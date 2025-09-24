@@ -7,13 +7,15 @@ This repository contains MEDM source code.
 This repository is organized into the following top-level files and directories:
 
 - `AGENTS.md`: agent instructions and guidelines.
+- `KNOWN_PROBLEMS.html`: historical bug notes and known limitations.
 - `LICENSE`: licensing information.
 - `Makefile`, `Makefile.build`, `Makefile.rules`: top-level build configuration.
-- `printUtils/`: source code.
-- `xc/`: source code.
-- `medm/`: source code.
-- `snap/`: reference snapshots for EPICS PVs.
-- `pv/`: PV files for ADT used to configure it's layout.
+- `README.1st`, `README.md`: getting-started documentation.
+- `bin/`: prebuilt binaries grouped by host architecture.
+- `lib/`: shared libraries grouped by host architecture.
+- `medm/`: core MEDM source code.
+- `printUtils/`: printing utility sources.
+- `xc/`: additional source modules.
 
 ## Coding Conventions
 

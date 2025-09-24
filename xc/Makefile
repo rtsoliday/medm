@@ -1,89 +1,72 @@
-#*************************************************************************
-# Copyright (c) 2002 The University of Chicago, as Operator of Argonne
-# National Laboratory.
-# Copyright (c) 2002 The Regents of the University of California, as
-# Operator of Los Alamos National Laboratory.
-# This file is distributed subject to a Software License Agreement found
-# in the file LICENSE that is included with this distribution.
-#*************************************************************************
-#
-# $Id$
-#
-TOP = ../../..
-include $(TOP)/configure/CONFIG
-
-SHARED_LIBRARIES = NO
-
-CMPLR = STRICT
-
-# Motif
-USE_MOTIF12=NO
-#USE_MOTIF12=YES
-
-# Optimization
-ifdef WIN32
-#HOST_OPT = NO
-else
-#HOST_OPT = NO
+SDDS_REPO = $(firstword $(wildcard ../../SDDS))
+ifeq ($(SDDS_REPO),)
+  $(error SDDS source code not found. Run 'git clone https://github.com/rtsoliday/SDDS.git' next to the adt repository)
+endif
+EPICS_BASE = $(firstword $(wildcard /usr/local/oag/base ../../epics-base ../../../../base $(HOME)/epics/base))
+ifeq ($(EPICS_BASE),)
+  $(error EPICS base not found. Run 'git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git' next to the adt repository)
 endif
 
-# Compiler specific
-#GCC_WARN_YES = -Wall -Wtraditional -Wmissing-prototypes -Wstrict-prototypes
-GCC_WARN_YES = -Wall
+include ../Makefile.rules
 
-# Source browser options
-ifeq ($(HOST_OPT),NO)
-  ifeq ($(ANSI),ACC)
-    ifeq ($(OS_CLASS),solaris)
-# Set this for browsing all files
-#      USR_CFLAGS += -xsb
-# Set this to just do one file so it doesn't mix up Initialize, etc.
-      USR_CFLAGS_WheelSwitch += -xsb
-      USR_CFLAGS += $(USR_CFLAGS_$*)
-    endif
-  endif
+LIBRARY = ANLwidgets
+
+LIBRARY_SRC = BarGraph.c \
+              Byte.c \
+              Caption.c \
+              Clip.c \
+              Control.c \
+              Indicator.c \
+              Matrix.c \
+              Marquee.c \
+              Meter.c \
+              Value.c \
+              bae.c \
+              utils.c \
+              WheelSwitch.c
+
+CFLAGS += -I$(EPICS_BASE)/include  -I$(SDDS_REPO)/include -I$(OBJ_DIR)
+CCFLAGS += -I$(EPICS_BASE)/include -I$(SDDS_REPO)/include -I$(OBJ_DIR)
+
+ifeq ($(OS), Linux)
+  CFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
+  CCFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
+  LDFLAGS := -L$(SDDS_REPO)/lib/$(OS)-$(ARCH) -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) -fopenmp $(LDFLAGS)
+  PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libnt.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccessCA.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccess.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvData.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
+    $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
+    $(Z_LIB) -lreadline $(PROD_SYS_LIBS)
+  PROD_LIBS_SDDS = -lmdbcommon -lmatlib -lSDDS1 -lnamelist -lrpnlib -lmdbmth -lmdblib
 endif
 
-USR_INCLUDES = -I$(MOTIF_INC) -I$(X11_INC)
-
-ifdef WIN32
-USR_CFLAGS_WIN32 += /DWIN32 /D_WINDOWS
-USR_CFLAGS_WIN32 += $(EXCEED_CFLAGS)
-
-# The proper import/export declarations are not included for DLLs
-SHARED_LIBRARIES = NO
+ifeq ($(OS), Darwin)
+  CFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
+  CCFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
+  LDFLAGS := -L$(SDDS_REPO)/lib/$(OS)-$(ARCH) -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) $(LDFLAGS)
+  PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libnt.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccessCA.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccess.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvData.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
+    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
+    $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) $(Z_LIB) $(PROD_SYS_LIBS)
+  PROD_LIBS_SDDS = -lmdbcommon -lmatlib -lSDDS1 -lnamelist -lrpnlib -lmdbmth -lmdblib
 endif
 
-ifeq ($(USE_MOTIF12),YES)
-USR_CFLAGS_solaris += -DMOTIF12_HEADERS
+ifeq ($(OS), Windows)
+  NO_DLL = 1
+  CFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -I$(SDDS_REPO)/lzma -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL
+  CCFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -I$(SDDS_REPO)/lzma -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL
+  PROD_LIBS += gsl.lib gslcblas.lib  ws2_32.lib
+  PROD_LIBS_SDDS = mdbcommon.lib matlib.lib SDDS1.lib namelist.lib rpnlib.lib mdbmth.lib mdblib.lib lzma.lib z.lib \
+                  pvaClient.lib nt.lib pvAccessCA.lib pvAccess.lib pvData.lib pvDatabase.lib ca.lib Com.lib
+  LIB_LINK_DIRS += -LIBPATH:$(SDDS_REPO)/lib/$(OS)-$(ARCH) -LIBPATH:$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)
 endif
 
-USR_LIBS_DEFAULT = Xm Xt Xmu X11 Xext
-
-LIBSRCS += BarGraph.c
-LIBSRCS += Byte.c
-LIBSRCS += Caption.c
-LIBSRCS += Clip.c
-LIBSRCS += Control.c
-LIBSRCS += Indicator.c
-LIBSRCS += Matrix.c
-LIBSRCS += Marquee.c
-LIBSRCS += Meter.c
-LIBSRCS += Value.c
-LIBSRCS += bae.c
-LIBSRCS += utils.c
-LIBSRCS += WheelSwitch.c
-
-LIBRARY_HOST = ANLwidgets
-
-include $(TOP)/configure/RULES
-
-meter1: $(OBJS) $(DEPLIBS) meter1.c
-	$(LINK.c) -o $@ $@.c $(LDLIBS)
-
-indicator1 : $(OBJS) $(DEPLIBS) indicator1.c
-	$(LINK.c) -o $@ $@.c $(LDLIBS)
-
-bar1: $(OBJS) $(DEPLIBS) bar1.c
-	$(LINK.c) -o $@ $@.c $(LDLIBS)
-
+include ../Makefile.build

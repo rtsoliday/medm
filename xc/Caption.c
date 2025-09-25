@@ -818,6 +818,10 @@ GeometryManager(Widget w, XtWidgetGeometry *desired, XtWidgetGeometry *allowed)
 	XtWidgetGeometry request;
 	XtGeometryResult result;
 
+	request.width = 0;
+	request.height = 0;
+	request.request_mode = 0;
+
       /*
        * Compute the size we want to be based on the new geometry
        * stored in the user's child above.

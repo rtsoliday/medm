@@ -69,6 +69,12 @@
 #include <Xm/MwmUtil.h>
 #include <X11/IntrinsicP.h>
 
+#ifndef _X_NORETURN
+#define _X_NORETURN
+#endif
+
+typedef void (*MedmXtErrorHandler)(char *) _X_NORETURN;
+
 /* For Xrt/Graph property editor */
 #ifdef XRTGRAPH
 #  if XRT_VERSION > 2
@@ -1610,7 +1616,17 @@ void mainFileMenuSimpleCallback(Widget w, XtPointer cd, XtPointer cbs) {
 
         /* Prompt if All has not been choosen */
         if (!saveAll) {
-          snprintf(str, sizeof(str), "Save \"%s\" ?", displayInfo->dlFile->name);
+          size_t prefixLen = sizeof("Save \"") - 1;
+          size_t suffixLen = sizeof("\" ?") - 1;
+          size_t maxNameLen = 0;
+          const char *displayName = displayInfo->dlFile->name ?
+            displayInfo->dlFile->name : "";
+
+          if (sizeof(str) > prefixLen + suffixLen + 1) {
+            maxNameLen = sizeof(str) - prefixLen - suffixLen - 1;
+          }
+          snprintf(str, sizeof(str), "Save \"%.*s\" ?", (int)maxNameLen,
+                   displayName);
           dmSetAndPopupQuestionDialog(displayInfo, str, "Yes", "No",
                                       "All Remaining");
           switch (displayInfo->questionDialogAnswer) {
@@ -2001,7 +2017,17 @@ void medmExit() {
             filename = tmp + 1;
           tmp++;
         }
-        snprintf(str, sizeof(str), "Save display \"%s\" before exit?", filename);
+        {
+          size_t prefixLen = sizeof("Save display \"") - 1;
+          size_t suffixLen = sizeof("\" before exit?") - 1;
+          size_t maxNameLen = 0;
+
+          if (sizeof(str) > prefixLen + suffixLen + 1) {
+            maxNameLen = sizeof(str) - prefixLen - suffixLen - 1;
+          }
+          snprintf(str, sizeof(str), "Save display \"%.*s\" before exit?",
+                   (int)maxNameLen, filename);
+        }
 #ifdef PROMPT_TO_EXIT
         /* Don't use Cancel, use All (Only 3 buttons) */
         if (displayInfo->next)
@@ -3462,24 +3488,30 @@ int main(int argc, char *argv[]) {
   /* Set error handlers */
 #if DEBUG_ERRORHANDLER
   {
+    MedmXtErrorHandler errorHandler = (MedmXtErrorHandler)xtErrorHandler;
+    XtErrorHandler warningHandler = (XtErrorHandler)xtErrorHandler;
     XtErrorHandler errHandler, warnHandler;
     printf("MEDM: Set error handlers: appContext=%p\n", (void *)appContext);
-    errHandler = XtAppSetErrorHandler(appContext, xtErrorHandler);
-    warnHandler = XtAppSetWarningHandler(appContext, xtErrorHandler);
+    errHandler = XtAppSetErrorHandler(appContext, errorHandler);
+    warnHandler = XtAppSetWarningHandler(appContext, warningHandler);
     printf(" errHandler=%p xtErrorHandler=%p\n",
            (void *)errHandler, (void *)xtErrorHandler);
     printf(" warnHandler=%p xtErrorHandler=%p\n",
            (void *)warnHandler, (void *)xtErrorHandler);
-    errHandler = XtAppSetErrorHandler(appContext, xtErrorHandler);
-    warnHandler = XtAppSetWarningHandler(appContext, xtErrorHandler);
+    errHandler = XtAppSetErrorHandler(appContext, errorHandler);
+    warnHandler = XtAppSetWarningHandler(appContext, warningHandler);
     printf(" errHandler=%p xtErrorHandler=%p\n",
            (void *)errHandler, (void *)xtErrorHandler);
     printf(" warnHandler=%p xtErrorHandler=%p\n",
            (void *)warnHandler, (void *)xtErrorHandler);
   }
 #else
-  XtAppSetErrorHandler(appContext, xtErrorHandler);
-  XtAppSetWarningHandler(appContext, xtErrorHandler);
+  {
+    MedmXtErrorHandler errorHandler = (MedmXtErrorHandler)xtErrorHandler;
+    XtErrorHandler warningHandler = (XtErrorHandler)xtErrorHandler;
+    XtAppSetErrorHandler(appContext, errorHandler);
+    XtAppSetWarningHandler(appContext, warningHandler);
+  }
 #endif
   XSetErrorHandler(xErrorHandler);
 

@@ -3365,7 +3365,12 @@ DisplayInfo *findDisplay(char *filename, char *argsString,
   }
 
   /* Open the file so we can get the name that would be used */
-  strncpy(pathName, filename, MAX_TOKEN_LENGTH);
+  if (filename) {
+    strncpy(pathName, filename, MAX_TOKEN_LENGTH - 1);
+    pathName[MAX_TOKEN_LENGTH - 1] = '\0';
+  } else {
+    pathName[0] = '\0';
+  }
   filePtr = dmOpenUsableFile(pathName, relatedDisplayFilename);
   if (!filePtr) {
     /* It can't be opened anyway */

@@ -1015,9 +1015,18 @@ void relatedDisplayCreateNewDisplay(DisplayInfo *displayInfo,
          passing the parent's path. */
 	filePtr = dmOpenUsableFile(filename, displayInfo->dlFile->name);
 	if(filePtr == NULL) {
-	    snprintf(token, sizeof(token),
-	      "Cannot open related display:\n  %s\nCheck %s\n",
-	      filename, "EPICS_DISPLAY_PATH");
+	    const char *envVar = "EPICS_DISPLAY_PATH";
+	    const char *prefix = "Cannot open related display:\n  ";
+	    const char *safeFilename = filename;
+	    size_t fixedLen = strlen(prefix) + strlen("\nCheck ") +
+	      strlen(envVar) + strlen("\n");
+	    size_t maxFilenameLen = 0;
+
+	    if(sizeof(token) > fixedLen + 1) {
+	      maxFilenameLen = sizeof(token) - fixedLen - 1;
+	    }
+	    snprintf(token, sizeof(token), "%s%.*s\nCheck %s\n",
+	      prefix, (int)maxFilenameLen, safeFilename, envVar);
 	    dmSetAndPopupWarningDialog(displayInfo,token,"OK",NULL,NULL);
 	    medmPostMsg(1,token);
 	} else {

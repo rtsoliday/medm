@@ -154,13 +154,15 @@ int utilPrint(Display *display, Widget w, char *xwdFileName, char *title)
 	    myArgv[myArgc++] = titleString;
 	}
 	break;
-    case PRINT_TITLE_SPECIFIED:
-	if(*printTitleString) {
-	    snprintf(titleString, PRINT_BUF_SIZE, "-s%s", printTitleString);
-	    myArgv[myArgc++] = titleString;
-	}
-	break;
-    }
+	case PRINT_TITLE_SPECIFIED:
+		if(*printTitleString) {
+		    int maxTitleLen = PRINT_BUF_SIZE > 3 ? PRINT_BUF_SIZE - 3 : 0;
+		    snprintf(titleString, PRINT_BUF_SIZE, "-s%.*s", maxTitleLen,
+		      printTitleString);
+		    myArgv[myArgc++] = titleString;
+		}
+		break;
+	    }
 
     myArgv[myArgc++] = newFileName;
 
@@ -194,7 +196,22 @@ int utilPrint(Display *display, Widget w, char *xwdFileName, char *title)
     } else {
       /* Print the file to the printer, unless you are debugging, in
          which case you can look at the files instead */
-	snprintf(commandBuffer, PRINT_BUF_SIZE, "%s %s", printCommand, psFileName);
+	size_t commandLen = strlen(printCommand);
+	size_t fileLen = strlen(psFileName);
+	size_t required = commandLen + fileLen + (commandLen ? 1 : 0);
+	if(required >= PRINT_BUF_SIZE) {
+	    errMsg("utilPrint: Print command is too long\n");
+	    retCode = 0;
+	    goto CLEAN;
+	}
+	if(commandLen) {
+	    memcpy(commandBuffer, printCommand, commandLen);
+	    commandBuffer[commandLen++] = ' ';
+	} else {
+	    commandBuffer[0] = '\0';
+	}
+	memcpy(commandBuffer + commandLen, psFileName, fileLen);
+	commandBuffer[commandLen + fileLen] = '\0';
 	status=system(commandBuffer);
 #ifndef VMS
 	if(status) {

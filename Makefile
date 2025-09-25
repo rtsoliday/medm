@@ -63,6 +63,7 @@ DIRS += $(SDDS_REPO)/mdbcommon
 DIRS += printUtils
 DIRS += xc
 DIRS += medm
+DIRS += qtedm
 
 .PHONY: all $(DIRS) clean distclean
 
@@ -104,12 +105,15 @@ xc: printUtils
 	$(MAKE) -C $@
 medm: xc
 	$(MAKE) -C $@
+qtedm: medm
+	$(MAKE) -C $@
 
 clean:
 	$(MAKE) -C printUtils clean
 	$(MAKE) -C xc clean
 	$(MAKE) -C medm clean
-
+	$(MAKE) -C qtedm clean
+	
 distclean: clean
 	rm -rf bin/$(OS)-$(ARCH)
 	rm -rf lib/$(OS)-$(ARCH)

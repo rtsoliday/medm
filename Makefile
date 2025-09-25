@@ -6,27 +6,49 @@ endif
 
 # Check for external gsl repository needed on Windows
 ifeq ($(OS), Windows)
-  GSL_REPO = $(wildcard ../gsl)
+  GSL_REPO ?= $(firstword $(wildcard ../gsl ../../gsl))
   ifeq ($(GSL_REPO),)
-    $(error GSL source code not found. Run 'git clone https://github.com/rtsoliday/gsl.git' next to the adt repository)
+    $(error GSL source code not found. Run 'git clone https://github.com/rtsoliday/gsl.git' next to the medm repository)
   endif
+else
+  GSL_REPO :=
 endif
 
 # Check for external SDDS repository
-SDDS_REPO = $(firstword $(wildcard ../SDDS ../../../../epics/extensions/src/SDDS))
+SDDS_SEARCH_PATHS := ../SDDS ../../../../epics/extensions/src/SDDS \
+                     $(HOME)/SDDS $(HOME)/epics/extensions/src/SDDS \
+                     /cygdrive/*/SDDS /cygdrive/*/epics/extensions/src/SDDS
+SDDS_REPO ?= $(firstword $(wildcard $(SDDS_SEARCH_PATHS)))
 ifeq ($(SDDS_REPO),)
-  $(error SDDS source code not found. Run 'git clone https://github.com/rtsoliday/SDDS.git' next to the adt repository)
+  $(error SDDS source code not found. Run 'git clone https://github.com/rtsoliday/SDDS.git' next to the medm repository)
 endif
 
-ifeq ($(OS), Linux)
-  GSL_LOCAL = $(wildcard $(SDDS_REPO)/gsl)
+ifneq ($(OS), Windows)
+  GSL_LOCAL ?= $(wildcard $(SDDS_REPO)/gsl)
 endif
+
+ifneq ($(strip $(GSL_REPO)),)
+  GSL_REPO := $(abspath $(GSL_REPO))
+endif
+ifneq ($(strip $(GSL_LOCAL)),)
+  GSL_LOCAL := $(abspath $(GSL_LOCAL))
+endif
+SDDS_REPO := $(abspath $(SDDS_REPO))
+
+export GSL_REPO
+export GSL_LOCAL
+export SDDS_REPO
 
 include Makefile.rules
 export MOTIF
 
-DIRS = $(GSL_REPO)
-DIRS += $(GSL_LOCAL)
+DIRS :=
+ifneq ($(strip $(GSL_REPO)),)
+  DIRS += $(GSL_REPO)
+endif
+ifneq ($(strip $(GSL_LOCAL)),)
+  DIRS += $(GSL_LOCAL)
+endif
 DIRS += $(SDDS_REPO)/include
 DIRS += $(SDDS_REPO)/zlib
 DIRS += $(SDDS_REPO)/lzma
@@ -39,7 +61,7 @@ DIRS += $(SDDS_REPO)/fftpack
 DIRS += $(SDDS_REPO)/matlib
 DIRS += $(SDDS_REPO)/mdbcommon
 DIRS += printUtils
-DIRS += xc 
+DIRS += xc
 DIRS += medm
 
 .PHONY: all $(DIRS) clean distclean

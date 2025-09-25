@@ -1,13 +1,31 @@
-SDDS_REPO = $(firstword $(wildcard ../../SDDS))
+SDDS_SEARCH_PATHS := ../../SDDS ../../../../epics/extensions/src/SDDS \
+                     $(HOME)/SDDS $(HOME)/epics/extensions/src/SDDS \
+                     /cygdrive/*/SDDS /cygdrive/*/epics/extensions/src/SDDS
+SDDS_REPO ?= $(firstword $(wildcard $(SDDS_SEARCH_PATHS)))
 ifeq ($(SDDS_REPO),)
-  $(error SDDS source code not found. Run 'git clone https://github.com/rtsoliday/SDDS.git' next to the adt repository)
+  $(error SDDS source code not found. Run 'git clone https://github.com/rtsoliday/SDDS.git' next to the medm repository)
 endif
-EPICS_BASE = $(firstword $(wildcard /usr/local/oag/base ../../epics-base ../../../../base $(HOME)/epics/base))
+EPICS_SEARCH_PATHS := /usr/local/oag/base ../../epics-base ../../../../base \
+                      $(HOME)/epics/base $(HOME)/epics/base-7.0 \
+                      /cygdrive/*/epics/base /cygdrive/*/epics/base-7.0
+EPICS_BASE ?= $(firstword $(wildcard $(EPICS_SEARCH_PATHS)))
 ifeq ($(EPICS_BASE),)
-  $(error EPICS base not found. Run 'git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git' next to the adt repository)
+  $(error EPICS base not found. Run 'git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git' next to the medm repository)
 endif
 
+SDDS_REPO := $(abspath $(SDDS_REPO))
+EPICS_BASE := $(abspath $(EPICS_BASE))
+
 include ../Makefile.rules
+
+PROD_LIBS :=
+PROD_LIBS_SDDS :=
+
+ifneq ($(OS), Windows)
+  PROD_LIBS += -lANLwidgets -lPrintUtils
+  PROD_LIBS_SDDS += -lmdbcommon -lmatlib -lSDDS1 -lnamelist -lrpnlib \
+                    -lmdbmth -lmdblib
+endif
 
 PROD = medm
 
@@ -31,13 +49,11 @@ ifeq ($(OS), Linux)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
     $(Z_LIB) -lreadline $(PROD_SYS_LIBS)
-    PROD_SYS_LIBS += $(XM_LIB) $(XMU_LIB) $(XT_LIB) $(X11_LIB) $(XEXT_LIB)
-  PROD_LIBS = -lANLwidgets -lPrintUtils
-  PROD_LIBS_SDDS = -lmdbcommon -lmatlib -lSDDS1 -lnamelist -lrpnlib -lmdbmth -lmdblib
+  PROD_SYS_LIBS += $(XM_LIB) $(XMU_LIB) $(XT_LIB) $(X11_LIB) $(XEXT_LIB)
 endif
 
 ifeq ($(OS), Darwin)
-  CFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
+  CFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-deprecated-builtins
   CCFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
   LDFLAGS := -L$(SDDS_REPO)/lib/$(OS)-$(ARCH) -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) $(LDFLAGS)
   PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \
@@ -48,15 +64,15 @@ ifeq ($(OS), Darwin)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) $(Z_LIB) $(PROD_SYS_LIBS)
-  PROD_LIBS_SDDS = -lmdbcommon -lmatlib -lSDDS1 -lnamelist -lrpnlib -lmdbmth -lmdblib
+  PROD_SYS_LIBS += $(XM_LIB) $(XMU_LIB) $(XT_LIB) $(X11_LIB) $(XEXT_LIB)
 endif
 
 ifeq ($(OS), Windows)
   NO_DLL = 1
   CFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -I$(SDDS_REPO)/lzma -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL
   CCFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -I$(SDDS_REPO)/lzma -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL
-  PROD_LIBS += gsl.lib gslcblas.lib  ws2_32.lib
-  PROD_LIBS_SDDS = mdbcommon.lib matlib.lib SDDS1.lib namelist.lib rpnlib.lib mdbmth.lib mdblib.lib lzma.lib z.lib \
+  PROD_LIBS += ANLwidgets.lib PrintUtils.lib gsl.lib gslcblas.lib ws2_32.lib
+  PROD_LIBS_SDDS := mdbcommon.lib matlib.lib SDDS1.lib namelist.lib rpnlib.lib mdbmth.lib mdblib.lib lzma.lib z.lib \
                   pvaClient.lib nt.lib pvAccessCA.lib pvAccess.lib pvData.lib pvDatabase.lib ca.lib Com.lib
   LIB_LINK_DIRS += -LIBPATH:$(SDDS_REPO)/lib/$(OS)-$(ARCH) -LIBPATH:$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)
 endif

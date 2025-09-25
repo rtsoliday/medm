@@ -1,11 +1,20 @@
-SDDS_REPO = $(firstword $(wildcard ../../SDDS))
+SDDS_SEARCH_PATHS := ../../SDDS ../../../../epics/extensions/src/SDDS \
+                     $(HOME)/SDDS $(HOME)/epics/extensions/src/SDDS \
+                     /cygdrive/*/SDDS /cygdrive/*/epics/extensions/src/SDDS
+SDDS_REPO ?= $(firstword $(wildcard $(SDDS_SEARCH_PATHS)))
 ifeq ($(SDDS_REPO),)
-  $(error SDDS source code not found. Run 'git clone https://github.com/rtsoliday/SDDS.git' next to the adt repository)
+  $(error SDDS source code not found. Run 'git clone https://github.com/rtsoliday/SDDS.git' next to the medm repository)
 endif
-EPICS_BASE = $(firstword $(wildcard /usr/local/oag/base ../../epics-base ../../../../base $(HOME)/epics/base))
+EPICS_SEARCH_PATHS := /usr/local/oag/base ../../epics-base ../../../../base \
+                      $(HOME)/epics/base $(HOME)/epics/base-7.0 \
+                      /cygdrive/*/epics/base /cygdrive/*/epics/base-7.0
+EPICS_BASE ?= $(firstword $(wildcard $(EPICS_SEARCH_PATHS)))
 ifeq ($(EPICS_BASE),)
-  $(error EPICS base not found. Run 'git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git' next to the adt repository)
+  $(error EPICS base not found. Run 'git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git' next to the medm repository)
 endif
+
+SDDS_REPO := $(abspath $(SDDS_REPO))
+EPICS_BASE := $(abspath $(EPICS_BASE))
 
 include ../Makefile.rules
 
@@ -45,7 +54,7 @@ ifeq ($(OS), Linux)
 endif
 
 ifeq ($(OS), Darwin)
-  CFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
+  CFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-deprecated-builtins
   CCFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
   LDFLAGS := -L$(SDDS_REPO)/lib/$(OS)-$(ARCH) -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) $(LDFLAGS)
   PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \

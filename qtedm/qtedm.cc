@@ -1,6 +1,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QColor>
+#include <QCoreApplication>
+#include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QMainWindow>
@@ -8,6 +10,7 @@
 #include <QMenuBar>
 #include <QPalette>
 #include <QRadioButton>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -30,12 +33,26 @@ int main(int argc, char *argv[])
 
     // Match the teal Motif background used by the legacy MEDM main window.
     const QColor backgroundColor(0xb0, 0xc3, 0xca);
+    const QColor highlightColor = backgroundColor.lighter(120);
+    const QColor midHighlightColor = backgroundColor.lighter(108);
+    const QColor shadowColor = backgroundColor.darker(120);
+    const QColor midShadowColor = backgroundColor.darker(140);
     QPalette palette = win.palette();
     palette.setColor(QPalette::Window, backgroundColor);
+    palette.setColor(QPalette::Base, backgroundColor);
+    palette.setColor(QPalette::AlternateBase, backgroundColor);
+    palette.setColor(QPalette::Button, backgroundColor);
     palette.setColor(QPalette::WindowText, Qt::black);
+    palette.setColor(QPalette::ButtonText, Qt::black);
+    palette.setColor(QPalette::Light, highlightColor);
+    palette.setColor(QPalette::Midlight, midHighlightColor);
+    palette.setColor(QPalette::Dark, shadowColor);
+    palette.setColor(QPalette::Mid, midShadowColor);
     win.setPalette(palette);
 
     auto *menuBar = win.menuBar();
+    menuBar->setAutoFillBackground(true);
+    menuBar->setPalette(palette);
 
     auto *fileMenu = menuBar->addMenu("&File");
     fileMenu->addAction("&New");
@@ -118,6 +135,7 @@ int main(int argc, char *argv[])
     editMenu->addAction("Edit &Summary...");
 
     editMenu->setEnabled(false);
+    editMenu->menuAction()->setEnabled(false);
 
     auto *viewMenu = menuBar->addMenu("&View");
     viewMenu->addAction("&Message Window");
@@ -129,6 +147,7 @@ int main(int argc, char *argv[])
     palettesMenu->addAction("&Resource");
     palettesMenu->addAction("&Color");
     palettesMenu->setEnabled(false);
+    palettesMenu->menuAction()->setEnabled(false);
 
     auto *helpMenu = menuBar->addMenu("&Help");
     helpMenu->addAction("&Overview");
@@ -144,27 +163,57 @@ int main(int argc, char *argv[])
     central->setObjectName("mainBB");
     central->setAutoFillBackground(true);
     central->setPalette(palette);
+    central->setBackgroundRole(QPalette::Window);
 
     auto *layout = new QVBoxLayout;
-    layout->setContentsMargins(18, 9, 18, 9);
+    layout->setContentsMargins(10, 8, 10, 10);
+    layout->setSpacing(10);
+
+    auto *modePanel = new QFrame;
+    modePanel->setFrameShape(QFrame::Panel);
+    modePanel->setFrameShadow(QFrame::Sunken);
+    modePanel->setLineWidth(2);
+    modePanel->setMidLineWidth(1);
+    modePanel->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    modePanel->setAutoFillBackground(true);
+    modePanel->setPalette(palette);
+    modePanel->setBackgroundRole(QPalette::Button);
+
+    auto *panelLayout = new QVBoxLayout(modePanel);
+    panelLayout->setContentsMargins(12, 8, 12, 12);
+    panelLayout->setSpacing(6);
 
     auto *modeBox = new QGroupBox("Mode");
+    modeBox->setAutoFillBackground(true);
+    modeBox->setPalette(palette);
+    modeBox->setBackgroundRole(QPalette::Window);
+    modeBox->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    modeBox->setStyleSheet(
+        "QGroupBox { border: 2px groove palette(mid); margin-top: 0.8em;"
+        " padding: 6px 12px 8px 12px; }"
+        " QGroupBox::title { subcontrol-origin: margin; left: 10px;"
+        " padding: 0 4px; }");
+
     auto *modeLayout = new QHBoxLayout;
+    modeLayout->setContentsMargins(12, 8, 12, 8);
+    modeLayout->setSpacing(14);
     auto *editModeButton = new QRadioButton("Edit");
     auto *executeModeButton = new QRadioButton("Execute");
     editModeButton->setChecked(true);
     modeLayout->addWidget(editModeButton);
     modeLayout->addWidget(executeModeButton);
-    modeLayout->addStretch();
     modeBox->setLayout(modeLayout);
 
-    layout->addWidget(modeBox, 0, Qt::AlignLeft);
+    panelLayout->addWidget(modeBox);
+
+    layout->addWidget(modePanel, 0, Qt::AlignLeft);
     layout->addStretch();
 
     central->setLayout(layout);
     win.setCentralWidget(central);
 
-    win.resize(540, 180);
+    win.adjustSize();
+    win.setFixedSize(win.sizeHint());
     win.show();
     return app.exec();
 }

@@ -37,6 +37,7 @@ int main(int argc, char *argv[])
     const QColor midHighlightColor = backgroundColor.lighter(108);
     const QColor shadowColor = backgroundColor.darker(120);
     const QColor midShadowColor = backgroundColor.darker(140);
+    const QColor disabledTextColor(0x64, 0x64, 0x64);
     QPalette palette = win.palette();
     palette.setColor(QPalette::Window, backgroundColor);
     palette.setColor(QPalette::Base, backgroundColor);
@@ -48,6 +49,12 @@ int main(int argc, char *argv[])
     palette.setColor(QPalette::Midlight, midHighlightColor);
     palette.setColor(QPalette::Dark, shadowColor);
     palette.setColor(QPalette::Mid, midShadowColor);
+    palette.setColor(QPalette::Disabled, QPalette::WindowText,
+        disabledTextColor);
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText,
+        disabledTextColor);
+    palette.setColor(QPalette::Disabled, QPalette::Text, disabledTextColor);
+    palette.setColor(QPalette::Disabled, QPalette::Button, backgroundColor);
     win.setPalette(palette);
 
     auto *menuBar = win.menuBar();

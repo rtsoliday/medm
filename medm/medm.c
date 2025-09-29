@@ -1619,7 +1619,7 @@ void mainFileMenuSimpleCallback(Widget w, XtPointer cd, XtPointer cbs) {
           size_t prefixLen = sizeof("Save \"") - 1;
           size_t suffixLen = sizeof("\" ?") - 1;
           size_t maxNameLen = 0;
-          const char *displayName = displayInfo->dlFile->name ?
+          const char *displayName = displayInfo->dlFile->name[0] ?
             displayInfo->dlFile->name : "";
 
           if (sizeof(str) > prefixLen + suffixLen + 1) {

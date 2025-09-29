@@ -50,6 +50,7 @@
 #include <process.h>
 #else
 #include <sys/types.h>
+#include <sys/wait.h>
 #endif
 
 /* Function prototypes */
@@ -58,6 +59,7 @@ static void displayHelpCallback(Widget shell, XtPointer client_data,
   XtPointer call_data);
 static int saveEarlyMessage(char *msg);
 static void copyEarlyMessages(void);
+static void runSystemCommand(const char *command);
 
 /* Global variables */
 
@@ -73,6 +75,37 @@ static Widget errMsgSendSubjectText = NULL;
 static Widget errMsgSendToText = NULL;
 static Widget errMsgSendText = NULL;
 static XtIntervalId caStudyDlgTimeOutId = 0;
+
+static void runSystemCommand(const char *command)
+{
+    int status;
+
+    if(!command || !*command) return;
+
+    status = system(command);
+    if(status == -1) {
+        medmPrintf(1, "\nrunSystemCommand: system(\"%s\") failed\n",
+          command);
+        return;
+    }
+#ifndef WIN32
+    if(WIFSIGNALED(status)) {
+        medmPrintf(1,
+          "\nrunSystemCommand: \"%s\" terminated by signal %d\n", command,
+          WTERMSIG(status));
+    } else if(WIFEXITED(status) && WEXITSTATUS(status)) {
+        medmPrintf(1,
+          "\nrunSystemCommand: \"%s\" exited with status %d\n", command,
+          WEXITSTATUS(status));
+    }
+#else
+    if(status) {
+        medmPrintf(1,
+          "\nrunSystemCommand: \"%s\" exited with status %d\n", command,
+          status);
+    }
+#endif
+}
 
 void errMsgSendDlgCreateDlg();
 void errMsgSendDlgSendButtonCb(Widget w, XtPointer clientData, XtPointer callData);
@@ -224,14 +257,14 @@ void errMsgDlgCb(Widget w, XtPointer clientData, XtPointer callData)
 		xInfoMsg(w,"Output sent to:\n  %s\n",psFileName);
 	    } else {
 		commandBuffer = (char *)calloc(1,MAX_TOKEN_LENGTH+256);
-		sprintf(commandBuffer,"%s %s",printCommand,psFileName);
-		system(commandBuffer);
+                sprintf(commandBuffer,"%s %s",printCommand,psFileName);
+                runSystemCommand(commandBuffer);
 
-	      /* Delete file */
-		sprintf(commandBuffer,"rm %s",psFileName);
-		system(commandBuffer);
-		free(commandBuffer);
-	    }
+              /* Delete file */
+                sprintf(commandBuffer,"rm %s",psFileName);
+                runSystemCommand(commandBuffer);
+                free(commandBuffer);
+            }
 
 	  /* Clean up */
 	    free(psFileName);
@@ -1266,7 +1299,7 @@ static void displayHelpCallback(Widget shell, XtPointer client_data,
 
 	command = (char*)malloc(strlen(env) + strlen(name) + 5);
 	sprintf(command, "%s %s &", env, name);
-	(void)system(command);
+        runSystemCommand(command);
 	free(command);
     } else {
       /* KE: Should no longer get here */

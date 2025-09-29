@@ -49,6 +49,7 @@
 #  include <X11/Xos.h>
 #else
 #  include <sys/time.h>
+#  include <sys/wait.h>
 #endif
 
 #ifdef WIN32
@@ -73,11 +74,39 @@ static int doPasting(int *offsetX, int *offsetY);
 static void toggleHighlightRectangles(DisplayInfo *displayInfo,
                                       int xOffset, int yOffset);
 static void dumpPixmapCb(Widget w, XtPointer clientData, XtPointer callData);
+static void runShellCommand(const char *command);
 
 /* Global variables */
 
 Boolean modalGrab = FALSE; /* KE: Not used ?? */
 static DlList *tmpDlElementList = NULL;
+
+static void runShellCommand(const char *command)
+{
+  int status;
+
+  if(!command || !*command) return;
+
+  status = system(command);
+  if(status == -1) {
+    medmPrintf(1, "\nrunShellCommand: system(\"%s\") failed\n", command);
+    return;
+  }
+#ifndef WIN32
+  if(WIFSIGNALED(status)) {
+    medmPrintf(1, "\nrunShellCommand: \"%s\" terminated by signal %d\n",
+      command, WTERMSIG(status));
+  } else if(WIFEXITED(status) && WEXITSTATUS(status)) {
+    medmPrintf(1, "\nrunShellCommand: \"%s\" exited with status %d\n",
+      command, WEXITSTATUS(status));
+  }
+#else
+  if(status) {
+    medmPrintf(1, "\nrunShellCommand: \"%s\" exited with status %d\n",
+      command, status);
+  }
+#endif
+}
 
 /* Function to convert float to long for use with X resources */
 long longFval(double f) {
@@ -198,22 +227,35 @@ int convertNameToFullPath(const char *name, char *pathName, int nChars) {
     pathName[nChars - 1] = '\0';
   } else {
     char currentDirectoryName[PATH_MAX];
+    size_t nameLen = name ? strlen(name) : 0;
 
     /* Insert the path before the file name */
     currentDirectoryName[0] = '\0';
-    getcwd(currentDirectoryName, PATH_MAX);
-
-    if (strlen(currentDirectoryName) + strlen(name) <
+    if(!getcwd(currentDirectoryName, PATH_MAX)) {
+      medmPrintf(1,
+        "\nconvertNameToFullPath: Unable to determine current directory\n");
+      if(name) {
+        strncpy(pathName, name, nChars);
+        pathName[nChars - 1] = '\0';
+      } else if(nChars > 0) {
+        pathName[0] = '\0';
+      }
+      retVal = 0;
+    } else if (strlen(currentDirectoryName) + nameLen <
         (size_t)(nChars - 1)) {
       strcpy(pathName, currentDirectoryName);
 #ifndef VMS
       strcat(pathName, MEDM_DIR_DELIMITER_STRING);
 #endif
-      strcat(pathName, name);
+      if(name) strcat(pathName, name);
     } else {
       /* Hopefully won't get here */
-      strncpy(pathName, name, nChars);
-      pathName[nChars - 1] = '\0';
+      if(name) {
+        strncpy(pathName, name, nChars);
+        pathName[nChars - 1] = '\0';
+      } else if(nChars > 0) {
+        pathName[0] = '\0';
+      }
       retVal = 0;
     }
   }
@@ -4376,7 +4418,7 @@ void parseAndExecCommand(DisplayInfo *displayInfo, char *cmd) {
 #ifndef VMS
     /* KE: This blocks unless the command includes & (on UNIX) */
     /* It should probably be fixed for WIN32 */
-    system(command);
+    runShellCommand(command);
 #else
   /* ACM: This does not block the whole application, but spawns a command */
   cmdDesc.dsc$w_length = strlen(command);

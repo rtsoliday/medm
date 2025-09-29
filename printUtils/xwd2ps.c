@@ -152,6 +152,19 @@ static unsigned char *line4bits = NULL; /* raster line buffer for unpacking 4 bi
 static XColor *colors = NULL;           /* the color map */
 char progname[PROG_NAME_SIZE];
 
+static int readChecked(void *ptr, size_t size, size_t nmemb, FILE *file,
+  const char *context)
+{
+  size_t itemsRead;
+
+  itemsRead = fread(ptr, size, nmemb, file);
+  if(itemsRead != nmemb) {
+    errMsg("%s: Error reading %s from input stream\n", progname, context);
+    return 0;
+  }
+  return 1;
+}
+
 int redshift,greenshift,blueshift;
 int redadjust,greenadjust,blueadjust;
 int swapData;
@@ -1182,7 +1195,9 @@ static int get_raster_header(FILE *file, XWDFileHeader *win, char *w_name)
 #endif
 
   /* read in window header */
-    fread((char *)win, sizeof( *win ), 1, file);
+    if(!readChecked((char *)win, sizeof(*win), 1, file, "window header")) {
+        return 0;
+    }
 
   /* KE: This just undoes what xwd did for the header */
     if(*(char *) & swaptest)  /* am I running on a byte swapped machine? */
@@ -1220,13 +1235,20 @@ static int get_raster_header(FILE *file, XWDFileHeader *win, char *w_name)
   /* TEMP - put in large image warning here! */
     idifsize = (unsigned)(win->header_size - sizeof *win);
     if(idifsize) {
-	w_name = (char *)malloc(idifsize);
-	fread(w_name, idifsize, 1, file);
+        w_name = (char *)malloc(idifsize);
+        if(!w_name) {
+            errMsg("%s: Cannot allocate memory for window name\n", progname);
+            return 0;
+        }
+        if(!readChecked(w_name, idifsize, 1, file, "window name")) {
+            free(w_name);
+            return 0;
+        }
       /* KE: Freed w_name to avoid MLK (Doesn't appear to be used anyway) */
-	if(w_name) {
-	    free(w_name);
-	    w_name = NULL;
-	}
+        if(w_name) {
+            free(w_name);
+            w_name = NULL;
+        }
     }
 
     if(win->ncolors) {
@@ -1235,7 +1257,12 @@ static int get_raster_header(FILE *file, XWDFileHeader *win, char *w_name)
 	    errMsg( "%s: Cannot allocate memory for color map\n", progname);
 	    return 0;
 	}
-	fread((char *)colors, win->ncolors, sizeof(XColor), file);
+        if(!readChecked((char *)colors, sizeof(XColor), win->ncolors, file,
+            "color map")) {
+            free(colors);
+            colors = NULL;
+            return 0;
+        }
       /*
        * Scale the values received from the colormap to 8 bits
        */
@@ -1293,7 +1320,9 @@ static int get_next_raster_line(FILE *file, XWDFileHeader *win,
 
     switch(iwbits) {
     case 32:
-	fread((char *)buffer, iwbytes, 1, file);
+        if(!readChecked((char *)buffer, iwbytes, 1, file, "raster data")) {
+            return 0;
+        }
 	bufptr1 = linec;
 	bufptr = buffer;
       /* KE: buffer size is bytes_per_line=width*bytes_per_pixel,
@@ -1318,7 +1347,9 @@ static int get_next_raster_line(FILE *file, XWDFileHeader *win,
 	return 1;
 
     case 16:
-	fread((char *)buffer, iwbytes, 1, file);
+        if(!readChecked((char *)buffer, iwbytes, 1, file, "raster data")) {
+            return 0;
+        }
 	bufptr1 = linec;
 	bufptr = buffer;
       /* KE: buffer size is bytes_per_line=width*bytes_per_pixel,
@@ -1363,7 +1394,9 @@ static int get_next_raster_line(FILE *file, XWDFileHeader *win,
 
     case 8:
     case 4:
-	fread((char *)linec, iwbytes, 1, file);
+        if(!readChecked((char *)linec, iwbytes, 1, file, "raster data")) {
+            return 0;
+        }
 	return 1;
 
     default:

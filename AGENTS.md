@@ -26,3 +26,7 @@ This repository is organized into the following top-level files and directories:
 - Declare pointers with the asterisk adjacent to the variable name (e.g. `Channel *pCh`) and mark internal helpers `static` when possible.
 - Retain the license banner at the top of C source files and use block comments (`/* ... */`) for multi-line descriptions; reserve single-line `/* comment */` for brief notes.
 - Keep line length near 80 columns; when necessary, wrap expressions and continue with logical indentation instead of trailing backslashes.
+
+## Build Expectations
+
+- When proposing any change to the MEDM or QtEDM source code, rebuild both `medm` and `qtedm` to ensure the modifications compile cleanly.

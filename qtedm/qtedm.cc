@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QDialog>
+#include <QList>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFrame>
@@ -18,6 +19,7 @@
 #include <QPalette>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QPointer>
 #include <QSizePolicy>
 #include <QString>
 #include <QStringList>
@@ -25,6 +27,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <functional>
+#include <memory>
 
 #include "legacy_fonts.h"
 #include "resources/fonts/adobe_helvetica_24_otb.h"
@@ -175,6 +179,41 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
     dialog->raise();
     dialog->activateWindow();
 }
+
+constexpr int kDefaultDisplayWidth = 400;
+constexpr int kDefaultDisplayHeight = 400;
+
+class DisplayWindow : public QMainWindow
+{
+public:
+  DisplayWindow(const QPalette &palette, const QFont &font,
+      QWidget *parent = nullptr)
+    : QMainWindow(parent)
+  {
+    setAttribute(Qt::WA_DeleteOnClose);
+    setObjectName(QStringLiteral("qtedmDisplayWindow"));
+    setWindowTitle(QStringLiteral("newDisplay.adl"));
+    setFont(font);
+    setAutoFillBackground(true);
+    setPalette(palette);
+
+    auto *displayArea = new QWidget;
+    displayArea->setObjectName(QStringLiteral("displayArea"));
+    displayArea->setAutoFillBackground(true);
+    displayArea->setPalette(palette);
+    displayArea->setBackgroundRole(QPalette::Window);
+    displayArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    displayArea->setMinimumSize(kDefaultDisplayWidth, kDefaultDisplayHeight);
+    setCentralWidget(displayArea);
+
+    resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
+  }
+};
+
+struct DisplayState {
+  bool editMode = true;
+  QList<QPointer<DisplayWindow>> displays;
+};
 
 } // namespace
 
@@ -353,7 +392,8 @@ int main(int argc, char *argv[])
 
     auto *fileMenu = menuBar->addMenu("&File");
     fileMenu->setFont(fixed13Font);
-    fileMenu->addAction("&New");
+    auto *newAct = fileMenu->addAction("&New");
+    newAct->setShortcut(QKeySequence::New);
     auto *openAct = fileMenu->addAction("&Open...");
     openAct->setShortcut(QKeySequence::Open);
     auto *saveAct = fileMenu->addAction("&Save");
@@ -518,6 +558,72 @@ int main(int argc, char *argv[])
     modeLayout->addWidget(editModeButton);
     modeLayout->addWidget(executeModeButton);
     modeBox->setLayout(modeLayout);
+
+    auto state = std::make_shared<DisplayState>();
+    auto updateMenus = std::make_shared<std::function<void()>>();
+
+    QPalette displayPalette = palette;
+    displayPalette.setColor(QPalette::Window, Qt::white);
+    displayPalette.setColor(QPalette::Base, Qt::white);
+    displayPalette.setColor(QPalette::AlternateBase, Qt::white);
+    displayPalette.setColor(QPalette::Button, Qt::white);
+
+    *updateMenus = [state, editMenu, palettesMenu, newAct]() {
+      auto &displays = state->displays;
+      for (auto it = displays.begin(); it != displays.end();) {
+        if (it->isNull()) {
+          it = displays.erase(it);
+        } else {
+          ++it;
+        }
+      }
+
+      const bool hasDisplay = !displays.isEmpty();
+      const bool enableEditing = hasDisplay && state->editMode;
+
+      editMenu->setEnabled(enableEditing);
+      editMenu->menuAction()->setEnabled(enableEditing);
+      palettesMenu->setEnabled(enableEditing);
+      palettesMenu->menuAction()->setEnabled(enableEditing);
+      newAct->setEnabled(state->editMode);
+    };
+
+    QObject::connect(newAct, &QAction::triggered, &win,
+        [state, displayPalette, updateMenus, &win, fixed10Font]() {
+          if (!state->editMode) {
+            return;
+          }
+
+          auto *displayWin = new DisplayWindow(displayPalette, fixed10Font);
+          state->displays.append(displayWin);
+
+          QObject::connect(displayWin, &QObject::destroyed, &win,
+              [state, updateMenus]() {
+                if (updateMenus && *updateMenus) {
+                  (*updateMenus)();
+                }
+              });
+
+          displayWin->show();
+          displayWin->raise();
+          displayWin->activateWindow();
+
+          if (updateMenus && *updateMenus) {
+            (*updateMenus)();
+          }
+        });
+
+    QObject::connect(editModeButton, &QRadioButton::toggled, &win,
+        [state, updateMenus](bool checked) {
+          state->editMode = checked;
+          if (updateMenus && *updateMenus) {
+            (*updateMenus)();
+          }
+        });
+
+    if (updateMenus && *updateMenus) {
+      (*updateMenus)();
+    }
 
     panelLayout->addWidget(modeBox);
 

@@ -4,17 +4,21 @@
 #include <cstddef>
 #include <QColor>
 #include <QCoreApplication>
+#include <QDialog>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPalette>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QSizePolicy>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QStringList>
 #include <QWidget>
@@ -49,6 +53,92 @@ QFont loadMiscFixedFont(const unsigned char *data, std::size_t size,
     return font;
 }
 
+void showVersionDialog(QWidget *parent, const QFont &titleFont,
+    const QFont &bodyFont, const QPalette &palette)
+{
+    auto *dialog = new QDialog(parent, Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
+    dialog->setObjectName("qtedmVersionDialog");
+    dialog->setWindowTitle(QStringLiteral("Version"));
+    dialog->setModal(false);
+    dialog->setAutoFillBackground(true);
+    dialog->setPalette(palette);
+    dialog->setBackgroundRole(QPalette::Window);
+    dialog->setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+
+    auto *layout = new QHBoxLayout(dialog);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(16);
+
+    auto *nameFrame = new QFrame(dialog);
+    nameFrame->setFrameShape(QFrame::Panel);
+    nameFrame->setFrameShadow(QFrame::Raised);
+    nameFrame->setLineWidth(2);
+    nameFrame->setMidLineWidth(1);
+    nameFrame->setAutoFillBackground(true);
+    nameFrame->setPalette(palette);
+    nameFrame->setBackgroundRole(QPalette::Button);
+
+    auto *nameLayout = new QVBoxLayout(nameFrame);
+    nameLayout->setContentsMargins(12, 8, 12, 8);
+    nameLayout->setSpacing(0);
+
+    auto *nameLabel = new QLabel(QStringLiteral("Q\nt\nE\nD\nM"), nameFrame);
+    QFont nameFont = titleFont;
+    nameFont.setPixelSize(nameFont.pixelSize() + 4);
+    nameLabel->setFont(nameFont);
+    nameLabel->setAlignment(Qt::AlignCenter);
+    nameLayout->addStretch(1);
+    nameLayout->addWidget(nameLabel, 0, Qt::AlignCenter);
+    nameLayout->addStretch(1);
+
+    layout->addWidget(nameFrame, 0, Qt::AlignTop);
+
+    auto *infoLayout = new QVBoxLayout;
+    infoLayout->setSpacing(8);
+
+    auto *descriptionLabel = new QLabel(
+        QStringLiteral("Qt-Based Editor & Display Manager"), dialog);
+    descriptionLabel->setFont(titleFont);
+    descriptionLabel->setAlignment(Qt::AlignLeft);
+    infoLayout->addWidget(descriptionLabel);
+
+    auto *versionLabel = new QLabel(
+        QStringLiteral("QtEDM Version 1.0.0  (EPICS 7.0.9.1-DEV)"), dialog);
+    versionLabel->setFont(titleFont);
+    versionLabel->setAlignment(Qt::AlignLeft);
+    infoLayout->addWidget(versionLabel);
+
+    auto *developedLabel = new QLabel(
+        QStringLiteral(
+            "Developed at Argonne National Laboratory\n"
+            "by Robert Soliday"),
+        dialog);
+    developedLabel->setFont(bodyFont);
+    developedLabel->setAlignment(Qt::AlignLeft);
+    developedLabel->setWordWrap(false);
+    infoLayout->addWidget(developedLabel);
+
+    infoLayout->addStretch(1);
+
+    auto *buttonLayout = new QHBoxLayout;
+    buttonLayout->addStretch(1);
+    auto *okButton = new QPushButton(QStringLiteral("OK"), dialog);
+    okButton->setFont(titleFont);
+    okButton->setAutoDefault(false);
+    okButton->setDefault(false);
+    buttonLayout->addWidget(okButton);
+    infoLayout->addLayout(buttonLayout);
+
+    layout->addLayout(infoLayout);
+
+    QObject::connect(okButton, &QPushButton::clicked, dialog, &QDialog::accept);
+    QTimer::singleShot(5000, dialog, &QDialog::accept);
+
+    dialog->adjustSize();
+    dialog->setFixedSize(dialog->sizeHint());
+    dialog->show();
+}
+
 } // namespace
 
 // Entry point
@@ -75,8 +165,8 @@ int main(int argc, char *argv[])
         kMiscFixed13FontSize, 13);
 
     QMainWindow win;
-    win.setObjectName("MedmMainWindow");
-    win.setWindowTitle("MEDM");
+    win.setObjectName("QtedmMainWindow");
+    win.setWindowTitle("QtEDM");
 
     // Match the teal Motif background used by the legacy MEDM main window.
     const QColor backgroundColor(0xb0, 0xc3, 0xca);
@@ -280,6 +370,8 @@ int main(int argc, char *argv[])
 
     central->setLayout(layout);
     win.setCentralWidget(central);
+
+    showVersionDialog(&win, fixed13Font, fixed10Font, palette);
 
     win.adjustSize();
     win.setFixedSize(win.sizeHint());

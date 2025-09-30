@@ -1,6 +1,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QByteArray>
+#include <cstddef>
 #include <QColor>
 #include <QCoreApplication>
 #include <QFont>
@@ -19,6 +20,36 @@
 #include <QWidget>
 
 #include "resources/fonts/misc_fixed_10_otb.h"
+#include "resources/fonts/misc_fixed_13_otb.h"
+
+namespace {
+
+QFont loadMiscFixedFont(const unsigned char *data, std::size_t size,
+    int pixelSize)
+{
+    const int fontId = QFontDatabase::addApplicationFontFromData(QByteArray(
+        reinterpret_cast<const char *>(data), static_cast<int>(size)));
+
+    QFont font;
+    if (fontId != -1) {
+        const QStringList families = QFontDatabase::applicationFontFamilies(
+            fontId);
+        if (!families.isEmpty()) {
+            font = QFont(families.first());
+        }
+    }
+
+    if (font.family().isEmpty()) {
+        font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    }
+
+    font.setStyleHint(QFont::TypeWriter, QFont::PreferBitmap);
+    font.setFixedPitch(true);
+    font.setPixelSize(pixelSize);
+    return font;
+}
+
+} // namespace
 
 // Entry point
 int main(int argc, char *argv[])
@@ -36,23 +67,12 @@ int main(int argc, char *argv[])
     // Load the packaged Misc Fixed font so every widget matches the legacy MEDM
     // appearance.  Fall back to the system fixed font if the embedded data
     // cannot be registered for some reason.
-    const int fontId = QFontDatabase::addApplicationFontFromData(QByteArray(
-        reinterpret_cast<const char *>(kMiscFixed10FontData),
-        static_cast<int>(kMiscFixed10FontSize)));
-    QFont fixedFont;
-    if (fontId != -1) {
-        const QStringList families = QFontDatabase::applicationFontFamilies(fontId);
-        if (!families.isEmpty()) {
-            fixedFont = QFont(families.first());
-        }
-    }
-    if (fixedFont.family().isEmpty()) {
-        fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    }
-    fixedFont.setStyleHint(QFont::TypeWriter, QFont::PreferBitmap);
-    fixedFont.setFixedPitch(true);
-    fixedFont.setPixelSize(10);
-    app.setFont(fixedFont);
+    const QFont fixed10Font = loadMiscFixedFont(kMiscFixed10FontData,
+        kMiscFixed10FontSize, 10);
+    app.setFont(fixed10Font);
+
+    const QFont fixed13Font = loadMiscFixedFont(kMiscFixed13FontData,
+        kMiscFixed13FontSize, 13);
 
     QMainWindow win;
     win.setObjectName("MedmMainWindow");
@@ -87,8 +107,10 @@ int main(int argc, char *argv[])
     auto *menuBar = win.menuBar();
     menuBar->setAutoFillBackground(true);
     menuBar->setPalette(palette);
+    menuBar->setFont(fixed13Font);
 
     auto *fileMenu = menuBar->addMenu("&File");
+    fileMenu->setFont(fixed13Font);
     fileMenu->addAction("&New");
     auto *openAct = fileMenu->addAction("&Open...");
     openAct->setShortcut(QKeySequence::Open);
@@ -112,6 +134,7 @@ int main(int argc, char *argv[])
     QObject::connect(closeAct, &QAction::triggered, &win, &QWidget::close);
 
     auto *editMenu = menuBar->addMenu("&Edit");
+    editMenu->setFont(fixed13Font);
     editMenu->addAction("&Undo");
     editMenu->addSeparator();
     editMenu->addAction("Cu&t");
@@ -125,6 +148,7 @@ int main(int argc, char *argv[])
     editMenu->addAction("&Ungroup");
     editMenu->addSeparator();
     auto *alignMenu = editMenu->addMenu("&Align");
+    alignMenu->setFont(fixed13Font);
     alignMenu->addAction("&Left");
     alignMenu->addAction("&Horizontal Center");
     alignMenu->addAction("&Right");
@@ -135,26 +159,31 @@ int main(int argc, char *argv[])
     alignMenu->addAction("Ed&ges to Grid");
 
     auto *spaceMenu = editMenu->addMenu("Space &Evenly");
+    spaceMenu->setFont(fixed13Font);
     spaceMenu->addAction("&Horizontal");
     spaceMenu->addAction("&Vertical");
     spaceMenu->addAction("&2-D");
 
     auto *centerMenu = editMenu->addMenu("&Center");
+    centerMenu->setFont(fixed13Font);
     centerMenu->addAction("&Horizontally in Display");
     centerMenu->addAction("&Vertically in Display");
     centerMenu->addAction("&Both");
 
     auto *orientMenu = editMenu->addMenu("&Orient");
+    orientMenu->setFont(fixed13Font);
     orientMenu->addAction("Flip &Horizontally");
     orientMenu->addAction("Flip &Vertically");
     orientMenu->addAction("Rotate &Clockwise");
     orientMenu->addAction("Rotate &Counterclockwise");
 
     auto *sizeMenu = editMenu->addMenu("&Size");
+    sizeMenu->setFont(fixed13Font);
     sizeMenu->addAction("&Same Size");
     sizeMenu->addAction("Text to &Contents");
 
     auto *gridMenu = editMenu->addMenu("&Grid");
+    gridMenu->setFont(fixed13Font);
     gridMenu->addAction("Toggle Show &Grid");
     gridMenu->addAction("Toggle &Snap To Grid");
     gridMenu->addAction("Grid &Spacing...");
@@ -172,11 +201,13 @@ int main(int argc, char *argv[])
     editMenu->menuAction()->setEnabled(false);
 
     auto *viewMenu = menuBar->addMenu("&View");
+    viewMenu->setFont(fixed13Font);
     viewMenu->addAction("&Message Window");
     viewMenu->addAction("&Statistics Window");
     viewMenu->addAction("&Display List");
 
     auto *palettesMenu = menuBar->addMenu("&Palettes");
+    palettesMenu->setFont(fixed13Font);
     palettesMenu->addAction("&Object");
     palettesMenu->addAction("&Resource");
     palettesMenu->addAction("&Color");
@@ -184,6 +215,7 @@ int main(int argc, char *argv[])
     palettesMenu->menuAction()->setEnabled(false);
 
     auto *helpMenu = menuBar->addMenu("&Help");
+    helpMenu->setFont(fixed13Font);
     helpMenu->addAction("&Overview");
     helpMenu->addAction("&Contents");
     helpMenu->addAction("Object &Index");
@@ -218,6 +250,7 @@ int main(int argc, char *argv[])
     panelLayout->setSpacing(6);
 
     auto *modeBox = new QGroupBox("Mode");
+    modeBox->setFont(fixed13Font);
     modeBox->setAutoFillBackground(true);
     modeBox->setPalette(palette);
     modeBox->setBackgroundRole(QPalette::Window);
@@ -233,6 +266,8 @@ int main(int argc, char *argv[])
     modeLayout->setSpacing(14);
     auto *editModeButton = new QRadioButton("Edit");
     auto *executeModeButton = new QRadioButton("Execute");
+    editModeButton->setFont(fixed13Font);
+    executeModeButton->setFont(fixed13Font);
     editModeButton->setChecked(true);
     modeLayout->addWidget(editModeButton);
     modeLayout->addWidget(executeModeButton);

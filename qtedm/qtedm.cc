@@ -9,6 +9,7 @@
 #include <QFontDatabase>
 #include <QFrame>
 #include <QGroupBox>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMainWindow>
@@ -18,18 +19,32 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSizePolicy>
+#include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <QStringList>
 #include <QWidget>
 
+#include "legacy_fonts.h"
+#include "resources/fonts/adobe_helvetica_24_otb.h"
+#include "resources/fonts/adobe_helvetica_bold_24_otb.h"
+#include "resources/fonts/adobe_times_18_otb.h"
 #include "resources/fonts/misc_fixed_10_otb.h"
+#include "resources/fonts/misc_fixed_10x20_otb.h"
 #include "resources/fonts/misc_fixed_13_otb.h"
+#include "resources/fonts/misc_fixed_7x13_otb.h"
+#include "resources/fonts/misc_fixed_7x14_otb.h"
+#include "resources/fonts/misc_fixed_8_otb.h"
+#include "resources/fonts/misc_fixed_9_otb.h"
+#include "resources/fonts/misc_fixed_9x15_otb.h"
+#include "resources/fonts/sony_fixed_12x24_otb.h"
+#include "resources/fonts/sony_fixed_8x16_otb.h"
 
 namespace {
 
-QFont loadMiscFixedFont(const unsigned char *data, std::size_t size,
-    int pixelSize)
+QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
+    int pixelSize, QFont::StyleHint styleHint, bool fixedPitch,
+    QFont::Weight weight)
 {
     const int fontId = QFontDatabase::addApplicationFontFromData(QByteArray(
         reinterpret_cast<const char *>(data), static_cast<int>(size)));
@@ -44,12 +59,18 @@ QFont loadMiscFixedFont(const unsigned char *data, std::size_t size,
     }
 
     if (font.family().isEmpty()) {
-        font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+        const QFontDatabase::SystemFont fallback =
+            styleHint == QFont::TypeWriter ? QFontDatabase::FixedFont
+                                           : QFontDatabase::GeneralFont;
+        font = QFontDatabase::systemFont(fallback);
     }
 
-    font.setStyleHint(QFont::TypeWriter, QFont::PreferBitmap);
-    font.setFixedPitch(true);
+    font.setStyleHint(styleHint, QFont::PreferBitmap);
+    font.setStyleStrategy(QFont::PreferBitmap);
+    font.setFixedPitch(fixedPitch);
     font.setPixelSize(pixelSize);
+    font.setWeight(weight);
+    font.setBold(weight >= QFont::DemiBold);
     return font;
 }
 
@@ -141,6 +162,115 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
 
 } // namespace
 
+namespace LegacyFonts {
+
+const QHash<QString, QFont> &all()
+{
+    static const QHash<QString, QFont> fonts = [] {
+        struct FontSpec {
+            const char *key;
+            const unsigned char *data;
+            std::size_t size;
+            int pixelSize;
+            QFont::StyleHint styleHint;
+            bool fixedPitch;
+            QFont::Weight weight;
+        };
+
+        const FontSpec fontSpecs[] = {
+            {"miscFixed8", kMiscFixed8FontData, kMiscFixed8FontSize, 8,
+                QFont::TypeWriter, true, QFont::Normal},
+            {"miscFixed9", kMiscFixed9FontData, kMiscFixed9FontSize, 9,
+                QFont::TypeWriter, true, QFont::Normal},
+            {"miscFixed10", kMiscFixed10FontData, kMiscFixed10FontSize, 10,
+                QFont::TypeWriter, true, QFont::Normal},
+            {"miscFixed13", kMiscFixed13FontData, kMiscFixed13FontSize, 13,
+                QFont::TypeWriter, true, QFont::Normal},
+            {"miscFixed7x13", kMiscFixed7x13FontData, kMiscFixed7x13FontSize,
+                13, QFont::TypeWriter, true, QFont::Normal},
+            {"miscFixed7x14", kMiscFixed7x14FontData, kMiscFixed7x14FontSize,
+                14, QFont::TypeWriter, true, QFont::Normal},
+            {"miscFixed9x15", kMiscFixed9x15FontData, kMiscFixed9x15FontSize,
+                15, QFont::TypeWriter, true, QFont::Normal},
+            {"sonyFixed8x16", kSonyFixed8x16FontData, kSonyFixed8x16FontSize,
+                16, QFont::TypeWriter, true, QFont::Normal},
+            {"miscFixed10x20", kMiscFixed10x20FontData,
+                kMiscFixed10x20FontSize, 20, QFont::TypeWriter, true,
+                QFont::Normal},
+            {"sonyFixed12x24", kSonyFixed12x24FontData,
+                kSonyFixed12x24FontSize, 24, QFont::TypeWriter, true,
+                QFont::Normal},
+            {"adobeTimes18", kAdobeTimes18FontData, kAdobeTimes18FontSize, 25,
+                QFont::Serif, false, QFont::Normal},
+            {"adobeHelvetica24", kAdobeHelvetica24FontData,
+                kAdobeHelvetica24FontSize, 34, QFont::SansSerif, false,
+                QFont::Normal},
+            {"adobeHelveticaBold24", kAdobeHelveticaBold24FontData,
+                kAdobeHelveticaBold24FontSize, 34, QFont::SansSerif, false,
+                QFont::Bold},
+        };
+
+        QHash<QString, QFont> fonts;
+        for (const FontSpec &spec : fontSpecs) {
+            fonts.insert(QString::fromLatin1(spec.key), loadEmbeddedFont(
+                spec.data, spec.size, spec.pixelSize, spec.styleHint,
+                spec.fixedPitch, spec.weight));
+        }
+
+        struct FontAlias {
+            const char *alias;
+            const char *key;
+        };
+
+        const FontAlias fontAliases[] = {
+            {"widgetDM_4", "miscFixed8"},
+            {"widgetDM_6", "miscFixed8"},
+            {"widgetDM_8", "miscFixed9"},
+            {"widgetDM_10", "miscFixed10"},
+            {"widgetDM_12", "miscFixed7x13"},
+            {"widgetDM_14", "miscFixed7x14"},
+            {"widgetDM_16", "miscFixed9x15"},
+            {"widgetDM_18", "sonyFixed8x16"},
+            {"widgetDM_20", "miscFixed10x20"},
+            {"widgetDM_22", "sonyFixed12x24"},
+            {"widgetDM_24", "sonyFixed12x24"},
+            {"widgetDM_30", "adobeTimes18"},
+            {"widgetDM_36", "adobeHelvetica24"},
+            {"widgetDM_40", "adobeHelveticaBold24"},
+            {"widgetDM_48", "adobeHelveticaBold24"},
+            {"widgetDM_60", "adobeHelveticaBold24"},
+        };
+
+        for (const FontAlias &alias : fontAliases) {
+            const QString key = QString::fromLatin1(alias.key);
+            const QFont font = fonts.value(key);
+            if (!font.family().isEmpty()) {
+                fonts.insert(QString::fromLatin1(alias.alias), font);
+            }
+        }
+
+        return fonts;
+    }();
+
+    return fonts;
+}
+
+QFont font(const QString &key)
+{
+    return all().value(key);
+}
+
+QFont fontOrDefault(const QString &key, const QFont &fallback)
+{
+    const QHash<QString, QFont> &fonts = all();
+    if (fonts.contains(key)) {
+        return fonts.value(key);
+    }
+    return fallback;
+}
+
+} // namespace LegacyFonts
+
 // Entry point
 int main(int argc, char *argv[])
 {
@@ -154,15 +284,16 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
 
-    // Load the packaged Misc Fixed font so every widget matches the legacy MEDM
+    // Load the packaged bitmap fonts so every widget matches the legacy MEDM
     // appearance.  Fall back to the system fixed font if the embedded data
     // cannot be registered for some reason.
-    const QFont fixed10Font = loadMiscFixedFont(kMiscFixed10FontData,
-        kMiscFixed10FontSize, 10);
+    const QFont fixed10Font = LegacyFonts::fontOrDefault(
+        QStringLiteral("widgetDM_10"),
+        QFontDatabase::systemFont(QFontDatabase::FixedFont));
     app.setFont(fixed10Font);
 
-    const QFont fixed13Font = loadMiscFixedFont(kMiscFixed13FontData,
-        kMiscFixed13FontSize, 13);
+    const QFont fixed13Font = LegacyFonts::fontOrDefault(
+        QStringLiteral("miscFixed13"), fixed10Font);
 
     QMainWindow win;
     win.setObjectName("QtedmMainWindow");

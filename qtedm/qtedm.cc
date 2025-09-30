@@ -21,6 +21,7 @@
 #include <QSizePolicy>
 #include <QString>
 #include <QStringList>
+#include <QStyleFactory>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -298,6 +299,11 @@ int main(int argc, char *argv[])
 #endif
 
     QApplication app(argc, argv);
+
+    if (auto *fusionStyle =
+            QStyleFactory::create(QStringLiteral("Fusion"))) {
+        app.setStyle(fusionStyle);
+    }
 
     // Load the packaged bitmap fonts so every widget matches the legacy MEDM
     // appearance.  Fall back to the system fixed font if the embedded data

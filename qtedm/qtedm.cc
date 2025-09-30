@@ -75,89 +75,104 @@ QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
 }
 
 void showVersionDialog(QWidget *parent, const QFont &titleFont,
-    const QFont &bodyFont, const QPalette &palette)
+    const QFont &bodyFont, const QPalette &palette, bool autoClose = true)
 {
-    auto *dialog = new QDialog(parent, Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
-    dialog->setObjectName("qtedmVersionDialog");
-    dialog->setWindowTitle(QStringLiteral("Version"));
-    dialog->setModal(false);
-    dialog->setAutoFillBackground(true);
+    QDialog *dialog = parent ? parent->findChild<QDialog *>(
+        QStringLiteral("qtedmVersionDialog"))
+                             : nullptr;
+
+    if (!dialog) {
+        dialog = new QDialog(parent,
+            Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
+        dialog->setObjectName(QStringLiteral("qtedmVersionDialog"));
+        dialog->setWindowTitle(QStringLiteral("Version"));
+        dialog->setModal(false);
+        dialog->setAutoFillBackground(true);
+        dialog->setBackgroundRole(QPalette::Window);
+        dialog->setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+
+        auto *layout = new QHBoxLayout(dialog);
+        layout->setContentsMargins(12, 12, 12, 12);
+        layout->setSpacing(16);
+
+        auto *nameFrame = new QFrame(dialog);
+        nameFrame->setFrameShape(QFrame::Panel);
+        nameFrame->setFrameShadow(QFrame::Raised);
+        nameFrame->setLineWidth(2);
+        nameFrame->setMidLineWidth(1);
+        nameFrame->setAutoFillBackground(true);
+        nameFrame->setBackgroundRole(QPalette::Button);
+        nameFrame->setPalette(palette);
+
+        auto *nameLayout = new QVBoxLayout(nameFrame);
+        nameLayout->setContentsMargins(12, 8, 12, 8);
+        nameLayout->setSpacing(0);
+
+        auto *nameLabel = new QLabel(QStringLiteral("QtEDM"), nameFrame);
+        QFont nameFont = titleFont;
+        nameFont.setPixelSize(nameFont.pixelSize() + 4);
+        nameLabel->setFont(nameFont);
+        nameLabel->setAlignment(Qt::AlignCenter);
+        nameLayout->addStretch(1);
+        nameLayout->addWidget(nameLabel, 0, Qt::AlignCenter);
+        nameLayout->addStretch(1);
+
+        layout->addWidget(nameFrame, 0, Qt::AlignTop);
+
+        auto *infoLayout = new QVBoxLayout;
+        infoLayout->setSpacing(8);
+
+        auto *descriptionLabel = new QLabel(
+            QStringLiteral("Qt-Based Editor & Display Manager"), dialog);
+        descriptionLabel->setFont(titleFont);
+        descriptionLabel->setAlignment(Qt::AlignLeft);
+        infoLayout->addWidget(descriptionLabel);
+
+        auto *versionLabel = new QLabel(
+            QStringLiteral("QtEDM Version 1.0.0  (EPICS 7.0.9.1-DEV)"), dialog);
+        versionLabel->setFont(titleFont);
+        versionLabel->setAlignment(Qt::AlignLeft);
+        infoLayout->addWidget(versionLabel);
+
+        auto *developedLabel = new QLabel(
+            QStringLiteral(
+                "Developed at Argonne National Laboratory\n"
+                "by Robert Soliday"),
+            dialog);
+        developedLabel->setFont(bodyFont);
+        developedLabel->setAlignment(Qt::AlignLeft);
+        developedLabel->setWordWrap(false);
+        infoLayout->addWidget(developedLabel);
+
+        infoLayout->addStretch(1);
+
+        auto *buttonLayout = new QHBoxLayout;
+        buttonLayout->addStretch(1);
+        auto *okButton = new QPushButton(QStringLiteral("OK"), dialog);
+        okButton->setFont(titleFont);
+        okButton->setAutoDefault(false);
+        okButton->setDefault(false);
+        buttonLayout->addWidget(okButton);
+        infoLayout->addLayout(buttonLayout);
+
+        layout->addLayout(infoLayout);
+
+        QObject::connect(okButton, &QPushButton::clicked, dialog,
+            &QDialog::accept);
+
+        dialog->adjustSize();
+        dialog->setFixedSize(dialog->sizeHint());
+    }
+
     dialog->setPalette(palette);
-    dialog->setBackgroundRole(QPalette::Window);
-    dialog->setWindowFlag(Qt::WindowContextHelpButtonHint, false);
 
-    auto *layout = new QHBoxLayout(dialog);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(16);
+    if (autoClose) {
+        QTimer::singleShot(5000, dialog, &QDialog::accept);
+    }
 
-    auto *nameFrame = new QFrame(dialog);
-    nameFrame->setFrameShape(QFrame::Panel);
-    nameFrame->setFrameShadow(QFrame::Raised);
-    nameFrame->setLineWidth(2);
-    nameFrame->setMidLineWidth(1);
-    nameFrame->setAutoFillBackground(true);
-    nameFrame->setPalette(palette);
-    nameFrame->setBackgroundRole(QPalette::Button);
-
-    auto *nameLayout = new QVBoxLayout(nameFrame);
-    nameLayout->setContentsMargins(12, 8, 12, 8);
-    nameLayout->setSpacing(0);
-
-    auto *nameLabel = new QLabel(QStringLiteral("Q\nt\nE\nD\nM"), nameFrame);
-    QFont nameFont = titleFont;
-    nameFont.setPixelSize(nameFont.pixelSize() + 4);
-    nameLabel->setFont(nameFont);
-    nameLabel->setAlignment(Qt::AlignCenter);
-    nameLayout->addStretch(1);
-    nameLayout->addWidget(nameLabel, 0, Qt::AlignCenter);
-    nameLayout->addStretch(1);
-
-    layout->addWidget(nameFrame, 0, Qt::AlignTop);
-
-    auto *infoLayout = new QVBoxLayout;
-    infoLayout->setSpacing(8);
-
-    auto *descriptionLabel = new QLabel(
-        QStringLiteral("Qt-Based Editor & Display Manager"), dialog);
-    descriptionLabel->setFont(titleFont);
-    descriptionLabel->setAlignment(Qt::AlignLeft);
-    infoLayout->addWidget(descriptionLabel);
-
-    auto *versionLabel = new QLabel(
-        QStringLiteral("QtEDM Version 1.0.0  (EPICS 7.0.9.1-DEV)"), dialog);
-    versionLabel->setFont(titleFont);
-    versionLabel->setAlignment(Qt::AlignLeft);
-    infoLayout->addWidget(versionLabel);
-
-    auto *developedLabel = new QLabel(
-        QStringLiteral(
-            "Developed at Argonne National Laboratory\n"
-            "by Robert Soliday"),
-        dialog);
-    developedLabel->setFont(bodyFont);
-    developedLabel->setAlignment(Qt::AlignLeft);
-    developedLabel->setWordWrap(false);
-    infoLayout->addWidget(developedLabel);
-
-    infoLayout->addStretch(1);
-
-    auto *buttonLayout = new QHBoxLayout;
-    buttonLayout->addStretch(1);
-    auto *okButton = new QPushButton(QStringLiteral("OK"), dialog);
-    okButton->setFont(titleFont);
-    okButton->setAutoDefault(false);
-    okButton->setDefault(false);
-    buttonLayout->addWidget(okButton);
-    infoLayout->addLayout(buttonLayout);
-
-    layout->addLayout(infoLayout);
-
-    QObject::connect(okButton, &QPushButton::clicked, dialog, &QDialog::accept);
-    QTimer::singleShot(5000, dialog, &QDialog::accept);
-
-    dialog->adjustSize();
-    dialog->setFixedSize(dialog->sizeHint());
     dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
 }
 
 } // namespace
@@ -444,7 +459,11 @@ int main(int argc, char *argv[])
     helpMenu->addAction("&New Features");
     helpMenu->addAction("Technical &Support");
     helpMenu->addAction("On &Help");
-    helpMenu->addAction("On &Version");
+    auto *onVersionAct = helpMenu->addAction("On &Version");
+    QObject::connect(onVersionAct, &QAction::triggered, &win,
+        [&win, &fixed13Font, &fixed10Font, &palette]() {
+            showVersionDialog(&win, fixed13Font, fixed10Font, palette, false);
+        });
 
     auto *central = new QWidget;
     central->setObjectName("mainBB");

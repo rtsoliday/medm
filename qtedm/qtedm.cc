@@ -1,7 +1,10 @@
 #include <QAction>
 #include <QApplication>
+#include <QByteArray>
 #include <QColor>
 #include <QCoreApplication>
+#include <QFont>
+#include <QFontDatabase>
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -12,7 +15,10 @@
 #include <QRadioButton>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+#include <QStringList>
 #include <QWidget>
+
+#include "resources/fonts/misc_fixed_10_otb.h"
 
 // Entry point
 int main(int argc, char *argv[])
@@ -26,6 +32,27 @@ int main(int argc, char *argv[])
 #endif
 
     QApplication app(argc, argv);
+
+    // Load the packaged Misc Fixed font so every widget matches the legacy MEDM
+    // appearance.  Fall back to the system fixed font if the embedded data
+    // cannot be registered for some reason.
+    const int fontId = QFontDatabase::addApplicationFontFromData(QByteArray(
+        reinterpret_cast<const char *>(kMiscFixed10FontData),
+        static_cast<int>(kMiscFixed10FontSize)));
+    QFont fixedFont;
+    if (fontId != -1) {
+        const QStringList families = QFontDatabase::applicationFontFamilies(fontId);
+        if (!families.isEmpty()) {
+            fixedFont = QFont(families.first());
+        }
+    }
+    if (fixedFont.family().isEmpty()) {
+        fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    }
+    fixedFont.setStyleHint(QFont::TypeWriter, QFont::PreferBitmap);
+    fixedFont.setFixedPitch(true);
+    fixedFont.setPixelSize(10);
+    app.setFont(fixedFont);
 
     QMainWindow win;
     win.setObjectName("MedmMainWindow");

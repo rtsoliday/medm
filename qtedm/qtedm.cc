@@ -91,6 +91,18 @@ enum class TextVisibilityMode
   kCalc
 };
 
+enum class RectangleFill
+{
+  kOutline,
+  kSolid
+};
+
+enum class RectangleLineStyle
+{
+  kSolid,
+  kDash
+};
+
 const std::array<QString, 16> &textFontAliases()
 {
     static const std::array<QString, 16> kAliases = {
@@ -374,12 +386,14 @@ constexpr bool kDefaultGridOn = false;
 constexpr bool kDefaultSnapToGrid = false;
 constexpr int kMinimumTextWidth = 40;
 constexpr int kMinimumTextHeight = 20;
+constexpr int kMinimumRectangleSize = 6;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
 
 enum class CreateTool {
   kNone,
   kText,
+  kRectangle,
 };
 
 class DisplayWindow;
@@ -876,6 +890,115 @@ public:
     displayLayout->setRowStretch(6, 1);
     entriesLayout->addWidget(displaySection_);
 
+    rectangleSection_ = new QWidget(entriesWidget_);
+    auto *rectangleLayout = new QGridLayout(rectangleSection_);
+    rectangleLayout->setContentsMargins(0, 0, 0, 0);
+    rectangleLayout->setHorizontalSpacing(12);
+    rectangleLayout->setVerticalSpacing(6);
+
+    rectangleForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(rectangleForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(rectangleForegroundButton_,
+              QStringLiteral("Rectangle Color"), rectangleForegroundSetter_);
+        });
+
+    rectangleFillCombo_ = new QComboBox;
+    rectangleFillCombo_->setFont(valueFont_);
+    rectangleFillCombo_->setAutoFillBackground(true);
+    rectangleFillCombo_->addItem(QStringLiteral("Outline"));
+    rectangleFillCombo_->addItem(QStringLiteral("Solid"));
+    QObject::connect(rectangleFillCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (rectangleFillSetter_) {
+            rectangleFillSetter_(fillFromIndex(index));
+          }
+        });
+
+    rectangleLineStyleCombo_ = new QComboBox;
+    rectangleLineStyleCombo_->setFont(valueFont_);
+    rectangleLineStyleCombo_->setAutoFillBackground(true);
+    rectangleLineStyleCombo_->addItem(QStringLiteral("Solid"));
+    rectangleLineStyleCombo_->addItem(QStringLiteral("Dash"));
+    QObject::connect(rectangleLineStyleCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (rectangleLineStyleSetter_) {
+            rectangleLineStyleSetter_(lineStyleFromIndex(index));
+          }
+        });
+
+    rectangleLineWidthEdit_ = createLineEdit();
+    committedTexts_.insert(rectangleLineWidthEdit_, rectangleLineWidthEdit_->text());
+    rectangleLineWidthEdit_->installEventFilter(this);
+    QObject::connect(rectangleLineWidthEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitRectangleLineWidth(); });
+    QObject::connect(rectangleLineWidthEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitRectangleLineWidth(); });
+
+    rectangleColorModeCombo_ = new QComboBox;
+    rectangleColorModeCombo_->setFont(valueFont_);
+    rectangleColorModeCombo_->setAutoFillBackground(true);
+    rectangleColorModeCombo_->addItem(QStringLiteral("Static"));
+    rectangleColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    rectangleColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(rectangleColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (rectangleColorModeSetter_) {
+            rectangleColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    rectangleVisibilityCombo_ = new QComboBox;
+    rectangleVisibilityCombo_->setFont(valueFont_);
+    rectangleVisibilityCombo_->setAutoFillBackground(true);
+    rectangleVisibilityCombo_->addItem(QStringLiteral("Static"));
+    rectangleVisibilityCombo_->addItem(QStringLiteral("If Not Zero"));
+    rectangleVisibilityCombo_->addItem(QStringLiteral("If Zero"));
+    rectangleVisibilityCombo_->addItem(QStringLiteral("Calc"));
+    QObject::connect(rectangleVisibilityCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (rectangleVisibilityModeSetter_) {
+            rectangleVisibilityModeSetter_(visibilityModeFromIndex(index));
+          }
+        });
+
+    rectangleVisibilityCalcEdit_ = createLineEdit();
+    committedTexts_.insert(rectangleVisibilityCalcEdit_, rectangleVisibilityCalcEdit_->text());
+    rectangleVisibilityCalcEdit_->installEventFilter(this);
+    QObject::connect(rectangleVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitRectangleVisibilityCalc(); });
+    QObject::connect(rectangleVisibilityCalcEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitRectangleVisibilityCalc(); });
+
+    for (int i = 0; i < static_cast<int>(rectangleChannelEdits_.size()); ++i) {
+      rectangleChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(rectangleChannelEdits_[i], rectangleChannelEdits_[i]->text());
+      rectangleChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(rectangleChannelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitRectangleChannel(i); });
+      QObject::connect(rectangleChannelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitRectangleChannel(i); });
+    }
+
+    addRow(rectangleLayout, 0, QStringLiteral("Color"), rectangleForegroundButton_);
+    addRow(rectangleLayout, 1, QStringLiteral("Fill"), rectangleFillCombo_);
+    addRow(rectangleLayout, 2, QStringLiteral("Line Style"), rectangleLineStyleCombo_);
+    addRow(rectangleLayout, 3, QStringLiteral("Line Width"), rectangleLineWidthEdit_);
+    addRow(rectangleLayout, 4, QStringLiteral("Color Mode"), rectangleColorModeCombo_);
+    addRow(rectangleLayout, 5, QStringLiteral("Visibility"), rectangleVisibilityCombo_);
+    addRow(rectangleLayout, 6, QStringLiteral("Vis Calc"), rectangleVisibilityCalcEdit_);
+    addRow(rectangleLayout, 7, QStringLiteral("Channel A"), rectangleChannelEdits_[0]);
+    addRow(rectangleLayout, 8, QStringLiteral("Channel B"), rectangleChannelEdits_[1]);
+    addRow(rectangleLayout, 9, QStringLiteral("Channel C"), rectangleChannelEdits_[2]);
+    addRow(rectangleLayout, 10, QStringLiteral("Channel D"), rectangleChannelEdits_[3]);
+    rectangleLayout->setRowStretch(11, 1);
+    entriesLayout->addWidget(rectangleSection_);
+
     textSection_ = new QWidget(entriesWidget_);
     auto *textLayout = new QGridLayout(textSection_);
     textLayout->setContentsMargins(0, 0, 0, 0);
@@ -968,8 +1091,9 @@ public:
 
     entriesLayout->addStretch(1);
 
-    displaySection_->setVisible(false);
-    textSection_->setVisible(false);
+  displaySection_->setVisible(false);
+  rectangleSection_->setVisible(false);
+  textSection_->setVisible(false);
     updateSectionVisibility(selectionKind_);
 
     scrollArea_->setWidget(entriesWidget_);
@@ -1201,6 +1325,160 @@ public:
     activateWindow();
   }
 
+  void showForRectangle(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> colorGetter,
+      std::function<void(const QColor &)> colorSetter,
+      std::function<RectangleFill()> fillGetter,
+      std::function<void(RectangleFill)> fillSetter,
+      std::function<RectangleLineStyle()> lineStyleGetter,
+      std::function<void(RectangleLineStyle)> lineStyleSetter,
+      std::function<int()> lineWidthGetter,
+      std::function<void(int)> lineWidthSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<TextVisibilityMode()> visibilityModeGetter,
+      std::function<void(TextVisibilityMode)> visibilityModeSetter,
+      std::function<QString()> visibilityCalcGetter,
+      std::function<void(const QString &)> visibilityCalcSetter,
+      std::array<std::function<QString()>, 4> channelGetters,
+      std::array<std::function<void(const QString &)>, 4> channelSetters)
+  {
+    selectionKind_ = SelectionKind::kRectangle;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+
+    rectangleForegroundGetter_ = std::move(colorGetter);
+    rectangleForegroundSetter_ = std::move(colorSetter);
+    rectangleFillGetter_ = std::move(fillGetter);
+    rectangleFillSetter_ = std::move(fillSetter);
+    rectangleLineStyleGetter_ = std::move(lineStyleGetter);
+    rectangleLineStyleSetter_ = std::move(lineStyleSetter);
+    rectangleLineWidthGetter_ = std::move(lineWidthGetter);
+    rectangleLineWidthSetter_ = std::move(lineWidthSetter);
+    rectangleColorModeGetter_ = std::move(colorModeGetter);
+    rectangleColorModeSetter_ = std::move(colorModeSetter);
+    rectangleVisibilityModeGetter_ = std::move(visibilityModeGetter);
+    rectangleVisibilityModeSetter_ = std::move(visibilityModeSetter);
+    rectangleVisibilityCalcGetter_ = std::move(visibilityCalcGetter);
+    rectangleVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
+    rectangleChannelGetters_ = std::move(channelGetters);
+    rectangleChannelSetters_ = std::move(channelSetters);
+
+    QRect rectGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (rectGeometry.width() <= 0) {
+      rectGeometry.setWidth(1);
+    }
+    if (rectGeometry.height() <= 0) {
+      rectGeometry.setHeight(1);
+    }
+    lastCommittedGeometry_ = rectGeometry;
+    updateGeometryEdits(rectGeometry);
+
+    if (rectangleForegroundButton_) {
+      const QColor color = rectangleForegroundGetter_ ? rectangleForegroundGetter_()
+                                                      : palette().color(
+                                                            QPalette::WindowText);
+      setColorButtonColor(rectangleForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (rectangleFillCombo_) {
+      const QSignalBlocker blocker(rectangleFillCombo_);
+      const RectangleFill fill = rectangleFillGetter_ ? rectangleFillGetter_()
+                                                     : RectangleFill::kOutline;
+      rectangleFillCombo_->setCurrentIndex(fillToIndex(fill));
+    }
+
+    if (rectangleLineStyleCombo_) {
+      const QSignalBlocker blocker(rectangleLineStyleCombo_);
+      const RectangleLineStyle style = rectangleLineStyleGetter_ ? rectangleLineStyleGetter_()
+                                                                 : RectangleLineStyle::kSolid;
+      rectangleLineStyleCombo_->setCurrentIndex(lineStyleToIndex(style));
+    }
+
+    if (rectangleLineWidthEdit_) {
+      const int width = rectangleLineWidthGetter_ ? rectangleLineWidthGetter_()
+                                                 : 1;
+      const int clampedWidth = std::max(1, width);
+      const QSignalBlocker blocker(rectangleLineWidthEdit_);
+      rectangleLineWidthEdit_->setText(QString::number(clampedWidth));
+      committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
+    }
+
+    if (rectangleColorModeCombo_) {
+      const QSignalBlocker blocker(rectangleColorModeCombo_);
+      const TextColorMode mode = rectangleColorModeGetter_ ? rectangleColorModeGetter_()
+                                                          : TextColorMode::kStatic;
+      rectangleColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (rectangleVisibilityCombo_) {
+      const QSignalBlocker blocker(rectangleVisibilityCombo_);
+      const TextVisibilityMode mode = rectangleVisibilityModeGetter_
+          ? rectangleVisibilityModeGetter_()
+          : TextVisibilityMode::kStatic;
+      rectangleVisibilityCombo_->setCurrentIndex(visibilityModeToIndex(mode));
+    }
+
+    if (rectangleVisibilityCalcEdit_) {
+      const QString calc = rectangleVisibilityCalcGetter_ ? rectangleVisibilityCalcGetter_()
+                                                          : QString();
+      const QSignalBlocker blocker(rectangleVisibilityCalcEdit_);
+      rectangleVisibilityCalcEdit_->setText(calc);
+      committedTexts_[rectangleVisibilityCalcEdit_] = rectangleVisibilityCalcEdit_->text();
+    }
+
+    for (int i = 0; i < static_cast<int>(rectangleChannelEdits_.size()); ++i) {
+      QLineEdit *edit = rectangleChannelEdits_[i];
+      if (!edit) {
+        continue;
+      }
+      const QString value = rectangleChannelGetters_[i]
+          ? rectangleChannelGetters_[i]()
+          : QString();
+      const QSignalBlocker blocker(edit);
+      edit->setText(value);
+      committedTexts_[edit] = edit->text();
+    }
+
+    elementLabel_->setText(QStringLiteral("Rectangle"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void clearSelectionState()
   {
     geometryGetter_ = {};
@@ -1232,6 +1510,26 @@ public:
     for (auto &setter : textChannelSetters_) {
       setter = {};
     }
+    rectangleForegroundGetter_ = {};
+    rectangleForegroundSetter_ = {};
+    rectangleFillGetter_ = {};
+    rectangleFillSetter_ = {};
+    rectangleLineStyleGetter_ = {};
+    rectangleLineStyleSetter_ = {};
+    rectangleLineWidthGetter_ = {};
+    rectangleLineWidthSetter_ = {};
+    rectangleColorModeGetter_ = {};
+    rectangleColorModeSetter_ = {};
+    rectangleVisibilityModeGetter_ = {};
+    rectangleVisibilityModeSetter_ = {};
+    rectangleVisibilityCalcGetter_ = {};
+    rectangleVisibilityCalcSetter_ = {};
+    for (auto &getter : rectangleChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : rectangleChannelSetters_) {
+      setter = {};
+    }
     activeColorButton_ = nullptr;
     lastCommittedGeometry_ = QRect();
     committedTextString_.clear();
@@ -1252,10 +1550,16 @@ public:
     for (QLineEdit *edit : textChannelEdits_) {
       resetLineEdit(edit);
     }
+    resetLineEdit(rectangleLineWidthEdit_);
+    resetLineEdit(rectangleVisibilityCalcEdit_);
+    for (QLineEdit *edit : rectangleChannelEdits_) {
+      resetLineEdit(edit);
+    }
 
     resetColorButton(foregroundButton_);
     resetColorButton(backgroundButton_);
     resetColorButton(textForegroundButton_);
+    resetColorButton(rectangleForegroundButton_);
 
     if (gridOnCombo_) {
       const QSignalBlocker blocker(gridOnCombo_);
@@ -1280,6 +1584,23 @@ public:
       textVisibilityCombo_->setCurrentIndex(
           visibilityModeToIndex(TextVisibilityMode::kStatic));
     }
+    if (rectangleFillCombo_) {
+      const QSignalBlocker blocker(rectangleFillCombo_);
+      rectangleFillCombo_->setCurrentIndex(fillToIndex(RectangleFill::kOutline));
+    }
+    if (rectangleLineStyleCombo_) {
+      const QSignalBlocker blocker(rectangleLineStyleCombo_);
+      rectangleLineStyleCombo_->setCurrentIndex(lineStyleToIndex(RectangleLineStyle::kSolid));
+    }
+    if (rectangleColorModeCombo_) {
+      const QSignalBlocker blocker(rectangleColorModeCombo_);
+      rectangleColorModeCombo_->setCurrentIndex(colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (rectangleVisibilityCombo_) {
+      const QSignalBlocker blocker(rectangleVisibilityCombo_);
+      rectangleVisibilityCombo_->setCurrentIndex(
+          visibilityModeToIndex(TextVisibilityMode::kStatic));
+    }
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Select..."));
@@ -1298,7 +1619,7 @@ protected:
   }
 
 private:
-  enum class SelectionKind { kNone, kDisplay, kText };
+  enum class SelectionKind { kNone, kDisplay, kRectangle, kText };
   QLineEdit *createLineEdit()
   {
     auto *edit = new QLineEdit;
@@ -1349,8 +1670,14 @@ private:
   {
     if (event->type() == QEvent::FocusOut) {
       if (auto *edit = qobject_cast<QLineEdit *>(object)) {
-        if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
-            || edit == heightEdit_ || edit == gridSpacingEdit_) {
+    const bool isRectangleChannelEdit = std::find(
+      rectangleChannelEdits_.begin(), rectangleChannelEdits_.end(), edit)
+      != rectangleChannelEdits_.end();
+    if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
+      || edit == heightEdit_ || edit == gridSpacingEdit_
+      || edit == rectangleLineWidthEdit_
+      || edit == rectangleVisibilityCalcEdit_
+      || isRectangleChannelEdit) {
           revertLineEdit(edit);
         }
       }
@@ -1401,6 +1728,11 @@ private:
       const bool displayVisible = kind == SelectionKind::kDisplay;
       displaySection_->setVisible(displayVisible);
       displaySection_->setEnabled(displayVisible);
+    }
+    if (rectangleSection_) {
+      const bool rectangleVisible = kind == SelectionKind::kRectangle;
+      rectangleSection_->setVisible(rectangleVisible);
+      rectangleSection_->setEnabled(rectangleVisible);
     }
     if (textSection_) {
       const bool textVisible = kind == SelectionKind::kText;
@@ -1467,6 +1799,64 @@ private:
     }
     const QString value = edit->text();
     textChannelSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitRectangleLineWidth()
+  {
+    if (!rectangleLineWidthEdit_) {
+      return;
+    }
+    if (!rectangleLineWidthSetter_) {
+      revertLineEdit(rectangleLineWidthEdit_);
+      return;
+    }
+    bool ok = false;
+    int value = rectangleLineWidthEdit_->text().toInt(&ok);
+    if (!ok) {
+      revertLineEdit(rectangleLineWidthEdit_);
+      return;
+    }
+    value = std::max(1, value);
+    rectangleLineWidthSetter_(value);
+    const int effectiveWidth = rectangleLineWidthGetter_
+        ? rectangleLineWidthGetter_()
+        : value;
+    const int clampedWidth = std::max(1, effectiveWidth);
+    const QSignalBlocker blocker(rectangleLineWidthEdit_);
+    rectangleLineWidthEdit_->setText(QString::number(clampedWidth));
+    committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
+  }
+
+  void commitRectangleVisibilityCalc()
+  {
+    if (!rectangleVisibilityCalcEdit_) {
+      return;
+    }
+    if (!rectangleVisibilityCalcSetter_) {
+      revertLineEdit(rectangleVisibilityCalcEdit_);
+      return;
+    }
+    const QString value = rectangleVisibilityCalcEdit_->text();
+    rectangleVisibilityCalcSetter_(value);
+    committedTexts_[rectangleVisibilityCalcEdit_] = value;
+  }
+
+  void commitRectangleChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(rectangleChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = rectangleChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!rectangleChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    rectangleChannelSetters_[index](value);
     committedTexts_[edit] = value;
   }
 
@@ -1546,6 +1936,26 @@ private:
     default:
       return 0;
     }
+  }
+
+  RectangleFill fillFromIndex(int index) const
+  {
+    return index == 1 ? RectangleFill::kSolid : RectangleFill::kOutline;
+  }
+
+  int fillToIndex(RectangleFill fill) const
+  {
+    return fill == RectangleFill::kSolid ? 1 : 0;
+  }
+
+  RectangleLineStyle lineStyleFromIndex(int index) const
+  {
+    return index == 1 ? RectangleLineStyle::kDash : RectangleLineStyle::kSolid;
+  }
+
+  int lineStyleToIndex(RectangleLineStyle style) const
+  {
+    return style == RectangleLineStyle::kDash ? 1 : 0;
   }
 
   void positionRelativeTo(QWidget *reference)
@@ -1670,6 +2080,7 @@ private:
   QFont valueFont_;
   QWidget *geometrySection_ = nullptr;
   QWidget *displaySection_ = nullptr;
+  QWidget *rectangleSection_ = nullptr;
   QWidget *textSection_ = nullptr;
   QLineEdit *xEdit_ = nullptr;
   QLineEdit *yEdit_ = nullptr;
@@ -1684,6 +2095,14 @@ private:
   QComboBox *textVisibilityCombo_ = nullptr;
   QLineEdit *textVisibilityCalcEdit_ = nullptr;
   std::array<QLineEdit *, 4> textChannelEdits_{};
+  QPushButton *rectangleForegroundButton_ = nullptr;
+  QComboBox *rectangleFillCombo_ = nullptr;
+  QComboBox *rectangleLineStyleCombo_ = nullptr;
+  QLineEdit *rectangleLineWidthEdit_ = nullptr;
+  QComboBox *rectangleColorModeCombo_ = nullptr;
+  QComboBox *rectangleVisibilityCombo_ = nullptr;
+  QLineEdit *rectangleVisibilityCalcEdit_ = nullptr;
+  std::array<QLineEdit *, 4> rectangleChannelEdits_{};
   QPushButton *foregroundButton_ = nullptr;
   QPushButton *backgroundButton_ = nullptr;
   QComboBox *gridOnCombo_ = nullptr;
@@ -1804,6 +2223,17 @@ private:
     if (gridSpacingEdit_) {
       committedTexts_[gridSpacingEdit_] = gridSpacingEdit_->text();
     }
+    if (rectangleLineWidthEdit_) {
+      committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
+    }
+    if (rectangleVisibilityCalcEdit_) {
+      committedTexts_[rectangleVisibilityCalcEdit_] = rectangleVisibilityCalcEdit_->text();
+    }
+    for (QLineEdit *edit : rectangleChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
   }
 
   void commitGridSpacing()
@@ -1864,6 +2294,22 @@ private:
   std::array<std::function<QString()>, 4> textChannelGetters_{};
   std::array<std::function<void(const QString &)>, 4> textChannelSetters_{};
   QString committedTextString_;
+  std::function<QColor()> rectangleForegroundGetter_;
+  std::function<void(const QColor &)> rectangleForegroundSetter_;
+  std::function<RectangleFill()> rectangleFillGetter_;
+  std::function<void(RectangleFill)> rectangleFillSetter_;
+  std::function<RectangleLineStyle()> rectangleLineStyleGetter_;
+  std::function<void(RectangleLineStyle)> rectangleLineStyleSetter_;
+  std::function<int()> rectangleLineWidthGetter_;
+  std::function<void(int)> rectangleLineWidthSetter_;
+  std::function<TextColorMode()> rectangleColorModeGetter_;
+  std::function<void(TextColorMode)> rectangleColorModeSetter_;
+  std::function<TextVisibilityMode()> rectangleVisibilityModeGetter_;
+  std::function<void(TextVisibilityMode)> rectangleVisibilityModeSetter_;
+  std::function<QString()> rectangleVisibilityCalcGetter_;
+  std::function<void(const QString &)> rectangleVisibilityCalcSetter_;
+  std::array<std::function<QString()>, 4> rectangleChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4> rectangleChannelSetters_{};
 
   QLineEdit *editForField(GeometryField field) const
   {
@@ -2154,6 +2600,217 @@ private:
   std::array<QString, 4> channels_{};
 };
 
+class RectangleElement : public QWidget
+{
+public:
+  explicit RectangleElement(QWidget *parent = nullptr)
+    : QWidget(parent)
+  {
+    setAutoFillBackground(false);
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    setAttribute(Qt::WA_NoSystemBackground, true);
+    setForegroundColor(palette().color(QPalette::WindowText));
+    setFill(RectangleFill::kOutline);
+    setLineStyle(RectangleLineStyle::kSolid);
+    setLineWidth(1);
+    setColorMode(TextColorMode::kStatic);
+    setVisibilityMode(TextVisibilityMode::kStatic);
+    update();
+  }
+
+  void setSelected(bool selected)
+  {
+    if (selected_ == selected) {
+      return;
+    }
+    selected_ = selected;
+    update();
+  }
+
+  bool isSelected() const
+  {
+    return selected_;
+  }
+
+  QColor color() const
+  {
+    return color_;
+  }
+
+  void setForegroundColor(const QColor &color)
+  {
+    QColor effective = color;
+    if (!effective.isValid()) {
+      effective = defaultForegroundColor();
+    }
+    if (color_ == effective) {
+      return;
+    }
+    color_ = effective;
+    update();
+  }
+
+  RectangleFill fill() const
+  {
+    return fill_;
+  }
+
+  void setFill(RectangleFill fill)
+  {
+    if (fill_ == fill) {
+      return;
+    }
+    fill_ = fill;
+    update();
+  }
+
+  RectangleLineStyle lineStyle() const
+  {
+    return lineStyle_;
+  }
+
+  void setLineStyle(RectangleLineStyle style)
+  {
+    if (lineStyle_ == style) {
+      return;
+    }
+    lineStyle_ = style;
+    update();
+  }
+
+  int lineWidth() const
+  {
+    return lineWidth_;
+  }
+
+  void setLineWidth(int width)
+  {
+    const int clamped = std::max(1, width);
+    if (lineWidth_ == clamped) {
+      return;
+    }
+    lineWidth_ = clamped;
+    update();
+  }
+
+  TextColorMode colorMode() const
+  {
+    return colorMode_;
+  }
+
+  void setColorMode(TextColorMode mode)
+  {
+    colorMode_ = mode;
+  }
+
+  TextVisibilityMode visibilityMode() const
+  {
+    return visibilityMode_;
+  }
+
+  void setVisibilityMode(TextVisibilityMode mode)
+  {
+    visibilityMode_ = mode;
+  }
+
+  QString visibilityCalc() const
+  {
+    return visibilityCalc_;
+  }
+
+  void setVisibilityCalc(const QString &calc)
+  {
+    if (visibilityCalc_ == calc) {
+      return;
+    }
+    visibilityCalc_ = calc;
+  }
+
+  QString channel(int index) const
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return QString();
+    }
+    return channels_[index];
+  }
+
+  void setChannel(int index, const QString &value)
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return;
+    }
+    if (channels_[index] == value) {
+      return;
+    }
+    channels_[index] = value;
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    Q_UNUSED(event);
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    const QColor effectiveColor = color_.isValid() ? color_ : defaultForegroundColor();
+    QRect drawRect = rect().adjusted(0, 0, -1, -1);
+
+    if (fill_ == RectangleFill::kSolid) {
+      painter.setPen(Qt::NoPen);
+      painter.setBrush(effectiveColor);
+      painter.drawRect(drawRect);
+    } else {
+      painter.setBrush(Qt::NoBrush);
+      QPen pen(effectiveColor);
+      pen.setWidth(lineWidth_);
+      pen.setStyle(lineStyle_ == RectangleLineStyle::kDash
+              ? Qt::DashLine
+              : Qt::SolidLine);
+      painter.setPen(pen);
+      QRect outlineRect = drawRect;
+      if (lineWidth_ > 1) {
+        const int offset = lineWidth_ / 2;
+        outlineRect.adjust(offset, offset, -offset, -offset);
+      }
+      if (outlineRect.width() > 0 && outlineRect.height() > 0) {
+        painter.drawRect(outlineRect);
+      }
+    }
+
+    if (selected_) {
+      QPen pen(Qt::black);
+      pen.setStyle(Qt::DashLine);
+      pen.setWidth(1);
+      painter.setPen(pen);
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(drawRect);
+    }
+  }
+
+private:
+  QColor defaultForegroundColor() const
+  {
+    if (const QWidget *parent = parentWidget()) {
+      return parent->palette().color(QPalette::WindowText);
+    }
+    if (qApp) {
+      return qApp->palette().color(QPalette::WindowText);
+    }
+    return QColor(Qt::black);
+  }
+
+  bool selected_ = false;
+  QColor color_;
+  RectangleFill fill_ = RectangleFill::kOutline;
+  RectangleLineStyle lineStyle_ = RectangleLineStyle::kSolid;
+  int lineWidth_ = 1;
+  TextColorMode colorMode_ = TextColorMode::kStatic;
+  TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
+  QString visibilityCalc_;
+  std::array<QString, 4> channels_{};
+};
+
 class DisplayWindow : public QMainWindow
 {
 public:
@@ -2235,12 +2892,13 @@ protected:
   {
     if (event->button() == Qt::LeftButton) {
       if (auto state = state_.lock(); state && state->editMode) {
-        if (state->createTool == CreateTool::kText) {
+        if (state->createTool == CreateTool::kText
+            || state->createTool == CreateTool::kRectangle) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
             if (displayArea_->rect().contains(areaPos)) {
-              clearTextSelection();
-              startTextRubberBand(areaPos);
+              clearSelections();
+              startCreateRubberBand(areaPos, state->createTool);
             }
           }
           event->accept();
@@ -2251,13 +2909,22 @@ protected:
           return;
         }
 
-        if (TextElement *element = textElementAt(event->pos())) {
-          selectTextElement(element);
-          showResourcePaletteForText(element);
-          event->accept();
-          return;
+        if (QWidget *widget = elementAt(event->pos())) {
+          if (auto *text = dynamic_cast<TextElement *>(widget)) {
+            selectTextElement(text);
+            showResourcePaletteForText(text);
+            event->accept();
+            return;
+          }
+          if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+            selectRectangleElement(rectangle);
+            showResourcePaletteForRectangle(rectangle);
+            event->accept();
+            return;
+          }
         }
 
+        clearRectangleSelection();
         clearTextSelection();
 
         if (displaySelected_) {
@@ -2296,11 +2963,10 @@ protected:
 
   void mouseMoveEvent(QMouseEvent *event) override
   {
-    if (textDragActive_) {
-      if (auto state = state_.lock(); state && state->editMode
-          && state->createTool == CreateTool::kText && displayArea_) {
+    if (rubberBandActive_) {
+      if (auto state = state_.lock(); state && state->editMode && displayArea_) {
         const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
-        updateTextRubberBand(areaPos);
+        updateCreateRubberBand(areaPos);
         event->accept();
         return;
       }
@@ -2312,11 +2978,11 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override
   {
     if (event->button() == Qt::LeftButton) {
-      if (textDragActive_) {
+      if (rubberBandActive_) {
         if (auto state = state_.lock(); state && state->editMode
             && displayArea_) {
           const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
-          finishTextRubberBand(areaPos);
+          finishCreateRubberBand(areaPos);
           event->accept();
           return;
         }
@@ -2338,9 +3004,13 @@ private:
   QPoint lastContextMenuGlobalPos_;
   QList<TextElement *> textElements_;
   TextElement *selectedTextElement_ = nullptr;
+  QList<RectangleElement *> rectangleElements_;
+  RectangleElement *selectedRectangle_ = nullptr;
+  QList<QPointer<QWidget>> elementStack_;
   QRubberBand *rubberBand_ = nullptr;
-  bool textDragActive_ = false;
-  QPoint textDragOrigin_;
+  bool rubberBandActive_ = false;
+  QPoint rubberBandOrigin_;
+  CreateTool activeRubberBandTool_ = CreateTool::kNone;
 
   void setDisplaySelected(bool selected)
   {
@@ -2371,10 +3041,20 @@ private:
     selectedTextElement_ = nullptr;
   }
 
+  void clearRectangleSelection()
+  {
+    if (!selectedRectangle_) {
+      return;
+    }
+    selectedRectangle_->setSelected(false);
+    selectedRectangle_ = nullptr;
+  }
+
   void clearSelections()
   {
     clearDisplaySelection();
     clearTextSelection();
+    clearRectangleSelection();
     closeResourcePalette();
   }
 
@@ -2389,6 +3069,7 @@ private:
   {
     clearDisplaySelection();
     clearTextSelection();
+    clearRectangleSelection();
   }
 
   ResourcePaletteDialog *ensureResourcePalette()
@@ -2505,7 +3186,14 @@ private:
           return element->geometry();
         },
         [this, element](const QRect &newGeometry) {
-          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumRectangleSize) {
+            adjusted.setWidth(kMinimumRectangleSize);
+          }
+          if (adjusted.height() < kMinimumRectangleSize) {
+            adjusted.setHeight(kMinimumRectangleSize);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
         },
         [element]() {
           return element->text();
@@ -2546,7 +3234,80 @@ private:
         std::move(channelGetters), std::move(channelSetters));
   }
 
-  TextElement *textElementAt(const QPoint &windowPos) const
+  void showResourcePaletteForRectangle(RectangleElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+  std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+  }};
+  std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [element](const QString &value) { element->setChannel(0, value); },
+        [element](const QString &value) { element->setChannel(1, value); },
+        [element](const QString &value) { element->setChannel(2, value); },
+        [element](const QString &value) { element->setChannel(3, value); },
+  }};
+    dialog->showForRectangle(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+        },
+        [element]() {
+          return element->color();
+        },
+        [element](const QColor &color) {
+          element->setForegroundColor(color);
+        },
+        [element]() {
+          return element->fill();
+        },
+        [element](RectangleFill fill) {
+          element->setFill(fill);
+        },
+        [element]() {
+          return element->lineStyle();
+        },
+        [element](RectangleLineStyle style) {
+          element->setLineStyle(style);
+        },
+        [element]() {
+          return element->lineWidth();
+        },
+        [element](int width) {
+          element->setLineWidth(width);
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [element](TextColorMode mode) {
+          element->setColorMode(mode);
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+        },
+        std::move(channelGetters), std::move(channelSetters));
+  }
+
+  QWidget *elementAt(const QPoint &windowPos) const
   {
     if (!displayArea_) {
       return nullptr;
@@ -2555,13 +3316,35 @@ private:
     if (!displayArea_->rect().contains(areaPos)) {
       return nullptr;
     }
-    for (auto it = textElements_.crbegin(); it != textElements_.crend(); ++it) {
-      TextElement *element = *it;
-      if (element && element->geometry().contains(areaPos)) {
-        return element;
+    for (auto it = elementStack_.crbegin(); it != elementStack_.crend(); ++it) {
+      QWidget *widget = it->data();
+      if (!widget) {
+        continue;
+      }
+      if (widget->geometry().contains(areaPos)) {
+        return widget;
       }
     }
     return nullptr;
+  }
+
+  void bringElementToFront(QWidget *element)
+  {
+    if (!element) {
+      return;
+    }
+    for (auto it = elementStack_.begin(); it != elementStack_.end(); ++it) {
+      QWidget *current = it->data();
+      if (current == element) {
+        QPointer<QWidget> pointer = *it;
+        elementStack_.erase(it);
+        elementStack_.append(pointer);
+        element->raise();
+        return;
+      }
+    }
+    elementStack_.append(QPointer<QWidget>(element));
+    element->raise();
   }
 
   void selectTextElement(TextElement *element)
@@ -2573,36 +3356,56 @@ private:
       selectedTextElement_->setSelected(false);
     }
     clearDisplaySelection();
+    clearRectangleSelection();
     selectedTextElement_ = element;
     selectedTextElement_->setSelected(true);
+    bringElementToFront(element);
   }
 
-  void startTextRubberBand(const QPoint &areaPos)
+  void selectRectangleElement(RectangleElement *element)
   {
-    textDragActive_ = true;
-    textDragOrigin_ = clampToDisplayArea(areaPos);
+    if (!element) {
+      return;
+    }
+    if (selectedRectangle_) {
+      selectedRectangle_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    selectedRectangle_ = element;
+    selectedRectangle_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void startCreateRubberBand(const QPoint &areaPos, CreateTool tool)
+  {
+    rubberBandActive_ = true;
+    activeRubberBandTool_ = tool;
+    rubberBandOrigin_ = clampToDisplayArea(areaPos);
     ensureRubberBand();
     if (rubberBand_) {
-      rubberBand_->setGeometry(QRect(textDragOrigin_, QSize(1, 1)));
+      rubberBand_->setGeometry(QRect(rubberBandOrigin_, QSize(1, 1)));
       rubberBand_->show();
     }
   }
 
-  void updateTextRubberBand(const QPoint &areaPos)
+  void updateCreateRubberBand(const QPoint &areaPos)
   {
-    if (!textDragActive_ || !rubberBand_) {
+    if (!rubberBandActive_ || !rubberBand_) {
       return;
     }
     const QPoint clamped = clampToDisplayArea(areaPos);
-    rubberBand_->setGeometry(QRect(textDragOrigin_, clamped).normalized());
+    rubberBand_->setGeometry(QRect(rubberBandOrigin_, clamped).normalized());
   }
 
-  void finishTextRubberBand(const QPoint &areaPos)
+  void finishCreateRubberBand(const QPoint &areaPos)
   {
-    if (!textDragActive_) {
+    if (!rubberBandActive_) {
       return;
     }
-    textDragActive_ = false;
+    rubberBandActive_ = false;
+    CreateTool tool = activeRubberBandTool_;
+    activeRubberBandTool_ = CreateTool::kNone;
     if (rubberBand_) {
       rubberBand_->hide();
     }
@@ -2610,15 +3413,31 @@ private:
       return;
     }
     const QPoint clamped = clampToDisplayArea(areaPos);
-    QRect rect = QRect(textDragOrigin_, clamped).normalized();
-    if (rect.width() < kMinimumTextWidth) {
-      rect.setWidth(kMinimumTextWidth);
+    QRect rect = QRect(rubberBandOrigin_, clamped).normalized();
+    switch (tool) {
+    case CreateTool::kText:
+      if (rect.width() < kMinimumTextWidth) {
+        rect.setWidth(kMinimumTextWidth);
+      }
+      if (rect.height() < kMinimumTextHeight) {
+        rect.setHeight(kMinimumTextHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createTextElement(rect);
+      break;
+    case CreateTool::kRectangle:
+      if (rect.width() <= 0) {
+        rect.setWidth(1);
+      }
+      if (rect.height() <= 0) {
+        rect.setHeight(1);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createRectangleElement(rect);
+      break;
+    default:
+      break;
     }
-    if (rect.height() < kMinimumTextHeight) {
-      rect.setHeight(kMinimumTextHeight);
-    }
-    rect = adjustRectToDisplayArea(rect);
-    createTextElement(rect);
   }
 
   void createTextElement(const QRect &rect)
@@ -2638,6 +3457,31 @@ private:
     textElements_.append(element);
     selectTextElement(element);
     showResourcePaletteForText(element);
+    deactivateCreateTool();
+  }
+
+  void createRectangleElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumRectangleSize) {
+      target.setWidth(kMinimumRectangleSize);
+    }
+    if (target.height() < kMinimumRectangleSize) {
+      target.setHeight(kMinimumRectangleSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new RectangleElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    rectangleElements_.append(element);
+    selectRectangleElement(element);
+    showResourcePaletteForRectangle(element);
     deactivateCreateTool();
   }
 
@@ -2677,16 +3521,16 @@ private:
   void updateCreateCursor()
   {
     auto state = state_.lock();
-    const bool textToolActive =
-        state && state->createTool == CreateTool::kText;
+    const bool crossCursorActive = state && (state->createTool == CreateTool::kText
+        || state->createTool == CreateTool::kRectangle);
     if (displayArea_) {
-      if (textToolActive) {
+      if (crossCursorActive) {
         displayArea_->setCursor(Qt::CrossCursor);
       } else {
         displayArea_->unsetCursor();
       }
     }
-    if (textToolActive) {
+    if (crossCursorActive) {
       setCursor(Qt::CrossCursor);
     } else {
       unsetCursor();
@@ -2707,7 +3551,8 @@ private:
           display->updateCreateCursor();
         }
       }
-      textDragActive_ = false;
+      rubberBandActive_ = false;
+      activeRubberBandTool_ = CreateTool::kNone;
       if (rubberBand_) {
         rubberBand_->hide();
       }
@@ -2725,7 +3570,8 @@ private:
         }
       }
     }
-    textDragActive_ = false;
+    rubberBandActive_ = false;
+    activeRubberBandTool_ = CreateTool::kNone;
     if (rubberBand_) {
       rubberBand_->hide();
     }
@@ -2758,7 +3604,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(graphicsMenu, QStringLiteral("Rectangle"));
+    auto *rectangleAction =
+        addMenuAction(graphicsMenu, QStringLiteral("Rectangle"));
+    QObject::connect(rectangleAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kRectangle);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(graphicsMenu, QStringLiteral("Line"));
     addMenuAction(graphicsMenu, QStringLiteral("Polygon"));
     addMenuAction(graphicsMenu, QStringLiteral("Polyline"));

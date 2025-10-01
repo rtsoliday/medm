@@ -22,9 +22,11 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QLayout>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QEvent>
+#include <QMetaObject>
 #include <QPalette>
 #include <QPainter>
 #include <QPushButton>
@@ -1417,11 +1419,13 @@ private:
       QRect desiredRect(desiredTopLeft, size());
       if (available.isNull() || available.contains(desiredRect)) {
         move(desiredTopLeft);
+        scheduleDeferredResize(reference);
         return;
       }
     }
 
     moveToTopRight(available, size());
+    scheduleDeferredResize(reference);
   }
 
   QScreen *screenForWidget(const QWidget *widget) const
@@ -1450,7 +1454,25 @@ private:
 
   void resizeToFitContents(const QRect &available)
   {
+    if (entriesWidget_) {
+      entriesWidget_->adjustSize();
+      if (QLayout *entriesLayout = entriesWidget_->layout()) {
+        entriesLayout->activate();
+      }
+    }
+    if (QLayout *dialogLayout = layout()) {
+      dialogLayout->activate();
+    }
+
     QSize target = sizeHint();
+    if (scrollArea_ && entriesWidget_) {
+      const QSize contentHint = entriesWidget_->sizeHint();
+      const QSize scrollHint = scrollArea_->sizeHint();
+      const int widthDelta = std::max(0, contentHint.width() - scrollHint.width());
+      const int heightDelta = std::max(0, contentHint.height() - scrollHint.height());
+      target.rwidth() += widthDelta;
+      target.rheight() += heightDelta;
+    }
     target.rwidth() += 48;
     target.rheight() += 48;
     if (!available.isNull()) {
@@ -1462,6 +1484,40 @@ private:
     newSize.setWidth(std::max(newSize.width(), target.width()));
     newSize.setHeight(std::max(newSize.height(), target.height()));
     resize(newSize);
+  }
+
+  void scheduleDeferredResize(QWidget *reference)
+  {
+    QPointer<ResourcePaletteDialog> guard(this);
+    QPointer<QWidget> ref(reference);
+    QMetaObject::invokeMethod(this, [guard, ref]() {
+      if (!guard) {
+        return;
+      }
+
+  QWidget *referenceWidget = ref ? ref.data() : guard->parentWidget();
+  QWidget *anchorWidget = referenceWidget ? referenceWidget : guard.data();
+  QScreen *screen = guard->screenForWidget(anchorWidget);
+      if (!screen) {
+        screen = QGuiApplication::primaryScreen();
+      }
+      const QRect available = screen ? screen->availableGeometry() : QRect();
+
+      guard->resizeToFitContents(available);
+
+      if (referenceWidget) {
+        const QRect referenceFrame = referenceWidget->frameGeometry();
+        QPoint desiredTopLeft(referenceFrame.topRight());
+        desiredTopLeft.rx() += 12;
+        QRect desiredRect(desiredTopLeft, guard->size());
+        if (available.isNull() || available.contains(desiredRect)) {
+          guard->move(desiredTopLeft);
+          return;
+        }
+      }
+
+      guard->moveToTopRight(available, guard->size());
+    }, Qt::QueuedConnection);
   }
 
   QFont labelFont_;
@@ -1784,16 +1840,14 @@ public:
   {
     QColor effective = color;
     if (!effective.isValid()) {
-      effective = palette().color(QPalette::WindowText);
+      effective = defaultForegroundColor();
     }
-    if (foregroundColor_ == effective) {
-      return;
-    }
+    const bool changed = (foregroundColor_ != effective);
     foregroundColor_ = effective;
-    QPalette pal = palette();
-    pal.setColor(QPalette::WindowText, foregroundColor_);
-    setPalette(pal);
-    update();
+    applyTextColor();
+    if (changed) {
+      update();
+    }
   }
 
   Qt::Alignment textAlignment() const
@@ -1871,15 +1925,53 @@ public:
 private:
   void updateSelectionVisual()
   {
-    if (selected_) {
-      setStyleSheet(QStringLiteral("border: 1px dashed black;"));
-    } else {
-      setStyleSheet(QString());
+    applyTextColor();
+    update();
+  }
+
+  QColor defaultForegroundColor() const
+  {
+    if (const QWidget *parent = parentWidget()) {
+      return parent->palette().color(QPalette::WindowText);
     }
+    if (qApp) {
+      return qApp->palette().color(QPalette::WindowText);
+    }
+    return QColor(Qt::black);
   }
 
   bool selected_ = false;
   QColor foregroundColor_;
+  void applyTextColor()
+  {
+    const QColor color = foregroundColor_.isValid()
+        ? foregroundColor_
+        : defaultForegroundColor();
+
+    setStyleSheet(QString());
+
+    QPalette pal = palette();
+    pal.setColor(QPalette::WindowText, color);
+    pal.setColor(QPalette::Text, color);
+    pal.setColor(QPalette::ButtonText, color);
+    setPalette(pal);
+  }
+
+  void paintEvent(QPaintEvent *event) override
+  {
+    QLabel::paintEvent(event);
+    if (!selected_) {
+      return;
+    }
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    QPen pen(Qt::black);
+    pen.setStyle(Qt::DashLine);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  }
   Qt::Alignment alignment_ = Qt::AlignLeft | Qt::AlignVCenter;
   TextColorMode colorMode_ = TextColorMode::kStatic;
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;

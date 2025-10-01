@@ -20,12 +20,17 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QEvent>
 #include <QPalette>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QPointer>
 #include <QScrollArea>
+#include <QSignalBlocker>
+#include <QPoint>
+#include <QSize>
 #include <QSizePolicy>
+#include <QRect>
 #include <QString>
 #include <QStringList>
 #include <QStyleFactory>
@@ -278,6 +283,11 @@ public:
     colormapEdit_ = createLineEdit();
     gridSpacingEdit_ = createLineEdit();
 
+    setupGeometryField(xEdit_, GeometryField::kX);
+    setupGeometryField(yEdit_, GeometryField::kY);
+    setupGeometryField(widthEdit_, GeometryField::kWidth);
+    setupGeometryField(heightEdit_, GeometryField::kHeight);
+
     foregroundButton_ = createColorButton(
         basePalette.color(QPalette::WindowText));
     backgroundButton_ = createColorButton(
@@ -332,13 +342,26 @@ public:
     setMinimumWidth(sizeHint().width());
   }
 
-  void showForDisplay(const QRect &displayGeometry,
+  void showForDisplay(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
       const QPalette &displayPalette)
   {
-    xEdit_->setText(QString::number(displayGeometry.x()));
-    yEdit_->setText(QString::number(displayGeometry.y()));
-    widthEdit_->setText(QString::number(displayGeometry.width()));
-    heightEdit_->setText(QString::number(displayGeometry.height()));
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+
+    QRect displayGeometry = geometryGetter_ ? geometryGetter_()
+                                            : QRect(QPoint(0, 0),
+                                                  QSize(kDefaultDisplayWidth,
+                                                      kDefaultDisplayHeight));
+    if (displayGeometry.width() <= 0) {
+      displayGeometry.setWidth(kDefaultDisplayWidth);
+    }
+    if (displayGeometry.height() <= 0) {
+      displayGeometry.setHeight(kDefaultDisplayHeight);
+    }
+    lastCommittedGeometry_ = displayGeometry;
+
+    updateGeometryEdits(displayGeometry);
     gridSpacingEdit_->setText(QString::number(kDefaultGridSpacing));
     colormapEdit_->clear();
 
@@ -404,6 +427,20 @@ private:
     layout->addWidget(field, row, 1);
   }
 
+  bool eventFilter(QObject *object, QEvent *event) override
+  {
+    if (event->type() == QEvent::FocusOut) {
+      if (auto *edit = qobject_cast<QLineEdit *>(object)) {
+        if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
+            || edit == heightEdit_) {
+          revertLineEdit(edit);
+        }
+      }
+    }
+
+    return QDialog::eventFilter(object, event);
+  }
+
   void setColorButtonColor(QPushButton *button, const QColor &color)
   {
     QPalette buttonPalette = button->palette();
@@ -429,6 +466,124 @@ private:
   QComboBox *gridOnCombo_ = nullptr;
   QComboBox *snapToGridCombo_ = nullptr;
   QLabel *elementLabel_ = nullptr;
+  enum class GeometryField { kX, kY, kWidth, kHeight };
+  void setupGeometryField(QLineEdit *edit, GeometryField field)
+  {
+    committedTexts_.insert(edit, edit->text());
+    edit->installEventFilter(this);
+    QObject::connect(edit, &QLineEdit::returnPressed, this,
+        [this, field]() { commitGeometryField(field); });
+  }
+
+  void commitGeometryField(GeometryField field)
+  {
+    if (!geometrySetter_) {
+      revertLineEdit(editForField(field));
+      return;
+    }
+
+    QLineEdit *edit = editForField(field);
+    if (!edit) {
+      return;
+    }
+
+    bool ok = false;
+    const int value = edit->text().toInt(&ok);
+    if (!ok) {
+      revertLineEdit(edit);
+      return;
+    }
+
+    QRect geometry = geometryGetter_ ? geometryGetter_() : lastCommittedGeometry_;
+    switch (field) {
+    case GeometryField::kX:
+      geometry.moveLeft(value);
+      break;
+    case GeometryField::kY:
+      geometry.moveTop(value);
+      break;
+    case GeometryField::kWidth:
+      geometry.setWidth(value);
+      break;
+    case GeometryField::kHeight:
+      geometry.setHeight(value);
+      break;
+    }
+
+    if (geometry.width() <= 0 || geometry.height() <= 0) {
+      revertLineEdit(edit);
+      return;
+    }
+
+    geometrySetter_(geometry);
+    const QRect effectiveGeometry = geometryGetter_ ? geometryGetter_() : geometry;
+    lastCommittedGeometry_ = effectiveGeometry;
+    updateGeometryEdits(effectiveGeometry);
+  }
+
+  void revertLineEdit(QLineEdit *edit)
+  {
+    if (!edit) {
+      return;
+    }
+
+    const QString committed = committedTexts_.value(edit, edit->text());
+    if (edit->text() != committed) {
+      const QSignalBlocker blocker(edit);
+      edit->setText(committed);
+    }
+  }
+
+  void updateGeometryEdits(const QRect &geometry)
+  {
+    {
+      const QSignalBlocker blocker(xEdit_);
+      xEdit_->setText(QString::number(geometry.x()));
+    }
+    {
+      const QSignalBlocker blocker(yEdit_);
+      yEdit_->setText(QString::number(geometry.y()));
+    }
+    {
+      const QSignalBlocker blocker(widthEdit_);
+      widthEdit_->setText(QString::number(geometry.width()));
+    }
+    {
+      const QSignalBlocker blocker(heightEdit_);
+      heightEdit_->setText(QString::number(geometry.height()));
+    }
+
+    updateCommittedTexts();
+  }
+
+  void updateCommittedTexts()
+  {
+    committedTexts_[xEdit_] = xEdit_->text();
+    committedTexts_[yEdit_] = yEdit_->text();
+    committedTexts_[widthEdit_] = widthEdit_->text();
+    committedTexts_[heightEdit_] = heightEdit_->text();
+  }
+
+  std::function<QRect()> geometryGetter_;
+  std::function<void(const QRect &)> geometrySetter_;
+  QRect lastCommittedGeometry_;
+  QHash<QLineEdit *, QString> committedTexts_;
+
+  QLineEdit *editForField(GeometryField field) const
+  {
+    switch (field) {
+    case GeometryField::kX:
+      return xEdit_;
+    case GeometryField::kY:
+      return yEdit_;
+    case GeometryField::kWidth:
+      return widthEdit_;
+    case GeometryField::kHeight:
+      return heightEdit_;
+    }
+
+    return nullptr;
+  }
 };
 
 class DisplayWindow : public QMainWindow
@@ -471,12 +626,18 @@ protected:
               resourcePaletteBase_, labelFont_, font(), this);
         }
 
-        const QRect geometry = centralWidget()
-            ? QRect(QPoint(0, 0), centralWidget()->size())
-            : QRect(QPoint(0, 0), size());
-        resourcePalette_->showForDisplay(geometry, centralWidget()
-                ? centralWidget()->palette()
-                : palette());
+        resourcePalette_->showForDisplay(
+            [this]() {
+              return geometry();
+            },
+            [this](const QRect &newGeometry) {
+              setGeometry(newGeometry);
+              if (auto *widget = centralWidget()) {
+                widget->setMinimumSize(newGeometry.size());
+                widget->resize(newGeometry.size());
+              }
+            },
+            centralWidget() ? centralWidget()->palette() : palette());
         event->accept();
         return;
       }

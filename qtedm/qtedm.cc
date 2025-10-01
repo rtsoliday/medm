@@ -2850,6 +2850,54 @@ private:
   }
 };
 
+class MainWindowController : public QObject
+{
+public:
+  MainWindowController(QMainWindow *mainWindow,
+      std::weak_ptr<DisplayState> state)
+    : QObject(mainWindow)
+    , mainWindow_(mainWindow)
+    , state_(std::move(state))
+  {
+    if (QCoreApplication *core = QCoreApplication::instance()) {
+      QObject::connect(core, &QCoreApplication::aboutToQuit, this,
+          [this]() { closeAllDisplays(); });
+    }
+  }
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override
+  {
+    if (watched == mainWindow_ && event->type() == QEvent::Close) {
+      closeAllDisplays();
+    }
+    return QObject::eventFilter(watched, event);
+  }
+
+private:
+  void closeAllDisplays()
+  {
+    if (closing_) {
+      return;
+    }
+    closing_ = true;
+    if (auto state = state_.lock()) {
+      const auto displays = state->displays;
+      for (const auto &display : displays) {
+        if (!display.isNull()) {
+          display->close();
+        }
+      }
+      state->createTool = CreateTool::kNone;
+    }
+    closing_ = false;
+  }
+
+  QPointer<QMainWindow> mainWindow_;
+  std::weak_ptr<DisplayState> state_;
+  bool closing_ = false;
+};
+
 } // namespace
 
 namespace LegacyFonts {
@@ -3195,6 +3243,9 @@ int main(int argc, char *argv[])
     modeBox->setLayout(modeLayout);
 
     auto state = std::make_shared<DisplayState>();
+    auto *mainWindowController = new MainWindowController(&win,
+        std::weak_ptr<DisplayState>(state));
+    win.installEventFilter(mainWindowController);
     auto updateMenus = std::make_shared<std::function<void()>>();
 
     QPalette displayPalette = palette;

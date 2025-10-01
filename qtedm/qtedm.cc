@@ -205,6 +205,7 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
 constexpr int kDefaultGridSpacing = 5;
+constexpr int kMinimumGridSpacing = 2;
 constexpr bool kDefaultGridOn = false;
 constexpr bool kDefaultSnapToGrid = false;
 
@@ -222,6 +223,7 @@ public:
     : QWidget(parent)
   {
     setAutoFillBackground(true);
+    gridColor_ = palette().color(QPalette::WindowText);
   }
 
   void setSelected(bool selected)
@@ -233,10 +235,70 @@ public:
     update();
   }
 
+  void setGridOn(bool gridOn)
+  {
+    if (gridOn_ == gridOn) {
+      return;
+    }
+    gridOn_ = gridOn;
+    update();
+  }
+
+  bool gridOn() const
+  {
+    return gridOn_;
+  }
+
+  void setGridSpacing(int spacing)
+  {
+    const int clampedSpacing = std::max(kMinimumGridSpacing, spacing);
+    if (gridSpacing_ == clampedSpacing) {
+      return;
+    }
+    gridSpacing_ = clampedSpacing;
+    if (gridOn_) {
+      update();
+    }
+  }
+
+  int gridSpacing() const
+  {
+    return gridSpacing_;
+  }
+
+  void setGridColor(const QColor &color)
+  {
+    if (!color.isValid() || gridColor_ == color) {
+      return;
+    }
+    gridColor_ = color;
+    if (gridOn_) {
+      update();
+    }
+  }
+
 protected:
   void paintEvent(QPaintEvent *event) override
   {
     QWidget::paintEvent(event);
+
+    if (gridOn_ && gridSpacing_ > 0) {
+      QPainter painter(this);
+      painter.setRenderHint(QPainter::Antialiasing, false);
+      QPen gridPen(gridColor_);
+      gridPen.setWidth(1);
+      painter.setPen(gridPen);
+
+      const QRect canvas = rect();
+      const int width = canvas.width();
+      const int height = canvas.height();
+      for (int x = 0; x < width; x += gridSpacing_) {
+        for (int y = 0; y < height; y += gridSpacing_) {
+          painter.drawPoint(canvas.left() + x, canvas.top() + y);
+        }
+      }
+    }
+
     if (!selected_) {
       return;
     }
@@ -253,6 +315,9 @@ protected:
 
 private:
   bool selected_ = false;
+  bool gridOn_ = kDefaultGridOn;
+  int gridSpacing_ = kDefaultGridSpacing;
+  QColor gridColor_ = Qt::black;
 };
 
 class ColorPaletteDialog : public QDialog
@@ -580,6 +645,7 @@ public:
     setupGeometryField(yEdit_, GeometryField::kY);
     setupGeometryField(widthEdit_, GeometryField::kWidth);
     setupGeometryField(heightEdit_, GeometryField::kHeight);
+    setupGridSpacingField(gridSpacingEdit_);
 
     foregroundButton_ = createColorButton(
         basePalette.color(QPalette::WindowText));
@@ -600,6 +666,13 @@ public:
         });
 
     gridOnCombo_ = createBooleanComboBox();
+    QObject::connect(gridOnCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (gridOnSetter_) {
+            gridOnSetter_(index == 1);
+          }
+        });
     snapToGridCombo_ = createBooleanComboBox();
 
     addRow(gridLayout, 0, QStringLiteral("X Position"), xEdit_);
@@ -653,7 +726,11 @@ public:
       std::function<QColor()> foregroundGetter,
       std::function<void(const QColor &)> foregroundSetter,
       std::function<QColor()> backgroundGetter,
-      std::function<void(const QColor &)> backgroundSetter)
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<int()> gridSpacingGetter,
+      std::function<void(int)> gridSpacingSetter,
+      std::function<bool()> gridOnGetter,
+      std::function<void(bool)> gridOnSetter)
   {
     geometryGetter_ = std::move(geometryGetter);
     geometrySetter_ = std::move(geometrySetter);
@@ -661,6 +738,10 @@ public:
     foregroundColorSetter_ = std::move(foregroundSetter);
     backgroundColorGetter_ = std::move(backgroundGetter);
     backgroundColorSetter_ = std::move(backgroundSetter);
+    gridSpacingGetter_ = std::move(gridSpacingGetter);
+    gridSpacingSetter_ = std::move(gridSpacingSetter);
+    gridOnGetter_ = std::move(gridOnGetter);
+    gridOnSetter_ = std::move(gridOnSetter);
 
     QRect displayGeometry = geometryGetter_ ? geometryGetter_()
                                             : QRect(QPoint(0, 0),
@@ -675,13 +756,24 @@ public:
     lastCommittedGeometry_ = displayGeometry;
 
     updateGeometryEdits(displayGeometry);
-    gridSpacingEdit_->setText(QString::number(kDefaultGridSpacing));
+    if (gridSpacingEdit_) {
+      const QSignalBlocker blocker(gridSpacingEdit_);
+      const int spacing = gridSpacingGetter_ ? gridSpacingGetter_()
+                                             : kDefaultGridSpacing;
+      gridSpacingEdit_->setText(
+          QString::number(std::max(kMinimumGridSpacing, spacing)));
+      committedTexts_[gridSpacingEdit_] = gridSpacingEdit_->text();
+    }
     colormapEdit_->clear();
 
     setColorButtonColor(foregroundButton_, currentForegroundColor());
     setColorButtonColor(backgroundButton_, currentBackgroundColor());
 
-    gridOnCombo_->setCurrentIndex(kDefaultGridOn ? 1 : 0);
+    if (gridOnCombo_) {
+      const QSignalBlocker blocker(gridOnCombo_);
+      const bool gridOn = gridOnGetter_ ? gridOnGetter_() : kDefaultGridOn;
+      gridOnCombo_->setCurrentIndex(gridOn ? 1 : 0);
+    }
     snapToGridCombo_->setCurrentIndex(kDefaultSnapToGrid ? 1 : 0);
 
     elementLabel_->setText(QStringLiteral("Display"));
@@ -701,6 +793,10 @@ public:
     backgroundColorGetter_ = {};
     backgroundColorSetter_ = {};
     activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
     activeColorButton_ = nullptr;
     lastCommittedGeometry_ = QRect();
 
@@ -791,7 +887,7 @@ private:
     if (event->type() == QEvent::FocusOut) {
       if (auto *edit = qobject_cast<QLineEdit *>(object)) {
         if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
-            || edit == heightEdit_) {
+            || edit == heightEdit_ || edit == gridSpacingEdit_) {
           revertLineEdit(edit);
         }
       }
@@ -919,6 +1015,19 @@ private:
         [this, field]() { commitGeometryField(field); });
   }
 
+  void setupGridSpacingField(QLineEdit *edit)
+  {
+    if (!edit) {
+      return;
+    }
+    committedTexts_.insert(edit, edit->text());
+    edit->installEventFilter(this);
+    QObject::connect(edit, &QLineEdit::returnPressed, this,
+        [this]() { commitGridSpacing(); });
+    QObject::connect(edit, &QLineEdit::editingFinished, this,
+        [this]() { commitGridSpacing(); });
+  }
+
   void commitGeometryField(GeometryField field)
   {
     if (!geometrySetter_) {
@@ -1006,6 +1115,37 @@ private:
     committedTexts_[yEdit_] = yEdit_->text();
     committedTexts_[widthEdit_] = widthEdit_->text();
     committedTexts_[heightEdit_] = heightEdit_->text();
+    if (gridSpacingEdit_) {
+      committedTexts_[gridSpacingEdit_] = gridSpacingEdit_->text();
+    }
+  }
+
+  void commitGridSpacing()
+  {
+    if (!gridSpacingEdit_) {
+      return;
+    }
+    if (!gridSpacingSetter_) {
+      revertLineEdit(gridSpacingEdit_);
+      return;
+    }
+
+    bool ok = false;
+    int value = gridSpacingEdit_->text().toInt(&ok);
+    if (!ok) {
+      revertLineEdit(gridSpacingEdit_);
+      return;
+    }
+
+    value = std::max(kMinimumGridSpacing, value);
+    gridSpacingSetter_(value);
+
+    const int effectiveSpacing = gridSpacingGetter_ ? gridSpacingGetter_()
+                                                   : value;
+    const int clampedSpacing = std::max(kMinimumGridSpacing, effectiveSpacing);
+    const QSignalBlocker blocker(gridSpacingEdit_);
+    gridSpacingEdit_->setText(QString::number(clampedSpacing));
+    committedTexts_[gridSpacingEdit_] = gridSpacingEdit_->text();
   }
 
   std::function<QRect()> geometryGetter_;
@@ -1019,6 +1159,10 @@ private:
   std::function<QColor()> backgroundColorGetter_;
   std::function<void(const QColor &)> backgroundColorSetter_;
   std::function<void(const QColor &)> activeColorSetter_;
+  std::function<int()> gridSpacingGetter_;
+  std::function<void(int)> gridSpacingSetter_;
+  std::function<bool()> gridOnGetter_;
+  std::function<void(bool)> gridOnSetter_;
 
   QLineEdit *editForField(GeometryField field) const
   {
@@ -1126,6 +1270,9 @@ public:
     displayArea_->setBackgroundRole(QPalette::Window);
     displayArea_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     displayArea_->setMinimumSize(kDefaultDisplayWidth, kDefaultDisplayHeight);
+    displayArea_->setGridSpacing(gridSpacing_);
+    displayArea_->setGridOn(gridOn_);
+    displayArea_->setGridColor(displayPalette.color(QPalette::WindowText));
     setCentralWidget(displayArea_);
 
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
@@ -1140,6 +1287,39 @@ public:
       resourcePalette_->close();
     }
     setDisplaySelected(false);
+  }
+
+  int gridSpacing() const
+  {
+    return gridSpacing_;
+  }
+
+  void setGridSpacing(int spacing)
+  {
+    const int clampedSpacing = std::max(kMinimumGridSpacing, spacing);
+    if (gridSpacing_ == clampedSpacing) {
+      return;
+    }
+    gridSpacing_ = clampedSpacing;
+    if (displayArea_) {
+      displayArea_->setGridSpacing(gridSpacing_);
+    }
+  }
+
+  bool isGridOn() const
+  {
+    return gridOn_;
+  }
+
+  void setGridOn(bool gridOn)
+  {
+    if (gridOn_ == gridOn) {
+      return;
+    }
+    gridOn_ = gridOn;
+    if (displayArea_) {
+      displayArea_->setGridOn(gridOn_);
+    }
   }
 
 protected:
@@ -1199,6 +1379,9 @@ protected:
                 widget->setPalette(widgetPalette);
                 widget->update();
               }
+              if (displayArea_) {
+                displayArea_->setGridColor(color);
+              }
               update();
             },
             [this]() {
@@ -1218,6 +1401,18 @@ protected:
                 widget->update();
               }
               update();
+            },
+            [this]() {
+              return gridSpacing();
+            },
+            [this](int spacing) {
+              setGridSpacing(spacing);
+            },
+            [this]() {
+              return isGridOn();
+            },
+            [this](bool gridOn) {
+              setGridOn(gridOn);
             });
         event->accept();
         return;
@@ -1234,6 +1429,8 @@ private:
   QPointer<ResourcePaletteDialog> resourcePalette_;
   DisplayAreaWidget *displayArea_ = nullptr;
   bool displaySelected_ = false;
+  bool gridOn_ = kDefaultGridOn;
+  int gridSpacing_ = kDefaultGridSpacing;
 
   void setDisplaySelected(bool selected)
   {

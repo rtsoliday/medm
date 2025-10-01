@@ -33,6 +33,7 @@
 #include <QPointer>
 #include <QScrollArea>
 #include <QSignalBlocker>
+#include <QKeySequence>
 #include <QPoint>
 #include <QScreen>
 #include <QSize>
@@ -1419,6 +1420,14 @@ protected:
       }
     }
 
+    if (event->button() == Qt::RightButton) {
+      if (auto state = state_.lock(); state && state->editMode) {
+        showEditContextMenu(event->globalPos());
+        event->accept();
+        return;
+      }
+    }
+
     QMainWindow::mousePressEvent(event);
   }
 
@@ -1442,6 +1451,117 @@ private:
       displayArea_->setSelected(selected);
     }
     update();
+  }
+
+  void showEditContextMenu(const QPoint &globalPos)
+  {
+    QMenu menu(this);
+    menu.setObjectName(QStringLiteral("editModeContextMenu"));
+    menu.setSeparatorsCollapsible(false);
+
+    auto addMenuAction = [](QMenu *target, const QString &text,
+        const QKeySequence &shortcut = QKeySequence()) {
+      QAction *action = target->addAction(text);
+      if (!shortcut.isEmpty()) {
+        action->setShortcut(shortcut);
+        action->setShortcutVisibleInContextMenu(true);
+      }
+      return action;
+    };
+
+    auto *objectMenu = menu.addMenu(QStringLiteral("Object"));
+
+    auto *graphicsMenu = objectMenu->addMenu(QStringLiteral("Graphics"));
+    addMenuAction(graphicsMenu, QStringLiteral("Text"));
+    addMenuAction(graphicsMenu, QStringLiteral("Rectangle"));
+    addMenuAction(graphicsMenu, QStringLiteral("Line"));
+    addMenuAction(graphicsMenu, QStringLiteral("Polygon"));
+    addMenuAction(graphicsMenu, QStringLiteral("Polyline"));
+    addMenuAction(graphicsMenu, QStringLiteral("Oval"));
+    addMenuAction(graphicsMenu, QStringLiteral("Arc"));
+    addMenuAction(graphicsMenu, QStringLiteral("Image"));
+
+    auto *monitorsMenu = objectMenu->addMenu(QStringLiteral("Monitors"));
+    addMenuAction(monitorsMenu, QStringLiteral("Text Monitor"));
+    addMenuAction(monitorsMenu, QStringLiteral("Meter"));
+    addMenuAction(monitorsMenu, QStringLiteral("Bar Monitor"));
+    addMenuAction(monitorsMenu, QStringLiteral("Byte Monitor"));
+    addMenuAction(monitorsMenu, QStringLiteral("Scale Monitor"));
+    addMenuAction(monitorsMenu, QStringLiteral("Strip Chart"));
+    addMenuAction(monitorsMenu, QStringLiteral("Cartesian Plot"));
+
+    auto *controllersMenu = objectMenu->addMenu(QStringLiteral("Controllers"));
+    addMenuAction(controllersMenu, QStringLiteral("Text Entry"));
+    addMenuAction(controllersMenu, QStringLiteral("Choice Button"));
+    addMenuAction(controllersMenu, QStringLiteral("Menu"));
+    addMenuAction(controllersMenu, QStringLiteral("Slider"));
+    addMenuAction(controllersMenu, QStringLiteral("Message Button"));
+    addMenuAction(controllersMenu, QStringLiteral("Related Display"));
+    addMenuAction(controllersMenu, QStringLiteral("Shell Command"));
+    addMenuAction(controllersMenu, QStringLiteral("Wheel Switch"));
+
+    addMenuAction(&menu, QStringLiteral("Undo"));
+
+    menu.addSeparator();
+    addMenuAction(&menu, QStringLiteral("Cut"), QKeySequence(QStringLiteral("Shift+Del")));
+    addMenuAction(&menu, QStringLiteral("Copy"), QKeySequence(QStringLiteral("Ctrl+Ins")));
+    addMenuAction(&menu, QStringLiteral("Paste"), QKeySequence(QStringLiteral("Shift+Ins")));
+
+    menu.addSeparator();
+    addMenuAction(&menu, QStringLiteral("Raise"));
+    addMenuAction(&menu, QStringLiteral("Lower"));
+
+    menu.addSeparator();
+    addMenuAction(&menu, QStringLiteral("Group"));
+    addMenuAction(&menu, QStringLiteral("Ungroup"));
+
+    menu.addSeparator();
+    auto *alignMenu = menu.addMenu(QStringLiteral("Align"));
+    addMenuAction(alignMenu, QStringLiteral("Left"));
+    addMenuAction(alignMenu, QStringLiteral("Horizontal Center"));
+    addMenuAction(alignMenu, QStringLiteral("Right"));
+    addMenuAction(alignMenu, QStringLiteral("Top"));
+    addMenuAction(alignMenu, QStringLiteral("Vertical Center"));
+    addMenuAction(alignMenu, QStringLiteral("Bottom"));
+    addMenuAction(alignMenu, QStringLiteral("Position to Grid"));
+    addMenuAction(alignMenu, QStringLiteral("Edges to Grid"));
+
+    auto *spaceMenu = menu.addMenu(QStringLiteral("Space Evenly"));
+    addMenuAction(spaceMenu, QStringLiteral("Horizontal"));
+    addMenuAction(spaceMenu, QStringLiteral("Vertical"));
+    addMenuAction(spaceMenu, QStringLiteral("2-D"));
+
+    auto *centerMenu = menu.addMenu(QStringLiteral("Center"));
+    addMenuAction(centerMenu, QStringLiteral("Horizontally in Display"));
+    addMenuAction(centerMenu, QStringLiteral("Vertically in Display"));
+    addMenuAction(centerMenu, QStringLiteral("Both"));
+
+    auto *orientMenu = menu.addMenu(QStringLiteral("Orient"));
+    addMenuAction(orientMenu, QStringLiteral("Flip Horizontally"));
+    addMenuAction(orientMenu, QStringLiteral("Flip Vertically"));
+    addMenuAction(orientMenu, QStringLiteral("Rotate Clockwise"));
+    addMenuAction(orientMenu, QStringLiteral("Rotate Counterclockwise"));
+
+    auto *sizeMenu = menu.addMenu(QStringLiteral("Size"));
+    addMenuAction(sizeMenu, QStringLiteral("Same Size"));
+    addMenuAction(sizeMenu, QStringLiteral("Text to Contents"));
+
+    auto *gridMenu = menu.addMenu(QStringLiteral("Grid"));
+    addMenuAction(gridMenu, QStringLiteral("Toggle Show Grid"));
+    addMenuAction(gridMenu, QStringLiteral("Toggle Snap To Grid"));
+    addMenuAction(gridMenu, QStringLiteral("Grid Spacing..."));
+
+    menu.addSeparator();
+    addMenuAction(&menu, QStringLiteral("Unselect"));
+    addMenuAction(&menu, QStringLiteral("Select All"));
+    addMenuAction(&menu, QStringLiteral("Select Display"));
+
+    menu.addSeparator();
+    addMenuAction(&menu, QStringLiteral("Find Outliers"));
+    addMenuAction(&menu, QStringLiteral("Refresh"));
+    addMenuAction(&menu, QStringLiteral("Edit Summary..."));
+
+    menu.exec(globalPos);
   }
 };
 

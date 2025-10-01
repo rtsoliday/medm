@@ -2,10 +2,13 @@
 #include <QApplication>
 #include <QByteArray>
 #include <cstddef>
+#include <QCloseEvent>
 #include <QColor>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QGuiApplication>
 #include <QDialog>
+#include <QAbstractScrollArea>
 #include <QList>
 #include <QFont>
 #include <QFontDatabase>
@@ -22,12 +25,16 @@
 #include <QMouseEvent>
 #include <QEvent>
 #include <QPalette>
+#include <QPainter>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QPaintEvent>
+#include <QPen>
 #include <QPointer>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QPoint>
+#include <QScreen>
 #include <QSize>
 #include <QSizePolicy>
 #include <QRect>
@@ -40,6 +47,7 @@
 #include <QWidget>
 #include <functional>
 #include <memory>
+#include <algorithm>
 #include <utility>
 #include <array>
 #include <vector>
@@ -207,6 +215,46 @@ struct DisplayState {
   QList<QPointer<DisplayWindow>> displays;
 };
 
+class DisplayAreaWidget : public QWidget
+{
+public:
+  explicit DisplayAreaWidget(QWidget *parent = nullptr)
+    : QWidget(parent)
+  {
+    setAutoFillBackground(true);
+  }
+
+  void setSelected(bool selected)
+  {
+    if (selected_ == selected) {
+      return;
+    }
+    selected_ = selected;
+    update();
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    QWidget::paintEvent(event);
+    if (!selected_) {
+      return;
+    }
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    QPen pen(Qt::black);
+    pen.setStyle(Qt::DashLine);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    const QRect borderRect = rect().adjusted(0, 0, -1, -1);
+    painter.drawRect(borderRect);
+  }
+
+private:
+  bool selected_ = false;
+};
+
 class ColorPaletteDialog : public QDialog
 {
 public:
@@ -224,6 +272,7 @@ public:
     setBackgroundRole(QPalette::Window);
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, false);
+    setSizeGripEnabled(true);
 
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(8, 8, 8, 8);
@@ -461,6 +510,7 @@ public:
     setBackgroundRole(QPalette::Window);
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, false);
+    setSizeGripEnabled(true);
 
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(8, 8, 8, 8);
@@ -500,17 +550,21 @@ public:
     contentLayout->setContentsMargins(6, 6, 6, 6);
     contentLayout->setSpacing(6);
 
-    auto *scrollArea = new QScrollArea;
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
-    scrollArea->setAutoFillBackground(true);
-    scrollArea->setPalette(basePalette);
+    scrollArea_ = new QScrollArea;
+    scrollArea_->setWidgetResizable(true);
+    scrollArea_->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
+    scrollArea_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea_->setFrameShape(QFrame::NoFrame);
+    scrollArea_->setAutoFillBackground(true);
+    scrollArea_->setPalette(basePalette);
 
-    auto *entriesWidget = new QWidget;
-    entriesWidget->setAutoFillBackground(true);
-    entriesWidget->setPalette(basePalette);
+    entriesWidget_ = new QWidget;
+    entriesWidget_->setAutoFillBackground(true);
+    entriesWidget_->setPalette(basePalette);
+    entriesWidget_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
-    auto *gridLayout = new QGridLayout(entriesWidget);
+    auto *gridLayout = new QGridLayout(entriesWidget_);
     gridLayout->setContentsMargins(0, 0, 0, 0);
     gridLayout->setHorizontalSpacing(12);
     gridLayout->setVerticalSpacing(6);
@@ -560,8 +614,8 @@ public:
     addRow(gridLayout, 9, QStringLiteral("Snap To Grid"), snapToGridCombo_);
     gridLayout->setRowStretch(10, 1);
 
-    scrollArea->setWidget(entriesWidget);
-    contentLayout->addWidget(scrollArea);
+    scrollArea_->setWidget(entriesWidget_);
+    contentLayout->addWidget(scrollArea_);
     mainLayout->addWidget(contentFrame);
 
     auto *messageFrame = new QFrame;
@@ -633,8 +687,56 @@ public:
     elementLabel_->setText(QStringLiteral("Display"));
 
     show();
+    positionRelativeTo(parentWidget());
     raise();
     activateWindow();
+  }
+
+  void clearSelectionState()
+  {
+    geometryGetter_ = {};
+    geometrySetter_ = {};
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    activeColorButton_ = nullptr;
+    lastCommittedGeometry_ = QRect();
+
+    if (colorPaletteDialog_) {
+      colorPaletteDialog_->hide();
+    }
+
+    resetLineEdit(xEdit_);
+    resetLineEdit(yEdit_);
+    resetLineEdit(widthEdit_);
+    resetLineEdit(heightEdit_);
+    resetLineEdit(colormapEdit_);
+    resetLineEdit(gridSpacingEdit_);
+
+    resetColorButton(foregroundButton_);
+    resetColorButton(backgroundButton_);
+
+    if (gridOnCombo_) {
+      gridOnCombo_->setCurrentIndex(0);
+    }
+    if (snapToGridCombo_) {
+      snapToGridCombo_->setCurrentIndex(0);
+    }
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Select..."));
+    }
+
+    updateCommittedTexts();
+  }
+
+protected:
+  void closeEvent(QCloseEvent *event) override
+  {
+    clearSelectionState();
+    QDialog::closeEvent(event);
   }
 
 private:
@@ -710,6 +812,89 @@ private:
     button->setText(color.name(QColor::HexRgb).toUpper());
   }
 
+  void resetLineEdit(QLineEdit *edit)
+  {
+    if (!edit) {
+      return;
+    }
+    const QSignalBlocker blocker(edit);
+    edit->clear();
+  }
+
+  void resetColorButton(QPushButton *button)
+  {
+    if (!button) {
+      return;
+    }
+    QPalette buttonPalette = palette();
+    button->setPalette(buttonPalette);
+    button->setText(QString());
+  }
+
+  void positionRelativeTo(QWidget *reference)
+  {
+    QScreen *screen = screenForWidget(reference);
+    if (!screen) {
+      screen = QGuiApplication::primaryScreen();
+    }
+    const QRect available = screen ? screen->availableGeometry() : QRect();
+
+    resizeToFitContents(available);
+
+    if (reference) {
+      const QRect referenceFrame = reference->frameGeometry();
+      QPoint desiredTopLeft(referenceFrame.topRight());
+      desiredTopLeft.rx() += 12;
+      QRect desiredRect(desiredTopLeft, size());
+      if (available.isNull() || available.contains(desiredRect)) {
+        move(desiredTopLeft);
+        return;
+      }
+    }
+
+    moveToTopRight(available, size());
+  }
+
+  QScreen *screenForWidget(const QWidget *widget) const
+  {
+    if (!widget) {
+      return nullptr;
+    }
+    if (QScreen *screen = widget->screen()) {
+      return screen;
+    }
+    const QPoint globalCenter = widget->mapToGlobal(
+        QPoint(widget->width() / 2, widget->height() / 2));
+    return QGuiApplication::screenAt(globalCenter);
+  }
+
+  void moveToTopRight(const QRect &area, const QSize &dialogSize)
+  {
+    if (area.isNull()) {
+      move(0, 0);
+      return;
+    }
+    const int x = std::max(area.left(), area.right() - dialogSize.width() + 1);
+    const int y = area.top();
+    move(x, y);
+  }
+
+  void resizeToFitContents(const QRect &available)
+  {
+    QSize target = sizeHint();
+    target.rwidth() += 48;
+    target.rheight() += 48;
+    if (!available.isNull()) {
+      target.setWidth(std::min(target.width(), available.width()));
+      target.setHeight(std::min(target.height(), available.height()));
+    }
+
+    QSize newSize = size();
+    newSize.setWidth(std::max(newSize.width(), target.width()));
+    newSize.setHeight(std::max(newSize.height(), target.height()));
+    resize(newSize);
+  }
+
   QFont labelFont_;
   QFont valueFont_;
   QLineEdit *xEdit_ = nullptr;
@@ -723,6 +908,8 @@ private:
   QComboBox *gridOnCombo_ = nullptr;
   QComboBox *snapToGridCombo_ = nullptr;
   QLabel *elementLabel_ = nullptr;
+  QScrollArea *scrollArea_ = nullptr;
+  QWidget *entriesWidget_ = nullptr;
   enum class GeometryField { kX, kY, kWidth, kHeight };
   void setupGeometryField(QLineEdit *edit, GeometryField field)
   {
@@ -932,16 +1119,27 @@ public:
     setAutoFillBackground(true);
     setPalette(displayPalette);
 
-    auto *displayArea = new QWidget;
-    displayArea->setObjectName(QStringLiteral("displayArea"));
-    displayArea->setAutoFillBackground(true);
-    displayArea->setPalette(displayPalette);
-    displayArea->setBackgroundRole(QPalette::Window);
-    displayArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    displayArea->setMinimumSize(kDefaultDisplayWidth, kDefaultDisplayHeight);
-    setCentralWidget(displayArea);
+    displayArea_ = new DisplayAreaWidget;
+    displayArea_->setObjectName(QStringLiteral("displayArea"));
+    displayArea_->setAutoFillBackground(true);
+    displayArea_->setPalette(displayPalette);
+    displayArea_->setBackgroundRole(QPalette::Window);
+    displayArea_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    displayArea_->setMinimumSize(kDefaultDisplayWidth, kDefaultDisplayHeight);
+    setCentralWidget(displayArea_);
 
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
+  }
+
+  void clearSelection()
+  {
+    if (!displaySelected_) {
+      return;
+    }
+    if (!resourcePalette_.isNull() && resourcePalette_->isVisible()) {
+      resourcePalette_->close();
+    }
+    setDisplaySelected(false);
   }
 
 protected:
@@ -949,11 +1147,31 @@ protected:
   {
     if (event->button() == Qt::LeftButton) {
       if (auto state = state_.lock(); state && state->editMode) {
+        if (displaySelected_) {
+          clearSelection();
+          event->accept();
+          return;
+        }
         if (resourcePalette_.isNull()) {
           resourcePalette_ = new ResourcePaletteDialog(
               resourcePaletteBase_, labelFont_, font(), this);
+          QObject::connect(resourcePalette_, &QDialog::finished, this,
+              [this](int) {
+                clearSelection();
+              });
+          QObject::connect(resourcePalette_, &QObject::destroyed, this,
+              [this]() {
+                clearSelection();
+              });
         }
 
+        for (auto &display : state->displays) {
+          if (!display.isNull() && display != this) {
+            display->clearSelection();
+          }
+        }
+
+        setDisplaySelected(true);
         resourcePalette_->showForDisplay(
             [this]() {
               return geometry();
@@ -1014,6 +1232,20 @@ private:
   QFont labelFont_;
   QPalette resourcePaletteBase_;
   QPointer<ResourcePaletteDialog> resourcePalette_;
+  DisplayAreaWidget *displayArea_ = nullptr;
+  bool displaySelected_ = false;
+
+  void setDisplaySelected(bool selected)
+  {
+    if (displaySelected_ == selected) {
+      return;
+    }
+    displaySelected_ = selected;
+    if (displayArea_) {
+      displayArea_->setSelected(selected);
+    }
+    update();
+  }
 };
 
 } // namespace
@@ -1429,6 +1661,13 @@ int main(int argc, char *argv[])
     QObject::connect(editModeButton, &QRadioButton::toggled, &win,
         [state, updateMenus](bool checked) {
           state->editMode = checked;
+          if (!checked) {
+            for (auto &display : state->displays) {
+              if (!display.isNull()) {
+                display->clearSelection();
+              }
+            }
+          }
           if (updateMenus && *updateMenus) {
             (*updateMenus)();
           }

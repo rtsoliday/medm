@@ -1364,10 +1364,20 @@ int main(int argc, char *argv[])
     auto updateMenus = std::make_shared<std::function<void()>>();
 
     QPalette displayPalette = palette;
-    displayPalette.setColor(QPalette::Window, Qt::white);
-    displayPalette.setColor(QPalette::Base, Qt::white);
-    displayPalette.setColor(QPalette::AlternateBase, Qt::white);
-    displayPalette.setColor(QPalette::Button, Qt::white);
+    // Match MEDM default display background (colormap index 4).
+    const QColor displayBackgroundColor(0xbb, 0xbb, 0xbb);
+    displayPalette.setColor(QPalette::Window, displayBackgroundColor);
+    displayPalette.setColor(QPalette::Base, displayBackgroundColor);
+    displayPalette.setColor(QPalette::AlternateBase, displayBackgroundColor);
+    displayPalette.setColor(QPalette::Button, displayBackgroundColor);
+    displayPalette.setColor(QPalette::Disabled, QPalette::Window,
+        displayBackgroundColor);
+    displayPalette.setColor(QPalette::Disabled, QPalette::Base,
+        displayBackgroundColor);
+    displayPalette.setColor(QPalette::Disabled, QPalette::AlternateBase,
+        displayBackgroundColor);
+    displayPalette.setColor(QPalette::Disabled, QPalette::Button,
+        displayBackgroundColor);
 
     *updateMenus = [state, editMenu, palettesMenu, newAct]() {
       auto &displays = state->displays;

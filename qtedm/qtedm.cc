@@ -3,12 +3,14 @@
 #include <QByteArray>
 #include <cstddef>
 #include <QColor>
+#include <QComboBox>
 #include <QCoreApplication>
 #include <QDialog>
 #include <QList>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFrame>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHash>
 #include <QHBoxLayout>
@@ -16,19 +18,24 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
+#include <QMouseEvent>
 #include <QPalette>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QPointer>
+#include <QScrollArea>
 #include <QSizePolicy>
 #include <QString>
 #include <QStringList>
 #include <QStyleFactory>
 #include <QTimer>
+#include <QLineEdit>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <functional>
 #include <memory>
+#include <utility>
 
 #include "legacy_fonts.h"
 #include "resources/fonts/adobe_helvetica_24_otb.h"
@@ -182,25 +189,270 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
 
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
+constexpr int kDefaultGridSpacing = 5;
+constexpr bool kDefaultGridOn = false;
+constexpr bool kDefaultSnapToGrid = false;
+
+class DisplayWindow;
+
+struct DisplayState {
+  bool editMode = true;
+  QList<QPointer<DisplayWindow>> displays;
+};
+
+class ResourcePaletteDialog : public QDialog
+{
+public:
+  ResourcePaletteDialog(const QPalette &basePalette, const QFont &labelFont,
+      const QFont &valueFont, QWidget *parent = nullptr)
+    : QDialog(parent)
+    , labelFont_(labelFont)
+    , valueFont_(valueFont)
+  {
+    setObjectName(QStringLiteral("qtedmResourcePalette"));
+    setWindowTitle(QStringLiteral("Resource Palette"));
+    setModal(false);
+    setAutoFillBackground(true);
+    setPalette(basePalette);
+    setBackgroundRole(QPalette::Window);
+    setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, false);
+
+    auto *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(8, 8, 8, 8);
+    mainLayout->setSpacing(6);
+
+    auto *menuBar = new QMenuBar;
+    menuBar->setAutoFillBackground(true);
+    menuBar->setPalette(basePalette);
+    menuBar->setFont(labelFont_);
+
+    auto *fileMenu = menuBar->addMenu(QStringLiteral("&File"));
+    fileMenu->setFont(labelFont_);
+    auto *closeAction = fileMenu->addAction(QStringLiteral("&Close"));
+    QObject::connect(closeAction, &QAction::triggered, this,
+        &QDialog::close);
+
+    auto *helpMenu = menuBar->addMenu(QStringLiteral("&Help"));
+    helpMenu->setFont(labelFont_);
+    auto *helpAction = helpMenu->addAction(
+        QStringLiteral("On &Resource Palette"));
+    QObject::connect(helpAction, &QAction::triggered, this, [this]() {
+      QMessageBox::information(this, windowTitle(),
+          QStringLiteral("Displays and edits display-related resources."));
+    });
+
+    mainLayout->setMenuBar(menuBar);
+
+    auto *contentFrame = new QFrame;
+    contentFrame->setFrameShape(QFrame::Panel);
+    contentFrame->setFrameShadow(QFrame::Sunken);
+    contentFrame->setLineWidth(2);
+    contentFrame->setMidLineWidth(1);
+    contentFrame->setAutoFillBackground(true);
+    contentFrame->setPalette(basePalette);
+
+    auto *contentLayout = new QVBoxLayout(contentFrame);
+    contentLayout->setContentsMargins(6, 6, 6, 6);
+    contentLayout->setSpacing(6);
+
+    auto *scrollArea = new QScrollArea;
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setAutoFillBackground(true);
+    scrollArea->setPalette(basePalette);
+
+    auto *entriesWidget = new QWidget;
+    entriesWidget->setAutoFillBackground(true);
+    entriesWidget->setPalette(basePalette);
+
+    auto *gridLayout = new QGridLayout(entriesWidget);
+    gridLayout->setContentsMargins(0, 0, 0, 0);
+    gridLayout->setHorizontalSpacing(12);
+    gridLayout->setVerticalSpacing(6);
+
+    xEdit_ = createLineEdit();
+    yEdit_ = createLineEdit();
+    widthEdit_ = createLineEdit();
+    heightEdit_ = createLineEdit();
+    colormapEdit_ = createLineEdit();
+    gridSpacingEdit_ = createLineEdit();
+
+    foregroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    backgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+
+    gridOnCombo_ = createBooleanComboBox();
+    snapToGridCombo_ = createBooleanComboBox();
+
+    addRow(gridLayout, 0, QStringLiteral("X Position"), xEdit_);
+    addRow(gridLayout, 1, QStringLiteral("Y Position"), yEdit_);
+    addRow(gridLayout, 2, QStringLiteral("Width"), widthEdit_);
+    addRow(gridLayout, 3, QStringLiteral("Height"), heightEdit_);
+    addRow(gridLayout, 4, QStringLiteral("Foreground"), foregroundButton_);
+    addRow(gridLayout, 5, QStringLiteral("Background"), backgroundButton_);
+    addRow(gridLayout, 6, QStringLiteral("Colormap"), colormapEdit_);
+    addRow(gridLayout, 7, QStringLiteral("Grid Spacing"), gridSpacingEdit_);
+    addRow(gridLayout, 8, QStringLiteral("Grid On"), gridOnCombo_);
+    addRow(gridLayout, 9, QStringLiteral("Snap To Grid"), snapToGridCombo_);
+    gridLayout->setRowStretch(10, 1);
+
+    scrollArea->setWidget(entriesWidget);
+    contentLayout->addWidget(scrollArea);
+    mainLayout->addWidget(contentFrame);
+
+    auto *messageFrame = new QFrame;
+    messageFrame->setFrameShape(QFrame::Panel);
+    messageFrame->setFrameShadow(QFrame::Sunken);
+    messageFrame->setLineWidth(2);
+    messageFrame->setMidLineWidth(1);
+    messageFrame->setAutoFillBackground(true);
+    messageFrame->setPalette(basePalette);
+
+    auto *messageLayout = new QVBoxLayout(messageFrame);
+    messageLayout->setContentsMargins(8, 4, 8, 4);
+    messageLayout->setSpacing(2);
+
+    elementLabel_ = new QLabel(QStringLiteral("Select..."));
+    elementLabel_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    elementLabel_->setFont(labelFont_);
+    elementLabel_->setAutoFillBackground(false);
+    messageLayout->addWidget(elementLabel_);
+
+    auto *separator = new QFrame;
+    separator->setFrameShape(QFrame::HLine);
+    separator->setFrameShadow(QFrame::Plain);
+    separator->setLineWidth(1);
+    messageLayout->addWidget(separator);
+
+    mainLayout->addWidget(messageFrame);
+
+    adjustSize();
+    setMinimumWidth(sizeHint().width());
+  }
+
+  void showForDisplay(const QRect &displayGeometry,
+      const QPalette &displayPalette)
+  {
+    xEdit_->setText(QString::number(displayGeometry.x()));
+    yEdit_->setText(QString::number(displayGeometry.y()));
+    widthEdit_->setText(QString::number(displayGeometry.width()));
+    heightEdit_->setText(QString::number(displayGeometry.height()));
+    gridSpacingEdit_->setText(QString::number(kDefaultGridSpacing));
+    colormapEdit_->clear();
+
+    setColorButtonColor(foregroundButton_,
+        displayPalette.color(QPalette::WindowText));
+    setColorButtonColor(backgroundButton_,
+        displayPalette.color(QPalette::Window));
+
+    gridOnCombo_->setCurrentIndex(kDefaultGridOn ? 1 : 0);
+    snapToGridCombo_->setCurrentIndex(kDefaultSnapToGrid ? 1 : 0);
+
+    elementLabel_->setText(QStringLiteral("Display"));
+
+    show();
+    raise();
+    activateWindow();
+  }
+
+private:
+  QLineEdit *createLineEdit()
+  {
+    auto *edit = new QLineEdit;
+    edit->setFont(valueFont_);
+    edit->setAutoFillBackground(true);
+    QPalette editPalette = palette();
+    editPalette.setColor(QPalette::Base, Qt::white);
+    editPalette.setColor(QPalette::Text, Qt::black);
+    edit->setPalette(editPalette);
+    edit->setMaximumWidth(160);
+    return edit;
+  }
+
+  QPushButton *createColorButton(const QColor &color)
+  {
+    auto *button = new QPushButton;
+    button->setFont(valueFont_);
+    button->setAutoDefault(false);
+    button->setDefault(false);
+    button->setFixedSize(120, 24);
+    button->setFocusPolicy(Qt::NoFocus);
+    setColorButtonColor(button, color);
+    return button;
+  }
+
+  QComboBox *createBooleanComboBox()
+  {
+    auto *combo = new QComboBox;
+    combo->setFont(valueFont_);
+    combo->setAutoFillBackground(true);
+    combo->addItem(QStringLiteral("false"));
+    combo->addItem(QStringLiteral("true"));
+    return combo;
+  }
+
+  void addRow(QGridLayout *layout, int row, const QString &label,
+      QWidget *field)
+  {
+    auto *labelWidget = new QLabel(label);
+    labelWidget->setFont(labelFont_);
+    labelWidget->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    labelWidget->setAutoFillBackground(false);
+    layout->addWidget(labelWidget, row, 0);
+    layout->addWidget(field, row, 1);
+  }
+
+  void setColorButtonColor(QPushButton *button, const QColor &color)
+  {
+    QPalette buttonPalette = button->palette();
+    buttonPalette.setColor(QPalette::Button, color);
+    buttonPalette.setColor(QPalette::Window, color);
+    buttonPalette.setColor(QPalette::Base, color);
+    buttonPalette.setColor(QPalette::ButtonText,
+        color.lightness() < 128 ? Qt::white : Qt::black);
+    button->setPalette(buttonPalette);
+    button->setText(color.name(QColor::HexRgb).toUpper());
+  }
+
+  QFont labelFont_;
+  QFont valueFont_;
+  QLineEdit *xEdit_ = nullptr;
+  QLineEdit *yEdit_ = nullptr;
+  QLineEdit *widthEdit_ = nullptr;
+  QLineEdit *heightEdit_ = nullptr;
+  QLineEdit *colormapEdit_ = nullptr;
+  QLineEdit *gridSpacingEdit_ = nullptr;
+  QPushButton *foregroundButton_ = nullptr;
+  QPushButton *backgroundButton_ = nullptr;
+  QComboBox *gridOnCombo_ = nullptr;
+  QComboBox *snapToGridCombo_ = nullptr;
+  QLabel *elementLabel_ = nullptr;
+};
 
 class DisplayWindow : public QMainWindow
 {
 public:
-  DisplayWindow(const QPalette &palette, const QFont &font,
-      QWidget *parent = nullptr)
+  DisplayWindow(const QPalette &displayPalette, const QPalette &uiPalette,
+      const QFont &font, const QFont &labelFont,
+      std::weak_ptr<DisplayState> state, QWidget *parent = nullptr)
     : QMainWindow(parent)
+    , state_(std::move(state))
+    , labelFont_(labelFont)
+    , resourcePaletteBase_(uiPalette)
   {
     setAttribute(Qt::WA_DeleteOnClose);
     setObjectName(QStringLiteral("qtedmDisplayWindow"));
     setWindowTitle(QStringLiteral("newDisplay.adl"));
     setFont(font);
     setAutoFillBackground(true);
-    setPalette(palette);
+    setPalette(displayPalette);
 
     auto *displayArea = new QWidget;
     displayArea->setObjectName(QStringLiteral("displayArea"));
     displayArea->setAutoFillBackground(true);
-    displayArea->setPalette(palette);
+    displayArea->setPalette(displayPalette);
     displayArea->setBackgroundRole(QPalette::Window);
     displayArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     displayArea->setMinimumSize(kDefaultDisplayWidth, kDefaultDisplayHeight);
@@ -208,11 +460,36 @@ public:
 
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
   }
-};
 
-struct DisplayState {
-  bool editMode = true;
-  QList<QPointer<DisplayWindow>> displays;
+protected:
+  void mousePressEvent(QMouseEvent *event) override
+  {
+    if (event->button() == Qt::LeftButton) {
+      if (auto state = state_.lock(); state && state->editMode) {
+        if (resourcePalette_.isNull()) {
+          resourcePalette_ = new ResourcePaletteDialog(
+              resourcePaletteBase_, labelFont_, font(), this);
+        }
+
+        const QRect geometry = centralWidget()
+            ? QRect(QPoint(0, 0), centralWidget()->size())
+            : QRect(QPoint(0, 0), size());
+        resourcePalette_->showForDisplay(geometry, centralWidget()
+                ? centralWidget()->palette()
+                : palette());
+        event->accept();
+        return;
+      }
+    }
+
+    QMainWindow::mousePressEvent(event);
+  }
+
+private:
+  std::weak_ptr<DisplayState> state_;
+  QFont labelFont_;
+  QPalette resourcePaletteBase_;
+  QPointer<ResourcePaletteDialog> resourcePalette_;
 };
 
 } // namespace
@@ -589,12 +866,14 @@ int main(int argc, char *argv[])
     };
 
     QObject::connect(newAct, &QAction::triggered, &win,
-        [state, displayPalette, updateMenus, &win, fixed10Font]() {
+        [state, displayPalette, updateMenus, &win, fixed10Font, &palette,
+            fixed13Font]() {
           if (!state->editMode) {
             return;
           }
 
-          auto *displayWin = new DisplayWindow(displayPalette, fixed10Font);
+          auto *displayWin = new DisplayWindow(displayPalette, palette,
+              fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
           state->displays.append(displayWin);
 
           QObject::connect(displayWin, &QObject::destroyed, &win,

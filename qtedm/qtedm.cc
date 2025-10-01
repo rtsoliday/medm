@@ -13,6 +13,7 @@
 #include <QList>
 #include <QFont>
 #include <QFontDatabase>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -34,6 +35,7 @@
 #include <QPaintEvent>
 #include <QPen>
 #include <QPointer>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QKeySequence>
@@ -88,6 +90,79 @@ enum class TextVisibilityMode
   kIfZero,
   kCalc
 };
+
+const std::array<QString, 16> &textFontAliases()
+{
+    static const std::array<QString, 16> kAliases = {
+        QStringLiteral("widgetDM_4"),
+        QStringLiteral("widgetDM_6"),
+        QStringLiteral("widgetDM_8"),
+        QStringLiteral("widgetDM_10"),
+        QStringLiteral("widgetDM_12"),
+        QStringLiteral("widgetDM_14"),
+        QStringLiteral("widgetDM_16"),
+        QStringLiteral("widgetDM_18"),
+        QStringLiteral("widgetDM_20"),
+        QStringLiteral("widgetDM_22"),
+        QStringLiteral("widgetDM_24"),
+        QStringLiteral("widgetDM_30"),
+        QStringLiteral("widgetDM_36"),
+        QStringLiteral("widgetDM_40"),
+        QStringLiteral("widgetDM_48"),
+        QStringLiteral("widgetDM_60"),
+    };
+    return kAliases;
+}
+
+QFont medmCompatibleTextFont(const QString &text, const QSize &availableSize)
+{
+    if (availableSize.width() <= 0 || availableSize.height() <= 0) {
+        return QFont();
+    }
+
+    QString sample = text;
+    if (sample.trimmed().isEmpty()) {
+        sample = QStringLiteral("Ag");
+    }
+
+    QFont chosen;
+    bool found = false;
+
+    for (const QString &alias : textFontAliases()) {
+        const QFont font = LegacyFonts::font(alias);
+        if (font.family().isEmpty()) {
+            continue;
+        }
+
+        const QFontMetrics metrics(font);
+        const int fontHeight = metrics.ascent() + metrics.descent();
+        if (fontHeight > availableSize.height()) {
+            continue;
+        }
+
+        const int fontWidth = metrics.horizontalAdvance(sample);
+        if (fontWidth > availableSize.width()) {
+            continue;
+        }
+
+        chosen = font;
+        found = true;
+    }
+
+    if (found) {
+        return chosen;
+    }
+
+    // Fall back to the smallest available MEDM bitmap font.
+    for (const QString &alias : textFontAliases()) {
+        const QFont fallback = LegacyFonts::font(alias);
+        if (!fallback.family().isEmpty()) {
+            return fallback;
+        }
+    }
+
+    return QFont();
+}
 
 QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
     int pixelSize, QFont::StyleHint styleHint, bool fixedPitch,
@@ -1881,7 +1956,7 @@ public:
     setWordWrap(true);
     setContentsMargins(2, 2, 2, 2);
     setAttribute(Qt::WA_TransparentForMouseEvents);
-    setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    setTextAlignment(Qt::AlignLeft | Qt::AlignTop);
     setForegroundColor(palette().color(QPalette::WindowText));
     setColorMode(TextColorMode::kStatic);
     setVisibilityMode(TextVisibilityMode::kStatic);
@@ -1921,6 +1996,12 @@ public:
     }
   }
 
+  void setText(const QString &value)
+  {
+    QLabel::setText(value);
+    updateFontForGeometry();
+  }
+
   Qt::Alignment textAlignment() const
   {
     return alignment_;
@@ -1933,7 +2014,7 @@ public:
       effective |= Qt::AlignLeft;
     }
     effective &= ~Qt::AlignVertical_Mask;
-    effective |= Qt::AlignVCenter;
+    effective |= Qt::AlignTop;
     if (alignment_ == effective) {
       return;
     }
@@ -2026,6 +2107,29 @@ private:
     pal.setColor(QPalette::Text, color);
     pal.setColor(QPalette::ButtonText, color);
     setPalette(pal);
+  }
+
+  void resizeEvent(QResizeEvent *event) override
+  {
+    QLabel::resizeEvent(event);
+    updateFontForGeometry();
+  }
+
+  void updateFontForGeometry()
+  {
+    const QSize available = contentsRect().size();
+    if (available.isEmpty()) {
+      return;
+    }
+
+    const QFont newFont = medmCompatibleTextFont(text(), available);
+    if (newFont.family().isEmpty()) {
+      return;
+    }
+
+    if (font() != newFont) {
+      QLabel::setFont(newFont);
+    }
   }
 
   void paintEvent(QPaintEvent *event) override

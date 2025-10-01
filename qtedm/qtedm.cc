@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QCursor>
 #include <QGuiApplication>
 #include <QDialog>
 #include <QAbstractScrollArea>
@@ -44,6 +45,7 @@
 #include <QStyleFactory>
 #include <QTimer>
 #include <QLineEdit>
+#include <QRubberBand>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <functional>
@@ -209,12 +211,20 @@ constexpr int kDefaultGridSpacing = 5;
 constexpr int kMinimumGridSpacing = 2;
 constexpr bool kDefaultGridOn = false;
 constexpr bool kDefaultSnapToGrid = false;
+constexpr int kMinimumTextWidth = 40;
+constexpr int kMinimumTextHeight = 20;
+
+enum class CreateTool {
+  kNone,
+  kText,
+};
 
 class DisplayWindow;
 
 struct DisplayState {
   bool editMode = true;
   QList<QPointer<DisplayWindow>> displays;
+  CreateTool createTool = CreateTool::kNone;
 };
 
 class DisplayAreaWidget : public QWidget
@@ -630,10 +640,15 @@ public:
     entriesWidget_->setPalette(basePalette);
     entriesWidget_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
-    auto *gridLayout = new QGridLayout(entriesWidget_);
-    gridLayout->setContentsMargins(0, 0, 0, 0);
-    gridLayout->setHorizontalSpacing(12);
-    gridLayout->setVerticalSpacing(6);
+    auto *entriesLayout = new QVBoxLayout(entriesWidget_);
+    entriesLayout->setContentsMargins(0, 0, 0, 0);
+    entriesLayout->setSpacing(12);
+
+    geometrySection_ = new QWidget(entriesWidget_);
+    auto *geometryLayout = new QGridLayout(geometrySection_);
+    geometryLayout->setContentsMargins(0, 0, 0, 0);
+    geometryLayout->setHorizontalSpacing(12);
+    geometryLayout->setVerticalSpacing(6);
 
     xEdit_ = createLineEdit();
     yEdit_ = createLineEdit();
@@ -647,6 +662,19 @@ public:
     setupGeometryField(widthEdit_, GeometryField::kWidth);
     setupGeometryField(heightEdit_, GeometryField::kHeight);
     setupGridSpacingField(gridSpacingEdit_);
+
+    addRow(geometryLayout, 0, QStringLiteral("X Position"), xEdit_);
+    addRow(geometryLayout, 1, QStringLiteral("Y Position"), yEdit_);
+    addRow(geometryLayout, 2, QStringLiteral("Width"), widthEdit_);
+    addRow(geometryLayout, 3, QStringLiteral("Height"), heightEdit_);
+    geometryLayout->setRowStretch(4, 1);
+    entriesLayout->addWidget(geometrySection_);
+
+    displaySection_ = new QWidget(entriesWidget_);
+    auto *displayLayout = new QGridLayout(displaySection_);
+    displayLayout->setContentsMargins(0, 0, 0, 0);
+    displayLayout->setHorizontalSpacing(12);
+    displayLayout->setVerticalSpacing(6);
 
     foregroundButton_ = createColorButton(
         basePalette.color(QPalette::WindowText));
@@ -676,17 +704,36 @@ public:
         });
     snapToGridCombo_ = createBooleanComboBox();
 
-    addRow(gridLayout, 0, QStringLiteral("X Position"), xEdit_);
-    addRow(gridLayout, 1, QStringLiteral("Y Position"), yEdit_);
-    addRow(gridLayout, 2, QStringLiteral("Width"), widthEdit_);
-    addRow(gridLayout, 3, QStringLiteral("Height"), heightEdit_);
-    addRow(gridLayout, 4, QStringLiteral("Foreground"), foregroundButton_);
-    addRow(gridLayout, 5, QStringLiteral("Background"), backgroundButton_);
-    addRow(gridLayout, 6, QStringLiteral("Colormap"), colormapEdit_);
-    addRow(gridLayout, 7, QStringLiteral("Grid Spacing"), gridSpacingEdit_);
-    addRow(gridLayout, 8, QStringLiteral("Grid On"), gridOnCombo_);
-    addRow(gridLayout, 9, QStringLiteral("Snap To Grid"), snapToGridCombo_);
-    gridLayout->setRowStretch(10, 1);
+    addRow(displayLayout, 0, QStringLiteral("Foreground"), foregroundButton_);
+    addRow(displayLayout, 1, QStringLiteral("Background"), backgroundButton_);
+    addRow(displayLayout, 2, QStringLiteral("Colormap"), colormapEdit_);
+    addRow(displayLayout, 3, QStringLiteral("Grid Spacing"), gridSpacingEdit_);
+    addRow(displayLayout, 4, QStringLiteral("Grid On"), gridOnCombo_);
+    addRow(displayLayout, 5, QStringLiteral("Snap To Grid"), snapToGridCombo_);
+    displayLayout->setRowStretch(6, 1);
+    entriesLayout->addWidget(displaySection_);
+
+    textSection_ = new QWidget(entriesWidget_);
+    auto *textLayout = new QGridLayout(textSection_);
+    textLayout->setContentsMargins(0, 0, 0, 0);
+    textLayout->setHorizontalSpacing(12);
+    textLayout->setVerticalSpacing(6);
+
+    textStringEdit_ = createLineEdit();
+    QObject::connect(textStringEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitTextString(); });
+    QObject::connect(textStringEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitTextString(); });
+
+    addRow(textLayout, 0, QStringLiteral("Text String"), textStringEdit_);
+    textLayout->setRowStretch(1, 1);
+    entriesLayout->addWidget(textSection_);
+
+    entriesLayout->addStretch(1);
+
+    displaySection_->setVisible(false);
+    textSection_->setVisible(false);
+    updateSectionVisibility(selectionKind_);
 
     scrollArea_->setWidget(entriesWidget_);
     contentLayout->addWidget(scrollArea_);
@@ -733,6 +780,9 @@ public:
       std::function<bool()> gridOnGetter,
       std::function<void(bool)> gridOnSetter)
   {
+    selectionKind_ = SelectionKind::kDisplay;
+    updateSectionVisibility(selectionKind_);
+
     geometryGetter_ = std::move(geometryGetter);
     geometrySetter_ = std::move(geometrySetter);
     foregroundColorGetter_ = std::move(foregroundGetter);
@@ -743,6 +793,13 @@ public:
     gridSpacingSetter_ = std::move(gridSpacingSetter);
     gridOnGetter_ = std::move(gridOnGetter);
     gridOnSetter_ = std::move(gridOnSetter);
+    textGetter_ = {};
+    textSetter_ = {};
+    committedTextString_.clear();
+    if (textStringEdit_) {
+      const QSignalBlocker blocker(textStringEdit_);
+      textStringEdit_->clear();
+    }
 
     QRect displayGeometry = geometryGetter_ ? geometryGetter_()
                                             : QRect(QPoint(0, 0),
@@ -785,6 +842,53 @@ public:
     activateWindow();
   }
 
+  void showForText(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QString()> textGetter,
+      std::function<void(const QString &)> textSetter)
+  {
+    selectionKind_ = SelectionKind::kText;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = std::move(textGetter);
+    textSetter_ = std::move(textSetter);
+
+    QRect textGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (textGeometry.width() <= 0) {
+      textGeometry.setWidth(kMinimumTextWidth);
+    }
+    if (textGeometry.height() <= 0) {
+      textGeometry.setHeight(kMinimumTextHeight);
+    }
+    lastCommittedGeometry_ = textGeometry;
+
+    updateGeometryEdits(textGeometry);
+    if (textStringEdit_) {
+      const QString currentText = textGetter_ ? textGetter_() : QString();
+      const QSignalBlocker blocker(textStringEdit_);
+      textStringEdit_->setText(currentText);
+      committedTextString_ = currentText;
+    }
+
+    elementLabel_->setText(QStringLiteral("Text"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void clearSelectionState()
   {
     geometryGetter_ = {};
@@ -798,8 +902,12 @@ public:
     gridSpacingSetter_ = {};
     gridOnGetter_ = {};
     gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
     activeColorButton_ = nullptr;
     lastCommittedGeometry_ = QRect();
+    committedTextString_.clear();
+    selectionKind_ = SelectionKind::kNone;
 
     if (colorPaletteDialog_) {
       colorPaletteDialog_->hide();
@@ -811,6 +919,7 @@ public:
     resetLineEdit(heightEdit_);
     resetLineEdit(colormapEdit_);
     resetLineEdit(gridSpacingEdit_);
+    resetLineEdit(textStringEdit_);
 
     resetColorButton(foregroundButton_);
     resetColorButton(backgroundButton_);
@@ -827,6 +936,7 @@ public:
     }
 
     updateCommittedTexts();
+    updateSectionVisibility(selectionKind_);
   }
 
 protected:
@@ -837,6 +947,7 @@ protected:
   }
 
 private:
+  enum class SelectionKind { kNone, kDisplay, kText };
   QLineEdit *createLineEdit()
   {
     auto *edit = new QLineEdit;
@@ -928,6 +1039,54 @@ private:
     button->setText(QString());
   }
 
+  void updateSectionVisibility(SelectionKind kind)
+  {
+    if (geometrySection_) {
+      const bool showGeometry = kind != SelectionKind::kNone;
+      geometrySection_->setVisible(showGeometry);
+      geometrySection_->setEnabled(showGeometry);
+    }
+    if (displaySection_) {
+      const bool displayVisible = kind == SelectionKind::kDisplay;
+      displaySection_->setVisible(displayVisible);
+      displaySection_->setEnabled(displayVisible);
+    }
+    if (textSection_) {
+      const bool textVisible = kind == SelectionKind::kText;
+      textSection_->setVisible(textVisible);
+      textSection_->setEnabled(textVisible);
+    }
+    if (textStringEdit_) {
+      textStringEdit_->setEnabled(kind == SelectionKind::kText);
+    }
+  }
+
+  void commitTextString()
+  {
+    if (!textStringEdit_) {
+      return;
+    }
+    if (!textSetter_) {
+      revertTextString();
+      return;
+    }
+    const QString value = textStringEdit_->text();
+    textSetter_(value);
+    committedTextString_ = value;
+  }
+
+  void revertTextString()
+  {
+    if (!textStringEdit_) {
+      return;
+    }
+    if (textStringEdit_->text() == committedTextString_) {
+      return;
+    }
+    const QSignalBlocker blocker(textStringEdit_);
+    textStringEdit_->setText(committedTextString_);
+  }
+
   void positionRelativeTo(QWidget *reference)
   {
     QScreen *screen = screenForWidget(reference);
@@ -994,12 +1153,16 @@ private:
 
   QFont labelFont_;
   QFont valueFont_;
+  QWidget *geometrySection_ = nullptr;
+  QWidget *displaySection_ = nullptr;
+  QWidget *textSection_ = nullptr;
   QLineEdit *xEdit_ = nullptr;
   QLineEdit *yEdit_ = nullptr;
   QLineEdit *widthEdit_ = nullptr;
   QLineEdit *heightEdit_ = nullptr;
   QLineEdit *colormapEdit_ = nullptr;
   QLineEdit *gridSpacingEdit_ = nullptr;
+  QLineEdit *textStringEdit_ = nullptr;
   QPushButton *foregroundButton_ = nullptr;
   QPushButton *backgroundButton_ = nullptr;
   QComboBox *gridOnCombo_ = nullptr;
@@ -1007,6 +1170,7 @@ private:
   QLabel *elementLabel_ = nullptr;
   QScrollArea *scrollArea_ = nullptr;
   QWidget *entriesWidget_ = nullptr;
+  SelectionKind selectionKind_ = SelectionKind::kNone;
   enum class GeometryField { kX, kY, kWidth, kHeight };
   void setupGeometryField(QLineEdit *edit, GeometryField field)
   {
@@ -1164,6 +1328,9 @@ private:
   std::function<void(int)> gridSpacingSetter_;
   std::function<bool()> gridOnGetter_;
   std::function<void(bool)> gridOnSetter_;
+  std::function<QString()> textGetter_;
+  std::function<void(const QString &)> textSetter_;
+  QString committedTextString_;
 
   QLineEdit *editForField(GeometryField field) const
   {
@@ -1246,6 +1413,47 @@ private:
   }
 };
 
+class TextElement : public QLabel
+{
+public:
+  explicit TextElement(QWidget *parent = nullptr)
+    : QLabel(parent)
+  {
+    setAutoFillBackground(false);
+    setWordWrap(true);
+    setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    setContentsMargins(2, 2, 2, 2);
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    updateSelectionVisual();
+  }
+
+  void setSelected(bool selected)
+  {
+    if (selected_ == selected) {
+      return;
+    }
+    selected_ = selected;
+    updateSelectionVisual();
+  }
+
+  bool isSelected() const
+  {
+    return selected_;
+  }
+
+private:
+  void updateSelectionVisual()
+  {
+    if (selected_) {
+      setStyleSheet(QStringLiteral("border: 1px dashed black;"));
+    } else {
+      setStyleSheet(QString());
+    }
+  }
+
+  bool selected_ = false;
+};
+
 class DisplayWindow : public QMainWindow
 {
 public:
@@ -1277,17 +1485,6 @@ public:
     setCentralWidget(displayArea_);
 
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
-  }
-
-  void clearSelection()
-  {
-    if (!displaySelected_) {
-      return;
-    }
-    if (!resourcePalette_.isNull() && resourcePalette_->isVisible()) {
-      resourcePalette_->close();
-    }
-    setDisplaySelected(false);
   }
 
   int gridSpacing() const
@@ -1323,98 +1520,63 @@ public:
     }
   }
 
+  void syncCreateCursor()
+  {
+    updateCreateCursor();
+  }
+
+  void clearSelection()
+  {
+    clearSelections();
+  }
+
 protected:
   void mousePressEvent(QMouseEvent *event) override
   {
     if (event->button() == Qt::LeftButton) {
       if (auto state = state_.lock(); state && state->editMode) {
-        if (displaySelected_) {
-          clearSelection();
+        if (state->createTool == CreateTool::kText) {
+          if (displayArea_) {
+            const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
+            if (displayArea_->rect().contains(areaPos)) {
+              clearTextSelection();
+              startTextRubberBand(areaPos);
+            }
+          }
           event->accept();
           return;
         }
-        if (resourcePalette_.isNull()) {
-          resourcePalette_ = new ResourcePaletteDialog(
-              resourcePaletteBase_, labelFont_, font(), this);
-          QObject::connect(resourcePalette_, &QDialog::finished, this,
-              [this](int) {
-                clearSelection();
-              });
-          QObject::connect(resourcePalette_, &QObject::destroyed, this,
-              [this]() {
-                clearSelection();
-              });
+        if (state->createTool != CreateTool::kNone) {
+          event->accept();
+          return;
         }
 
-        for (auto &display : state->displays) {
-          if (!display.isNull() && display != this) {
-            display->clearSelection();
+        if (TextElement *element = textElementAt(event->pos())) {
+          selectTextElement(element);
+          showResourcePaletteForText(element);
+          event->accept();
+          return;
+        }
+
+        clearTextSelection();
+
+        if (displaySelected_) {
+          clearDisplaySelection();
+          closeResourcePalette();
+          event->accept();
+          return;
+        }
+
+        if (ensureResourcePalette()) {
+          for (auto &display : state->displays) {
+            if (!display.isNull() && display != this) {
+              display->clearSelections();
+            }
           }
-        }
 
-        setDisplaySelected(true);
-        resourcePalette_->showForDisplay(
-            [this]() {
-              return geometry();
-            },
-            [this](const QRect &newGeometry) {
-              setGeometry(newGeometry);
-              if (auto *widget = centralWidget()) {
-                widget->setMinimumSize(newGeometry.size());
-                widget->resize(newGeometry.size());
-              }
-            },
-            [this]() {
-              if (auto *widget = centralWidget()) {
-                return widget->palette().color(QPalette::WindowText);
-              }
-              return palette().color(QPalette::WindowText);
-            },
-            [this](const QColor &color) {
-              QPalette windowPalette = palette();
-              windowPalette.setColor(QPalette::WindowText, color);
-              setPalette(windowPalette);
-              if (auto *widget = centralWidget()) {
-                QPalette widgetPalette = widget->palette();
-                widgetPalette.setColor(QPalette::WindowText, color);
-                widget->setPalette(widgetPalette);
-                widget->update();
-              }
-              if (displayArea_) {
-                displayArea_->setGridColor(color);
-              }
-              update();
-            },
-            [this]() {
-              if (auto *widget = centralWidget()) {
-                return widget->palette().color(QPalette::Window);
-              }
-              return palette().color(QPalette::Window);
-            },
-            [this](const QColor &color) {
-              QPalette windowPalette = palette();
-              windowPalette.setColor(QPalette::Window, color);
-              setPalette(windowPalette);
-              if (auto *widget = centralWidget()) {
-                QPalette widgetPalette = widget->palette();
-                widgetPalette.setColor(QPalette::Window, color);
-                widget->setPalette(widgetPalette);
-                widget->update();
-              }
-              update();
-            },
-            [this]() {
-              return gridSpacing();
-            },
-            [this](int spacing) {
-              setGridSpacing(spacing);
-            },
-            [this]() {
-              return isGridOn();
-            },
-            [this](bool gridOn) {
-              setGridOn(gridOn);
-            });
+          setDisplaySelected(true);
+          showResourcePaletteForDisplay();
+        }
         event->accept();
         return;
       }
@@ -1422,6 +1584,7 @@ protected:
 
     if (event->button() == Qt::RightButton) {
       if (auto state = state_.lock(); state && state->editMode) {
+        lastContextMenuGlobalPos_ = event->globalPos();
         showEditContextMenu(event->globalPos());
         event->accept();
         return;
@@ -1429,6 +1592,38 @@ protected:
     }
 
     QMainWindow::mousePressEvent(event);
+  }
+
+  void mouseMoveEvent(QMouseEvent *event) override
+  {
+    if (textDragActive_) {
+      if (auto state = state_.lock(); state && state->editMode
+          && state->createTool == CreateTool::kText && displayArea_) {
+        const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
+        updateTextRubberBand(areaPos);
+        event->accept();
+        return;
+      }
+    }
+
+    QMainWindow::mouseMoveEvent(event);
+  }
+
+  void mouseReleaseEvent(QMouseEvent *event) override
+  {
+    if (event->button() == Qt::LeftButton) {
+      if (textDragActive_) {
+        if (auto state = state_.lock(); state && state->editMode
+            && displayArea_) {
+          const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
+          finishTextRubberBand(areaPos);
+          event->accept();
+          return;
+        }
+      }
+    }
+
+    QMainWindow::mouseReleaseEvent(event);
   }
 
 private:
@@ -1440,6 +1635,12 @@ private:
   bool displaySelected_ = false;
   bool gridOn_ = kDefaultGridOn;
   int gridSpacing_ = kDefaultGridSpacing;
+  QPoint lastContextMenuGlobalPos_;
+  QList<TextElement *> textElements_;
+  TextElement *selectedTextElement_ = nullptr;
+  QRubberBand *rubberBand_ = nullptr;
+  bool textDragActive_ = false;
+  QPoint textDragOrigin_;
 
   void setDisplaySelected(bool selected)
   {
@@ -1451,6 +1652,340 @@ private:
       displayArea_->setSelected(selected);
     }
     update();
+  }
+
+  void clearDisplaySelection()
+  {
+    if (!displaySelected_) {
+      return;
+    }
+    setDisplaySelected(false);
+  }
+
+  void clearTextSelection()
+  {
+    if (!selectedTextElement_) {
+      return;
+    }
+    selectedTextElement_->setSelected(false);
+    selectedTextElement_ = nullptr;
+  }
+
+  void clearSelections()
+  {
+    clearDisplaySelection();
+    clearTextSelection();
+    closeResourcePalette();
+  }
+
+  void closeResourcePalette()
+  {
+    if (!resourcePalette_.isNull() && resourcePalette_->isVisible()) {
+      resourcePalette_->close();
+    }
+  }
+
+  void handleResourcePaletteClosed()
+  {
+    clearDisplaySelection();
+    clearTextSelection();
+  }
+
+  ResourcePaletteDialog *ensureResourcePalette()
+  {
+    if (resourcePalette_.isNull()) {
+      resourcePalette_ = new ResourcePaletteDialog(
+          resourcePaletteBase_, labelFont_, font(), this);
+      QObject::connect(resourcePalette_, &QDialog::finished, this,
+          [this](int) {
+            handleResourcePaletteClosed();
+          });
+      QObject::connect(resourcePalette_, &QObject::destroyed, this,
+          [this]() {
+            resourcePalette_.clear();
+            handleResourcePaletteClosed();
+          });
+    }
+    return resourcePalette_;
+  }
+
+  void showResourcePaletteForDisplay()
+  {
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForDisplay(
+        [this]() {
+          return geometry();
+        },
+        [this](const QRect &newGeometry) {
+          setGeometry(newGeometry);
+          if (auto *widget = centralWidget()) {
+            widget->setMinimumSize(newGeometry.size());
+            widget->resize(newGeometry.size());
+          }
+        },
+        [this]() {
+          if (auto *widget = centralWidget()) {
+            return widget->palette().color(QPalette::WindowText);
+          }
+          return palette().color(QPalette::WindowText);
+        },
+        [this](const QColor &color) {
+          QPalette windowPalette = palette();
+          windowPalette.setColor(QPalette::WindowText, color);
+          setPalette(windowPalette);
+          if (auto *widget = centralWidget()) {
+            QPalette widgetPalette = widget->palette();
+            widgetPalette.setColor(QPalette::WindowText, color);
+            widget->setPalette(widgetPalette);
+            widget->update();
+          }
+          if (displayArea_) {
+            displayArea_->setGridColor(color);
+          }
+          update();
+        },
+        [this]() {
+          if (auto *widget = centralWidget()) {
+            return widget->palette().color(QPalette::Window);
+          }
+          return palette().color(QPalette::Window);
+        },
+        [this](const QColor &color) {
+          QPalette windowPalette = palette();
+          windowPalette.setColor(QPalette::Window, color);
+          setPalette(windowPalette);
+          if (auto *widget = centralWidget()) {
+            QPalette widgetPalette = widget->palette();
+            widgetPalette.setColor(QPalette::Window, color);
+            widget->setPalette(widgetPalette);
+            widget->update();
+          }
+          update();
+        },
+        [this]() {
+          return gridSpacing();
+        },
+        [this](int spacing) {
+          setGridSpacing(spacing);
+        },
+        [this]() {
+          return isGridOn();
+        },
+        [this](bool gridOn) {
+          setGridOn(gridOn);
+        });
+  }
+
+  void showResourcePaletteForText(TextElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForText(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+        },
+        [element]() {
+          return element->text();
+        },
+        [element](const QString &text) {
+          element->setText(text.isEmpty() ? QStringLiteral(" ") : text);
+        });
+  }
+
+  TextElement *textElementAt(const QPoint &windowPos) const
+  {
+    if (!displayArea_) {
+      return nullptr;
+    }
+    const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
+    if (!displayArea_->rect().contains(areaPos)) {
+      return nullptr;
+    }
+    for (auto it = textElements_.crbegin(); it != textElements_.crend(); ++it) {
+      TextElement *element = *it;
+      if (element && element->geometry().contains(areaPos)) {
+        return element;
+      }
+    }
+    return nullptr;
+  }
+
+  void selectTextElement(TextElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedTextElement_) {
+      selectedTextElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    selectedTextElement_ = element;
+    selectedTextElement_->setSelected(true);
+  }
+
+  void startTextRubberBand(const QPoint &areaPos)
+  {
+    textDragActive_ = true;
+    textDragOrigin_ = clampToDisplayArea(areaPos);
+    ensureRubberBand();
+    if (rubberBand_) {
+      rubberBand_->setGeometry(QRect(textDragOrigin_, QSize(1, 1)));
+      rubberBand_->show();
+    }
+  }
+
+  void updateTextRubberBand(const QPoint &areaPos)
+  {
+    if (!textDragActive_ || !rubberBand_) {
+      return;
+    }
+    const QPoint clamped = clampToDisplayArea(areaPos);
+    rubberBand_->setGeometry(QRect(textDragOrigin_, clamped).normalized());
+  }
+
+  void finishTextRubberBand(const QPoint &areaPos)
+  {
+    if (!textDragActive_) {
+      return;
+    }
+    textDragActive_ = false;
+    if (rubberBand_) {
+      rubberBand_->hide();
+    }
+    if (!displayArea_) {
+      return;
+    }
+    const QPoint clamped = clampToDisplayArea(areaPos);
+    QRect rect = QRect(textDragOrigin_, clamped).normalized();
+    if (rect.width() < kMinimumTextWidth) {
+      rect.setWidth(kMinimumTextWidth);
+    }
+    if (rect.height() < kMinimumTextHeight) {
+      rect.setHeight(kMinimumTextHeight);
+    }
+    rect = adjustRectToDisplayArea(rect);
+    createTextElement(rect);
+  }
+
+  void createTextElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = adjustRectToDisplayArea(rect);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new TextElement(displayArea_);
+    element->setFont(font());
+    element->setGeometry(target);
+    element->setText(QStringLiteral("Text"));
+    element->show();
+    textElements_.append(element);
+    selectTextElement(element);
+    showResourcePaletteForText(element);
+    deactivateCreateTool();
+  }
+
+  void ensureRubberBand()
+  {
+    if (!rubberBand_) {
+      rubberBand_ = new QRubberBand(QRubberBand::Rectangle, displayArea_);
+    }
+  }
+
+  QPoint clampToDisplayArea(const QPoint &areaPos) const
+  {
+    if (!displayArea_) {
+      return areaPos;
+    }
+    const QRect areaRect = displayArea_->rect();
+    const int x = std::clamp(areaPos.x(), areaRect.left(), areaRect.right());
+    const int y = std::clamp(areaPos.y(), areaRect.top(), areaRect.bottom());
+    return QPoint(x, y);
+  }
+
+  QRect adjustRectToDisplayArea(const QRect &rect) const
+  {
+    if (!displayArea_) {
+      return rect;
+    }
+    const QRect areaRect = displayArea_->rect();
+    int width = std::min(rect.width(), areaRect.width());
+    int height = std::min(rect.height(), areaRect.height());
+    int x = std::clamp(rect.x(), areaRect.left(),
+        areaRect.right() - width + 1);
+    int y = std::clamp(rect.y(), areaRect.top(),
+        areaRect.bottom() - height + 1);
+    return QRect(QPoint(x, y), QSize(width, height));
+  }
+
+  void updateCreateCursor()
+  {
+    auto state = state_.lock();
+    const bool textToolActive =
+        state && state->createTool == CreateTool::kText;
+    if (displayArea_) {
+      if (textToolActive) {
+        displayArea_->setCursor(Qt::CrossCursor);
+      } else {
+        displayArea_->unsetCursor();
+      }
+    }
+    if (textToolActive) {
+      setCursor(Qt::CrossCursor);
+    } else {
+      unsetCursor();
+    }
+  }
+
+  void activateCreateTool(CreateTool tool)
+  {
+    if (auto state = state_.lock(); state && state->editMode) {
+      for (auto &display : state->displays) {
+        if (!display.isNull()) {
+          display->clearSelections();
+        }
+      }
+      state->createTool = tool;
+      for (auto &display : state->displays) {
+        if (!display.isNull()) {
+          display->updateCreateCursor();
+        }
+      }
+      textDragActive_ = false;
+      if (rubberBand_) {
+        rubberBand_->hide();
+      }
+    }
+  }
+
+  void deactivateCreateTool()
+  {
+    if (auto state = state_.lock(); state
+        && state->createTool != CreateTool::kNone) {
+      state->createTool = CreateTool::kNone;
+      for (auto &display : state->displays) {
+        if (!display.isNull()) {
+          display->updateCreateCursor();
+        }
+      }
+    }
+    textDragActive_ = false;
+    if (rubberBand_) {
+      rubberBand_->hide();
+    }
   }
 
   void showEditContextMenu(const QPoint &globalPos)
@@ -1472,7 +2007,14 @@ private:
     auto *objectMenu = menu.addMenu(QStringLiteral("Object"));
 
     auto *graphicsMenu = objectMenu->addMenu(QStringLiteral("Graphics"));
-    addMenuAction(graphicsMenu, QStringLiteral("Text"));
+    auto *textAction =
+        addMenuAction(graphicsMenu, QStringLiteral("Text"));
+    QObject::connect(textAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kText);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(graphicsMenu, QStringLiteral("Rectangle"));
     addMenuAction(graphicsMenu, QStringLiteral("Line"));
     addMenuAction(graphicsMenu, QStringLiteral("Polygon"));
@@ -1958,9 +2500,22 @@ int main(int argc, char *argv[])
           auto *displayWin = new DisplayWindow(displayPalette, palette,
               fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
           state->displays.append(displayWin);
+          displayWin->syncCreateCursor();
 
           QObject::connect(displayWin, &QObject::destroyed, &win,
               [state, updateMenus]() {
+                if (state) {
+                  bool hasLiveDisplay = false;
+                  for (auto &display : state->displays) {
+                    if (!display.isNull()) {
+                      hasLiveDisplay = true;
+                      break;
+                    }
+                  }
+                  if (!hasLiveDisplay) {
+                    state->createTool = CreateTool::kNone;
+                  }
+                }
                 if (updateMenus && *updateMenus) {
                   (*updateMenus)();
                 }
@@ -1979,9 +2534,17 @@ int main(int argc, char *argv[])
         [state, updateMenus](bool checked) {
           state->editMode = checked;
           if (!checked) {
+            state->createTool = CreateTool::kNone;
             for (auto &display : state->displays) {
               if (!display.isNull()) {
                 display->clearSelection();
+                display->syncCreateCursor();
+              }
+            }
+          } else {
+            for (auto &display : state->displays) {
+              if (!display.isNull()) {
+                display->syncCreateCursor();
               }
             }
           }

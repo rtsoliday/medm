@@ -535,12 +535,14 @@ public:
     QObject::connect(foregroundButton_, &QPushButton::clicked, this,
         [this]() {
           openColorPalette(foregroundButton_,
-              QStringLiteral("Display Foreground"));
+              QStringLiteral("Display Foreground"),
+              foregroundColorSetter_);
         });
     QObject::connect(backgroundButton_, &QPushButton::clicked, this,
         [this]() {
           openColorPalette(backgroundButton_,
-              QStringLiteral("Display Background"));
+              QStringLiteral("Display Background"),
+              backgroundColorSetter_);
         });
 
     gridOnCombo_ = createBooleanComboBox();
@@ -594,10 +596,17 @@ public:
 
   void showForDisplay(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
-      const QPalette &displayPalette)
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter)
   {
     geometryGetter_ = std::move(geometryGetter);
     geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = std::move(foregroundGetter);
+    foregroundColorSetter_ = std::move(foregroundSetter);
+    backgroundColorGetter_ = std::move(backgroundGetter);
+    backgroundColorSetter_ = std::move(backgroundSetter);
 
     QRect displayGeometry = geometryGetter_ ? geometryGetter_()
                                             : QRect(QPoint(0, 0),
@@ -615,10 +624,8 @@ public:
     gridSpacingEdit_->setText(QString::number(kDefaultGridSpacing));
     colormapEdit_->clear();
 
-    setColorButtonColor(foregroundButton_,
-        displayPalette.color(QPalette::WindowText));
-    setColorButtonColor(backgroundButton_,
-        displayPalette.color(QPalette::Window));
+    setColorButtonColor(foregroundButton_, currentForegroundColor());
+    setColorButtonColor(backgroundButton_, currentBackgroundColor());
 
     gridOnCombo_->setCurrentIndex(kDefaultGridOn ? 1 : 0);
     snapToGridCombo_->setCurrentIndex(kDefaultSnapToGrid ? 1 : 0);
@@ -820,6 +827,11 @@ private:
   QHash<QLineEdit *, QString> committedTexts_;
   ColorPaletteDialog *colorPaletteDialog_ = nullptr;
   QPushButton *activeColorButton_ = nullptr;
+  std::function<QColor()> foregroundColorGetter_;
+  std::function<void(const QColor &)> foregroundColorSetter_;
+  std::function<QColor()> backgroundColorGetter_;
+  std::function<void(const QColor &)> backgroundColorSetter_;
+  std::function<void(const QColor &)> activeColorSetter_;
 
   QLineEdit *editForField(GeometryField field) const
   {
@@ -837,7 +849,8 @@ private:
     return nullptr;
   }
 
-  void openColorPalette(QPushButton *button, const QString &description)
+  void openColorPalette(QPushButton *button, const QString &description,
+      const std::function<void(const QColor &)> &setter)
   {
     if (!button) {
       return;
@@ -851,12 +864,19 @@ private:
             if (activeColorButton_) {
               setColorButtonColor(activeColorButton_, color);
             }
+            if (activeColorSetter_) {
+              activeColorSetter_(color);
+            }
           });
       QObject::connect(colorPaletteDialog_, &QDialog::finished, this,
-          [this](int) { activeColorButton_ = nullptr; });
+          [this](int) {
+            activeColorButton_ = nullptr;
+            activeColorSetter_ = {};
+          });
     }
 
     activeColorButton_ = button;
+    activeColorSetter_ = setter;
     colorPaletteDialog_->setCurrentColor(colorFromButton(button), description);
     colorPaletteDialog_->show();
     colorPaletteDialog_->raise();
@@ -869,6 +889,28 @@ private:
       return QColor();
     }
     return button->palette().color(QPalette::Button);
+  }
+
+  QColor currentForegroundColor() const
+  {
+    if (foregroundColorGetter_) {
+      const QColor color = foregroundColorGetter_();
+      if (color.isValid()) {
+        return color;
+      }
+    }
+    return palette().color(QPalette::WindowText);
+  }
+
+  QColor currentBackgroundColor() const
+  {
+    if (backgroundColorGetter_) {
+      const QColor color = backgroundColorGetter_();
+      if (color.isValid()) {
+        return color;
+      }
+    }
+    return palette().color(QPalette::Window);
   }
 };
 
@@ -923,7 +965,42 @@ protected:
                 widget->resize(newGeometry.size());
               }
             },
-            centralWidget() ? centralWidget()->palette() : palette());
+            [this]() {
+              if (auto *widget = centralWidget()) {
+                return widget->palette().color(QPalette::WindowText);
+              }
+              return palette().color(QPalette::WindowText);
+            },
+            [this](const QColor &color) {
+              QPalette windowPalette = palette();
+              windowPalette.setColor(QPalette::WindowText, color);
+              setPalette(windowPalette);
+              if (auto *widget = centralWidget()) {
+                QPalette widgetPalette = widget->palette();
+                widgetPalette.setColor(QPalette::WindowText, color);
+                widget->setPalette(widgetPalette);
+                widget->update();
+              }
+              update();
+            },
+            [this]() {
+              if (auto *widget = centralWidget()) {
+                return widget->palette().color(QPalette::Window);
+              }
+              return palette().color(QPalette::Window);
+            },
+            [this](const QColor &color) {
+              QPalette windowPalette = palette();
+              windowPalette.setColor(QPalette::Window, color);
+              setPalette(windowPalette);
+              if (auto *widget = centralWidget()) {
+                QPalette widgetPalette = widget->palette();
+                widgetPalette.setColor(QPalette::Window, color);
+                widget->setPalette(widgetPalette);
+                widget->update();
+              }
+              update();
+            });
         event->accept();
         return;
       }

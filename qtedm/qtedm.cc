@@ -222,6 +222,34 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
     dialog->activateWindow();
 }
 
+void positionWindowTopRight(QWidget *window, int rightMargin, int topMargin)
+{
+  if (!window) {
+    return;
+  }
+
+  QScreen *screen = window->screen();
+  if (!screen) {
+    screen = QGuiApplication::primaryScreen();
+  }
+  if (!screen) {
+    return;
+  }
+
+  const QRect screenGeometry = screen->availableGeometry();
+  QSize frameSize = window->frameGeometry().size();
+  if (frameSize.isEmpty()) {
+    frameSize = window->size();
+  }
+
+  const int xOffset = std::max(0, screenGeometry.width() - frameSize.width() - rightMargin);
+  const int yOffset = std::max(0, topMargin);
+  const int x = screenGeometry.x() + xOffset;
+  const int y = screenGeometry.y() + yOffset;
+
+  window->move(x, y);
+}
+
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
 constexpr int kDefaultGridSpacing = 5;
@@ -230,6 +258,8 @@ constexpr bool kDefaultGridOn = false;
 constexpr bool kDefaultSnapToGrid = false;
 constexpr int kMinimumTextWidth = 40;
 constexpr int kMinimumTextHeight = 20;
+constexpr int kMainWindowRightMargin = 5;
+constexpr int kMainWindowTopMargin = 5;
 
 enum class CreateTool {
   kNone,
@@ -3138,5 +3168,11 @@ int main(int argc, char *argv[])
     win.adjustSize();
     win.setFixedSize(win.sizeHint());
     win.show();
+    positionWindowTopRight(&win, kMainWindowRightMargin, kMainWindowTopMargin);
+    QTimer::singleShot(0, &win,
+        [&, rightMargin = kMainWindowRightMargin,
+            topMargin = kMainWindowTopMargin]() {
+          positionWindowTopRight(&win, rightMargin, topMargin);
+        });
     return app.exec();
 }

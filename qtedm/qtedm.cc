@@ -72,6 +72,21 @@
 
 namespace {
 
+enum class TextColorMode
+{
+  kStatic,
+  kAlarm,
+  kDiscrete
+};
+
+enum class TextVisibilityMode
+{
+  kStatic,
+  kIfNotZero,
+  kIfZero,
+  kCalc
+};
+
 QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
     int pixelSize, QFont::StyleHint styleHint, bool fixedPitch,
     QFont::Weight weight)
@@ -725,8 +740,82 @@ public:
     QObject::connect(textStringEdit_, &QLineEdit::editingFinished, this,
         [this]() { commitTextString(); });
 
+    textAlignmentCombo_ = new QComboBox;
+    textAlignmentCombo_->setFont(valueFont_);
+    textAlignmentCombo_->setAutoFillBackground(true);
+    textAlignmentCombo_->addItem(QStringLiteral("Left"));
+    textAlignmentCombo_->addItem(QStringLiteral("Center"));
+    textAlignmentCombo_->addItem(QStringLiteral("Right"));
+    QObject::connect(textAlignmentCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAlignmentSetter_) {
+            textAlignmentSetter_(alignmentFromIndex(index));
+          }
+        });
+
+    textForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(textForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(textForegroundButton_,
+              QStringLiteral("Text Foreground"), textForegroundSetter_);
+        });
+
+    textColorModeCombo_ = new QComboBox;
+    textColorModeCombo_->setFont(valueFont_);
+    textColorModeCombo_->setAutoFillBackground(true);
+    textColorModeCombo_->addItem(QStringLiteral("Static"));
+    textColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    textColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(textColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textColorModeSetter_) {
+            textColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    textVisibilityCombo_ = new QComboBox;
+    textVisibilityCombo_->setFont(valueFont_);
+    textVisibilityCombo_->setAutoFillBackground(true);
+    textVisibilityCombo_->addItem(QStringLiteral("Static"));
+    textVisibilityCombo_->addItem(QStringLiteral("If Not Zero"));
+    textVisibilityCombo_->addItem(QStringLiteral("If Zero"));
+    textVisibilityCombo_->addItem(QStringLiteral("Calc"));
+    QObject::connect(textVisibilityCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textVisibilityModeSetter_) {
+            textVisibilityModeSetter_(visibilityModeFromIndex(index));
+          }
+        });
+
+    textVisibilityCalcEdit_ = createLineEdit();
+    QObject::connect(textVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitTextVisibilityCalc(); });
+    QObject::connect(textVisibilityCalcEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitTextVisibilityCalc(); });
+
+    for (int i = 0; i < static_cast<int>(textChannelEdits_.size()); ++i) {
+      textChannelEdits_[i] = createLineEdit();
+      QObject::connect(textChannelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitTextChannel(i); });
+      QObject::connect(textChannelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitTextChannel(i); });
+    }
+
     addRow(textLayout, 0, QStringLiteral("Text String"), textStringEdit_);
-    textLayout->setRowStretch(1, 1);
+    addRow(textLayout, 1, QStringLiteral("Alignment"), textAlignmentCombo_);
+    addRow(textLayout, 2, QStringLiteral("Foreground"), textForegroundButton_);
+    addRow(textLayout, 3, QStringLiteral("Color Mode"), textColorModeCombo_);
+    addRow(textLayout, 4, QStringLiteral("Visibility"), textVisibilityCombo_);
+    addRow(textLayout, 5, QStringLiteral("Vis Calc"), textVisibilityCalcEdit_);
+    addRow(textLayout, 6, QStringLiteral("Channel A"), textChannelEdits_[0]);
+    addRow(textLayout, 7, QStringLiteral("Channel B"), textChannelEdits_[1]);
+    addRow(textLayout, 8, QStringLiteral("Channel C"), textChannelEdits_[2]);
+    addRow(textLayout, 9, QStringLiteral("Channel D"), textChannelEdits_[3]);
+    textLayout->setRowStretch(10, 1);
     entriesLayout->addWidget(textSection_);
 
     entriesLayout->addStretch(1);
@@ -845,7 +934,19 @@ public:
   void showForText(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QString()> textGetter,
-      std::function<void(const QString &)> textSetter)
+      std::function<void(const QString &)> textSetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<Qt::Alignment()> alignmentGetter,
+      std::function<void(Qt::Alignment)> alignmentSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<TextVisibilityMode()> visibilityModeGetter,
+      std::function<void(TextVisibilityMode)> visibilityModeSetter,
+      std::function<QString()> visibilityCalcGetter,
+      std::function<void(const QString &)> visibilityCalcSetter,
+      std::array<std::function<QString()>, 4> channelGetters,
+      std::array<std::function<void(const QString &)>, 4> channelSetters)
   {
     selectionKind_ = SelectionKind::kText;
     updateSectionVisibility(selectionKind_);
@@ -863,6 +964,18 @@ public:
     gridOnSetter_ = {};
     textGetter_ = std::move(textGetter);
     textSetter_ = std::move(textSetter);
+    textForegroundGetter_ = std::move(foregroundGetter);
+    textForegroundSetter_ = std::move(foregroundSetter);
+    textAlignmentGetter_ = std::move(alignmentGetter);
+    textAlignmentSetter_ = std::move(alignmentSetter);
+    textColorModeGetter_ = std::move(colorModeGetter);
+    textColorModeSetter_ = std::move(colorModeSetter);
+    textVisibilityModeGetter_ = std::move(visibilityModeGetter);
+    textVisibilityModeSetter_ = std::move(visibilityModeSetter);
+    textVisibilityCalcGetter_ = std::move(visibilityCalcGetter);
+    textVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
+    textChannelGetters_ = std::move(channelGetters);
+    textChannelSetters_ = std::move(channelSetters);
 
     QRect textGeometry = geometryGetter_ ? geometryGetter_() : QRect();
     if (textGeometry.width() <= 0) {
@@ -879,6 +992,57 @@ public:
       const QSignalBlocker blocker(textStringEdit_);
       textStringEdit_->setText(currentText);
       committedTextString_ = currentText;
+    }
+
+    if (textAlignmentCombo_) {
+      const QSignalBlocker blocker(textAlignmentCombo_);
+      const Qt::Alignment alignment =
+          textAlignmentGetter_ ? textAlignmentGetter_()
+                               : (Qt::AlignLeft | Qt::AlignVCenter);
+      textAlignmentCombo_->setCurrentIndex(alignmentToIndex(alignment));
+    }
+
+    if (textForegroundButton_) {
+      const QColor color = textForegroundGetter_ ? textForegroundGetter_()
+                                                 : palette().color(
+                                                       QPalette::WindowText);
+      setColorButtonColor(textForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (textColorModeCombo_) {
+      const QSignalBlocker blocker(textColorModeCombo_);
+      const TextColorMode mode = textColorModeGetter_ ? textColorModeGetter_()
+                                                      : TextColorMode::kStatic;
+      textColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (textVisibilityCombo_) {
+      const QSignalBlocker blocker(textVisibilityCombo_);
+      const TextVisibilityMode mode =
+          textVisibilityModeGetter_ ? textVisibilityModeGetter_()
+                                    : TextVisibilityMode::kStatic;
+      textVisibilityCombo_->setCurrentIndex(visibilityModeToIndex(mode));
+    }
+
+    if (textVisibilityCalcEdit_) {
+      const QString calc =
+          textVisibilityCalcGetter_ ? textVisibilityCalcGetter_() : QString();
+      const QSignalBlocker blocker(textVisibilityCalcEdit_);
+      textVisibilityCalcEdit_->setText(calc);
+      committedTexts_[textVisibilityCalcEdit_] = textVisibilityCalcEdit_->text();
+    }
+
+    for (int i = 0; i < static_cast<int>(textChannelEdits_.size()); ++i) {
+      QLineEdit *edit = textChannelEdits_[i];
+      if (!edit) {
+        continue;
+      }
+      const QString value =
+          textChannelGetters_[i] ? textChannelGetters_[i]() : QString();
+      const QSignalBlocker blocker(edit);
+      edit->setText(value);
+      committedTexts_[edit] = edit->text();
     }
 
     elementLabel_->setText(QStringLiteral("Text"));
@@ -904,6 +1068,22 @@ public:
     gridOnSetter_ = {};
     textGetter_ = {};
     textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
     activeColorButton_ = nullptr;
     lastCommittedGeometry_ = QRect();
     committedTextString_.clear();
@@ -920,21 +1100,44 @@ public:
     resetLineEdit(colormapEdit_);
     resetLineEdit(gridSpacingEdit_);
     resetLineEdit(textStringEdit_);
+    resetLineEdit(textVisibilityCalcEdit_);
+    for (QLineEdit *edit : textChannelEdits_) {
+      resetLineEdit(edit);
+    }
 
     resetColorButton(foregroundButton_);
     resetColorButton(backgroundButton_);
+    resetColorButton(textForegroundButton_);
 
     if (gridOnCombo_) {
+      const QSignalBlocker blocker(gridOnCombo_);
       gridOnCombo_->setCurrentIndex(0);
     }
     if (snapToGridCombo_) {
+      const QSignalBlocker blocker(snapToGridCombo_);
       snapToGridCombo_->setCurrentIndex(0);
+    }
+    if (textAlignmentCombo_) {
+      const QSignalBlocker blocker(textAlignmentCombo_);
+      textAlignmentCombo_->setCurrentIndex(
+          alignmentToIndex(Qt::AlignLeft | Qt::AlignVCenter));
+    }
+    if (textColorModeCombo_) {
+      const QSignalBlocker blocker(textColorModeCombo_);
+      textColorModeCombo_->setCurrentIndex(
+          colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (textVisibilityCombo_) {
+      const QSignalBlocker blocker(textVisibilityCombo_);
+      textVisibilityCombo_->setCurrentIndex(
+          visibilityModeToIndex(TextVisibilityMode::kStatic));
     }
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Select..."));
     }
 
+    committedTexts_.clear();
     updateCommittedTexts();
     updateSectionVisibility(selectionKind_);
   }
@@ -1087,6 +1290,116 @@ private:
     textStringEdit_->setText(committedTextString_);
   }
 
+  void commitTextVisibilityCalc()
+  {
+    if (!textVisibilityCalcEdit_) {
+      return;
+    }
+    if (!textVisibilityCalcSetter_) {
+      revertLineEdit(textVisibilityCalcEdit_);
+      return;
+    }
+    const QString value = textVisibilityCalcEdit_->text();
+    textVisibilityCalcSetter_(value);
+    committedTexts_[textVisibilityCalcEdit_] = value;
+  }
+
+  void commitTextChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(textChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = textChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!textChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    textChannelSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  Qt::Alignment alignmentFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return Qt::AlignHCenter | Qt::AlignVCenter;
+    case 2:
+      return Qt::AlignRight | Qt::AlignVCenter;
+    default:
+      return Qt::AlignLeft | Qt::AlignVCenter;
+    }
+  }
+
+  int alignmentToIndex(Qt::Alignment alignment) const
+  {
+    const Qt::Alignment horizontal = alignment & Qt::AlignHorizontal_Mask;
+    if (horizontal == Qt::AlignHCenter) {
+      return 1;
+    }
+    if (horizontal == Qt::AlignRight) {
+      return 2;
+    }
+    return 0;
+  }
+
+  TextColorMode colorModeFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return TextColorMode::kAlarm;
+    case 2:
+      return TextColorMode::kDiscrete;
+    default:
+      return TextColorMode::kStatic;
+    }
+  }
+
+  int colorModeToIndex(TextColorMode mode) const
+  {
+    switch (mode) {
+    case TextColorMode::kAlarm:
+      return 1;
+    case TextColorMode::kDiscrete:
+      return 2;
+    case TextColorMode::kStatic:
+    default:
+      return 0;
+    }
+  }
+
+  TextVisibilityMode visibilityModeFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return TextVisibilityMode::kIfNotZero;
+    case 2:
+      return TextVisibilityMode::kIfZero;
+    case 3:
+      return TextVisibilityMode::kCalc;
+    default:
+      return TextVisibilityMode::kStatic;
+    }
+  }
+
+  int visibilityModeToIndex(TextVisibilityMode mode) const
+  {
+    switch (mode) {
+    case TextVisibilityMode::kIfNotZero:
+      return 1;
+    case TextVisibilityMode::kIfZero:
+      return 2;
+    case TextVisibilityMode::kCalc:
+      return 3;
+    case TextVisibilityMode::kStatic:
+    default:
+      return 0;
+    }
+  }
+
   void positionRelativeTo(QWidget *reference)
   {
     QScreen *screen = screenForWidget(reference);
@@ -1163,6 +1476,12 @@ private:
   QLineEdit *colormapEdit_ = nullptr;
   QLineEdit *gridSpacingEdit_ = nullptr;
   QLineEdit *textStringEdit_ = nullptr;
+  QPushButton *textForegroundButton_ = nullptr;
+  QComboBox *textAlignmentCombo_ = nullptr;
+  QComboBox *textColorModeCombo_ = nullptr;
+  QComboBox *textVisibilityCombo_ = nullptr;
+  QLineEdit *textVisibilityCalcEdit_ = nullptr;
+  std::array<QLineEdit *, 4> textChannelEdits_{};
   QPushButton *foregroundButton_ = nullptr;
   QPushButton *backgroundButton_ = nullptr;
   QComboBox *gridOnCombo_ = nullptr;
@@ -1330,6 +1649,18 @@ private:
   std::function<void(bool)> gridOnSetter_;
   std::function<QString()> textGetter_;
   std::function<void(const QString &)> textSetter_;
+  std::function<QColor()> textForegroundGetter_;
+  std::function<void(const QColor &)> textForegroundSetter_;
+  std::function<Qt::Alignment()> textAlignmentGetter_;
+  std::function<void(Qt::Alignment)> textAlignmentSetter_;
+  std::function<TextColorMode()> textColorModeGetter_;
+  std::function<void(TextColorMode)> textColorModeSetter_;
+  std::function<TextVisibilityMode()> textVisibilityModeGetter_;
+  std::function<void(TextVisibilityMode)> textVisibilityModeSetter_;
+  std::function<QString()> textVisibilityCalcGetter_;
+  std::function<void(const QString &)> textVisibilityCalcSetter_;
+  std::array<std::function<QString()>, 4> textChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4> textChannelSetters_{};
   QString committedTextString_;
 
   QLineEdit *editForField(GeometryField field) const
@@ -1421,9 +1752,12 @@ public:
   {
     setAutoFillBackground(false);
     setWordWrap(true);
-    setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     setContentsMargins(2, 2, 2, 2);
     setAttribute(Qt::WA_TransparentForMouseEvents);
+    setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    setForegroundColor(palette().color(QPalette::WindowText));
+    setColorMode(TextColorMode::kStatic);
+    setVisibilityMode(TextVisibilityMode::kStatic);
     updateSelectionVisual();
   }
 
@@ -1441,6 +1775,99 @@ public:
     return selected_;
   }
 
+  QColor foregroundColor() const
+  {
+    return foregroundColor_;
+  }
+
+  void setForegroundColor(const QColor &color)
+  {
+    QColor effective = color;
+    if (!effective.isValid()) {
+      effective = palette().color(QPalette::WindowText);
+    }
+    if (foregroundColor_ == effective) {
+      return;
+    }
+    foregroundColor_ = effective;
+    QPalette pal = palette();
+    pal.setColor(QPalette::WindowText, foregroundColor_);
+    setPalette(pal);
+    update();
+  }
+
+  Qt::Alignment textAlignment() const
+  {
+    return alignment_;
+  }
+
+  void setTextAlignment(Qt::Alignment alignment)
+  {
+    Qt::Alignment effective = alignment;
+    if (!(effective & Qt::AlignHorizontal_Mask)) {
+      effective |= Qt::AlignLeft;
+    }
+    effective &= ~Qt::AlignVertical_Mask;
+    effective |= Qt::AlignVCenter;
+    if (alignment_ == effective) {
+      return;
+    }
+    alignment_ = effective;
+    QLabel::setAlignment(alignment_);
+  }
+
+  TextColorMode colorMode() const
+  {
+    return colorMode_;
+  }
+
+  void setColorMode(TextColorMode mode)
+  {
+    colorMode_ = mode;
+  }
+
+  TextVisibilityMode visibilityMode() const
+  {
+    return visibilityMode_;
+  }
+
+  void setVisibilityMode(TextVisibilityMode mode)
+  {
+    visibilityMode_ = mode;
+  }
+
+  QString visibilityCalc() const
+  {
+    return visibilityCalc_;
+  }
+
+  void setVisibilityCalc(const QString &calc)
+  {
+    if (visibilityCalc_ == calc) {
+      return;
+    }
+    visibilityCalc_ = calc;
+  }
+
+  QString channel(int index) const
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return QString();
+    }
+    return channels_[index];
+  }
+
+  void setChannel(int index, const QString &value)
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return;
+    }
+    if (channels_[index] == value) {
+      return;
+    }
+    channels_[index] = value;
+  }
+
 private:
   void updateSelectionVisual()
   {
@@ -1452,6 +1879,12 @@ private:
   }
 
   bool selected_ = false;
+  QColor foregroundColor_;
+  Qt::Alignment alignment_ = Qt::AlignLeft | Qt::AlignVCenter;
+  TextColorMode colorMode_ = TextColorMode::kStatic;
+  TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
+  QString visibilityCalc_;
+  std::array<QString, 4> channels_{};
 };
 
 class DisplayWindow : public QMainWindow
@@ -1788,6 +2221,18 @@ private:
     if (!dialog) {
       return;
     }
+    std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [element](const QString &value) { element->setChannel(0, value); },
+        [element](const QString &value) { element->setChannel(1, value); },
+        [element](const QString &value) { element->setChannel(2, value); },
+        [element](const QString &value) { element->setChannel(3, value); },
+    }};
     dialog->showForText(
         [element]() {
           return element->geometry();
@@ -1800,7 +2245,38 @@ private:
         },
         [element](const QString &text) {
           element->setText(text.isEmpty() ? QStringLiteral(" ") : text);
-        });
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [element](const QColor &color) {
+          element->setForegroundColor(color);
+        },
+        [element]() {
+          return element->textAlignment();
+        },
+        [element](Qt::Alignment alignment) {
+          element->setTextAlignment(alignment);
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [element](TextColorMode mode) {
+          element->setColorMode(mode);
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+        },
+        std::move(channelGetters), std::move(channelSetters));
   }
 
   TextElement *textElementAt(const QPoint &windowPos) const

@@ -41,6 +41,7 @@
 #include <QKeySequence>
 #include <QPoint>
 #include <QPointF>
+#include <QPolygon>
 #include <QScreen>
 #include <QSize>
 #include <QSizePolicy>
@@ -53,6 +54,7 @@
 #include <QRubberBand>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QVector>
 #include <functional>
 #include <memory>
 #include <algorithm>
@@ -396,6 +398,7 @@ enum class CreateTool {
   kNone,
   kText,
   kRectangle,
+  kPolygon,
   kLine,
 };
 
@@ -1441,9 +1444,12 @@ public:
       std::function<QString()> visibilityCalcGetter,
       std::function<void(const QString &)> visibilityCalcSetter,
       std::array<std::function<QString()>, 4> channelGetters,
-      std::array<std::function<void(const QString &)>, 4> channelSetters)
+      std::array<std::function<void(const QString &)>, 4> channelSetters,
+      const QString &elementLabel = QStringLiteral("Rectangle"),
+      bool treatAsPolygon = false)
   {
-    selectionKind_ = SelectionKind::kRectangle;
+    selectionKind_ = treatAsPolygon ? SelectionKind::kPolygon
+                                    : SelectionKind::kRectangle;
     updateSectionVisibility(selectionKind_);
 
     geometryGetter_ = std::move(geometryGetter);
@@ -1570,7 +1576,7 @@ public:
       committedTexts_[edit] = edit->text();
     }
 
-    elementLabel_->setText(QStringLiteral("Rectangle"));
+    elementLabel_->setText(elementLabel);
 
     show();
     positionRelativeTo(parentWidget());
@@ -1918,7 +1924,7 @@ protected:
   }
 
 private:
-  enum class SelectionKind { kNone, kDisplay, kRectangle, kLine, kText };
+  enum class SelectionKind { kNone, kDisplay, kRectangle, kPolygon, kLine, kText };
   QLineEdit *createLineEdit()
   {
     auto *edit = new QLineEdit;
@@ -2034,7 +2040,8 @@ private:
       displaySection_->setEnabled(displayVisible);
     }
     if (rectangleSection_) {
-      const bool rectangleVisible = kind == SelectionKind::kRectangle;
+      const bool rectangleVisible = kind == SelectionKind::kRectangle
+          || kind == SelectionKind::kPolygon;
       rectangleSection_->setVisible(rectangleVisible);
       rectangleSection_->setEnabled(rectangleVisible);
     }
@@ -3438,6 +3445,312 @@ private:
   QPointF endRatio_{1.0, 1.0};
 };
 
+class PolygonElement : public QWidget
+{
+public:
+  explicit PolygonElement(QWidget *parent = nullptr)
+    : QWidget(parent)
+  {
+    setAutoFillBackground(false);
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    setAttribute(Qt::WA_NoSystemBackground, true);
+    setForegroundColor(defaultForegroundColor());
+    setFill(RectangleFill::kOutline);
+    setLineStyle(RectangleLineStyle::kSolid);
+    setLineWidth(1);
+    setColorMode(TextColorMode::kStatic);
+    setVisibilityMode(TextVisibilityMode::kStatic);
+    update();
+  }
+
+  void setSelected(bool selected)
+  {
+    if (selected_ == selected) {
+      return;
+    }
+    selected_ = selected;
+    update();
+  }
+
+  bool isSelected() const
+  {
+    return selected_;
+  }
+
+  QColor color() const
+  {
+    return color_;
+  }
+
+  void setForegroundColor(const QColor &color)
+  {
+    QColor effective = color;
+    if (!effective.isValid()) {
+      effective = defaultForegroundColor();
+    }
+    if (color_ == effective) {
+      return;
+    }
+    color_ = effective;
+    update();
+  }
+
+  RectangleFill fill() const
+  {
+    return fill_;
+  }
+
+  void setFill(RectangleFill fill)
+  {
+    if (fill_ == fill) {
+      return;
+    }
+    fill_ = fill;
+    update();
+  }
+
+  RectangleLineStyle lineStyle() const
+  {
+    return lineStyle_;
+  }
+
+  void setLineStyle(RectangleLineStyle style)
+  {
+    if (lineStyle_ == style) {
+      return;
+    }
+    lineStyle_ = style;
+    update();
+  }
+
+  int lineWidth() const
+  {
+    return lineWidth_;
+  }
+
+  void setLineWidth(int width)
+  {
+    const int clamped = std::max(1, width);
+    if (lineWidth_ == clamped) {
+      return;
+    }
+    lineWidth_ = clamped;
+    update();
+  }
+
+  TextColorMode colorMode() const
+  {
+    return colorMode_;
+  }
+
+  void setColorMode(TextColorMode mode)
+  {
+    colorMode_ = mode;
+  }
+
+  TextVisibilityMode visibilityMode() const
+  {
+    return visibilityMode_;
+  }
+
+  void setVisibilityMode(TextVisibilityMode mode)
+  {
+    visibilityMode_ = mode;
+  }
+
+  QString visibilityCalc() const
+  {
+    return visibilityCalc_;
+  }
+
+  void setVisibilityCalc(const QString &calc)
+  {
+    if (visibilityCalc_ == calc) {
+      return;
+    }
+    visibilityCalc_ = calc;
+  }
+
+  QString channel(int index) const
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return QString();
+    }
+    return channels_[index];
+  }
+
+  void setChannel(int index, const QString &value)
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return;
+    }
+    if (channels_[index] == value) {
+      return;
+    }
+    channels_[index] = value;
+  }
+
+  void setAbsolutePoints(const QVector<QPoint> &points)
+  {
+    if (points.size() < 2) {
+      return;
+    }
+
+    QVector<QPoint> effectivePoints = points;
+    if (effectivePoints.first() != effectivePoints.last()) {
+      effectivePoints.append(effectivePoints.first());
+    }
+
+    QPolygon polygon(effectivePoints);
+    QRect bounding = polygon.boundingRect();
+    if (bounding.width() <= 0) {
+      bounding.setWidth(1);
+    }
+    if (bounding.height() <= 0) {
+      bounding.setHeight(1);
+    }
+
+    const int widthSpan = std::max(1, bounding.width() - 1);
+    const int heightSpan = std::max(1, bounding.height() - 1);
+    const double width = static_cast<double>(widthSpan);
+    const double height = static_cast<double>(heightSpan);
+
+    normalizedPoints_.clear();
+    normalizedPoints_.reserve(effectivePoints.size());
+    for (const QPoint &point : effectivePoints) {
+      const double nx = width > 0.0
+          ? static_cast<double>(point.x() - bounding.left()) / width
+          : 0.0;
+      const double ny = height > 0.0
+          ? static_cast<double>(point.y() - bounding.top()) / height
+          : 0.0;
+      normalizedPoints_.append(QPointF(std::clamp(nx, 0.0, 1.0),
+          std::clamp(ny, 0.0, 1.0)));
+    }
+
+    QWidget::setGeometry(bounding);
+    recalcLocalPolygon();
+    update();
+  }
+
+  QVector<QPoint> absolutePoints() const
+  {
+    QVector<QPoint> points;
+    points.reserve(normalizedPoints_.size());
+    const QRect globalRect = geometry();
+    const int w = std::max(1, globalRect.width() - 1);
+    const int h = std::max(1, globalRect.height() - 1);
+    for (const QPointF &norm : normalizedPoints_) {
+      const double clampedX = std::clamp(norm.x(), 0.0, 1.0);
+      const double clampedY = std::clamp(norm.y(), 0.0, 1.0);
+      const int x = globalRect.left()
+          + static_cast<int>(std::round(clampedX * w));
+      const int y = globalRect.top()
+          + static_cast<int>(std::round(clampedY * h));
+      points.append(QPoint(x, y));
+    }
+    return points;
+  }
+
+  bool containsGlobalPoint(const QPoint &point) const
+  {
+    if (localPolygon_.isEmpty()) {
+      return false;
+    }
+    const QPoint localPoint = point - geometry().topLeft();
+    return localPolygon_.containsPoint(localPoint, Qt::OddEvenFill);
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    Q_UNUSED(event);
+
+    if (localPolygon_.size() < 2) {
+      return;
+    }
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    const QColor effectiveColor = color_.isValid()
+        ? color_
+        : defaultForegroundColor();
+
+    if (fill_ == RectangleFill::kSolid) {
+      painter.setPen(Qt::NoPen);
+      painter.setBrush(effectiveColor);
+      painter.drawPolygon(localPolygon_);
+    } else {
+      painter.setBrush(Qt::NoBrush);
+      QPen pen(effectiveColor);
+      pen.setWidth(lineWidth_);
+      pen.setStyle(lineStyle_ == RectangleLineStyle::kDash
+              ? Qt::DashLine
+              : Qt::SolidLine);
+      painter.setPen(pen);
+      painter.drawPolygon(localPolygon_);
+    }
+
+    if (selected_) {
+      QPen selectionPen(Qt::black);
+      selectionPen.setStyle(Qt::DashLine);
+      selectionPen.setWidth(1);
+      painter.setPen(selectionPen);
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
+  }
+
+  void resizeEvent(QResizeEvent *event) override
+  {
+    QWidget::resizeEvent(event);
+    recalcLocalPolygon();
+  }
+
+private:
+  QColor defaultForegroundColor() const
+  {
+    if (const QWidget *parent = parentWidget()) {
+      return parent->palette().color(QPalette::WindowText);
+    }
+    if (qApp) {
+      return qApp->palette().color(QPalette::WindowText);
+    }
+    return QColor(Qt::black);
+  }
+
+  void recalcLocalPolygon()
+  {
+    localPolygon_.clear();
+    if (normalizedPoints_.isEmpty()) {
+      return;
+    }
+
+    const int w = std::max(1, width() - 1);
+    const int h = std::max(1, height() - 1);
+    for (const QPointF &norm : normalizedPoints_) {
+      const double clampedX = std::clamp(norm.x(), 0.0, 1.0);
+      const double clampedY = std::clamp(norm.y(), 0.0, 1.0);
+      const int x = static_cast<int>(std::round(clampedX * w));
+      const int y = static_cast<int>(std::round(clampedY * h));
+      localPolygon_.append(QPoint(x, y));
+    }
+  }
+
+  bool selected_ = false;
+  QColor color_;
+  RectangleFill fill_ = RectangleFill::kOutline;
+  RectangleLineStyle lineStyle_ = RectangleLineStyle::kSolid;
+  int lineWidth_ = 1;
+  TextColorMode colorMode_ = TextColorMode::kStatic;
+  TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
+  QString visibilityCalc_;
+  std::array<QString, 4> channels_{};
+  QVector<QPointF> normalizedPoints_;
+  QPolygon localPolygon_;
+};
+
 class DisplayWindow : public QMainWindow
 {
 public:
@@ -3519,9 +3832,22 @@ protected:
   {
     if (event->button() == Qt::LeftButton) {
       if (auto state = state_.lock(); state && state->editMode) {
-    if (state->createTool == CreateTool::kText
-      || state->createTool == CreateTool::kRectangle
-      || state->createTool == CreateTool::kLine) {
+        if (state->createTool == CreateTool::kPolygon) {
+          if (displayArea_) {
+            const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
+            if (displayArea_->rect().contains(areaPos)) {
+              if (!polygonCreationActive_) {
+                clearSelections();
+              }
+              handlePolygonClick(areaPos, event->modifiers());
+            }
+          }
+          event->accept();
+          return;
+        }
+        if (state->createTool == CreateTool::kText
+            || state->createTool == CreateTool::kRectangle
+            || state->createTool == CreateTool::kLine) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
             if (displayArea_->rect().contains(areaPos)) {
@@ -3547,6 +3873,12 @@ protected:
           if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
             selectRectangleElement(rectangle);
             showResourcePaletteForRectangle(rectangle);
+            event->accept();
+            return;
+          }
+          if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+            selectPolygonElement(polygon);
+            showResourcePaletteForPolygon(polygon);
             event->accept();
             return;
           }
@@ -3598,6 +3930,16 @@ protected:
 
   void mouseMoveEvent(QMouseEvent *event) override
   {
+    if (polygonCreationActive_) {
+      if (auto state = state_.lock(); state && state->editMode && displayArea_
+          && state->createTool == CreateTool::kPolygon) {
+        const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
+        updatePolygonPreview(areaPos, event->modifiers());
+        event->accept();
+        return;
+      }
+    }
+
     if (rubberBandActive_) {
       if (auto state = state_.lock(); state && state->editMode && displayArea_) {
         const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
@@ -3627,6 +3969,23 @@ protected:
     QMainWindow::mouseReleaseEvent(event);
   }
 
+  void mouseDoubleClickEvent(QMouseEvent *event) override
+  {
+    if (event->button() == Qt::LeftButton) {
+      if (auto state = state_.lock(); state && state->editMode
+          && state->createTool == CreateTool::kPolygon && displayArea_) {
+        const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
+        if (displayArea_->rect().contains(areaPos)) {
+          handlePolygonDoubleClick(areaPos, event->modifiers());
+          event->accept();
+          return;
+        }
+      }
+    }
+
+    QMainWindow::mouseDoubleClickEvent(event);
+  }
+
 private:
   std::weak_ptr<DisplayState> state_;
   QFont labelFont_;
@@ -3643,6 +4002,11 @@ private:
   RectangleElement *selectedRectangle_ = nullptr;
   QList<LineElement *> lineElements_;
   LineElement *selectedLine_ = nullptr;
+  QList<PolygonElement *> polygonElements_;
+  PolygonElement *selectedPolygon_ = nullptr;
+  bool polygonCreationActive_ = false;
+  PolygonElement *activePolygonElement_ = nullptr;
+  QVector<QPoint> polygonCreationPoints_;
   QList<QPointer<QWidget>> elementStack_;
   QRubberBand *rubberBand_ = nullptr;
   bool rubberBandActive_ = false;
@@ -3696,12 +4060,22 @@ private:
     selectedLine_ = nullptr;
   }
 
+  void clearPolygonSelection()
+  {
+    if (!selectedPolygon_) {
+      return;
+    }
+    selectedPolygon_->setSelected(false);
+    selectedPolygon_ = nullptr;
+  }
+
   void clearSelections()
   {
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
     clearLineSelection();
+    clearPolygonSelection();
     closeResourcePalette();
   }
 
@@ -3718,6 +4092,7 @@ private:
     clearTextSelection();
     clearRectangleSelection();
     clearLineSelection();
+    clearPolygonSelection();
   }
 
   ResourcePaletteDialog *ensureResourcePalette()
@@ -4022,6 +4397,88 @@ private:
         std::move(channelGetters), std::move(channelSetters));
   }
 
+  void showResourcePaletteForPolygon(PolygonElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [element](const QString &value) { element->setChannel(0, value); },
+        [element](const QString &value) { element->setChannel(1, value); },
+        [element](const QString &value) { element->setChannel(2, value); },
+        [element](const QString &value) { element->setChannel(3, value); },
+    }};
+    dialog->showForRectangle(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = adjustRectToDisplayArea(newGeometry);
+          if (adjusted.width() < 1) {
+            adjusted.setWidth(1);
+          }
+          if (adjusted.height() < 1) {
+            adjusted.setHeight(1);
+          }
+          element->setGeometry(adjusted);
+          element->update();
+        },
+        [element]() {
+          return element->color();
+        },
+        [element](const QColor &color) {
+          element->setForegroundColor(color);
+        },
+        [element]() {
+          return element->fill();
+        },
+        [element](RectangleFill fill) {
+          element->setFill(fill);
+        },
+        [element]() {
+          return element->lineStyle();
+        },
+        [element](RectangleLineStyle style) {
+          element->setLineStyle(style);
+        },
+        [element]() {
+          return element->lineWidth();
+        },
+        [element](int width) {
+          element->setLineWidth(width);
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [element](TextColorMode mode) {
+          element->setColorMode(mode);
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+        },
+        std::move(channelGetters), std::move(channelSetters),
+        QStringLiteral("Polygon"), true);
+  }
+
   QWidget *elementAt(const QPoint &windowPos) const
   {
     if (!displayArea_) {
@@ -4036,9 +4493,15 @@ private:
       if (!widget) {
         continue;
       }
-      if (widget->geometry().contains(areaPos)) {
-        return widget;
+      if (!widget->geometry().contains(areaPos)) {
+        continue;
       }
+      if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+        if (!polygon->containsGlobalPoint(areaPos)) {
+          continue;
+        }
+      }
+      return widget;
     }
     return nullptr;
   }
@@ -4062,6 +4525,21 @@ private:
     element->raise();
   }
 
+  void removeElementFromStack(QWidget *element)
+  {
+    if (!element) {
+      return;
+    }
+    for (auto it = elementStack_.begin(); it != elementStack_.end();) {
+      QWidget *current = it->data();
+      if (!current || current == element) {
+        it = elementStack_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
   void selectTextElement(TextElement *element)
   {
     if (!element) {
@@ -4073,6 +4551,7 @@ private:
     clearDisplaySelection();
     clearRectangleSelection();
     clearLineSelection();
+    clearPolygonSelection();
     selectedTextElement_ = element;
     selectedTextElement_->setSelected(true);
     bringElementToFront(element);
@@ -4089,6 +4568,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearLineSelection();
+    clearPolygonSelection();
     selectedRectangle_ = element;
     selectedRectangle_->setSelected(true);
     bringElementToFront(element);
@@ -4105,8 +4585,26 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearPolygonSelection();
     selectedLine_ = element;
     selectedLine_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectPolygonElement(PolygonElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedPolygon_) {
+      selectedPolygon_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearRectangleSelection();
+    clearLineSelection();
+    selectedPolygon_ = element;
+    selectedPolygon_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -4174,6 +4672,147 @@ private:
     default:
       break;
     }
+  }
+
+  void handlePolygonClick(const QPoint &areaPos, Qt::KeyboardModifiers modifiers)
+  {
+    if (!displayArea_) {
+      return;
+    }
+
+    const QPoint point = polygonCreationActive_
+        ? adjustedPolygonPoint(areaPos, modifiers)
+        : clampToDisplayArea(areaPos);
+
+    if (!polygonCreationActive_) {
+      polygonCreationActive_ = true;
+      polygonCreationPoints_.clear();
+      polygonCreationPoints_.append(point);
+      if (activePolygonElement_) {
+        removeElementFromStack(activePolygonElement_);
+        activePolygonElement_->deleteLater();
+      }
+      activePolygonElement_ = new PolygonElement(displayArea_);
+      activePolygonElement_->show();
+      bringElementToFront(activePolygonElement_);
+      QVector<QPoint> preview{point, point};
+      activePolygonElement_->setAbsolutePoints(preview);
+      return;
+    }
+
+    if (polygonCreationPoints_.isEmpty()
+        || polygonCreationPoints_.last() != point) {
+      polygonCreationPoints_.append(point);
+    }
+    updatePolygonPreview(point, modifiers);
+  }
+
+  void handlePolygonDoubleClick(const QPoint &areaPos,
+      Qt::KeyboardModifiers modifiers)
+  {
+    if (!polygonCreationActive_) {
+      return;
+    }
+
+    const QPoint point = adjustedPolygonPoint(areaPos, modifiers);
+    if (polygonCreationPoints_.isEmpty()
+        || polygonCreationPoints_.last() != point) {
+      polygonCreationPoints_.append(point);
+    }
+    finalizePolygonCreation();
+  }
+
+  void updatePolygonPreview(const QPoint &areaPos,
+      Qt::KeyboardModifiers modifiers)
+  {
+    if (!polygonCreationActive_ || !activePolygonElement_) {
+      return;
+    }
+
+    const QPoint previewPoint = adjustedPolygonPoint(areaPos, modifiers);
+    QVector<QPoint> preview = polygonCreationPoints_;
+    if (preview.isEmpty()) {
+      preview.append(previewPoint);
+      preview.append(previewPoint);
+    } else {
+      preview.append(previewPoint);
+    }
+    activePolygonElement_->setAbsolutePoints(preview);
+    bringElementToFront(activePolygonElement_);
+    activePolygonElement_->update();
+  }
+
+  void finalizePolygonCreation()
+  {
+    if (!polygonCreationActive_ || !activePolygonElement_) {
+      cancelPolygonCreation();
+      return;
+    }
+
+    QVector<QPoint> finalPoints = polygonCreationPoints_;
+    if (finalPoints.size() < 3) {
+      cancelPolygonCreation();
+      return;
+    }
+    if (finalPoints.first() != finalPoints.last()) {
+      finalPoints.append(finalPoints.first());
+    }
+    activePolygonElement_->setAbsolutePoints(finalPoints);
+    PolygonElement *element = activePolygonElement_;
+    polygonCreationActive_ = false;
+    polygonCreationPoints_.clear();
+    activePolygonElement_ = nullptr;
+    polygonElements_.append(element);
+    selectPolygonElement(element);
+    showResourcePaletteForPolygon(element);
+    deactivateCreateTool();
+  }
+
+  void cancelPolygonCreation()
+  {
+    if (!polygonCreationActive_ && !activePolygonElement_) {
+      polygonCreationPoints_.clear();
+      return;
+    }
+
+    polygonCreationActive_ = false;
+    polygonCreationPoints_.clear();
+    if (activePolygonElement_) {
+      removeElementFromStack(activePolygonElement_);
+      activePolygonElement_->deleteLater();
+      activePolygonElement_ = nullptr;
+    }
+  }
+
+  QPoint adjustedPolygonPoint(const QPoint &areaPos,
+      Qt::KeyboardModifiers modifiers)
+  {
+    QPoint clamped = clampToDisplayArea(areaPos);
+    if (!(modifiers & Qt::ShiftModifier) || polygonCreationPoints_.isEmpty()) {
+      return clamped;
+    }
+
+    const QPoint &reference = polygonCreationPoints_.last();
+    const int dx = clamped.x() - reference.x();
+    const int dy = clamped.y() - reference.y();
+    if (dx == 0 && dy == 0) {
+      return clamped;
+    }
+
+    constexpr double kPi = 3.14159265358979323846;
+    double angle = std::atan2(static_cast<double>(dy), static_cast<double>(dx));
+    if (angle < 0.0) {
+      angle += 2.0 * kPi;
+    }
+    const double step = kPi / 4.0;
+    const int index = static_cast<int>(std::round(angle / step));
+    const double snapped = index * step;
+    const double length = std::sqrt(static_cast<double>(dx * dx + dy * dy));
+    const int x = reference.x()
+        + static_cast<int>(std::round(std::cos(snapped) * length));
+    const int y = reference.y()
+        + static_cast<int>(std::round(std::sin(snapped) * length));
+    return clampToDisplayArea(QPoint(x, y));
   }
 
   void createTextElement(const QRect &rect)
@@ -4298,6 +4937,7 @@ private:
   const bool crossCursorActive = state
     && (state->createTool == CreateTool::kText
       || state->createTool == CreateTool::kRectangle
+      || state->createTool == CreateTool::kPolygon
       || state->createTool == CreateTool::kLine);
     if (displayArea_) {
       if (crossCursorActive) {
@@ -4318,6 +4958,7 @@ private:
     if (auto state = state_.lock(); state && state->editMode) {
       for (auto &display : state->displays) {
         if (!display.isNull()) {
+          display->cancelPolygonCreation();
           display->clearSelections();
         }
       }
@@ -4342,12 +4983,14 @@ private:
       state->createTool = CreateTool::kNone;
       for (auto &display : state->displays) {
         if (!display.isNull()) {
+          display->cancelPolygonCreation();
           display->updateCreateCursor();
         }
       }
     }
     rubberBandActive_ = false;
     activeRubberBandTool_ = CreateTool::kNone;
+    cancelPolygonCreation();
     if (rubberBand_) {
       rubberBand_->hide();
     }
@@ -4396,7 +5039,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(graphicsMenu, QStringLiteral("Polygon"));
+    auto *polygonAction =
+        addMenuAction(graphicsMenu, QStringLiteral("Polygon"));
+    QObject::connect(polygonAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kPolygon);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(graphicsMenu, QStringLiteral("Polyline"));
     addMenuAction(graphicsMenu, QStringLiteral("Oval"));
     addMenuAction(graphicsMenu, QStringLiteral("Arc"));

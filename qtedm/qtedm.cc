@@ -40,6 +40,7 @@
 #include <QSignalBlocker>
 #include <QKeySequence>
 #include <QPoint>
+#include <QPointF>
 #include <QScreen>
 #include <QSize>
 #include <QSizePolicy>
@@ -55,6 +56,7 @@
 #include <functional>
 #include <memory>
 #include <algorithm>
+#include <cmath>
 #include <utility>
 #include <array>
 #include <vector>
@@ -394,6 +396,7 @@ enum class CreateTool {
   kNone,
   kText,
   kRectangle,
+  kLine,
 };
 
 class DisplayWindow;
@@ -999,6 +1002,101 @@ public:
     rectangleLayout->setRowStretch(11, 1);
     entriesLayout->addWidget(rectangleSection_);
 
+    lineSection_ = new QWidget(entriesWidget_);
+    auto *lineLayout = new QGridLayout(lineSection_);
+    lineLayout->setContentsMargins(0, 0, 0, 0);
+    lineLayout->setHorizontalSpacing(12);
+    lineLayout->setVerticalSpacing(6);
+
+    lineColorButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(lineColorButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(lineColorButton_,
+              QStringLiteral("Line Color"), lineColorSetter_);
+        });
+
+    lineLineStyleCombo_ = new QComboBox;
+    lineLineStyleCombo_->setFont(valueFont_);
+    lineLineStyleCombo_->setAutoFillBackground(true);
+    lineLineStyleCombo_->addItem(QStringLiteral("Solid"));
+    lineLineStyleCombo_->addItem(QStringLiteral("Dash"));
+    QObject::connect(lineLineStyleCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (lineLineStyleSetter_) {
+            lineLineStyleSetter_(lineStyleFromIndex(index));
+          }
+        });
+
+    lineLineWidthEdit_ = createLineEdit();
+    committedTexts_.insert(lineLineWidthEdit_, lineLineWidthEdit_->text());
+    lineLineWidthEdit_->installEventFilter(this);
+    QObject::connect(lineLineWidthEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitLineLineWidth(); });
+    QObject::connect(lineLineWidthEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitLineLineWidth(); });
+
+    lineColorModeCombo_ = new QComboBox;
+    lineColorModeCombo_->setFont(valueFont_);
+    lineColorModeCombo_->setAutoFillBackground(true);
+    lineColorModeCombo_->addItem(QStringLiteral("Static"));
+    lineColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    lineColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(lineColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (lineColorModeSetter_) {
+            lineColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    lineVisibilityCombo_ = new QComboBox;
+    lineVisibilityCombo_->setFont(valueFont_);
+    lineVisibilityCombo_->setAutoFillBackground(true);
+    lineVisibilityCombo_->addItem(QStringLiteral("Static"));
+    lineVisibilityCombo_->addItem(QStringLiteral("If Not Zero"));
+    lineVisibilityCombo_->addItem(QStringLiteral("If Zero"));
+    lineVisibilityCombo_->addItem(QStringLiteral("Calc"));
+    QObject::connect(lineVisibilityCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (lineVisibilityModeSetter_) {
+            lineVisibilityModeSetter_(visibilityModeFromIndex(index));
+          }
+        });
+
+    lineVisibilityCalcEdit_ = createLineEdit();
+    committedTexts_.insert(lineVisibilityCalcEdit_, lineVisibilityCalcEdit_->text());
+    lineVisibilityCalcEdit_->installEventFilter(this);
+    QObject::connect(lineVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitLineVisibilityCalc(); });
+    QObject::connect(lineVisibilityCalcEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitLineVisibilityCalc(); });
+
+    for (int i = 0; i < static_cast<int>(lineChannelEdits_.size()); ++i) {
+      lineChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(lineChannelEdits_[i], lineChannelEdits_[i]->text());
+      lineChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(lineChannelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitLineChannel(i); });
+      QObject::connect(lineChannelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitLineChannel(i); });
+    }
+
+    addRow(lineLayout, 0, QStringLiteral("Color"), lineColorButton_);
+    addRow(lineLayout, 1, QStringLiteral("Line Style"), lineLineStyleCombo_);
+    addRow(lineLayout, 2, QStringLiteral("Line Width"), lineLineWidthEdit_);
+    addRow(lineLayout, 3, QStringLiteral("Color Mode"), lineColorModeCombo_);
+    addRow(lineLayout, 4, QStringLiteral("Visibility"), lineVisibilityCombo_);
+    addRow(lineLayout, 5, QStringLiteral("Vis Calc"), lineVisibilityCalcEdit_);
+    addRow(lineLayout, 6, QStringLiteral("Channel A"), lineChannelEdits_[0]);
+    addRow(lineLayout, 7, QStringLiteral("Channel B"), lineChannelEdits_[1]);
+    addRow(lineLayout, 8, QStringLiteral("Channel C"), lineChannelEdits_[2]);
+    addRow(lineLayout, 9, QStringLiteral("Channel D"), lineChannelEdits_[3]);
+    lineLayout->setRowStretch(10, 1);
+    entriesLayout->addWidget(lineSection_);
+
     textSection_ = new QWidget(entriesWidget_);
     auto *textLayout = new QGridLayout(textSection_);
     textLayout->setContentsMargins(0, 0, 0, 0);
@@ -1093,6 +1191,7 @@ public:
 
   displaySection_->setVisible(false);
   rectangleSection_->setVisible(false);
+  lineSection_->setVisible(false);
   textSection_->setVisible(false);
     updateSectionVisibility(selectionKind_);
 
@@ -1479,6 +1578,169 @@ public:
     activateWindow();
   }
 
+  void showForLine(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> colorGetter,
+      std::function<void(const QColor &)> colorSetter,
+      std::function<RectangleLineStyle()> lineStyleGetter,
+      std::function<void(RectangleLineStyle)> lineStyleSetter,
+      std::function<int()> lineWidthGetter,
+      std::function<void(int)> lineWidthSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<TextVisibilityMode()> visibilityModeGetter,
+      std::function<void(TextVisibilityMode)> visibilityModeSetter,
+      std::function<QString()> visibilityCalcGetter,
+      std::function<void(const QString &)> visibilityCalcSetter,
+      std::array<std::function<QString()>, 4> channelGetters,
+      std::array<std::function<void(const QString &)>, 4> channelSetters)
+  {
+    selectionKind_ = SelectionKind::kLine;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+
+    rectangleForegroundGetter_ = {};
+    rectangleForegroundSetter_ = {};
+    rectangleFillGetter_ = {};
+    rectangleFillSetter_ = {};
+    rectangleLineStyleGetter_ = {};
+    rectangleLineStyleSetter_ = {};
+    rectangleLineWidthGetter_ = {};
+    rectangleLineWidthSetter_ = {};
+    rectangleColorModeGetter_ = {};
+    rectangleColorModeSetter_ = {};
+    rectangleVisibilityModeGetter_ = {};
+    rectangleVisibilityModeSetter_ = {};
+    rectangleVisibilityCalcGetter_ = {};
+    rectangleVisibilityCalcSetter_ = {};
+    for (auto &getter : rectangleChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : rectangleChannelSetters_) {
+      setter = {};
+    }
+
+    lineColorGetter_ = std::move(colorGetter);
+    lineColorSetter_ = std::move(colorSetter);
+    lineLineStyleGetter_ = std::move(lineStyleGetter);
+    lineLineStyleSetter_ = std::move(lineStyleSetter);
+    lineLineWidthGetter_ = std::move(lineWidthGetter);
+    lineLineWidthSetter_ = std::move(lineWidthSetter);
+    lineColorModeGetter_ = std::move(colorModeGetter);
+    lineColorModeSetter_ = std::move(colorModeSetter);
+    lineVisibilityModeGetter_ = std::move(visibilityModeGetter);
+    lineVisibilityModeSetter_ = std::move(visibilityModeSetter);
+    lineVisibilityCalcGetter_ = std::move(visibilityCalcGetter);
+    lineVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
+    lineChannelGetters_ = std::move(channelGetters);
+    lineChannelSetters_ = std::move(channelSetters);
+
+    QRect lineGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (lineGeometry.width() <= 0) {
+      lineGeometry.setWidth(1);
+    }
+    if (lineGeometry.height() <= 0) {
+      lineGeometry.setHeight(1);
+    }
+    lastCommittedGeometry_ = lineGeometry;
+    updateGeometryEdits(lineGeometry);
+
+    if (lineColorButton_) {
+      const QColor color = lineColorGetter_ ? lineColorGetter_()
+                                            : palette().color(
+                                                  QPalette::WindowText);
+      setColorButtonColor(lineColorButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (lineLineStyleCombo_) {
+      const QSignalBlocker blocker(lineLineStyleCombo_);
+      const RectangleLineStyle style = lineLineStyleGetter_ ? lineLineStyleGetter_()
+                                                           : RectangleLineStyle::kSolid;
+      lineLineStyleCombo_->setCurrentIndex(lineStyleToIndex(style));
+    }
+
+    if (lineLineWidthEdit_) {
+      const int width = lineLineWidthGetter_ ? lineLineWidthGetter_() : 1;
+      const int clampedWidth = std::max(1, width);
+      const QSignalBlocker blocker(lineLineWidthEdit_);
+      lineLineWidthEdit_->setText(QString::number(clampedWidth));
+      committedTexts_[lineLineWidthEdit_] = lineLineWidthEdit_->text();
+    }
+
+    if (lineColorModeCombo_) {
+      const QSignalBlocker blocker(lineColorModeCombo_);
+      const TextColorMode mode = lineColorModeGetter_ ? lineColorModeGetter_()
+                                                     : TextColorMode::kStatic;
+      lineColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (lineVisibilityCombo_) {
+      const QSignalBlocker blocker(lineVisibilityCombo_);
+      const TextVisibilityMode mode = lineVisibilityModeGetter_
+          ? lineVisibilityModeGetter_()
+          : TextVisibilityMode::kStatic;
+      lineVisibilityCombo_->setCurrentIndex(visibilityModeToIndex(mode));
+    }
+
+    if (lineVisibilityCalcEdit_) {
+      const QString calc = lineVisibilityCalcGetter_ ? lineVisibilityCalcGetter_()
+                                                     : QString();
+      const QSignalBlocker blocker(lineVisibilityCalcEdit_);
+      lineVisibilityCalcEdit_->setText(calc);
+      committedTexts_[lineVisibilityCalcEdit_] = lineVisibilityCalcEdit_->text();
+    }
+
+    for (int i = 0; i < static_cast<int>(lineChannelEdits_.size()); ++i) {
+      QLineEdit *edit = lineChannelEdits_[i];
+      if (!edit) {
+        continue;
+      }
+      const QString value = lineChannelGetters_[i]
+          ? lineChannelGetters_[i]()
+          : QString();
+      const QSignalBlocker blocker(edit);
+      edit->setText(value);
+      committedTexts_[edit] = edit->text();
+    }
+
+    elementLabel_->setText(QStringLiteral("Line"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void clearSelectionState()
   {
     geometryGetter_ = {};
@@ -1530,6 +1792,24 @@ public:
     for (auto &setter : rectangleChannelSetters_) {
       setter = {};
     }
+    lineColorGetter_ = {};
+    lineColorSetter_ = {};
+    lineLineStyleGetter_ = {};
+    lineLineStyleSetter_ = {};
+    lineLineWidthGetter_ = {};
+    lineLineWidthSetter_ = {};
+    lineColorModeGetter_ = {};
+    lineColorModeSetter_ = {};
+    lineVisibilityModeGetter_ = {};
+    lineVisibilityModeSetter_ = {};
+    lineVisibilityCalcGetter_ = {};
+    lineVisibilityCalcSetter_ = {};
+    for (auto &getter : lineChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : lineChannelSetters_) {
+      setter = {};
+    }
     activeColorButton_ = nullptr;
     lastCommittedGeometry_ = QRect();
     committedTextString_.clear();
@@ -1555,11 +1835,17 @@ public:
     for (QLineEdit *edit : rectangleChannelEdits_) {
       resetLineEdit(edit);
     }
+    resetLineEdit(lineLineWidthEdit_);
+    resetLineEdit(lineVisibilityCalcEdit_);
+    for (QLineEdit *edit : lineChannelEdits_) {
+      resetLineEdit(edit);
+    }
 
     resetColorButton(foregroundButton_);
     resetColorButton(backgroundButton_);
     resetColorButton(textForegroundButton_);
     resetColorButton(rectangleForegroundButton_);
+    resetColorButton(lineColorButton_);
 
     if (gridOnCombo_) {
       const QSignalBlocker blocker(gridOnCombo_);
@@ -1601,6 +1887,19 @@ public:
       rectangleVisibilityCombo_->setCurrentIndex(
           visibilityModeToIndex(TextVisibilityMode::kStatic));
     }
+    if (lineLineStyleCombo_) {
+      const QSignalBlocker blocker(lineLineStyleCombo_);
+      lineLineStyleCombo_->setCurrentIndex(lineStyleToIndex(RectangleLineStyle::kSolid));
+    }
+    if (lineColorModeCombo_) {
+      const QSignalBlocker blocker(lineColorModeCombo_);
+      lineColorModeCombo_->setCurrentIndex(colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (lineVisibilityCombo_) {
+      const QSignalBlocker blocker(lineVisibilityCombo_);
+      lineVisibilityCombo_->setCurrentIndex(
+          visibilityModeToIndex(TextVisibilityMode::kStatic));
+    }
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Select..."));
@@ -1619,7 +1918,7 @@ protected:
   }
 
 private:
-  enum class SelectionKind { kNone, kDisplay, kRectangle, kText };
+  enum class SelectionKind { kNone, kDisplay, kRectangle, kLine, kText };
   QLineEdit *createLineEdit()
   {
     auto *edit = new QLineEdit;
@@ -1673,11 +1972,16 @@ private:
     const bool isRectangleChannelEdit = std::find(
       rectangleChannelEdits_.begin(), rectangleChannelEdits_.end(), edit)
       != rectangleChannelEdits_.end();
+    const bool isLineChannelEdit = std::find(
+      lineChannelEdits_.begin(), lineChannelEdits_.end(), edit)
+      != lineChannelEdits_.end();
     if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
       || edit == heightEdit_ || edit == gridSpacingEdit_
       || edit == rectangleLineWidthEdit_
       || edit == rectangleVisibilityCalcEdit_
-      || isRectangleChannelEdit) {
+      || edit == lineLineWidthEdit_
+      || edit == lineVisibilityCalcEdit_
+      || isRectangleChannelEdit || isLineChannelEdit) {
           revertLineEdit(edit);
         }
       }
@@ -1733,6 +2037,11 @@ private:
       const bool rectangleVisible = kind == SelectionKind::kRectangle;
       rectangleSection_->setVisible(rectangleVisible);
       rectangleSection_->setEnabled(rectangleVisible);
+    }
+    if (lineSection_) {
+      const bool lineVisible = kind == SelectionKind::kLine;
+      lineSection_->setVisible(lineVisible);
+      lineSection_->setEnabled(lineVisible);
     }
     if (textSection_) {
       const bool textVisible = kind == SelectionKind::kText;
@@ -1857,6 +2166,63 @@ private:
     }
     const QString value = edit->text();
     rectangleChannelSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitLineLineWidth()
+  {
+    if (!lineLineWidthEdit_) {
+      return;
+    }
+    if (!lineLineWidthSetter_) {
+      revertLineEdit(lineLineWidthEdit_);
+      return;
+    }
+    bool ok = false;
+    int value = lineLineWidthEdit_->text().toInt(&ok);
+    if (!ok) {
+      revertLineEdit(lineLineWidthEdit_);
+      return;
+    }
+    value = std::max(1, value);
+    lineLineWidthSetter_(value);
+    const int effectiveWidth = lineLineWidthGetter_ ? lineLineWidthGetter_()
+                                                    : value;
+    const int clampedWidth = std::max(1, effectiveWidth);
+    const QSignalBlocker blocker(lineLineWidthEdit_);
+    lineLineWidthEdit_->setText(QString::number(clampedWidth));
+    committedTexts_[lineLineWidthEdit_] = lineLineWidthEdit_->text();
+  }
+
+  void commitLineVisibilityCalc()
+  {
+    if (!lineVisibilityCalcEdit_) {
+      return;
+    }
+    if (!lineVisibilityCalcSetter_) {
+      revertLineEdit(lineVisibilityCalcEdit_);
+      return;
+    }
+    const QString value = lineVisibilityCalcEdit_->text();
+    lineVisibilityCalcSetter_(value);
+    committedTexts_[lineVisibilityCalcEdit_] = value;
+  }
+
+  void commitLineChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(lineChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = lineChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!lineChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    lineChannelSetters_[index](value);
     committedTexts_[edit] = value;
   }
 
@@ -2081,6 +2447,7 @@ private:
   QWidget *geometrySection_ = nullptr;
   QWidget *displaySection_ = nullptr;
   QWidget *rectangleSection_ = nullptr;
+  QWidget *lineSection_ = nullptr;
   QWidget *textSection_ = nullptr;
   QLineEdit *xEdit_ = nullptr;
   QLineEdit *yEdit_ = nullptr;
@@ -2103,6 +2470,13 @@ private:
   QComboBox *rectangleVisibilityCombo_ = nullptr;
   QLineEdit *rectangleVisibilityCalcEdit_ = nullptr;
   std::array<QLineEdit *, 4> rectangleChannelEdits_{};
+  QPushButton *lineColorButton_ = nullptr;
+  QComboBox *lineLineStyleCombo_ = nullptr;
+  QLineEdit *lineLineWidthEdit_ = nullptr;
+  QComboBox *lineColorModeCombo_ = nullptr;
+  QComboBox *lineVisibilityCombo_ = nullptr;
+  QLineEdit *lineVisibilityCalcEdit_ = nullptr;
+  std::array<QLineEdit *, 4> lineChannelEdits_{};
   QPushButton *foregroundButton_ = nullptr;
   QPushButton *backgroundButton_ = nullptr;
   QComboBox *gridOnCombo_ = nullptr;
@@ -2234,6 +2608,17 @@ private:
         committedTexts_[edit] = edit->text();
       }
     }
+    if (lineLineWidthEdit_) {
+      committedTexts_[lineLineWidthEdit_] = lineLineWidthEdit_->text();
+    }
+    if (lineVisibilityCalcEdit_) {
+      committedTexts_[lineVisibilityCalcEdit_] = lineVisibilityCalcEdit_->text();
+    }
+    for (QLineEdit *edit : lineChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
   }
 
   void commitGridSpacing()
@@ -2310,6 +2695,20 @@ private:
   std::function<void(const QString &)> rectangleVisibilityCalcSetter_;
   std::array<std::function<QString()>, 4> rectangleChannelGetters_{};
   std::array<std::function<void(const QString &)>, 4> rectangleChannelSetters_{};
+  std::function<QColor()> lineColorGetter_;
+  std::function<void(const QColor &)> lineColorSetter_;
+  std::function<RectangleLineStyle()> lineLineStyleGetter_;
+  std::function<void(RectangleLineStyle)> lineLineStyleSetter_;
+  std::function<int()> lineLineWidthGetter_;
+  std::function<void(int)> lineLineWidthSetter_;
+  std::function<TextColorMode()> lineColorModeGetter_;
+  std::function<void(TextColorMode)> lineColorModeSetter_;
+  std::function<TextVisibilityMode()> lineVisibilityModeGetter_;
+  std::function<void(TextVisibilityMode)> lineVisibilityModeSetter_;
+  std::function<QString()> lineVisibilityCalcGetter_;
+  std::function<void(const QString &)> lineVisibilityCalcSetter_;
+  std::array<std::function<QString()>, 4> lineChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4> lineChannelSetters_{};
 
   QLineEdit *editForField(GeometryField field) const
   {
@@ -2811,6 +3210,234 @@ private:
   std::array<QString, 4> channels_{};
 };
 
+class LineElement : public QWidget
+{
+public:
+  explicit LineElement(QWidget *parent = nullptr)
+    : QWidget(parent)
+  {
+    setAutoFillBackground(false);
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    setAttribute(Qt::WA_NoSystemBackground, true);
+    setForegroundColor(defaultForegroundColor());
+    setLineStyle(RectangleLineStyle::kSolid);
+    setLineWidth(1);
+    setColorMode(TextColorMode::kStatic);
+    setVisibilityMode(TextVisibilityMode::kStatic);
+    update();
+  }
+
+  void setSelected(bool selected)
+  {
+    if (selected_ == selected) {
+      return;
+    }
+    selected_ = selected;
+    update();
+  }
+
+  bool isSelected() const
+  {
+    return selected_;
+  }
+
+  QColor color() const
+  {
+    return color_;
+  }
+
+  void setForegroundColor(const QColor &color)
+  {
+    QColor effective = color;
+    if (!effective.isValid()) {
+      effective = defaultForegroundColor();
+    }
+    if (color_ == effective) {
+      return;
+    }
+    color_ = effective;
+    update();
+  }
+
+  RectangleLineStyle lineStyle() const
+  {
+    return lineStyle_;
+  }
+
+  void setLineStyle(RectangleLineStyle style)
+  {
+    if (lineStyle_ == style) {
+      return;
+    }
+    lineStyle_ = style;
+    update();
+  }
+
+  int lineWidth() const
+  {
+    return lineWidth_;
+  }
+
+  void setLineWidth(int width)
+  {
+    const int clamped = std::max(1, width);
+    if (lineWidth_ == clamped) {
+      return;
+    }
+    lineWidth_ = clamped;
+    update();
+  }
+
+  TextColorMode colorMode() const
+  {
+    return colorMode_;
+  }
+
+  void setColorMode(TextColorMode mode)
+  {
+    colorMode_ = mode;
+  }
+
+  TextVisibilityMode visibilityMode() const
+  {
+    return visibilityMode_;
+  }
+
+  void setVisibilityMode(TextVisibilityMode mode)
+  {
+    visibilityMode_ = mode;
+  }
+
+  QString visibilityCalc() const
+  {
+    return visibilityCalc_;
+  }
+
+  void setVisibilityCalc(const QString &calc)
+  {
+    if (visibilityCalc_ == calc) {
+      return;
+    }
+    visibilityCalc_ = calc;
+  }
+
+  QString channel(int index) const
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return QString();
+    }
+    return channels_[index];
+  }
+
+  void setChannel(int index, const QString &value)
+  {
+    if (index < 0 || index >= static_cast<int>(channels_.size())) {
+      return;
+    }
+    if (channels_[index] == value) {
+      return;
+    }
+    channels_[index] = value;
+  }
+
+  void setLocalEndpoints(const QPoint &start, const QPoint &end)
+  {
+    const QSize currentSize = size();
+    if (currentSize.isEmpty()) {
+      startRatio_ = QPointF(0.0, 0.0);
+      endRatio_ = QPointF(1.0, 1.0);
+      return;
+    }
+
+    const QPoint clampedStart = clampToSize(start, currentSize);
+    const QPoint clampedEnd = clampToSize(end, currentSize);
+
+    startRatio_ = ratioForPoint(clampedStart, currentSize);
+    endRatio_ = ratioForPoint(clampedEnd, currentSize);
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    Q_UNUSED(event);
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    const QColor effectiveColor = color_.isValid() ? color_ : defaultForegroundColor();
+    QPen pen(effectiveColor);
+    pen.setWidth(lineWidth_);
+    pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
+                                                         : Qt::SolidLine);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    const QPoint startPoint = pointFromRatio(startRatio_);
+    const QPoint endPoint = pointFromRatio(endRatio_);
+    painter.drawLine(startPoint, endPoint);
+
+    if (selected_) {
+      QPen selectionPen(Qt::black);
+      selectionPen.setStyle(Qt::DashLine);
+      selectionPen.setWidth(1);
+      painter.setPen(selectionPen);
+      painter.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
+  }
+
+private:
+  QColor defaultForegroundColor() const
+  {
+    if (const QWidget *parent = parentWidget()) {
+      return parent->palette().color(QPalette::WindowText);
+    }
+    if (qApp) {
+      return qApp->palette().color(QPalette::WindowText);
+    }
+    return QColor(Qt::black);
+  }
+
+  QPoint clampToSize(const QPoint &point, const QSize &size) const
+  {
+    const int x = std::clamp(point.x(), 0, std::max(0, size.width() - 1));
+    const int y = std::clamp(point.y(), 0, std::max(0, size.height() - 1));
+    return QPoint(x, y);
+  }
+
+  QPointF ratioForPoint(const QPoint &point, const QSize &size) const
+  {
+    const double denomX = size.width() <= 1 ? 1.0
+        : static_cast<double>(size.width() - 1);
+    const double denomY = size.height() <= 1 ? 1.0
+        : static_cast<double>(size.height() - 1);
+    const double rx = denomX == 0.0 ? 0.0 : point.x() / denomX;
+    const double ry = denomY == 0.0 ? 0.0 : point.y() / denomY;
+    return QPointF(std::clamp(rx, 0.0, 1.0), std::clamp(ry, 0.0, 1.0));
+  }
+
+  QPoint pointFromRatio(const QPointF &ratio) const
+  {
+    const double denomX = width() <= 1 ? 1.0
+        : static_cast<double>(width() - 1);
+    const double denomY = height() <= 1 ? 1.0
+        : static_cast<double>(height() - 1);
+    const int x = static_cast<int>(std::round(std::clamp(ratio.x(), 0.0, 1.0) * denomX));
+    const int y = static_cast<int>(std::round(std::clamp(ratio.y(), 0.0, 1.0) * denomY));
+    return QPoint(x, y);
+  }
+
+  bool selected_ = false;
+  QColor color_;
+  RectangleLineStyle lineStyle_ = RectangleLineStyle::kSolid;
+  int lineWidth_ = 1;
+  TextColorMode colorMode_ = TextColorMode::kStatic;
+  TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
+  QString visibilityCalc_;
+  std::array<QString, 4> channels_{};
+  QPointF startRatio_{0.0, 0.0};
+  QPointF endRatio_{1.0, 1.0};
+};
+
 class DisplayWindow : public QMainWindow
 {
 public:
@@ -2892,8 +3519,9 @@ protected:
   {
     if (event->button() == Qt::LeftButton) {
       if (auto state = state_.lock(); state && state->editMode) {
-        if (state->createTool == CreateTool::kText
-            || state->createTool == CreateTool::kRectangle) {
+    if (state->createTool == CreateTool::kText
+      || state->createTool == CreateTool::kRectangle
+      || state->createTool == CreateTool::kLine) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
             if (displayArea_->rect().contains(areaPos)) {
@@ -2922,10 +3550,17 @@ protected:
             event->accept();
             return;
           }
+          if (auto *line = dynamic_cast<LineElement *>(widget)) {
+            selectLineElement(line);
+            showResourcePaletteForLine(line);
+            event->accept();
+            return;
+          }
         }
 
         clearRectangleSelection();
         clearTextSelection();
+        clearLineSelection();
 
         if (displaySelected_) {
           clearDisplaySelection();
@@ -3006,6 +3641,8 @@ private:
   TextElement *selectedTextElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
   RectangleElement *selectedRectangle_ = nullptr;
+  QList<LineElement *> lineElements_;
+  LineElement *selectedLine_ = nullptr;
   QList<QPointer<QWidget>> elementStack_;
   QRubberBand *rubberBand_ = nullptr;
   bool rubberBandActive_ = false;
@@ -3050,11 +3687,21 @@ private:
     selectedRectangle_ = nullptr;
   }
 
+  void clearLineSelection()
+  {
+    if (!selectedLine_) {
+      return;
+    }
+    selectedLine_->setSelected(false);
+    selectedLine_ = nullptr;
+  }
+
   void clearSelections()
   {
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearLineSelection();
     closeResourcePalette();
   }
 
@@ -3070,6 +3717,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearLineSelection();
   }
 
   ResourcePaletteDialog *ensureResourcePalette()
@@ -3307,6 +3955,73 @@ private:
         std::move(channelGetters), std::move(channelSetters));
   }
 
+  void showResourcePaletteForLine(LineElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [element](const QString &value) { element->setChannel(0, value); },
+        [element](const QString &value) { element->setChannel(1, value); },
+        [element](const QString &value) { element->setChannel(2, value); },
+        [element](const QString &value) { element->setChannel(3, value); },
+    }};
+    dialog->showForLine(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+        },
+        [element]() {
+          return element->color();
+        },
+        [element](const QColor &color) {
+          element->setForegroundColor(color);
+        },
+        [element]() {
+          return element->lineStyle();
+        },
+        [element](RectangleLineStyle style) {
+          element->setLineStyle(style);
+        },
+        [element]() {
+          return element->lineWidth();
+        },
+        [element](int width) {
+          element->setLineWidth(width);
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [element](TextColorMode mode) {
+          element->setColorMode(mode);
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+        },
+        std::move(channelGetters), std::move(channelSetters));
+  }
+
   QWidget *elementAt(const QPoint &windowPos) const
   {
     if (!displayArea_) {
@@ -3357,6 +4072,7 @@ private:
     }
     clearDisplaySelection();
     clearRectangleSelection();
+    clearLineSelection();
     selectedTextElement_ = element;
     selectedTextElement_->setSelected(true);
     bringElementToFront(element);
@@ -3372,8 +4088,25 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearLineSelection();
     selectedRectangle_ = element;
     selectedRectangle_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectLineElement(LineElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedLine_) {
+      selectedLine_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearRectangleSelection();
+    selectedLine_ = element;
+    selectedLine_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -3435,6 +4168,9 @@ private:
       rect = adjustRectToDisplayArea(rect);
       createRectangleElement(rect);
       break;
+    case CreateTool::kLine:
+      createLineElement(rubberBandOrigin_, clamped);
+      break;
     default:
       break;
     }
@@ -3485,6 +4221,44 @@ private:
     deactivateCreateTool();
   }
 
+  void createLineElement(const QPoint &startPoint, const QPoint &endPoint)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QPoint clampedStart = clampToDisplayArea(startPoint);
+    QPoint clampedEnd = clampToDisplayArea(endPoint);
+    QRect rect(clampedStart, clampedEnd);
+    rect = rect.normalized();
+    if (rect.width() < 1) {
+      rect.setWidth(1);
+    }
+    if (rect.height() < 1) {
+      rect.setHeight(1);
+    }
+    rect = adjustRectToDisplayArea(rect);
+
+    auto clampLocalPoint = [](const QPoint &point, const QSize &size) {
+      const int maxX = std::max(0, size.width() - 1);
+      const int maxY = std::max(0, size.height() - 1);
+      const int x = std::clamp(point.x(), 0, maxX);
+      const int y = std::clamp(point.y(), 0, maxY);
+      return QPoint(x, y);
+    };
+
+    QPoint localStart = clampLocalPoint(clampedStart - rect.topLeft(), rect.size());
+    QPoint localEnd = clampLocalPoint(clampedEnd - rect.topLeft(), rect.size());
+
+    auto *element = new LineElement(displayArea_);
+    element->setGeometry(rect);
+    element->setLocalEndpoints(localStart, localEnd);
+    element->show();
+    lineElements_.append(element);
+    selectLineElement(element);
+    showResourcePaletteForLine(element);
+    deactivateCreateTool();
+  }
+
   void ensureRubberBand()
   {
     if (!rubberBand_) {
@@ -3521,8 +4295,10 @@ private:
   void updateCreateCursor()
   {
     auto state = state_.lock();
-    const bool crossCursorActive = state && (state->createTool == CreateTool::kText
-        || state->createTool == CreateTool::kRectangle);
+  const bool crossCursorActive = state
+    && (state->createTool == CreateTool::kText
+      || state->createTool == CreateTool::kRectangle
+      || state->createTool == CreateTool::kLine);
     if (displayArea_) {
       if (crossCursorActive) {
         displayArea_->setCursor(Qt::CrossCursor);
@@ -3612,7 +4388,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(graphicsMenu, QStringLiteral("Line"));
+    auto *lineAction =
+        addMenuAction(graphicsMenu, QStringLiteral("Line"));
+    QObject::connect(lineAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kLine);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(graphicsMenu, QStringLiteral("Polygon"));
     addMenuAction(graphicsMenu, QStringLiteral("Polyline"));
     addMenuAction(graphicsMenu, QStringLiteral("Oval"));

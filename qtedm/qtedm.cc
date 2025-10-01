@@ -121,6 +121,8 @@ QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
     return font;
 }
 
+void centerWindowOnScreen(QWidget *window);
+
 void showVersionDialog(QWidget *parent, const QFont &titleFont,
     const QFont &bodyFont, const QPalette &palette, bool autoClose = true)
 {
@@ -212,6 +214,9 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
     }
 
     dialog->setPalette(palette);
+  dialog->adjustSize();
+  dialog->setFixedSize(dialog->sizeHint());
+  centerWindowOnScreen(dialog);
 
     if (autoClose) {
         QTimer::singleShot(5000, dialog, &QDialog::accept);
@@ -246,6 +251,42 @@ void positionWindowTopRight(QWidget *window, int rightMargin, int topMargin)
   const int yOffset = std::max(0, topMargin);
   const int x = screenGeometry.x() + xOffset;
   const int y = screenGeometry.y() + yOffset;
+
+  window->move(x, y);
+}
+
+void centerWindowOnScreen(QWidget *window)
+{
+  if (!window) {
+    return;
+  }
+
+  QScreen *screen = window->screen();
+  if (!screen) {
+    if (QWidget *parent = window->parentWidget()) {
+      screen = parent->screen();
+    }
+  }
+  if (!screen) {
+    screen = QGuiApplication::screenAt(QCursor::pos());
+  }
+  if (!screen) {
+    screen = QGuiApplication::primaryScreen();
+  }
+  if (!screen) {
+    return;
+  }
+
+  const QRect screenGeometry = screen->availableGeometry();
+  QSize targetSize = window->size();
+  if (targetSize.isEmpty()) {
+    targetSize = window->sizeHint();
+  }
+
+  const int x = screenGeometry.x()
+      + std::max(0, (screenGeometry.width() - targetSize.width()) / 2);
+  const int y = screenGeometry.y()
+      + std::max(0, (screenGeometry.height() - targetSize.height()) / 2);
 
   window->move(x, y);
 }

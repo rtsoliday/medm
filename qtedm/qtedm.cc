@@ -11,6 +11,7 @@
 #include <QDialog>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QDir>
 #include <QAbstractScrollArea>
 #include <QSaveFile>
 #include <QTextStream>
@@ -1032,6 +1033,7 @@ private:
   QPointer<ResourcePaletteDialog> resourcePalette_;
   DisplayAreaWidget *displayArea_ = nullptr;
   QString filePath_;
+  QString colormapName_;
   bool dirty_ = true;
   bool displaySelected_ = false;
   bool gridOn_ = kDefaultGridOn;
@@ -3127,6 +3129,10 @@ bool DisplayWindow::saveAs(QWidget *dialogParent)
   QString initialPath = filePath_;
   if (initialPath.isEmpty()) {
     QString baseName = windowTitle();
+    if (baseName.endsWith(QLatin1Char('*'))) {
+      baseName.chop(1);
+      baseName = baseName.trimmed();
+    }
     if (baseName.isEmpty()) {
       baseName = QStringLiteral("untitled.adl");
     } else if (!baseName.endsWith(QStringLiteral(".adl"), Qt::CaseInsensitive)) {
@@ -3135,9 +3141,27 @@ bool DisplayWindow::saveAs(QWidget *dialogParent)
     initialPath = baseName;
   }
 
-  const QString selected = QFileDialog::getSaveFileName(parent,
-      QStringLiteral("Save Display"), initialPath,
-      QStringLiteral("MEDM Display Files (*.adl);;All Files (*)"));
+  QFileDialog dialog(parent, QStringLiteral("Save Display"));
+  dialog.setAcceptMode(QFileDialog::AcceptSave);
+  dialog.setFileMode(QFileDialog::AnyFile);
+  dialog.setNameFilter(QStringLiteral("MEDM Display Files (*.adl)"));
+  dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+  dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
+  dialog.setModal(true);
+  dialog.setWindowModality(Qt::ApplicationModal);
+  dialog.setDefaultSuffix(QStringLiteral("adl"));
+
+  const QFileInfo initialInfo(initialPath);
+  if (initialInfo.exists() || !initialPath.isEmpty()) {
+    dialog.setDirectory(initialInfo.absolutePath());
+    dialog.selectFile(initialInfo.filePath());
+  }
+
+  if (dialog.exec() != QDialog::Accepted) {
+    return false;
+  }
+
+  const QString selected = dialog.selectedFiles().value(0);
   if (selected.isEmpty()) {
     return false;
   }
@@ -3171,7 +3195,15 @@ bool DisplayWindow::writeAdlFile(const QString &filePath) const
   QTextStream stream(&file);
   stream.setCodec("UTF-8");
 
-  const QString fileName = QFileInfo(filePath).fileName();
+  const QFileInfo info(filePath);
+  QString fileName = info.filePath();
+  if (info.isAbsolute()) {
+    fileName = info.absoluteFilePath();
+  }
+  if (fileName.isEmpty()) {
+    fileName = info.fileName();
+  }
+  fileName = QDir::cleanPath(fileName);
   stream << "file {";
   writeIndentedLine(stream, 1,
       QStringLiteral("name=\"%1\"").arg(escapeAdlString(fileName)));
@@ -3198,7 +3230,15 @@ bool DisplayWindow::writeAdlFile(const QString &filePath) const
       QStringLiteral("clr=%1").arg(medmColorIndex(foreground)));
   writeIndentedLine(stream, 1,
       QStringLiteral("bclr=%1").arg(medmColorIndex(background)));
-  writeIndentedLine(stream, 1, QStringLiteral("cmap=\"default\""));
+  const QString cmapName = colormapName_.trimmed();
+  const bool cmapDefault = cmapName.isEmpty()
+      || cmapName.compare(QStringLiteral("default"), Qt::CaseInsensitive) == 0;
+  if (cmapDefault) {
+    writeIndentedLine(stream, 1, QStringLiteral("cmap=\"\""));
+  } else {
+    writeIndentedLine(stream, 1,
+        QStringLiteral("cmap=\"%1\"").arg(escapeAdlString(cmapName)));
+  }
   writeIndentedLine(stream, 1,
       QStringLiteral("gridSpacing=%1").arg(gridSpacing_));
   writeIndentedLine(stream, 1,

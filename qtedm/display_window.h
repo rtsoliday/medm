@@ -63,6 +63,7 @@
 #include "display_properties.h"
 #include "display_state.h"
 #include "image_element.h"
+#include "meter_element.h"
 #include "line_element.h"
 #include "medm_colors.h"
 #include "oval_element.h"

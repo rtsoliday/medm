@@ -248,6 +248,7 @@ protected:
         }
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
+            || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -278,6 +279,12 @@ protected:
           if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
             selectTextMonitorElement(textMonitor);
             showResourcePaletteForTextMonitor(textMonitor);
+            event->accept();
+            return;
+          }
+          if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+            selectMeterElement(meter);
+            showResourcePaletteForMeter(meter);
             event->accept();
             return;
           }
@@ -329,6 +336,7 @@ protected:
         clearOvalSelection();
         clearTextSelection();
         clearTextMonitorSelection();
+        clearMeterSelection();
         clearLineSelection();
 
         if (displaySelected_) {
@@ -465,6 +473,8 @@ private:
   TextElement *selectedTextElement_ = nullptr;
   QList<TextMonitorElement *> textMonitorElements_;
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
+  QList<MeterElement *> meterElements_;
+  MeterElement *selectedMeterElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
   RectangleElement *selectedRectangle_ = nullptr;
   QList<ImageElement *> imageElements_;
@@ -527,6 +537,15 @@ private:
     }
     selectedTextMonitorElement_->setSelected(false);
     selectedTextMonitorElement_ = nullptr;
+  }
+
+  void clearMeterSelection()
+  {
+    if (!selectedMeterElement_) {
+      return;
+    }
+    selectedMeterElement_->setSelected(false);
+    selectedMeterElement_ = nullptr;
   }
 
   void clearRectangleSelection()
@@ -597,6 +616,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -619,6 +639,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -898,6 +919,74 @@ private:
         [this, element](const QString &value) {
           element->setChannel(0, value);
           element->setText(value);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForMeter(MeterElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForMeter(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumMeterSize) {
+            adjusted.setWidth(kMinimumMeterSize);
+          }
+          if (adjusted.height() < kMinimumMeterSize) {
+            adjusted.setHeight(kMinimumMeterSize);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->label();
+        },
+        [this, element](MeterLabel label) {
+          element->setLabel(label);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
           markDirty();
         });
   }
@@ -1644,6 +1733,7 @@ private:
     }
     clearDisplaySelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -1665,6 +1755,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -1674,6 +1765,29 @@ private:
     clearPolygonSelection();
     selectedTextMonitorElement_ = element;
     selectedTextMonitorElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectMeterElement(MeterElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedMeterElement_) {
+      selectedMeterElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedMeterElement_ = element;
+    selectedMeterElement_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -1688,6 +1802,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1709,6 +1824,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1731,6 +1847,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearArcSelection();
@@ -1752,6 +1869,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearImageSelection();
@@ -1774,6 +1892,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1796,6 +1915,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1818,6 +1938,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearMeterSelection();
     clearRectangleSelection();
     clearArcSelection();
     clearLineSelection();
@@ -1886,6 +2007,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createTextMonitorElement(rect);
+      break;
+    case CreateTool::kMeter:
+      if (rect.width() < kMinimumMeterSize) {
+        rect.setWidth(kMinimumMeterSize);
+      }
+      if (rect.height() < kMinimumMeterSize) {
+        rect.setHeight(kMinimumMeterSize);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createMeterElement(rect);
       break;
     case CreateTool::kRectangle:
       if (rect.width() <= 0) {
@@ -2240,6 +2371,32 @@ private:
     markDirty();
   }
 
+  void createMeterElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumMeterSize) {
+      target.setWidth(kMinimumMeterSize);
+    }
+    if (target.height() < kMinimumMeterSize) {
+      target.setHeight(kMinimumMeterSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new MeterElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    meterElements_.append(element);
+    selectMeterElement(element);
+    showResourcePaletteForMeter(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createRectangleElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -2422,6 +2579,7 @@ private:
     const bool crossCursorActive = state
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
+            || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -2580,7 +2738,13 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(monitorsMenu, QStringLiteral("Meter"));
+    auto *meterAction = addMenuAction(monitorsMenu, QStringLiteral("Meter"));
+    QObject::connect(meterAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kMeter);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(monitorsMenu, QStringLiteral("Bar Monitor"));
     addMenuAction(monitorsMenu, QStringLiteral("Byte Monitor"));
     addMenuAction(monitorsMenu, QStringLiteral("Scale Monitor"));

@@ -32,6 +32,15 @@ enum class TextMonitorFormat
   kSexagesimalDms,
 };
 
+enum class MeterLabel
+{
+  kNone,
+  kNoDecorations,
+  kOutline,
+  kLimits,
+  kChannel,
+};
+
 enum class PvLimitSource
 {
   kChannel,
@@ -77,6 +86,7 @@ constexpr bool kDefaultSnapToGrid = false;
 constexpr int kMinimumTextWidth = 40;
 constexpr int kMinimumTextHeight = 20;
 constexpr int kMinimumRectangleSize = 6;
+constexpr int kMinimumMeterSize = 60;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
 

@@ -36,6 +36,7 @@
 #include <QPalette>
 #include <QPointer>
 #include <QScreen>
+#include <QGuiApplication>
 
 #include "color_palette_dialog.h"
 #include "display_properties.h"
@@ -735,6 +736,81 @@ public:
     textMonitorLayout->setRowStretch(8, 1);
     entriesLayout->addWidget(textMonitorSection_);
 
+    meterSection_ = new QWidget(entriesWidget_);
+    auto *meterLayout = new QGridLayout(meterSection_);
+    meterLayout->setContentsMargins(0, 0, 0, 0);
+    meterLayout->setHorizontalSpacing(12);
+    meterLayout->setVerticalSpacing(6);
+
+    meterForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(meterForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(meterForegroundButton_,
+              QStringLiteral("Meter Foreground"), meterForegroundSetter_);
+        });
+
+    meterBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(meterBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(meterBackgroundButton_,
+              QStringLiteral("Meter Background"), meterBackgroundSetter_);
+        });
+
+    meterLabelCombo_ = new QComboBox;
+    meterLabelCombo_->setFont(valueFont_);
+    meterLabelCombo_->setAutoFillBackground(true);
+    meterLabelCombo_->addItem(QStringLiteral("None"));
+    meterLabelCombo_->addItem(QStringLiteral("No Decorations"));
+    meterLabelCombo_->addItem(QStringLiteral("Outline"));
+    meterLabelCombo_->addItem(QStringLiteral("Limits"));
+    meterLabelCombo_->addItem(QStringLiteral("Channel"));
+    QObject::connect(meterLabelCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (meterLabelSetter_) {
+            meterLabelSetter_(meterLabelFromIndex(index));
+          }
+        });
+
+    meterColorModeCombo_ = new QComboBox;
+    meterColorModeCombo_->setFont(valueFont_);
+    meterColorModeCombo_->setAutoFillBackground(true);
+    meterColorModeCombo_->addItem(QStringLiteral("Static"));
+    meterColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    meterColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(meterColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (meterColorModeSetter_) {
+            meterColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    meterChannelEdit_ = createLineEdit();
+    committedTexts_.insert(meterChannelEdit_, meterChannelEdit_->text());
+    meterChannelEdit_->installEventFilter(this);
+    QObject::connect(meterChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitMeterChannel(); });
+    QObject::connect(meterChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitMeterChannel(); });
+
+    meterPvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    meterPvLimitsButton_->setEnabled(false);
+    QObject::connect(meterPvLimitsButton_, &QPushButton::clicked, this,
+        [this]() { openMeterPvLimitsDialog(); });
+
+    addRow(meterLayout, 0, QStringLiteral("Foreground"), meterForegroundButton_);
+    addRow(meterLayout, 1, QStringLiteral("Background"), meterBackgroundButton_);
+    addRow(meterLayout, 2, QStringLiteral("Label"), meterLabelCombo_);
+    addRow(meterLayout, 3, QStringLiteral("Color Mode"), meterColorModeCombo_);
+    addRow(meterLayout, 4, QStringLiteral("Channel"), meterChannelEdit_);
+    addRow(meterLayout, 5, QStringLiteral("Channel Limits"), meterPvLimitsButton_);
+    meterLayout->setRowStretch(6, 1);
+    entriesLayout->addWidget(meterSection_);
+
     entriesLayout->addStretch(1);
 
   displaySection_->setVisible(false);
@@ -743,6 +819,7 @@ public:
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
   textMonitorSection_->setVisible(false);
+  meterSection_->setVisible(false);
     updateSectionVisibility(selectionKind_);
 
     scrollArea_->setWidget(entriesWidget_);
@@ -790,6 +867,7 @@ public:
       std::function<bool()> gridOnGetter,
       std::function<void(bool)> gridOnSetter)
   {
+    clearSelectionState();
     selectionKind_ = SelectionKind::kDisplay;
     updateSectionVisibility(selectionKind_);
 
@@ -901,6 +979,7 @@ public:
       std::array<std::function<QString()>, 4> channelGetters,
       std::array<std::function<void(const QString &)>, 4> channelSetters)
   {
+    clearSelectionState();
     selectionKind_ = SelectionKind::kText;
     updateSectionVisibility(selectionKind_);
 
@@ -1041,6 +1120,7 @@ public:
       std::function<QString()> channelGetter,
       std::function<void(const QString &)> channelSetter)
   {
+    clearSelectionState();
     selectionKind_ = SelectionKind::kTextMonitor;
     updateSectionVisibility(selectionKind_);
 
@@ -1275,6 +1355,169 @@ public:
     activateWindow();
   }
 
+  void showForMeter(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<MeterLabel()> labelGetter,
+      std::function<void(MeterLabel)> labelSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kMeter;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
+      setter = {};
+    }
+
+    meterForegroundGetter_ = std::move(foregroundGetter);
+    meterForegroundSetter_ = std::move(foregroundSetter);
+    meterBackgroundGetter_ = std::move(backgroundGetter);
+    meterBackgroundSetter_ = std::move(backgroundSetter);
+    meterLabelGetter_ = std::move(labelGetter);
+    meterLabelSetter_ = std::move(labelSetter);
+    meterColorModeGetter_ = std::move(colorModeGetter);
+    meterColorModeSetter_ = std::move(colorModeSetter);
+    meterChannelGetter_ = std::move(channelGetter);
+    meterChannelSetter_ = std::move(channelSetter);
+    meterLimitsGetter_ = std::move(limitsGetter);
+    meterLimitsSetter_ = std::move(limitsSetter);
+
+    QRect meterGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (meterGeometry.width() <= 0) {
+      meterGeometry.setWidth(kMinimumMeterSize);
+    }
+    if (meterGeometry.height() <= 0) {
+      meterGeometry.setHeight(kMinimumMeterSize);
+    }
+    lastCommittedGeometry_ = meterGeometry;
+
+    updateGeometryEdits(meterGeometry);
+
+    if (meterForegroundButton_) {
+      const QColor color = meterForegroundGetter_
+              ? meterForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(meterForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (meterBackgroundButton_) {
+      const QColor color = meterBackgroundGetter_
+              ? meterBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(meterBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (meterLabelCombo_) {
+      const QSignalBlocker blocker(meterLabelCombo_);
+      const MeterLabel label = meterLabelGetter_ ? meterLabelGetter_()
+                                                : MeterLabel::kOutline;
+      meterLabelCombo_->setCurrentIndex(meterLabelToIndex(label));
+    }
+
+    if (meterColorModeCombo_) {
+      const QSignalBlocker blocker(meterColorModeCombo_);
+      const TextColorMode mode = meterColorModeGetter_
+              ? meterColorModeGetter_()
+              : TextColorMode::kStatic;
+      meterColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (meterChannelEdit_) {
+      const QString channel = meterChannelGetter_ ? meterChannelGetter_()
+                                                  : QString();
+      const QSignalBlocker blocker(meterChannelEdit_);
+      meterChannelEdit_->setText(channel);
+      committedTexts_[meterChannelEdit_] = meterChannelEdit_->text();
+    }
+
+    if (meterPvLimitsButton_) {
+      meterPvLimitsButton_->setEnabled(static_cast<bool>(meterLimitsSetter_));
+    }
+
+    updateMeterLimitsFromDialog();
+
+    elementLabel_->setText(QStringLiteral("Meter"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void showForRectangle(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> colorGetter,
@@ -1300,6 +1543,7 @@ public:
       std::function<int()> arcPathGetter = {},
       std::function<void(int)> arcPathSetter = {})
   {
+    clearSelectionState();
     const bool hasArcAngles = static_cast<bool>(arcBeginGetter)
         || static_cast<bool>(arcPathGetter)
         || static_cast<bool>(arcBeginSetter)
@@ -1510,6 +1754,7 @@ public:
       std::array<std::function<QString()>, 4> channelGetters,
       std::array<std::function<void(const QString &)>, 4> channelSetters)
   {
+    clearSelectionState();
     selectionKind_ = SelectionKind::kImage;
     updateSectionVisibility(selectionKind_);
 
@@ -1717,6 +1962,7 @@ public:
     std::array<std::function<void(const QString &)>, 4> channelSetters,
     const QString &elementLabel = QStringLiteral("Line"))
   {
+    clearSelectionState();
     selectionKind_ = SelectionKind::kLine;
     updateSectionVisibility(selectionKind_);
 
@@ -1913,6 +2159,39 @@ public:
     for (auto &setter : textChannelSetters_) {
       setter = {};
     }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    meterForegroundGetter_ = {};
+    meterForegroundSetter_ = {};
+    meterBackgroundGetter_ = {};
+    meterBackgroundSetter_ = {};
+    meterLabelGetter_ = {};
+    meterLabelSetter_ = {};
+    meterColorModeGetter_ = {};
+    meterColorModeSetter_ = {};
+    meterChannelGetter_ = {};
+    meterChannelSetter_ = {};
+    meterLimitsGetter_ = {};
+    meterLimitsSetter_ = {};
+    if (meterPvLimitsButton_) {
+      meterPvLimitsButton_->setEnabled(false);
+    }
     rectangleForegroundGetter_ = {};
     rectangleForegroundSetter_ = {};
     rectangleFillGetter_ = {};
@@ -1979,6 +2258,7 @@ public:
     if (textMonitorPvLimitsButton_) {
       textMonitorPvLimitsButton_->setEnabled(false);
     }
+    resetLineEdit(meterChannelEdit_);
     resetLineEdit(rectangleLineWidthEdit_);
     resetLineEdit(rectangleVisibilityCalcEdit_);
     for (QLineEdit *edit : rectangleChannelEdits_) {
@@ -2001,6 +2281,8 @@ public:
     resetColorButton(textForegroundButton_);
     resetColorButton(textMonitorForegroundButton_);
     resetColorButton(textMonitorBackgroundButton_);
+    resetColorButton(meterForegroundButton_);
+    resetColorButton(meterBackgroundButton_);
     resetColorButton(rectangleForegroundButton_);
     resetColorButton(lineColorButton_);
 
@@ -2035,6 +2317,15 @@ public:
     if (textMonitorColorModeCombo_) {
       const QSignalBlocker blocker(textMonitorColorModeCombo_);
       textMonitorColorModeCombo_->setCurrentIndex(
+          colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (meterLabelCombo_) {
+      const QSignalBlocker blocker(meterLabelCombo_);
+      meterLabelCombo_->setCurrentIndex(meterLabelToIndex(MeterLabel::kOutline));
+    }
+    if (meterColorModeCombo_) {
+      const QSignalBlocker blocker(meterColorModeCombo_);
+      meterColorModeCombo_->setCurrentIndex(
           colorModeToIndex(TextColorMode::kStatic));
     }
     if (textVisibilityCombo_) {
@@ -2135,6 +2426,7 @@ private:
     kPolygon,
     kLine,
     kText,
+    kMeter,
     kTextMonitor
   };
   QLineEdit *createLineEdit()
@@ -2198,29 +2490,31 @@ private:
   {
     if (event->type() == QEvent::FocusOut) {
       if (auto *edit = qobject_cast<QLineEdit *>(object)) {
-    const bool isRectangleChannelEdit = std::find(
-      rectangleChannelEdits_.begin(), rectangleChannelEdits_.end(), edit)
-      != rectangleChannelEdits_.end();
-    const bool isLineChannelEdit = std::find(
-      lineChannelEdits_.begin(), lineChannelEdits_.end(), edit)
-      != lineChannelEdits_.end();
-    const bool isImageChannelEdit = std::find(
-      imageChannelEdits_.begin(), imageChannelEdits_.end(), edit)
-      != imageChannelEdits_.end();
-    if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
-      || edit == heightEdit_ || edit == gridSpacingEdit_
-      || edit == rectangleLineWidthEdit_
-      || edit == rectangleVisibilityCalcEdit_
-      || edit == imageNameEdit_ || edit == imageCalcEdit_
-      || edit == imageVisibilityCalcEdit_
-      || edit == lineLineWidthEdit_
-      || edit == lineVisibilityCalcEdit_
-      || isRectangleChannelEdit || isLineChannelEdit || isImageChannelEdit) {
+        const bool isRectangleChannelEdit = std::find(
+            rectangleChannelEdits_.begin(), rectangleChannelEdits_.end(), edit)
+            != rectangleChannelEdits_.end();
+        const bool isLineChannelEdit = std::find(
+            lineChannelEdits_.begin(), lineChannelEdits_.end(), edit)
+            != lineChannelEdits_.end();
+        const bool isImageChannelEdit = std::find(
+            imageChannelEdits_.begin(), imageChannelEdits_.end(), edit)
+            != imageChannelEdits_.end();
+        if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
+            || edit == heightEdit_ || edit == gridSpacingEdit_
+            || edit == rectangleLineWidthEdit_
+            || edit == rectangleVisibilityCalcEdit_
+            || edit == imageNameEdit_ || edit == imageCalcEdit_
+            || edit == imageVisibilityCalcEdit_
+            || edit == lineLineWidthEdit_
+            || edit == lineVisibilityCalcEdit_
+            || isRectangleChannelEdit || isLineChannelEdit
+            || isImageChannelEdit) {
           revertLineEdit(edit);
         }
-      if (edit == textMonitorPrecisionEdit_ || edit == textMonitorChannelEdit_) {
-        revertLineEdit(edit);
-      }
+        if (edit == textMonitorPrecisionEdit_ || edit == textMonitorChannelEdit_
+            || edit == meterChannelEdit_) {
+          revertLineEdit(edit);
+        }
       }
     }
 
@@ -2317,6 +2611,11 @@ private:
       textMonitorSection_->setVisible(monitorVisible);
       textMonitorSection_->setEnabled(monitorVisible);
     }
+    if (meterSection_) {
+      const bool meterVisible = kind == SelectionKind::kMeter;
+      meterSection_->setVisible(meterVisible);
+      meterSection_->setEnabled(meterVisible);
+    }
   }
 
   void commitTextString()
@@ -2391,6 +2690,21 @@ private:
     committedTexts_[textMonitorChannelEdit_] = value;
   }
 
+  void commitMeterChannel()
+  {
+    if (!meterChannelEdit_) {
+      return;
+    }
+    if (!meterChannelSetter_) {
+      revertLineEdit(meterChannelEdit_);
+      return;
+    }
+    const QString value = meterChannelEdit_->text();
+    meterChannelSetter_(value);
+    committedTexts_[meterChannelEdit_] = value;
+    updateMeterLimitsFromDialog();
+  }
+
   void commitTextMonitorPrecision()
   {
     if (!textMonitorPrecisionEdit_) {
@@ -2457,6 +2771,21 @@ private:
           textMonitorPrecisionDefaultGetter_,
           textMonitorPrecisionDefaultSetter_,
           [this]() { updateTextMonitorLimitsFromDialog(); });
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
+  }
+
+  void updateMeterLimitsFromDialog()
+  {
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (meterLimitsGetter_ && meterLimitsSetter_) {
+      const QString channelLabel = meterChannelGetter_ ? meterChannelGetter_()
+                                                       : QString();
+      pvLimitsDialog_->setMeterCallbacks(channelLabel, meterLimitsGetter_,
+          meterLimitsSetter_, [this]() { updateMeterLimitsFromDialog(); });
     } else {
       pvLimitsDialog_->clearTargets();
     }
@@ -2744,6 +3073,40 @@ private:
     }
   }
 
+  MeterLabel meterLabelFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return MeterLabel::kNoDecorations;
+    case 2:
+      return MeterLabel::kOutline;
+    case 3:
+      return MeterLabel::kLimits;
+    case 4:
+      return MeterLabel::kChannel;
+    case 0:
+    default:
+      return MeterLabel::kNone;
+    }
+  }
+
+  int meterLabelToIndex(MeterLabel label) const
+  {
+    switch (label) {
+    case MeterLabel::kNoDecorations:
+      return 1;
+    case MeterLabel::kOutline:
+      return 2;
+    case MeterLabel::kLimits:
+      return 3;
+    case MeterLabel::kChannel:
+      return 4;
+    case MeterLabel::kNone:
+    default:
+      return 0;
+    }
+  }
+
   static int degreesToAngle64(int degrees)
   {
     return degrees * 64;
@@ -2979,6 +3342,13 @@ private:
   QComboBox *textMonitorColorModeCombo_ = nullptr;
   QLineEdit *textMonitorChannelEdit_ = nullptr;
   QPushButton *textMonitorPvLimitsButton_ = nullptr;
+  QWidget *meterSection_ = nullptr;
+  QPushButton *meterForegroundButton_ = nullptr;
+  QPushButton *meterBackgroundButton_ = nullptr;
+  QComboBox *meterLabelCombo_ = nullptr;
+  QComboBox *meterColorModeCombo_ = nullptr;
+  QLineEdit *meterChannelEdit_ = nullptr;
+  QPushButton *meterPvLimitsButton_ = nullptr;
   QPushButton *rectangleForegroundButton_ = nullptr;
   QComboBox *rectangleFillCombo_ = nullptr;
   QComboBox *rectangleLineStyleCombo_ = nullptr;
@@ -3143,6 +3513,9 @@ private:
     if (textMonitorChannelEdit_) {
       committedTexts_[textMonitorChannelEdit_] = textMonitorChannelEdit_->text();
     }
+    if (meterChannelEdit_) {
+      committedTexts_[meterChannelEdit_] = meterChannelEdit_->text();
+    }
     if (rectangleLineWidthEdit_) {
       committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
     }
@@ -3257,6 +3630,18 @@ private:
   std::function<void(TextColorMode)> textMonitorColorModeSetter_;
   std::function<QString()> textMonitorChannelGetter_;
   std::function<void(const QString &)> textMonitorChannelSetter_;
+  std::function<QColor()> meterForegroundGetter_;
+  std::function<void(const QColor &)> meterForegroundSetter_;
+  std::function<QColor()> meterBackgroundGetter_;
+  std::function<void(const QColor &)> meterBackgroundSetter_;
+  std::function<MeterLabel()> meterLabelGetter_;
+  std::function<void(MeterLabel)> meterLabelSetter_;
+  std::function<TextColorMode()> meterColorModeGetter_;
+  std::function<void(TextColorMode)> meterColorModeSetter_;
+  std::function<QString()> meterChannelGetter_;
+  std::function<void(const QString &)> meterChannelSetter_;
+  std::function<PvLimits()> meterLimitsGetter_;
+  std::function<void(const PvLimits &)> meterLimitsSetter_;
   QString committedTextString_;
   std::function<QColor()> rectangleForegroundGetter_;
   std::function<void(const QColor &)> rectangleForegroundSetter_;
@@ -3379,6 +3764,26 @@ private:
         textMonitorPrecisionDefaultSetter_,
         [this]() { updateTextMonitorLimitsFromDialog(); });
     dialog->showForTextMonitor();
+  }
+
+  void openMeterPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!meterLimitsGetter_ || !meterLimitsSetter_) {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = meterChannelGetter_ ? meterChannelGetter_()
+                                                     : QString();
+    dialog->setMeterCallbacks(channelLabel, meterLimitsGetter_,
+        meterLimitsSetter_, [this]() { updateMeterLimitsFromDialog(); });
+    dialog->showForMeter();
   }
 
   QColor colorFromButton(const QPushButton *button) const

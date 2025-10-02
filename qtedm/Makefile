@@ -37,6 +37,7 @@ qtedm_SRC = qtedm.cc \
             text_font_utils.cc \
             text_element.cc \
             text_monitor_element.cc \
+            meter_element.cc \
             rectangle_element.cc \
             oval_element.cc \
             arc_element.cc \

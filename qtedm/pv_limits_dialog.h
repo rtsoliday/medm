@@ -27,16 +27,27 @@ public:
       std::function<void(int)> precisionDefaultSetter,
       std::function<void()> changeNotifier);
   void showForTextMonitor();
+  void setMeterCallbacks(const QString &channelName,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter,
+      std::function<void()> changeNotifier);
+  void showForMeter();
 
 private:
   enum class Mode {
     kNone,
-    kTextMonitor
+    kTextMonitor,
+    kMeter
   };
 
   void updatePrecisionControls();
+  void updateMeterControls();
   void handlePrecisionSourceChanged(int index);
   void commitPrecisionValue();
+  void handleLowSourceChanged(int index);
+  void handleHighSourceChanged(int index);
+  void commitLowValue();
+  void commitHighValue();
   void notifyChanged();
   void setRowEnabled(QLabel *label, QComboBox *combo, QLineEdit *edit,
       bool enabled);
@@ -60,6 +71,8 @@ private:
   std::function<void(PvLimitSource)> precisionSourceSetter_;
   std::function<int()> precisionDefaultGetter_;
   std::function<void(int)> precisionDefaultSetter_;
+  std::function<PvLimits()> meterLimitsGetter_;
+  std::function<void(const PvLimits &)> meterLimitsSetter_;
   std::function<void()> onChangedCallback_;
   bool updating_ = false;
   QString channelLabel_;

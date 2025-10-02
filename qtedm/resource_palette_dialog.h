@@ -39,6 +39,7 @@
 
 #include "color_palette_dialog.h"
 #include "display_properties.h"
+#include "pv_limits_dialog.h"
 
 class ResourcePaletteDialog : public QDialog
 {
@@ -709,6 +710,12 @@ public:
     QObject::connect(textMonitorChannelEdit_, &QLineEdit::editingFinished, this,
         [this]() { commitTextMonitorChannel(); });
 
+    textMonitorPvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    textMonitorPvLimitsButton_->setEnabled(false);
+    QObject::connect(textMonitorPvLimitsButton_, &QPushButton::clicked, this,
+        [this]() { openTextMonitorPvLimitsDialog(); });
+
     addRow(textMonitorLayout, 0, QStringLiteral("Foreground"),
         textMonitorForegroundButton_);
     addRow(textMonitorLayout, 1, QStringLiteral("Background"),
@@ -723,7 +730,9 @@ public:
         textMonitorColorModeCombo_);
     addRow(textMonitorLayout, 6, QStringLiteral("Channel"),
         textMonitorChannelEdit_);
-    textMonitorLayout->setRowStretch(7, 1);
+    addRow(textMonitorLayout, 7, QStringLiteral("Channel Limits"),
+        textMonitorPvLimitsButton_);
+    textMonitorLayout->setRowStretch(8, 1);
     entriesLayout->addWidget(textMonitorSection_);
 
     entriesLayout->addStretch(1);
@@ -1023,6 +1032,10 @@ public:
       std::function<void(TextMonitorFormat)> formatSetter,
       std::function<int()> precisionGetter,
       std::function<void(int)> precisionSetter,
+      std::function<PvLimitSource()> precisionSourceGetter,
+      std::function<void(PvLimitSource)> precisionSourceSetter,
+      std::function<int()> precisionDefaultGetter,
+      std::function<void(int)> precisionDefaultSetter,
       std::function<TextColorMode()> colorModeGetter,
       std::function<void(TextColorMode)> colorModeSetter,
       std::function<QString()> channelGetter,
@@ -1070,6 +1083,10 @@ public:
     textMonitorFormatSetter_ = {};
     textMonitorPrecisionGetter_ = {};
     textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
     textMonitorColorModeGetter_ = {};
     textMonitorColorModeSetter_ = {};
     textMonitorChannelGetter_ = {};
@@ -1140,6 +1157,10 @@ public:
     textMonitorFormatSetter_ = std::move(formatSetter);
     textMonitorPrecisionGetter_ = std::move(precisionGetter);
     textMonitorPrecisionSetter_ = std::move(precisionSetter);
+    textMonitorPrecisionSourceGetter_ = std::move(precisionSourceGetter);
+    textMonitorPrecisionSourceSetter_ = std::move(precisionSourceSetter);
+    textMonitorPrecisionDefaultGetter_ = std::move(precisionDefaultGetter);
+    textMonitorPrecisionDefaultSetter_ = std::move(precisionDefaultSetter);
     textMonitorColorModeGetter_ = std::move(colorModeGetter);
     textMonitorColorModeSetter_ = std::move(colorModeSetter);
     textMonitorChannelGetter_ = std::move(channelGetter);
@@ -1237,6 +1258,13 @@ public:
       const QSignalBlocker blocker(textMonitorChannelEdit_);
       textMonitorChannelEdit_->setText(channel);
       committedTexts_[textMonitorChannelEdit_] = channel;
+    }
+
+    updateTextMonitorLimitsFromDialog();
+
+    if (textMonitorPvLimitsButton_) {
+      textMonitorPvLimitsButton_->setEnabled(
+          static_cast<bool>(textMonitorPrecisionSourceSetter_));
     }
 
     elementLabel_->setText(QStringLiteral("Text Monitor"));
@@ -1931,6 +1959,9 @@ public:
     if (colorPaletteDialog_) {
       colorPaletteDialog_->hide();
     }
+    if (pvLimitsDialog_) {
+      pvLimitsDialog_->clearTargets();
+    }
 
     resetLineEdit(xEdit_);
     resetLineEdit(yEdit_);
@@ -1945,6 +1976,9 @@ public:
     }
     resetLineEdit(textMonitorPrecisionEdit_);
     resetLineEdit(textMonitorChannelEdit_);
+    if (textMonitorPvLimitsButton_) {
+      textMonitorPvLimitsButton_->setEnabled(false);
+    }
     resetLineEdit(rectangleLineWidthEdit_);
     resetLineEdit(rectangleVisibilityCalcEdit_);
     for (QLineEdit *edit : rectangleChannelEdits_) {
@@ -2075,6 +2109,11 @@ public:
       setter = {};
     }
 
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+
     committedTexts_.clear();
     updateCommittedTexts();
     updateSectionVisibility(selectionKind_);
@@ -2120,6 +2159,17 @@ private:
     button->setFixedSize(120, 24);
     button->setFocusPolicy(Qt::NoFocus);
     setColorButtonColor(button, color);
+    return button;
+  }
+
+  QPushButton *createActionButton(const QString &text)
+  {
+    auto *button = new QPushButton(text);
+    button->setFont(valueFont_);
+    button->setAutoDefault(false);
+    button->setDefault(false);
+    button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    button->setFocusPolicy(Qt::NoFocus);
     return button;
   }
 
@@ -2373,6 +2423,43 @@ private:
       textMonitorPrecisionEdit_->setText(QString::number(value));
     }
     committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
+    updateTextMonitorLimitsFromDialog();
+  }
+
+  void updateTextMonitorPrecisionField()
+  {
+    if (!textMonitorPrecisionEdit_) {
+      return;
+    }
+    const int precision = textMonitorPrecisionGetter_ ? textMonitorPrecisionGetter_()
+                                                     : -1;
+    const QSignalBlocker blocker(textMonitorPrecisionEdit_);
+    if (precision < 0) {
+      textMonitorPrecisionEdit_->clear();
+    } else {
+      textMonitorPrecisionEdit_->setText(QString::number(precision));
+    }
+    committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
+  }
+
+  void updateTextMonitorLimitsFromDialog()
+  {
+    updateTextMonitorPrecisionField();
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (textMonitorPrecisionSourceGetter_) {
+      const QString channelLabel = textMonitorChannelGetter_
+              ? textMonitorChannelGetter_()
+              : QString();
+      pvLimitsDialog_->setTextMonitorCallbacks(channelLabel,
+          textMonitorPrecisionSourceGetter_, textMonitorPrecisionSourceSetter_,
+          textMonitorPrecisionDefaultGetter_,
+          textMonitorPrecisionDefaultSetter_,
+          [this]() { updateTextMonitorLimitsFromDialog(); });
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
   }
 
   void commitRectangleLineWidth()
@@ -2891,6 +2978,7 @@ private:
   QLineEdit *textMonitorPrecisionEdit_ = nullptr;
   QComboBox *textMonitorColorModeCombo_ = nullptr;
   QLineEdit *textMonitorChannelEdit_ = nullptr;
+  QPushButton *textMonitorPvLimitsButton_ = nullptr;
   QPushButton *rectangleForegroundButton_ = nullptr;
   QComboBox *rectangleFillCombo_ = nullptr;
   QComboBox *rectangleLineStyleCombo_ = nullptr;
@@ -3126,6 +3214,7 @@ private:
   QRect lastCommittedGeometry_;
   QHash<QLineEdit *, QString> committedTexts_;
   ColorPaletteDialog *colorPaletteDialog_ = nullptr;
+  PvLimitsDialog *pvLimitsDialog_ = nullptr;
   QPushButton *activeColorButton_ = nullptr;
   std::function<QColor()> foregroundColorGetter_;
   std::function<void(const QColor &)> foregroundColorSetter_;
@@ -3160,6 +3249,10 @@ private:
   std::function<void(TextMonitorFormat)> textMonitorFormatSetter_;
   std::function<int()> textMonitorPrecisionGetter_;
   std::function<void(int)> textMonitorPrecisionSetter_;
+  std::function<PvLimitSource()> textMonitorPrecisionSourceGetter_;
+  std::function<void(PvLimitSource)> textMonitorPrecisionSourceSetter_;
+  std::function<int()> textMonitorPrecisionDefaultGetter_;
+  std::function<void(int)> textMonitorPrecisionDefaultSetter_;
   std::function<TextColorMode()> textMonitorColorModeGetter_;
   std::function<void(TextColorMode)> textMonitorColorModeSetter_;
   std::function<QString()> textMonitorChannelGetter_;
@@ -3264,6 +3357,30 @@ private:
     colorPaletteDialog_->activateWindow();
   }
 
+  void openTextMonitorPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!textMonitorPrecisionSourceGetter_) {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = textMonitorChannelGetter_
+            ? textMonitorChannelGetter_()
+            : QString();
+    dialog->setTextMonitorCallbacks(channelLabel,
+        textMonitorPrecisionSourceGetter_, textMonitorPrecisionSourceSetter_,
+        textMonitorPrecisionDefaultGetter_,
+        textMonitorPrecisionDefaultSetter_,
+        [this]() { updateTextMonitorLimitsFromDialog(); });
+    dialog->showForTextMonitor();
+  }
+
   QColor colorFromButton(const QPushButton *button) const
   {
     if (!button) {
@@ -3281,6 +3398,14 @@ private:
       }
     }
     return palette().color(QPalette::WindowText);
+  }
+
+  PvLimitsDialog *ensurePvLimitsDialog()
+  {
+    if (!pvLimitsDialog_) {
+      pvLimitsDialog_ = new PvLimitsDialog(palette(), labelFont_, valueFont_, this);
+    }
+    return pvLimitsDialog_;
   }
 
   QColor currentBackgroundColor() const

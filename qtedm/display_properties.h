@@ -32,6 +32,23 @@ enum class TextMonitorFormat
   kSexagesimalDms,
 };
 
+enum class PvLimitSource
+{
+  kChannel,
+  kDefault,
+  kUser
+};
+
+struct PvLimits
+{
+  PvLimitSource lowSource = PvLimitSource::kChannel;
+  double lowDefault = 0.0;
+  PvLimitSource highSource = PvLimitSource::kChannel;
+  double highDefault = 1.0;
+  PvLimitSource precisionSource = PvLimitSource::kChannel;
+  int precisionDefault = 0;
+};
+
 enum class RectangleFill
 {
   kOutline,

@@ -111,13 +111,68 @@ void TextMonitorElement::setFormat(TextMonitorFormat format)
 
 int TextMonitorElement::precision() const
 {
-  return precision_;
+  if (limits_.precisionSource == PvLimitSource::kDefault) {
+    return limits_.precisionDefault;
+  }
+  return -1;
 }
 
 void TextMonitorElement::setPrecision(int precision)
 {
-  const int clamped = std::clamp(precision, -1, 17);
-  precision_ = clamped;
+  if (precision < 0) {
+    if (limits_.precisionSource != PvLimitSource::kChannel) {
+      limits_.precisionSource = PvLimitSource::kChannel;
+    }
+    return;
+  }
+
+  const int clamped = std::clamp(precision, 0, 17);
+  limits_.precisionDefault = clamped;
+  limits_.precisionSource = PvLimitSource::kDefault;
+}
+
+PvLimitSource TextMonitorElement::precisionSource() const
+{
+  return limits_.precisionSource;
+}
+
+void TextMonitorElement::setPrecisionSource(PvLimitSource source)
+{
+  switch (source) {
+  case PvLimitSource::kChannel:
+    limits_.precisionSource = PvLimitSource::kChannel;
+    break;
+  case PvLimitSource::kDefault:
+    limits_.precisionSource = PvLimitSource::kDefault;
+    break;
+  case PvLimitSource::kUser:
+    limits_.precisionSource = PvLimitSource::kDefault;
+    break;
+  }
+}
+
+int TextMonitorElement::precisionDefault() const
+{
+  return limits_.precisionDefault;
+}
+
+void TextMonitorElement::setPrecisionDefault(int precision)
+{
+  limits_.precisionDefault = std::clamp(precision, 0, 17);
+}
+
+const PvLimits &TextMonitorElement::limits() const
+{
+  return limits_;
+}
+
+void TextMonitorElement::setLimits(const PvLimits &limits)
+{
+  limits_ = limits;
+  limits_.precisionDefault = std::clamp(limits_.precisionDefault, 0, 17);
+  if (limits_.precisionSource == PvLimitSource::kUser) {
+    limits_.precisionSource = PvLimitSource::kDefault;
+  }
 }
 
 QString TextMonitorElement::channel(int index) const

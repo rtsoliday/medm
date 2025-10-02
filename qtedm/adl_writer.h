@@ -38,7 +38,7 @@ void writeDynamicAttributeSection(QTextStream &stream, int level,
     const QString &calc, const std::array<QString, 4> &channels);
 void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex);
-void writeLimitsSection(QTextStream &stream, int level, int precision);
+void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits);
 void writePointsSection(
     QTextStream &stream, int level, const QVector<QPoint> &points);
 

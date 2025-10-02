@@ -289,14 +289,31 @@ void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 
-void writeLimitsSection(QTextStream &stream, int level, int precision)
+QString pvLimitSourceString(PvLimitSource source)
+{
+  switch (source) {
+  case PvLimitSource::kDefault:
+    return QStringLiteral("default");
+  case PvLimitSource::kUser:
+    return QStringLiteral("user specified");
+  case PvLimitSource::kChannel:
+  default:
+    return QStringLiteral("channel");
+  }
+}
+
+void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
 {
   writeIndentedLine(stream, level, QStringLiteral("\"limits\" {"));
-  writeIndentedLine(stream, level + 1,
-      QStringLiteral("precSrc=\"default\""));
-  if (precision >= 0) {
+  if (limits.precisionSource != PvLimitSource::kChannel) {
     writeIndentedLine(stream, level + 1,
-        QStringLiteral("precDefault=%1").arg(precision));
+        QStringLiteral("precSrc=\"%1\"").arg(pvLimitSourceString(
+            limits.precisionSource)));
+  }
+  if (limits.precisionSource == PvLimitSource::kDefault
+      && limits.precisionDefault != 0) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("precDefault=%1").arg(limits.precisionDefault));
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }

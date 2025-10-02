@@ -37,6 +37,13 @@ public:
   int precision() const;
   void setPrecision(int precision);
 
+  PvLimitSource precisionSource() const;
+  void setPrecisionSource(PvLimitSource source);
+  int precisionDefault() const;
+  void setPrecisionDefault(int precision);
+  const PvLimits &limits() const;
+  void setLimits(const PvLimits &limits);
+
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
 
@@ -57,7 +64,7 @@ private:
   Qt::Alignment alignment_ = Qt::AlignLeft | Qt::AlignVCenter;
   TextColorMode colorMode_ = TextColorMode::kStatic;
   TextMonitorFormat format_ = TextMonitorFormat::kDecimal;
-  int precision_ = -1;
+  PvLimits limits_{};
   std::array<QString, 4> channels_{};
 };
 

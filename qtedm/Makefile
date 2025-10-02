@@ -45,6 +45,7 @@ qtedm_SRC = qtedm.cc \
             polygon_element.cc \
             image_element.cc \
             color_palette_dialog.cc \
+            pv_limits_dialog.cc \
             medm_colors.cc
 
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))

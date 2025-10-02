@@ -872,6 +872,20 @@ private:
           markDirty();
         },
         [element]() {
+          return element->precisionSource();
+        },
+        [this, element](PvLimitSource source) {
+          element->setPrecisionSource(source);
+          markDirty();
+        },
+        [element]() {
+          return element->precisionDefault();
+        },
+        [this, element](int precision) {
+          element->setPrecisionDefault(precision);
+          markDirty();
+        },
+        [element]() {
           return element->colorMode();
         },
         [this, element](TextColorMode mode) {
@@ -2899,7 +2913,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("format=\"%1\"")
                 .arg(AdlWriter::textMonitorFormatString(monitor->format())));
       }
-      AdlWriter::writeLimitsSection(stream, 1, monitor->precision());
+      AdlWriter::writeLimitsSection(stream, 1, monitor->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

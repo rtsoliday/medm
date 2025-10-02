@@ -918,6 +918,98 @@ public:
     barLayout->setRowStretch(8, 1);
     entriesLayout->addWidget(barSection_);
 
+    byteSection_ = new QWidget(entriesWidget_);
+    auto *byteLayout = new QGridLayout(byteSection_);
+    byteLayout->setContentsMargins(0, 0, 0, 0);
+    byteLayout->setHorizontalSpacing(12);
+    byteLayout->setVerticalSpacing(6);
+
+    byteForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(byteForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(byteForegroundButton_,
+              QStringLiteral("Byte Monitor Foreground"),
+              byteForegroundSetter_);
+        });
+
+    byteBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(byteBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(byteBackgroundButton_,
+              QStringLiteral("Byte Monitor Background"),
+              byteBackgroundSetter_);
+        });
+
+    byteColorModeCombo_ = new QComboBox;
+    byteColorModeCombo_->setFont(valueFont_);
+    byteColorModeCombo_->setAutoFillBackground(true);
+    byteColorModeCombo_->addItem(QStringLiteral("Static"));
+    byteColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    byteColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(byteColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (byteColorModeSetter_) {
+            byteColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    byteDirectionCombo_ = new QComboBox;
+    byteDirectionCombo_->setFont(valueFont_);
+    byteDirectionCombo_->setAutoFillBackground(true);
+    byteDirectionCombo_->addItem(QStringLiteral("Up"));
+    byteDirectionCombo_->addItem(QStringLiteral("Right"));
+    byteDirectionCombo_->addItem(QStringLiteral("Down"));
+    byteDirectionCombo_->addItem(QStringLiteral("Left"));
+    QObject::connect(byteDirectionCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (byteDirectionSetter_) {
+            byteDirectionSetter_(barDirectionFromIndex(index));
+          }
+        });
+
+    byteStartBitSpin_ = new QSpinBox;
+    byteStartBitSpin_->setFont(valueFont_);
+    byteStartBitSpin_->setAutoFillBackground(true);
+    QPalette byteSpinPalette = palette();
+    byteSpinPalette.setColor(QPalette::Base, Qt::white);
+    byteSpinPalette.setColor(QPalette::Text, Qt::black);
+    byteStartBitSpin_->setPalette(byteSpinPalette);
+    byteStartBitSpin_->setRange(0, 31);
+    QObject::connect(byteStartBitSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) { commitByteStartBit(value); });
+
+    byteEndBitSpin_ = new QSpinBox;
+    byteEndBitSpin_->setFont(valueFont_);
+    byteEndBitSpin_->setAutoFillBackground(true);
+    byteEndBitSpin_->setPalette(byteSpinPalette);
+    byteEndBitSpin_->setRange(0, 31);
+    QObject::connect(byteEndBitSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) { commitByteEndBit(value); });
+
+    byteChannelEdit_ = createLineEdit();
+    committedTexts_.insert(byteChannelEdit_, byteChannelEdit_->text());
+    byteChannelEdit_->installEventFilter(this);
+    QObject::connect(byteChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitByteChannel(); });
+    QObject::connect(byteChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitByteChannel(); });
+
+    addRow(byteLayout, 0, QStringLiteral("Foreground"), byteForegroundButton_);
+    addRow(byteLayout, 1, QStringLiteral("Background"), byteBackgroundButton_);
+    addRow(byteLayout, 2, QStringLiteral("Color Mode"), byteColorModeCombo_);
+    addRow(byteLayout, 3, QStringLiteral("Direction"), byteDirectionCombo_);
+    addRow(byteLayout, 4, QStringLiteral("Start Bit"), byteStartBitSpin_);
+    addRow(byteLayout, 5, QStringLiteral("End Bit"), byteEndBitSpin_);
+    addRow(byteLayout, 6, QStringLiteral("Channel"), byteChannelEdit_);
+    byteLayout->setRowStretch(7, 1);
+    entriesLayout->addWidget(byteSection_);
+
     entriesLayout->addStretch(1);
 
   displaySection_->setVisible(false);
@@ -928,6 +1020,7 @@ public:
   textMonitorSection_->setVisible(false);
   meterSection_->setVisible(false);
   barSection_->setVisible(false);
+  byteSection_->setVisible(false);
   updateSectionVisibility(selectionKind_);
 
     scrollArea_->setWidget(entriesWidget_);
@@ -1823,6 +1916,117 @@ public:
     activateWindow();
   }
 
+  void showForByteMonitor(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<BarDirection()> directionGetter,
+      std::function<void(BarDirection)> directionSetter,
+      std::function<int()> startBitGetter,
+      std::function<void(int)> startBitSetter,
+      std::function<int()> endBitGetter,
+      std::function<void(int)> endBitSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kByteMonitor;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    byteForegroundGetter_ = std::move(foregroundGetter);
+    byteForegroundSetter_ = std::move(foregroundSetter);
+    byteBackgroundGetter_ = std::move(backgroundGetter);
+    byteBackgroundSetter_ = std::move(backgroundSetter);
+    byteColorModeGetter_ = std::move(colorModeGetter);
+    byteColorModeSetter_ = std::move(colorModeSetter);
+    byteDirectionGetter_ = std::move(directionGetter);
+    byteDirectionSetter_ = std::move(directionSetter);
+    byteStartBitGetter_ = std::move(startBitGetter);
+    byteStartBitSetter_ = std::move(startBitSetter);
+    byteEndBitGetter_ = std::move(endBitGetter);
+    byteEndBitSetter_ = std::move(endBitSetter);
+    byteChannelGetter_ = std::move(channelGetter);
+    byteChannelSetter_ = std::move(channelSetter);
+
+    QRect byteGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (byteGeometry.width() <= 0) {
+      byteGeometry.setWidth(kMinimumByteSize);
+    }
+    if (byteGeometry.height() <= 0) {
+      byteGeometry.setHeight(kMinimumByteSize);
+    }
+    lastCommittedGeometry_ = byteGeometry;
+
+    updateGeometryEdits(byteGeometry);
+
+    if (byteForegroundButton_) {
+      const QColor color = byteForegroundGetter_ ? byteForegroundGetter_()
+                                                : palette().color(QPalette::WindowText);
+      setColorButtonColor(byteForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (byteBackgroundButton_) {
+      const QColor color = byteBackgroundGetter_ ? byteBackgroundGetter_()
+                                                : palette().color(QPalette::Window);
+      setColorButtonColor(byteBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (byteColorModeCombo_) {
+      const QSignalBlocker blocker(byteColorModeCombo_);
+      const TextColorMode mode = byteColorModeGetter_ ? byteColorModeGetter_()
+                                                     : TextColorMode::kStatic;
+      byteColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (byteDirectionCombo_) {
+      const QSignalBlocker blocker(byteDirectionCombo_);
+      const BarDirection direction = byteDirectionGetter_ ? byteDirectionGetter_()
+                                                         : BarDirection::kRight;
+      byteDirectionCombo_->setCurrentIndex(barDirectionToIndex(direction));
+    }
+
+    if (byteStartBitSpin_) {
+      const QSignalBlocker blocker(byteStartBitSpin_);
+      int value = byteStartBitGetter_ ? byteStartBitGetter_() : 15;
+      value = std::clamp(value, 0, 31);
+      byteStartBitSpin_->setValue(value);
+      byteStartBitSpin_->setEnabled(static_cast<bool>(byteStartBitSetter_));
+    }
+
+    if (byteEndBitSpin_) {
+      const QSignalBlocker blocker(byteEndBitSpin_);
+      int value = byteEndBitGetter_ ? byteEndBitGetter_() : 0;
+      value = std::clamp(value, 0, 31);
+      byteEndBitSpin_->setValue(value);
+      byteEndBitSpin_->setEnabled(static_cast<bool>(byteEndBitSetter_));
+    }
+
+    if (byteChannelEdit_) {
+      const QString channel = byteChannelGetter_ ? byteChannelGetter_()
+                                                 : QString();
+      const QSignalBlocker blocker(byteChannelEdit_);
+      byteChannelEdit_->setText(channel);
+      committedTexts_[byteChannelEdit_] = byteChannelEdit_->text();
+      byteChannelEdit_->setEnabled(static_cast<bool>(byteChannelSetter_));
+    }
+
+    elementLabel_->setText(QStringLiteral("Byte Monitor"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+
   void showForRectangle(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> colorGetter,
@@ -2516,6 +2720,29 @@ public:
     if (barPvLimitsButton_) {
       barPvLimitsButton_->setEnabled(false);
     }
+    byteForegroundGetter_ = {};
+    byteForegroundSetter_ = {};
+    byteBackgroundGetter_ = {};
+    byteBackgroundSetter_ = {};
+    byteColorModeGetter_ = {};
+    byteColorModeSetter_ = {};
+    byteDirectionGetter_ = {};
+    byteDirectionSetter_ = {};
+    byteStartBitGetter_ = {};
+    byteStartBitSetter_ = {};
+    byteEndBitGetter_ = {};
+    byteEndBitSetter_ = {};
+    byteChannelGetter_ = {};
+    byteChannelSetter_ = {};
+    if (byteStartBitSpin_) {
+      byteStartBitSpin_->setEnabled(false);
+    }
+    if (byteEndBitSpin_) {
+      byteEndBitSpin_->setEnabled(false);
+    }
+    if (byteChannelEdit_) {
+      byteChannelEdit_->setEnabled(false);
+    }
     rectangleForegroundGetter_ = {};
     rectangleForegroundSetter_ = {};
     rectangleFillGetter_ = {};
@@ -2771,6 +2998,7 @@ private:
     kText,
     kMeter,
     kBarMonitor,
+    kByteMonitor,
     kTextMonitor
   };
   QLineEdit *createLineEdit()
@@ -2965,6 +3193,11 @@ private:
       barSection_->setVisible(barVisible);
       barSection_->setEnabled(barVisible);
     }
+    if (byteSection_) {
+      const bool byteVisible = kind == SelectionKind::kByteMonitor;
+      byteSection_->setVisible(byteVisible);
+      byteSection_->setEnabled(byteVisible);
+    }
   }
 
   void commitTextString()
@@ -3067,6 +3300,64 @@ private:
     barChannelSetter_(value);
     committedTexts_[barChannelEdit_] = value;
     updateBarLimitsFromDialog();
+  }
+
+  void commitByteChannel()
+  {
+    if (!byteChannelEdit_) {
+      return;
+    }
+    if (!byteChannelSetter_) {
+      revertLineEdit(byteChannelEdit_);
+      return;
+    }
+    const QString value = byteChannelEdit_->text();
+    byteChannelSetter_(value);
+    committedTexts_[byteChannelEdit_] = value;
+  }
+
+  void commitByteStartBit(int value)
+  {
+    if (!byteStartBitSpin_) {
+      return;
+    }
+    if (!byteStartBitSetter_) {
+      if (byteStartBitGetter_) {
+        const QSignalBlocker blocker(byteStartBitSpin_);
+        int current = std::clamp(byteStartBitGetter_(), 0, 31);
+        byteStartBitSpin_->setValue(current);
+      }
+      return;
+    }
+    value = std::clamp(value, 0, 31);
+    byteStartBitSetter_(value);
+    if (byteStartBitGetter_) {
+      const QSignalBlocker blocker(byteStartBitSpin_);
+      int current = std::clamp(byteStartBitGetter_(), 0, 31);
+      byteStartBitSpin_->setValue(current);
+    }
+  }
+
+  void commitByteEndBit(int value)
+  {
+    if (!byteEndBitSpin_) {
+      return;
+    }
+    if (!byteEndBitSetter_) {
+      if (byteEndBitGetter_) {
+        const QSignalBlocker blocker(byteEndBitSpin_);
+        int current = std::clamp(byteEndBitGetter_(), 0, 31);
+        byteEndBitSpin_->setValue(current);
+      }
+      return;
+    }
+    value = std::clamp(value, 0, 31);
+    byteEndBitSetter_(value);
+    if (byteEndBitGetter_) {
+      const QSignalBlocker blocker(byteEndBitSpin_);
+      int current = std::clamp(byteEndBitGetter_(), 0, 31);
+      byteEndBitSpin_->setValue(current);
+    }
   }
 
   void commitTextMonitorPrecision()
@@ -3789,6 +4080,14 @@ private:
   QComboBox *barFillCombo_ = nullptr;
   QLineEdit *barChannelEdit_ = nullptr;
   QPushButton *barPvLimitsButton_ = nullptr;
+  QWidget *byteSection_ = nullptr;
+  QPushButton *byteForegroundButton_ = nullptr;
+  QPushButton *byteBackgroundButton_ = nullptr;
+  QComboBox *byteColorModeCombo_ = nullptr;
+  QComboBox *byteDirectionCombo_ = nullptr;
+  QSpinBox *byteStartBitSpin_ = nullptr;
+  QSpinBox *byteEndBitSpin_ = nullptr;
+  QLineEdit *byteChannelEdit_ = nullptr;
   QPushButton *rectangleForegroundButton_ = nullptr;
   QComboBox *rectangleFillCombo_ = nullptr;
   QComboBox *rectangleLineStyleCombo_ = nullptr;
@@ -3959,6 +4258,9 @@ private:
     if (barChannelEdit_) {
       committedTexts_[barChannelEdit_] = barChannelEdit_->text();
     }
+    if (byteChannelEdit_) {
+      committedTexts_[byteChannelEdit_] = byteChannelEdit_->text();
+    }
     if (rectangleLineWidthEdit_) {
       committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
     }
@@ -4101,6 +4403,20 @@ private:
   std::function<void(const QString &)> barChannelSetter_;
   std::function<PvLimits()> barLimitsGetter_;
   std::function<void(const PvLimits &)> barLimitsSetter_;
+  std::function<QColor()> byteForegroundGetter_;
+  std::function<void(const QColor &)> byteForegroundSetter_;
+  std::function<QColor()> byteBackgroundGetter_;
+  std::function<void(const QColor &)> byteBackgroundSetter_;
+  std::function<TextColorMode()> byteColorModeGetter_;
+  std::function<void(TextColorMode)> byteColorModeSetter_;
+  std::function<BarDirection()> byteDirectionGetter_;
+  std::function<void(BarDirection)> byteDirectionSetter_;
+  std::function<int()> byteStartBitGetter_;
+  std::function<void(int)> byteStartBitSetter_;
+  std::function<int()> byteEndBitGetter_;
+  std::function<void(int)> byteEndBitSetter_;
+  std::function<QString()> byteChannelGetter_;
+  std::function<void(const QString &)> byteChannelSetter_;
   QString committedTextString_;
   std::function<QColor()> rectangleForegroundGetter_;
   std::function<void(const QColor &)> rectangleForegroundSetter_;

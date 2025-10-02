@@ -102,6 +102,7 @@ constexpr int kMinimumTextHeight = 20;
 constexpr int kMinimumRectangleSize = 6;
 constexpr int kMinimumMeterSize = 60;
 constexpr int kMinimumBarSize = 30;
+constexpr int kMinimumByteSize = 30;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
 

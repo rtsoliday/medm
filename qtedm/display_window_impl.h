@@ -249,6 +249,7 @@ protected:
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kMeter
+            || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -285,6 +286,12 @@ protected:
           if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
             selectMeterElement(meter);
             showResourcePaletteForMeter(meter);
+            event->accept();
+            return;
+          }
+          if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+            selectBarMonitorElement(bar);
+            showResourcePaletteForBar(bar);
             event->accept();
             return;
           }
@@ -337,6 +344,7 @@ protected:
         clearTextSelection();
         clearTextMonitorSelection();
         clearMeterSelection();
+        clearBarMonitorSelection();
         clearLineSelection();
 
         if (displaySelected_) {
@@ -475,6 +483,8 @@ private:
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
   QList<MeterElement *> meterElements_;
   MeterElement *selectedMeterElement_ = nullptr;
+  QList<BarMonitorElement *> barMonitorElements_;
+  BarMonitorElement *selectedBarMonitorElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
   RectangleElement *selectedRectangle_ = nullptr;
   QList<ImageElement *> imageElements_;
@@ -548,6 +558,15 @@ private:
     selectedMeterElement_ = nullptr;
   }
 
+  void clearBarMonitorSelection()
+  {
+    if (!selectedBarMonitorElement_) {
+      return;
+    }
+    selectedBarMonitorElement_->setSelected(false);
+    selectedBarMonitorElement_ = nullptr;
+  }
+
   void clearRectangleSelection()
   {
     if (!selectedRectangle_) {
@@ -617,7 +636,9 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
+    clearBarMonitorSelection();
     clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -640,6 +661,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -973,6 +995,88 @@ private:
         },
         [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForBar(BarMonitorElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForBarMonitor(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumBarSize) {
+            adjusted.setWidth(kMinimumBarSize);
+          }
+          if (adjusted.height() < kMinimumBarSize) {
+            adjusted.setHeight(kMinimumBarSize);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->label();
+        },
+        [this, element](MeterLabel label) {
+          element->setLabel(label);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->direction();
+        },
+        [this, element](BarDirection direction) {
+          element->setDirection(direction);
+          markDirty();
+        },
+        [element]() {
+          return element->fillMode();
+        },
+        [this, element](BarFill mode) {
+          element->setFillMode(mode);
           markDirty();
         },
         [element]() {
@@ -1734,6 +1838,7 @@ private:
     clearDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -1756,6 +1861,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -1791,6 +1897,31 @@ private:
     bringElementToFront(element);
   }
 
+  void selectBarMonitorElement(BarMonitorElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedBarMonitorElement_) {
+      selectedBarMonitorElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearBarMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedBarMonitorElement_ = element;
+    selectedBarMonitorElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
   void selectRectangleElement(RectangleElement *element)
   {
     if (!element) {
@@ -1803,6 +1934,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1825,6 +1957,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1848,6 +1981,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearArcSelection();
@@ -1870,6 +2004,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearImageSelection();
@@ -1893,6 +2028,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1916,6 +2052,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -1939,6 +2076,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearBarMonitorSelection();
     clearRectangleSelection();
     clearArcSelection();
     clearLineSelection();
@@ -2017,6 +2155,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createMeterElement(rect);
+      break;
+    case CreateTool::kBarMonitor:
+      if (rect.width() < kMinimumBarSize) {
+        rect.setWidth(kMinimumBarSize);
+      }
+      if (rect.height() < kMinimumBarSize) {
+        rect.setHeight(kMinimumBarSize);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createBarMonitorElement(rect);
       break;
     case CreateTool::kRectangle:
       if (rect.width() <= 0) {
@@ -2397,6 +2545,32 @@ private:
     markDirty();
   }
 
+  void createBarMonitorElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumBarSize) {
+      target.setWidth(kMinimumBarSize);
+    }
+    if (target.height() < kMinimumBarSize) {
+      target.setHeight(kMinimumBarSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new BarMonitorElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    barMonitorElements_.append(element);
+    selectBarMonitorElement(element);
+    showResourcePaletteForBar(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createRectangleElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -2580,6 +2754,7 @@ private:
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kMeter
+            || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -2745,7 +2920,13 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(monitorsMenu, QStringLiteral("Bar Monitor"));
+    auto *barAction = addMenuAction(monitorsMenu, QStringLiteral("Bar Monitor"));
+    QObject::connect(barAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kBarMonitor);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(monitorsMenu, QStringLiteral("Byte Monitor"));
     addMenuAction(monitorsMenu, QStringLiteral("Scale Monitor"));
     addMenuAction(monitorsMenu, QStringLiteral("Strip Chart"));

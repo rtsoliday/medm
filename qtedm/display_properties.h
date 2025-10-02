@@ -41,6 +41,20 @@ enum class MeterLabel
   kChannel,
 };
 
+enum class BarDirection
+{
+  kUp,
+  kRight,
+  kDown,
+  kLeft,
+};
+
+enum class BarFill
+{
+  kFromEdge,
+  kFromCenter,
+};
+
 enum class PvLimitSource
 {
   kChannel,
@@ -87,6 +101,7 @@ constexpr int kMinimumTextWidth = 40;
 constexpr int kMinimumTextHeight = 20;
 constexpr int kMinimumRectangleSize = 6;
 constexpr int kMinimumMeterSize = 60;
+constexpr int kMinimumBarSize = 30;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
 

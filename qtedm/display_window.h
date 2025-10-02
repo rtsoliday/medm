@@ -60,6 +60,7 @@
 
 #include "adl_writer.h"
 #include "arc_element.h"
+#include "bar_monitor_element.h"
 #include "display_properties.h"
 #include "display_state.h"
 #include "image_element.h"

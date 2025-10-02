@@ -13,6 +13,7 @@ enum class CreateTool {
   kText,
   kTextMonitor,
   kMeter,
+  kBarMonitor,
   kRectangle,
   kOval,
   kArc,

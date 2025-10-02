@@ -918,6 +918,99 @@ public:
     barLayout->setRowStretch(8, 1);
     entriesLayout->addWidget(barSection_);
 
+    scaleSection_ = new QWidget(entriesWidget_);
+    auto *scaleLayout = new QGridLayout(scaleSection_);
+    scaleLayout->setContentsMargins(0, 0, 0, 0);
+    scaleLayout->setHorizontalSpacing(12);
+    scaleLayout->setVerticalSpacing(6);
+
+    scaleForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(scaleForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(scaleForegroundButton_,
+              QStringLiteral("Scale Monitor Foreground"),
+              scaleForegroundSetter_);
+        });
+
+    scaleBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(scaleBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(scaleBackgroundButton_,
+              QStringLiteral("Scale Monitor Background"),
+              scaleBackgroundSetter_);
+        });
+
+    scaleLabelCombo_ = new QComboBox;
+    scaleLabelCombo_->setFont(valueFont_);
+    scaleLabelCombo_->setAutoFillBackground(true);
+    scaleLabelCombo_->addItem(QStringLiteral("None"));
+    scaleLabelCombo_->addItem(QStringLiteral("No Decorations"));
+    scaleLabelCombo_->addItem(QStringLiteral("Outline"));
+    scaleLabelCombo_->addItem(QStringLiteral("Limits"));
+    scaleLabelCombo_->addItem(QStringLiteral("Channel"));
+    QObject::connect(scaleLabelCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (scaleLabelSetter_) {
+            scaleLabelSetter_(meterLabelFromIndex(index));
+          }
+        });
+
+    scaleColorModeCombo_ = new QComboBox;
+    scaleColorModeCombo_->setFont(valueFont_);
+    scaleColorModeCombo_->setAutoFillBackground(true);
+    scaleColorModeCombo_->addItem(QStringLiteral("Static"));
+    scaleColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    scaleColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(scaleColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (scaleColorModeSetter_) {
+            scaleColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    scaleDirectionCombo_ = new QComboBox;
+    scaleDirectionCombo_->setFont(valueFont_);
+    scaleDirectionCombo_->setAutoFillBackground(true);
+    scaleDirectionCombo_->addItem(QStringLiteral("Up"));
+    scaleDirectionCombo_->addItem(QStringLiteral("Right"));
+    scaleDirectionCombo_->addItem(QStringLiteral("Down"));
+    scaleDirectionCombo_->addItem(QStringLiteral("Left"));
+    QObject::connect(scaleDirectionCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (scaleDirectionSetter_) {
+            scaleDirectionSetter_(barDirectionFromIndex(index));
+          }
+        });
+
+    scaleChannelEdit_ = createLineEdit();
+    committedTexts_.insert(scaleChannelEdit_, scaleChannelEdit_->text());
+    scaleChannelEdit_->installEventFilter(this);
+    QObject::connect(scaleChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitScaleChannel(); });
+    QObject::connect(scaleChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitScaleChannel(); });
+
+    scalePvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    scalePvLimitsButton_->setEnabled(false);
+    QObject::connect(scalePvLimitsButton_, &QPushButton::clicked, this,
+        [this]() { openScaleMonitorPvLimitsDialog(); });
+
+    addRow(scaleLayout, 0, QStringLiteral("Foreground"), scaleForegroundButton_);
+    addRow(scaleLayout, 1, QStringLiteral("Background"), scaleBackgroundButton_);
+    addRow(scaleLayout, 2, QStringLiteral("Label"), scaleLabelCombo_);
+    addRow(scaleLayout, 3, QStringLiteral("Color Mode"), scaleColorModeCombo_);
+    addRow(scaleLayout, 4, QStringLiteral("Direction"), scaleDirectionCombo_);
+    addRow(scaleLayout, 5, QStringLiteral("Channel"), scaleChannelEdit_);
+    addRow(scaleLayout, 6, QStringLiteral("Channel Limits"), scalePvLimitsButton_);
+    scaleLayout->setRowStretch(7, 1);
+    entriesLayout->addWidget(scaleSection_);
+
     byteSection_ = new QWidget(entriesWidget_);
     auto *byteLayout = new QGridLayout(byteSection_);
     byteLayout->setContentsMargins(0, 0, 0, 0);
@@ -1020,6 +1113,7 @@ public:
   textMonitorSection_->setVisible(false);
   meterSection_->setVisible(false);
   barSection_->setVisible(false);
+  scaleSection_->setVisible(false);
   byteSection_->setVisible(false);
   updateSectionVisibility(selectionKind_);
 
@@ -1916,6 +2010,208 @@ public:
     activateWindow();
   }
 
+  void showForScaleMonitor(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<MeterLabel()> labelGetter,
+      std::function<void(MeterLabel)> labelSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<BarDirection()> directionGetter,
+      std::function<void(BarDirection)> directionSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kScaleMonitor;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+
+    meterForegroundGetter_ = {};
+    meterForegroundSetter_ = {};
+    meterBackgroundGetter_ = {};
+    meterBackgroundSetter_ = {};
+    meterLabelGetter_ = {};
+    meterLabelSetter_ = {};
+    meterColorModeGetter_ = {};
+    meterColorModeSetter_ = {};
+    meterChannelGetter_ = {};
+    meterChannelSetter_ = {};
+    meterLimitsGetter_ = {};
+    meterLimitsSetter_ = {};
+
+    barForegroundGetter_ = {};
+    barForegroundSetter_ = {};
+    barBackgroundGetter_ = {};
+    barBackgroundSetter_ = {};
+    barLabelGetter_ = {};
+    barLabelSetter_ = {};
+    barColorModeGetter_ = {};
+    barColorModeSetter_ = {};
+    barDirectionGetter_ = {};
+    barDirectionSetter_ = {};
+    barFillModeGetter_ = {};
+    barFillModeSetter_ = {};
+    barChannelGetter_ = {};
+    barChannelSetter_ = {};
+    barLimitsGetter_ = {};
+    barLimitsSetter_ = {};
+
+    scaleForegroundGetter_ = std::move(foregroundGetter);
+    scaleForegroundSetter_ = std::move(foregroundSetter);
+    scaleBackgroundGetter_ = std::move(backgroundGetter);
+    scaleBackgroundSetter_ = std::move(backgroundSetter);
+    scaleLabelGetter_ = std::move(labelGetter);
+    scaleLabelSetter_ = std::move(labelSetter);
+    scaleColorModeGetter_ = std::move(colorModeGetter);
+    scaleColorModeSetter_ = std::move(colorModeSetter);
+    scaleDirectionGetter_ = std::move(directionGetter);
+    scaleDirectionSetter_ = std::move(directionSetter);
+    scaleChannelGetter_ = std::move(channelGetter);
+    scaleChannelSetter_ = std::move(channelSetter);
+    scaleLimitsGetter_ = std::move(limitsGetter);
+    scaleLimitsSetter_ = std::move(limitsSetter);
+
+    byteForegroundGetter_ = {};
+    byteForegroundSetter_ = {};
+    byteBackgroundGetter_ = {};
+    byteBackgroundSetter_ = {};
+    byteColorModeGetter_ = {};
+    byteColorModeSetter_ = {};
+    byteDirectionGetter_ = {};
+    byteDirectionSetter_ = {};
+    byteStartBitGetter_ = {};
+    byteStartBitSetter_ = {};
+    byteEndBitGetter_ = {};
+    byteEndBitSetter_ = {};
+    byteChannelGetter_ = {};
+    byteChannelSetter_ = {};
+
+    QRect scaleGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (scaleGeometry.width() <= 0) {
+      scaleGeometry.setWidth(kMinimumScaleSize);
+    }
+    if (scaleGeometry.height() <= 0) {
+      scaleGeometry.setHeight(kMinimumScaleSize);
+    }
+    lastCommittedGeometry_ = scaleGeometry;
+
+    updateGeometryEdits(scaleGeometry);
+
+    if (scaleForegroundButton_) {
+      const QColor color = scaleForegroundGetter_
+              ? scaleForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(scaleForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (scaleBackgroundButton_) {
+      const QColor color = scaleBackgroundGetter_
+              ? scaleBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(scaleBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (scaleLabelCombo_) {
+      const QSignalBlocker blocker(scaleLabelCombo_);
+      const MeterLabel label = scaleLabelGetter_ ? scaleLabelGetter_()
+                                                : MeterLabel::kOutline;
+      scaleLabelCombo_->setCurrentIndex(meterLabelToIndex(label));
+    }
+
+    if (scaleColorModeCombo_) {
+      const QSignalBlocker blocker(scaleColorModeCombo_);
+      const TextColorMode mode = scaleColorModeGetter_
+              ? scaleColorModeGetter_()
+              : TextColorMode::kStatic;
+      scaleColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (scaleDirectionCombo_) {
+      const QSignalBlocker blocker(scaleDirectionCombo_);
+      const BarDirection direction = scaleDirectionGetter_
+              ? scaleDirectionGetter_()
+              : BarDirection::kRight;
+      scaleDirectionCombo_->setCurrentIndex(barDirectionToIndex(direction));
+    }
+
+    if (scaleChannelEdit_) {
+      const QString channel = scaleChannelGetter_ ? scaleChannelGetter_()
+                                                  : QString();
+      const QSignalBlocker blocker(scaleChannelEdit_);
+      scaleChannelEdit_->setText(channel);
+      committedTexts_[scaleChannelEdit_] = scaleChannelEdit_->text();
+      scaleChannelEdit_->setEnabled(static_cast<bool>(scaleChannelSetter_));
+    }
+
+    if (scalePvLimitsButton_) {
+      scalePvLimitsButton_->setEnabled(static_cast<bool>(scaleLimitsSetter_));
+    }
+
+    updateScaleLimitsFromDialog();
+
+    elementLabel_->setText(QStringLiteral("Scale Monitor"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void showForByteMonitor(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> foregroundGetter,
@@ -2720,6 +3016,26 @@ public:
     if (barPvLimitsButton_) {
       barPvLimitsButton_->setEnabled(false);
     }
+    scaleForegroundGetter_ = {};
+    scaleForegroundSetter_ = {};
+    scaleBackgroundGetter_ = {};
+    scaleBackgroundSetter_ = {};
+    scaleLabelGetter_ = {};
+    scaleLabelSetter_ = {};
+    scaleColorModeGetter_ = {};
+    scaleColorModeSetter_ = {};
+    scaleDirectionGetter_ = {};
+    scaleDirectionSetter_ = {};
+    scaleChannelGetter_ = {};
+    scaleChannelSetter_ = {};
+    scaleLimitsGetter_ = {};
+    scaleLimitsSetter_ = {};
+    if (scaleChannelEdit_) {
+      scaleChannelEdit_->setEnabled(false);
+    }
+    if (scalePvLimitsButton_) {
+      scalePvLimitsButton_->setEnabled(false);
+    }
     byteForegroundGetter_ = {};
     byteForegroundSetter_ = {};
     byteBackgroundGetter_ = {};
@@ -2811,6 +3127,7 @@ public:
     }
     resetLineEdit(meterChannelEdit_);
     resetLineEdit(barChannelEdit_);
+    resetLineEdit(scaleChannelEdit_);
     resetLineEdit(rectangleLineWidthEdit_);
     resetLineEdit(rectangleVisibilityCalcEdit_);
     for (QLineEdit *edit : rectangleChannelEdits_) {
@@ -2837,6 +3154,8 @@ public:
     resetColorButton(meterBackgroundButton_);
     resetColorButton(barForegroundButton_);
     resetColorButton(barBackgroundButton_);
+    resetColorButton(scaleForegroundButton_);
+    resetColorButton(scaleBackgroundButton_);
     resetColorButton(rectangleForegroundButton_);
     resetColorButton(lineColorButton_);
 
@@ -2889,6 +3208,18 @@ public:
     if (barColorModeCombo_) {
       const QSignalBlocker blocker(barColorModeCombo_);
       barColorModeCombo_->setCurrentIndex(colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (scaleLabelCombo_) {
+      const QSignalBlocker blocker(scaleLabelCombo_);
+      scaleLabelCombo_->setCurrentIndex(meterLabelToIndex(MeterLabel::kOutline));
+    }
+    if (scaleColorModeCombo_) {
+      const QSignalBlocker blocker(scaleColorModeCombo_);
+      scaleColorModeCombo_->setCurrentIndex(colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (scaleDirectionCombo_) {
+      const QSignalBlocker blocker(scaleDirectionCombo_);
+      scaleDirectionCombo_->setCurrentIndex(barDirectionToIndex(BarDirection::kRight));
     }
     if (barDirectionCombo_) {
       const QSignalBlocker blocker(barDirectionCombo_);
@@ -2996,10 +3327,11 @@ private:
     kPolygon,
     kLine,
     kText,
+    kTextMonitor,
     kMeter,
     kBarMonitor,
-    kByteMonitor,
-    kTextMonitor
+    kScaleMonitor,
+    kByteMonitor
   };
   QLineEdit *createLineEdit()
   {
@@ -3193,6 +3525,11 @@ private:
       barSection_->setVisible(barVisible);
       barSection_->setEnabled(barVisible);
     }
+    if (scaleSection_) {
+      const bool scaleVisible = kind == SelectionKind::kScaleMonitor;
+      scaleSection_->setVisible(scaleVisible);
+      scaleSection_->setEnabled(scaleVisible);
+    }
     if (byteSection_) {
       const bool byteVisible = kind == SelectionKind::kByteMonitor;
       byteSection_->setVisible(byteVisible);
@@ -3300,6 +3637,21 @@ private:
     barChannelSetter_(value);
     committedTexts_[barChannelEdit_] = value;
     updateBarLimitsFromDialog();
+  }
+
+  void commitScaleChannel()
+  {
+    if (!scaleChannelEdit_) {
+      return;
+    }
+    if (!scaleChannelSetter_) {
+      revertLineEdit(scaleChannelEdit_);
+      return;
+    }
+    const QString value = scaleChannelEdit_->text();
+    scaleChannelSetter_(value);
+    committedTexts_[scaleChannelEdit_] = value;
+    updateScaleLimitsFromDialog();
   }
 
   void commitByteChannel()
@@ -3456,6 +3808,21 @@ private:
                                                      : QString();
       pvLimitsDialog_->setBarCallbacks(channelLabel, barLimitsGetter_,
           barLimitsSetter_, [this]() { updateBarLimitsFromDialog(); });
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
+  }
+
+  void updateScaleLimitsFromDialog()
+  {
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (scaleLimitsGetter_ && scaleLimitsSetter_) {
+      const QString channelLabel = scaleChannelGetter_ ? scaleChannelGetter_()
+                                                       : QString();
+      pvLimitsDialog_->setScaleCallbacks(channelLabel, scaleLimitsGetter_,
+          scaleLimitsSetter_, [this]() { updateScaleLimitsFromDialog(); });
     } else {
       pvLimitsDialog_->clearTargets();
     }
@@ -4080,6 +4447,14 @@ private:
   QComboBox *barFillCombo_ = nullptr;
   QLineEdit *barChannelEdit_ = nullptr;
   QPushButton *barPvLimitsButton_ = nullptr;
+  QWidget *scaleSection_ = nullptr;
+  QPushButton *scaleForegroundButton_ = nullptr;
+  QPushButton *scaleBackgroundButton_ = nullptr;
+  QComboBox *scaleLabelCombo_ = nullptr;
+  QComboBox *scaleColorModeCombo_ = nullptr;
+  QComboBox *scaleDirectionCombo_ = nullptr;
+  QLineEdit *scaleChannelEdit_ = nullptr;
+  QPushButton *scalePvLimitsButton_ = nullptr;
   QWidget *byteSection_ = nullptr;
   QPushButton *byteForegroundButton_ = nullptr;
   QPushButton *byteBackgroundButton_ = nullptr;
@@ -4403,6 +4778,20 @@ private:
   std::function<void(const QString &)> barChannelSetter_;
   std::function<PvLimits()> barLimitsGetter_;
   std::function<void(const PvLimits &)> barLimitsSetter_;
+  std::function<QColor()> scaleForegroundGetter_;
+  std::function<void(const QColor &)> scaleForegroundSetter_;
+  std::function<QColor()> scaleBackgroundGetter_;
+  std::function<void(const QColor &)> scaleBackgroundSetter_;
+  std::function<MeterLabel()> scaleLabelGetter_;
+  std::function<void(MeterLabel)> scaleLabelSetter_;
+  std::function<TextColorMode()> scaleColorModeGetter_;
+  std::function<void(TextColorMode)> scaleColorModeSetter_;
+  std::function<BarDirection()> scaleDirectionGetter_;
+  std::function<void(BarDirection)> scaleDirectionSetter_;
+  std::function<QString()> scaleChannelGetter_;
+  std::function<void(const QString &)> scaleChannelSetter_;
+  std::function<PvLimits()> scaleLimitsGetter_;
+  std::function<void(const PvLimits &)> scaleLimitsSetter_;
   std::function<QColor()> byteForegroundGetter_;
   std::function<void(const QColor &)> byteForegroundSetter_;
   std::function<QColor()> byteBackgroundGetter_;
@@ -4579,6 +4968,26 @@ private:
     dialog->setBarCallbacks(channelLabel, barLimitsGetter_, barLimitsSetter_,
         [this]() { updateBarLimitsFromDialog(); });
     dialog->showForBarMonitor();
+  }
+
+  void openScaleMonitorPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!scaleLimitsGetter_ || !scaleLimitsSetter_) {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = scaleChannelGetter_ ? scaleChannelGetter_()
+                                                     : QString();
+    dialog->setScaleCallbacks(channelLabel, scaleLimitsGetter_,
+        scaleLimitsSetter_, [this]() { updateScaleLimitsFromDialog(); });
+    dialog->showForScaleMonitor();
   }
 
   QColor colorFromButton(const QPushButton *button) const

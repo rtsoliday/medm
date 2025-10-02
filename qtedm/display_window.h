@@ -62,6 +62,7 @@
 #include "arc_element.h"
 #include "byte_monitor_element.h"
 #include "bar_monitor_element.h"
+#include "scale_monitor_element.h"
 #include "display_properties.h"
 #include "display_state.h"
 #include "image_element.h"

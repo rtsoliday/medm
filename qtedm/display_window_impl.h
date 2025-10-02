@@ -251,6 +251,7 @@ protected:
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
+            || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -287,6 +288,12 @@ protected:
           if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
             selectMeterElement(meter);
             showResourcePaletteForMeter(meter);
+            event->accept();
+            return;
+          }
+          if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+            selectScaleMonitorElement(scale);
+            showResourcePaletteForScale(scale);
             event->accept();
             return;
           }
@@ -493,6 +500,8 @@ private:
   MeterElement *selectedMeterElement_ = nullptr;
   QList<BarMonitorElement *> barMonitorElements_;
   BarMonitorElement *selectedBarMonitorElement_ = nullptr;
+  QList<ScaleMonitorElement *> scaleMonitorElements_;
+  ScaleMonitorElement *selectedScaleMonitorElement_ = nullptr;
   QList<ByteMonitorElement *> byteMonitorElements_;
   ByteMonitorElement *selectedByteMonitorElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
@@ -566,6 +575,15 @@ private:
     }
     selectedMeterElement_->setSelected(false);
     selectedMeterElement_ = nullptr;
+  }
+
+  void clearScaleMonitorSelection()
+  {
+    if (!selectedScaleMonitorElement_) {
+      return;
+    }
+    selectedScaleMonitorElement_->setSelected(false);
+    selectedScaleMonitorElement_ = nullptr;
   }
 
   void clearBarMonitorSelection()
@@ -655,6 +673,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -680,6 +699,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -1097,6 +1117,81 @@ private:
         },
         [this, element](BarFill mode) {
           element->setFillMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForScale(ScaleMonitorElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForScaleMonitor(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumScaleSize) {
+            adjusted.setWidth(kMinimumScaleSize);
+          }
+          if (adjusted.height() < kMinimumScaleSize) {
+            adjusted.setHeight(kMinimumScaleSize);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->label();
+        },
+        [this, element](MeterLabel label) {
+          element->setLabel(label);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->direction();
+        },
+        [this, element](BarDirection direction) {
+          element->setDirection(direction);
           markDirty();
         },
         [element]() {
@@ -1933,6 +2028,7 @@ private:
     clearDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -1957,6 +2053,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -1982,6 +2079,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextMonitorSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -1993,6 +2091,33 @@ private:
     clearPolygonSelection();
     selectedMeterElement_ = element;
     selectedMeterElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectScaleMonitorElement(ScaleMonitorElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedScaleMonitorElement_) {
+      selectedScaleMonitorElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedScaleMonitorElement_ = element;
+    selectedScaleMonitorElement_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -2008,6 +2133,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2034,6 +2160,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2060,6 +2187,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearImageSelection();
@@ -2084,6 +2212,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2109,6 +2238,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2133,6 +2263,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2158,6 +2289,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2183,6 +2315,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2208,6 +2341,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
+    clearScaleMonitorSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2308,6 +2442,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createByteMonitorElement(rect);
+      break;
+    case CreateTool::kScaleMonitor:
+      if (rect.width() < kMinimumScaleSize) {
+        rect.setWidth(kMinimumScaleSize);
+      }
+      if (rect.height() < kMinimumScaleSize) {
+        rect.setHeight(kMinimumScaleSize);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createScaleMonitorElement(rect);
       break;
     case CreateTool::kRectangle:
       if (rect.width() <= 0) {
@@ -2714,6 +2858,32 @@ private:
     markDirty();
   }
 
+  void createScaleMonitorElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumScaleSize) {
+      target.setWidth(kMinimumScaleSize);
+    }
+    if (target.height() < kMinimumScaleSize) {
+      target.setHeight(kMinimumScaleSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new ScaleMonitorElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    scaleMonitorElements_.append(element);
+    selectScaleMonitorElement(element);
+    showResourcePaletteForScale(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createByteMonitorElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -2925,6 +3095,7 @@ private:
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
+            || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -3104,7 +3275,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(monitorsMenu, QStringLiteral("Scale Monitor"));
+    auto *scaleAction =
+        addMenuAction(monitorsMenu, QStringLiteral("Scale Monitor"));
+    QObject::connect(scaleAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kScaleMonitor);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(monitorsMenu, QStringLiteral("Strip Chart"));
     addMenuAction(monitorsMenu, QStringLiteral("Cartesian Plot"));
 

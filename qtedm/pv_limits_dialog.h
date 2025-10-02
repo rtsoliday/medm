@@ -37,13 +37,19 @@ public:
       std::function<void(const PvLimits &)> limitsSetter,
       std::function<void()> changeNotifier);
   void showForBarMonitor();
+  void setScaleCallbacks(const QString &channelName,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter,
+      std::function<void()> changeNotifier);
+  void showForScaleMonitor();
 
 private:
   enum class Mode {
     kNone,
     kTextMonitor,
     kMeter,
-    kBarMonitor
+    kBarMonitor,
+    kScaleMonitor
   };
 
   void updatePrecisionControls();

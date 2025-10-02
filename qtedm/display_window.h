@@ -71,5 +71,6 @@
 #include "rectangle_element.h"
 #include "resource_palette_dialog.h"
 #include "text_element.h"
+#include "text_monitor_element.h"
 
 #include "display_window_impl.h"

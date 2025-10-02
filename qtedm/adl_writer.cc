@@ -125,6 +125,35 @@ QString channelFieldName(int index)
   return QStringLiteral("chan%1").arg(QChar(QLatin1Char('A' + index)));
 }
 
+QString textMonitorFormatString(TextMonitorFormat format)
+{
+  switch (format) {
+  case TextMonitorFormat::kExponential:
+    return QStringLiteral("exponential");
+  case TextMonitorFormat::kEngineering:
+    return QStringLiteral("engr. notation");
+  case TextMonitorFormat::kCompact:
+    return QStringLiteral("compact");
+  case TextMonitorFormat::kTruncated:
+    return QStringLiteral("truncated");
+  case TextMonitorFormat::kHexadecimal:
+    return QStringLiteral("hexadecimal");
+  case TextMonitorFormat::kOctal:
+    return QStringLiteral("octal");
+  case TextMonitorFormat::kString:
+    return QStringLiteral("string");
+  case TextMonitorFormat::kSexagesimal:
+    return QStringLiteral("sexagesimal");
+  case TextMonitorFormat::kSexagesimalHms:
+    return QStringLiteral("sexagesimal-hms");
+  case TextMonitorFormat::kSexagesimalDms:
+    return QStringLiteral("sexagesimal-dms");
+  case TextMonitorFormat::kDecimal:
+  default:
+    return QStringLiteral("decimal");
+  }
+}
+
 int medmLineWidthValue(int width)
 {
   return width <= 1 ? 0 : width;
@@ -242,6 +271,32 @@ void writeDynamicAttributeSection(QTextStream &stream, int level,
     writeIndentedLine(stream, level + 1,
         QStringLiteral("%1=\"%2\"")
             .arg(channelFieldName(i), escapeAdlString(channel)));
+  }
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
+    int colorIndex, int backgroundIndex)
+{
+  writeIndentedLine(stream, level, QStringLiteral("\"monitor\" {"));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("%1=\"%2\"")
+          .arg(channelFieldName(0), escapeAdlString(channel)));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("clr=%1").arg(colorIndex));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("bclr=%1").arg(backgroundIndex));
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeLimitsSection(QTextStream &stream, int level, int precision)
+{
+  writeIndentedLine(stream, level, QStringLiteral("\"limits\" {"));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("precSrc=\"default\""));
+  if (precision >= 0) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("precDefault=%1").arg(precision));
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }

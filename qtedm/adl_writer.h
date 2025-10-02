@@ -27,6 +27,7 @@ QString fillString(RectangleFill fill);
 QString alignmentString(Qt::Alignment alignment);
 QString imageTypeString(ImageType type);
 QString channelFieldName(int index);
+QString textMonitorFormatString(TextMonitorFormat format);
 int medmLineWidthValue(int width);
 int medmColorIndex(const QColor &color);
 void writeObjectSection(QTextStream &stream, int level, const QRect &rect);
@@ -35,6 +36,9 @@ void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
 void writeDynamicAttributeSection(QTextStream &stream, int level,
     TextColorMode colorMode, TextVisibilityMode visibilityMode,
     const QString &calc, const std::array<QString, 4> &channels);
+void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
+    int colorIndex, int backgroundIndex);
+void writeLimitsSection(QTextStream &stream, int level, int precision);
 void writePointsSection(
     QTextStream &stream, int level, const QVector<QPoint> &points);
 

@@ -11,6 +11,7 @@ class DisplayWindow;
 enum class CreateTool {
   kNone,
   kText,
+  kTextMonitor,
   kRectangle,
   kOval,
   kArc,

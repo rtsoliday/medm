@@ -17,6 +17,21 @@ enum class TextVisibilityMode
   kCalc
 };
 
+enum class TextMonitorFormat
+{
+  kDecimal,
+  kExponential,
+  kEngineering,
+  kCompact,
+  kTruncated,
+  kHexadecimal,
+  kOctal,
+  kString,
+  kSexagesimal,
+  kSexagesimalHms,
+  kSexagesimalDms,
+};
+
 enum class RectangleFill
 {
   kOutline,

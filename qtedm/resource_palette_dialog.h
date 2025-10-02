@@ -619,6 +619,113 @@ public:
     textLayout->setRowStretch(10, 1);
     entriesLayout->addWidget(textSection_);
 
+    textMonitorSection_ = new QWidget(entriesWidget_);
+    auto *textMonitorLayout = new QGridLayout(textMonitorSection_);
+    textMonitorLayout->setContentsMargins(0, 0, 0, 0);
+    textMonitorLayout->setHorizontalSpacing(12);
+    textMonitorLayout->setVerticalSpacing(6);
+
+    textMonitorForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(textMonitorForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(textMonitorForegroundButton_,
+              QStringLiteral("Text Monitor Foreground"),
+              textMonitorForegroundSetter_);
+        });
+
+    textMonitorBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(textMonitorBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(textMonitorBackgroundButton_,
+              QStringLiteral("Text Monitor Background"),
+              textMonitorBackgroundSetter_);
+        });
+
+    textMonitorAlignmentCombo_ = new QComboBox;
+    textMonitorAlignmentCombo_->setFont(valueFont_);
+    textMonitorAlignmentCombo_->setAutoFillBackground(true);
+    textMonitorAlignmentCombo_->addItem(QStringLiteral("Left"));
+    textMonitorAlignmentCombo_->addItem(QStringLiteral("Center"));
+    textMonitorAlignmentCombo_->addItem(QStringLiteral("Right"));
+    QObject::connect(textMonitorAlignmentCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textMonitorAlignmentSetter_) {
+            textMonitorAlignmentSetter_(alignmentFromIndex(index));
+          }
+        });
+
+    textMonitorFormatCombo_ = new QComboBox;
+    textMonitorFormatCombo_->setFont(valueFont_);
+    textMonitorFormatCombo_->setAutoFillBackground(true);
+    textMonitorFormatCombo_->addItem(QStringLiteral("Decimal"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Exponential"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Engineering"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Compact"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Truncated"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Hexadecimal"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Octal"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("String"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Sexagesimal"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Sexagesimal (H:M:S)"));
+    textMonitorFormatCombo_->addItem(QStringLiteral("Sexagesimal (D:M:S)"));
+    QObject::connect(textMonitorFormatCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textMonitorFormatSetter_) {
+            textMonitorFormatSetter_(textMonitorFormatFromIndex(index));
+          }
+        });
+
+    textMonitorPrecisionEdit_ = createLineEdit();
+    committedTexts_.insert(textMonitorPrecisionEdit_, textMonitorPrecisionEdit_->text());
+    textMonitorPrecisionEdit_->installEventFilter(this);
+    QObject::connect(textMonitorPrecisionEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitTextMonitorPrecision(); });
+    QObject::connect(textMonitorPrecisionEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitTextMonitorPrecision(); });
+
+    textMonitorColorModeCombo_ = new QComboBox;
+    textMonitorColorModeCombo_->setFont(valueFont_);
+    textMonitorColorModeCombo_->setAutoFillBackground(true);
+    textMonitorColorModeCombo_->addItem(QStringLiteral("Static"));
+    textMonitorColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    textMonitorColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(textMonitorColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textMonitorColorModeSetter_) {
+            textMonitorColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    textMonitorChannelEdit_ = createLineEdit();
+    committedTexts_.insert(textMonitorChannelEdit_, textMonitorChannelEdit_->text());
+    textMonitorChannelEdit_->installEventFilter(this);
+    QObject::connect(textMonitorChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitTextMonitorChannel(); });
+    QObject::connect(textMonitorChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitTextMonitorChannel(); });
+
+    addRow(textMonitorLayout, 0, QStringLiteral("Foreground"),
+        textMonitorForegroundButton_);
+    addRow(textMonitorLayout, 1, QStringLiteral("Background"),
+        textMonitorBackgroundButton_);
+    addRow(textMonitorLayout, 2, QStringLiteral("Alignment"),
+        textMonitorAlignmentCombo_);
+    addRow(textMonitorLayout, 3, QStringLiteral("Format"),
+        textMonitorFormatCombo_);
+    addRow(textMonitorLayout, 4, QStringLiteral("Precision"),
+        textMonitorPrecisionEdit_);
+    addRow(textMonitorLayout, 5, QStringLiteral("Color Mode"),
+        textMonitorColorModeCombo_);
+    addRow(textMonitorLayout, 6, QStringLiteral("Channel"),
+        textMonitorChannelEdit_);
+    textMonitorLayout->setRowStretch(7, 1);
+    entriesLayout->addWidget(textMonitorSection_);
+
     entriesLayout->addStretch(1);
 
   displaySection_->setVisible(false);
@@ -626,6 +733,7 @@ public:
   imageSection_->setVisible(false);
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
+  textMonitorSection_->setVisible(false);
     updateSectionVisibility(selectionKind_);
 
     scrollArea_->setWidget(entriesWidget_);
@@ -689,6 +797,20 @@ public:
     textGetter_ = {};
     textSetter_ = {};
     committedTextString_.clear();
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
     imageTypeGetter_ = {};
     imageTypeSetter_ = {};
     imageNameGetter_ = {};
@@ -798,6 +920,20 @@ public:
     textVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
     textChannelGetters_ = std::move(channelGetters);
     textChannelSetters_ = std::move(channelSetters);
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
 
     QRect textGeometry = geometryGetter_ ? geometryGetter_() : QRect();
     if (textGeometry.width() <= 0) {
@@ -875,6 +1011,242 @@ public:
     activateWindow();
   }
 
+  void showForTextMonitor(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<Qt::Alignment()> alignmentGetter,
+      std::function<void(Qt::Alignment)> alignmentSetter,
+      std::function<TextMonitorFormat()> formatGetter,
+      std::function<void(TextMonitorFormat)> formatSetter,
+      std::function<int()> precisionGetter,
+      std::function<void(int)> precisionSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter)
+  {
+    selectionKind_ = SelectionKind::kTextMonitor;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    textMonitorForegroundGetter_ = std::move(foregroundGetter);
+    textMonitorForegroundSetter_ = std::move(foregroundSetter);
+    textMonitorBackgroundGetter_ = std::move(backgroundGetter);
+    textMonitorBackgroundSetter_ = std::move(backgroundSetter);
+    textMonitorAlignmentGetter_ = std::move(alignmentGetter);
+    textMonitorAlignmentSetter_ = std::move(alignmentSetter);
+    textMonitorFormatGetter_ = std::move(formatGetter);
+    textMonitorFormatSetter_ = std::move(formatSetter);
+    textMonitorPrecisionGetter_ = std::move(precisionGetter);
+    textMonitorPrecisionSetter_ = std::move(precisionSetter);
+    textMonitorColorModeGetter_ = std::move(colorModeGetter);
+    textMonitorColorModeSetter_ = std::move(colorModeSetter);
+    textMonitorChannelGetter_ = std::move(channelGetter);
+    textMonitorChannelSetter_ = std::move(channelSetter);
+
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
+      setter = {};
+    }
+
+    QRect monitorGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (monitorGeometry.width() <= 0) {
+      monitorGeometry.setWidth(kMinimumTextWidth);
+    }
+    if (monitorGeometry.height() <= 0) {
+      monitorGeometry.setHeight(kMinimumTextHeight);
+    }
+    lastCommittedGeometry_ = monitorGeometry;
+
+    updateGeometryEdits(monitorGeometry);
+
+    if (textMonitorForegroundButton_) {
+      const QColor color = textMonitorForegroundGetter_
+              ? textMonitorForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(textMonitorForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (textMonitorBackgroundButton_) {
+      const QColor color = textMonitorBackgroundGetter_
+              ? textMonitorBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(textMonitorBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (textMonitorAlignmentCombo_) {
+      const QSignalBlocker blocker(textMonitorAlignmentCombo_);
+      const Qt::Alignment alignment = textMonitorAlignmentGetter_
+              ? textMonitorAlignmentGetter_()
+              : (Qt::AlignLeft | Qt::AlignVCenter);
+      textMonitorAlignmentCombo_->setCurrentIndex(
+          alignmentToIndex(alignment));
+    }
+
+    if (textMonitorFormatCombo_) {
+      const QSignalBlocker blocker(textMonitorFormatCombo_);
+      const TextMonitorFormat format = textMonitorFormatGetter_
+              ? textMonitorFormatGetter_()
+              : TextMonitorFormat::kDecimal;
+      textMonitorFormatCombo_->setCurrentIndex(
+          textMonitorFormatToIndex(format));
+    }
+
+    if (textMonitorPrecisionEdit_) {
+      const int precision = textMonitorPrecisionGetter_
+              ? textMonitorPrecisionGetter_()
+              : -1;
+      const QSignalBlocker blocker(textMonitorPrecisionEdit_);
+      if (precision < 0) {
+        textMonitorPrecisionEdit_->clear();
+      } else {
+        textMonitorPrecisionEdit_->setText(QString::number(precision));
+      }
+      committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
+    }
+
+    if (textMonitorColorModeCombo_) {
+      const QSignalBlocker blocker(textMonitorColorModeCombo_);
+      const TextColorMode mode = textMonitorColorModeGetter_
+              ? textMonitorColorModeGetter_()
+              : TextColorMode::kStatic;
+      textMonitorColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (textMonitorChannelEdit_) {
+      const QString channel = textMonitorChannelGetter_
+              ? textMonitorChannelGetter_()
+              : QString();
+      const QSignalBlocker blocker(textMonitorChannelEdit_);
+      textMonitorChannelEdit_->setText(channel);
+      committedTexts_[textMonitorChannelEdit_] = channel;
+    }
+
+    elementLabel_->setText(QStringLiteral("Text Monitor"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void showForRectangle(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> colorGetter,
@@ -943,6 +1315,20 @@ public:
     for (auto &setter : textChannelSetters_) {
       setter = {};
     }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
 
     imageTypeGetter_ = {};
     imageTypeSetter_ = {};
@@ -1557,6 +1943,8 @@ public:
     for (QLineEdit *edit : textChannelEdits_) {
       resetLineEdit(edit);
     }
+    resetLineEdit(textMonitorPrecisionEdit_);
+    resetLineEdit(textMonitorChannelEdit_);
     resetLineEdit(rectangleLineWidthEdit_);
     resetLineEdit(rectangleVisibilityCalcEdit_);
     for (QLineEdit *edit : rectangleChannelEdits_) {
@@ -1577,6 +1965,8 @@ public:
     resetColorButton(foregroundButton_);
     resetColorButton(backgroundButton_);
     resetColorButton(textForegroundButton_);
+    resetColorButton(textMonitorForegroundButton_);
+    resetColorButton(textMonitorBackgroundButton_);
     resetColorButton(rectangleForegroundButton_);
     resetColorButton(lineColorButton_);
 
@@ -1593,9 +1983,24 @@ public:
       textAlignmentCombo_->setCurrentIndex(
           alignmentToIndex(Qt::AlignLeft | Qt::AlignVCenter));
     }
+    if (textMonitorAlignmentCombo_) {
+      const QSignalBlocker blocker(textMonitorAlignmentCombo_);
+      textMonitorAlignmentCombo_->setCurrentIndex(
+          alignmentToIndex(Qt::AlignLeft | Qt::AlignVCenter));
+    }
+    if (textMonitorFormatCombo_) {
+      const QSignalBlocker blocker(textMonitorFormatCombo_);
+      textMonitorFormatCombo_->setCurrentIndex(
+          textMonitorFormatToIndex(TextMonitorFormat::kDecimal));
+    }
     if (textColorModeCombo_) {
       const QSignalBlocker blocker(textColorModeCombo_);
       textColorModeCombo_->setCurrentIndex(
+          colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (textMonitorColorModeCombo_) {
+      const QSignalBlocker blocker(textMonitorColorModeCombo_);
+      textMonitorColorModeCombo_->setCurrentIndex(
           colorModeToIndex(TextColorMode::kStatic));
     }
     if (textVisibilityCombo_) {
@@ -1690,7 +2095,8 @@ private:
     kImage,
     kPolygon,
     kLine,
-    kText
+    kText,
+    kTextMonitor
   };
   QLineEdit *createLineEdit()
   {
@@ -1762,6 +2168,9 @@ private:
       || isRectangleChannelEdit || isLineChannelEdit || isImageChannelEdit) {
           revertLineEdit(edit);
         }
+      if (edit == textMonitorPrecisionEdit_ || edit == textMonitorChannelEdit_) {
+        revertLineEdit(edit);
+      }
       }
     }
 
@@ -1853,6 +2262,11 @@ private:
     if (textStringEdit_) {
       textStringEdit_->setEnabled(kind == SelectionKind::kText);
     }
+    if (textMonitorSection_) {
+      const bool monitorVisible = kind == SelectionKind::kTextMonitor;
+      textMonitorSection_->setVisible(monitorVisible);
+      textMonitorSection_->setEnabled(monitorVisible);
+    }
   }
 
   void commitTextString()
@@ -1911,6 +2325,54 @@ private:
     const QString value = edit->text();
     textChannelSetters_[index](value);
     committedTexts_[edit] = value;
+  }
+
+  void commitTextMonitorChannel()
+  {
+    if (!textMonitorChannelEdit_) {
+      return;
+    }
+    if (!textMonitorChannelSetter_) {
+      revertLineEdit(textMonitorChannelEdit_);
+      return;
+    }
+    const QString value = textMonitorChannelEdit_->text();
+    textMonitorChannelSetter_(value);
+    committedTexts_[textMonitorChannelEdit_] = value;
+  }
+
+  void commitTextMonitorPrecision()
+  {
+    if (!textMonitorPrecisionEdit_) {
+      return;
+    }
+    if (!textMonitorPrecisionSetter_) {
+      revertLineEdit(textMonitorPrecisionEdit_);
+      return;
+    }
+    const QString raw = textMonitorPrecisionEdit_->text().trimmed();
+    if (raw.isEmpty()) {
+      textMonitorPrecisionSetter_(-1);
+      const QSignalBlocker blocker(textMonitorPrecisionEdit_);
+      textMonitorPrecisionEdit_->clear();
+      committedTexts_[textMonitorPrecisionEdit_] = QString();
+      return;
+    }
+    bool ok = false;
+    int value = raw.toInt(&ok);
+    if (!ok) {
+      revertLineEdit(textMonitorPrecisionEdit_);
+      return;
+    }
+    value = std::clamp(value, -1, 17);
+    textMonitorPrecisionSetter_(value);
+    const QSignalBlocker blocker(textMonitorPrecisionEdit_);
+    if (value < 0) {
+      textMonitorPrecisionEdit_->clear();
+    } else {
+      textMonitorPrecisionEdit_->setText(QString::number(value));
+    }
+    committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
   }
 
   void commitRectangleLineWidth()
@@ -2110,6 +2572,64 @@ private:
       return 2;
     }
     return 0;
+  }
+
+  TextMonitorFormat textMonitorFormatFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return TextMonitorFormat::kExponential;
+    case 2:
+      return TextMonitorFormat::kEngineering;
+    case 3:
+      return TextMonitorFormat::kCompact;
+    case 4:
+      return TextMonitorFormat::kTruncated;
+    case 5:
+      return TextMonitorFormat::kHexadecimal;
+    case 6:
+      return TextMonitorFormat::kOctal;
+    case 7:
+      return TextMonitorFormat::kString;
+    case 8:
+      return TextMonitorFormat::kSexagesimal;
+    case 9:
+      return TextMonitorFormat::kSexagesimalHms;
+    case 10:
+      return TextMonitorFormat::kSexagesimalDms;
+    case 0:
+    default:
+      return TextMonitorFormat::kDecimal;
+    }
+  }
+
+  int textMonitorFormatToIndex(TextMonitorFormat format) const
+  {
+    switch (format) {
+    case TextMonitorFormat::kExponential:
+      return 1;
+    case TextMonitorFormat::kEngineering:
+      return 2;
+    case TextMonitorFormat::kCompact:
+      return 3;
+    case TextMonitorFormat::kTruncated:
+      return 4;
+    case TextMonitorFormat::kHexadecimal:
+      return 5;
+    case TextMonitorFormat::kOctal:
+      return 6;
+    case TextMonitorFormat::kString:
+      return 7;
+    case TextMonitorFormat::kSexagesimal:
+      return 8;
+    case TextMonitorFormat::kSexagesimalHms:
+      return 9;
+    case TextMonitorFormat::kSexagesimalDms:
+      return 10;
+    case TextMonitorFormat::kDecimal:
+    default:
+      return 0;
+    }
   }
 
   TextColorMode colorModeFromIndex(int index) const
@@ -2363,6 +2883,14 @@ private:
   QComboBox *textVisibilityCombo_ = nullptr;
   QLineEdit *textVisibilityCalcEdit_ = nullptr;
   std::array<QLineEdit *, 4> textChannelEdits_{};
+  QWidget *textMonitorSection_ = nullptr;
+  QPushButton *textMonitorForegroundButton_ = nullptr;
+  QPushButton *textMonitorBackgroundButton_ = nullptr;
+  QComboBox *textMonitorAlignmentCombo_ = nullptr;
+  QComboBox *textMonitorFormatCombo_ = nullptr;
+  QLineEdit *textMonitorPrecisionEdit_ = nullptr;
+  QComboBox *textMonitorColorModeCombo_ = nullptr;
+  QLineEdit *textMonitorChannelEdit_ = nullptr;
   QPushButton *rectangleForegroundButton_ = nullptr;
   QComboBox *rectangleFillCombo_ = nullptr;
   QComboBox *rectangleLineStyleCombo_ = nullptr;
@@ -2510,6 +3038,23 @@ private:
     if (gridSpacingEdit_) {
       committedTexts_[gridSpacingEdit_] = gridSpacingEdit_->text();
     }
+    if (textStringEdit_) {
+      committedTexts_[textStringEdit_] = textStringEdit_->text();
+    }
+    if (textVisibilityCalcEdit_) {
+      committedTexts_[textVisibilityCalcEdit_] = textVisibilityCalcEdit_->text();
+    }
+    for (QLineEdit *edit : textChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
+    if (textMonitorPrecisionEdit_) {
+      committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
+    }
+    if (textMonitorChannelEdit_) {
+      committedTexts_[textMonitorChannelEdit_] = textMonitorChannelEdit_->text();
+    }
     if (rectangleLineWidthEdit_) {
       committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
     }
@@ -2605,6 +3150,20 @@ private:
   std::function<void(const QString &)> textVisibilityCalcSetter_;
   std::array<std::function<QString()>, 4> textChannelGetters_{};
   std::array<std::function<void(const QString &)>, 4> textChannelSetters_{};
+  std::function<QColor()> textMonitorForegroundGetter_;
+  std::function<void(const QColor &)> textMonitorForegroundSetter_;
+  std::function<QColor()> textMonitorBackgroundGetter_;
+  std::function<void(const QColor &)> textMonitorBackgroundSetter_;
+  std::function<Qt::Alignment()> textMonitorAlignmentGetter_;
+  std::function<void(Qt::Alignment)> textMonitorAlignmentSetter_;
+  std::function<TextMonitorFormat()> textMonitorFormatGetter_;
+  std::function<void(TextMonitorFormat)> textMonitorFormatSetter_;
+  std::function<int()> textMonitorPrecisionGetter_;
+  std::function<void(int)> textMonitorPrecisionSetter_;
+  std::function<TextColorMode()> textMonitorColorModeGetter_;
+  std::function<void(TextColorMode)> textMonitorColorModeSetter_;
+  std::function<QString()> textMonitorChannelGetter_;
+  std::function<void(const QString &)> textMonitorChannelSetter_;
   QString committedTextString_;
   std::function<QColor()> rectangleForegroundGetter_;
   std::function<void(const QColor &)> rectangleForegroundSetter_;

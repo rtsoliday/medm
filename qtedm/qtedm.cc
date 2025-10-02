@@ -72,6 +72,7 @@
 #include "line_element.h"
 #include "polyline_element.h"
 #include "polygon_element.h"
+#include "image_element.h"
 #include "color_palette_dialog.h"
 #include "display_properties.h"
 #include "resources/fonts/adobe_helvetica_24_otb.h"
@@ -301,6 +302,7 @@ enum class CreateTool {
   kPolygon,
   kPolyline,
   kLine,
+  kImage,
 };
 
 class DisplayWindow;
@@ -532,7 +534,8 @@ protected:
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
-            || state->createTool == CreateTool::kLine) {
+            || state->createTool == CreateTool::kLine
+            || state->createTool == CreateTool::kImage) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
             if (displayArea_->rect().contains(areaPos)) {
@@ -558,6 +561,12 @@ protected:
           if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
             selectRectangleElement(rectangle);
             showResourcePaletteForRectangle(rectangle);
+            event->accept();
+            return;
+          }
+          if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+            selectImageElement(image);
+            showResourcePaletteForImage(image);
             event->accept();
             return;
           }
@@ -723,6 +732,8 @@ private:
   TextElement *selectedTextElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
   RectangleElement *selectedRectangle_ = nullptr;
+  QList<ImageElement *> imageElements_;
+  ImageElement *selectedImage_ = nullptr;
   QList<OvalElement *> ovalElements_;
   OvalElement *selectedOval_ = nullptr;
   QList<ArcElement *> arcElements_;
@@ -783,6 +794,15 @@ private:
     selectedRectangle_ = nullptr;
   }
 
+  void clearImageSelection()
+  {
+    if (!selectedImage_) {
+      return;
+    }
+    selectedImage_->setSelected(false);
+    selectedImage_ = nullptr;
+  }
+
   void clearOvalSelection()
   {
     if (!selectedOval_) {
@@ -833,6 +853,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
     clearLineSelection();
@@ -853,6 +874,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
     clearLineSelection();
@@ -1073,6 +1095,73 @@ private:
         },
         [element](int width) {
           element->setLineWidth(width);
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [element](TextColorMode mode) {
+          element->setColorMode(mode);
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+        },
+        std::move(channelGetters), std::move(channelSetters));
+  }
+
+  void showResourcePaletteForImage(ImageElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [element](const QString &value) { element->setChannel(0, value); },
+        [element](const QString &value) { element->setChannel(1, value); },
+        [element](const QString &value) { element->setChannel(2, value); },
+        [element](const QString &value) { element->setChannel(3, value); },
+    }};
+    dialog->showForImage(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+        },
+        [element]() {
+          return element->imageType();
+        },
+        [element](ImageType type) {
+          element->setImageType(type);
+        },
+        [element]() {
+          return element->imageName();
+        },
+        [element](const QString &name) {
+          element->setImageName(name);
+        },
+        [element]() {
+          return element->calc();
+        },
+        [element](const QString &calc) {
+          element->setCalc(calc);
         },
         [element]() {
           return element->colorMode();
@@ -1558,6 +1647,7 @@ private:
     }
     clearDisplaySelection();
     clearRectangleSelection();
+    clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
     clearLineSelection();
@@ -1577,12 +1667,34 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
     selectedRectangle_ = element;
     selectedRectangle_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectImageElement(ImageElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedImage_) {
+      selectedImage_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearRectangleSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedImage_ = element;
+    selectedImage_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -1597,6 +1709,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearImageSelection();
     clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
@@ -1617,6 +1730,7 @@ private:
     clearTextSelection();
     clearRectangleSelection();
     clearOvalSelection();
+    clearImageSelection();
     clearLineSelection();
     clearPolygonSelection();
     clearPolylineSelection();
@@ -1638,6 +1752,7 @@ private:
     clearRectangleSelection();
     clearOvalSelection();
     clearArcSelection();
+    clearImageSelection();
     clearPolygonSelection();
     clearPolylineSelection();
     selectedLine_ = element;
@@ -1659,6 +1774,7 @@ private:
     clearOvalSelection();
     clearArcSelection();
     clearLineSelection();
+    clearImageSelection();
     clearPolygonSelection();
     selectedPolyline_ = element;
     selectedPolyline_->setSelected(true);
@@ -1679,6 +1795,7 @@ private:
     clearArcSelection();
     clearLineSelection();
     clearPolylineSelection();
+    clearImageSelection();
     clearOvalSelection();
     selectedPolygon_ = element;
     selectedPolygon_->setSelected(true);
@@ -1765,6 +1882,16 @@ private:
       break;
     case CreateTool::kLine:
       createLineElement(rubberBandOrigin_, clamped);
+      break;
+    case CreateTool::kImage:
+      if (rect.width() <= 0) {
+        rect.setWidth(1);
+      }
+      if (rect.height() <= 0) {
+        rect.setHeight(1);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createImageElement(rect);
       break;
     default:
       break;
@@ -2077,6 +2204,31 @@ private:
     deactivateCreateTool();
   }
 
+  void createImageElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumRectangleSize) {
+      target.setWidth(kMinimumRectangleSize);
+    }
+    if (target.height() < kMinimumRectangleSize) {
+      target.setHeight(kMinimumRectangleSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new ImageElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    imageElements_.append(element);
+    selectImageElement(element);
+    showResourcePaletteForImage(element);
+    deactivateCreateTool();
+  }
+
   void createOvalElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -2208,7 +2360,8 @@ private:
             || state->createTool == CreateTool::kArc
             || state->createTool == CreateTool::kPolygon
             || state->createTool == CreateTool::kPolyline
-            || state->createTool == CreateTool::kLine);
+            || state->createTool == CreateTool::kLine
+            || state->createTool == CreateTool::kImage);
     if (displayArea_) {
       if (crossCursorActive) {
         displayArea_->setCursor(Qt::CrossCursor);
@@ -2342,7 +2495,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(graphicsMenu, QStringLiteral("Image"));
+    auto *imageAction =
+        addMenuAction(graphicsMenu, QStringLiteral("Image"));
+    QObject::connect(imageAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kImage);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
 
     auto *monitorsMenu = objectMenu->addMenu(QStringLiteral("Monitors"));
     addMenuAction(monitorsMenu, QStringLiteral("Text Monitor"));

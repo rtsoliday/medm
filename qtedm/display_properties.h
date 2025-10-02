@@ -29,6 +29,13 @@ enum class RectangleLineStyle
   kDash
 };
 
+enum class ImageType
+{
+  kNone,
+  kGif,
+  kTiff
+};
+
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
 constexpr int kDefaultGridSpacing = 5;

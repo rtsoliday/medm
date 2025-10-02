@@ -336,6 +336,103 @@ public:
     rectangleLayout->setRowStretch(rectangleRow, 1);
     entriesLayout->addWidget(rectangleSection_);
 
+    imageSection_ = new QWidget(entriesWidget_);
+    auto *imageLayout = new QGridLayout(imageSection_);
+    imageLayout->setContentsMargins(0, 0, 0, 0);
+    imageLayout->setHorizontalSpacing(12);
+    imageLayout->setVerticalSpacing(6);
+
+    imageTypeCombo_ = new QComboBox;
+    imageTypeCombo_->setFont(valueFont_);
+    imageTypeCombo_->setAutoFillBackground(true);
+    imageTypeCombo_->addItem(QStringLiteral("None"));
+    imageTypeCombo_->addItem(QStringLiteral("GIF"));
+    imageTypeCombo_->addItem(QStringLiteral("TIFF"));
+    QObject::connect(imageTypeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (imageTypeSetter_) {
+            imageTypeSetter_(imageTypeFromIndex(index));
+          }
+        });
+
+    imageNameEdit_ = createLineEdit();
+    committedTexts_.insert(imageNameEdit_, imageNameEdit_->text());
+    imageNameEdit_->installEventFilter(this);
+    QObject::connect(imageNameEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitImageName(); });
+    QObject::connect(imageNameEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitImageName(); });
+
+    imageCalcEdit_ = createLineEdit();
+    committedTexts_.insert(imageCalcEdit_, imageCalcEdit_->text());
+    imageCalcEdit_->installEventFilter(this);
+    QObject::connect(imageCalcEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitImageCalc(); });
+    QObject::connect(imageCalcEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitImageCalc(); });
+
+    imageColorModeCombo_ = new QComboBox;
+    imageColorModeCombo_->setFont(valueFont_);
+    imageColorModeCombo_->setAutoFillBackground(true);
+    imageColorModeCombo_->addItem(QStringLiteral("Static"));
+    imageColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    imageColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(imageColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (imageColorModeSetter_) {
+            imageColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    imageVisibilityCombo_ = new QComboBox;
+    imageVisibilityCombo_->setFont(valueFont_);
+    imageVisibilityCombo_->setAutoFillBackground(true);
+    imageVisibilityCombo_->addItem(QStringLiteral("Static"));
+    imageVisibilityCombo_->addItem(QStringLiteral("If Not Zero"));
+    imageVisibilityCombo_->addItem(QStringLiteral("If Zero"));
+    imageVisibilityCombo_->addItem(QStringLiteral("Calc"));
+    QObject::connect(imageVisibilityCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (imageVisibilityModeSetter_) {
+            imageVisibilityModeSetter_(visibilityModeFromIndex(index));
+          }
+        });
+
+    imageVisibilityCalcEdit_ = createLineEdit();
+    committedTexts_.insert(imageVisibilityCalcEdit_, imageVisibilityCalcEdit_->text());
+    imageVisibilityCalcEdit_->installEventFilter(this);
+    QObject::connect(imageVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitImageVisibilityCalc(); });
+    QObject::connect(imageVisibilityCalcEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitImageVisibilityCalc(); });
+
+    for (int i = 0; i < static_cast<int>(imageChannelEdits_.size()); ++i) {
+      imageChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(imageChannelEdits_[i], imageChannelEdits_[i]->text());
+      imageChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(imageChannelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitImageChannel(i); });
+      QObject::connect(imageChannelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitImageChannel(i); });
+    }
+
+    int imageRow = 0;
+    addRow(imageLayout, imageRow++, QStringLiteral("Image Type"), imageTypeCombo_);
+    addRow(imageLayout, imageRow++, QStringLiteral("Image Name"), imageNameEdit_);
+    addRow(imageLayout, imageRow++, QStringLiteral("Calc"), imageCalcEdit_);
+    addRow(imageLayout, imageRow++, QStringLiteral("Color Mode"), imageColorModeCombo_);
+    addRow(imageLayout, imageRow++, QStringLiteral("Visibility"), imageVisibilityCombo_);
+    addRow(imageLayout, imageRow++, QStringLiteral("Vis Calc"), imageVisibilityCalcEdit_);
+    addRow(imageLayout, imageRow++, QStringLiteral("Channel A"), imageChannelEdits_[0]);
+    addRow(imageLayout, imageRow++, QStringLiteral("Channel B"), imageChannelEdits_[1]);
+    addRow(imageLayout, imageRow++, QStringLiteral("Channel C"), imageChannelEdits_[2]);
+    addRow(imageLayout, imageRow++, QStringLiteral("Channel D"), imageChannelEdits_[3]);
+    imageLayout->setRowStretch(imageRow, 1);
+    entriesLayout->addWidget(imageSection_);
+
     lineSection_ = new QWidget(entriesWidget_);
     auto *lineLayout = new QGridLayout(lineSection_);
     lineLayout->setContentsMargins(0, 0, 0, 0);
@@ -525,6 +622,7 @@ public:
 
   displaySection_->setVisible(false);
   rectangleSection_->setVisible(false);
+  imageSection_->setVisible(false);
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
     updateSectionVisibility(selectionKind_);
@@ -590,6 +688,24 @@ public:
     textGetter_ = {};
     textSetter_ = {};
     committedTextString_.clear();
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
+      setter = {};
+    }
     if (textStringEdit_) {
       const QSignalBlocker blocker(textStringEdit_);
       textStringEdit_->clear();
@@ -827,6 +943,25 @@ public:
       setter = {};
     }
 
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
+      setter = {};
+    }
+
     rectangleForegroundGetter_ = std::move(colorGetter);
     rectangleForegroundSetter_ = std::move(colorSetter);
     rectangleFillGetter_ = std::move(fillGetter);
@@ -943,6 +1078,212 @@ public:
     activateWindow();
   }
 
+  void showForImage(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<ImageType()> typeGetter,
+      std::function<void(ImageType)> typeSetter,
+      std::function<QString()> nameGetter,
+      std::function<void(const QString &)> nameSetter,
+      std::function<QString()> calcGetter,
+      std::function<void(const QString &)> calcSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<TextVisibilityMode()> visibilityModeGetter,
+      std::function<void(TextVisibilityMode)> visibilityModeSetter,
+      std::function<QString()> visibilityCalcGetter,
+      std::function<void(const QString &)> visibilityCalcSetter,
+      std::array<std::function<QString()>, 4> channelGetters,
+      std::array<std::function<void(const QString &)>, 4> channelSetters)
+  {
+    selectionKind_ = SelectionKind::kImage;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
+      setter = {};
+    }
+
+    rectangleForegroundGetter_ = {};
+    rectangleForegroundSetter_ = {};
+    rectangleFillGetter_ = {};
+    rectangleFillSetter_ = {};
+    rectangleLineStyleGetter_ = {};
+    rectangleLineStyleSetter_ = {};
+    rectangleLineWidthGetter_ = {};
+    rectangleLineWidthSetter_ = {};
+    rectangleColorModeGetter_ = {};
+    rectangleColorModeSetter_ = {};
+    rectangleVisibilityModeGetter_ = {};
+    rectangleVisibilityModeSetter_ = {};
+    rectangleVisibilityCalcGetter_ = {};
+    rectangleVisibilityCalcSetter_ = {};
+    for (auto &getter : rectangleChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : rectangleChannelSetters_) {
+      setter = {};
+    }
+
+    arcBeginGetter_ = {};
+    arcBeginSetter_ = {};
+    arcPathGetter_ = {};
+    arcPathSetter_ = {};
+    rectangleIsArc_ = false;
+
+    lineColorGetter_ = {};
+    lineColorSetter_ = {};
+    lineLineStyleGetter_ = {};
+    lineLineStyleSetter_ = {};
+    lineLineWidthGetter_ = {};
+    lineLineWidthSetter_ = {};
+    lineColorModeGetter_ = {};
+    lineColorModeSetter_ = {};
+    lineVisibilityModeGetter_ = {};
+    lineVisibilityModeSetter_ = {};
+    lineVisibilityCalcGetter_ = {};
+    lineVisibilityCalcSetter_ = {};
+    for (auto &getter : lineChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : lineChannelSetters_) {
+      setter = {};
+    }
+
+    imageTypeGetter_ = std::move(typeGetter);
+    imageTypeSetter_ = std::move(typeSetter);
+    imageNameGetter_ = std::move(nameGetter);
+    imageNameSetter_ = std::move(nameSetter);
+    imageCalcGetter_ = std::move(calcGetter);
+    imageCalcSetter_ = std::move(calcSetter);
+    imageColorModeGetter_ = std::move(colorModeGetter);
+    imageColorModeSetter_ = std::move(colorModeSetter);
+    imageVisibilityModeGetter_ = std::move(visibilityModeGetter);
+    imageVisibilityModeSetter_ = std::move(visibilityModeSetter);
+    imageVisibilityCalcGetter_ = std::move(visibilityCalcGetter);
+    imageVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
+    imageChannelGetters_ = std::move(channelGetters);
+    imageChannelSetters_ = std::move(channelSetters);
+
+    QRect imageGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (imageGeometry.width() <= 0) {
+      imageGeometry.setWidth(1);
+    }
+    if (imageGeometry.height() <= 0) {
+      imageGeometry.setHeight(1);
+    }
+    lastCommittedGeometry_ = imageGeometry;
+    updateGeometryEdits(imageGeometry);
+
+    if (imageTypeCombo_) {
+      const QSignalBlocker blocker(imageTypeCombo_);
+      const ImageType type = imageTypeGetter_ ? imageTypeGetter_()
+                                              : ImageType::kNone;
+      imageTypeCombo_->setCurrentIndex(imageTypeToIndex(type));
+    }
+
+    if (imageNameEdit_) {
+      const QString name = imageNameGetter_ ? imageNameGetter_() : QString();
+      const QSignalBlocker blocker(imageNameEdit_);
+      imageNameEdit_->setText(name);
+      committedTexts_[imageNameEdit_] = imageNameEdit_->text();
+    }
+
+    if (imageCalcEdit_) {
+      const QString calc = imageCalcGetter_ ? imageCalcGetter_() : QString();
+      const QSignalBlocker blocker(imageCalcEdit_);
+      imageCalcEdit_->setText(calc);
+      committedTexts_[imageCalcEdit_] = imageCalcEdit_->text();
+    }
+
+    if (imageColorModeCombo_) {
+      const QSignalBlocker blocker(imageColorModeCombo_);
+      const TextColorMode mode = imageColorModeGetter_ ? imageColorModeGetter_()
+                                                      : TextColorMode::kStatic;
+      imageColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (imageVisibilityCombo_) {
+      const QSignalBlocker blocker(imageVisibilityCombo_);
+      const TextVisibilityMode mode = imageVisibilityModeGetter_
+          ? imageVisibilityModeGetter_()
+          : TextVisibilityMode::kStatic;
+      imageVisibilityCombo_->setCurrentIndex(visibilityModeToIndex(mode));
+    }
+
+    if (imageVisibilityCalcEdit_) {
+      const QString calc = imageVisibilityCalcGetter_
+              ? imageVisibilityCalcGetter_()
+              : QString();
+      const QSignalBlocker blocker(imageVisibilityCalcEdit_);
+      imageVisibilityCalcEdit_->setText(calc);
+      committedTexts_[imageVisibilityCalcEdit_] = imageVisibilityCalcEdit_->text();
+    }
+
+    for (int i = 0; i < static_cast<int>(imageChannelEdits_.size()); ++i) {
+      QLineEdit *edit = imageChannelEdits_[i];
+      if (!edit) {
+        continue;
+      }
+      const QString value = imageChannelGetters_[i]
+          ? imageChannelGetters_[i]()
+          : QString();
+      const QSignalBlocker blocker(edit);
+      edit->setText(value);
+      committedTexts_[edit] = edit->text();
+    }
+
+    elementLabel_->setText(QStringLiteral("Image"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void showForLine(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> colorGetter,
@@ -991,6 +1332,25 @@ public:
       getter = {};
     }
     for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
       setter = {};
     }
 
@@ -1201,6 +1561,12 @@ public:
     for (QLineEdit *edit : rectangleChannelEdits_) {
       resetLineEdit(edit);
     }
+    resetLineEdit(imageNameEdit_);
+    resetLineEdit(imageCalcEdit_);
+    resetLineEdit(imageVisibilityCalcEdit_);
+    for (QLineEdit *edit : imageChannelEdits_) {
+      resetLineEdit(edit);
+    }
     resetLineEdit(lineLineWidthEdit_);
     resetLineEdit(lineVisibilityCalcEdit_);
     for (QLineEdit *edit : lineChannelEdits_) {
@@ -1253,6 +1619,19 @@ public:
       rectangleVisibilityCombo_->setCurrentIndex(
           visibilityModeToIndex(TextVisibilityMode::kStatic));
     }
+    if (imageTypeCombo_) {
+      const QSignalBlocker blocker(imageTypeCombo_);
+      imageTypeCombo_->setCurrentIndex(imageTypeToIndex(ImageType::kNone));
+    }
+    if (imageColorModeCombo_) {
+      const QSignalBlocker blocker(imageColorModeCombo_);
+      imageColorModeCombo_->setCurrentIndex(colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (imageVisibilityCombo_) {
+      const QSignalBlocker blocker(imageVisibilityCombo_);
+      imageVisibilityCombo_->setCurrentIndex(
+          visibilityModeToIndex(TextVisibilityMode::kStatic));
+    }
     if (lineLineStyleCombo_) {
       const QSignalBlocker blocker(lineLineStyleCombo_);
       lineLineStyleCombo_->setCurrentIndex(lineStyleToIndex(RectangleLineStyle::kSolid));
@@ -1271,6 +1650,25 @@ public:
       elementLabel_->setText(QStringLiteral("Select..."));
     }
 
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
+      setter = {};
+    }
+
     committedTexts_.clear();
     updateCommittedTexts();
     updateSectionVisibility(selectionKind_);
@@ -1284,7 +1682,15 @@ protected:
   }
 
 private:
-  enum class SelectionKind { kNone, kDisplay, kRectangle, kPolygon, kLine, kText };
+  enum class SelectionKind {
+    kNone,
+    kDisplay,
+    kRectangle,
+    kImage,
+    kPolygon,
+    kLine,
+    kText
+  };
   QLineEdit *createLineEdit()
   {
     auto *edit = new QLineEdit;
@@ -1341,13 +1747,18 @@ private:
     const bool isLineChannelEdit = std::find(
       lineChannelEdits_.begin(), lineChannelEdits_.end(), edit)
       != lineChannelEdits_.end();
+    const bool isImageChannelEdit = std::find(
+      imageChannelEdits_.begin(), imageChannelEdits_.end(), edit)
+      != imageChannelEdits_.end();
     if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
       || edit == heightEdit_ || edit == gridSpacingEdit_
       || edit == rectangleLineWidthEdit_
       || edit == rectangleVisibilityCalcEdit_
+      || edit == imageNameEdit_ || edit == imageCalcEdit_
+      || edit == imageVisibilityCalcEdit_
       || edit == lineLineWidthEdit_
       || edit == lineVisibilityCalcEdit_
-      || isRectangleChannelEdit || isLineChannelEdit) {
+      || isRectangleChannelEdit || isLineChannelEdit || isImageChannelEdit) {
           revertLineEdit(edit);
         }
       }
@@ -1404,6 +1815,11 @@ private:
           || kind == SelectionKind::kPolygon;
       rectangleSection_->setVisible(rectangleVisible);
       rectangleSection_->setEnabled(rectangleVisible);
+    }
+    if (imageSection_) {
+      const bool imageVisible = kind == SelectionKind::kImage;
+      imageSection_->setVisible(imageVisible);
+      imageSection_->setEnabled(imageVisible);
     }
     const bool showArcControls = (kind == SelectionKind::kRectangle
         || kind == SelectionKind::kPolygon) && rectangleIsArc_;
@@ -1551,6 +1967,66 @@ private:
     }
     const QString value = edit->text();
     rectangleChannelSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitImageName()
+  {
+    if (!imageNameEdit_) {
+      return;
+    }
+    if (!imageNameSetter_) {
+      revertLineEdit(imageNameEdit_);
+      return;
+    }
+    const QString value = imageNameEdit_->text();
+    imageNameSetter_(value);
+    committedTexts_[imageNameEdit_] = value;
+  }
+
+  void commitImageCalc()
+  {
+    if (!imageCalcEdit_) {
+      return;
+    }
+    if (!imageCalcSetter_) {
+      revertLineEdit(imageCalcEdit_);
+      return;
+    }
+    const QString value = imageCalcEdit_->text();
+    imageCalcSetter_(value);
+    committedTexts_[imageCalcEdit_] = value;
+  }
+
+  void commitImageVisibilityCalc()
+  {
+    if (!imageVisibilityCalcEdit_) {
+      return;
+    }
+    if (!imageVisibilityCalcSetter_) {
+      revertLineEdit(imageVisibilityCalcEdit_);
+      return;
+    }
+    const QString value = imageVisibilityCalcEdit_->text();
+    imageVisibilityCalcSetter_(value);
+    committedTexts_[imageVisibilityCalcEdit_] = value;
+  }
+
+  void commitImageChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(imageChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = imageChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!imageChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    imageChannelSetters_[index](value);
     committedTexts_[edit] = value;
   }
 
@@ -1722,6 +2198,31 @@ private:
     return style == RectangleLineStyle::kDash ? 1 : 0;
   }
 
+  ImageType imageTypeFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return ImageType::kGif;
+    case 2:
+      return ImageType::kTiff;
+    default:
+      return ImageType::kNone;
+    }
+  }
+
+  int imageTypeToIndex(ImageType type) const
+  {
+    switch (type) {
+    case ImageType::kGif:
+      return 1;
+    case ImageType::kTiff:
+      return 2;
+    case ImageType::kNone:
+    default:
+      return 0;
+    }
+  }
+
   void positionRelativeTo(QWidget *reference)
   {
     QScreen *screen = screenForWidget(reference);
@@ -1845,6 +2346,7 @@ private:
   QWidget *geometrySection_ = nullptr;
   QWidget *displaySection_ = nullptr;
   QWidget *rectangleSection_ = nullptr;
+  QWidget *imageSection_ = nullptr;
   QWidget *lineSection_ = nullptr;
   QWidget *textSection_ = nullptr;
   QLineEdit *xEdit_ = nullptr;
@@ -1868,6 +2370,13 @@ private:
   QComboBox *rectangleVisibilityCombo_ = nullptr;
   QLineEdit *rectangleVisibilityCalcEdit_ = nullptr;
   std::array<QLineEdit *, 4> rectangleChannelEdits_{};
+  QComboBox *imageTypeCombo_ = nullptr;
+  QLineEdit *imageNameEdit_ = nullptr;
+  QLineEdit *imageCalcEdit_ = nullptr;
+  QComboBox *imageColorModeCombo_ = nullptr;
+  QComboBox *imageVisibilityCombo_ = nullptr;
+  QLineEdit *imageVisibilityCalcEdit_ = nullptr;
+  std::array<QLineEdit *, 4> imageChannelEdits_{};
   QLabel *arcBeginLabel_ = nullptr;
   QLabel *arcPathLabel_ = nullptr;
   QSpinBox *arcBeginSpin_ = nullptr;
@@ -2011,6 +2520,20 @@ private:
         committedTexts_[edit] = edit->text();
       }
     }
+    if (imageNameEdit_) {
+      committedTexts_[imageNameEdit_] = imageNameEdit_->text();
+    }
+    if (imageCalcEdit_) {
+      committedTexts_[imageCalcEdit_] = imageCalcEdit_->text();
+    }
+    if (imageVisibilityCalcEdit_) {
+      committedTexts_[imageVisibilityCalcEdit_] = imageVisibilityCalcEdit_->text();
+    }
+    for (QLineEdit *edit : imageChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
     if (lineLineWidthEdit_) {
       committedTexts_[lineLineWidthEdit_] = lineLineWidthEdit_->text();
     }
@@ -2102,6 +2625,20 @@ private:
   std::function<void(const QString &)> rectangleVisibilityCalcSetter_;
   std::array<std::function<QString()>, 4> rectangleChannelGetters_{};
   std::array<std::function<void(const QString &)>, 4> rectangleChannelSetters_{};
+  std::function<ImageType()> imageTypeGetter_;
+  std::function<void(ImageType)> imageTypeSetter_;
+  std::function<QString()> imageNameGetter_;
+  std::function<void(const QString &)> imageNameSetter_;
+  std::function<QString()> imageCalcGetter_;
+  std::function<void(const QString &)> imageCalcSetter_;
+  std::function<TextColorMode()> imageColorModeGetter_;
+  std::function<void(TextColorMode)> imageColorModeSetter_;
+  std::function<TextVisibilityMode()> imageVisibilityModeGetter_;
+  std::function<void(TextVisibilityMode)> imageVisibilityModeSetter_;
+  std::function<QString()> imageVisibilityCalcGetter_;
+  std::function<void(const QString &)> imageVisibilityCalcSetter_;
+  std::array<std::function<QString()>, 4> imageChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4> imageChannelSetters_{};
   std::function<QColor()> lineColorGetter_;
   std::function<void(const QColor &)> lineColorSetter_;
   std::function<RectangleLineStyle()> lineLineStyleGetter_;

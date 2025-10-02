@@ -8,6 +8,7 @@
 #include <QPointF>
 #include <QSize>
 #include <QString>
+#include <QVector>
 #include <QWidget>
 
 #include "display_properties.h"
@@ -42,6 +43,7 @@ public:
   void setChannel(int index, const QString &value);
 
   void setLocalEndpoints(const QPoint &start, const QPoint &end);
+  QVector<QPoint> absolutePoints() const;
 
 protected:
   void paintEvent(QPaintEvent *event) override;

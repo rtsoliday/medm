@@ -38,7 +38,8 @@ qtedm_SRC = qtedm.cc \
             polyline_element.cc \
             polygon_element.cc \
             image_element.cc \
-            color_palette_dialog.cc
+            color_palette_dialog.cc \
+            medm_colors.cc
 
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
 

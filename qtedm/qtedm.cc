@@ -9,7 +9,11 @@
 #include <QCursor>
 #include <QGuiApplication>
 #include <QDialog>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QAbstractScrollArea>
+#include <QSaveFile>
+#include <QTextStream>
 #include <QList>
 #include <QFont>
 #include <QFontDatabase>
@@ -27,6 +31,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QEvent>
+#include <QFocusEvent>
 #include <QMetaObject>
 #include <QPalette>
 #include <QPainter>
@@ -62,6 +67,7 @@
 #include <utility>
 #include <array>
 #include <vector>
+#include <limits>
 
 #include "legacy_fonts.h"
 #include "resource_palette_dialog.h"
@@ -75,6 +81,7 @@
 #include "image_element.h"
 #include "color_palette_dialog.h"
 #include "display_properties.h"
+#include "medm_colors.h"
 #include "resources/fonts/adobe_helvetica_24_otb.h"
 #include "resources/fonts/adobe_helvetica_bold_24_otb.h"
 #include "resources/fonts/adobe_times_18_otb.h"
@@ -293,6 +300,269 @@ void centerWindowOnScreen(QWidget *window)
   window->move(x, y);
 }
 
+constexpr int kMedmVersionNumber = 30122;
+
+QString indentString(int level)
+{
+  return QString(level, QLatin1Char('\t'));
+}
+
+void writeIndentedLine(QTextStream &stream, int level, const QString &text)
+{
+  stream << '\n' << indentString(level) << text;
+}
+
+QString escapeAdlString(const QString &value)
+{
+  QString result;
+  result.reserve(value.size());
+  for (QChar ch : value) {
+    switch (ch.unicode()) {
+    case '\\':
+      result.append(QStringLiteral("\\\\"));
+      break;
+    case '\"':
+      result.append(QStringLiteral("\\\""));
+      break;
+    case '\n':
+      result.append(QStringLiteral("\\n"));
+      break;
+    case '\r':
+      result.append(QStringLiteral("\\r"));
+      break;
+    case '\t':
+      result.append(QStringLiteral("\\t"));
+      break;
+    default:
+      if (ch.isPrint()) {
+        result.append(ch);
+      } else {
+        result.append(QStringLiteral("\\x%1")
+            .arg(ch.unicode(), 2, 16, QLatin1Char('0')));
+      }
+      break;
+    }
+  }
+  return result;
+}
+
+QString colorModeString(TextColorMode mode)
+{
+  switch (mode) {
+  case TextColorMode::kAlarm:
+    return QStringLiteral("alarm");
+  case TextColorMode::kDiscrete:
+    return QStringLiteral("discrete");
+  case TextColorMode::kStatic:
+  default:
+    return QStringLiteral("static");
+  }
+}
+
+QString visibilityModeString(TextVisibilityMode mode)
+{
+  switch (mode) {
+  case TextVisibilityMode::kIfNotZero:
+    return QStringLiteral("if not zero");
+  case TextVisibilityMode::kIfZero:
+    return QStringLiteral("if zero");
+  case TextVisibilityMode::kCalc:
+    return QStringLiteral("calc");
+  case TextVisibilityMode::kStatic:
+  default:
+    return QStringLiteral("static");
+  }
+}
+
+QString lineStyleString(RectangleLineStyle style)
+{
+  return style == RectangleLineStyle::kDash ? QStringLiteral("dash")
+                                            : QStringLiteral("solid");
+}
+
+QString fillString(RectangleFill fill)
+{
+  return fill == RectangleFill::kSolid ? QStringLiteral("solid")
+                                       : QStringLiteral("outline");
+}
+
+QString alignmentString(Qt::Alignment alignment)
+{
+  if (alignment & Qt::AlignHCenter) {
+    return QStringLiteral("horiz. centered");
+  }
+  if (alignment & Qt::AlignRight) {
+    return QStringLiteral("horiz. right");
+  }
+  return QStringLiteral("horiz. left");
+}
+
+QString imageTypeString(ImageType type)
+{
+  switch (type) {
+  case ImageType::kGif:
+    return QStringLiteral("gif");
+  case ImageType::kTiff:
+    return QStringLiteral("tiff");
+  case ImageType::kNone:
+  default:
+    return QStringLiteral("no image");
+  }
+}
+
+QString channelFieldName(int index)
+{
+  if (index <= 0) {
+    return QStringLiteral("chan");
+  }
+  return QStringLiteral("chan%1").arg(QChar(QLatin1Char('A' + index)));
+}
+
+int medmLineWidthValue(int width)
+{
+  return width <= 1 ? 0 : width;
+}
+
+int medmColorIndex(const QColor &color)
+{
+  if (!color.isValid()) {
+    return 14;
+  }
+  const int exact = MedmColors::indexForColor(color);
+  if (exact >= 0) {
+    return exact;
+  }
+
+  const auto &palette = MedmColors::palette();
+  const QColor target = color.toRgb();
+  int bestIndex = 0;
+  int bestDistance = std::numeric_limits<int>::max();
+  for (int i = 0; i < static_cast<int>(palette.size()); ++i) {
+    const QColor candidate = palette[i].toRgb();
+    const int dr = candidate.red() - target.red();
+    const int dg = candidate.green() - target.green();
+    const int db = candidate.blue() - target.blue();
+    const int distance = dr * dr + dg * dg + db * db;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = i;
+      if (distance == 0) {
+        break;
+      }
+    }
+  }
+  return bestIndex;
+}
+
+void writeObjectSection(QTextStream &stream, int level, const QRect &rect)
+{
+  const QRect bounded(rect.x(), rect.y(), std::max(rect.width(), 0),
+      std::max(rect.height(), 0));
+  writeIndentedLine(stream, level, QStringLiteral("object {"));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("x=%1").arg(bounded.x()));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("y=%1").arg(bounded.y()));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("width=%1").arg(std::max(bounded.width(), 0)));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("height=%1").arg(std::max(bounded.height(), 0)));
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
+    RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth)
+{
+  writeIndentedLine(stream, level, QStringLiteral("\"basic attribute\" {"));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("clr=%1").arg(colorIndex));
+  if (lineStyle != RectangleLineStyle::kSolid) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("style=\"%1\"").arg(lineStyleString(lineStyle)));
+  }
+  if (fill != RectangleFill::kSolid) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("fill=\"%1\"").arg(fillString(fill)));
+  }
+  const int medmWidth = medmLineWidthValue(lineWidth);
+  if (medmWidth > 0) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("width=%1").arg(medmWidth));
+  }
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeDynamicAttributeSection(QTextStream &stream, int level,
+    TextColorMode colorMode, TextVisibilityMode visibilityMode,
+    const QString &calc, const std::array<QString, 4> &channels)
+{
+  const bool hasColor = colorMode != TextColorMode::kStatic;
+  const bool hasVisibility = visibilityMode != TextVisibilityMode::kStatic;
+  const bool hasCalc = !calc.trimmed().isEmpty();
+  bool hasChannel = false;
+  for (const QString &channel : channels) {
+    if (!channel.trimmed().isEmpty()) {
+      hasChannel = true;
+      break;
+    }
+  }
+
+  if (!hasColor && !hasVisibility && !hasCalc && !hasChannel) {
+    return;
+  }
+
+  writeIndentedLine(stream, level, QStringLiteral("\"dynamic attribute\" {"));
+  if (hasColor) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("clr=\"%1\"").arg(colorModeString(colorMode)));
+  }
+  if (hasVisibility) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("vis=\"%1\"").arg(visibilityModeString(visibilityMode)));
+  }
+  if (hasCalc) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("calc=\"%1\"").arg(escapeAdlString(calc)));
+  }
+  for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+    const QString channel = channels[i].trimmed();
+    if (channel.isEmpty()) {
+      continue;
+    }
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("%1=\"%2\"")
+            .arg(channelFieldName(i), escapeAdlString(channel)));
+  }
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+template <typename Element>
+std::array<QString, 4> collectChannels(const Element *element)
+{
+  std::array<QString, 4> channels{};
+  if (!element) {
+    return channels;
+  }
+  for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+    channels[i] = element->channel(i);
+  }
+  return channels;
+}
+
+void writePointsSection(
+    QTextStream &stream, int level, const QVector<QPoint> &points)
+{
+  if (points.isEmpty()) {
+    return;
+  }
+  writeIndentedLine(stream, level, QStringLiteral("points {"));
+  for (const QPoint &point : points) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("(%1,%2)").arg(point.x()).arg(point.y()));
+  }
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
 enum class CreateTool {
   kNone,
   kText,
@@ -311,6 +581,8 @@ struct DisplayState {
   bool editMode = true;
   QList<QPointer<DisplayWindow>> displays;
   CreateTool createTool = CreateTool::kNone;
+  QPointer<DisplayWindow> activeDisplay;
+  std::shared_ptr<std::function<void()>> updateMenus;
 };
 
 class DisplayAreaWidget : public QWidget
@@ -454,6 +726,8 @@ public:
     setCentralWidget(displayArea_);
 
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
+    setFocusPolicy(Qt::StrongFocus);
+    updateDirtyIndicator();
   }
 
   int gridSpacing() const
@@ -471,6 +745,7 @@ public:
     if (displayArea_) {
       displayArea_->setGridSpacing(gridSpacing_);
     }
+    markDirty();
   }
 
   bool isGridOn() const
@@ -487,6 +762,7 @@ public:
     if (displayArea_) {
       displayArea_->setGridOn(gridOn_);
     }
+    markDirty();
   }
 
   void syncCreateCursor()
@@ -499,9 +775,34 @@ public:
     clearSelections();
   }
 
+  bool save(QWidget *dialogParent = nullptr);
+  bool saveAs(QWidget *dialogParent = nullptr);
+  QString filePath() const
+  {
+    return filePath_;
+  }
+
+  bool isDirty() const
+  {
+    return dirty_;
+  }
+
+  bool hasFilePath() const
+  {
+    return !filePath_.isEmpty();
+  }
+
 protected:
+  void focusInEvent(QFocusEvent *event) override
+  {
+    QMainWindow::focusInEvent(event);
+    setAsActiveDisplay();
+  }
+
+  void closeEvent(QCloseEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override
   {
+    setAsActiveDisplay();
     if (event->button() == Qt::LeftButton) {
       if (auto state = state_.lock(); state && state->editMode) {
         if (state->createTool == CreateTool::kPolygon) {
@@ -719,11 +1020,19 @@ protected:
   }
 
 private:
+  bool writeAdlFile(const QString &filePath) const;
+  void setAsActiveDisplay();
+  void markDirty();
+  void notifyMenus() const;
+  void updateDirtyIndicator();
+
   std::weak_ptr<DisplayState> state_;
   QFont labelFont_;
   QPalette resourcePaletteBase_;
   QPointer<ResourcePaletteDialog> resourcePalette_;
   DisplayAreaWidget *displayArea_ = nullptr;
+  QString filePath_;
+  bool dirty_ = true;
   bool displaySelected_ = false;
   bool gridOn_ = kDefaultGridOn;
   int gridSpacing_ = kDefaultGridSpacing;
@@ -916,6 +1225,7 @@ private:
             widget->setMinimumSize(newGeometry.size());
             widget->resize(newGeometry.size());
           }
+          markDirty();
         },
         [this]() {
           if (auto *widget = centralWidget()) {
@@ -937,6 +1247,7 @@ private:
             displayArea_->setGridColor(color);
           }
           update();
+          markDirty();
         },
         [this]() {
           if (auto *widget = centralWidget()) {
@@ -955,6 +1266,7 @@ private:
             widget->update();
           }
           update();
+          markDirty();
         },
         [this]() {
           return gridSpacing();
@@ -986,10 +1298,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     dialog->showForText(
         [element]() {
@@ -1004,42 +1328,49 @@ private:
             adjusted.setHeight(kMinimumRectangleSize);
           }
           element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
         },
         [element]() {
           return element->text();
         },
-        [element](const QString &text) {
+        [this, element](const QString &text) {
           element->setText(text.isEmpty() ? QStringLiteral(" ") : text);
+          markDirty();
         },
         [element]() {
           return element->foregroundColor();
         },
-        [element](const QColor &color) {
+        [this, element](const QColor &color) {
           element->setForegroundColor(color);
+          markDirty();
         },
         [element]() {
           return element->textAlignment();
         },
-        [element](Qt::Alignment alignment) {
+        [this, element](Qt::Alignment alignment) {
           element->setTextAlignment(alignment);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters));
   }
@@ -1060,10 +1391,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     dialog->showForRectangle(
         [element]() {
@@ -1071,48 +1414,56 @@ private:
         },
         [this, element](const QRect &newGeometry) {
           element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          markDirty();
         },
         [element]() {
           return element->color();
         },
-        [element](const QColor &color) {
+        [this, element](const QColor &color) {
           element->setForegroundColor(color);
+          markDirty();
         },
         [element]() {
           return element->fill();
         },
-        [element](RectangleFill fill) {
+        [this, element](RectangleFill fill) {
           element->setFill(fill);
+          markDirty();
         },
         [element]() {
           return element->lineStyle();
         },
-        [element](RectangleLineStyle style) {
+        [this, element](RectangleLineStyle style) {
           element->setLineStyle(style);
+          markDirty();
         },
         [element]() {
           return element->lineWidth();
         },
-        [element](int width) {
+        [this, element](int width) {
           element->setLineWidth(width);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters));
   }
@@ -1133,10 +1484,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     dialog->showForImage(
         [element]() {
@@ -1144,42 +1507,49 @@ private:
         },
         [this, element](const QRect &newGeometry) {
           element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          markDirty();
         },
         [element]() {
           return element->imageType();
         },
-        [element](ImageType type) {
+        [this, element](ImageType type) {
           element->setImageType(type);
+          markDirty();
         },
         [element]() {
           return element->imageName();
         },
-        [element](const QString &name) {
+        [this, element](const QString &name) {
           element->setImageName(name);
+          markDirty();
         },
         [element]() {
           return element->calc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setCalc(calc);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters));
   }
@@ -1200,10 +1570,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     dialog->showForRectangle(
         [element]() {
@@ -1211,48 +1593,56 @@ private:
         },
         [this, element](const QRect &newGeometry) {
           element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          markDirty();
         },
         [element]() {
           return element->color();
         },
-        [element](const QColor &color) {
+        [this, element](const QColor &color) {
           element->setForegroundColor(color);
+          markDirty();
         },
         [element]() {
           return element->fill();
         },
-        [element](RectangleFill fill) {
+        [this, element](RectangleFill fill) {
           element->setFill(fill);
+          markDirty();
         },
         [element]() {
           return element->lineStyle();
         },
-        [element](RectangleLineStyle style) {
+        [this, element](RectangleLineStyle style) {
           element->setLineStyle(style);
+          markDirty();
         },
         [element]() {
           return element->lineWidth();
         },
-        [element](int width) {
+        [this, element](int width) {
           element->setLineWidth(width);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters),
         QStringLiteral("Oval"));
@@ -1274,10 +1664,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     dialog->showForRectangle(
         [element]() {
@@ -1285,62 +1687,72 @@ private:
         },
         [this, element](const QRect &newGeometry) {
           element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          markDirty();
         },
         [element]() {
           return element->color();
         },
-        [element](const QColor &color) {
+        [this, element](const QColor &color) {
           element->setForegroundColor(color);
+          markDirty();
         },
         [element]() {
           return element->fill();
         },
-        [element](RectangleFill fill) {
+        [this, element](RectangleFill fill) {
           element->setFill(fill);
+          markDirty();
         },
         [element]() {
           return element->lineStyle();
         },
-        [element](RectangleLineStyle style) {
+        [this, element](RectangleLineStyle style) {
           element->setLineStyle(style);
+          markDirty();
         },
         [element]() {
           return element->lineWidth();
         },
-        [element](int width) {
+        [this, element](int width) {
           element->setLineWidth(width);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters),
         QStringLiteral("Arc"), false,
         [element]() {
           return element->beginAngle();
         },
-        [element](int angle) {
+        [this, element](int angle) {
           element->setBeginAngle(angle);
+          markDirty();
         },
         [element]() {
           return element->pathAngle();
         },
-        [element](int angle) {
+        [this, element](int angle) {
           element->setPathAngle(angle);
+          markDirty();
         });
   }
 
@@ -1360,10 +1772,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     dialog->showForLine(
         [element]() {
@@ -1371,42 +1795,49 @@ private:
         },
         [this, element](const QRect &newGeometry) {
           element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          markDirty();
         },
         [element]() {
           return element->color();
         },
-        [element](const QColor &color) {
+        [this, element](const QColor &color) {
           element->setForegroundColor(color);
+          markDirty();
         },
         [element]() {
           return element->lineStyle();
         },
-        [element](RectangleLineStyle style) {
+        [this, element](RectangleLineStyle style) {
           element->setLineStyle(style);
+          markDirty();
         },
         [element]() {
           return element->lineWidth();
         },
-        [element](int width) {
+        [this, element](int width) {
           element->setLineWidth(width);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters));
   }
@@ -1427,10 +1858,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     const int pointCount = element->absolutePoints().size();
     const QString label = pointCount == 2 ? QStringLiteral("Line")
@@ -1449,42 +1892,49 @@ private:
           }
           element->setGeometry(adjusted);
           element->update();
+          markDirty();
         },
         [element]() {
           return element->color();
         },
-        [element](const QColor &color) {
+        [this, element](const QColor &color) {
           element->setForegroundColor(color);
+          markDirty();
         },
         [element]() {
           return element->lineStyle();
         },
-        [element](RectangleLineStyle style) {
+        [this, element](RectangleLineStyle style) {
           element->setLineStyle(style);
+          markDirty();
         },
         [element]() {
           return element->lineWidth();
         },
-        [element](int width) {
+        [this, element](int width) {
           element->setLineWidth(width);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters), label);
   }
@@ -1505,10 +1955,22 @@ private:
         [element]() { return element->channel(3); },
     }};
     std::array<std::function<void(const QString &)>, 4> channelSetters{{
-        [element](const QString &value) { element->setChannel(0, value); },
-        [element](const QString &value) { element->setChannel(1, value); },
-        [element](const QString &value) { element->setChannel(2, value); },
-        [element](const QString &value) { element->setChannel(3, value); },
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
     }};
     dialog->showForRectangle(
         [element]() {
@@ -1524,48 +1986,56 @@ private:
           }
           element->setGeometry(adjusted);
           element->update();
+          markDirty();
         },
         [element]() {
           return element->color();
         },
-        [element](const QColor &color) {
+        [this, element](const QColor &color) {
           element->setForegroundColor(color);
+          markDirty();
         },
         [element]() {
           return element->fill();
         },
-        [element](RectangleFill fill) {
+        [this, element](RectangleFill fill) {
           element->setFill(fill);
+          markDirty();
         },
         [element]() {
           return element->lineStyle();
         },
-        [element](RectangleLineStyle style) {
+        [this, element](RectangleLineStyle style) {
           element->setLineStyle(style);
+          markDirty();
         },
         [element]() {
           return element->lineWidth();
         },
-        [element](int width) {
+        [this, element](int width) {
           element->setLineWidth(width);
+          markDirty();
         },
         [element]() {
           return element->colorMode();
         },
-        [element](TextColorMode mode) {
+        [this, element](TextColorMode mode) {
           element->setColorMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityMode();
         },
-        [element](TextVisibilityMode mode) {
+        [this, element](TextVisibilityMode mode) {
           element->setVisibilityMode(mode);
+          markDirty();
         },
         [element]() {
           return element->visibilityCalc();
         },
-        [element](const QString &calc) {
+        [this, element](const QString &calc) {
           element->setVisibilityCalc(calc);
+          markDirty();
         },
         std::move(channelGetters), std::move(channelSetters),
         QStringLiteral("Polygon"), true);
@@ -2058,6 +2528,7 @@ private:
     selectPolygonElement(element);
     showResourcePaletteForPolygon(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void finalizePolylineCreation()
@@ -2082,6 +2553,7 @@ private:
     selectPolylineElement(element);
     showResourcePaletteForPolyline(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void cancelPolygonCreation()
@@ -2177,6 +2649,7 @@ private:
     selectTextElement(element);
     showResourcePaletteForText(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void createRectangleElement(const QRect &rect)
@@ -2202,6 +2675,7 @@ private:
     selectRectangleElement(element);
     showResourcePaletteForRectangle(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void createImageElement(const QRect &rect)
@@ -2227,6 +2701,7 @@ private:
     selectImageElement(element);
     showResourcePaletteForImage(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void createOvalElement(const QRect &rect)
@@ -2252,6 +2727,7 @@ private:
     selectOvalElement(element);
     showResourcePaletteForOval(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void createArcElement(const QRect &rect)
@@ -2277,6 +2753,7 @@ private:
     selectArcElement(element);
     showResourcePaletteForArc(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void createLineElement(const QPoint &startPoint, const QPoint &endPoint)
@@ -2315,6 +2792,7 @@ private:
     selectLineElement(element);
     showResourcePaletteForLine(element);
     deactivateCreateTool();
+    markDirty();
   }
 
   void ensureRubberBand()
@@ -2588,6 +3066,356 @@ private:
   }
 };
 
+void DisplayWindow::closeEvent(QCloseEvent *event)
+{
+  if (dirty_) {
+    QString baseTitle = windowTitle();
+    if (baseTitle.endsWith(QLatin1Char('*'))) {
+      baseTitle.chop(1);
+    }
+    if (baseTitle.isEmpty()) {
+      baseTitle = QStringLiteral("this display");
+    }
+    const QMessageBox::StandardButton choice = QMessageBox::warning(this,
+        QStringLiteral("Close Display"),
+        QStringLiteral("Save changes to %1?").arg(baseTitle),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save);
+    if (choice == QMessageBox::Save) {
+      if (!save(this)) {
+        event->ignore();
+        return;
+      }
+    } else if (choice == QMessageBox::Cancel) {
+      event->ignore();
+      return;
+    }
+  }
+  QMainWindow::closeEvent(event);
+  if (!event->isAccepted()) {
+    return;
+  }
+  if (auto state = state_.lock()) {
+    if (state->activeDisplay == this) {
+      state->activeDisplay = nullptr;
+    }
+  }
+  notifyMenus();
+}
+
+bool DisplayWindow::save(QWidget *dialogParent)
+{
+  QWidget *parent = dialogParent ? dialogParent : this;
+  if (filePath_.isEmpty()) {
+    return saveAs(parent);
+  }
+  if (!writeAdlFile(filePath_)) {
+    QMessageBox::critical(parent, QStringLiteral("Save Display"),
+        QStringLiteral("Failed to save display to:\n%1").arg(filePath_));
+    return false;
+  }
+  dirty_ = false;
+  setWindowTitle(QFileInfo(filePath_).fileName());
+  updateDirtyIndicator();
+  notifyMenus();
+  return true;
+}
+
+bool DisplayWindow::saveAs(QWidget *dialogParent)
+{
+  QWidget *parent = dialogParent ? dialogParent : this;
+  QString initialPath = filePath_;
+  if (initialPath.isEmpty()) {
+    QString baseName = windowTitle();
+    if (baseName.isEmpty()) {
+      baseName = QStringLiteral("untitled.adl");
+    } else if (!baseName.endsWith(QStringLiteral(".adl"), Qt::CaseInsensitive)) {
+      baseName.append(QStringLiteral(".adl"));
+    }
+    initialPath = baseName;
+  }
+
+  const QString selected = QFileDialog::getSaveFileName(parent,
+      QStringLiteral("Save Display"), initialPath,
+      QStringLiteral("MEDM Display Files (*.adl);;All Files (*)"));
+  if (selected.isEmpty()) {
+    return false;
+  }
+
+  QString normalized = selected;
+  if (!normalized.endsWith(QStringLiteral(".adl"), Qt::CaseInsensitive)) {
+    normalized.append(QStringLiteral(".adl"));
+  }
+
+  if (!writeAdlFile(normalized)) {
+    QMessageBox::critical(parent, QStringLiteral("Save Display"),
+        QStringLiteral("Failed to save display to:\n%1").arg(normalized));
+    return false;
+  }
+
+  filePath_ = QFileInfo(normalized).absoluteFilePath();
+  setWindowTitle(QFileInfo(filePath_).fileName());
+  dirty_ = false;
+  updateDirtyIndicator();
+  notifyMenus();
+  return true;
+}
+
+bool DisplayWindow::writeAdlFile(const QString &filePath) const
+{
+  QSaveFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return false;
+  }
+
+  QTextStream stream(&file);
+  stream.setCodec("UTF-8");
+
+  const QString fileName = QFileInfo(filePath).fileName();
+  stream << "file {";
+  writeIndentedLine(stream, 1,
+      QStringLiteral("name=\"%1\"").arg(escapeAdlString(fileName)));
+  writeIndentedLine(stream, 1,
+      QStringLiteral("version=%1")
+          .arg(QStringLiteral("%1")
+                   .arg(kMedmVersionNumber, 6, 10, QLatin1Char('0'))));
+  writeIndentedLine(stream, 0, QStringLiteral("}"));
+
+  const int displayWidth = displayArea_ ? displayArea_->width() : width();
+  const int displayHeight = displayArea_ ? displayArea_->height() : height();
+  const QRect displayRect(geometry().x(), geometry().y(), displayWidth,
+      displayHeight);
+
+  writeIndentedLine(stream, 0, QStringLiteral("display {"));
+  writeObjectSection(stream, 1, displayRect);
+  const QColor foreground = displayArea_
+      ? displayArea_->palette().color(QPalette::WindowText)
+      : palette().color(QPalette::WindowText);
+  const QColor background = displayArea_
+      ? displayArea_->palette().color(QPalette::Window)
+      : palette().color(QPalette::Window);
+  writeIndentedLine(stream, 1,
+      QStringLiteral("clr=%1").arg(medmColorIndex(foreground)));
+  writeIndentedLine(stream, 1,
+      QStringLiteral("bclr=%1").arg(medmColorIndex(background)));
+  writeIndentedLine(stream, 1, QStringLiteral("cmap=\"default\""));
+  writeIndentedLine(stream, 1,
+      QStringLiteral("gridSpacing=%1").arg(gridSpacing_));
+  writeIndentedLine(stream, 1,
+      QStringLiteral("gridOn=%1").arg(gridOn_ ? 1 : 0));
+  writeIndentedLine(stream, 1,
+      QStringLiteral("snapToGrid=%1").arg(kDefaultSnapToGrid ? 1 : 0));
+  writeIndentedLine(stream, 0, QStringLiteral("}"));
+
+  writeIndentedLine(stream, 0, QStringLiteral("\"color map\" {"));
+  const auto &colors = MedmColors::palette();
+  writeIndentedLine(stream, 1,
+      QStringLiteral("ncolors=%1").arg(static_cast<int>(colors.size())));
+  writeIndentedLine(stream, 1, QStringLiteral("colors {"));
+  for (const QColor &color : colors) {
+    const int value = (color.red() << 16) | (color.green() << 8)
+        | color.blue();
+    writeIndentedLine(stream, 2,
+        QStringLiteral("%1,")
+            .arg(QString::number(value, 16).rightJustified(6, QLatin1Char('0'))
+                     .toLower()));
+  }
+  writeIndentedLine(stream, 1, QStringLiteral("}"));
+  writeIndentedLine(stream, 0, QStringLiteral("}"));
+
+  for (const auto &entry : elementStack_) {
+    QWidget *widget = entry.data();
+    if (!widget) {
+      continue;
+    }
+
+    if (auto *text = dynamic_cast<TextElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("text {"));
+      writeObjectSection(stream, 1, text->geometry());
+      writeBasicAttributeSection(stream, 1,
+          medmColorIndex(text->foregroundColor()),
+          RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
+      writeDynamicAttributeSection(stream, 1, text->colorMode(),
+          text->visibilityMode(), text->visibilityCalc(),
+          collectChannels(text));
+      const QString content = text->text();
+      if (!content.isEmpty()) {
+        writeIndentedLine(stream, 1,
+            QStringLiteral("textix=\"%1\"")
+                .arg(escapeAdlString(content)));
+      }
+      const Qt::Alignment horizontal = text->textAlignment()
+          & Qt::AlignHorizontal_Mask;
+      if (horizontal != Qt::AlignLeft) {
+        writeIndentedLine(stream, 1,
+            QStringLiteral("align=\"%1\"")
+                .arg(alignmentString(text->textAlignment())));
+      }
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("rectangle {"));
+      writeObjectSection(stream, 1, rectangle->geometry());
+      writeBasicAttributeSection(stream, 1,
+          medmColorIndex(rectangle->color()), rectangle->lineStyle(),
+          rectangle->fill(), rectangle->lineWidth());
+      writeDynamicAttributeSection(stream, 1, rectangle->colorMode(),
+          rectangle->visibilityMode(), rectangle->visibilityCalc(),
+          collectChannels(rectangle));
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("image {"));
+      writeObjectSection(stream, 1, image->geometry());
+      writeIndentedLine(stream, 1,
+          QStringLiteral("type=\"%1\"")
+              .arg(imageTypeString(image->imageType())));
+      const QString imageName = image->imageName();
+      if (!imageName.isEmpty()) {
+        writeIndentedLine(stream, 1,
+            QStringLiteral("\"image name\"=\"%1\"")
+                .arg(escapeAdlString(imageName)));
+      }
+      const QString imageCalc = image->calc();
+      if (!imageCalc.trimmed().isEmpty()) {
+        writeIndentedLine(stream, 1,
+            QStringLiteral("calc=\"%1\"")
+                .arg(escapeAdlString(imageCalc)));
+      }
+      writeDynamicAttributeSection(stream, 1, image->colorMode(),
+          image->visibilityMode(), image->visibilityCalc(),
+          collectChannels(image));
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("oval {"));
+      writeObjectSection(stream, 1, oval->geometry());
+      writeBasicAttributeSection(stream, 1, medmColorIndex(oval->color()),
+          oval->lineStyle(), oval->fill(), oval->lineWidth());
+      writeDynamicAttributeSection(stream, 1, oval->colorMode(),
+          oval->visibilityMode(), oval->visibilityCalc(),
+          collectChannels(oval));
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("arc {"));
+      writeObjectSection(stream, 1, arc->geometry());
+      writeBasicAttributeSection(stream, 1, medmColorIndex(arc->color()),
+          arc->lineStyle(), arc->fill(), arc->lineWidth());
+      writeDynamicAttributeSection(stream, 1, arc->colorMode(),
+          arc->visibilityMode(), arc->visibilityCalc(),
+          collectChannels(arc));
+      writeIndentedLine(stream, 1,
+          QStringLiteral("begin=%1").arg(arc->beginAngle()));
+      writeIndentedLine(stream, 1,
+          QStringLiteral("path=%1").arg(arc->pathAngle()));
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *line = dynamic_cast<LineElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("polyline {"));
+      writeObjectSection(stream, 1, line->geometry());
+      writeBasicAttributeSection(stream, 1, medmColorIndex(line->color()),
+          line->lineStyle(), RectangleFill::kSolid, line->lineWidth());
+      writeDynamicAttributeSection(stream, 1, line->colorMode(),
+          line->visibilityMode(), line->visibilityCalc(),
+          collectChannels(line));
+      const QVector<QPoint> points = line->absolutePoints();
+      if (points.size() >= 2) {
+        writePointsSection(stream, 1, points);
+      }
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("polyline {"));
+      writeObjectSection(stream, 1, polyline->geometry());
+      writeBasicAttributeSection(stream, 1,
+          medmColorIndex(polyline->color()), polyline->lineStyle(),
+          RectangleFill::kSolid, polyline->lineWidth());
+      writeDynamicAttributeSection(stream, 1, polyline->colorMode(),
+          polyline->visibilityMode(), polyline->visibilityCalc(),
+          collectChannels(polyline));
+      writePointsSection(stream, 1, polyline->absolutePoints());
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+      writeIndentedLine(stream, 0, QStringLiteral("polygon {"));
+      writeObjectSection(stream, 1, polygon->geometry());
+      writeBasicAttributeSection(stream, 1,
+          medmColorIndex(polygon->color()), polygon->lineStyle(),
+          polygon->fill(), polygon->lineWidth());
+      writeDynamicAttributeSection(stream, 1, polygon->colorMode(),
+          polygon->visibilityMode(), polygon->visibilityCalc(),
+          collectChannels(polygon));
+      writePointsSection(stream, 1, polygon->absolutePoints());
+      writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+  }
+
+  stream << '\n';
+  if (!file.commit()) {
+    return false;
+  }
+  return true;
+}
+
+void DisplayWindow::setAsActiveDisplay()
+{
+  if (auto state = state_.lock()) {
+    if (state->activeDisplay != this) {
+      state->activeDisplay = this;
+      notifyMenus();
+    }
+  }
+}
+
+void DisplayWindow::markDirty()
+{
+  const bool wasDirty = dirty_;
+  dirty_ = true;
+  updateDirtyIndicator();
+  if (!wasDirty) {
+    notifyMenus();
+  }
+}
+
+void DisplayWindow::notifyMenus() const
+{
+  if (auto state = state_.lock()) {
+    if (state->updateMenus && *state->updateMenus) {
+      (*state->updateMenus)();
+    }
+  }
+}
+
+void DisplayWindow::updateDirtyIndicator()
+{
+  QString title = windowTitle();
+  const bool hasIndicator = title.endsWith(QLatin1Char('*'));
+  if (dirty_) {
+    if (!hasIndicator) {
+      setWindowTitle(title + QLatin1Char('*'));
+    }
+  } else if (hasIndicator) {
+    title.chop(1);
+    setWindowTitle(title);
+  }
+}
+
 class MainWindowController : public QObject
 {
 public:
@@ -2834,7 +3662,6 @@ int main(int argc, char *argv[])
     saveAllAct->setEnabled(false);
     saveAsAct->setEnabled(false);
     closeAct->setEnabled(false);
-    QObject::connect(closeAct, &QAction::triggered, &win, &QWidget::close);
 
     auto *editMenu = menuBar->addMenu("&Edit");
     editMenu->setFont(fixed13Font);
@@ -2985,6 +3812,26 @@ int main(int argc, char *argv[])
         std::weak_ptr<DisplayState>(state));
     win.installEventFilter(mainWindowController);
     auto updateMenus = std::make_shared<std::function<void()>>();
+    state->updateMenus = updateMenus;
+
+    QObject::connect(saveAct, &QAction::triggered, &win,
+        [state]() {
+          if (auto active = state->activeDisplay.data()) {
+            active->save();
+          }
+        });
+    QObject::connect(saveAsAct, &QAction::triggered, &win,
+        [state]() {
+          if (auto active = state->activeDisplay.data()) {
+            active->saveAs();
+          }
+        });
+    QObject::connect(closeAct, &QAction::triggered, &win,
+        [state]() {
+          if (auto active = state->activeDisplay.data()) {
+            active->close();
+          }
+        });
 
     QPalette displayPalette = palette;
     // Match MEDM default display background (colormap index 4).
@@ -3002,7 +3849,8 @@ int main(int argc, char *argv[])
     displayPalette.setColor(QPalette::Disabled, QPalette::Button,
         displayBackgroundColor);
 
-    *updateMenus = [state, editMenu, palettesMenu, newAct]() {
+    *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
+        closeAct]() {
       auto &displays = state->displays;
       for (auto it = displays.begin(); it != displays.end();) {
         if (it->isNull()) {
@@ -3012,14 +3860,42 @@ int main(int argc, char *argv[])
         }
       }
 
+      if (!state->activeDisplay.isNull()) {
+        bool found = false;
+        for (const auto &display : displays) {
+          if (display == state->activeDisplay) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          state->activeDisplay.clear();
+        }
+      }
+
+      DisplayWindow *active = state->activeDisplay.data();
+      if (!active) {
+        for (auto it = displays.crbegin(); it != displays.crend(); ++it) {
+          if (!it->isNull()) {
+            active = it->data();
+            state->activeDisplay = active;
+            break;
+          }
+        }
+      }
+
       const bool hasDisplay = !displays.isEmpty();
       const bool enableEditing = hasDisplay && state->editMode;
+      const bool canEditActive = enableEditing && active;
 
       editMenu->setEnabled(enableEditing);
       editMenu->menuAction()->setEnabled(enableEditing);
       palettesMenu->setEnabled(enableEditing);
       palettesMenu->menuAction()->setEnabled(enableEditing);
       newAct->setEnabled(state->editMode);
+      saveAct->setEnabled(canEditActive && active->isDirty());
+      saveAsAct->setEnabled(canEditActive);
+      closeAct->setEnabled(active);
     };
 
     QObject::connect(newAct, &QAction::triggered, &win,
@@ -3035,8 +3911,11 @@ int main(int argc, char *argv[])
           displayWin->syncCreateCursor();
 
           QObject::connect(displayWin, &QObject::destroyed, &win,
-              [state, updateMenus]() {
+              [state, updateMenus, displayPtr = QPointer<DisplayWindow>(displayWin)]() {
                 if (state) {
+                  if (state->activeDisplay == displayPtr) {
+                    state->activeDisplay.clear();
+                  }
                   bool hasLiveDisplay = false;
                   for (auto &display : state->displays) {
                     if (!display.isNull()) {

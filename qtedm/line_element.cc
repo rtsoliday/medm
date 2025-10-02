@@ -151,6 +151,16 @@ void LineElement::setLocalEndpoints(const QPoint &start, const QPoint &end)
   endRatio_ = ratioForPoint(clampedEnd, currentSize);
 }
 
+QVector<QPoint> LineElement::absolutePoints() const
+{
+  QVector<QPoint> points;
+  points.reserve(2);
+  const QPoint topLeft = geometry().topLeft();
+  points.append(topLeft + pointFromRatio(startRatio_));
+  points.append(topLeft + pointFromRatio(endRatio_));
+  return points;
+}
+
 void LineElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);

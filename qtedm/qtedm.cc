@@ -68,6 +68,7 @@
 #include "text_element.h"
 #include "rectangle_element.h"
 #include "oval_element.h"
+#include "arc_element.h"
 #include "line_element.h"
 #include "polyline_element.h"
 #include "polygon_element.h"
@@ -296,6 +297,7 @@ enum class CreateTool {
   kText,
   kRectangle,
   kOval,
+  kArc,
   kPolygon,
   kPolyline,
   kLine,
@@ -529,6 +531,7 @@ protected:
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
+            || state->createTool == CreateTool::kArc
             || state->createTool == CreateTool::kLine) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
@@ -561,6 +564,12 @@ protected:
           if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
             selectOvalElement(oval);
             showResourcePaletteForOval(oval);
+            event->accept();
+            return;
+          }
+          if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+            selectArcElement(arc);
+            showResourcePaletteForArc(arc);
             event->accept();
             return;
           }
@@ -716,6 +725,8 @@ private:
   RectangleElement *selectedRectangle_ = nullptr;
   QList<OvalElement *> ovalElements_;
   OvalElement *selectedOval_ = nullptr;
+  QList<ArcElement *> arcElements_;
+  ArcElement *selectedArc_ = nullptr;
   QList<LineElement *> lineElements_;
   LineElement *selectedLine_ = nullptr;
   QList<PolylineElement *> polylineElements_;
@@ -781,6 +792,15 @@ private:
     selectedOval_ = nullptr;
   }
 
+  void clearArcSelection()
+  {
+    if (!selectedArc_) {
+      return;
+    }
+    selectedArc_->setSelected(false);
+    selectedArc_ = nullptr;
+  }
+
   void clearLineSelection()
   {
     if (!selectedLine_) {
@@ -814,6 +834,7 @@ private:
     clearTextSelection();
     clearRectangleSelection();
     clearOvalSelection();
+    clearArcSelection();
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
@@ -833,6 +854,7 @@ private:
     clearTextSelection();
     clearRectangleSelection();
     clearOvalSelection();
+    clearArcSelection();
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
@@ -1147,6 +1169,92 @@ private:
         QStringLiteral("Oval"));
   }
 
+  void showResourcePaletteForArc(ArcElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [element](const QString &value) { element->setChannel(0, value); },
+        [element](const QString &value) { element->setChannel(1, value); },
+        [element](const QString &value) { element->setChannel(2, value); },
+        [element](const QString &value) { element->setChannel(3, value); },
+    }};
+    dialog->showForRectangle(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+        },
+        [element]() {
+          return element->color();
+        },
+        [element](const QColor &color) {
+          element->setForegroundColor(color);
+        },
+        [element]() {
+          return element->fill();
+        },
+        [element](RectangleFill fill) {
+          element->setFill(fill);
+        },
+        [element]() {
+          return element->lineStyle();
+        },
+        [element](RectangleLineStyle style) {
+          element->setLineStyle(style);
+        },
+        [element]() {
+          return element->lineWidth();
+        },
+        [element](int width) {
+          element->setLineWidth(width);
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [element](TextColorMode mode) {
+          element->setColorMode(mode);
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+        },
+        std::move(channelGetters), std::move(channelSetters),
+        QStringLiteral("Arc"), false,
+        [element]() {
+          return element->beginAngle();
+        },
+        [element](int angle) {
+          element->setBeginAngle(angle);
+        },
+        [element]() {
+          return element->pathAngle();
+        },
+        [element](int angle) {
+          element->setPathAngle(angle);
+        });
+  }
+
   void showResourcePaletteForLine(LineElement *element)
   {
     if (!element) {
@@ -1451,6 +1559,7 @@ private:
     clearDisplaySelection();
     clearRectangleSelection();
     clearOvalSelection();
+    clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
     selectedTextElement_ = element;
@@ -1469,6 +1578,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearOvalSelection();
+    clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
     selectedRectangle_ = element;
@@ -1487,10 +1597,31 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
     selectedOval_ = element;
     selectedOval_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectArcElement(ArcElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedArc_) {
+      selectedArc_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearRectangleSelection();
+    clearOvalSelection();
+    clearLineSelection();
+    clearPolygonSelection();
+    clearPolylineSelection();
+    selectedArc_ = element;
+    selectedArc_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -1506,6 +1637,7 @@ private:
     clearTextSelection();
     clearRectangleSelection();
     clearOvalSelection();
+    clearArcSelection();
     clearPolygonSelection();
     clearPolylineSelection();
     selectedLine_ = element;
@@ -1525,6 +1657,7 @@ private:
     clearTextSelection();
     clearRectangleSelection();
     clearOvalSelection();
+    clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
     selectedPolyline_ = element;
@@ -1543,6 +1676,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearRectangleSelection();
+    clearArcSelection();
     clearLineSelection();
     clearPolylineSelection();
     clearOvalSelection();
@@ -1618,6 +1752,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createOvalElement(rect);
+      break;
+    case CreateTool::kArc:
+      if (rect.width() <= 0) {
+        rect.setWidth(1);
+      }
+      if (rect.height() <= 0) {
+        rect.setHeight(1);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createArcElement(rect);
       break;
     case CreateTool::kLine:
       createLineElement(rubberBandOrigin_, clamped);
@@ -1958,6 +2102,31 @@ private:
     deactivateCreateTool();
   }
 
+  void createArcElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumRectangleSize) {
+      target.setWidth(kMinimumRectangleSize);
+    }
+    if (target.height() < kMinimumRectangleSize) {
+      target.setHeight(kMinimumRectangleSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new ArcElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    arcElements_.append(element);
+    selectArcElement(element);
+    showResourcePaletteForArc(element);
+    deactivateCreateTool();
+  }
+
   void createLineElement(const QPoint &startPoint, const QPoint &endPoint)
   {
     if (!displayArea_) {
@@ -2036,6 +2205,7 @@ private:
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
+            || state->createTool == CreateTool::kArc
             || state->createTool == CreateTool::kPolygon
             || state->createTool == CreateTool::kPolyline
             || state->createTool == CreateTool::kLine);
@@ -2165,7 +2335,13 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(graphicsMenu, QStringLiteral("Arc"));
+    auto *arcAction = addMenuAction(graphicsMenu, QStringLiteral("Arc"));
+    QObject::connect(arcAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kArc);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(graphicsMenu, QStringLiteral("Image"));
 
     auto *monitorsMenu = objectMenu->addMenu(QStringLiteral("Monitors"));

@@ -29,6 +29,7 @@
 #include <QSize>
 #include <QSizePolicy>
 #include <QString>
+#include <QSpinBox>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QHash>
@@ -230,6 +231,32 @@ public:
     QObject::connect(rectangleLineWidthEdit_, &QLineEdit::editingFinished, this,
         [this]() { commitRectangleLineWidth(); });
 
+    arcBeginSpin_ = new QSpinBox;
+    arcBeginSpin_->setFont(valueFont_);
+    arcBeginSpin_->setRange(-360, 360);
+    arcBeginSpin_->setSingleStep(5);
+    arcBeginSpin_->setAccelerated(true);
+    QObject::connect(arcBeginSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) {
+          if (rectangleIsArc_ && arcBeginSetter_) {
+            arcBeginSetter_(degreesToAngle64(value));
+          }
+        });
+
+    arcPathSpin_ = new QSpinBox;
+    arcPathSpin_->setFont(valueFont_);
+    arcPathSpin_->setRange(-360, 360);
+    arcPathSpin_->setSingleStep(5);
+    arcPathSpin_->setAccelerated(true);
+    QObject::connect(arcPathSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) {
+          if (rectangleIsArc_ && arcPathSetter_) {
+            arcPathSetter_(degreesToAngle64(value));
+          }
+        });
+
     rectangleColorModeCombo_ = new QComboBox;
     rectangleColorModeCombo_->setFont(valueFont_);
     rectangleColorModeCombo_->setAutoFillBackground(true);
@@ -277,18 +304,36 @@ public:
           [this, i]() { commitRectangleChannel(i); });
     }
 
-    addRow(rectangleLayout, 0, QStringLiteral("Color"), rectangleForegroundButton_);
-    addRow(rectangleLayout, 1, QStringLiteral("Fill"), rectangleFillCombo_);
-    addRow(rectangleLayout, 2, QStringLiteral("Line Style"), rectangleLineStyleCombo_);
-    addRow(rectangleLayout, 3, QStringLiteral("Line Width"), rectangleLineWidthEdit_);
-    addRow(rectangleLayout, 4, QStringLiteral("Color Mode"), rectangleColorModeCombo_);
-    addRow(rectangleLayout, 5, QStringLiteral("Visibility"), rectangleVisibilityCombo_);
-    addRow(rectangleLayout, 6, QStringLiteral("Vis Calc"), rectangleVisibilityCalcEdit_);
-    addRow(rectangleLayout, 7, QStringLiteral("Channel A"), rectangleChannelEdits_[0]);
-    addRow(rectangleLayout, 8, QStringLiteral("Channel B"), rectangleChannelEdits_[1]);
-    addRow(rectangleLayout, 9, QStringLiteral("Channel C"), rectangleChannelEdits_[2]);
-    addRow(rectangleLayout, 10, QStringLiteral("Channel D"), rectangleChannelEdits_[3]);
-    rectangleLayout->setRowStretch(11, 1);
+    int rectangleRow = 0;
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Color"), rectangleForegroundButton_);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Fill"), rectangleFillCombo_);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Line Style"), rectangleLineStyleCombo_);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Line Width"), rectangleLineWidthEdit_);
+
+    arcBeginLabel_ = new QLabel(QStringLiteral("Begin Angle"));
+    arcBeginLabel_->setFont(labelFont_);
+    arcBeginLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    arcBeginLabel_->setAutoFillBackground(false);
+    rectangleLayout->addWidget(arcBeginLabel_, rectangleRow, 0);
+    rectangleLayout->addWidget(arcBeginSpin_, rectangleRow, 1);
+    ++rectangleRow;
+
+    arcPathLabel_ = new QLabel(QStringLiteral("Path Length"));
+    arcPathLabel_->setFont(labelFont_);
+    arcPathLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    arcPathLabel_->setAutoFillBackground(false);
+    rectangleLayout->addWidget(arcPathLabel_, rectangleRow, 0);
+    rectangleLayout->addWidget(arcPathSpin_, rectangleRow, 1);
+    ++rectangleRow;
+
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Color Mode"), rectangleColorModeCombo_);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Visibility"), rectangleVisibilityCombo_);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Vis Calc"), rectangleVisibilityCalcEdit_);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Channel A"), rectangleChannelEdits_[0]);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Channel B"), rectangleChannelEdits_[1]);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Channel C"), rectangleChannelEdits_[2]);
+    addRow(rectangleLayout, rectangleRow++, QStringLiteral("Channel D"), rectangleChannelEdits_[3]);
+    rectangleLayout->setRowStretch(rectangleRow, 1);
     entriesLayout->addWidget(rectangleSection_);
 
     lineSection_ = new QWidget(entriesWidget_);
@@ -732,8 +777,22 @@ public:
       std::array<std::function<QString()>, 4> channelGetters,
       std::array<std::function<void(const QString &)>, 4> channelSetters,
       const QString &elementLabel = QStringLiteral("Rectangle"),
-      bool treatAsPolygon = false)
+      bool treatAsPolygon = false,
+      std::function<int()> arcBeginGetter = {},
+      std::function<void(int)> arcBeginSetter = {},
+      std::function<int()> arcPathGetter = {},
+      std::function<void(int)> arcPathSetter = {})
   {
+    const bool hasArcAngles = static_cast<bool>(arcBeginGetter)
+        || static_cast<bool>(arcPathGetter)
+        || static_cast<bool>(arcBeginSetter)
+        || static_cast<bool>(arcPathSetter);
+    rectangleIsArc_ = hasArcAngles;
+    arcBeginGetter_ = std::move(arcBeginGetter);
+    arcBeginSetter_ = std::move(arcBeginSetter);
+    arcPathGetter_ = std::move(arcPathGetter);
+    arcPathSetter_ = std::move(arcPathSetter);
+
     selectionKind_ = treatAsPolygon ? SelectionKind::kPolygon
                                     : SelectionKind::kRectangle;
     updateSectionVisibility(selectionKind_);
@@ -824,6 +883,20 @@ public:
       const QSignalBlocker blocker(rectangleLineWidthEdit_);
       rectangleLineWidthEdit_->setText(QString::number(clampedWidth));
       committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
+    }
+
+    if (arcBeginSpin_) {
+      const QSignalBlocker blocker(arcBeginSpin_);
+      const int angle = arcBeginGetter_ ? arcBeginGetter_() : 0;
+      arcBeginSpin_->setValue(angle64ToDegrees(angle));
+      arcBeginSpin_->setEnabled(rectangleIsArc_ && static_cast<bool>(arcBeginSetter_));
+    }
+
+    if (arcPathSpin_) {
+      const QSignalBlocker blocker(arcPathSpin_);
+      const int angle = arcPathGetter_ ? arcPathGetter_() : 0;
+      arcPathSpin_->setValue(angle64ToDegrees(angle));
+      arcPathSpin_->setEnabled(rectangleIsArc_ && static_cast<bool>(arcPathSetter_));
     }
 
     if (rectangleColorModeCombo_) {
@@ -1332,6 +1405,24 @@ private:
       rectangleSection_->setVisible(rectangleVisible);
       rectangleSection_->setEnabled(rectangleVisible);
     }
+    const bool showArcControls = (kind == SelectionKind::kRectangle
+        || kind == SelectionKind::kPolygon) && rectangleIsArc_;
+    if (arcBeginLabel_) {
+      arcBeginLabel_->setVisible(showArcControls);
+    }
+    if (arcBeginSpin_) {
+      arcBeginSpin_->setVisible(showArcControls);
+      arcBeginSpin_->setEnabled(showArcControls
+          && static_cast<bool>(arcBeginSetter_));
+    }
+    if (arcPathLabel_) {
+      arcPathLabel_->setVisible(showArcControls);
+    }
+    if (arcPathSpin_) {
+      arcPathSpin_->setVisible(showArcControls);
+      arcPathSpin_->setEnabled(showArcControls
+          && static_cast<bool>(arcPathSetter_));
+    }
     if (lineSection_) {
       const bool lineVisible = kind == SelectionKind::kLine;
       lineSection_->setVisible(lineVisible);
@@ -1569,6 +1660,19 @@ private:
     }
   }
 
+  static int degreesToAngle64(int degrees)
+  {
+    return degrees * 64;
+  }
+
+  static int angle64ToDegrees(int angle64)
+  {
+    if (angle64 >= 0) {
+      return (angle64 + 32) / 64;
+    }
+    return (angle64 - 32) / 64;
+  }
+
   TextVisibilityMode visibilityModeFromIndex(int index) const
   {
     switch (index) {
@@ -1764,6 +1868,10 @@ private:
   QComboBox *rectangleVisibilityCombo_ = nullptr;
   QLineEdit *rectangleVisibilityCalcEdit_ = nullptr;
   std::array<QLineEdit *, 4> rectangleChannelEdits_{};
+  QLabel *arcBeginLabel_ = nullptr;
+  QLabel *arcPathLabel_ = nullptr;
+  QSpinBox *arcBeginSpin_ = nullptr;
+  QSpinBox *arcPathSpin_ = nullptr;
   QPushButton *lineColorButton_ = nullptr;
   QComboBox *lineLineStyleCombo_ = nullptr;
   QLineEdit *lineLineWidthEdit_ = nullptr;
@@ -1779,6 +1887,7 @@ private:
   QScrollArea *scrollArea_ = nullptr;
   QWidget *entriesWidget_ = nullptr;
   SelectionKind selectionKind_ = SelectionKind::kNone;
+  bool rectangleIsArc_ = false;
   enum class GeometryField { kX, kY, kWidth, kHeight };
   void setupGeometryField(QLineEdit *edit, GeometryField field)
   {
@@ -1981,6 +2090,10 @@ private:
   std::function<void(RectangleLineStyle)> rectangleLineStyleSetter_;
   std::function<int()> rectangleLineWidthGetter_;
   std::function<void(int)> rectangleLineWidthSetter_;
+  std::function<int()> arcBeginGetter_;
+  std::function<void(int)> arcBeginSetter_;
+  std::function<int()> arcPathGetter_;
+  std::function<void(int)> arcPathSetter_;
   std::function<TextColorMode()> rectangleColorModeGetter_;
   std::function<void(TextColorMode)> rectangleColorModeSetter_;
   std::function<TextVisibilityMode()> rectangleVisibilityModeGetter_;

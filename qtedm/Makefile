@@ -30,6 +30,10 @@ endif
 PROD = qtedm
 
 qtedm_SRC = qtedm.cc \
+            legacy_fonts.cc \
+            window_utils.cc \
+            adl_writer.cc \
+            main_window_controller.cc \
             text_element.cc \
             rectangle_element.cc \
             oval_element.cc \

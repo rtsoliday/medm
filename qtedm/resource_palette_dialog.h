@@ -35,6 +35,7 @@
 #include <QHash>
 #include <QPalette>
 #include <QPointer>
+#include <QScreen>
 
 #include "color_palette_dialog.h"
 #include "display_properties.h"
@@ -2734,4 +2735,3 @@ private:
     return palette().color(QPalette::Window);
   }
 };
-

@@ -32,6 +32,7 @@ PROD = qtedm
 qtedm_SRC = qtedm.cc \
             text_element.cc \
             rectangle_element.cc \
+            oval_element.cc \
             line_element.cc \
             polyline_element.cc \
             polygon_element.cc \

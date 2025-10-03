@@ -60,6 +60,7 @@
 
 #include "adl_writer.h"
 #include "arc_element.h"
+#include "cartesian_plot_element.h"
 #include "byte_monitor_element.h"
 #include "bar_monitor_element.h"
 #include "scale_monitor_element.h"

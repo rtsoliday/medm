@@ -39,14 +39,20 @@ void writeDynamicAttributeSection(QTextStream &stream, int level,
     const QString &calc, const std::array<QString, 4> &channels);
 void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex);
+QString cartesianPlotStyleString(CartesianPlotStyle style);
+QString cartesianEraseOldestString(bool eraseOldest);
+QString cartesianEraseModeString(CartesianPlotEraseMode mode);
 void writePlotcom(QTextStream &stream, int level, const QString &title,
-    const QString &xLabel, const QString &yLabel, int colorIndex,
-    int backgroundIndex);
+    const QString &xLabel, const std::array<QString, 4> &yLabels,
+    int colorIndex, int backgroundIndex);
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits);
 void writeStripChartPenSection(QTextStream &stream, int level, int index,
     const QString &channel, int colorIndex, const PvLimits &limits);
 void writePointsSection(
     QTextStream &stream, int level, const QVector<QPoint> &points);
+void writeCartesianTraceSection(QTextStream &stream, int level, int index,
+    const QString &xChannel, const QString &yChannel, int colorIndex,
+    int axisIndex, bool usesRightAxis);
 
 template <typename Element>
 std::array<QString, 4> collectChannels(const Element *element)

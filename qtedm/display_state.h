@@ -17,6 +17,7 @@ enum class CreateTool {
   kByteMonitor,
   kScaleMonitor,
   kStripChart,
+  kCartesianPlot,
   kRectangle,
   kOval,
   kArc,

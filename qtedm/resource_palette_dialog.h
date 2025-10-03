@@ -1132,6 +1132,198 @@ public:
     stripLayout->setRowStretch(8, 1);
     entriesLayout->addWidget(stripChartSection_);
 
+    cartesianSection_ = new QWidget(entriesWidget_);
+    auto *cartesianLayout = new QGridLayout(cartesianSection_);
+    cartesianLayout->setContentsMargins(0, 0, 0, 0);
+    cartesianLayout->setHorizontalSpacing(12);
+    cartesianLayout->setVerticalSpacing(6);
+
+    cartesianTitleEdit_ = createLineEdit();
+    committedTexts_.insert(cartesianTitleEdit_, cartesianTitleEdit_->text());
+    cartesianTitleEdit_->installEventFilter(this);
+    QObject::connect(cartesianTitleEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCartesianTitle(); });
+    QObject::connect(cartesianTitleEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCartesianTitle(); });
+
+    cartesianXLabelEdit_ = createLineEdit();
+    committedTexts_.insert(cartesianXLabelEdit_, cartesianXLabelEdit_->text());
+    cartesianXLabelEdit_->installEventFilter(this);
+    QObject::connect(cartesianXLabelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCartesianXLabel(); });
+    QObject::connect(cartesianXLabelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCartesianXLabel(); });
+
+    for (int i = 0; i < 4; ++i) {
+      cartesianYLabelEdits_[i] = createLineEdit();
+      committedTexts_.insert(cartesianYLabelEdits_[i],
+          cartesianYLabelEdits_[i]->text());
+      cartesianYLabelEdits_[i]->installEventFilter(this);
+      QObject::connect(cartesianYLabelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitCartesianYLabel(i); });
+      QObject::connect(cartesianYLabelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitCartesianYLabel(i); });
+    }
+
+    cartesianForegroundButton_ = createColorButton(
+        palette().color(QPalette::WindowText));
+    QObject::connect(cartesianForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(cartesianForegroundButton_,
+              QStringLiteral("Cartesian Foreground"),
+              cartesianForegroundSetter_);
+        });
+
+    cartesianBackgroundButton_ = createColorButton(
+        palette().color(QPalette::Window));
+    QObject::connect(cartesianBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(cartesianBackgroundButton_,
+              QStringLiteral("Cartesian Background"),
+              cartesianBackgroundSetter_);
+        });
+
+    cartesianStyleCombo_ = new QComboBox;
+    cartesianStyleCombo_->setFont(valueFont_);
+    cartesianStyleCombo_->setAutoFillBackground(true);
+    cartesianStyleCombo_->addItem(QStringLiteral("Point Plot"));
+    cartesianStyleCombo_->addItem(QStringLiteral("Line Plot"));
+    cartesianStyleCombo_->addItem(QStringLiteral("Step Plot"));
+    cartesianStyleCombo_->addItem(QStringLiteral("Fill Under"));
+    QObject::connect(cartesianStyleCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) { handleCartesianStyleChanged(index); });
+
+    cartesianEraseOldestCombo_ = createBooleanComboBox();
+    QObject::connect(cartesianEraseOldestCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) { handleCartesianEraseOldestChanged(index); });
+
+    cartesianCountEdit_ = createLineEdit();
+    cartesianCountEdit_->setValidator(new QIntValidator(1, 100000,
+        cartesianCountEdit_));
+    committedTexts_.insert(cartesianCountEdit_, cartesianCountEdit_->text());
+    cartesianCountEdit_->installEventFilter(this);
+    QObject::connect(cartesianCountEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCartesianCount(); });
+    QObject::connect(cartesianCountEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCartesianCount(); });
+
+    cartesianEraseModeCombo_ = new QComboBox;
+    cartesianEraseModeCombo_->setFont(valueFont_);
+    cartesianEraseModeCombo_->setAutoFillBackground(true);
+    cartesianEraseModeCombo_->addItem(QStringLiteral("If Not Zero"));
+    cartesianEraseModeCombo_->addItem(QStringLiteral("If Zero"));
+    QObject::connect(cartesianEraseModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) { handleCartesianEraseModeChanged(index); });
+
+    cartesianTriggerEdit_ = createLineEdit();
+    committedTexts_.insert(cartesianTriggerEdit_, cartesianTriggerEdit_->text());
+    cartesianTriggerEdit_->installEventFilter(this);
+    QObject::connect(cartesianTriggerEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCartesianTrigger(); });
+    QObject::connect(cartesianTriggerEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCartesianTrigger(); });
+
+    cartesianEraseEdit_ = createLineEdit();
+    committedTexts_.insert(cartesianEraseEdit_, cartesianEraseEdit_->text());
+    cartesianEraseEdit_->installEventFilter(this);
+    QObject::connect(cartesianEraseEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCartesianErase(); });
+    QObject::connect(cartesianEraseEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCartesianErase(); });
+
+    cartesianCountPvEdit_ = createLineEdit();
+    committedTexts_.insert(cartesianCountPvEdit_, cartesianCountPvEdit_->text());
+    cartesianCountPvEdit_->installEventFilter(this);
+    QObject::connect(cartesianCountPvEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCartesianCountPv(); });
+    QObject::connect(cartesianCountPvEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCartesianCountPv(); });
+
+    auto *cartesianTraceWidget = new QWidget(cartesianSection_);
+    auto *cartesianTraceLayout = new QGridLayout(cartesianTraceWidget);
+    cartesianTraceLayout->setContentsMargins(0, 0, 0, 0);
+    cartesianTraceLayout->setHorizontalSpacing(8);
+    cartesianTraceLayout->setVerticalSpacing(4);
+
+    for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
+      auto *traceLabel = new QLabel(QStringLiteral("Trace %1").arg(i + 1));
+      traceLabel->setFont(labelFont_);
+      cartesianTraceLayout->addWidget(traceLabel, i, 0);
+
+      cartesianTraceColorButtons_[i] = createColorButton(
+          palette().color(QPalette::WindowText));
+      QObject::connect(cartesianTraceColorButtons_[i], &QPushButton::clicked, this,
+          [this, i]() {
+            openColorPalette(cartesianTraceColorButtons_[i],
+                QStringLiteral("Trace Color"), cartesianTraceColorSetters_[i]);
+          });
+      cartesianTraceLayout->addWidget(cartesianTraceColorButtons_[i], i, 1);
+
+      cartesianTraceXEdits_[i] = createLineEdit();
+      committedTexts_.insert(cartesianTraceXEdits_[i],
+          cartesianTraceXEdits_[i]->text());
+      cartesianTraceXEdits_[i]->installEventFilter(this);
+      QObject::connect(cartesianTraceXEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitCartesianTraceXChannel(i); });
+      QObject::connect(cartesianTraceXEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitCartesianTraceXChannel(i); });
+      cartesianTraceLayout->addWidget(cartesianTraceXEdits_[i], i, 2);
+
+      cartesianTraceYEdits_[i] = createLineEdit();
+      committedTexts_.insert(cartesianTraceYEdits_[i],
+          cartesianTraceYEdits_[i]->text());
+      cartesianTraceYEdits_[i]->installEventFilter(this);
+      QObject::connect(cartesianTraceYEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitCartesianTraceYChannel(i); });
+      QObject::connect(cartesianTraceYEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitCartesianTraceYChannel(i); });
+      cartesianTraceLayout->addWidget(cartesianTraceYEdits_[i], i, 3);
+
+      cartesianTraceAxisCombos_[i] = new QComboBox;
+      cartesianTraceAxisCombos_[i]->setFont(valueFont_);
+      cartesianTraceAxisCombos_[i]->setAutoFillBackground(true);
+      cartesianTraceAxisCombos_[i]->addItem(QStringLiteral("Y1"));
+      cartesianTraceAxisCombos_[i]->addItem(QStringLiteral("Y2"));
+      cartesianTraceAxisCombos_[i]->addItem(QStringLiteral("Y3"));
+      cartesianTraceAxisCombos_[i]->addItem(QStringLiteral("Y4"));
+      QObject::connect(cartesianTraceAxisCombos_[i],
+          static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+          this, [this, i](int index) { handleCartesianTraceAxisChanged(i, index); });
+      cartesianTraceLayout->addWidget(cartesianTraceAxisCombos_[i], i, 4);
+
+      cartesianTraceSideCombos_[i] = new QComboBox;
+      cartesianTraceSideCombos_[i]->setFont(valueFont_);
+      cartesianTraceSideCombos_[i]->setAutoFillBackground(true);
+      cartesianTraceSideCombos_[i]->addItem(QStringLiteral("Left"));
+      cartesianTraceSideCombos_[i]->addItem(QStringLiteral("Right"));
+      QObject::connect(cartesianTraceSideCombos_[i],
+          static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+          this, [this, i](int index) { handleCartesianTraceSideChanged(i, index); });
+      cartesianTraceLayout->addWidget(cartesianTraceSideCombos_[i], i, 5);
+    }
+
+    addRow(cartesianLayout, 0, QStringLiteral("Title"), cartesianTitleEdit_);
+    addRow(cartesianLayout, 1, QStringLiteral("X Label"), cartesianXLabelEdit_);
+    addRow(cartesianLayout, 2, QStringLiteral("Y1 Label"), cartesianYLabelEdits_[0]);
+    addRow(cartesianLayout, 3, QStringLiteral("Y2 Label"), cartesianYLabelEdits_[1]);
+    addRow(cartesianLayout, 4, QStringLiteral("Y3 Label"), cartesianYLabelEdits_[2]);
+    addRow(cartesianLayout, 5, QStringLiteral("Y4 Label"), cartesianYLabelEdits_[3]);
+    addRow(cartesianLayout, 6, QStringLiteral("Foreground"), cartesianForegroundButton_);
+    addRow(cartesianLayout, 7, QStringLiteral("Background"), cartesianBackgroundButton_);
+    addRow(cartesianLayout, 8, QStringLiteral("Style"), cartesianStyleCombo_);
+    addRow(cartesianLayout, 9, QStringLiteral("Erase Oldest"), cartesianEraseOldestCombo_);
+    addRow(cartesianLayout, 10, QStringLiteral("Count"), cartesianCountEdit_);
+    addRow(cartesianLayout, 11, QStringLiteral("Erase Mode"), cartesianEraseModeCombo_);
+    addRow(cartesianLayout, 12, QStringLiteral("Trigger"), cartesianTriggerEdit_);
+    addRow(cartesianLayout, 13, QStringLiteral("Erase"), cartesianEraseEdit_);
+    addRow(cartesianLayout, 14, QStringLiteral("Count PV"), cartesianCountPvEdit_);
+    addRow(cartesianLayout, 15, QStringLiteral("Traces"), cartesianTraceWidget);
+    cartesianLayout->setRowStretch(16, 1);
+    entriesLayout->addWidget(cartesianSection_);
+
     byteSection_ = new QWidget(entriesWidget_);
     auto *byteLayout = new QGridLayout(byteSection_);
     byteLayout->setContentsMargins(0, 0, 0, 0);
@@ -2579,6 +2771,393 @@ public:
     activateWindow();
   }
 
+  void showForCartesianPlot(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QString()> titleGetter,
+      std::function<void(const QString &)> titleSetter,
+      std::function<QString()> xLabelGetter,
+      std::function<void(const QString &)> xLabelSetter,
+      std::array<std::function<QString()>, 4> yLabelGetters,
+      std::array<std::function<void(const QString &)>, 4> yLabelSetters,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<CartesianPlotStyle()> styleGetter,
+      std::function<void(CartesianPlotStyle)> styleSetter,
+      std::function<bool()> eraseOldestGetter,
+      std::function<void(bool)> eraseOldestSetter,
+      std::function<int()> countGetter,
+      std::function<void(int)> countSetter,
+      std::function<CartesianPlotEraseMode()> eraseModeGetter,
+      std::function<void(CartesianPlotEraseMode)> eraseModeSetter,
+      std::function<QString()> triggerGetter,
+      std::function<void(const QString &)> triggerSetter,
+      std::function<QString()> eraseGetter,
+      std::function<void(const QString &)> eraseSetter,
+      std::function<QString()> countPvGetter,
+      std::function<void(const QString &)> countPvSetter,
+      std::array<std::function<QString()>, kCartesianPlotTraceCount> xChannelGetters,
+      std::array<std::function<void(const QString &)>, kCartesianPlotTraceCount> xChannelSetters,
+      std::array<std::function<QString()>, kCartesianPlotTraceCount> yChannelGetters,
+      std::array<std::function<void(const QString &)>, kCartesianPlotTraceCount> yChannelSetters,
+      std::array<std::function<QColor()>, kCartesianPlotTraceCount> colorGetters,
+      std::array<std::function<void(const QColor &)>, kCartesianPlotTraceCount> colorSetters,
+      std::array<std::function<CartesianPlotYAxis()>, kCartesianPlotTraceCount> axisGetters,
+      std::array<std::function<void(CartesianPlotYAxis)>, kCartesianPlotTraceCount> axisSetters,
+      std::array<std::function<bool()>, kCartesianPlotTraceCount> sideGetters,
+      std::array<std::function<void(bool)>, kCartesianPlotTraceCount> sideSetters)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kCartesianPlot;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+
+    meterForegroundGetter_ = {};
+    meterForegroundSetter_ = {};
+    meterBackgroundGetter_ = {};
+    meterBackgroundSetter_ = {};
+    meterLabelGetter_ = {};
+    meterLabelSetter_ = {};
+    meterColorModeGetter_ = {};
+    meterColorModeSetter_ = {};
+    meterChannelGetter_ = {};
+    meterChannelSetter_ = {};
+    meterLimitsGetter_ = {};
+    meterLimitsSetter_ = {};
+
+    barForegroundGetter_ = {};
+    barForegroundSetter_ = {};
+    barBackgroundGetter_ = {};
+    barBackgroundSetter_ = {};
+    barLabelGetter_ = {};
+    barLabelSetter_ = {};
+    barColorModeGetter_ = {};
+    barColorModeSetter_ = {};
+    barDirectionGetter_ = {};
+    barDirectionSetter_ = {};
+    barFillModeGetter_ = {};
+    barFillModeSetter_ = {};
+    barChannelGetter_ = {};
+    barChannelSetter_ = {};
+    barLimitsGetter_ = {};
+    barLimitsSetter_ = {};
+
+    scaleForegroundGetter_ = {};
+    scaleForegroundSetter_ = {};
+    scaleBackgroundGetter_ = {};
+    scaleBackgroundSetter_ = {};
+    scaleLabelGetter_ = {};
+    scaleLabelSetter_ = {};
+    scaleColorModeGetter_ = {};
+    scaleColorModeSetter_ = {};
+    scaleDirectionGetter_ = {};
+    scaleDirectionSetter_ = {};
+    scaleChannelGetter_ = {};
+    scaleChannelSetter_ = {};
+    scaleLimitsGetter_ = {};
+    scaleLimitsSetter_ = {};
+
+    stripTitleGetter_ = {};
+    stripTitleSetter_ = {};
+    stripXLabelGetter_ = {};
+    stripXLabelSetter_ = {};
+    stripYLabelGetter_ = {};
+    stripYLabelSetter_ = {};
+    stripForegroundGetter_ = {};
+    stripForegroundSetter_ = {};
+    stripBackgroundGetter_ = {};
+    stripBackgroundSetter_ = {};
+    stripPeriodGetter_ = {};
+    stripPeriodSetter_ = {};
+    stripUnitsGetter_ = {};
+    stripUnitsSetter_ = {};
+    for (auto &getter : stripPenChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : stripPenChannelSetters_) {
+      setter = {};
+    }
+    for (auto &getter : stripPenColorGetters_) {
+      getter = {};
+    }
+    for (auto &setter : stripPenColorSetters_) {
+      setter = {};
+    }
+    for (auto &getter : stripPenLimitsGetters_) {
+      getter = {};
+    }
+    for (auto &setter : stripPenLimitsSetters_) {
+      setter = {};
+    }
+
+    byteForegroundGetter_ = {};
+    byteForegroundSetter_ = {};
+    byteBackgroundGetter_ = {};
+    byteBackgroundSetter_ = {};
+    byteColorModeGetter_ = {};
+    byteColorModeSetter_ = {};
+    byteDirectionGetter_ = {};
+    byteDirectionSetter_ = {};
+    byteStartBitGetter_ = {};
+    byteStartBitSetter_ = {};
+    byteEndBitGetter_ = {};
+    byteEndBitSetter_ = {};
+    byteChannelGetter_ = {};
+    byteChannelSetter_ = {};
+
+    cartesianTitleGetter_ = std::move(titleGetter);
+    cartesianTitleSetter_ = std::move(titleSetter);
+    cartesianXLabelGetter_ = std::move(xLabelGetter);
+    cartesianXLabelSetter_ = std::move(xLabelSetter);
+    cartesianYLabelGetters_ = std::move(yLabelGetters);
+    cartesianYLabelSetters_ = std::move(yLabelSetters);
+    cartesianForegroundGetter_ = std::move(foregroundGetter);
+    cartesianForegroundSetter_ = std::move(foregroundSetter);
+    cartesianBackgroundGetter_ = std::move(backgroundGetter);
+    cartesianBackgroundSetter_ = std::move(backgroundSetter);
+    cartesianStyleGetter_ = std::move(styleGetter);
+    cartesianStyleSetter_ = std::move(styleSetter);
+    cartesianEraseOldestGetter_ = std::move(eraseOldestGetter);
+    cartesianEraseOldestSetter_ = std::move(eraseOldestSetter);
+    cartesianCountGetter_ = std::move(countGetter);
+    cartesianCountSetter_ = std::move(countSetter);
+    cartesianEraseModeGetter_ = std::move(eraseModeGetter);
+    cartesianEraseModeSetter_ = std::move(eraseModeSetter);
+    cartesianTriggerGetter_ = std::move(triggerGetter);
+    cartesianTriggerSetter_ = std::move(triggerSetter);
+    cartesianEraseGetter_ = std::move(eraseGetter);
+    cartesianEraseSetter_ = std::move(eraseSetter);
+    cartesianCountPvGetter_ = std::move(countPvGetter);
+    cartesianCountPvSetter_ = std::move(countPvSetter);
+    cartesianTraceXGetters_ = std::move(xChannelGetters);
+    cartesianTraceXSetters_ = std::move(xChannelSetters);
+    cartesianTraceYGetters_ = std::move(yChannelGetters);
+    cartesianTraceYSetters_ = std::move(yChannelSetters);
+    cartesianTraceColorGetters_ = std::move(colorGetters);
+    cartesianTraceColorSetters_ = std::move(colorSetters);
+    cartesianTraceAxisGetters_ = std::move(axisGetters);
+    cartesianTraceAxisSetters_ = std::move(axisSetters);
+    cartesianTraceSideGetters_ = std::move(sideGetters);
+    cartesianTraceSideSetters_ = std::move(sideSetters);
+
+    QRect geometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (geometry.width() <= 0) {
+      geometry.setWidth(kMinimumCartesianPlotWidth);
+    }
+    if (geometry.height() <= 0) {
+      geometry.setHeight(kMinimumCartesianPlotHeight);
+    }
+    lastCommittedGeometry_ = geometry;
+
+    updateGeometryEdits(geometry);
+
+    if (cartesianTitleEdit_) {
+      const QString value = cartesianTitleGetter_ ? cartesianTitleGetter_()
+                                                 : QString();
+      const QSignalBlocker blocker(cartesianTitleEdit_);
+      cartesianTitleEdit_->setText(value);
+      committedTexts_[cartesianTitleEdit_] = value;
+    }
+
+    if (cartesianXLabelEdit_) {
+      const QString value = cartesianXLabelGetter_ ? cartesianXLabelGetter_()
+                                                   : QString();
+      const QSignalBlocker blocker(cartesianXLabelEdit_);
+      cartesianXLabelEdit_->setText(value);
+      committedTexts_[cartesianXLabelEdit_] = value;
+    }
+
+    for (int i = 0; i < 4; ++i) {
+      if (!cartesianYLabelEdits_[i]) {
+        continue;
+      }
+      const QString value = cartesianYLabelGetters_[i]
+              ? cartesianYLabelGetters_[i]()
+              : QString();
+      const QSignalBlocker blocker(cartesianYLabelEdits_[i]);
+      cartesianYLabelEdits_[i]->setText(value);
+      committedTexts_[cartesianYLabelEdits_[i]] = value;
+    }
+
+    if (cartesianForegroundButton_) {
+      const QColor color = cartesianForegroundGetter_ ? cartesianForegroundGetter_()
+                                                      : palette().color(QPalette::WindowText);
+      setColorButtonColor(cartesianForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+      cartesianForegroundButton_->setEnabled(static_cast<bool>(cartesianForegroundSetter_));
+    }
+
+    if (cartesianBackgroundButton_) {
+      const QColor color = cartesianBackgroundGetter_ ? cartesianBackgroundGetter_()
+                                                      : palette().color(QPalette::Window);
+      setColorButtonColor(cartesianBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+      cartesianBackgroundButton_->setEnabled(static_cast<bool>(cartesianBackgroundSetter_));
+    }
+
+    if (cartesianStyleCombo_) {
+      const QSignalBlocker blocker(cartesianStyleCombo_);
+      const int index = cartesianStyleGetter_
+              ? cartesianPlotStyleToIndex(cartesianStyleGetter_())
+              : cartesianPlotStyleToIndex(CartesianPlotStyle::kLine);
+      cartesianStyleCombo_->setCurrentIndex(index);
+      cartesianStyleCombo_->setEnabled(static_cast<bool>(cartesianStyleSetter_));
+    }
+
+    if (cartesianEraseOldestCombo_) {
+      const QSignalBlocker blocker(cartesianEraseOldestCombo_);
+      const bool eraseOldest = cartesianEraseOldestGetter_
+              ? cartesianEraseOldestGetter_()
+              : false;
+      cartesianEraseOldestCombo_->setCurrentIndex(eraseOldest ? 1 : 0);
+      cartesianEraseOldestCombo_->setEnabled(static_cast<bool>(cartesianEraseOldestSetter_));
+    }
+
+    if (cartesianCountEdit_) {
+      const int countValue = cartesianCountGetter_ ? cartesianCountGetter_() : 1;
+      const QSignalBlocker blocker(cartesianCountEdit_);
+      cartesianCountEdit_->setText(QString::number(std::max(countValue, 1)));
+      cartesianCountEdit_->setEnabled(static_cast<bool>(cartesianCountSetter_));
+      committedTexts_[cartesianCountEdit_] = cartesianCountEdit_->text();
+    }
+
+    if (cartesianEraseModeCombo_) {
+      const QSignalBlocker blocker(cartesianEraseModeCombo_);
+      const int index = cartesianEraseModeGetter_
+              ? cartesianEraseModeToIndex(cartesianEraseModeGetter_())
+              : cartesianEraseModeToIndex(CartesianPlotEraseMode::kIfNotZero);
+      cartesianEraseModeCombo_->setCurrentIndex(index);
+      cartesianEraseModeCombo_->setEnabled(static_cast<bool>(cartesianEraseModeSetter_));
+    }
+
+    if (cartesianTriggerEdit_) {
+      const QString value = cartesianTriggerGetter_ ? cartesianTriggerGetter_()
+                                                   : QString();
+      const QSignalBlocker blocker(cartesianTriggerEdit_);
+      cartesianTriggerEdit_->setText(value);
+      cartesianTriggerEdit_->setEnabled(static_cast<bool>(cartesianTriggerSetter_));
+      committedTexts_[cartesianTriggerEdit_] = value;
+    }
+
+    if (cartesianEraseEdit_) {
+      const QString value = cartesianEraseGetter_ ? cartesianEraseGetter_()
+                                                 : QString();
+      const QSignalBlocker blocker(cartesianEraseEdit_);
+      cartesianEraseEdit_->setText(value);
+      cartesianEraseEdit_->setEnabled(static_cast<bool>(cartesianEraseSetter_));
+      committedTexts_[cartesianEraseEdit_] = value;
+    }
+
+    if (cartesianCountPvEdit_) {
+      const QString value = cartesianCountPvGetter_ ? cartesianCountPvGetter_()
+                                                   : QString();
+      const QSignalBlocker blocker(cartesianCountPvEdit_);
+      cartesianCountPvEdit_->setText(value);
+      cartesianCountPvEdit_->setEnabled(static_cast<bool>(cartesianCountPvSetter_));
+      committedTexts_[cartesianCountPvEdit_] = value;
+    }
+
+    for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
+      if (cartesianTraceColorButtons_[i]) {
+        const QColor color = cartesianTraceColorGetters_[i]
+                ? cartesianTraceColorGetters_[i]()
+                : palette().color(QPalette::WindowText);
+        setColorButtonColor(cartesianTraceColorButtons_[i],
+            color.isValid() ? color : palette().color(QPalette::WindowText));
+        cartesianTraceColorButtons_[i]->setEnabled(static_cast<bool>(cartesianTraceColorSetters_[i]));
+      }
+      if (cartesianTraceXEdits_[i]) {
+        const QString value = cartesianTraceXGetters_[i]
+                ? cartesianTraceXGetters_[i]()
+                : QString();
+        const QSignalBlocker blocker(cartesianTraceXEdits_[i]);
+        cartesianTraceXEdits_[i]->setText(value);
+        cartesianTraceXEdits_[i]->setEnabled(static_cast<bool>(cartesianTraceXSetters_[i]));
+        committedTexts_[cartesianTraceXEdits_[i]] = value;
+      }
+      if (cartesianTraceYEdits_[i]) {
+        const QString value = cartesianTraceYGetters_[i]
+                ? cartesianTraceYGetters_[i]()
+                : QString();
+        const QSignalBlocker blocker(cartesianTraceYEdits_[i]);
+        cartesianTraceYEdits_[i]->setText(value);
+        cartesianTraceYEdits_[i]->setEnabled(static_cast<bool>(cartesianTraceYSetters_[i]));
+        committedTexts_[cartesianTraceYEdits_[i]] = value;
+      }
+      if (cartesianTraceAxisCombos_[i]) {
+        const QSignalBlocker blocker(cartesianTraceAxisCombos_[i]);
+        const int index = cartesianTraceAxisGetters_[i]
+                ? cartesianAxisToIndex(cartesianTraceAxisGetters_[i]())
+                : cartesianAxisToIndex(CartesianPlotYAxis::kY1);
+        cartesianTraceAxisCombos_[i]->setCurrentIndex(index);
+        cartesianTraceAxisCombos_[i]->setEnabled(static_cast<bool>(cartesianTraceAxisSetters_[i]));
+      }
+      if (cartesianTraceSideCombos_[i]) {
+        const QSignalBlocker blocker(cartesianTraceSideCombos_[i]);
+        const bool usesRight = cartesianTraceSideGetters_[i]
+                ? cartesianTraceSideGetters_[i]()
+                : false;
+        cartesianTraceSideCombos_[i]->setCurrentIndex(usesRight ? 1 : 0);
+        cartesianTraceSideCombos_[i]->setEnabled(static_cast<bool>(cartesianTraceSideSetters_[i]));
+      }
+    }
+
+    elementLabel_->setText(QStringLiteral("Cartesian Plot"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void showForByteMonitor(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> foregroundGetter,
@@ -3444,6 +4023,122 @@ public:
       const QSignalBlocker blocker(stripUnitsCombo_);
       stripUnitsCombo_->setCurrentIndex(timeUnitsToIndex(TimeUnits::kSeconds));
     }
+    cartesianTitleGetter_ = {};
+    cartesianTitleSetter_ = {};
+    cartesianXLabelGetter_ = {};
+    cartesianXLabelSetter_ = {};
+    for (auto &getter : cartesianYLabelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianYLabelSetters_) {
+      setter = {};
+    }
+    cartesianForegroundGetter_ = {};
+    cartesianForegroundSetter_ = {};
+    cartesianBackgroundGetter_ = {};
+    cartesianBackgroundSetter_ = {};
+    cartesianStyleGetter_ = {};
+    cartesianStyleSetter_ = {};
+    cartesianEraseOldestGetter_ = {};
+    cartesianEraseOldestSetter_ = {};
+    cartesianCountGetter_ = {};
+    cartesianCountSetter_ = {};
+    cartesianEraseModeGetter_ = {};
+    cartesianEraseModeSetter_ = {};
+    cartesianTriggerGetter_ = {};
+    cartesianTriggerSetter_ = {};
+    cartesianEraseGetter_ = {};
+    cartesianEraseSetter_ = {};
+    cartesianCountPvGetter_ = {};
+    cartesianCountPvSetter_ = {};
+    for (auto &getter : cartesianTraceXGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceXSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceYGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceYSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceColorGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceColorSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceAxisGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceAxisSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceSideGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceSideSetters_) {
+      setter = {};
+    }
+    if (cartesianStyleCombo_) {
+      const QSignalBlocker blocker(cartesianStyleCombo_);
+      cartesianStyleCombo_->setCurrentIndex(cartesianPlotStyleToIndex(
+          CartesianPlotStyle::kLine));
+      cartesianStyleCombo_->setEnabled(false);
+    }
+    if (cartesianEraseOldestCombo_) {
+      const QSignalBlocker blocker(cartesianEraseOldestCombo_);
+      cartesianEraseOldestCombo_->setCurrentIndex(0);
+      cartesianEraseOldestCombo_->setEnabled(false);
+    }
+    if (cartesianCountEdit_) {
+      cartesianCountEdit_->setEnabled(false);
+    }
+    if (cartesianEraseModeCombo_) {
+      const QSignalBlocker blocker(cartesianEraseModeCombo_);
+      cartesianEraseModeCombo_->setCurrentIndex(
+          cartesianEraseModeToIndex(CartesianPlotEraseMode::kIfNotZero));
+      cartesianEraseModeCombo_->setEnabled(false);
+    }
+    if (cartesianTriggerEdit_) {
+      cartesianTriggerEdit_->setEnabled(false);
+    }
+    if (cartesianEraseEdit_) {
+      cartesianEraseEdit_->setEnabled(false);
+    }
+    if (cartesianCountPvEdit_) {
+      cartesianCountPvEdit_->setEnabled(false);
+    }
+    for (auto *button : cartesianTraceColorButtons_) {
+      if (button) {
+        button->setEnabled(false);
+      }
+    }
+    for (auto *edit : cartesianTraceXEdits_) {
+      if (edit) {
+        edit->setEnabled(false);
+      }
+    }
+    for (auto *edit : cartesianTraceYEdits_) {
+      if (edit) {
+        edit->setEnabled(false);
+      }
+    }
+    for (auto *combo : cartesianTraceAxisCombos_) {
+      if (combo) {
+        const QSignalBlocker blocker(combo);
+        combo->setCurrentIndex(0);
+        combo->setEnabled(false);
+      }
+    }
+    for (auto *combo : cartesianTraceSideCombos_) {
+      if (combo) {
+        const QSignalBlocker blocker(combo);
+        combo->setCurrentIndex(0);
+        combo->setEnabled(false);
+      }
+    }
     byteForegroundGetter_ = {};
     byteForegroundSetter_ = {};
     byteBackgroundGetter_ = {};
@@ -3541,6 +4236,21 @@ public:
     for (QLineEdit *edit : stripPenChannelEdits_) {
       resetLineEdit(edit);
     }
+    resetLineEdit(cartesianTitleEdit_);
+    resetLineEdit(cartesianXLabelEdit_);
+    for (QLineEdit *edit : cartesianYLabelEdits_) {
+      resetLineEdit(edit);
+    }
+    resetLineEdit(cartesianCountEdit_);
+    resetLineEdit(cartesianTriggerEdit_);
+    resetLineEdit(cartesianEraseEdit_);
+    resetLineEdit(cartesianCountPvEdit_);
+    for (QLineEdit *edit : cartesianTraceXEdits_) {
+      resetLineEdit(edit);
+    }
+    for (QLineEdit *edit : cartesianTraceYEdits_) {
+      resetLineEdit(edit);
+    }
     resetLineEdit(barChannelEdit_);
     resetLineEdit(scaleChannelEdit_);
     resetLineEdit(rectangleLineWidthEdit_);
@@ -3574,6 +4284,11 @@ public:
     resetColorButton(stripForegroundButton_);
     resetColorButton(stripBackgroundButton_);
     for (QPushButton *button : stripPenColorButtons_) {
+      resetColorButton(button);
+    }
+    resetColorButton(cartesianForegroundButton_);
+    resetColorButton(cartesianBackgroundButton_);
+    for (QPushButton *button : cartesianTraceColorButtons_) {
       resetColorButton(button);
     }
     resetColorButton(rectangleForegroundButton_);
@@ -3752,6 +4467,7 @@ private:
     kBarMonitor,
     kScaleMonitor,
     kStripChart,
+    kCartesianPlot,
     kByteMonitor
   };
   QLineEdit *createLineEdit()
@@ -3955,6 +4671,11 @@ private:
       const bool stripVisible = kind == SelectionKind::kStripChart;
       stripChartSection_->setVisible(stripVisible);
       stripChartSection_->setEnabled(stripVisible);
+    }
+    if (cartesianSection_) {
+      const bool cartesianVisible = kind == SelectionKind::kCartesianPlot;
+      cartesianSection_->setVisible(cartesianVisible);
+      cartesianSection_->setEnabled(cartesianVisible);
     }
     if (byteSection_) {
       const bool byteVisible = kind == SelectionKind::kByteMonitor;
@@ -4177,6 +4898,150 @@ private:
     updateStripChartPenLimitsFromDialog(index);
   }
 
+  void commitCartesianTitle()
+  {
+    if (!cartesianTitleEdit_) {
+      return;
+    }
+    if (!cartesianTitleSetter_) {
+      revertLineEdit(cartesianTitleEdit_);
+      return;
+    }
+    const QString value = cartesianTitleEdit_->text();
+    cartesianTitleSetter_(value);
+    committedTexts_[cartesianTitleEdit_] = value;
+  }
+
+  void commitCartesianXLabel()
+  {
+    if (!cartesianXLabelEdit_) {
+      return;
+    }
+    if (!cartesianXLabelSetter_) {
+      revertLineEdit(cartesianXLabelEdit_);
+      return;
+    }
+    const QString value = cartesianXLabelEdit_->text();
+    cartesianXLabelSetter_(value);
+    committedTexts_[cartesianXLabelEdit_] = value;
+  }
+
+  void commitCartesianYLabel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(cartesianYLabelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = cartesianYLabelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!cartesianYLabelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    cartesianYLabelSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitCartesianCount()
+  {
+    if (!cartesianCountEdit_) {
+      return;
+    }
+    if (!cartesianCountSetter_) {
+      revertLineEdit(cartesianCountEdit_);
+      return;
+    }
+    bool ok = false;
+    int value = cartesianCountEdit_->text().toInt(&ok);
+    if (!ok || value <= 0) {
+      revertLineEdit(cartesianCountEdit_);
+      return;
+    }
+    cartesianCountSetter_(value);
+    cartesianCountEdit_->setText(QString::number(std::max(value, 1)));
+    committedTexts_[cartesianCountEdit_] = cartesianCountEdit_->text();
+  }
+
+  void commitCartesianTrigger()
+  {
+    if (!cartesianTriggerEdit_) {
+      return;
+    }
+    if (!cartesianTriggerSetter_) {
+      revertLineEdit(cartesianTriggerEdit_);
+      return;
+    }
+    const QString value = cartesianTriggerEdit_->text();
+    cartesianTriggerSetter_(value);
+    committedTexts_[cartesianTriggerEdit_] = value;
+  }
+
+  void commitCartesianErase()
+  {
+    if (!cartesianEraseEdit_) {
+      return;
+    }
+    if (!cartesianEraseSetter_) {
+      revertLineEdit(cartesianEraseEdit_);
+      return;
+    }
+    const QString value = cartesianEraseEdit_->text();
+    cartesianEraseSetter_(value);
+    committedTexts_[cartesianEraseEdit_] = value;
+  }
+
+  void commitCartesianCountPv()
+  {
+    if (!cartesianCountPvEdit_) {
+      return;
+    }
+    if (!cartesianCountPvSetter_) {
+      revertLineEdit(cartesianCountPvEdit_);
+      return;
+    }
+    const QString value = cartesianCountPvEdit_->text();
+    cartesianCountPvSetter_(value);
+    committedTexts_[cartesianCountPvEdit_] = value;
+  }
+
+  void commitCartesianTraceXChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(cartesianTraceXEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = cartesianTraceXEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!cartesianTraceXSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    cartesianTraceXSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitCartesianTraceYChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(cartesianTraceYEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = cartesianTraceYEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!cartesianTraceYSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    cartesianTraceYSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
   void commitByteChannel()
   {
     if (!byteChannelEdit_) {
@@ -4209,6 +5074,119 @@ private:
     if (stripUnitsGetter_) {
       const QSignalBlocker blocker(stripUnitsCombo_);
       stripUnitsCombo_->setCurrentIndex(timeUnitsToIndex(stripUnitsGetter_()));
+    }
+  }
+
+  void handleCartesianStyleChanged(int index)
+  {
+    if (!cartesianStyleCombo_) {
+      return;
+    }
+    if (!cartesianStyleSetter_) {
+      const QSignalBlocker blocker(cartesianStyleCombo_);
+      const int currentIndex = cartesianStyleGetter_
+              ? cartesianPlotStyleToIndex(cartesianStyleGetter_())
+              : cartesianPlotStyleToIndex(CartesianPlotStyle::kLine);
+      cartesianStyleCombo_->setCurrentIndex(currentIndex);
+      return;
+    }
+    cartesianStyleSetter_(indexToCartesianPlotStyle(index));
+    if (cartesianStyleGetter_) {
+      const QSignalBlocker blocker(cartesianStyleCombo_);
+      cartesianStyleCombo_->setCurrentIndex(
+          cartesianPlotStyleToIndex(cartesianStyleGetter_()));
+    }
+  }
+
+  void handleCartesianEraseOldestChanged(int index)
+  {
+    if (!cartesianEraseOldestCombo_) {
+      return;
+    }
+    if (!cartesianEraseOldestSetter_) {
+      const QSignalBlocker blocker(cartesianEraseOldestCombo_);
+      const bool eraseOldest = cartesianEraseOldestGetter_
+              ? cartesianEraseOldestGetter_()
+              : false;
+      cartesianEraseOldestCombo_->setCurrentIndex(eraseOldest ? 1 : 0);
+      return;
+    }
+    const bool value = (index != 0);
+    cartesianEraseOldestSetter_(value);
+    if (cartesianEraseOldestGetter_) {
+      const QSignalBlocker blocker(cartesianEraseOldestCombo_);
+      cartesianEraseOldestCombo_->setCurrentIndex(
+          cartesianEraseOldestGetter_() ? 1 : 0);
+    }
+  }
+
+  void handleCartesianEraseModeChanged(int index)
+  {
+    if (!cartesianEraseModeCombo_) {
+      return;
+    }
+    if (!cartesianEraseModeSetter_) {
+      const QSignalBlocker blocker(cartesianEraseModeCombo_);
+      const int currentIndex = cartesianEraseModeGetter_
+              ? cartesianEraseModeToIndex(cartesianEraseModeGetter_())
+              : cartesianEraseModeToIndex(CartesianPlotEraseMode::kIfNotZero);
+      cartesianEraseModeCombo_->setCurrentIndex(currentIndex);
+      return;
+    }
+    cartesianEraseModeSetter_(indexToCartesianPlotEraseMode(index));
+    if (cartesianEraseModeGetter_) {
+      const QSignalBlocker blocker(cartesianEraseModeCombo_);
+      cartesianEraseModeCombo_->setCurrentIndex(
+          cartesianEraseModeToIndex(cartesianEraseModeGetter_()));
+    }
+  }
+
+  void handleCartesianTraceAxisChanged(int index, int comboIndex)
+  {
+    if (index < 0 || index >= static_cast<int>(cartesianTraceAxisCombos_.size())) {
+      return;
+    }
+    if (!cartesianTraceAxisCombos_[index]) {
+      return;
+    }
+    if (!cartesianTraceAxisSetters_[index]) {
+      const QSignalBlocker blocker(cartesianTraceAxisCombos_[index]);
+      const int currentIndex = cartesianTraceAxisGetters_[index]
+              ? cartesianAxisToIndex(cartesianTraceAxisGetters_[index]())
+              : cartesianAxisToIndex(CartesianPlotYAxis::kY1);
+      cartesianTraceAxisCombos_[index]->setCurrentIndex(currentIndex);
+      return;
+    }
+    cartesianTraceAxisSetters_[index](indexToCartesianAxis(comboIndex));
+    if (cartesianTraceAxisGetters_[index]) {
+      const QSignalBlocker blocker(cartesianTraceAxisCombos_[index]);
+      cartesianTraceAxisCombos_[index]->setCurrentIndex(
+          cartesianAxisToIndex(cartesianTraceAxisGetters_[index]()));
+    }
+  }
+
+  void handleCartesianTraceSideChanged(int index, int comboIndex)
+  {
+    if (index < 0 || index >= static_cast<int>(cartesianTraceSideCombos_.size())) {
+      return;
+    }
+    if (!cartesianTraceSideCombos_[index]) {
+      return;
+    }
+    if (!cartesianTraceSideSetters_[index]) {
+      const QSignalBlocker blocker(cartesianTraceSideCombos_[index]);
+      const bool usesRight = cartesianTraceSideGetters_[index]
+              ? cartesianTraceSideGetters_[index]()
+              : false;
+      cartesianTraceSideCombos_[index]->setCurrentIndex(usesRight ? 1 : 0);
+      return;
+    }
+    const bool usesRight = (comboIndex != 0);
+    cartesianTraceSideSetters_[index](usesRight);
+    if (cartesianTraceSideGetters_[index]) {
+      const QSignalBlocker blocker(cartesianTraceSideCombos_[index]);
+      cartesianTraceSideCombos_[index]->setCurrentIndex(
+          cartesianTraceSideGetters_[index]() ? 1 : 0);
     }
   }
 
@@ -4816,6 +5794,89 @@ private:
     }
   }
 
+  int cartesianPlotStyleToIndex(CartesianPlotStyle style) const
+  {
+    switch (style) {
+    case CartesianPlotStyle::kPoint:
+      return 0;
+    case CartesianPlotStyle::kLine:
+      return 1;
+    case CartesianPlotStyle::kStep:
+      return 2;
+    case CartesianPlotStyle::kFillUnder:
+      return 3;
+    default:
+      return 1;
+    }
+  }
+
+  CartesianPlotStyle indexToCartesianPlotStyle(int index) const
+  {
+    switch (index) {
+    case 0:
+      return CartesianPlotStyle::kPoint;
+    case 2:
+      return CartesianPlotStyle::kStep;
+    case 3:
+      return CartesianPlotStyle::kFillUnder;
+    case 1:
+    default:
+      return CartesianPlotStyle::kLine;
+    }
+  }
+
+  int cartesianEraseModeToIndex(CartesianPlotEraseMode mode) const
+  {
+    switch (mode) {
+    case CartesianPlotEraseMode::kIfZero:
+      return 1;
+    case CartesianPlotEraseMode::kIfNotZero:
+    default:
+      return 0;
+    }
+  }
+
+  CartesianPlotEraseMode indexToCartesianPlotEraseMode(int index) const
+  {
+    switch (index) {
+    case 1:
+      return CartesianPlotEraseMode::kIfZero;
+    case 0:
+    default:
+      return CartesianPlotEraseMode::kIfNotZero;
+    }
+  }
+
+  int cartesianAxisToIndex(CartesianPlotYAxis axis) const
+  {
+    switch (axis) {
+    case CartesianPlotYAxis::kY2:
+      return 1;
+    case CartesianPlotYAxis::kY3:
+      return 2;
+    case CartesianPlotYAxis::kY4:
+      return 3;
+    case CartesianPlotYAxis::kY1:
+    default:
+      return 0;
+    }
+  }
+
+  CartesianPlotYAxis indexToCartesianAxis(int index) const
+  {
+    switch (index) {
+    case 1:
+      return CartesianPlotYAxis::kY2;
+    case 2:
+      return CartesianPlotYAxis::kY3;
+    case 3:
+      return CartesianPlotYAxis::kY4;
+    case 0:
+    default:
+      return CartesianPlotYAxis::kY1;
+    }
+  }
+
   static int degreesToAngle64(int degrees)
   {
     return degrees * 64;
@@ -5086,6 +6147,24 @@ private:
   std::array<QPushButton *, kStripChartPenCount> stripPenColorButtons_{};
   std::array<QLineEdit *, kStripChartPenCount> stripPenChannelEdits_{};
   std::array<QPushButton *, kStripChartPenCount> stripPenLimitsButtons_{};
+  QWidget *cartesianSection_ = nullptr;
+  QLineEdit *cartesianTitleEdit_ = nullptr;
+  QLineEdit *cartesianXLabelEdit_ = nullptr;
+  std::array<QLineEdit *, 4> cartesianYLabelEdits_{};
+  QPushButton *cartesianForegroundButton_ = nullptr;
+  QPushButton *cartesianBackgroundButton_ = nullptr;
+  QComboBox *cartesianStyleCombo_ = nullptr;
+  QComboBox *cartesianEraseOldestCombo_ = nullptr;
+  QLineEdit *cartesianCountEdit_ = nullptr;
+  QComboBox *cartesianEraseModeCombo_ = nullptr;
+  QLineEdit *cartesianTriggerEdit_ = nullptr;
+  QLineEdit *cartesianEraseEdit_ = nullptr;
+  QLineEdit *cartesianCountPvEdit_ = nullptr;
+  std::array<QPushButton *, kCartesianPlotTraceCount> cartesianTraceColorButtons_{};
+  std::array<QLineEdit *, kCartesianPlotTraceCount> cartesianTraceXEdits_{};
+  std::array<QLineEdit *, kCartesianPlotTraceCount> cartesianTraceYEdits_{};
+  std::array<QComboBox *, kCartesianPlotTraceCount> cartesianTraceAxisCombos_{};
+  std::array<QComboBox *, kCartesianPlotTraceCount> cartesianTraceSideCombos_{};
   QWidget *byteSection_ = nullptr;
   QPushButton *byteForegroundButton_ = nullptr;
   QPushButton *byteBackgroundButton_ = nullptr;
@@ -5278,6 +6357,39 @@ private:
         committedTexts_[edit] = edit->text();
       }
     }
+    if (cartesianTitleEdit_) {
+      committedTexts_[cartesianTitleEdit_] = cartesianTitleEdit_->text();
+    }
+    if (cartesianXLabelEdit_) {
+      committedTexts_[cartesianXLabelEdit_] = cartesianXLabelEdit_->text();
+    }
+    for (QLineEdit *edit : cartesianYLabelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
+    if (cartesianCountEdit_) {
+      committedTexts_[cartesianCountEdit_] = cartesianCountEdit_->text();
+    }
+    if (cartesianTriggerEdit_) {
+      committedTexts_[cartesianTriggerEdit_] = cartesianTriggerEdit_->text();
+    }
+    if (cartesianEraseEdit_) {
+      committedTexts_[cartesianEraseEdit_] = cartesianEraseEdit_->text();
+    }
+    if (cartesianCountPvEdit_) {
+      committedTexts_[cartesianCountPvEdit_] = cartesianCountPvEdit_->text();
+    }
+    for (QLineEdit *edit : cartesianTraceXEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
+    for (QLineEdit *edit : cartesianTraceYEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
     if (barChannelEdit_) {
       committedTexts_[barChannelEdit_] = barChannelEdit_->text();
     }
@@ -5460,6 +6572,40 @@ private:
   std::array<std::function<void(const QColor &)>, kStripChartPenCount> stripPenColorSetters_{};
   std::array<std::function<PvLimits()>, kStripChartPenCount> stripPenLimitsGetters_{};
   std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> stripPenLimitsSetters_{};
+  std::function<QString()> cartesianTitleGetter_;
+  std::function<void(const QString &)> cartesianTitleSetter_;
+  std::function<QString()> cartesianXLabelGetter_;
+  std::function<void(const QString &)> cartesianXLabelSetter_;
+  std::array<std::function<QString()>, 4> cartesianYLabelGetters_{};
+  std::array<std::function<void(const QString &)>, 4> cartesianYLabelSetters_{};
+  std::function<QColor()> cartesianForegroundGetter_;
+  std::function<void(const QColor &)> cartesianForegroundSetter_;
+  std::function<QColor()> cartesianBackgroundGetter_;
+  std::function<void(const QColor &)> cartesianBackgroundSetter_;
+  std::function<CartesianPlotStyle()> cartesianStyleGetter_;
+  std::function<void(CartesianPlotStyle)> cartesianStyleSetter_;
+  std::function<bool()> cartesianEraseOldestGetter_;
+  std::function<void(bool)> cartesianEraseOldestSetter_;
+  std::function<int()> cartesianCountGetter_;
+  std::function<void(int)> cartesianCountSetter_;
+  std::function<CartesianPlotEraseMode()> cartesianEraseModeGetter_;
+  std::function<void(CartesianPlotEraseMode)> cartesianEraseModeSetter_;
+  std::function<QString()> cartesianTriggerGetter_;
+  std::function<void(const QString &)> cartesianTriggerSetter_;
+  std::function<QString()> cartesianEraseGetter_;
+  std::function<void(const QString &)> cartesianEraseSetter_;
+  std::function<QString()> cartesianCountPvGetter_;
+  std::function<void(const QString &)> cartesianCountPvSetter_;
+  std::array<std::function<QString()>, kCartesianPlotTraceCount> cartesianTraceXGetters_{};
+  std::array<std::function<void(const QString &)>, kCartesianPlotTraceCount> cartesianTraceXSetters_{};
+  std::array<std::function<QString()>, kCartesianPlotTraceCount> cartesianTraceYGetters_{};
+  std::array<std::function<void(const QString &)>, kCartesianPlotTraceCount> cartesianTraceYSetters_{};
+  std::array<std::function<QColor()>, kCartesianPlotTraceCount> cartesianTraceColorGetters_{};
+  std::array<std::function<void(const QColor &)>, kCartesianPlotTraceCount> cartesianTraceColorSetters_{};
+  std::array<std::function<CartesianPlotYAxis()>, kCartesianPlotTraceCount> cartesianTraceAxisGetters_{};
+  std::array<std::function<void(CartesianPlotYAxis)>, kCartesianPlotTraceCount> cartesianTraceAxisSetters_{};
+  std::array<std::function<bool()>, kCartesianPlotTraceCount> cartesianTraceSideGetters_{};
+  std::array<std::function<void(bool)>, kCartesianPlotTraceCount> cartesianTraceSideSetters_{};
   std::function<QColor()> byteForegroundGetter_;
   std::function<void(const QColor &)> byteForegroundSetter_;
   std::function<QColor()> byteBackgroundGetter_;

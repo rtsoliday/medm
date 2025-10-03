@@ -130,6 +130,38 @@ QString timeUnitsString(TimeUnits units)
   }
 }
 
+QString cartesianPlotStyleString(CartesianPlotStyle style)
+{
+  switch (style) {
+  case CartesianPlotStyle::kPoint:
+    return QStringLiteral("point");
+  case CartesianPlotStyle::kStep:
+    return QStringLiteral("step");
+  case CartesianPlotStyle::kFillUnder:
+    return QStringLiteral("fill-under");
+  case CartesianPlotStyle::kLine:
+  default:
+    return QStringLiteral("line");
+  }
+}
+
+QString cartesianEraseOldestString(bool eraseOldest)
+{
+  return eraseOldest ? QStringLiteral("plot last n pts")
+                     : QStringLiteral("plot n pts & stop");
+}
+
+QString cartesianEraseModeString(CartesianPlotEraseMode mode)
+{
+  switch (mode) {
+  case CartesianPlotEraseMode::kIfZero:
+    return QStringLiteral("if zero");
+  case CartesianPlotEraseMode::kIfNotZero:
+  default:
+    return QStringLiteral("if not zero");
+  }
+}
+
 QString channelFieldName(int index)
 {
   if (index <= 0) {
@@ -303,8 +335,8 @@ void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
 }
 
 void writePlotcom(QTextStream &stream, int level, const QString &title,
-    const QString &xLabel, const QString &yLabel, int colorIndex,
-    int backgroundIndex)
+    const QString &xLabel, const std::array<QString, 4> &yLabels,
+    int colorIndex, int backgroundIndex)
 {
   writeIndentedLine(stream, level, QStringLiteral("plotcom {"));
   if (!title.trimmed().isEmpty()) {
@@ -317,10 +349,25 @@ void writePlotcom(QTextStream &stream, int level, const QString &title,
         QStringLiteral("xlabel=\"%1\"")
             .arg(escapeAdlString(xLabel.trimmed())));
   }
-  if (!yLabel.trimmed().isEmpty()) {
+  if (!yLabels[0].trimmed().isEmpty()) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("ylabel=\"%1\"")
-            .arg(escapeAdlString(yLabel.trimmed())));
+            .arg(escapeAdlString(yLabels[0].trimmed())));
+  }
+  if (!yLabels[1].trimmed().isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("y2label=\"%1\"")
+            .arg(escapeAdlString(yLabels[1].trimmed())));
+  }
+  if (!yLabels[2].trimmed().isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("y3label=\"%1\"")
+            .arg(escapeAdlString(yLabels[2].trimmed())));
+  }
+  if (!yLabels[3].trimmed().isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("y4label=\"%1\"")
+            .arg(escapeAdlString(yLabels[3].trimmed())));
   }
   writeIndentedLine(stream, level + 1,
       QStringLiteral("clr=%1").arg(colorIndex));
@@ -373,6 +420,38 @@ void writeStripChartPenSection(QTextStream &stream, int level, int index,
   writeIndentedLine(stream, level + 1,
       QStringLiteral("clr=%1").arg(colorIndex));
   writeLimitsSection(stream, level + 1, limits);
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeCartesianTraceSection(QTextStream &stream, int level, int index,
+    const QString &xChannel, const QString &yChannel, int colorIndex,
+    int axisIndex, bool usesRightAxis)
+{
+  const QString trimmedX = xChannel.trimmed();
+  const QString trimmedY = yChannel.trimmed();
+  if (trimmedX.isEmpty() && trimmedY.isEmpty()) {
+    return;
+  }
+
+  writeIndentedLine(stream, level,
+      QStringLiteral("trace[%1] {").arg(index));
+  if (!trimmedX.isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("xdata=\"%1\"")
+            .arg(escapeAdlString(trimmedX)));
+  }
+  if (!trimmedY.isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("ydata=\"%1\"")
+            .arg(escapeAdlString(trimmedY)));
+  }
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("data_clr=%1").arg(colorIndex));
+  const int clampedAxis = std::max(0, std::min(3, axisIndex));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("yaxis=%1").arg(clampedAxis));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("yside=%1").arg(usesRightAxis ? 1 : 0));
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 

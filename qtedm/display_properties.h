@@ -98,7 +98,30 @@ enum class TimeUnits
   kMinutes,
 };
 
+enum class CartesianPlotStyle
+{
+  kPoint,
+  kLine,
+  kStep,
+  kFillUnder,
+};
+
+enum class CartesianPlotEraseMode
+{
+  kIfNotZero,
+  kIfZero,
+};
+
+enum class CartesianPlotYAxis
+{
+  kY1,
+  kY2,
+  kY3,
+  kY4,
+};
+
 constexpr int kStripChartPenCount = 8;
+constexpr int kCartesianPlotTraceCount = 8;
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
 constexpr int kDefaultGridSpacing = 5;
@@ -114,6 +137,8 @@ constexpr int kMinimumByteSize = 30;
 constexpr int kMinimumScaleSize = 40;
 constexpr int kMinimumStripChartWidth = 120;
 constexpr int kMinimumStripChartHeight = 80;
+constexpr int kMinimumCartesianPlotWidth = 160;
+constexpr int kMinimumCartesianPlotHeight = 120;
 constexpr double kDefaultStripChartPeriod = 60.0;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;

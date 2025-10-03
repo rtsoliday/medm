@@ -253,6 +253,7 @@ protected:
             || state->createTool == CreateTool::kByteMonitor
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
+            || state->createTool == CreateTool::kCartesianPlot
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -301,6 +302,12 @@ protected:
           if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
             selectStripChartElement(strip);
             showResourcePaletteForStripChart(strip);
+            event->accept();
+            return;
+          }
+          if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
+            selectCartesianPlotElement(cart);
+            showResourcePaletteForCartesianPlot(cart);
             event->accept();
             return;
           }
@@ -511,6 +518,8 @@ private:
   ScaleMonitorElement *selectedScaleMonitorElement_ = nullptr;
   QList<StripChartElement *> stripChartElements_;
   StripChartElement *selectedStripChartElement_ = nullptr;
+  QList<CartesianPlotElement *> cartesianPlotElements_;
+  CartesianPlotElement *selectedCartesianPlotElement_ = nullptr;
   QList<ByteMonitorElement *> byteMonitorElements_;
   ByteMonitorElement *selectedByteMonitorElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
@@ -604,6 +613,15 @@ private:
     selectedStripChartElement_ = nullptr;
   }
 
+  void clearCartesianPlotSelection()
+  {
+    if (!selectedCartesianPlotElement_) {
+      return;
+    }
+    selectedCartesianPlotElement_->setSelected(false);
+    selectedCartesianPlotElement_ = nullptr;
+  }
+
   void clearBarMonitorSelection()
   {
     if (!selectedBarMonitorElement_) {
@@ -693,6 +711,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -720,6 +739,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -1181,6 +1201,166 @@ private:
         std::move(channelGetters), std::move(channelSetters),
         std::move(colorGetters), std::move(colorSetters),
         std::move(limitsGetters), std::move(limitsSetters));
+  }
+
+  void showResourcePaletteForCartesianPlot(CartesianPlotElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    std::array<std::function<QString()>, 4> yLabelGetters{};
+    std::array<std::function<void(const QString &)>, 4> yLabelSetters{};
+    for (int i = 0; i < 4; ++i) {
+      yLabelGetters[i] = [element, i]() { return element->yLabel(i); };
+      yLabelSetters[i] = [this, element, i](const QString &label) {
+        element->setYLabel(i, label);
+        markDirty();
+      };
+    }
+
+    std::array<std::function<QString()>, kCartesianPlotTraceCount> xChannelGetters{};
+    std::array<std::function<void(const QString &)>, kCartesianPlotTraceCount> xChannelSetters{};
+    std::array<std::function<QString()>, kCartesianPlotTraceCount> yChannelGetters{};
+    std::array<std::function<void(const QString &)>, kCartesianPlotTraceCount> yChannelSetters{};
+    std::array<std::function<QColor()>, kCartesianPlotTraceCount> colorGetters{};
+    std::array<std::function<void(const QColor &)>, kCartesianPlotTraceCount> colorSetters{};
+    std::array<std::function<CartesianPlotYAxis()>, kCartesianPlotTraceCount> axisGetters{};
+    std::array<std::function<void(CartesianPlotYAxis)>, kCartesianPlotTraceCount> axisSetters{};
+    std::array<std::function<bool()>, kCartesianPlotTraceCount> sideGetters{};
+    std::array<std::function<void(bool)>, kCartesianPlotTraceCount> sideSetters{};
+
+    for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
+      xChannelGetters[i] = [element, i]() { return element->traceXChannel(i); };
+      xChannelSetters[i] = [this, element, i](const QString &channel) {
+        element->setTraceXChannel(i, channel);
+        markDirty();
+      };
+      yChannelGetters[i] = [element, i]() { return element->traceYChannel(i); };
+      yChannelSetters[i] = [this, element, i](const QString &channel) {
+        element->setTraceYChannel(i, channel);
+        markDirty();
+      };
+      colorGetters[i] = [element, i]() { return element->traceColor(i); };
+      colorSetters[i] = [this, element, i](const QColor &color) {
+        element->setTraceColor(i, color);
+        markDirty();
+      };
+      axisGetters[i] = [element, i]() { return element->traceYAxis(i); };
+      axisSetters[i] = [this, element, i](CartesianPlotYAxis axis) {
+        element->setTraceYAxis(i, axis);
+        markDirty();
+      };
+      sideGetters[i] = [element, i]() { return element->traceUsesRightAxis(i); };
+      sideSetters[i] = [this, element, i](bool usesRight) {
+        element->setTraceUsesRightAxis(i, usesRight);
+        markDirty();
+      };
+    }
+
+    dialog->showForCartesianPlot(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumCartesianPlotWidth) {
+            adjusted.setWidth(kMinimumCartesianPlotWidth);
+          }
+          if (adjusted.height() < kMinimumCartesianPlotHeight) {
+            adjusted.setHeight(kMinimumCartesianPlotHeight);
+          }
+          adjusted = adjustRectToDisplayArea(adjusted);
+          element->setGeometry(adjusted);
+          markDirty();
+        },
+        [element]() {
+          return element->title();
+        },
+        [this, element](const QString &title) {
+          element->setTitle(title);
+          markDirty();
+        },
+        [element]() {
+          return element->xLabel();
+        },
+        [this, element](const QString &label) {
+          element->setXLabel(label);
+          markDirty();
+        },
+        std::move(yLabelGetters), std::move(yLabelSetters),
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->style();
+        },
+        [this, element](CartesianPlotStyle style) {
+          element->setStyle(style);
+          markDirty();
+        },
+        [element]() {
+          return element->eraseOldest();
+        },
+        [this, element](bool eraseOldest) {
+          element->setEraseOldest(eraseOldest);
+          markDirty();
+        },
+        [element]() {
+          return element->count();
+        },
+        [this, element](int count) {
+          element->setCount(count);
+          markDirty();
+        },
+        [element]() {
+          return element->eraseMode();
+        },
+        [this, element](CartesianPlotEraseMode mode) {
+          element->setEraseMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->triggerChannel();
+        },
+        [this, element](const QString &channel) {
+          element->setTriggerChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->eraseChannel();
+        },
+        [this, element](const QString &channel) {
+          element->setEraseChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->countChannel();
+        },
+        [this, element](const QString &channel) {
+          element->setCountChannel(channel);
+          markDirty();
+        },
+        std::move(xChannelGetters), std::move(xChannelSetters),
+        std::move(yChannelGetters), std::move(yChannelSetters),
+        std::move(colorGetters), std::move(colorSetters),
+        std::move(axisGetters), std::move(axisSetters),
+        std::move(sideGetters), std::move(sideSetters));
   }
 
   void showResourcePaletteForBar(BarMonitorElement *element)
@@ -2160,6 +2340,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2186,6 +2367,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2213,6 +2395,7 @@ private:
     clearTextMonitorSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2241,6 +2424,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2269,6 +2453,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2280,6 +2465,35 @@ private:
     clearPolygonSelection();
     selectedStripChartElement_ = element;
     selectedStripChartElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectCartesianPlotElement(CartesianPlotElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedCartesianPlotElement_) {
+      selectedCartesianPlotElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedCartesianPlotElement_ = element;
+    selectedCartesianPlotElement_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -2297,6 +2511,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2325,6 +2540,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2353,6 +2569,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearImageSelection();
@@ -2379,6 +2596,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2406,6 +2624,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2432,6 +2651,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2459,6 +2679,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2486,6 +2707,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2513,6 +2735,7 @@ private:
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
+    clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2633,6 +2856,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createStripChartElement(rect);
+      break;
+    case CreateTool::kCartesianPlot:
+      if (rect.width() < kMinimumCartesianPlotWidth) {
+        rect.setWidth(kMinimumCartesianPlotWidth);
+      }
+      if (rect.height() < kMinimumCartesianPlotHeight) {
+        rect.setHeight(kMinimumCartesianPlotHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createCartesianPlotElement(rect);
       break;
     case CreateTool::kRectangle:
       if (rect.width() <= 0) {
@@ -3091,6 +3324,32 @@ private:
     markDirty();
   }
 
+  void createCartesianPlotElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumCartesianPlotWidth) {
+      target.setWidth(kMinimumCartesianPlotWidth);
+    }
+    if (target.height() < kMinimumCartesianPlotHeight) {
+      target.setHeight(kMinimumCartesianPlotHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new CartesianPlotElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    cartesianPlotElements_.append(element);
+    selectCartesianPlotElement(element);
+    showResourcePaletteForCartesianPlot(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createByteMonitorElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -3304,6 +3563,7 @@ private:
             || state->createTool == CreateTool::kByteMonitor
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
+            || state->createTool == CreateTool::kCartesianPlot
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -3499,7 +3759,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(monitorsMenu, QStringLiteral("Cartesian Plot"));
+    auto *cartesianAction =
+        addMenuAction(monitorsMenu, QStringLiteral("Cartesian Plot"));
+    QObject::connect(cartesianAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kCartesianPlot);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
 
     auto *controllersMenu = objectMenu->addMenu(QStringLiteral("Controllers"));
     addMenuAction(controllersMenu, QStringLiteral("Text Entry"));
@@ -3836,8 +4103,10 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"strip chart\" {"));
       AdlWriter::writeObjectSection(stream, 1, strip->geometry());
+      std::array<QString, 4> stripYLabels{};
+      stripYLabels[0] = strip->yLabel();
       AdlWriter::writePlotcom(stream, 1, strip->title(), strip->xLabel(),
-          strip->yLabel(), AdlWriter::medmColorIndex(strip->foregroundColor()),
+          stripYLabels, AdlWriter::medmColorIndex(strip->foregroundColor()),
           AdlWriter::medmColorIndex(strip->backgroundColor()));
       const double period = strip->period();
       if (period > 0.0
@@ -3857,6 +4126,85 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
         const PvLimits limits = strip->penLimits(i);
         AdlWriter::writeStripChartPenSection(stream, 1, i, channel,
             AdlWriter::medmColorIndex(penColor), limits);
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *cartesian = dynamic_cast<CartesianPlotElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("\"cartesian plot\" {"));
+      AdlWriter::writeObjectSection(stream, 1, cartesian->geometry());
+      std::array<QString, 4> yLabels{};
+      for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
+        yLabels[i] = cartesian->yLabel(i);
+      }
+      AdlWriter::writePlotcom(stream, 1, cartesian->title(),
+          cartesian->xLabel(), yLabels,
+          AdlWriter::medmColorIndex(cartesian->foregroundColor()),
+          AdlWriter::medmColorIndex(cartesian->backgroundColor()));
+      if (cartesian->style() != CartesianPlotStyle::kPoint) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("style=\"%1\"")
+                .arg(AdlWriter::cartesianPlotStyleString(cartesian->style())));
+      }
+      if (cartesian->eraseOldest()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("erase_oldest=\"%1\"")
+                .arg(AdlWriter::cartesianEraseOldestString(
+                    cartesian->eraseOldest())));
+      }
+      if (cartesian->count() > 1) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("count=\"%1\"")
+                .arg(QString::number(cartesian->count())));
+      }
+      auto axisIndexFor = [](CartesianPlotYAxis axis) {
+        switch (axis) {
+        case CartesianPlotYAxis::kY2:
+          return 1;
+        case CartesianPlotYAxis::kY3:
+          return 2;
+        case CartesianPlotYAxis::kY4:
+          return 3;
+        case CartesianPlotYAxis::kY1:
+        default:
+          return 0;
+        }
+      };
+      for (int i = 0; i < cartesian->traceCount(); ++i) {
+        const QString xChannel = cartesian->traceXChannel(i);
+        const QString yChannel = cartesian->traceYChannel(i);
+        const int colorIndex = AdlWriter::medmColorIndex(
+            cartesian->traceColor(i));
+        const int axisIndex = axisIndexFor(cartesian->traceYAxis(i));
+        const bool usesRightAxis = cartesian->traceUsesRightAxis(i);
+        AdlWriter::writeCartesianTraceSection(stream, 1, i, xChannel,
+            yChannel, colorIndex, axisIndex, usesRightAxis);
+      }
+      const QString trigger = cartesian->triggerChannel().trimmed();
+      if (!trigger.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("trigger=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(trigger)));
+      }
+      const QString erase = cartesian->eraseChannel().trimmed();
+      if (!erase.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("erase=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(erase)));
+      }
+      const QString countPv = cartesian->countChannel().trimmed();
+      if (!countPv.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("countPvName=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(countPv)));
+      }
+      if (cartesian->eraseMode() != CartesianPlotEraseMode::kIfNotZero) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("eraseMode=\"%1\"")
+                .arg(AdlWriter::cartesianEraseModeString(
+                    cartesian->eraseMode())));
       }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;

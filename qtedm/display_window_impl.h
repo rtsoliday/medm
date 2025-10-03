@@ -5513,6 +5513,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     fileName = info.fileName();
   }
   fileName = QDir::cleanPath(fileName);
+  AdlWriter::writeIndentedLine(stream, 0, QString());
   stream << "file {";
   AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("name=\"%1\"").arg(AdlWriter::escapeAdlString(fileName)));

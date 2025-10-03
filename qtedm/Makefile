@@ -46,6 +46,7 @@ qtedm_SRC = qtedm.cc \
             byte_monitor_element.cc \
             bar_monitor_element.cc \
             slider_element.cc \
+            wheel_switch_element.cc \
             meter_element.cc \
             scale_monitor_element.cc \
             strip_chart_element.cc \

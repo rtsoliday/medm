@@ -940,6 +940,92 @@ public:
     sliderLayout->setRowStretch(8, 1);
     entriesLayout->addWidget(sliderSection_);
 
+    wheelSwitchSection_ = new QWidget(entriesWidget_);
+    auto *wheelLayout = new QGridLayout(wheelSwitchSection_);
+    wheelLayout->setContentsMargins(0, 0, 0, 0);
+    wheelLayout->setHorizontalSpacing(12);
+    wheelLayout->setVerticalSpacing(6);
+
+    wheelSwitchForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(wheelSwitchForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(wheelSwitchForegroundButton_,
+              QStringLiteral("Wheel Switch Foreground"),
+              wheelSwitchForegroundSetter_);
+        });
+
+    wheelSwitchBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(wheelSwitchBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(wheelSwitchBackgroundButton_,
+              QStringLiteral("Wheel Switch Background"),
+              wheelSwitchBackgroundSetter_);
+        });
+
+    wheelSwitchColorModeCombo_ = new QComboBox;
+    wheelSwitchColorModeCombo_->setFont(valueFont_);
+    wheelSwitchColorModeCombo_->setAutoFillBackground(true);
+    wheelSwitchColorModeCombo_->addItem(QStringLiteral("Static"));
+    wheelSwitchColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    wheelSwitchColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(wheelSwitchColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (wheelSwitchColorModeSetter_) {
+            wheelSwitchColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    wheelSwitchPrecisionEdit_ = createLineEdit();
+    wheelSwitchPrecisionEdit_->setValidator(new QDoubleValidator(
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::max(), 6, wheelSwitchPrecisionEdit_));
+    committedTexts_.insert(wheelSwitchPrecisionEdit_, wheelSwitchPrecisionEdit_->text());
+    wheelSwitchPrecisionEdit_->installEventFilter(this);
+    QObject::connect(wheelSwitchPrecisionEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitWheelSwitchPrecision(); });
+    QObject::connect(wheelSwitchPrecisionEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitWheelSwitchPrecision(); });
+
+    wheelSwitchFormatEdit_ = createLineEdit();
+    committedTexts_.insert(wheelSwitchFormatEdit_, wheelSwitchFormatEdit_->text());
+    wheelSwitchFormatEdit_->installEventFilter(this);
+    QObject::connect(wheelSwitchFormatEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitWheelSwitchFormat(); });
+    QObject::connect(wheelSwitchFormatEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitWheelSwitchFormat(); });
+
+    wheelSwitchChannelEdit_ = createLineEdit();
+    committedTexts_.insert(wheelSwitchChannelEdit_, wheelSwitchChannelEdit_->text());
+    wheelSwitchChannelEdit_->installEventFilter(this);
+    QObject::connect(wheelSwitchChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitWheelSwitchChannel(); });
+    QObject::connect(wheelSwitchChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitWheelSwitchChannel(); });
+
+    wheelSwitchPvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    wheelSwitchPvLimitsButton_->setEnabled(false);
+    QObject::connect(wheelSwitchPvLimitsButton_, &QPushButton::clicked, this,
+        [this]() { openWheelSwitchPvLimitsDialog(); });
+
+    addRow(wheelLayout, 0, QStringLiteral("Foreground"),
+        wheelSwitchForegroundButton_);
+    addRow(wheelLayout, 1, QStringLiteral("Background"),
+        wheelSwitchBackgroundButton_);
+    addRow(wheelLayout, 2, QStringLiteral("Color Mode"),
+        wheelSwitchColorModeCombo_);
+    addRow(wheelLayout, 3, QStringLiteral("Precision"),
+        wheelSwitchPrecisionEdit_);
+    addRow(wheelLayout, 4, QStringLiteral("Format"), wheelSwitchFormatEdit_);
+    addRow(wheelLayout, 5, QStringLiteral("Channel"), wheelSwitchChannelEdit_);
+    addRow(wheelLayout, 6, QStringLiteral("Channel Limits"),
+        wheelSwitchPvLimitsButton_);
+    wheelLayout->setRowStretch(7, 1);
+    entriesLayout->addWidget(wheelSwitchSection_);
+
     choiceButtonSection_ = new QWidget(entriesWidget_);
     auto *choiceLayout = new QGridLayout(choiceButtonSection_);
     choiceLayout->setContentsMargins(0, 0, 0, 0);
@@ -2733,6 +2819,171 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Slider"));
+    }
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForWheelSwitch(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<double()> precisionGetter,
+      std::function<void(double)> precisionSetter,
+      std::function<QString()> formatGetter,
+      std::function<void(const QString &)> formatSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kWheelSwitch;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    sliderForegroundGetter_ = {};
+    sliderForegroundSetter_ = {};
+    sliderBackgroundGetter_ = {};
+    sliderBackgroundSetter_ = {};
+    sliderLabelGetter_ = {};
+    sliderLabelSetter_ = {};
+    sliderColorModeGetter_ = {};
+    sliderColorModeSetter_ = {};
+    sliderDirectionGetter_ = {};
+    sliderDirectionSetter_ = {};
+    sliderPrecisionGetter_ = {};
+    sliderPrecisionSetter_ = {};
+    sliderChannelGetter_ = {};
+    sliderChannelSetter_ = {};
+    sliderLimitsGetter_ = {};
+    sliderLimitsSetter_ = {};
+    wheelSwitchForegroundGetter_ = {};
+    wheelSwitchForegroundSetter_ = {};
+    wheelSwitchBackgroundGetter_ = {};
+    wheelSwitchBackgroundSetter_ = {};
+    wheelSwitchColorModeGetter_ = {};
+    wheelSwitchColorModeSetter_ = {};
+    wheelSwitchPrecisionGetter_ = {};
+    wheelSwitchPrecisionSetter_ = {};
+    wheelSwitchFormatGetter_ = {};
+    wheelSwitchFormatSetter_ = {};
+    wheelSwitchChannelGetter_ = {};
+    wheelSwitchChannelSetter_ = {};
+    wheelSwitchLimitsGetter_ = {};
+    wheelSwitchLimitsSetter_ = {};
+
+    wheelSwitchForegroundGetter_ = std::move(foregroundGetter);
+    wheelSwitchForegroundSetter_ = std::move(foregroundSetter);
+    wheelSwitchBackgroundGetter_ = std::move(backgroundGetter);
+    wheelSwitchBackgroundSetter_ = std::move(backgroundSetter);
+    wheelSwitchColorModeGetter_ = std::move(colorModeGetter);
+    wheelSwitchColorModeSetter_ = std::move(colorModeSetter);
+    wheelSwitchPrecisionGetter_ = std::move(precisionGetter);
+    wheelSwitchPrecisionSetter_ = std::move(precisionSetter);
+    wheelSwitchFormatGetter_ = std::move(formatGetter);
+    wheelSwitchFormatSetter_ = std::move(formatSetter);
+    wheelSwitchChannelGetter_ = std::move(channelGetter);
+    wheelSwitchChannelSetter_ = std::move(channelSetter);
+    wheelSwitchLimitsGetter_ = std::move(limitsGetter);
+    wheelSwitchLimitsSetter_ = std::move(limitsSetter);
+
+    QRect entryGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (entryGeometry.width() <= 0) {
+      entryGeometry.setWidth(kMinimumWheelSwitchWidth);
+    }
+    if (entryGeometry.height() <= 0) {
+      entryGeometry.setHeight(kMinimumWheelSwitchHeight);
+    }
+    lastCommittedGeometry_ = entryGeometry;
+
+    updateGeometryEdits(entryGeometry);
+
+    if (wheelSwitchForegroundButton_) {
+      const QColor color = wheelSwitchForegroundGetter_ ? wheelSwitchForegroundGetter_()
+                                                       : palette().color(QPalette::WindowText);
+      setColorButtonColor(wheelSwitchForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (wheelSwitchBackgroundButton_) {
+      const QColor color = wheelSwitchBackgroundGetter_ ? wheelSwitchBackgroundGetter_()
+                                                       : palette().color(QPalette::Window);
+      setColorButtonColor(wheelSwitchBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (wheelSwitchColorModeCombo_) {
+      const QSignalBlocker blocker(wheelSwitchColorModeCombo_);
+      const int index = wheelSwitchColorModeGetter_
+              ? colorModeToIndex(wheelSwitchColorModeGetter_())
+              : colorModeToIndex(TextColorMode::kStatic);
+      wheelSwitchColorModeCombo_->setCurrentIndex(index);
+    }
+
+    updateWheelSwitchPrecisionEdit();
+
+    if (wheelSwitchFormatEdit_) {
+      const QString format = wheelSwitchFormatGetter_ ? wheelSwitchFormatGetter_()
+                                                      : QString();
+      const QSignalBlocker blocker(wheelSwitchFormatEdit_);
+      wheelSwitchFormatEdit_->setText(format);
+      committedTexts_[wheelSwitchFormatEdit_] = wheelSwitchFormatEdit_->text();
+    }
+
+    if (wheelSwitchChannelEdit_) {
+      const QString channel = wheelSwitchChannelGetter_ ? wheelSwitchChannelGetter_()
+                                                        : QString();
+      const QSignalBlocker blocker(wheelSwitchChannelEdit_);
+      wheelSwitchChannelEdit_->setText(channel);
+      committedTexts_[wheelSwitchChannelEdit_] = wheelSwitchChannelEdit_->text();
+    }
+
+    if (wheelSwitchPvLimitsButton_) {
+      wheelSwitchPvLimitsButton_->setEnabled(
+          static_cast<bool>(wheelSwitchLimitsGetter_)
+          && static_cast<bool>(wheelSwitchLimitsSetter_));
+    }
+
+    updateWheelSwitchLimitsFromDialog();
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Wheel Switch"));
     }
 
     show();
@@ -6547,6 +6798,7 @@ private:
     kText,
     kTextEntry,
     kSlider,
+    kWheelSwitch,
     kChoiceButton,
     kMenu,
     kMessageButton,
@@ -6762,6 +7014,11 @@ private:
       sliderSection_->setVisible(sliderVisible);
       sliderSection_->setEnabled(sliderVisible);
     }
+    if (wheelSwitchSection_) {
+      const bool wheelVisible = kind == SelectionKind::kWheelSwitch;
+      wheelSwitchSection_->setVisible(wheelVisible);
+      wheelSwitchSection_->setEnabled(wheelVisible);
+    }
     if (choiceButtonSection_) {
       const bool choiceVisible = kind == SelectionKind::kChoiceButton;
       choiceButtonSection_->setVisible(choiceVisible);
@@ -6929,6 +7186,55 @@ private:
     sliderChannelSetter_(value);
     committedTexts_[sliderChannelEdit_] = value;
     updateSliderLimitsFromDialog();
+  }
+
+  void commitWheelSwitchPrecision()
+  {
+    if (!wheelSwitchPrecisionEdit_) {
+      return;
+    }
+    if (!wheelSwitchPrecisionSetter_) {
+      revertLineEdit(wheelSwitchPrecisionEdit_);
+      return;
+    }
+    bool ok = false;
+    const double value = wheelSwitchPrecisionEdit_->text().toDouble(&ok);
+    if (!ok) {
+      revertLineEdit(wheelSwitchPrecisionEdit_);
+      return;
+    }
+    wheelSwitchPrecisionSetter_(value);
+    committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
+    updateWheelSwitchLimitsFromDialog();
+  }
+
+  void commitWheelSwitchFormat()
+  {
+    if (!wheelSwitchFormatEdit_) {
+      return;
+    }
+    if (!wheelSwitchFormatSetter_) {
+      revertLineEdit(wheelSwitchFormatEdit_);
+      return;
+    }
+    const QString value = wheelSwitchFormatEdit_->text();
+    wheelSwitchFormatSetter_(value);
+    committedTexts_[wheelSwitchFormatEdit_] = value;
+  }
+
+  void commitWheelSwitchChannel()
+  {
+    if (!wheelSwitchChannelEdit_) {
+      return;
+    }
+    if (!wheelSwitchChannelSetter_) {
+      revertLineEdit(wheelSwitchChannelEdit_);
+      return;
+    }
+    const QString value = wheelSwitchChannelEdit_->text();
+    wheelSwitchChannelSetter_(value);
+    committedTexts_[wheelSwitchChannelEdit_] = value;
+    updateWheelSwitchLimitsFromDialog();
   }
 
   void commitChoiceButtonChannel()
@@ -7792,6 +8098,21 @@ private:
     committedTexts_[sliderPrecisionEdit_] = sliderPrecisionEdit_->text();
   }
 
+  void updateWheelSwitchPrecisionEdit()
+  {
+    if (!wheelSwitchPrecisionEdit_) {
+      return;
+    }
+    const QSignalBlocker blocker(wheelSwitchPrecisionEdit_);
+    if (!wheelSwitchPrecisionGetter_) {
+      wheelSwitchPrecisionEdit_->clear();
+    } else {
+      const double precision = wheelSwitchPrecisionGetter_();
+      wheelSwitchPrecisionEdit_->setText(QString::number(precision, 'g', 6));
+    }
+    committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
+  }
+
   void updateTextMonitorPrecisionField()
   {
     if (!textMonitorPrecisionEdit_) {
@@ -7844,6 +8165,23 @@ private:
                                                         : QString();
       pvLimitsDialog_->setSliderCallbacks(channelLabel, sliderLimitsGetter_,
           sliderLimitsSetter_, [this]() { updateSliderLimitsFromDialog(); });
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
+  }
+
+  void updateWheelSwitchLimitsFromDialog()
+  {
+    updateWheelSwitchPrecisionEdit();
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (wheelSwitchLimitsGetter_ && wheelSwitchLimitsSetter_) {
+      const QString channelLabel = wheelSwitchChannelGetter_ ? wheelSwitchChannelGetter_()
+                                                             : QString();
+      pvLimitsDialog_->setWheelSwitchCallbacks(channelLabel,
+          wheelSwitchLimitsGetter_, wheelSwitchLimitsSetter_,
+          [this]() { updateWheelSwitchLimitsFromDialog(); });
     } else {
       pvLimitsDialog_->clearTargets();
     }
@@ -8689,6 +9027,14 @@ private:
   QLineEdit *sliderPrecisionEdit_ = nullptr;
   QLineEdit *sliderChannelEdit_ = nullptr;
   QPushButton *sliderPvLimitsButton_ = nullptr;
+  QWidget *wheelSwitchSection_ = nullptr;
+  QPushButton *wheelSwitchForegroundButton_ = nullptr;
+  QPushButton *wheelSwitchBackgroundButton_ = nullptr;
+  QComboBox *wheelSwitchColorModeCombo_ = nullptr;
+  QLineEdit *wheelSwitchPrecisionEdit_ = nullptr;
+  QLineEdit *wheelSwitchFormatEdit_ = nullptr;
+  QLineEdit *wheelSwitchChannelEdit_ = nullptr;
+  QPushButton *wheelSwitchPvLimitsButton_ = nullptr;
   QWidget *choiceButtonSection_ = nullptr;
   QPushButton *choiceButtonForegroundButton_ = nullptr;
   QPushButton *choiceButtonBackgroundButton_ = nullptr;
@@ -8957,6 +9303,38 @@ private:
     if (sliderChannelEdit_) {
       committedTexts_[sliderChannelEdit_] = sliderChannelEdit_->text();
     }
+    if (wheelSwitchPrecisionEdit_) {
+      committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
+    }
+    if (wheelSwitchFormatEdit_) {
+      committedTexts_[wheelSwitchFormatEdit_] = wheelSwitchFormatEdit_->text();
+    }
+    if (wheelSwitchChannelEdit_) {
+      committedTexts_[wheelSwitchChannelEdit_] = wheelSwitchChannelEdit_->text();
+    }
+    if (wheelSwitchPrecisionEdit_) {
+      const QSignalBlocker blocker(wheelSwitchPrecisionEdit_);
+      wheelSwitchPrecisionEdit_->clear();
+      committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
+    }
+    if (wheelSwitchFormatEdit_) {
+      const QSignalBlocker blocker(wheelSwitchFormatEdit_);
+      wheelSwitchFormatEdit_->clear();
+      committedTexts_[wheelSwitchFormatEdit_] = wheelSwitchFormatEdit_->text();
+    }
+    if (wheelSwitchChannelEdit_) {
+      const QSignalBlocker blocker(wheelSwitchChannelEdit_);
+      wheelSwitchChannelEdit_->clear();
+      committedTexts_[wheelSwitchChannelEdit_] = wheelSwitchChannelEdit_->text();
+    }
+    if (wheelSwitchColorModeCombo_) {
+      const QSignalBlocker blocker(wheelSwitchColorModeCombo_);
+      wheelSwitchColorModeCombo_->setCurrentIndex(
+          colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (wheelSwitchPvLimitsButton_) {
+      wheelSwitchPvLimitsButton_->setEnabled(false);
+    }
     if (choiceButtonChannelEdit_) {
       committedTexts_[choiceButtonChannelEdit_] = choiceButtonChannelEdit_->text();
     }
@@ -9186,6 +9564,20 @@ private:
   std::function<void(const QString &)> sliderChannelSetter_;
   std::function<PvLimits()> sliderLimitsGetter_;
   std::function<void(const PvLimits &)> sliderLimitsSetter_;
+  std::function<QColor()> wheelSwitchForegroundGetter_;
+  std::function<void(const QColor &)> wheelSwitchForegroundSetter_;
+  std::function<QColor()> wheelSwitchBackgroundGetter_;
+  std::function<void(const QColor &)> wheelSwitchBackgroundSetter_;
+  std::function<TextColorMode()> wheelSwitchColorModeGetter_;
+  std::function<void(TextColorMode)> wheelSwitchColorModeSetter_;
+  std::function<double()> wheelSwitchPrecisionGetter_;
+  std::function<void(double)> wheelSwitchPrecisionSetter_;
+  std::function<QString()> wheelSwitchFormatGetter_;
+  std::function<void(const QString &)> wheelSwitchFormatSetter_;
+  std::function<QString()> wheelSwitchChannelGetter_;
+  std::function<void(const QString &)> wheelSwitchChannelSetter_;
+  std::function<PvLimits()> wheelSwitchLimitsGetter_;
+  std::function<void(const PvLimits &)> wheelSwitchLimitsSetter_;
   std::function<QColor()> choiceButtonForegroundGetter_;
   std::function<void(const QColor &)> choiceButtonForegroundSetter_;
   std::function<QColor()> choiceButtonBackgroundGetter_;
@@ -9542,6 +9934,26 @@ private:
     dialog->setSliderCallbacks(channelLabel, sliderLimitsGetter_,
         sliderLimitsSetter_, [this]() { updateSliderLimitsFromDialog(); });
     dialog->showForSlider();
+  }
+
+  void openWheelSwitchPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!wheelSwitchLimitsGetter_ || !wheelSwitchLimitsSetter_) {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = wheelSwitchChannelGetter_ ? wheelSwitchChannelGetter_()
+                                                           : QString();
+    dialog->setWheelSwitchCallbacks(channelLabel, wheelSwitchLimitsGetter_,
+        wheelSwitchLimitsSetter_, [this]() { updateWheelSwitchLimitsFromDialog(); });
+    dialog->showForWheelSwitch();
   }
 
   void openBarMonitorPvLimitsDialog()

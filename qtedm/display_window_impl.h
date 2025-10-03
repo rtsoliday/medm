@@ -250,6 +250,7 @@ protected:
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kSlider
+            || state->createTool == CreateTool::kWheelSwitch
             || state->createTool == CreateTool::kChoiceButton
             || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMessageButton
@@ -297,6 +298,12 @@ protected:
           if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
             selectSliderElement(slider);
             showResourcePaletteForSlider(slider);
+            event->accept();
+            return;
+          }
+          if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+            selectWheelSwitchElement(wheel);
+            showResourcePaletteForWheelSwitch(wheel);
             event->accept();
             return;
           }
@@ -561,6 +568,8 @@ private:
   TextEntryElement *selectedTextEntryElement_ = nullptr;
   QList<SliderElement *> sliderElements_;
   SliderElement *selectedSliderElement_ = nullptr;
+  QList<WheelSwitchElement *> wheelSwitchElements_;
+  WheelSwitchElement *selectedWheelSwitchElement_ = nullptr;
   QList<ChoiceButtonElement *> choiceButtonElements_;
   ChoiceButtonElement *selectedChoiceButtonElement_ = nullptr;
   QList<MenuElement *> menuElements_;
@@ -656,6 +665,15 @@ private:
     }
     selectedSliderElement_->setSelected(false);
     selectedSliderElement_ = nullptr;
+  }
+
+  void clearWheelSwitchSelection()
+  {
+    if (!selectedWheelSwitchElement_) {
+      return;
+    }
+    selectedWheelSwitchElement_->setSelected(false);
+    selectedWheelSwitchElement_ = nullptr;
   }
 
   void clearChoiceButtonSelection()
@@ -835,6 +853,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -870,6 +889,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -1221,6 +1241,81 @@ private:
         },
         [this, element](double precision) {
           element->setPrecision(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForWheelSwitch(WheelSwitchElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForWheelSwitch(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumWheelSwitchWidth) {
+            adjusted.setWidth(kMinimumWheelSwitchWidth);
+          }
+          if (adjusted.height() < kMinimumWheelSwitchHeight) {
+            adjusted.setHeight(kMinimumWheelSwitchHeight);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->precision();
+        },
+        [this, element](double precision) {
+          element->setPrecision(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->format();
+        },
+        [this, element](const QString &format) {
+          element->setFormat(format);
           markDirty();
         },
         [element]() {
@@ -2981,6 +3076,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3016,6 +3112,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3052,6 +3149,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3076,6 +3174,43 @@ private:
     bringElementToFront(element);
   }
 
+  void selectWheelSwitchElement(WheelSwitchElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedWheelSwitchElement_) {
+      selectedWheelSwitchElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearWheelSwitchSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedWheelSwitchElement_ = element;
+    selectedWheelSwitchElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
   void selectChoiceButtonElement(ChoiceButtonElement *element)
   {
     if (!element) {
@@ -3088,6 +3223,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3124,6 +3260,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3160,6 +3297,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3196,6 +3334,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3232,6 +3371,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3268,6 +3408,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3303,6 +3444,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearSliderSelection();
+    clearWheelSwitchSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
@@ -3827,6 +3969,16 @@ private:
       rect = adjustRectToDisplayArea(rect);
       createSliderElement(rect);
       break;
+    case CreateTool::kWheelSwitch:
+      if (rect.width() < kMinimumWheelSwitchWidth) {
+        rect.setWidth(kMinimumWheelSwitchWidth);
+      }
+      if (rect.height() < kMinimumWheelSwitchHeight) {
+        rect.setHeight(kMinimumWheelSwitchHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createWheelSwitchElement(rect);
+      break;
     case CreateTool::kChoiceButton:
       if (rect.width() < kMinimumTextWidth) {
         rect.setWidth(kMinimumTextWidth);
@@ -4343,6 +4495,32 @@ private:
     markDirty();
   }
 
+  void createWheelSwitchElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumWheelSwitchWidth) {
+      target.setWidth(kMinimumWheelSwitchWidth);
+    }
+    if (target.height() < kMinimumWheelSwitchHeight) {
+      target.setHeight(kMinimumWheelSwitchHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new WheelSwitchElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    wheelSwitchElements_.append(element);
+    selectWheelSwitchElement(element);
+    showResourcePaletteForWheelSwitch(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createChoiceButtonElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -4819,6 +4997,7 @@ private:
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kSlider
+            || state->createTool == CreateTool::kWheelSwitch
             || state->createTool == CreateTool::kChoiceButton
             || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMessageButton
@@ -5091,7 +5270,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(controllersMenu, QStringLiteral("Wheel Switch"));
+    auto *wheelSwitchAction =
+        addMenuAction(controllersMenu, QStringLiteral("Wheel Switch"));
+    QObject::connect(wheelSwitchAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kWheelSwitch);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
 
     addMenuAction(&menu, QStringLiteral("Undo"));
 
@@ -5435,6 +5621,29 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
                 .arg(QString::number(slider->precision(), 'g', 6)));
       }
       AdlWriter::writeLimitsSection(stream, 1, slider->limits());
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("\"wheel switch\" {"));
+      AdlWriter::writeObjectSection(stream, 1, wheel->geometry());
+      AdlWriter::writeControlSection(stream, 1, wheel->channel(),
+          AdlWriter::medmColorIndex(wheel->foregroundColor()),
+          AdlWriter::medmColorIndex(wheel->backgroundColor()));
+      if (wheel->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(wheel->colorMode())));
+      }
+      const QString wheelFormat = wheel->format().trimmed();
+      if (!wheelFormat.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("format=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(wheelFormat)));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, wheel->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

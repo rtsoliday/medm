@@ -252,6 +252,7 @@ protected:
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
             || state->createTool == CreateTool::kScaleMonitor
+            || state->createTool == CreateTool::kStripChart
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -294,6 +295,12 @@ protected:
           if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
             selectScaleMonitorElement(scale);
             showResourcePaletteForScale(scale);
+            event->accept();
+            return;
+          }
+          if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+            selectStripChartElement(strip);
+            showResourcePaletteForStripChart(strip);
             event->accept();
             return;
           }
@@ -502,6 +509,8 @@ private:
   BarMonitorElement *selectedBarMonitorElement_ = nullptr;
   QList<ScaleMonitorElement *> scaleMonitorElements_;
   ScaleMonitorElement *selectedScaleMonitorElement_ = nullptr;
+  QList<StripChartElement *> stripChartElements_;
+  StripChartElement *selectedStripChartElement_ = nullptr;
   QList<ByteMonitorElement *> byteMonitorElements_;
   ByteMonitorElement *selectedByteMonitorElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
@@ -584,6 +593,15 @@ private:
     }
     selectedScaleMonitorElement_->setSelected(false);
     selectedScaleMonitorElement_ = nullptr;
+  }
+
+  void clearStripChartSelection()
+  {
+    if (!selectedStripChartElement_) {
+      return;
+    }
+    selectedStripChartElement_->setSelected(false);
+    selectedStripChartElement_ = nullptr;
   }
 
   void clearBarMonitorSelection()
@@ -674,6 +692,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -700,6 +719,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -1051,6 +1071,116 @@ private:
           element->setLimits(limits);
           markDirty();
         });
+  }
+
+  void showResourcePaletteForStripChart(StripChartElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    std::array<std::function<QString()>, kStripChartPenCount> channelGetters{};
+    std::array<std::function<void(const QString &)>, kStripChartPenCount> channelSetters{};
+    std::array<std::function<QColor()>, kStripChartPenCount> colorGetters{};
+    std::array<std::function<void(const QColor &)>, kStripChartPenCount> colorSetters{};
+    std::array<std::function<PvLimits()>, kStripChartPenCount> limitsGetters{};
+    std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> limitsSetters{};
+    for (int i = 0; i < kStripChartPenCount; ++i) {
+      channelGetters[i] = [element, i]() {
+        return element->channel(i);
+      };
+      channelSetters[i] = [this, element, i](const QString &channel) {
+        element->setChannel(i, channel);
+        markDirty();
+      };
+      colorGetters[i] = [element, i]() {
+        return element->penColor(i);
+      };
+      colorSetters[i] = [this, element, i](const QColor &color) {
+        element->setPenColor(i, color);
+        markDirty();
+      };
+      limitsGetters[i] = [element, i]() {
+        return element->penLimits(i);
+      };
+      limitsSetters[i] = [this, element, i](const PvLimits &limits) {
+        element->setPenLimits(i, limits);
+        markDirty();
+      };
+    }
+
+    dialog->showForStripChart(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumStripChartWidth) {
+            adjusted.setWidth(kMinimumStripChartWidth);
+          }
+          if (adjusted.height() < kMinimumStripChartHeight) {
+            adjusted.setHeight(kMinimumStripChartHeight);
+          }
+          adjusted = adjustRectToDisplayArea(adjusted);
+          element->setGeometry(adjusted);
+          markDirty();
+        },
+        [element]() {
+          return element->title();
+        },
+        [this, element](const QString &title) {
+          element->setTitle(title);
+          markDirty();
+        },
+        [element]() {
+          return element->xLabel();
+        },
+        [this, element](const QString &label) {
+          element->setXLabel(label);
+          markDirty();
+        },
+        [element]() {
+          return element->yLabel();
+        },
+        [this, element](const QString &label) {
+          element->setYLabel(label);
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->period();
+        },
+        [this, element](double period) {
+          element->setPeriod(period);
+          markDirty();
+        },
+        [element]() {
+          return element->units();
+        },
+        [this, element](TimeUnits units) {
+          element->setUnits(units);
+          markDirty();
+        },
+        std::move(channelGetters), std::move(channelSetters),
+        std::move(colorGetters), std::move(colorSetters),
+        std::move(limitsGetters), std::move(limitsSetters));
   }
 
   void showResourcePaletteForBar(BarMonitorElement *element)
@@ -2029,6 +2159,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2054,6 +2185,7 @@ private:
     clearTextSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2080,6 +2212,7 @@ private:
     clearTextSelection();
     clearTextMonitorSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2107,6 +2240,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2118,6 +2252,34 @@ private:
     clearPolygonSelection();
     selectedScaleMonitorElement_ = element;
     selectedScaleMonitorElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
+  void selectStripChartElement(StripChartElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedStripChartElement_) {
+      selectedStripChartElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedStripChartElement_ = element;
+    selectedStripChartElement_->setSelected(true);
     bringElementToFront(element);
   }
 
@@ -2134,6 +2296,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2161,6 +2324,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2188,6 +2352,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearImageSelection();
@@ -2213,6 +2378,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2239,6 +2405,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2264,6 +2431,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2290,6 +2458,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2316,6 +2485,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2342,6 +2512,7 @@ private:
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
+    clearStripChartSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
@@ -2452,6 +2623,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createScaleMonitorElement(rect);
+      break;
+    case CreateTool::kStripChart:
+      if (rect.width() < kMinimumStripChartWidth) {
+        rect.setWidth(kMinimumStripChartWidth);
+      }
+      if (rect.height() < kMinimumStripChartHeight) {
+        rect.setHeight(kMinimumStripChartHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createStripChartElement(rect);
       break;
     case CreateTool::kRectangle:
       if (rect.width() <= 0) {
@@ -2884,6 +3065,32 @@ private:
     markDirty();
   }
 
+  void createStripChartElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumStripChartWidth) {
+      target.setWidth(kMinimumStripChartWidth);
+    }
+    if (target.height() < kMinimumStripChartHeight) {
+      target.setHeight(kMinimumStripChartHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new StripChartElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    stripChartElements_.append(element);
+    selectStripChartElement(element);
+    showResourcePaletteForStripChart(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createByteMonitorElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -3096,6 +3303,7 @@ private:
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
             || state->createTool == CreateTool::kScaleMonitor
+            || state->createTool == CreateTool::kStripChart
             || state->createTool == CreateTool::kRectangle
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
@@ -3283,7 +3491,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(monitorsMenu, QStringLiteral("Strip Chart"));
+    auto *stripChartAction =
+        addMenuAction(monitorsMenu, QStringLiteral("Strip Chart"));
+    QObject::connect(stripChartAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kStripChart);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(monitorsMenu, QStringLiteral("Cartesian Plot"));
 
     auto *controllersMenu = objectMenu->addMenu(QStringLiteral("Controllers"));
@@ -3613,6 +3828,36 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
                 .arg(AdlWriter::textMonitorFormatString(monitor->format())));
       }
       AdlWriter::writeLimitsSection(stream, 1, monitor->limits());
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("\"strip chart\" {"));
+      AdlWriter::writeObjectSection(stream, 1, strip->geometry());
+      AdlWriter::writePlotcom(stream, 1, strip->title(), strip->xLabel(),
+          strip->yLabel(), AdlWriter::medmColorIndex(strip->foregroundColor()),
+          AdlWriter::medmColorIndex(strip->backgroundColor()));
+      const double period = strip->period();
+      if (period > 0.0
+          && std::abs(period - kDefaultStripChartPeriod) > 1e-6) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("period=%1")
+                .arg(QString::number(period, 'f', 6)));
+      }
+      if (strip->units() != TimeUnits::kSeconds) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("units=\"%1\"")
+                .arg(AdlWriter::timeUnitsString(strip->units())));
+      }
+      for (int i = 0; i < strip->penCount(); ++i) {
+        const QString channel = strip->channel(i);
+        const QColor penColor = strip->penColor(i);
+        const PvLimits limits = strip->penLimits(i);
+        AdlWriter::writeStripChartPenSection(stream, 1, i, channel,
+            AdlWriter::medmColorIndex(penColor), limits);
+      }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

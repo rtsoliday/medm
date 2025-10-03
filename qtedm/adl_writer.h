@@ -26,6 +26,7 @@ QString lineStyleString(RectangleLineStyle style);
 QString fillString(RectangleFill fill);
 QString alignmentString(Qt::Alignment alignment);
 QString imageTypeString(ImageType type);
+QString timeUnitsString(TimeUnits units);
 QString channelFieldName(int index);
 QString textMonitorFormatString(TextMonitorFormat format);
 int medmLineWidthValue(int width);
@@ -38,7 +39,12 @@ void writeDynamicAttributeSection(QTextStream &stream, int level,
     const QString &calc, const std::array<QString, 4> &channels);
 void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex);
+void writePlotcom(QTextStream &stream, int level, const QString &title,
+    const QString &xLabel, const QString &yLabel, int colorIndex,
+    int backgroundIndex);
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits);
+void writeStripChartPenSection(QTextStream &stream, int level, int index,
+    const QString &channel, int colorIndex, const PvLimits &limits);
 void writePointsSection(
     QTextStream &stream, int level, const QVector<QPoint> &points);
 

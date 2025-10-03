@@ -15,6 +15,7 @@
 #include <QFont>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QDoubleValidator>
 #include <QIntValidator>
 #include <QLabel>
 #include <QLineEdit>
@@ -1010,6 +1011,126 @@ public:
     addRow(scaleLayout, 6, QStringLiteral("Channel Limits"), scalePvLimitsButton_);
     scaleLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(scaleSection_);
+
+    stripChartSection_ = new QWidget(entriesWidget_);
+    auto *stripLayout = new QGridLayout(stripChartSection_);
+    stripLayout->setContentsMargins(0, 0, 0, 0);
+    stripLayout->setHorizontalSpacing(12);
+    stripLayout->setVerticalSpacing(6);
+
+    stripTitleEdit_ = createLineEdit();
+    committedTexts_.insert(stripTitleEdit_, stripTitleEdit_->text());
+    stripTitleEdit_->installEventFilter(this);
+    QObject::connect(stripTitleEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitStripChartTitle(); });
+    QObject::connect(stripTitleEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitStripChartTitle(); });
+
+    stripXLabelEdit_ = createLineEdit();
+    committedTexts_.insert(stripXLabelEdit_, stripXLabelEdit_->text());
+    stripXLabelEdit_->installEventFilter(this);
+    QObject::connect(stripXLabelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitStripChartXLabel(); });
+    QObject::connect(stripXLabelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitStripChartXLabel(); });
+
+    stripYLabelEdit_ = createLineEdit();
+    committedTexts_.insert(stripYLabelEdit_, stripYLabelEdit_->text());
+    stripYLabelEdit_->installEventFilter(this);
+    QObject::connect(stripYLabelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitStripChartYLabel(); });
+    QObject::connect(stripYLabelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitStripChartYLabel(); });
+
+    stripForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(stripForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(stripForegroundButton_,
+              QStringLiteral("Strip Chart Foreground"),
+              stripForegroundSetter_);
+        });
+
+    stripBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(stripBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(stripBackgroundButton_,
+              QStringLiteral("Strip Chart Background"),
+              stripBackgroundSetter_);
+        });
+
+    stripPeriodEdit_ = createLineEdit();
+    stripPeriodEdit_->setValidator(
+        new QDoubleValidator(0.001, 1.0e9, 3, stripPeriodEdit_));
+    committedTexts_.insert(stripPeriodEdit_, stripPeriodEdit_->text());
+    stripPeriodEdit_->installEventFilter(this);
+    QObject::connect(stripPeriodEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitStripChartPeriod(); });
+    QObject::connect(stripPeriodEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitStripChartPeriod(); });
+
+    stripUnitsCombo_ = new QComboBox;
+    stripUnitsCombo_->setFont(valueFont_);
+    stripUnitsCombo_->setAutoFillBackground(true);
+    stripUnitsCombo_->addItem(QStringLiteral("Milliseconds"));
+    stripUnitsCombo_->addItem(QStringLiteral("Seconds"));
+    stripUnitsCombo_->addItem(QStringLiteral("Minutes"));
+    QObject::connect(stripUnitsCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) { handleStripChartUnitsChanged(index); });
+
+    auto *penWidget = new QWidget(stripChartSection_);
+    auto *penLayout = new QGridLayout(penWidget);
+    penLayout->setContentsMargins(0, 0, 0, 0);
+    penLayout->setHorizontalSpacing(8);
+    penLayout->setVerticalSpacing(4);
+
+    for (int i = 0; i < kStripChartPenCount; ++i) {
+      auto *label = new QLabel(QStringLiteral("Pen %1").arg(i + 1));
+      label->setFont(labelFont_);
+      penLayout->addWidget(label, i, 0);
+
+      stripPenColorButtons_[i] = createColorButton(
+          basePalette.color(QPalette::WindowText));
+      QObject::connect(stripPenColorButtons_[i], &QPushButton::clicked, this,
+          [this, i]() {
+            openColorPalette(stripPenColorButtons_[i],
+                QStringLiteral("Strip Chart Pen %1 Color").arg(i + 1),
+                stripPenColorSetters_[i]);
+          });
+      penLayout->addWidget(stripPenColorButtons_[i], i, 1);
+
+      stripPenChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(stripPenChannelEdits_[i],
+          stripPenChannelEdits_[i]->text());
+      stripPenChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(stripPenChannelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitStripChartChannel(i); });
+      QObject::connect(stripPenChannelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitStripChartChannel(i); });
+      penLayout->addWidget(stripPenChannelEdits_[i], i, 2);
+
+      stripPenLimitsButtons_[i] = createActionButton(
+          QStringLiteral("Limits..."));
+      stripPenLimitsButtons_[i]->setEnabled(false);
+      QObject::connect(stripPenLimitsButtons_[i], &QPushButton::clicked, this,
+          [this, i]() { openStripChartLimitsDialog(i); });
+      penLayout->addWidget(stripPenLimitsButtons_[i], i, 3);
+    }
+
+    addRow(stripLayout, 0, QStringLiteral("Title"), stripTitleEdit_);
+    addRow(stripLayout, 1, QStringLiteral("X Label"), stripXLabelEdit_);
+    addRow(stripLayout, 2, QStringLiteral("Y Label"), stripYLabelEdit_);
+    addRow(stripLayout, 3, QStringLiteral("Foreground"),
+        stripForegroundButton_);
+    addRow(stripLayout, 4, QStringLiteral("Background"),
+        stripBackgroundButton_);
+    addRow(stripLayout, 5, QStringLiteral("Period"), stripPeriodEdit_);
+    addRow(stripLayout, 6, QStringLiteral("Units"), stripUnitsCombo_);
+    addRow(stripLayout, 7, QStringLiteral("Pens"), penWidget);
+    stripLayout->setRowStretch(8, 1);
+    entriesLayout->addWidget(stripChartSection_);
 
     byteSection_ = new QWidget(entriesWidget_);
     auto *byteLayout = new QGridLayout(byteSection_);
@@ -2212,6 +2333,252 @@ public:
     activateWindow();
   }
 
+  void showForStripChart(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QString()> titleGetter,
+      std::function<void(const QString &)> titleSetter,
+      std::function<QString()> xLabelGetter,
+      std::function<void(const QString &)> xLabelSetter,
+      std::function<QString()> yLabelGetter,
+      std::function<void(const QString &)> yLabelSetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<double()> periodGetter,
+      std::function<void(double)> periodSetter,
+      std::function<TimeUnits()> unitsGetter,
+      std::function<void(TimeUnits)> unitsSetter,
+      std::array<std::function<QString()>, kStripChartPenCount> channelGetters,
+      std::array<std::function<void(const QString &)>, kStripChartPenCount> channelSetters,
+      std::array<std::function<QColor()>, kStripChartPenCount> colorGetters,
+      std::array<std::function<void(const QColor &)>, kStripChartPenCount> colorSetters,
+      std::array<std::function<PvLimits()>, kStripChartPenCount> limitsGetters,
+      std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> limitsSetters)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kStripChart;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+
+    meterForegroundGetter_ = {};
+    meterForegroundSetter_ = {};
+    meterBackgroundGetter_ = {};
+    meterBackgroundSetter_ = {};
+    meterLabelGetter_ = {};
+    meterLabelSetter_ = {};
+    meterColorModeGetter_ = {};
+    meterColorModeSetter_ = {};
+    meterChannelGetter_ = {};
+    meterChannelSetter_ = {};
+    meterLimitsGetter_ = {};
+    meterLimitsSetter_ = {};
+
+    barForegroundGetter_ = {};
+    barForegroundSetter_ = {};
+    barBackgroundGetter_ = {};
+    barBackgroundSetter_ = {};
+    barLabelGetter_ = {};
+    barLabelSetter_ = {};
+    barColorModeGetter_ = {};
+    barColorModeSetter_ = {};
+    barDirectionGetter_ = {};
+    barDirectionSetter_ = {};
+    barFillModeGetter_ = {};
+    barFillModeSetter_ = {};
+    barChannelGetter_ = {};
+    barChannelSetter_ = {};
+    barLimitsGetter_ = {};
+    barLimitsSetter_ = {};
+
+    scaleForegroundGetter_ = {};
+    scaleForegroundSetter_ = {};
+    scaleBackgroundGetter_ = {};
+    scaleBackgroundSetter_ = {};
+    scaleLabelGetter_ = {};
+    scaleLabelSetter_ = {};
+    scaleColorModeGetter_ = {};
+    scaleColorModeSetter_ = {};
+    scaleDirectionGetter_ = {};
+    scaleDirectionSetter_ = {};
+    scaleChannelGetter_ = {};
+    scaleChannelSetter_ = {};
+    scaleLimitsGetter_ = {};
+    scaleLimitsSetter_ = {};
+
+    stripTitleGetter_ = std::move(titleGetter);
+    stripTitleSetter_ = std::move(titleSetter);
+    stripXLabelGetter_ = std::move(xLabelGetter);
+    stripXLabelSetter_ = std::move(xLabelSetter);
+    stripYLabelGetter_ = std::move(yLabelGetter);
+    stripYLabelSetter_ = std::move(yLabelSetter);
+    stripForegroundGetter_ = std::move(foregroundGetter);
+    stripForegroundSetter_ = std::move(foregroundSetter);
+    stripBackgroundGetter_ = std::move(backgroundGetter);
+    stripBackgroundSetter_ = std::move(backgroundSetter);
+    stripPeriodGetter_ = std::move(periodGetter);
+    stripPeriodSetter_ = std::move(periodSetter);
+    stripUnitsGetter_ = std::move(unitsGetter);
+    stripUnitsSetter_ = std::move(unitsSetter);
+    stripPenChannelGetters_ = std::move(channelGetters);
+    stripPenChannelSetters_ = std::move(channelSetters);
+    stripPenColorGetters_ = std::move(colorGetters);
+    stripPenColorSetters_ = std::move(colorSetters);
+    stripPenLimitsGetters_ = std::move(limitsGetters);
+    stripPenLimitsSetters_ = std::move(limitsSetters);
+
+    QRect chartGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (chartGeometry.width() <= 0) {
+      chartGeometry.setWidth(kMinimumStripChartWidth);
+    }
+    if (chartGeometry.height() <= 0) {
+      chartGeometry.setHeight(kMinimumStripChartHeight);
+    }
+    lastCommittedGeometry_ = chartGeometry;
+
+    updateGeometryEdits(chartGeometry);
+
+    if (stripForegroundButton_) {
+      const QColor color = stripForegroundGetter_ ? stripForegroundGetter_()
+                                                  : palette().color(QPalette::WindowText);
+      setColorButtonColor(stripForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (stripBackgroundButton_) {
+      const QColor color = stripBackgroundGetter_ ? stripBackgroundGetter_()
+                                                  : palette().color(QPalette::Window);
+      setColorButtonColor(stripBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (stripTitleEdit_) {
+      const QString value = stripTitleGetter_ ? stripTitleGetter_() : QString();
+      const QSignalBlocker blocker(stripTitleEdit_);
+      stripTitleEdit_->setText(value);
+      committedTexts_[stripTitleEdit_] = value;
+    }
+
+    if (stripXLabelEdit_) {
+      const QString value = stripXLabelGetter_ ? stripXLabelGetter_() : QString();
+      const QSignalBlocker blocker(stripXLabelEdit_);
+      stripXLabelEdit_->setText(value);
+      committedTexts_[stripXLabelEdit_] = value;
+    }
+
+    if (stripYLabelEdit_) {
+      const QString value = stripYLabelGetter_ ? stripYLabelGetter_() : QString();
+      const QSignalBlocker blocker(stripYLabelEdit_);
+      stripYLabelEdit_->setText(value);
+      committedTexts_[stripYLabelEdit_] = value;
+    }
+
+    if (stripPeriodEdit_) {
+      double value = stripPeriodGetter_ ? stripPeriodGetter_()
+                                        : kDefaultStripChartPeriod;
+      if (value <= 0.0) {
+        value = kDefaultStripChartPeriod;
+      }
+      QString text = QString::number(value, 'f', 3);
+      if (text.contains(QLatin1Char('.'))) {
+        while (text.endsWith(QLatin1Char('0'))) {
+          text.chop(1);
+        }
+        if (text.endsWith(QLatin1Char('.'))) {
+          text.chop(1);
+        }
+      }
+      const QSignalBlocker blocker(stripPeriodEdit_);
+      stripPeriodEdit_->setText(text);
+      stripPeriodEdit_->setEnabled(static_cast<bool>(stripPeriodSetter_));
+      committedTexts_[stripPeriodEdit_] = stripPeriodEdit_->text();
+    }
+
+    if (stripUnitsCombo_) {
+      const QSignalBlocker blocker(stripUnitsCombo_);
+      const TimeUnits units = stripUnitsGetter_ ? stripUnitsGetter_()
+                                               : TimeUnits::kSeconds;
+      stripUnitsCombo_->setCurrentIndex(timeUnitsToIndex(units));
+      stripUnitsCombo_->setEnabled(static_cast<bool>(stripUnitsSetter_));
+    }
+
+    for (int i = 0; i < kStripChartPenCount; ++i) {
+      if (stripPenColorButtons_[i]) {
+        const QColor color = stripPenColorGetters_[i]
+                ? stripPenColorGetters_[i]()
+                : palette().color(QPalette::WindowText);
+        setColorButtonColor(stripPenColorButtons_[i],
+            color.isValid() ? color : palette().color(QPalette::WindowText));
+      }
+      if (stripPenChannelEdits_[i]) {
+        const QString channel = stripPenChannelGetters_[i]
+                ? stripPenChannelGetters_[i]()
+                : QString();
+        const QSignalBlocker blocker(stripPenChannelEdits_[i]);
+        stripPenChannelEdits_[i]->setText(channel);
+        stripPenChannelEdits_[i]->setEnabled(static_cast<bool>(stripPenChannelSetters_[i]));
+        committedTexts_[stripPenChannelEdits_[i]] = channel;
+      }
+      if (stripPenLimitsButtons_[i]) {
+        stripPenLimitsButtons_[i]->setEnabled(static_cast<bool>(stripPenLimitsSetters_[i]));
+      }
+    }
+
+    elementLabel_->setText(QStringLiteral("Strip Chart"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void showForByteMonitor(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> foregroundGetter,
@@ -3036,6 +3403,47 @@ public:
     if (scalePvLimitsButton_) {
       scalePvLimitsButton_->setEnabled(false);
     }
+    stripTitleGetter_ = {};
+    stripTitleSetter_ = {};
+    stripXLabelGetter_ = {};
+    stripXLabelSetter_ = {};
+    stripYLabelGetter_ = {};
+    stripYLabelSetter_ = {};
+    stripForegroundGetter_ = {};
+    stripForegroundSetter_ = {};
+    stripBackgroundGetter_ = {};
+    stripBackgroundSetter_ = {};
+    stripPeriodGetter_ = {};
+    stripPeriodSetter_ = {};
+    stripUnitsGetter_ = {};
+    stripUnitsSetter_ = {};
+    for (auto &getter : stripPenChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : stripPenChannelSetters_) {
+      setter = {};
+    }
+    for (auto &getter : stripPenColorGetters_) {
+      getter = {};
+    }
+    for (auto &setter : stripPenColorSetters_) {
+      setter = {};
+    }
+    for (auto &getter : stripPenLimitsGetters_) {
+      getter = {};
+    }
+    for (auto &setter : stripPenLimitsSetters_) {
+      setter = {};
+    }
+    for (QPushButton *button : stripPenLimitsButtons_) {
+      if (button) {
+        button->setEnabled(false);
+      }
+    }
+    if (stripUnitsCombo_) {
+      const QSignalBlocker blocker(stripUnitsCombo_);
+      stripUnitsCombo_->setCurrentIndex(timeUnitsToIndex(TimeUnits::kSeconds));
+    }
     byteForegroundGetter_ = {};
     byteForegroundSetter_ = {};
     byteBackgroundGetter_ = {};
@@ -3126,6 +3534,13 @@ public:
       textMonitorPvLimitsButton_->setEnabled(false);
     }
     resetLineEdit(meterChannelEdit_);
+    resetLineEdit(stripTitleEdit_);
+    resetLineEdit(stripXLabelEdit_);
+    resetLineEdit(stripYLabelEdit_);
+    resetLineEdit(stripPeriodEdit_);
+    for (QLineEdit *edit : stripPenChannelEdits_) {
+      resetLineEdit(edit);
+    }
     resetLineEdit(barChannelEdit_);
     resetLineEdit(scaleChannelEdit_);
     resetLineEdit(rectangleLineWidthEdit_);
@@ -3156,6 +3571,11 @@ public:
     resetColorButton(barBackgroundButton_);
     resetColorButton(scaleForegroundButton_);
     resetColorButton(scaleBackgroundButton_);
+    resetColorButton(stripForegroundButton_);
+    resetColorButton(stripBackgroundButton_);
+    for (QPushButton *button : stripPenColorButtons_) {
+      resetColorButton(button);
+    }
     resetColorButton(rectangleForegroundButton_);
     resetColorButton(lineColorButton_);
 
@@ -3331,6 +3751,7 @@ private:
     kMeter,
     kBarMonitor,
     kScaleMonitor,
+    kStripChart,
     kByteMonitor
   };
   QLineEdit *createLineEdit()
@@ -3530,6 +3951,11 @@ private:
       scaleSection_->setVisible(scaleVisible);
       scaleSection_->setEnabled(scaleVisible);
     }
+    if (stripChartSection_) {
+      const bool stripVisible = kind == SelectionKind::kStripChart;
+      stripChartSection_->setVisible(stripVisible);
+      stripChartSection_->setEnabled(stripVisible);
+    }
     if (byteSection_) {
       const bool byteVisible = kind == SelectionKind::kByteMonitor;
       byteSection_->setVisible(byteVisible);
@@ -3654,6 +4080,103 @@ private:
     updateScaleLimitsFromDialog();
   }
 
+  void commitStripChartTitle()
+  {
+    if (!stripTitleEdit_) {
+      return;
+    }
+    if (!stripTitleSetter_) {
+      revertLineEdit(stripTitleEdit_);
+      return;
+    }
+    const QString value = stripTitleEdit_->text();
+    stripTitleSetter_(value);
+    committedTexts_[stripTitleEdit_] = value;
+  }
+
+  void commitStripChartXLabel()
+  {
+    if (!stripXLabelEdit_) {
+      return;
+    }
+    if (!stripXLabelSetter_) {
+      revertLineEdit(stripXLabelEdit_);
+      return;
+    }
+    const QString value = stripXLabelEdit_->text();
+    stripXLabelSetter_(value);
+    committedTexts_[stripXLabelEdit_] = value;
+  }
+
+  void commitStripChartYLabel()
+  {
+    if (!stripYLabelEdit_) {
+      return;
+    }
+    if (!stripYLabelSetter_) {
+      revertLineEdit(stripYLabelEdit_);
+      return;
+    }
+    const QString value = stripYLabelEdit_->text();
+    stripYLabelSetter_(value);
+    committedTexts_[stripYLabelEdit_] = value;
+  }
+
+  void commitStripChartPeriod()
+  {
+    if (!stripPeriodEdit_) {
+      return;
+    }
+    if (!stripPeriodSetter_) {
+      revertLineEdit(stripPeriodEdit_);
+      return;
+    }
+
+    bool ok = false;
+    double value = stripPeriodEdit_->text().toDouble(&ok);
+    if (!ok || value <= 0.0) {
+      revertLineEdit(stripPeriodEdit_);
+      return;
+    }
+
+    stripPeriodSetter_(value);
+    double effective = stripPeriodGetter_ ? stripPeriodGetter_() : value;
+    if (effective <= 0.0) {
+      effective = kDefaultStripChartPeriod;
+    }
+    QString text = QString::number(effective, 'f', 3);
+    if (text.contains(QLatin1Char('.'))) {
+      while (text.endsWith(QLatin1Char('0'))) {
+        text.chop(1);
+      }
+      if (text.endsWith(QLatin1Char('.'))) {
+        text.chop(1);
+      }
+    }
+    const QSignalBlocker blocker(stripPeriodEdit_);
+    stripPeriodEdit_->setText(text);
+    committedTexts_[stripPeriodEdit_] = stripPeriodEdit_->text();
+  }
+
+  void commitStripChartChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(stripPenChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = stripPenChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!stripPenChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    stripPenChannelSetters_[index](value);
+    committedTexts_[edit] = value;
+    updateStripChartPenLimitsFromDialog(index);
+  }
+
   void commitByteChannel()
   {
     if (!byteChannelEdit_) {
@@ -3666,6 +4189,77 @@ private:
     const QString value = byteChannelEdit_->text();
     byteChannelSetter_(value);
     committedTexts_[byteChannelEdit_] = value;
+  }
+
+  void handleStripChartUnitsChanged(int index)
+  {
+    if (!stripUnitsCombo_) {
+      return;
+    }
+    if (!stripUnitsSetter_) {
+      const QSignalBlocker blocker(stripUnitsCombo_);
+      const int currentIndex = stripUnitsGetter_
+              ? timeUnitsToIndex(stripUnitsGetter_())
+              : timeUnitsToIndex(TimeUnits::kSeconds);
+      stripUnitsCombo_->setCurrentIndex(currentIndex);
+      return;
+    }
+    const TimeUnits units = timeUnitsFromIndex(index);
+    stripUnitsSetter_(units);
+    if (stripUnitsGetter_) {
+      const QSignalBlocker blocker(stripUnitsCombo_);
+      stripUnitsCombo_->setCurrentIndex(timeUnitsToIndex(stripUnitsGetter_()));
+    }
+  }
+
+  void openStripChartLimitsDialog(int index)
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (index < 0 || index >= kStripChartPenCount) {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    if (stripPenLimitsGetters_[index] && stripPenLimitsSetters_[index]) {
+      const QString channelLabel = stripPenChannelGetters_[index]
+              ? stripPenChannelGetters_[index]()
+              : QString();
+      dialog->setMeterCallbacks(channelLabel, stripPenLimitsGetters_[index],
+          stripPenLimitsSetters_[index],
+          [this, index]() { updateStripChartPenLimitsFromDialog(index); });
+      dialog->showForMeter();
+    } else {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+    }
+  }
+
+  void updateStripChartPenLimitsFromDialog(int index)
+  {
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (index < 0 || index >= kStripChartPenCount) {
+      pvLimitsDialog_->clearTargets();
+      return;
+    }
+    if (stripPenLimitsGetters_[index] && stripPenLimitsSetters_[index]) {
+      const QString channelLabel = stripPenChannelGetters_[index]
+              ? stripPenChannelGetters_[index]()
+              : QString();
+      pvLimitsDialog_->setMeterCallbacks(channelLabel,
+          stripPenLimitsGetters_[index], stripPenLimitsSetters_[index],
+          [this, index]() { updateStripChartPenLimitsFromDialog(index); });
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
   }
 
   void commitByteStartBit(int value)
@@ -4196,6 +4790,32 @@ private:
     }
   }
 
+  TimeUnits timeUnitsFromIndex(int index) const
+  {
+    switch (index) {
+    case 0:
+      return TimeUnits::kMilliseconds;
+    case 2:
+      return TimeUnits::kMinutes;
+    case 1:
+    default:
+      return TimeUnits::kSeconds;
+    }
+  }
+
+  int timeUnitsToIndex(TimeUnits units) const
+  {
+    switch (units) {
+    case TimeUnits::kMilliseconds:
+      return 0;
+    case TimeUnits::kMinutes:
+      return 2;
+    case TimeUnits::kSeconds:
+    default:
+      return 1;
+    }
+  }
+
   static int degreesToAngle64(int degrees)
   {
     return degrees * 64;
@@ -4455,6 +5075,17 @@ private:
   QComboBox *scaleDirectionCombo_ = nullptr;
   QLineEdit *scaleChannelEdit_ = nullptr;
   QPushButton *scalePvLimitsButton_ = nullptr;
+  QWidget *stripChartSection_ = nullptr;
+  QLineEdit *stripTitleEdit_ = nullptr;
+  QLineEdit *stripXLabelEdit_ = nullptr;
+  QLineEdit *stripYLabelEdit_ = nullptr;
+  QPushButton *stripForegroundButton_ = nullptr;
+  QPushButton *stripBackgroundButton_ = nullptr;
+  QLineEdit *stripPeriodEdit_ = nullptr;
+  QComboBox *stripUnitsCombo_ = nullptr;
+  std::array<QPushButton *, kStripChartPenCount> stripPenColorButtons_{};
+  std::array<QLineEdit *, kStripChartPenCount> stripPenChannelEdits_{};
+  std::array<QPushButton *, kStripChartPenCount> stripPenLimitsButtons_{};
   QWidget *byteSection_ = nullptr;
   QPushButton *byteForegroundButton_ = nullptr;
   QPushButton *byteBackgroundButton_ = nullptr;
@@ -4630,6 +5261,23 @@ private:
     if (meterChannelEdit_) {
       committedTexts_[meterChannelEdit_] = meterChannelEdit_->text();
     }
+    if (stripTitleEdit_) {
+      committedTexts_[stripTitleEdit_] = stripTitleEdit_->text();
+    }
+    if (stripXLabelEdit_) {
+      committedTexts_[stripXLabelEdit_] = stripXLabelEdit_->text();
+    }
+    if (stripYLabelEdit_) {
+      committedTexts_[stripYLabelEdit_] = stripYLabelEdit_->text();
+    }
+    if (stripPeriodEdit_) {
+      committedTexts_[stripPeriodEdit_] = stripPeriodEdit_->text();
+    }
+    for (QLineEdit *edit : stripPenChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
     if (barChannelEdit_) {
       committedTexts_[barChannelEdit_] = barChannelEdit_->text();
     }
@@ -4792,6 +5440,26 @@ private:
   std::function<void(const QString &)> scaleChannelSetter_;
   std::function<PvLimits()> scaleLimitsGetter_;
   std::function<void(const PvLimits &)> scaleLimitsSetter_;
+  std::function<QString()> stripTitleGetter_;
+  std::function<void(const QString &)> stripTitleSetter_;
+  std::function<QString()> stripXLabelGetter_;
+  std::function<void(const QString &)> stripXLabelSetter_;
+  std::function<QString()> stripYLabelGetter_;
+  std::function<void(const QString &)> stripYLabelSetter_;
+  std::function<QColor()> stripForegroundGetter_;
+  std::function<void(const QColor &)> stripForegroundSetter_;
+  std::function<QColor()> stripBackgroundGetter_;
+  std::function<void(const QColor &)> stripBackgroundSetter_;
+  std::function<double()> stripPeriodGetter_;
+  std::function<void(double)> stripPeriodSetter_;
+  std::function<TimeUnits()> stripUnitsGetter_;
+  std::function<void(TimeUnits)> stripUnitsSetter_;
+  std::array<std::function<QString()>, kStripChartPenCount> stripPenChannelGetters_{};
+  std::array<std::function<void(const QString &)>, kStripChartPenCount> stripPenChannelSetters_{};
+  std::array<std::function<QColor()>, kStripChartPenCount> stripPenColorGetters_{};
+  std::array<std::function<void(const QColor &)>, kStripChartPenCount> stripPenColorSetters_{};
+  std::array<std::function<PvLimits()>, kStripChartPenCount> stripPenLimitsGetters_{};
+  std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> stripPenLimitsSetters_{};
   std::function<QColor()> byteForegroundGetter_;
   std::function<void(const QColor &)> byteForegroundSetter_;
   std::function<QColor()> byteBackgroundGetter_;

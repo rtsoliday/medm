@@ -117,6 +117,19 @@ QString imageTypeString(ImageType type)
   }
 }
 
+QString timeUnitsString(TimeUnits units)
+{
+  switch (units) {
+  case TimeUnits::kMilliseconds:
+    return QStringLiteral("milli-second");
+  case TimeUnits::kMinutes:
+    return QStringLiteral("minute");
+  case TimeUnits::kSeconds:
+  default:
+    return QStringLiteral("second");
+  }
+}
+
 QString channelFieldName(int index)
 {
   if (index <= 0) {
@@ -289,6 +302,33 @@ void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 
+void writePlotcom(QTextStream &stream, int level, const QString &title,
+    const QString &xLabel, const QString &yLabel, int colorIndex,
+    int backgroundIndex)
+{
+  writeIndentedLine(stream, level, QStringLiteral("plotcom {"));
+  if (!title.trimmed().isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("title=\"%1\"")
+            .arg(escapeAdlString(title.trimmed())));
+  }
+  if (!xLabel.trimmed().isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("xlabel=\"%1\"")
+            .arg(escapeAdlString(xLabel.trimmed())));
+  }
+  if (!yLabel.trimmed().isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("ylabel=\"%1\"")
+            .arg(escapeAdlString(yLabel.trimmed())));
+  }
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("clr=%1").arg(colorIndex));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("bclr=%1").arg(backgroundIndex));
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
 QString pvLimitSourceString(PvLimitSource source)
 {
   switch (source) {
@@ -315,6 +355,24 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
     writeIndentedLine(stream, level + 1,
         QStringLiteral("precDefault=%1").arg(limits.precisionDefault));
   }
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeStripChartPenSection(QTextStream &stream, int level, int index,
+    const QString &channel, int colorIndex, const PvLimits &limits)
+{
+  const QString trimmedChannel = channel.trimmed();
+  if (trimmedChannel.isEmpty()) {
+    return;
+  }
+  writeIndentedLine(stream, level,
+      QStringLiteral("pen[%1] {").arg(index));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("chan=\"%1\"")
+          .arg(escapeAdlString(trimmedChannel)));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("clr=%1").arg(colorIndex));
+  writeLimitsSection(stream, level + 1, limits);
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 

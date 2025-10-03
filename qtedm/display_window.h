@@ -70,6 +70,7 @@
 #include "line_element.h"
 #include "medm_colors.h"
 #include "oval_element.h"
+#include "strip_chart_element.h"
 #include "polygon_element.h"
 #include "polyline_element.h"
 #include "rectangle_element.h"

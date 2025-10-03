@@ -41,6 +41,7 @@ qtedm_SRC = qtedm.cc \
             bar_monitor_element.cc \
             meter_element.cc \
             scale_monitor_element.cc \
+            strip_chart_element.cc \
             rectangle_element.cc \
             oval_element.cc \
             arc_element.cc \

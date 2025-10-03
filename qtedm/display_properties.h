@@ -91,6 +91,14 @@ enum class ImageType
   kTiff
 };
 
+enum class TimeUnits
+{
+  kMilliseconds,
+  kSeconds,
+  kMinutes,
+};
+
+constexpr int kStripChartPenCount = 8;
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
 constexpr int kDefaultGridSpacing = 5;
@@ -104,6 +112,9 @@ constexpr int kMinimumMeterSize = 60;
 constexpr int kMinimumBarSize = 30;
 constexpr int kMinimumByteSize = 30;
 constexpr int kMinimumScaleSize = 40;
+constexpr int kMinimumStripChartWidth = 120;
+constexpr int kMinimumStripChartHeight = 80;
+constexpr double kDefaultStripChartPeriod = 60.0;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
 

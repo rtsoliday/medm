@@ -78,6 +78,7 @@
 #include "resource_palette_dialog.h"
 #include "text_element.h"
 #include "choice_button_element.h"
+#include "menu_element.h"
 #include "text_entry_element.h"
 #include "text_monitor_element.h"
 

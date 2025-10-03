@@ -250,6 +250,7 @@ protected:
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kChoiceButton
+            || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
@@ -292,6 +293,12 @@ protected:
           if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
             selectChoiceButtonElement(choice);
             showResourcePaletteForChoiceButton(choice);
+            event->accept();
+            return;
+          }
+          if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+            selectMenuElement(menu);
+            showResourcePaletteForMenu(menu);
             event->accept();
             return;
           }
@@ -526,6 +533,8 @@ private:
   TextEntryElement *selectedTextEntryElement_ = nullptr;
   QList<ChoiceButtonElement *> choiceButtonElements_;
   ChoiceButtonElement *selectedChoiceButtonElement_ = nullptr;
+  QList<MenuElement *> menuElements_;
+  MenuElement *selectedMenuElement_ = nullptr;
   QList<TextMonitorElement *> textMonitorElements_;
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
   QList<MeterElement *> meterElements_;
@@ -611,6 +620,15 @@ private:
     }
     selectedChoiceButtonElement_->setSelected(false);
     selectedChoiceButtonElement_ = nullptr;
+  }
+
+  void clearMenuSelection()
+  {
+    if (!selectedMenuElement_) {
+      return;
+    }
+    selectedMenuElement_->setSelected(false);
+    selectedMenuElement_ = nullptr;
   }
 
   void clearTextMonitorSelection()
@@ -745,6 +763,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -775,6 +794,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -1107,6 +1127,60 @@ private:
         },
         [this, element](ChoiceButtonStacking stacking) {
           element->setStacking(stacking);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForMenu(MenuElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForMenu(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth) {
+            adjusted.setWidth(kMinimumTextWidth);
+          }
+          if (adjusted.height() < kMinimumTextHeight) {
+            adjusted.setHeight(kMinimumTextHeight);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
           markDirty();
         },
         [element]() {
@@ -2519,8 +2593,10 @@ private:
       selectedTextElement_->setSelected(false);
     }
     clearDisplaySelection();
+    clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2551,6 +2627,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2582,6 +2659,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2601,6 +2679,38 @@ private:
     bringElementToFront(element);
   }
 
+  void selectMenuElement(MenuElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedMenuElement_) {
+      selectedMenuElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedMenuElement_ = element;
+    selectedMenuElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
   void selectTextMonitorElement(TextMonitorElement *element)
   {
     if (!element) {
@@ -2613,6 +2723,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -2643,6 +2754,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -2673,6 +2785,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2704,6 +2817,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2735,6 +2849,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2766,6 +2881,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2797,6 +2913,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2828,6 +2945,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2857,6 +2975,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2887,6 +3006,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2916,6 +3036,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2946,6 +3067,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2976,6 +3098,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3006,6 +3129,7 @@ private:
     clearTextSelection();
     clearTextEntrySelection();
     clearChoiceButtonSelection();
+    clearMenuSelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3101,6 +3225,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createChoiceButtonElement(rect);
+      break;
+    case CreateTool::kMenu:
+      if (rect.width() < kMinimumTextWidth) {
+        rect.setWidth(kMinimumTextWidth);
+      }
+      if (rect.height() < kMinimumTextHeight) {
+        rect.setHeight(kMinimumTextHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createMenuElement(rect);
       break;
     case CreateTool::kMeter:
       if (rect.width() < kMinimumMeterSize) {
@@ -3569,6 +3703,33 @@ private:
     markDirty();
   }
 
+  void createMenuElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth) {
+      target.setWidth(kMinimumTextWidth);
+    }
+    if (target.height() < kMinimumTextHeight) {
+      target.setHeight(kMinimumTextHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new MenuElement(displayArea_);
+    element->setFont(font());
+    element->setGeometry(target);
+    element->show();
+    menuElements_.append(element);
+    selectMenuElement(element);
+    showResourcePaletteForMenu(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createMeterElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -3909,6 +4070,7 @@ private:
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kChoiceButton
+            || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
@@ -4136,7 +4298,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(controllersMenu, QStringLiteral("Menu"));
+    auto *menuControllerAction =
+        addMenuAction(controllersMenu, QStringLiteral("Menu"));
+    QObject::connect(menuControllerAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kMenu);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(controllersMenu, QStringLiteral("Slider"));
     addMenuAction(controllersMenu, QStringLiteral("Message Button"));
     addMenuAction(controllersMenu, QStringLiteral("Related Display"));
@@ -4473,6 +4642,22 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("stacking=\"%1\"")
                 .arg(AdlWriter::choiceButtonStackingString(choice->stacking())));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("menu {"));
+      AdlWriter::writeObjectSection(stream, 1, menu->geometry());
+      AdlWriter::writeControlSection(stream, 1, menu->channel(),
+          AdlWriter::medmColorIndex(menu->foregroundColor()),
+          AdlWriter::medmColorIndex(menu->backgroundColor()));
+      if (menu->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(menu->colorMode())));
       }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;

@@ -909,6 +909,57 @@ public:
     choiceLayout->setRowStretch(5, 1);
     entriesLayout->addWidget(choiceButtonSection_);
 
+    menuSection_ = new QWidget(entriesWidget_);
+    auto *menuLayout = new QGridLayout(menuSection_);
+    menuLayout->setContentsMargins(0, 0, 0, 0);
+    menuLayout->setHorizontalSpacing(12);
+    menuLayout->setVerticalSpacing(6);
+
+    menuForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(menuForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(menuForegroundButton_,
+              QStringLiteral("Menu Foreground"), menuForegroundSetter_);
+        });
+
+    menuBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(menuBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(menuBackgroundButton_,
+              QStringLiteral("Menu Background"), menuBackgroundSetter_);
+        });
+
+    menuColorModeCombo_ = new QComboBox;
+    menuColorModeCombo_->setFont(valueFont_);
+    menuColorModeCombo_->setAutoFillBackground(true);
+    menuColorModeCombo_->addItem(QStringLiteral("Static"));
+    menuColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    menuColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(menuColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (menuColorModeSetter_) {
+            menuColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    menuChannelEdit_ = createLineEdit();
+    committedTexts_.insert(menuChannelEdit_, menuChannelEdit_->text());
+    menuChannelEdit_->installEventFilter(this);
+    QObject::connect(menuChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitMenuChannel(); });
+    QObject::connect(menuChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitMenuChannel(); });
+
+    addRow(menuLayout, 0, QStringLiteral("Foreground"), menuForegroundButton_);
+    addRow(menuLayout, 1, QStringLiteral("Background"), menuBackgroundButton_);
+    addRow(menuLayout, 2, QStringLiteral("Color Mode"), menuColorModeCombo_);
+    addRow(menuLayout, 3, QStringLiteral("Channel"), menuChannelEdit_);
+    menuLayout->setRowStretch(4, 1);
+    entriesLayout->addWidget(menuSection_);
+
     meterSection_ = new QWidget(entriesWidget_);
     auto *meterLayout = new QGridLayout(meterSection_);
     meterLayout->setContentsMargins(0, 0, 0, 0);
@@ -2374,6 +2425,82 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Choice Button"));
+    }
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForMenu(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kMenu;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    menuForegroundGetter_ = std::move(foregroundGetter);
+    menuForegroundSetter_ = std::move(foregroundSetter);
+    menuBackgroundGetter_ = std::move(backgroundGetter);
+    menuBackgroundSetter_ = std::move(backgroundSetter);
+    menuColorModeGetter_ = std::move(colorModeGetter);
+    menuColorModeSetter_ = std::move(colorModeSetter);
+    menuChannelGetter_ = std::move(channelGetter);
+    menuChannelSetter_ = std::move(channelSetter);
+
+    QRect menuGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (menuGeometry.width() <= 0) {
+      menuGeometry.setWidth(kMinimumTextWidth);
+    }
+    if (menuGeometry.height() <= 0) {
+      menuGeometry.setHeight(kMinimumTextHeight);
+    }
+    lastCommittedGeometry_ = menuGeometry;
+
+    updateGeometryEdits(menuGeometry);
+
+    if (menuForegroundButton_) {
+      const QColor color = menuForegroundGetter_ ? menuForegroundGetter_()
+                                                : palette().color(QPalette::WindowText);
+      setColorButtonColor(menuForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (menuBackgroundButton_) {
+      const QColor color = menuBackgroundGetter_ ? menuBackgroundGetter_()
+                                                : palette().color(QPalette::Window);
+      setColorButtonColor(menuBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (menuColorModeCombo_) {
+      const QSignalBlocker blocker(menuColorModeCombo_);
+      const int index = menuColorModeGetter_
+          ? colorModeToIndex(menuColorModeGetter_())
+          : colorModeToIndex(TextColorMode::kStatic);
+      menuColorModeCombo_->setCurrentIndex(index);
+    }
+
+    if (menuChannelEdit_) {
+      const QString channel = menuChannelGetter_ ? menuChannelGetter_() : QString();
+      const QSignalBlocker blocker(menuChannelEdit_);
+      menuChannelEdit_->setText(channel);
+      committedTexts_[menuChannelEdit_] = menuChannelEdit_->text();
+    }
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Menu"));
     }
 
     show();
@@ -4629,6 +4756,14 @@ public:
     choiceButtonStackingSetter_ = {};
     choiceButtonChannelGetter_ = {};
     choiceButtonChannelSetter_ = {};
+    menuForegroundGetter_ = {};
+    menuForegroundSetter_ = {};
+    menuBackgroundGetter_ = {};
+    menuBackgroundSetter_ = {};
+    menuColorModeGetter_ = {};
+    menuColorModeSetter_ = {};
+    menuChannelGetter_ = {};
+    menuChannelSetter_ = {};
     if (textEntryPvLimitsButton_) {
       textEntryPvLimitsButton_->setEnabled(false);
     }
@@ -4930,6 +5065,7 @@ public:
     resetLineEdit(textEntryPrecisionEdit_);
     resetLineEdit(textEntryChannelEdit_);
     resetLineEdit(choiceButtonChannelEdit_);
+    resetLineEdit(menuChannelEdit_);
     resetLineEdit(textMonitorPrecisionEdit_);
     resetLineEdit(textMonitorChannelEdit_);
     if (textMonitorPvLimitsButton_) {
@@ -4984,6 +5120,8 @@ public:
     resetColorButton(textMonitorBackgroundButton_);
     resetColorButton(choiceButtonForegroundButton_);
     resetColorButton(choiceButtonBackgroundButton_);
+    resetColorButton(menuForegroundButton_);
+    resetColorButton(menuBackgroundButton_);
     resetColorButton(meterForegroundButton_);
     resetColorButton(meterBackgroundButton_);
     resetColorButton(barForegroundButton_);
@@ -5183,6 +5321,7 @@ private:
     kText,
     kTextEntry,
     kChoiceButton,
+    kMenu,
     kTextMonitor,
     kMeter,
     kBarMonitor,
@@ -5378,6 +5517,11 @@ private:
       choiceButtonSection_->setVisible(choiceVisible);
       choiceButtonSection_->setEnabled(choiceVisible);
     }
+    if (menuSection_) {
+      const bool menuVisible = kind == SelectionKind::kMenu;
+      menuSection_->setVisible(menuVisible);
+      menuSection_->setEnabled(menuVisible);
+    }
     if (textMonitorSection_) {
       const bool monitorVisible = kind == SelectionKind::kTextMonitor;
       textMonitorSection_->setVisible(monitorVisible);
@@ -5499,6 +5643,20 @@ private:
     const QString value = choiceButtonChannelEdit_->text();
     choiceButtonChannelSetter_(value);
     committedTexts_[choiceButtonChannelEdit_] = value;
+  }
+
+  void commitMenuChannel()
+  {
+    if (!menuChannelEdit_) {
+      return;
+    }
+    if (!menuChannelSetter_) {
+      revertLineEdit(menuChannelEdit_);
+      return;
+    }
+    const QString value = menuChannelEdit_->text();
+    menuChannelSetter_(value);
+    committedTexts_[menuChannelEdit_] = value;
   }
 
   void commitTextMonitorChannel()
@@ -6965,6 +7123,11 @@ private:
   QComboBox *choiceButtonColorModeCombo_ = nullptr;
   QComboBox *choiceButtonStackingCombo_ = nullptr;
   QLineEdit *choiceButtonChannelEdit_ = nullptr;
+  QWidget *menuSection_ = nullptr;
+  QPushButton *menuForegroundButton_ = nullptr;
+  QPushButton *menuBackgroundButton_ = nullptr;
+  QComboBox *menuColorModeCombo_ = nullptr;
+  QLineEdit *menuChannelEdit_ = nullptr;
   QWidget *meterSection_ = nullptr;
   QPushButton *meterForegroundButton_ = nullptr;
   QPushButton *meterBackgroundButton_ = nullptr;
@@ -7193,6 +7356,9 @@ private:
     if (choiceButtonChannelEdit_) {
       committedTexts_[choiceButtonChannelEdit_] = choiceButtonChannelEdit_->text();
     }
+    if (menuChannelEdit_) {
+      committedTexts_[menuChannelEdit_] = menuChannelEdit_->text();
+    }
     if (textMonitorPrecisionEdit_) {
       committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
     }
@@ -7398,6 +7564,14 @@ private:
   std::function<void(ChoiceButtonStacking)> choiceButtonStackingSetter_;
   std::function<QString()> choiceButtonChannelGetter_;
   std::function<void(const QString &)> choiceButtonChannelSetter_;
+  std::function<QColor()> menuForegroundGetter_;
+  std::function<void(const QColor &)> menuForegroundSetter_;
+  std::function<QColor()> menuBackgroundGetter_;
+  std::function<void(const QColor &)> menuBackgroundSetter_;
+  std::function<TextColorMode()> menuColorModeGetter_;
+  std::function<void(TextColorMode)> menuColorModeSetter_;
+  std::function<QString()> menuChannelGetter_;
+  std::function<void(const QString &)> menuChannelSetter_;
   std::function<QColor()> meterForegroundGetter_;
   std::function<void(const QColor &)> meterForegroundSetter_;
   std::function<QColor()> meterBackgroundGetter_;

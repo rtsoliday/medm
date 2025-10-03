@@ -14,6 +14,7 @@ enum class CreateTool {
   kTextMonitor,
   kTextEntry,
   kChoiceButton,
+  kMenu,
   kMeter,
   kBarMonitor,
   kByteMonitor,

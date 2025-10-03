@@ -32,6 +32,8 @@ QString timeUnitsString(TimeUnits units);
 QString channelFieldName(int index);
 QString textMonitorFormatString(TextMonitorFormat format);
 QString choiceButtonStackingString(ChoiceButtonStacking stacking);
+QString relatedDisplayVisualString(RelatedDisplayVisual visual);
+QString relatedDisplayModeString(RelatedDisplayMode mode);
 int medmLineWidthValue(int width);
 int medmColorIndex(const QColor &color);
 void writeObjectSection(QTextStream &stream, int level, const QRect &rect);
@@ -58,6 +60,8 @@ void writePointsSection(
 void writeCartesianTraceSection(QTextStream &stream, int level, int index,
     const QString &xChannel, const QString &yChannel, int colorIndex,
     int axisIndex, bool usesRightAxis);
+void writeRelatedDisplayEntry(QTextStream &stream, int level, int index,
+    const RelatedDisplayEntry &entry);
 
 template <typename Element>
 std::array<QString, 4> collectChannels(const Element *element)

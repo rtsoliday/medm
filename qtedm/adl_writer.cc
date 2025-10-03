@@ -245,6 +245,28 @@ QString choiceButtonStackingString(ChoiceButtonStacking stacking)
   }
 }
 
+QString relatedDisplayVisualString(RelatedDisplayVisual visual)
+{
+  switch (visual) {
+  case RelatedDisplayVisual::kRowOfButtons:
+    return QStringLiteral("a row of buttons");
+  case RelatedDisplayVisual::kColumnOfButtons:
+    return QStringLiteral("a column of buttons");
+  case RelatedDisplayVisual::kHiddenButton:
+    return QStringLiteral("invisible");
+  case RelatedDisplayVisual::kMenu:
+  default:
+    return QStringLiteral("menu");
+  }
+}
+
+QString relatedDisplayModeString(RelatedDisplayMode mode)
+{
+  return mode == RelatedDisplayMode::kReplace
+      ? QStringLiteral("replace display")
+      : QStringLiteral("create new display");
+}
+
 int medmLineWidthValue(int width)
 {
   return width <= 1 ? 0 : width;
@@ -564,6 +586,34 @@ void writePointsSection(
   for (const QPoint &point : points) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("(%1,%2)").arg(point.x()).arg(point.y()));
+  }
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeRelatedDisplayEntry(QTextStream &stream, int level, int index,
+    const RelatedDisplayEntry &entry)
+{
+  writeIndentedLine(stream, level,
+      QStringLiteral("display[%1] {").arg(index));
+  if (!entry.label.isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("label=\"%1\"")
+            .arg(escapeAdlString(entry.label)));
+  }
+  if (!entry.name.isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("name=\"%1\"")
+            .arg(escapeAdlString(entry.name)));
+  }
+  if (!entry.args.isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("args=\"%1\"")
+            .arg(escapeAdlString(entry.args)));
+  }
+  if (entry.mode != RelatedDisplayMode::kAdd) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("policy=\"%1\"")
+            .arg(relatedDisplayModeString(entry.mode)));
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }

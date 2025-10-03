@@ -39,6 +39,7 @@ qtedm_SRC = qtedm.cc \
             text_entry_element.cc \
             choice_button_element.cc \
             menu_element.cc \
+            related_display_element.cc \
             text_monitor_element.cc \
             byte_monitor_element.cc \
             bar_monitor_element.cc \

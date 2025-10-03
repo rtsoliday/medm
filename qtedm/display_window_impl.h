@@ -262,7 +262,8 @@ protected:
             || state->createTool == CreateTool::kOval
             || state->createTool == CreateTool::kArc
             || state->createTool == CreateTool::kLine
-            || state->createTool == CreateTool::kImage) {
+            || state->createTool == CreateTool::kImage
+            || state->createTool == CreateTool::kRelatedDisplay) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
             if (displayArea_->rect().contains(areaPos)) {
@@ -306,6 +307,12 @@ protected:
           if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
             selectMenuElement(menu);
             showResourcePaletteForMenu(menu);
+            event->accept();
+            return;
+          }
+          if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+            selectRelatedDisplayElement(related);
+            showResourcePaletteForRelatedDisplay(related);
             event->accept();
             return;
           }
@@ -544,6 +551,8 @@ private:
   ChoiceButtonElement *selectedChoiceButtonElement_ = nullptr;
   QList<MenuElement *> menuElements_;
   MenuElement *selectedMenuElement_ = nullptr;
+  QList<RelatedDisplayElement *> relatedDisplayElements_;
+  RelatedDisplayElement *selectedRelatedDisplayElement_ = nullptr;
   QList<TextMonitorElement *> textMonitorElements_;
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
   QList<MeterElement *> meterElements_;
@@ -647,6 +656,15 @@ private:
     }
     selectedMenuElement_->setSelected(false);
     selectedMenuElement_ = nullptr;
+  }
+
+  void clearRelatedDisplaySelection()
+  {
+    if (!selectedRelatedDisplayElement_) {
+      return;
+    }
+    selectedRelatedDisplayElement_->setSelected(false);
+    selectedRelatedDisplayElement_ = nullptr;
   }
 
   void clearTextMonitorSelection()
@@ -783,6 +801,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -815,6 +834,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -1292,6 +1312,86 @@ private:
           element->setChannel(channel);
           markDirty();
         });
+  }
+
+  void showResourcePaletteForRelatedDisplay(RelatedDisplayElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    std::array<std::function<QString()>, kRelatedDisplayEntryCount> labelGetters{};
+    std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> labelSetters{};
+    std::array<std::function<QString()>, kRelatedDisplayEntryCount> nameGetters{};
+    std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> nameSetters{};
+    std::array<std::function<QString()>, kRelatedDisplayEntryCount> argsGetters{};
+    std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> argsSetters{};
+    std::array<std::function<RelatedDisplayMode()>, kRelatedDisplayEntryCount> modeGetters{};
+    std::array<std::function<void(RelatedDisplayMode)>, kRelatedDisplayEntryCount> modeSetters{};
+
+    for (int i = 0; i < kRelatedDisplayEntryCount; ++i) {
+      labelGetters[i] = [element, i]() { return element->entryLabel(i); };
+      labelSetters[i] = [this, element, i](const QString &value) {
+        element->setEntryLabel(i, value);
+        markDirty();
+      };
+      nameGetters[i] = [element, i]() { return element->entryName(i); };
+      nameSetters[i] = [this, element, i](const QString &value) {
+        element->setEntryName(i, value);
+        markDirty();
+      };
+      argsGetters[i] = [element, i]() { return element->entryArgs(i); };
+      argsSetters[i] = [this, element, i](const QString &value) {
+        element->setEntryArgs(i, value);
+        markDirty();
+      };
+      modeGetters[i] = [element, i]() { return element->entryMode(i); };
+      modeSetters[i] = [this, element, i](RelatedDisplayMode mode) {
+        element->setEntryMode(i, mode);
+        markDirty();
+      };
+    }
+
+    dialog->showForRelatedDisplay(
+        [element]() { return element->geometry(); },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth) {
+            adjusted.setWidth(kMinimumTextWidth);
+          }
+          if (adjusted.height() < kMinimumTextHeight) {
+            adjusted.setHeight(kMinimumTextHeight);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() { return element->foregroundColor(); },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->backgroundColor(); },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->label(); },
+        [this, element](const QString &text) {
+          element->setLabel(text);
+          markDirty();
+        },
+        [element]() { return element->visual(); },
+        [this, element](RelatedDisplayVisual visual) {
+          element->setVisual(visual);
+          markDirty();
+        },
+        std::move(labelGetters), std::move(labelSetters), std::move(nameGetters),
+        std::move(nameSetters), std::move(argsGetters), std::move(argsSetters),
+        std::move(modeGetters), std::move(modeSetters));
   }
 
   void showResourcePaletteForTextMonitor(TextMonitorElement *element)
@@ -2700,6 +2800,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2732,6 +2833,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2765,6 +2867,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2798,6 +2901,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2831,6 +2935,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2850,6 +2955,40 @@ private:
     bringElementToFront(element);
   }
 
+  void selectRelatedDisplayElement(RelatedDisplayElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedRelatedDisplayElement_) {
+      selectedRelatedDisplayElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedRelatedDisplayElement_ = element;
+    selectedRelatedDisplayElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
   void selectTextMonitorElement(TextMonitorElement *element)
   {
     if (!element) {
@@ -2864,6 +3003,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -2896,6 +3036,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -2928,6 +3069,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2961,6 +3103,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2994,6 +3137,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3027,6 +3171,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3060,6 +3205,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3093,6 +3239,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3124,6 +3271,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3156,6 +3304,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3187,6 +3336,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3219,6 +3369,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3251,6 +3402,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3283,6 +3435,7 @@ private:
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
+    clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3501,6 +3654,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createImageElement(rect);
+      break;
+    case CreateTool::kRelatedDisplay:
+      if (rect.width() < kMinimumTextWidth) {
+        rect.setWidth(kMinimumTextWidth);
+      }
+      if (rect.height() < kMinimumTextHeight) {
+        rect.setHeight(kMinimumTextHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createRelatedDisplayElement(rect);
       break;
     default:
       break;
@@ -3919,6 +4082,33 @@ private:
     markDirty();
   }
 
+  void createRelatedDisplayElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth) {
+      target.setWidth(kMinimumTextWidth);
+    }
+    if (target.height() < kMinimumTextHeight) {
+      target.setHeight(kMinimumTextHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new RelatedDisplayElement(displayArea_);
+    element->setFont(font());
+    element->setGeometry(target);
+    element->show();
+    relatedDisplayElements_.append(element);
+    selectRelatedDisplayElement(element);
+    showResourcePaletteForRelatedDisplay(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createMeterElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -4273,7 +4463,8 @@ private:
             || state->createTool == CreateTool::kPolygon
             || state->createTool == CreateTool::kPolyline
             || state->createTool == CreateTool::kLine
-            || state->createTool == CreateTool::kImage);
+            || state->createTool == CreateTool::kImage
+            || state->createTool == CreateTool::kRelatedDisplay);
     if (displayArea_) {
       if (crossCursorActive) {
         displayArea_->setCursor(Qt::CrossCursor);
@@ -4505,7 +4696,14 @@ private:
       }
     });
     addMenuAction(controllersMenu, QStringLiteral("Message Button"));
-    addMenuAction(controllersMenu, QStringLiteral("Related Display"));
+    auto *relatedDisplayAction =
+        addMenuAction(controllersMenu, QStringLiteral("Related Display"));
+    QObject::connect(relatedDisplayAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kRelatedDisplay);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(controllersMenu, QStringLiteral("Shell Command"));
     addMenuAction(controllersMenu, QStringLiteral("Wheel Switch"));
 
@@ -4887,6 +5085,39 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
                 .arg(AdlWriter::colorModeString(menu->colorMode())));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("\"related display\" {"));
+      AdlWriter::writeObjectSection(stream, 1, related->geometry());
+      for (int i = 0; i < related->entryCount(); ++i) {
+        RelatedDisplayEntry entry = related->entry(i);
+        if (entry.label.trimmed().isEmpty() && entry.name.trimmed().isEmpty()
+            && entry.args.trimmed().isEmpty()) {
+          continue;
+        }
+        AdlWriter::writeRelatedDisplayEntry(stream, 1, i, entry);
+      }
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("clr=%1")
+              .arg(AdlWriter::medmColorIndex(related->foregroundColor())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("bclr=%1")
+              .arg(AdlWriter::medmColorIndex(related->backgroundColor())));
+      const QString label = related->label();
+      if (!label.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(label)));
+      }
+      if (related->visual() != RelatedDisplayVisual::kMenu) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("visual=\"%1\"")
+                .arg(AdlWriter::relatedDisplayVisualString(related->visual())));
       }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;

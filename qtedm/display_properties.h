@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QString>
+
 // Shared enums and constants used across QtEDM widgets and dialogs.
 
 enum class TextColorMode
@@ -37,6 +39,28 @@ enum class ChoiceButtonStacking
   kColumn,
   kRow,
   kRowColumn,
+};
+
+enum class RelatedDisplayMode
+{
+  kAdd,
+  kReplace
+};
+
+enum class RelatedDisplayVisual
+{
+  kMenu,
+  kRowOfButtons,
+  kColumnOfButtons,
+  kHiddenButton
+};
+
+struct RelatedDisplayEntry
+{
+  QString label;
+  QString name;
+  QString args;
+  RelatedDisplayMode mode = RelatedDisplayMode::kAdd;
 };
 
 enum class MeterLabel
@@ -149,6 +173,7 @@ constexpr int kMinimumStripChartHeight = 80;
 constexpr int kMinimumCartesianPlotWidth = 160;
 constexpr int kMinimumCartesianPlotHeight = 120;
 constexpr double kDefaultStripChartPeriod = 60.0;
+constexpr int kRelatedDisplayEntryCount = 16;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
 

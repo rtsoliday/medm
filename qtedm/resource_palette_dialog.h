@@ -1064,6 +1064,161 @@ public:
     menuLayout->setRowStretch(4, 1);
     entriesLayout->addWidget(menuSection_);
 
+    relatedDisplaySection_ = new QWidget(entriesWidget_);
+    auto *relatedLayout = new QGridLayout(relatedDisplaySection_);
+    relatedLayout->setContentsMargins(0, 0, 0, 0);
+    relatedLayout->setHorizontalSpacing(12);
+    relatedLayout->setVerticalSpacing(6);
+
+    relatedDisplayForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(relatedDisplayForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(relatedDisplayForegroundButton_,
+              QStringLiteral("Related Display Foreground"),
+              relatedDisplayForegroundSetter_);
+        });
+
+    relatedDisplayBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(relatedDisplayBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(relatedDisplayBackgroundButton_,
+              QStringLiteral("Related Display Background"),
+              relatedDisplayBackgroundSetter_);
+        });
+
+    relatedDisplayLabelEdit_ = createLineEdit();
+    committedTexts_.insert(
+        relatedDisplayLabelEdit_, relatedDisplayLabelEdit_->text());
+    relatedDisplayLabelEdit_->installEventFilter(this);
+    QObject::connect(relatedDisplayLabelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitRelatedDisplayLabel(); });
+    QObject::connect(relatedDisplayLabelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitRelatedDisplayLabel(); });
+
+    relatedDisplayVisualCombo_ = new QComboBox;
+    relatedDisplayVisualCombo_->setFont(valueFont_);
+    relatedDisplayVisualCombo_->setAutoFillBackground(true);
+    relatedDisplayVisualCombo_->addItem(QStringLiteral("Menu"));
+    relatedDisplayVisualCombo_->addItem(QStringLiteral("Row of Buttons"));
+    relatedDisplayVisualCombo_->addItem(QStringLiteral("Column of Buttons"));
+    relatedDisplayVisualCombo_->addItem(QStringLiteral("Hidden Button"));
+    QObject::connect(relatedDisplayVisualCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (relatedDisplayVisualSetter_) {
+            relatedDisplayVisualSetter_(relatedDisplayVisualFromIndex(index));
+          }
+        });
+
+    relatedDisplayEntriesWidget_ = new QWidget(relatedDisplaySection_);
+    auto *relatedEntriesLayout = new QGridLayout(relatedDisplayEntriesWidget_);
+    relatedEntriesLayout->setContentsMargins(0, 0, 0, 0);
+    relatedEntriesLayout->setHorizontalSpacing(8);
+    relatedEntriesLayout->setVerticalSpacing(4);
+
+    auto *displayHeader = new QLabel(QStringLiteral("Display"));
+    displayHeader->setFont(labelFont_);
+    displayHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(displayHeader, 0, 0);
+
+    auto *labelHeader = new QLabel(QStringLiteral("Label"));
+    labelHeader->setFont(labelFont_);
+    labelHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(labelHeader, 0, 1);
+
+    auto *nameHeader = new QLabel(QStringLiteral("Name"));
+    nameHeader->setFont(labelFont_);
+    nameHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(nameHeader, 0, 2);
+
+    auto *argsHeader = new QLabel(QStringLiteral("Args"));
+    argsHeader->setFont(labelFont_);
+    argsHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(argsHeader, 0, 3);
+
+    auto *modeHeader = new QLabel(QStringLiteral("Policy"));
+    modeHeader->setFont(labelFont_);
+    modeHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(modeHeader, 0, 4);
+
+    for (int i = 0; i < kRelatedDisplayEntryCount; ++i) {
+      auto *rowLabel = new QLabel(QStringLiteral("%1").arg(i + 1));
+      rowLabel->setFont(labelFont_);
+      rowLabel->setAlignment(Qt::AlignCenter);
+      relatedEntriesLayout->addWidget(rowLabel, i + 1, 0);
+
+      relatedDisplayEntryLabelEdits_[i] = createLineEdit();
+      committedTexts_.insert(relatedDisplayEntryLabelEdits_[i],
+          relatedDisplayEntryLabelEdits_[i]->text());
+      relatedDisplayEntryLabelEdits_[i]->setMaximumWidth(160);
+      relatedDisplayEntryLabelEdits_[i]->installEventFilter(this);
+      QObject::connect(relatedDisplayEntryLabelEdits_[i], &QLineEdit::returnPressed,
+          this, [this, i]() { commitRelatedDisplayEntryLabel(i); });
+      QObject::connect(relatedDisplayEntryLabelEdits_[i], &QLineEdit::editingFinished,
+          this, [this, i]() { commitRelatedDisplayEntryLabel(i); });
+      relatedEntriesLayout->addWidget(relatedDisplayEntryLabelEdits_[i], i + 1, 1);
+
+      relatedDisplayEntryNameEdits_[i] = createLineEdit();
+      committedTexts_.insert(relatedDisplayEntryNameEdits_[i],
+          relatedDisplayEntryNameEdits_[i]->text());
+      relatedDisplayEntryNameEdits_[i]->setMaximumWidth(160);
+      relatedDisplayEntryNameEdits_[i]->installEventFilter(this);
+      QObject::connect(relatedDisplayEntryNameEdits_[i], &QLineEdit::returnPressed,
+          this, [this, i]() { commitRelatedDisplayEntryName(i); });
+      QObject::connect(relatedDisplayEntryNameEdits_[i], &QLineEdit::editingFinished,
+          this, [this, i]() { commitRelatedDisplayEntryName(i); });
+      relatedEntriesLayout->addWidget(relatedDisplayEntryNameEdits_[i], i + 1, 2);
+
+      relatedDisplayEntryArgsEdits_[i] = createLineEdit();
+      committedTexts_.insert(relatedDisplayEntryArgsEdits_[i],
+          relatedDisplayEntryArgsEdits_[i]->text());
+      relatedDisplayEntryArgsEdits_[i]->setMaximumWidth(160);
+      relatedDisplayEntryArgsEdits_[i]->installEventFilter(this);
+      QObject::connect(relatedDisplayEntryArgsEdits_[i], &QLineEdit::returnPressed,
+          this, [this, i]() { commitRelatedDisplayEntryArgs(i); });
+      QObject::connect(relatedDisplayEntryArgsEdits_[i], &QLineEdit::editingFinished,
+          this, [this, i]() { commitRelatedDisplayEntryArgs(i); });
+      relatedEntriesLayout->addWidget(relatedDisplayEntryArgsEdits_[i], i + 1, 3);
+
+      relatedDisplayEntryModeCombos_[i] = new QComboBox;
+      relatedDisplayEntryModeCombos_[i]->setFont(valueFont_);
+      relatedDisplayEntryModeCombos_[i]->setAutoFillBackground(true);
+      relatedDisplayEntryModeCombos_[i]->addItem(
+          QStringLiteral("Add New Display"));
+      relatedDisplayEntryModeCombos_[i]->addItem(
+          QStringLiteral("Replace Display"));
+      QObject::connect(relatedDisplayEntryModeCombos_[i],
+          static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+          this, [this, i](int index) {
+            if (relatedDisplayEntryModeSetters_[i]) {
+              relatedDisplayEntryModeSetters_[i](
+                  relatedDisplayModeFromIndex(index));
+            }
+          });
+      relatedEntriesLayout->addWidget(relatedDisplayEntryModeCombos_[i], i + 1, 4);
+    }
+
+    relatedEntriesLayout->setColumnStretch(1, 1);
+    relatedEntriesLayout->setColumnStretch(2, 1);
+    relatedEntriesLayout->setColumnStretch(3, 1);
+    relatedEntriesLayout->setColumnStretch(4, 1);
+
+    int relatedRow = 0;
+    addRow(relatedLayout, relatedRow++, QStringLiteral("Foreground"),
+        relatedDisplayForegroundButton_);
+    addRow(relatedLayout, relatedRow++, QStringLiteral("Background"),
+        relatedDisplayBackgroundButton_);
+    addRow(relatedLayout, relatedRow++, QStringLiteral("Label"),
+        relatedDisplayLabelEdit_);
+    addRow(relatedLayout, relatedRow++, QStringLiteral("Visual"),
+        relatedDisplayVisualCombo_);
+    addRow(relatedLayout, relatedRow++, QStringLiteral("Displays"),
+        relatedDisplayEntriesWidget_);
+    relatedLayout->setRowStretch(relatedRow, 1);
+    entriesLayout->addWidget(relatedDisplaySection_);
+
     meterSection_ = new QWidget(entriesWidget_);
     auto *meterLayout = new QGridLayout(meterSection_);
     meterLayout->setContentsMargins(0, 0, 0, 0);
@@ -2782,6 +2937,153 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Menu"));
+    }
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForRelatedDisplay(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<QString()> labelGetter,
+      std::function<void(const QString &)> labelSetter,
+      std::function<RelatedDisplayVisual()> visualGetter,
+      std::function<void(RelatedDisplayVisual)> visualSetter,
+      std::array<std::function<QString()>, kRelatedDisplayEntryCount> entryLabelGetters,
+      std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> entryLabelSetters,
+      std::array<std::function<QString()>, kRelatedDisplayEntryCount> entryNameGetters,
+      std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> entryNameSetters,
+      std::array<std::function<QString()>, kRelatedDisplayEntryCount> entryArgsGetters,
+      std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> entryArgsSetters,
+      std::array<std::function<RelatedDisplayMode()>, kRelatedDisplayEntryCount> entryModeGetters,
+      std::array<std::function<void(RelatedDisplayMode)>, kRelatedDisplayEntryCount> entryModeSetters)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kRelatedDisplay;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    relatedDisplayForegroundGetter_ = std::move(foregroundGetter);
+    relatedDisplayForegroundSetter_ = std::move(foregroundSetter);
+    relatedDisplayBackgroundGetter_ = std::move(backgroundGetter);
+    relatedDisplayBackgroundSetter_ = std::move(backgroundSetter);
+    relatedDisplayLabelGetter_ = std::move(labelGetter);
+    relatedDisplayLabelSetter_ = std::move(labelSetter);
+    relatedDisplayVisualGetter_ = std::move(visualGetter);
+    relatedDisplayVisualSetter_ = std::move(visualSetter);
+    relatedDisplayEntryLabelGetters_ = std::move(entryLabelGetters);
+    relatedDisplayEntryLabelSetters_ = std::move(entryLabelSetters);
+    relatedDisplayEntryNameGetters_ = std::move(entryNameGetters);
+    relatedDisplayEntryNameSetters_ = std::move(entryNameSetters);
+    relatedDisplayEntryArgsGetters_ = std::move(entryArgsGetters);
+    relatedDisplayEntryArgsSetters_ = std::move(entryArgsSetters);
+    relatedDisplayEntryModeGetters_ = std::move(entryModeGetters);
+    relatedDisplayEntryModeSetters_ = std::move(entryModeSetters);
+
+    QRect rdGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (rdGeometry.width() <= 0) {
+      rdGeometry.setWidth(kMinimumTextWidth);
+    }
+    if (rdGeometry.height() <= 0) {
+      rdGeometry.setHeight(kMinimumTextHeight);
+    }
+    lastCommittedGeometry_ = rdGeometry;
+
+    updateGeometryEdits(rdGeometry);
+
+    if (relatedDisplayForegroundButton_) {
+      const QColor color = relatedDisplayForegroundGetter_
+              ? relatedDisplayForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(relatedDisplayForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+      relatedDisplayForegroundButton_->setEnabled(
+          static_cast<bool>(relatedDisplayForegroundSetter_));
+    }
+
+    if (relatedDisplayBackgroundButton_) {
+      const QColor color = relatedDisplayBackgroundGetter_
+              ? relatedDisplayBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(relatedDisplayBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+      relatedDisplayBackgroundButton_->setEnabled(
+          static_cast<bool>(relatedDisplayBackgroundSetter_));
+    }
+
+    if (relatedDisplayLabelEdit_) {
+      const QString text = relatedDisplayLabelGetter_
+              ? relatedDisplayLabelGetter_()
+              : QString();
+      const QSignalBlocker blocker(relatedDisplayLabelEdit_);
+      relatedDisplayLabelEdit_->setText(text);
+      relatedDisplayLabelEdit_->setEnabled(
+          static_cast<bool>(relatedDisplayLabelSetter_));
+      committedTexts_[relatedDisplayLabelEdit_] = text;
+    }
+
+    if (relatedDisplayVisualCombo_) {
+      const QSignalBlocker blocker(relatedDisplayVisualCombo_);
+      const int index = relatedDisplayVisualGetter_
+              ? relatedDisplayVisualToIndex(relatedDisplayVisualGetter_())
+              : relatedDisplayVisualToIndex(RelatedDisplayVisual::kMenu);
+      relatedDisplayVisualCombo_->setCurrentIndex(index);
+      relatedDisplayVisualCombo_->setEnabled(
+          static_cast<bool>(relatedDisplayVisualSetter_));
+    }
+
+    for (int i = 0; i < kRelatedDisplayEntryCount; ++i) {
+      if (relatedDisplayEntryLabelEdits_[i]) {
+        const QString value = relatedDisplayEntryLabelGetters_[i]
+                ? relatedDisplayEntryLabelGetters_[i]()
+                : QString();
+        const QSignalBlocker blocker(relatedDisplayEntryLabelEdits_[i]);
+        relatedDisplayEntryLabelEdits_[i]->setText(value);
+        relatedDisplayEntryLabelEdits_[i]->setEnabled(
+            static_cast<bool>(relatedDisplayEntryLabelSetters_[i]));
+        committedTexts_[relatedDisplayEntryLabelEdits_[i]] = value;
+      }
+      if (relatedDisplayEntryNameEdits_[i]) {
+        const QString value = relatedDisplayEntryNameGetters_[i]
+                ? relatedDisplayEntryNameGetters_[i]()
+                : QString();
+        const QSignalBlocker blocker(relatedDisplayEntryNameEdits_[i]);
+        relatedDisplayEntryNameEdits_[i]->setText(value);
+        relatedDisplayEntryNameEdits_[i]->setEnabled(
+            static_cast<bool>(relatedDisplayEntryNameSetters_[i]));
+        committedTexts_[relatedDisplayEntryNameEdits_[i]] = value;
+      }
+      if (relatedDisplayEntryArgsEdits_[i]) {
+        const QString value = relatedDisplayEntryArgsGetters_[i]
+                ? relatedDisplayEntryArgsGetters_[i]()
+                : QString();
+        const QSignalBlocker blocker(relatedDisplayEntryArgsEdits_[i]);
+        relatedDisplayEntryArgsEdits_[i]->setText(value);
+        relatedDisplayEntryArgsEdits_[i]->setEnabled(
+            static_cast<bool>(relatedDisplayEntryArgsSetters_[i]));
+        committedTexts_[relatedDisplayEntryArgsEdits_[i]] = value;
+      }
+      if (relatedDisplayEntryModeCombos_[i]) {
+        const QSignalBlocker blocker(relatedDisplayEntryModeCombos_[i]);
+        const RelatedDisplayMode mode = relatedDisplayEntryModeGetters_[i]
+                ? relatedDisplayEntryModeGetters_[i]()
+                : RelatedDisplayMode::kAdd;
+        relatedDisplayEntryModeCombos_[i]->setCurrentIndex(
+            relatedDisplayModeToIndex(mode));
+        relatedDisplayEntryModeCombos_[i]->setEnabled(
+            static_cast<bool>(relatedDisplayEntryModeSetters_[i]));
+      }
+    }
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Related Display"));
     }
 
     show();
@@ -5061,6 +5363,82 @@ public:
     menuColorModeSetter_ = {};
     menuChannelGetter_ = {};
     menuChannelSetter_ = {};
+    relatedDisplayForegroundGetter_ = {};
+    relatedDisplayForegroundSetter_ = {};
+    relatedDisplayBackgroundGetter_ = {};
+    relatedDisplayBackgroundSetter_ = {};
+    relatedDisplayLabelGetter_ = {};
+    relatedDisplayLabelSetter_ = {};
+    relatedDisplayVisualGetter_ = {};
+    relatedDisplayVisualSetter_ = {};
+    for (auto &getter : relatedDisplayEntryLabelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : relatedDisplayEntryLabelSetters_) {
+      setter = {};
+    }
+    for (auto &getter : relatedDisplayEntryNameGetters_) {
+      getter = {};
+    }
+    for (auto &setter : relatedDisplayEntryNameSetters_) {
+      setter = {};
+    }
+    for (auto &getter : relatedDisplayEntryArgsGetters_) {
+      getter = {};
+    }
+    for (auto &setter : relatedDisplayEntryArgsSetters_) {
+      setter = {};
+    }
+    for (auto &getter : relatedDisplayEntryModeGetters_) {
+      getter = {};
+    }
+    for (auto &setter : relatedDisplayEntryModeSetters_) {
+      setter = {};
+    }
+    if (relatedDisplayForegroundButton_) {
+      relatedDisplayForegroundButton_->setEnabled(false);
+    }
+    if (relatedDisplayBackgroundButton_) {
+      relatedDisplayBackgroundButton_->setEnabled(false);
+    }
+    if (relatedDisplayLabelEdit_) {
+      const QSignalBlocker blocker(relatedDisplayLabelEdit_);
+      relatedDisplayLabelEdit_->clear();
+      relatedDisplayLabelEdit_->setEnabled(false);
+    }
+    if (relatedDisplayVisualCombo_) {
+      const QSignalBlocker blocker(relatedDisplayVisualCombo_);
+      relatedDisplayVisualCombo_->setCurrentIndex(0);
+      relatedDisplayVisualCombo_->setEnabled(false);
+    }
+    for (QLineEdit *edit : relatedDisplayEntryLabelEdits_) {
+      if (edit) {
+        const QSignalBlocker blocker(edit);
+        edit->clear();
+        edit->setEnabled(false);
+      }
+    }
+    for (QLineEdit *edit : relatedDisplayEntryNameEdits_) {
+      if (edit) {
+        const QSignalBlocker blocker(edit);
+        edit->clear();
+        edit->setEnabled(false);
+      }
+    }
+    for (QLineEdit *edit : relatedDisplayEntryArgsEdits_) {
+      if (edit) {
+        const QSignalBlocker blocker(edit);
+        edit->clear();
+        edit->setEnabled(false);
+      }
+    }
+    for (QComboBox *combo : relatedDisplayEntryModeCombos_) {
+      if (combo) {
+        const QSignalBlocker blocker(combo);
+        combo->setCurrentIndex(0);
+        combo->setEnabled(false);
+      }
+    }
     if (textEntryPvLimitsButton_) {
       textEntryPvLimitsButton_->setEnabled(false);
     }
@@ -5620,6 +5998,7 @@ private:
     kSlider,
     kChoiceButton,
     kMenu,
+    kRelatedDisplay,
     kTextMonitor,
     kMeter,
     kBarMonitor,
@@ -5698,6 +6077,18 @@ private:
         const bool isImageChannelEdit = std::find(
             imageChannelEdits_.begin(), imageChannelEdits_.end(), edit)
             != imageChannelEdits_.end();
+        const bool isRelatedLabelEdit = std::find(
+            relatedDisplayEntryLabelEdits_.begin(),
+            relatedDisplayEntryLabelEdits_.end(), edit)
+            != relatedDisplayEntryLabelEdits_.end();
+        const bool isRelatedNameEdit = std::find(
+            relatedDisplayEntryNameEdits_.begin(),
+            relatedDisplayEntryNameEdits_.end(), edit)
+            != relatedDisplayEntryNameEdits_.end();
+        const bool isRelatedArgsEdit = std::find(
+            relatedDisplayEntryArgsEdits_.begin(),
+            relatedDisplayEntryArgsEdits_.end(), edit)
+            != relatedDisplayEntryArgsEdits_.end();
         if (edit == xEdit_ || edit == yEdit_ || edit == widthEdit_
             || edit == heightEdit_ || edit == gridSpacingEdit_
             || edit == rectangleLineWidthEdit_
@@ -5707,7 +6098,9 @@ private:
             || edit == lineLineWidthEdit_
             || edit == lineVisibilityCalcEdit_
             || isRectangleChannelEdit || isLineChannelEdit
-            || isImageChannelEdit) {
+            || isImageChannelEdit || isRelatedLabelEdit
+            || isRelatedNameEdit || isRelatedArgsEdit
+            || edit == relatedDisplayLabelEdit_) {
           revertLineEdit(edit);
         }
         if (edit == textMonitorPrecisionEdit_ || edit == textMonitorChannelEdit_
@@ -5825,6 +6218,11 @@ private:
       const bool menuVisible = kind == SelectionKind::kMenu;
       menuSection_->setVisible(menuVisible);
       menuSection_->setEnabled(menuVisible);
+    }
+    if (relatedDisplaySection_) {
+      const bool relatedVisible = kind == SelectionKind::kRelatedDisplay;
+      relatedDisplaySection_->setVisible(relatedVisible);
+      relatedDisplaySection_->setEnabled(relatedVisible);
     }
     if (textMonitorSection_) {
       const bool monitorVisible = kind == SelectionKind::kTextMonitor;
@@ -5996,6 +6394,74 @@ private:
     const QString value = menuChannelEdit_->text();
     menuChannelSetter_(value);
     committedTexts_[menuChannelEdit_] = value;
+  }
+
+  void commitRelatedDisplayLabel()
+  {
+    if (!relatedDisplayLabelEdit_) {
+      return;
+    }
+    if (!relatedDisplayLabelSetter_) {
+      revertLineEdit(relatedDisplayLabelEdit_);
+      return;
+    }
+    const QString value = relatedDisplayLabelEdit_->text();
+    relatedDisplayLabelSetter_(value);
+    committedTexts_[relatedDisplayLabelEdit_] = value;
+  }
+
+  void commitRelatedDisplayEntryLabel(int index)
+  {
+    if (index < 0 || index >= kRelatedDisplayEntryCount) {
+      return;
+    }
+    QLineEdit *edit = relatedDisplayEntryLabelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!relatedDisplayEntryLabelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    relatedDisplayEntryLabelSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitRelatedDisplayEntryName(int index)
+  {
+    if (index < 0 || index >= kRelatedDisplayEntryCount) {
+      return;
+    }
+    QLineEdit *edit = relatedDisplayEntryNameEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!relatedDisplayEntryNameSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    relatedDisplayEntryNameSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitRelatedDisplayEntryArgs(int index)
+  {
+    if (index < 0 || index >= kRelatedDisplayEntryCount) {
+      return;
+    }
+    QLineEdit *edit = relatedDisplayEntryArgsEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!relatedDisplayEntryArgsSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    relatedDisplayEntryArgsSetters_[index](value);
+    committedTexts_[edit] = value;
   }
 
   void commitTextMonitorChannel()
@@ -7331,6 +7797,46 @@ private:
     }
   }
 
+  RelatedDisplayVisual relatedDisplayVisualFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return RelatedDisplayVisual::kRowOfButtons;
+    case 2:
+      return RelatedDisplayVisual::kColumnOfButtons;
+    case 3:
+      return RelatedDisplayVisual::kHiddenButton;
+    case 0:
+    default:
+      return RelatedDisplayVisual::kMenu;
+    }
+  }
+
+  int relatedDisplayVisualToIndex(RelatedDisplayVisual visual) const
+  {
+    switch (visual) {
+    case RelatedDisplayVisual::kRowOfButtons:
+      return 1;
+    case RelatedDisplayVisual::kColumnOfButtons:
+      return 2;
+    case RelatedDisplayVisual::kHiddenButton:
+      return 3;
+    case RelatedDisplayVisual::kMenu:
+    default:
+      return 0;
+    }
+  }
+
+  RelatedDisplayMode relatedDisplayModeFromIndex(int index) const
+  {
+    return index == 1 ? RelatedDisplayMode::kReplace : RelatedDisplayMode::kAdd;
+  }
+
+  int relatedDisplayModeToIndex(RelatedDisplayMode mode) const
+  {
+    return mode == RelatedDisplayMode::kReplace ? 1 : 0;
+  }
+
   void positionRelativeTo(QWidget *reference)
   {
     QScreen *screen = screenForWidget(reference);
@@ -7507,6 +8013,16 @@ private:
   QPushButton *menuBackgroundButton_ = nullptr;
   QComboBox *menuColorModeCombo_ = nullptr;
   QLineEdit *menuChannelEdit_ = nullptr;
+  QWidget *relatedDisplaySection_ = nullptr;
+  QPushButton *relatedDisplayForegroundButton_ = nullptr;
+  QPushButton *relatedDisplayBackgroundButton_ = nullptr;
+  QLineEdit *relatedDisplayLabelEdit_ = nullptr;
+  QComboBox *relatedDisplayVisualCombo_ = nullptr;
+  QWidget *relatedDisplayEntriesWidget_ = nullptr;
+  std::array<QLineEdit *, kRelatedDisplayEntryCount> relatedDisplayEntryLabelEdits_{};
+  std::array<QLineEdit *, kRelatedDisplayEntryCount> relatedDisplayEntryNameEdits_{};
+  std::array<QLineEdit *, kRelatedDisplayEntryCount> relatedDisplayEntryArgsEdits_{};
+  std::array<QComboBox *, kRelatedDisplayEntryCount> relatedDisplayEntryModeCombos_{};
   QWidget *meterSection_ = nullptr;
   QPushButton *meterForegroundButton_ = nullptr;
   QPushButton *meterBackgroundButton_ = nullptr;
@@ -7973,6 +8489,22 @@ private:
   std::function<void(TextColorMode)> menuColorModeSetter_;
   std::function<QString()> menuChannelGetter_;
   std::function<void(const QString &)> menuChannelSetter_;
+  std::function<QColor()> relatedDisplayForegroundGetter_;
+  std::function<void(const QColor &)> relatedDisplayForegroundSetter_;
+  std::function<QColor()> relatedDisplayBackgroundGetter_;
+  std::function<void(const QColor &)> relatedDisplayBackgroundSetter_;
+  std::function<QString()> relatedDisplayLabelGetter_;
+  std::function<void(const QString &)> relatedDisplayLabelSetter_;
+  std::function<RelatedDisplayVisual()> relatedDisplayVisualGetter_;
+  std::function<void(RelatedDisplayVisual)> relatedDisplayVisualSetter_;
+  std::array<std::function<QString()>, kRelatedDisplayEntryCount> relatedDisplayEntryLabelGetters_{};
+  std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> relatedDisplayEntryLabelSetters_{};
+  std::array<std::function<QString()>, kRelatedDisplayEntryCount> relatedDisplayEntryNameGetters_{};
+  std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> relatedDisplayEntryNameSetters_{};
+  std::array<std::function<QString()>, kRelatedDisplayEntryCount> relatedDisplayEntryArgsGetters_{};
+  std::array<std::function<void(const QString &)>, kRelatedDisplayEntryCount> relatedDisplayEntryArgsSetters_{};
+  std::array<std::function<RelatedDisplayMode()>, kRelatedDisplayEntryCount> relatedDisplayEntryModeGetters_{};
+  std::array<std::function<void(RelatedDisplayMode)>, kRelatedDisplayEntryCount> relatedDisplayEntryModeSetters_{};
   std::function<QColor()> meterForegroundGetter_;
   std::function<void(const QColor &)> meterForegroundSetter_;
   std::function<QColor()> meterBackgroundGetter_;

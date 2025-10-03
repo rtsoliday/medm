@@ -20,16 +20,19 @@ constexpr double kTwoPi = 6.28318530717958647692;
 constexpr int kMinimumSampleCount = 8;
 constexpr int kMaximumSampleCount = 256;
 
+constexpr int kDefaultTraceColorIndex = 14;
+
 QColor defaultTraceColor(int index)
 {
+  Q_UNUSED(index);
   const auto &palette = MedmColors::palette();
-  if (palette.empty()) {
-    return QColor(Qt::black);
+  if (palette.size() > kDefaultTraceColorIndex) {
+    return palette[kDefaultTraceColorIndex];
   }
-  const int base = 4;
-  const int paletteIndex = std::clamp(base + index,
-      0, static_cast<int>(palette.size()) - 1);
-  return palette[paletteIndex];
+  if (!palette.empty()) {
+    return palette.back();
+  }
+  return QColor(Qt::black);
 }
 
 } // namespace

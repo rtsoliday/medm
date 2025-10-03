@@ -19,16 +19,19 @@ constexpr int kInnerMargin = 6;
 constexpr int kGridLines = 5;
 constexpr double kPenSampleCount = 24.0;
 
+constexpr int kDefaultPenColorIndex = 14;
+
 QColor defaultPenColor(int index)
 {
+  Q_UNUSED(index);
   const auto &palette = MedmColors::palette();
-  if (palette.empty()) {
-    return QColor(Qt::black);
+  if (palette.size() > kDefaultPenColorIndex) {
+    return palette[kDefaultPenColorIndex];
   }
-  const int base = 4;
-  const int paletteIndex = std::clamp(base + index,
-      0, static_cast<int>(palette.size()) - 1);
-  return palette[paletteIndex];
+  if (!palette.empty()) {
+    return palette.back();
+  }
+  return QColor(Qt::black);
 }
 
 } // namespace

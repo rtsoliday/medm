@@ -402,7 +402,7 @@ void writeDynamicAttributeSection(QTextStream &stream, int level,
 void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex)
 {
-  writeIndentedLine(stream, level, QStringLiteral("\"monitor\" {"));
+  writeIndentedLine(stream, level, QStringLiteral("monitor {"));
   const QString trimmedChannel = channel.trimmed();
   if (!trimmedChannel.isEmpty()) {
     writeIndentedLine(stream, level + 1,
@@ -498,7 +498,7 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
     return;
   }
 
-  writeIndentedLine(stream, level, QStringLiteral("\"limits\" {"));
+  writeIndentedLine(stream, level, QStringLiteral("limits {"));
   if (hasLow) {
     const PvLimitSource source = limits.lowSource == PvLimitSource::kUser
         ? PvLimitSource::kDefault

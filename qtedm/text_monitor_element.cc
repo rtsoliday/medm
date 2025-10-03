@@ -16,7 +16,7 @@ TextMonitorElement::TextMonitorElement(QWidget *parent)
   setWordWrap(true);
   setContentsMargins(2, 2, 2, 2);
   setAttribute(Qt::WA_TransparentForMouseEvents);
-  setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+  setTextAlignment(Qt::AlignLeft | Qt::AlignTop);
   setForegroundColor(defaultForegroundColor());
   setBackgroundColor(defaultBackgroundColor());
   updateSelectionVisual();
@@ -77,11 +77,12 @@ Qt::Alignment TextMonitorElement::textAlignment() const
 
 void TextMonitorElement::setTextAlignment(Qt::Alignment alignment)
 {
-  Qt::Alignment effective = alignment & Qt::AlignHorizontal_Mask;
+  Qt::Alignment effective = alignment;
   if (!(effective & Qt::AlignHorizontal_Mask)) {
     effective |= Qt::AlignLeft;
   }
-  effective |= Qt::AlignVCenter;
+  effective &= ~Qt::AlignVertical_Mask;
+  effective |= Qt::AlignTop;
   if (alignment_ == effective) {
     return;
   }

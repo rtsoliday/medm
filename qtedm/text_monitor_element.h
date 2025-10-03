@@ -61,7 +61,7 @@ private:
   bool selected_ = false;
   QColor foregroundColor_;
   QColor backgroundColor_;
-  Qt::Alignment alignment_ = Qt::AlignLeft | Qt::AlignVCenter;
+  Qt::Alignment alignment_ = Qt::AlignLeft | Qt::AlignTop;
   TextColorMode colorMode_ = TextColorMode::kStatic;
   TextMonitorFormat format_ = TextMonitorFormat::kDecimal;
   PvLimits limits_{};

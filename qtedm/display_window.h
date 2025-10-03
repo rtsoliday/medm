@@ -63,6 +63,7 @@
 #include "cartesian_plot_element.h"
 #include "byte_monitor_element.h"
 #include "bar_monitor_element.h"
+#include "slider_element.h"
 #include "scale_monitor_element.h"
 #include "display_properties.h"
 #include "display_state.h"

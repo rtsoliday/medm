@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <functional>
 
 #include <QAbstractScrollArea>
@@ -835,6 +836,109 @@ public:
         textEntryPvLimitsButton_);
     textEntryLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(textEntrySection_);
+
+    sliderSection_ = new QWidget(entriesWidget_);
+    auto *sliderLayout = new QGridLayout(sliderSection_);
+    sliderLayout->setContentsMargins(0, 0, 0, 0);
+    sliderLayout->setHorizontalSpacing(12);
+    sliderLayout->setVerticalSpacing(6);
+
+    sliderForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(sliderForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(sliderForegroundButton_,
+              QStringLiteral("Slider Foreground"), sliderForegroundSetter_);
+        });
+
+    sliderBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(sliderBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(sliderBackgroundButton_,
+              QStringLiteral("Slider Background"), sliderBackgroundSetter_);
+        });
+
+    sliderLabelCombo_ = new QComboBox;
+    sliderLabelCombo_->setFont(valueFont_);
+    sliderLabelCombo_->setAutoFillBackground(true);
+    sliderLabelCombo_->addItem(QStringLiteral("None"));
+    sliderLabelCombo_->addItem(QStringLiteral("No Decorations"));
+    sliderLabelCombo_->addItem(QStringLiteral("Outline"));
+    sliderLabelCombo_->addItem(QStringLiteral("Limits"));
+    sliderLabelCombo_->addItem(QStringLiteral("Channel"));
+    QObject::connect(sliderLabelCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (sliderLabelSetter_) {
+            sliderLabelSetter_(meterLabelFromIndex(index));
+          }
+        });
+
+    sliderColorModeCombo_ = new QComboBox;
+    sliderColorModeCombo_->setFont(valueFont_);
+    sliderColorModeCombo_->setAutoFillBackground(true);
+    sliderColorModeCombo_->addItem(QStringLiteral("Static"));
+    sliderColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    sliderColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(sliderColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (sliderColorModeSetter_) {
+            sliderColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    sliderDirectionCombo_ = new QComboBox;
+    sliderDirectionCombo_->setFont(valueFont_);
+    sliderDirectionCombo_->setAutoFillBackground(true);
+    sliderDirectionCombo_->addItem(QStringLiteral("Up"));
+    sliderDirectionCombo_->addItem(QStringLiteral("Right"));
+    sliderDirectionCombo_->addItem(QStringLiteral("Down"));
+    sliderDirectionCombo_->addItem(QStringLiteral("Left"));
+    QObject::connect(sliderDirectionCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (sliderDirectionSetter_) {
+            sliderDirectionSetter_(barDirectionFromIndex(index));
+          }
+        });
+
+    sliderPrecisionEdit_ = createLineEdit();
+    sliderPrecisionEdit_->setValidator(new QDoubleValidator(
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::max(), 6, sliderPrecisionEdit_));
+    committedTexts_.insert(sliderPrecisionEdit_, sliderPrecisionEdit_->text());
+    sliderPrecisionEdit_->installEventFilter(this);
+    QObject::connect(sliderPrecisionEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitSliderPrecision(); });
+    QObject::connect(sliderPrecisionEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitSliderPrecision(); });
+
+    sliderChannelEdit_ = createLineEdit();
+    committedTexts_.insert(sliderChannelEdit_, sliderChannelEdit_->text());
+    sliderChannelEdit_->installEventFilter(this);
+    QObject::connect(sliderChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitSliderChannel(); });
+    QObject::connect(sliderChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitSliderChannel(); });
+
+    sliderPvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    sliderPvLimitsButton_->setEnabled(false);
+    QObject::connect(sliderPvLimitsButton_, &QPushButton::clicked, this,
+        [this]() { openSliderPvLimitsDialog(); });
+
+    addRow(sliderLayout, 0, QStringLiteral("Foreground"), sliderForegroundButton_);
+    addRow(sliderLayout, 1, QStringLiteral("Background"), sliderBackgroundButton_);
+    addRow(sliderLayout, 2, QStringLiteral("Label"), sliderLabelCombo_);
+    addRow(sliderLayout, 3, QStringLiteral("Color Mode"), sliderColorModeCombo_);
+    addRow(sliderLayout, 4, QStringLiteral("Direction"), sliderDirectionCombo_);
+    addRow(sliderLayout, 5, QStringLiteral("Precision"), sliderPrecisionEdit_);
+    addRow(sliderLayout, 6, QStringLiteral("Channel"), sliderChannelEdit_);
+    addRow(sliderLayout, 7, QStringLiteral("Channel Limits"), sliderPvLimitsButton_);
+    sliderLayout->setRowStretch(8, 1);
+    entriesLayout->addWidget(sliderSection_);
 
     choiceButtonSection_ = new QWidget(entriesWidget_);
     auto *choiceLayout = new QGridLayout(choiceButtonSection_);
@@ -2098,6 +2202,183 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Text Entry"));
+    }
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForSlider(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<MeterLabel()> labelGetter,
+      std::function<void(MeterLabel)> labelSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<BarDirection()> directionGetter,
+      std::function<void(BarDirection)> directionSetter,
+      std::function<double()> precisionGetter,
+      std::function<void(double)> precisionSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kSlider;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    textEntryForegroundGetter_ = {};
+    textEntryForegroundSetter_ = {};
+    textEntryBackgroundGetter_ = {};
+    textEntryBackgroundSetter_ = {};
+    textEntryFormatGetter_ = {};
+    textEntryFormatSetter_ = {};
+    textEntryPrecisionGetter_ = {};
+    textEntryPrecisionSetter_ = {};
+    textEntryPrecisionSourceGetter_ = {};
+    textEntryPrecisionSourceSetter_ = {};
+    textEntryPrecisionDefaultGetter_ = {};
+    textEntryPrecisionDefaultSetter_ = {};
+    textEntryColorModeGetter_ = {};
+    textEntryColorModeSetter_ = {};
+    textEntryChannelGetter_ = {};
+    textEntryChannelSetter_ = {};
+
+    sliderForegroundGetter_ = std::move(foregroundGetter);
+    sliderForegroundSetter_ = std::move(foregroundSetter);
+    sliderBackgroundGetter_ = std::move(backgroundGetter);
+    sliderBackgroundSetter_ = std::move(backgroundSetter);
+    sliderLabelGetter_ = std::move(labelGetter);
+    sliderLabelSetter_ = std::move(labelSetter);
+    sliderColorModeGetter_ = std::move(colorModeGetter);
+    sliderColorModeSetter_ = std::move(colorModeSetter);
+    sliderDirectionGetter_ = std::move(directionGetter);
+    sliderDirectionSetter_ = std::move(directionSetter);
+    sliderPrecisionGetter_ = std::move(precisionGetter);
+    sliderPrecisionSetter_ = std::move(precisionSetter);
+    sliderChannelGetter_ = std::move(channelGetter);
+    sliderChannelSetter_ = std::move(channelSetter);
+    sliderLimitsGetter_ = std::move(limitsGetter);
+    sliderLimitsSetter_ = std::move(limitsSetter);
+
+    QRect entryGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (entryGeometry.width() <= 0) {
+      entryGeometry.setWidth(kMinimumSliderWidth);
+    }
+    if (entryGeometry.height() <= 0) {
+      entryGeometry.setHeight(kMinimumSliderHeight);
+    }
+    lastCommittedGeometry_ = entryGeometry;
+
+    updateGeometryEdits(entryGeometry);
+
+    if (sliderForegroundButton_) {
+      const QColor color = sliderForegroundGetter_ ? sliderForegroundGetter_()
+                                                  : palette().color(QPalette::WindowText);
+      setColorButtonColor(sliderForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (sliderBackgroundButton_) {
+      const QColor color = sliderBackgroundGetter_ ? sliderBackgroundGetter_()
+                                                  : palette().color(QPalette::Window);
+      setColorButtonColor(sliderBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (sliderLabelCombo_) {
+      const QSignalBlocker blocker(sliderLabelCombo_);
+      const MeterLabel label = sliderLabelGetter_ ? sliderLabelGetter_()
+                                                 : MeterLabel::kOutline;
+      sliderLabelCombo_->setCurrentIndex(meterLabelToIndex(label));
+    }
+
+    if (sliderColorModeCombo_) {
+      const QSignalBlocker blocker(sliderColorModeCombo_);
+      const TextColorMode mode = sliderColorModeGetter_ ? sliderColorModeGetter_()
+                                                       : TextColorMode::kStatic;
+      sliderColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (sliderDirectionCombo_) {
+      const QSignalBlocker blocker(sliderDirectionCombo_);
+      const BarDirection direction = sliderDirectionGetter_ ? sliderDirectionGetter_()
+                                                            : BarDirection::kRight;
+      sliderDirectionCombo_->setCurrentIndex(barDirectionToIndex(direction));
+    }
+
+    updateSliderPrecisionEdit();
+
+    if (sliderChannelEdit_) {
+      const QString channel = sliderChannelGetter_ ? sliderChannelGetter_()
+                                                  : QString();
+      const QSignalBlocker blocker(sliderChannelEdit_);
+      sliderChannelEdit_->setText(channel);
+      committedTexts_[sliderChannelEdit_] = sliderChannelEdit_->text();
+    }
+
+    if (sliderPvLimitsButton_) {
+      sliderPvLimitsButton_->setEnabled(static_cast<bool>(sliderLimitsGetter_)
+          && static_cast<bool>(sliderLimitsSetter_));
+    }
+
+    updateSliderLimitsFromDialog();
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Slider"));
     }
 
     show();
@@ -4746,6 +5027,22 @@ public:
     textEntryColorModeSetter_ = {};
     textEntryChannelGetter_ = {};
     textEntryChannelSetter_ = {};
+    sliderForegroundGetter_ = {};
+    sliderForegroundSetter_ = {};
+    sliderBackgroundGetter_ = {};
+    sliderBackgroundSetter_ = {};
+    sliderLabelGetter_ = {};
+    sliderLabelSetter_ = {};
+    sliderColorModeGetter_ = {};
+    sliderColorModeSetter_ = {};
+    sliderDirectionGetter_ = {};
+    sliderDirectionSetter_ = {};
+    sliderPrecisionGetter_ = {};
+    sliderPrecisionSetter_ = {};
+    sliderChannelGetter_ = {};
+    sliderChannelSetter_ = {};
+    sliderLimitsGetter_ = {};
+    sliderLimitsSetter_ = {};
     choiceButtonForegroundGetter_ = {};
     choiceButtonForegroundSetter_ = {};
     choiceButtonBackgroundGetter_ = {};
@@ -5320,6 +5617,7 @@ private:
     kLine,
     kText,
     kTextEntry,
+    kSlider,
     kChoiceButton,
     kMenu,
     kTextMonitor,
@@ -5413,7 +5711,8 @@ private:
           revertLineEdit(edit);
         }
         if (edit == textMonitorPrecisionEdit_ || edit == textMonitorChannelEdit_
-            || edit == meterChannelEdit_) {
+            || edit == meterChannelEdit_ || edit == sliderPrecisionEdit_
+            || edit == sliderChannelEdit_) {
           revertLineEdit(edit);
         }
       }
@@ -5511,6 +5810,11 @@ private:
       const bool textEntryVisible = kind == SelectionKind::kTextEntry;
       textEntrySection_->setVisible(textEntryVisible);
       textEntrySection_->setEnabled(textEntryVisible);
+    }
+    if (sliderSection_) {
+      const bool sliderVisible = kind == SelectionKind::kSlider;
+      sliderSection_->setVisible(sliderVisible);
+      sliderSection_->setEnabled(sliderVisible);
     }
     if (choiceButtonSection_) {
       const bool choiceVisible = kind == SelectionKind::kChoiceButton;
@@ -5629,6 +5933,41 @@ private:
     const QString value = textEntryChannelEdit_->text();
     textEntryChannelSetter_(value);
     committedTexts_[textEntryChannelEdit_] = value;
+  }
+
+  void commitSliderPrecision()
+  {
+    if (!sliderPrecisionEdit_) {
+      return;
+    }
+    if (!sliderPrecisionSetter_) {
+      revertLineEdit(sliderPrecisionEdit_);
+      return;
+    }
+    bool ok = false;
+    const double value = sliderPrecisionEdit_->text().toDouble(&ok);
+    if (!ok) {
+      revertLineEdit(sliderPrecisionEdit_);
+      return;
+    }
+    sliderPrecisionSetter_(value);
+    committedTexts_[sliderPrecisionEdit_] = sliderPrecisionEdit_->text();
+    updateSliderLimitsFromDialog();
+  }
+
+  void commitSliderChannel()
+  {
+    if (!sliderChannelEdit_) {
+      return;
+    }
+    if (!sliderChannelSetter_) {
+      revertLineEdit(sliderChannelEdit_);
+      return;
+    }
+    const QString value = sliderChannelEdit_->text();
+    sliderChannelSetter_(value);
+    committedTexts_[sliderChannelEdit_] = value;
+    updateSliderLimitsFromDialog();
   }
 
   void commitChoiceButtonChannel()
@@ -6285,6 +6624,21 @@ private:
     committedTexts_[textEntryPrecisionEdit_] = textEntryPrecisionEdit_->text();
   }
 
+  void updateSliderPrecisionEdit()
+  {
+    if (!sliderPrecisionEdit_) {
+      return;
+    }
+    const QSignalBlocker blocker(sliderPrecisionEdit_);
+    if (!sliderPrecisionGetter_) {
+      sliderPrecisionEdit_->clear();
+    } else {
+      const double precision = sliderPrecisionGetter_();
+      sliderPrecisionEdit_->setText(QString::number(precision, 'g', 6));
+    }
+    committedTexts_[sliderPrecisionEdit_] = sliderPrecisionEdit_->text();
+  }
+
   void updateTextMonitorPrecisionField()
   {
     if (!textMonitorPrecisionEdit_) {
@@ -6324,6 +6678,22 @@ private:
   void updateTextEntryLimitsFromDialog()
   {
     updateTextEntryPrecisionEdit();
+  }
+
+  void updateSliderLimitsFromDialog()
+  {
+    updateSliderPrecisionEdit();
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (sliderLimitsGetter_ && sliderLimitsSetter_) {
+      const QString channelLabel = sliderChannelGetter_ ? sliderChannelGetter_()
+                                                        : QString();
+      pvLimitsDialog_->setSliderCallbacks(channelLabel, sliderLimitsGetter_,
+          sliderLimitsSetter_, [this]() { updateSliderLimitsFromDialog(); });
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
   }
 
   void updateMeterLimitsFromDialog()
@@ -7117,6 +7487,15 @@ private:
   QComboBox *textEntryColorModeCombo_ = nullptr;
   QLineEdit *textEntryChannelEdit_ = nullptr;
   QPushButton *textEntryPvLimitsButton_ = nullptr;
+  QWidget *sliderSection_ = nullptr;
+  QPushButton *sliderForegroundButton_ = nullptr;
+  QPushButton *sliderBackgroundButton_ = nullptr;
+  QComboBox *sliderLabelCombo_ = nullptr;
+  QComboBox *sliderColorModeCombo_ = nullptr;
+  QComboBox *sliderDirectionCombo_ = nullptr;
+  QLineEdit *sliderPrecisionEdit_ = nullptr;
+  QLineEdit *sliderChannelEdit_ = nullptr;
+  QPushButton *sliderPvLimitsButton_ = nullptr;
   QWidget *choiceButtonSection_ = nullptr;
   QPushButton *choiceButtonForegroundButton_ = nullptr;
   QPushButton *choiceButtonBackgroundButton_ = nullptr;
@@ -7353,6 +7732,12 @@ private:
     if (textEntryChannelEdit_) {
       committedTexts_[textEntryChannelEdit_] = textEntryChannelEdit_->text();
     }
+    if (sliderPrecisionEdit_) {
+      committedTexts_[sliderPrecisionEdit_] = sliderPrecisionEdit_->text();
+    }
+    if (sliderChannelEdit_) {
+      committedTexts_[sliderChannelEdit_] = sliderChannelEdit_->text();
+    }
     if (choiceButtonChannelEdit_) {
       committedTexts_[choiceButtonChannelEdit_] = choiceButtonChannelEdit_->text();
     }
@@ -7554,6 +7939,22 @@ private:
   std::function<void(TextColorMode)> textEntryColorModeSetter_;
   std::function<QString()> textEntryChannelGetter_;
   std::function<void(const QString &)> textEntryChannelSetter_;
+  std::function<QColor()> sliderForegroundGetter_;
+  std::function<void(const QColor &)> sliderForegroundSetter_;
+  std::function<QColor()> sliderBackgroundGetter_;
+  std::function<void(const QColor &)> sliderBackgroundSetter_;
+  std::function<MeterLabel()> sliderLabelGetter_;
+  std::function<void(MeterLabel)> sliderLabelSetter_;
+  std::function<TextColorMode()> sliderColorModeGetter_;
+  std::function<void(TextColorMode)> sliderColorModeSetter_;
+  std::function<BarDirection()> sliderDirectionGetter_;
+  std::function<void(BarDirection)> sliderDirectionSetter_;
+  std::function<double()> sliderPrecisionGetter_;
+  std::function<void(double)> sliderPrecisionSetter_;
+  std::function<QString()> sliderChannelGetter_;
+  std::function<void(const QString &)> sliderChannelSetter_;
+  std::function<PvLimits()> sliderLimitsGetter_;
+  std::function<void(const PvLimits &)> sliderLimitsSetter_;
   std::function<QColor()> choiceButtonForegroundGetter_;
   std::function<void(const QColor &)> choiceButtonForegroundSetter_;
   std::function<QColor()> choiceButtonBackgroundGetter_;
@@ -7848,6 +8249,26 @@ private:
     dialog->setMeterCallbacks(channelLabel, meterLimitsGetter_,
         meterLimitsSetter_, [this]() { updateMeterLimitsFromDialog(); });
     dialog->showForMeter();
+  }
+
+  void openSliderPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!sliderLimitsGetter_ || !sliderLimitsSetter_) {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = sliderChannelGetter_ ? sliderChannelGetter_()
+                                                      : QString();
+    dialog->setSliderCallbacks(channelLabel, sliderLimitsGetter_,
+        sliderLimitsSetter_, [this]() { updateSliderLimitsFromDialog(); });
+    dialog->showForSlider();
   }
 
   void openBarMonitorPvLimitsDialog()

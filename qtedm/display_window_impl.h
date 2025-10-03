@@ -249,6 +249,7 @@ protected:
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
+            || state->createTool == CreateTool::kSlider
             || state->createTool == CreateTool::kChoiceButton
             || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMeter
@@ -287,6 +288,12 @@ protected:
           if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
             selectTextEntryElement(textEntry);
             showResourcePaletteForTextEntry(textEntry);
+            event->accept();
+            return;
+          }
+          if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+            selectSliderElement(slider);
+            showResourcePaletteForSlider(slider);
             event->accept();
             return;
           }
@@ -531,6 +538,8 @@ private:
   TextElement *selectedTextElement_ = nullptr;
   QList<TextEntryElement *> textEntryElements_;
   TextEntryElement *selectedTextEntryElement_ = nullptr;
+  QList<SliderElement *> sliderElements_;
+  SliderElement *selectedSliderElement_ = nullptr;
   QList<ChoiceButtonElement *> choiceButtonElements_;
   ChoiceButtonElement *selectedChoiceButtonElement_ = nullptr;
   QList<MenuElement *> menuElements_;
@@ -611,6 +620,15 @@ private:
     }
     selectedTextEntryElement_->setSelected(false);
     selectedTextEntryElement_ = nullptr;
+  }
+
+  void clearSliderSelection()
+  {
+    if (!selectedSliderElement_) {
+      return;
+    }
+    selectedSliderElement_->setSelected(false);
+    selectedSliderElement_ = nullptr;
   }
 
   void clearChoiceButtonSelection()
@@ -762,6 +780,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -793,6 +812,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -1073,6 +1093,88 @@ private:
         },
         [this, element](const QString &value) {
           element->setChannel(value);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForSlider(SliderElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForSlider(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumSliderWidth) {
+            adjusted.setWidth(kMinimumSliderWidth);
+          }
+          if (adjusted.height() < kMinimumSliderHeight) {
+            adjusted.setHeight(kMinimumSliderHeight);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->label();
+        },
+        [this, element](MeterLabel label) {
+          element->setLabel(label);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->direction();
+        },
+        [this, element](BarDirection direction) {
+          element->setDirection(direction);
+          markDirty();
+        },
+        [element]() {
+          return element->precision();
+        },
+        [this, element](double precision) {
+          element->setPrecision(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
           markDirty();
         });
   }
@@ -2595,6 +2697,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2626,6 +2729,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2647,6 +2751,39 @@ private:
     bringElementToFront(element);
   }
 
+  void selectSliderElement(SliderElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedSliderElement_) {
+      selectedSliderElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedSliderElement_ = element;
+    selectedSliderElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
   void selectChoiceButtonElement(ChoiceButtonElement *element)
   {
     if (!element) {
@@ -2658,6 +2795,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2690,6 +2828,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2722,6 +2861,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMeterSelection();
@@ -2753,6 +2893,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2784,6 +2925,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2816,6 +2958,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2848,6 +2991,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2880,6 +3024,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2912,6 +3057,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2944,6 +3090,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -2974,6 +3121,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -3005,6 +3153,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -3035,6 +3184,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -3066,6 +3216,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -3097,6 +3248,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -3128,6 +3280,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearTextMonitorSelection();
@@ -3215,6 +3368,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createTextEntryElement(rect);
+      break;
+    case CreateTool::kSlider:
+      if (rect.width() < kMinimumSliderWidth) {
+        rect.setWidth(kMinimumSliderWidth);
+      }
+      if (rect.height() < kMinimumSliderHeight) {
+        rect.setHeight(kMinimumSliderHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createSliderElement(rect);
       break;
     case CreateTool::kChoiceButton:
       if (rect.width() < kMinimumTextWidth) {
@@ -3676,6 +3839,32 @@ private:
     markDirty();
   }
 
+  void createSliderElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumSliderWidth) {
+      target.setWidth(kMinimumSliderWidth);
+    }
+    if (target.height() < kMinimumSliderHeight) {
+      target.setHeight(kMinimumSliderHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new SliderElement(displayArea_);
+    element->setGeometry(target);
+    element->show();
+    sliderElements_.append(element);
+    selectSliderElement(element);
+    showResourcePaletteForSlider(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createChoiceButtonElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -4069,6 +4258,7 @@ private:
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
+            || state->createTool == CreateTool::kSlider
             || state->createTool == CreateTool::kChoiceButton
             || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMeter
@@ -4306,7 +4496,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(controllersMenu, QStringLiteral("Slider"));
+    auto *sliderAction =
+        addMenuAction(controllersMenu, QStringLiteral("Slider"));
+    QObject::connect(sliderAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kSlider);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(controllersMenu, QStringLiteral("Message Button"));
     addMenuAction(controllersMenu, QStringLiteral("Related Display"));
     addMenuAction(controllersMenu, QStringLiteral("Shell Command"));
@@ -4622,6 +4819,38 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
                 .arg(AdlWriter::textMonitorFormatString(entry->format())));
       }
       AdlWriter::writeLimitsSection(stream, 1, entry->limits());
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("\"valuator\" {"));
+      AdlWriter::writeObjectSection(stream, 1, slider->geometry());
+      AdlWriter::writeControlSection(stream, 1, slider->channel(),
+          AdlWriter::medmColorIndex(slider->foregroundColor()),
+          AdlWriter::medmColorIndex(slider->backgroundColor()));
+      if (slider->label() != MeterLabel::kNone) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::meterLabelString(slider->label())));
+      }
+      if (slider->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(slider->colorMode())));
+      }
+      if (slider->direction() != BarDirection::kRight) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("direction=\"%1\"")
+                .arg(AdlWriter::barDirectionString(slider->direction())));
+      }
+      if (std::abs(slider->precision() - 1.0) > 1e-9) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("dPrecision=%1")
+                .arg(QString::number(slider->precision(), 'g', 6)));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, slider->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

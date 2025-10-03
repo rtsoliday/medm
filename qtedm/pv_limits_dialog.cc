@@ -315,6 +315,84 @@ void PvLimitsDialog::showForMeter()
   activateWindow();
 }
 
+void PvLimitsDialog::setSliderCallbacks(const QString &channelName,
+    std::function<PvLimits()> limitsGetter,
+    std::function<void(const PvLimits &)> limitsSetter,
+    std::function<void()> changeNotifier)
+{
+  mode_ = Mode::kSlider;
+  meterLimitsGetter_ = std::move(limitsGetter);
+  meterLimitsSetter_ = std::move(limitsSetter);
+  onChangedCallback_ = std::move(changeNotifier);
+  channelLabel_ = channelName;
+  if (titleLabel_) {
+    if (channelLabel_.trimmed().isEmpty()) {
+      titleLabel_->setText(QStringLiteral("Edit Mode Limits"));
+    } else {
+      titleLabel_->setText(channelLabel_.trimmed());
+    }
+  }
+  setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, true);
+  setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, true);
+  if (loprSourceCombo_) {
+    loprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+  }
+  if (hoprSourceCombo_) {
+    hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+  }
+
+  if (meterLimitsGetter_ && meterLimitsSetter_) {
+    precisionSourceGetter_ = [this]() {
+      if (!meterLimitsGetter_) {
+        return PvLimitSource::kChannel;
+      }
+      return meterLimitsGetter_().precisionSource;
+    };
+    precisionSourceSetter_ = [this](PvLimitSource source) {
+      if (!meterLimitsGetter_ || !meterLimitsSetter_) {
+        return;
+      }
+      PvLimits limits = meterLimitsGetter_();
+      if (source == PvLimitSource::kUser) {
+        source = PvLimitSource::kDefault;
+      }
+      limits.precisionSource = source;
+      meterLimitsSetter_(limits);
+    };
+    precisionDefaultGetter_ = [this]() {
+      return meterLimitsGetter_ ? meterLimitsGetter_().precisionDefault : 0;
+    };
+    precisionDefaultSetter_ = [this](int value) {
+      if (!meterLimitsGetter_ || !meterLimitsSetter_) {
+        return;
+      }
+      PvLimits limits = meterLimitsGetter_();
+      limits.precisionDefault = std::clamp(value, 0, 17);
+      meterLimitsSetter_(limits);
+    };
+  } else {
+    precisionSourceGetter_ = {};
+    precisionSourceSetter_ = {};
+    precisionDefaultGetter_ = {};
+    precisionDefaultSetter_ = {};
+  }
+
+  updateMeterControls();
+  updatePrecisionControls();
+}
+
+void PvLimitsDialog::showForSlider()
+{
+  if (mode_ != Mode::kSlider) {
+    return;
+  }
+  updateMeterControls();
+  updatePrecisionControls();
+  show();
+  raise();
+  activateWindow();
+}
+
 void PvLimitsDialog::setBarCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
@@ -474,7 +552,8 @@ void PvLimitsDialog::showForScaleMonitor()
 void PvLimitsDialog::updatePrecisionControls()
 {
   const bool hasPrecision = (mode_ == Mode::kTextMonitor
-      || mode_ == Mode::kMeter || mode_ == Mode::kBarMonitor
+      || mode_ == Mode::kMeter || mode_ == Mode::kSlider
+      || mode_ == Mode::kBarMonitor
       || mode_ == Mode::kScaleMonitor)
       && static_cast<bool>(precisionSourceGetter_);
   const PvLimitSource source = hasPrecision ? precisionSourceGetter_()
@@ -509,7 +588,8 @@ void PvLimitsDialog::updatePrecisionControls()
 void PvLimitsDialog::updateMeterControls()
 {
   const bool hasLimits = (mode_ == Mode::kMeter
-      || mode_ == Mode::kBarMonitor || mode_ == Mode::kScaleMonitor)
+      || mode_ == Mode::kSlider || mode_ == Mode::kBarMonitor
+      || mode_ == Mode::kScaleMonitor)
       && static_cast<bool>(meterLimitsGetter_)
       && static_cast<bool>(meterLimitsSetter_);
   PvLimits limits{};
@@ -616,8 +696,8 @@ void PvLimitsDialog::handleLowSourceChanged(int index)
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kMeter && mode_ != Mode::kBarMonitor
-          && mode_ != Mode::kScaleMonitor)
+  if ((mode_ != Mode::kMeter && mode_ != Mode::kSlider
+          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;
@@ -642,8 +722,8 @@ void PvLimitsDialog::handleHighSourceChanged(int index)
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kMeter && mode_ != Mode::kBarMonitor
-          && mode_ != Mode::kScaleMonitor)
+  if ((mode_ != Mode::kMeter && mode_ != Mode::kSlider
+          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;
@@ -668,8 +748,8 @@ void PvLimitsDialog::commitLowValue()
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kMeter && mode_ != Mode::kBarMonitor
-          && mode_ != Mode::kScaleMonitor)
+  if ((mode_ != Mode::kMeter && mode_ != Mode::kSlider
+          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;
@@ -707,8 +787,8 @@ void PvLimitsDialog::commitHighValue()
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kMeter && mode_ != Mode::kBarMonitor
-          && mode_ != Mode::kScaleMonitor)
+  if ((mode_ != Mode::kMeter && mode_ != Mode::kSlider
+          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;

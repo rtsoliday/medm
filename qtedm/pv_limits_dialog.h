@@ -32,6 +32,11 @@ public:
       std::function<void(const PvLimits &)> limitsSetter,
       std::function<void()> changeNotifier);
   void showForMeter();
+  void setSliderCallbacks(const QString &channelName,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter,
+      std::function<void()> changeNotifier);
+  void showForSlider();
   void setBarCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
@@ -48,6 +53,7 @@ private:
     kNone,
     kTextMonitor,
     kMeter,
+    kSlider,
     kBarMonitor,
     kScaleMonitor
   };

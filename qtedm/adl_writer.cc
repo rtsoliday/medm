@@ -3,6 +3,7 @@
 #include <QTextStream>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include "medm_colors.h"
@@ -114,6 +115,38 @@ QString imageTypeString(ImageType type)
   case ImageType::kNone:
   default:
     return QStringLiteral("no image");
+  }
+}
+
+QString meterLabelString(MeterLabel label)
+{
+  switch (label) {
+  case MeterLabel::kNoDecorations:
+    return QStringLiteral("no decorations");
+  case MeterLabel::kOutline:
+    return QStringLiteral("outline");
+  case MeterLabel::kLimits:
+    return QStringLiteral("limits");
+  case MeterLabel::kChannel:
+    return QStringLiteral("channel");
+  case MeterLabel::kNone:
+  default:
+    return QStringLiteral("none");
+  }
+}
+
+QString barDirectionString(BarDirection direction)
+{
+  switch (direction) {
+  case BarDirection::kUp:
+    return QStringLiteral("up");
+  case BarDirection::kDown:
+    return QStringLiteral("down");
+  case BarDirection::kLeft:
+    return QStringLiteral("left");
+  case BarDirection::kRight:
+  default:
+    return QStringLiteral("right");
   }
 }
 
@@ -421,16 +454,52 @@ QString pvLimitSourceString(PvLimitSource source)
 
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
 {
-  writeIndentedLine(stream, level, QStringLiteral("\"limits\" {"));
-  if (limits.precisionSource != PvLimitSource::kChannel) {
-    writeIndentedLine(stream, level + 1,
-        QStringLiteral("precSrc=\"%1\"").arg(pvLimitSourceString(
-            limits.precisionSource)));
+  const bool hasLow = limits.lowSource != PvLimitSource::kChannel;
+  const bool hasHigh = limits.highSource != PvLimitSource::kChannel;
+  const bool hasPrecision = limits.precisionSource != PvLimitSource::kChannel;
+
+  if (!hasLow && !hasHigh && !hasPrecision) {
+    return;
   }
-  if (limits.precisionSource == PvLimitSource::kDefault
-      && limits.precisionDefault != 0) {
+
+  writeIndentedLine(stream, level, QStringLiteral("\"limits\" {"));
+  if (hasLow) {
+    const PvLimitSource source = limits.lowSource == PvLimitSource::kUser
+        ? PvLimitSource::kDefault
+        : limits.lowSource;
     writeIndentedLine(stream, level + 1,
-        QStringLiteral("precDefault=%1").arg(limits.precisionDefault));
+        QStringLiteral("loprSrc=\"%1\"")
+            .arg(pvLimitSourceString(source)));
+    if (std::abs(limits.lowDefault - 0.0) > 1e-9) {
+      writeIndentedLine(stream, level + 1,
+          QStringLiteral("loprDefault=%1")
+              .arg(QString::number(limits.lowDefault, 'g', 6)));
+    }
+  }
+  if (hasHigh) {
+    const PvLimitSource source = limits.highSource == PvLimitSource::kUser
+        ? PvLimitSource::kDefault
+        : limits.highSource;
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("hoprSrc=\"%1\"")
+            .arg(pvLimitSourceString(source)));
+    if (std::abs(limits.highDefault - 1.0) > 1e-9) {
+      writeIndentedLine(stream, level + 1,
+          QStringLiteral("hoprDefault=%1")
+              .arg(QString::number(limits.highDefault, 'g', 6)));
+    }
+  }
+  if (hasPrecision) {
+    const PvLimitSource source = limits.precisionSource == PvLimitSource::kUser
+        ? PvLimitSource::kDefault
+        : limits.precisionSource;
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("precSrc=\"%1\"")
+            .arg(pvLimitSourceString(source)));
+    if (source == PvLimitSource::kDefault && limits.precisionDefault != 0) {
+      writeIndentedLine(stream, level + 1,
+          QStringLiteral("precDefault=%1").arg(limits.precisionDefault));
+    }
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }

@@ -5471,6 +5471,39 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
   QTextStream stream(&file);
   stream.setCodec("UTF-8");
 
+  auto resolveColor = [](const QWidget *widget, const QColor &candidate,
+      QPalette::ColorRole role) {
+    if (candidate.isValid()) {
+      return candidate;
+    }
+    const QWidget *current = widget;
+    while (current) {
+      const QColor fromPalette = current->palette().color(role);
+      if (fromPalette.isValid()) {
+        return fromPalette;
+      }
+      current = current->parentWidget();
+    }
+    if (qApp) {
+      const QColor appColor = qApp->palette().color(role);
+      if (appColor.isValid()) {
+        return appColor;
+      }
+    }
+    return role == QPalette::WindowText ? QColor(Qt::black)
+                                        : QColor(Qt::white);
+  };
+
+  auto resolvedForegroundColor = [&resolveColor](const QWidget *widget,
+      const QColor &candidate) {
+    return resolveColor(widget, candidate, QPalette::WindowText);
+  };
+
+  auto resolvedBackgroundColor = [&resolveColor](const QWidget *widget,
+      const QColor &candidate) {
+    return resolveColor(widget, candidate, QPalette::Window);
+  };
+
   const QFileInfo info(filePath);
   QString fileName = info.filePath();
   if (info.isAbsolute()) {
@@ -5548,8 +5581,10 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *text = dynamic_cast<TextElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("text {"));
       AdlWriter::writeObjectSection(stream, 1, text->geometry());
+    const QColor textForeground = resolvedForegroundColor(text,
+      text->foregroundColor());
       AdlWriter::writeBasicAttributeSection(stream, 1,
-          AdlWriter::medmColorIndex(text->foregroundColor()),
+      AdlWriter::medmColorIndex(textForeground),
           RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
       AdlWriter::writeDynamicAttributeSection(stream, 1, text->colorMode(),
           text->visibilityMode(), text->visibilityCalc(),
@@ -5575,9 +5610,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"text entry\" {"));
       AdlWriter::writeObjectSection(stream, 1, entry->geometry());
+    const QColor entryForeground = resolvedForegroundColor(entry,
+      entry->foregroundColor());
+    const QColor entryBackground = resolvedBackgroundColor(entry,
+      entry->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, entry->channel(),
-          AdlWriter::medmColorIndex(entry->foregroundColor()),
-          AdlWriter::medmColorIndex(entry->backgroundColor()));
+      AdlWriter::medmColorIndex(entryForeground),
+      AdlWriter::medmColorIndex(entryBackground));
       if (entry->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -5597,9 +5636,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"valuator\" {"));
       AdlWriter::writeObjectSection(stream, 1, slider->geometry());
+    const QColor sliderForeground = resolvedForegroundColor(slider,
+      slider->foregroundColor());
+    const QColor sliderBackground = resolvedBackgroundColor(slider,
+      slider->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, slider->channel(),
-          AdlWriter::medmColorIndex(slider->foregroundColor()),
-          AdlWriter::medmColorIndex(slider->backgroundColor()));
+      AdlWriter::medmColorIndex(sliderForeground),
+      AdlWriter::medmColorIndex(sliderBackground));
       if (slider->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -5629,9 +5672,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"wheel switch\" {"));
       AdlWriter::writeObjectSection(stream, 1, wheel->geometry());
+    const QColor wheelForeground = resolvedForegroundColor(wheel,
+      wheel->foregroundColor());
+    const QColor wheelBackground = resolvedBackgroundColor(wheel,
+      wheel->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, wheel->channel(),
-          AdlWriter::medmColorIndex(wheel->foregroundColor()),
-          AdlWriter::medmColorIndex(wheel->backgroundColor()));
+      AdlWriter::medmColorIndex(wheelForeground),
+      AdlWriter::medmColorIndex(wheelBackground));
       if (wheel->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -5652,9 +5699,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"choice button\" {"));
       AdlWriter::writeObjectSection(stream, 1, choice->geometry());
+    const QColor choiceForeground = resolvedForegroundColor(choice,
+      choice->foregroundColor());
+    const QColor choiceBackground = resolvedBackgroundColor(choice,
+      choice->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, choice->channel(),
-          AdlWriter::medmColorIndex(choice->foregroundColor()),
-          AdlWriter::medmColorIndex(choice->backgroundColor()));
+      AdlWriter::medmColorIndex(choiceForeground),
+      AdlWriter::medmColorIndex(choiceBackground));
       if (choice->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -5673,9 +5724,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("menu {"));
       AdlWriter::writeObjectSection(stream, 1, menu->geometry());
+    const QColor menuForeground = resolvedForegroundColor(menu,
+      menu->foregroundColor());
+    const QColor menuBackground = resolvedBackgroundColor(menu,
+      menu->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, menu->channel(),
-          AdlWriter::medmColorIndex(menu->foregroundColor()),
-          AdlWriter::medmColorIndex(menu->backgroundColor()));
+      AdlWriter::medmColorIndex(menuForeground),
+      AdlWriter::medmColorIndex(menuBackground));
       if (menu->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -5689,9 +5744,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"message button\" {"));
       AdlWriter::writeObjectSection(stream, 1, message->geometry());
+    const QColor messageForeground = resolvedForegroundColor(message,
+      message->foregroundColor());
+    const QColor messageBackground = resolvedBackgroundColor(message,
+      message->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, message->channel(),
-          AdlWriter::medmColorIndex(message->foregroundColor()),
-          AdlWriter::medmColorIndex(message->backgroundColor()));
+      AdlWriter::medmColorIndex(messageForeground),
+      AdlWriter::medmColorIndex(messageBackground));
       if (message->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -5752,12 +5811,16 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
         }
         AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
       }
-      AdlWriter::writeIndentedLine(stream, 1,
-          QStringLiteral("clr=%1")
-              .arg(AdlWriter::medmColorIndex(shell->foregroundColor())));
-      AdlWriter::writeIndentedLine(stream, 1,
-          QStringLiteral("bclr=%1")
-              .arg(AdlWriter::medmColorIndex(shell->backgroundColor())));
+    const QColor shellForeground = resolvedForegroundColor(shell,
+      shell->foregroundColor());
+    const QColor shellBackground = resolvedBackgroundColor(shell,
+      shell->backgroundColor());
+    AdlWriter::writeIndentedLine(stream, 1,
+      QStringLiteral("clr=%1")
+        .arg(AdlWriter::medmColorIndex(shellForeground)));
+    AdlWriter::writeIndentedLine(stream, 1,
+      QStringLiteral("bclr=%1")
+        .arg(AdlWriter::medmColorIndex(shellBackground)));
       const QString shellLabel = shell->label();
       if (!shellLabel.trimmed().isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -5780,12 +5843,16 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
         }
         AdlWriter::writeRelatedDisplayEntry(stream, 1, i, entry);
       }
-      AdlWriter::writeIndentedLine(stream, 1,
-          QStringLiteral("clr=%1")
-              .arg(AdlWriter::medmColorIndex(related->foregroundColor())));
-      AdlWriter::writeIndentedLine(stream, 1,
-          QStringLiteral("bclr=%1")
-              .arg(AdlWriter::medmColorIndex(related->backgroundColor())));
+    const QColor relatedForeground = resolvedForegroundColor(related,
+      related->foregroundColor());
+    const QColor relatedBackground = resolvedBackgroundColor(related,
+      related->backgroundColor());
+    AdlWriter::writeIndentedLine(stream, 1,
+      QStringLiteral("clr=%1")
+        .arg(AdlWriter::medmColorIndex(relatedForeground)));
+    AdlWriter::writeIndentedLine(stream, 1,
+      QStringLiteral("bclr=%1")
+        .arg(AdlWriter::medmColorIndex(relatedBackground)));
       const QString label = related->label();
       if (!label.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -5804,9 +5871,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("meter {"));
       AdlWriter::writeObjectSection(stream, 1, meter->geometry());
+    const QColor meterForeground = resolvedForegroundColor(meter,
+      meter->foregroundColor());
+    const QColor meterBackground = resolvedBackgroundColor(meter,
+      meter->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, meter->channel(),
-          AdlWriter::medmColorIndex(meter->foregroundColor()),
-          AdlWriter::medmColorIndex(meter->backgroundColor()));
+      AdlWriter::medmColorIndex(meterForeground),
+      AdlWriter::medmColorIndex(meterBackground));
       if (meter->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -5825,9 +5896,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("bar {"));
       AdlWriter::writeObjectSection(stream, 1, bar->geometry());
+    const QColor barForeground = resolvedForegroundColor(bar,
+      bar->foregroundColor());
+    const QColor barBackground = resolvedBackgroundColor(bar,
+      bar->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, bar->channel(),
-          AdlWriter::medmColorIndex(bar->foregroundColor()),
-          AdlWriter::medmColorIndex(bar->backgroundColor()));
+      AdlWriter::medmColorIndex(barForeground),
+      AdlWriter::medmColorIndex(barBackground));
       if (bar->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -5857,9 +5932,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("indicator {"));
       AdlWriter::writeObjectSection(stream, 1, scale->geometry());
+    const QColor scaleForeground = resolvedForegroundColor(scale,
+      scale->foregroundColor());
+    const QColor scaleBackground = resolvedBackgroundColor(scale,
+      scale->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, scale->channel(),
-          AdlWriter::medmColorIndex(scale->foregroundColor()),
-          AdlWriter::medmColorIndex(scale->backgroundColor()));
+      AdlWriter::medmColorIndex(scaleForeground),
+      AdlWriter::medmColorIndex(scaleBackground));
       if (scale->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -5883,9 +5962,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("byte {"));
       AdlWriter::writeObjectSection(stream, 1, byte->geometry());
+    const QColor byteForeground = resolvedForegroundColor(byte,
+      byte->foregroundColor());
+    const QColor byteBackground = resolvedBackgroundColor(byte,
+      byte->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, byte->channel(),
-          AdlWriter::medmColorIndex(byte->foregroundColor()),
-          AdlWriter::medmColorIndex(byte->backgroundColor()));
+      AdlWriter::medmColorIndex(byteForeground),
+      AdlWriter::medmColorIndex(byteBackground));
       if (byte->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -5912,9 +5995,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"text update\" {"));
       AdlWriter::writeObjectSection(stream, 1, monitor->geometry());
+    const QColor monitorForeground = resolvedForegroundColor(monitor,
+      monitor->foregroundColor());
+    const QColor monitorBackground = resolvedBackgroundColor(monitor,
+      monitor->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, monitor->channel(0),
-          AdlWriter::medmColorIndex(monitor->foregroundColor()),
-          AdlWriter::medmColorIndex(monitor->backgroundColor()));
+      AdlWriter::medmColorIndex(monitorForeground),
+      AdlWriter::medmColorIndex(monitorBackground));
       if (monitor->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -5943,9 +6030,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeObjectSection(stream, 1, strip->geometry());
       std::array<QString, 4> stripYLabels{};
       stripYLabels[0] = strip->yLabel();
+    const QColor stripForeground = resolvedForegroundColor(strip,
+      strip->foregroundColor());
+    const QColor stripBackground = resolvedBackgroundColor(strip,
+      strip->backgroundColor());
       AdlWriter::writePlotcom(stream, 1, strip->title(), strip->xLabel(),
-          stripYLabels, AdlWriter::medmColorIndex(strip->foregroundColor()),
-          AdlWriter::medmColorIndex(strip->backgroundColor()));
+      stripYLabels, AdlWriter::medmColorIndex(stripForeground),
+      AdlWriter::medmColorIndex(stripBackground));
       const double period = strip->period();
       if (period > 0.0
           && std::abs(period - kDefaultStripChartPeriod) > 1e-6) {
@@ -5977,10 +6068,14 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
         yLabels[i] = cartesian->yLabel(i);
       }
+      const QColor cartesianForeground = resolvedForegroundColor(cartesian,
+          cartesian->foregroundColor());
+      const QColor cartesianBackground = resolvedBackgroundColor(cartesian,
+          cartesian->backgroundColor());
       AdlWriter::writePlotcom(stream, 1, cartesian->title(),
           cartesian->xLabel(), yLabels,
-          AdlWriter::medmColorIndex(cartesian->foregroundColor()),
-          AdlWriter::medmColorIndex(cartesian->backgroundColor()));
+          AdlWriter::medmColorIndex(cartesianForeground),
+          AdlWriter::medmColorIndex(cartesianBackground));
       if (cartesian->style() != CartesianPlotStyle::kPoint) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("style=\"%1\"")

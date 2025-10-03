@@ -47,10 +47,10 @@ StripChartElement::StripChartElement(QWidget *parent)
   for (int i = 0; i < static_cast<int>(pens_.size()); ++i) {
     pens_[i].limits.lowSource = PvLimitSource::kDefault;
     pens_[i].limits.highSource = PvLimitSource::kDefault;
-    pens_[i].limits.precisionSource = PvLimitSource::kDefault;
     pens_[i].limits.lowDefault = 0.0;
     pens_[i].limits.highDefault = 100.0;
-    pens_[i].limits.precisionDefault = 1;
+    pens_[i].limits.precisionSource = PvLimitSource::kChannel;
+    pens_[i].limits.precisionDefault = 0;
     pens_[i].color = defaultPenColor(i);
   }
 }
@@ -218,7 +218,10 @@ PvLimits StripChartElement::penLimits(int index) const
   if (index < 0 || index >= penCount()) {
     return PvLimits{};
   }
-  return pens_[index].limits;
+  PvLimits limits = pens_[index].limits;
+  limits.precisionSource = PvLimitSource::kChannel;
+  limits.precisionDefault = 0;
+  return limits;
 }
 
 void StripChartElement::setPenLimits(int index, const PvLimits &limits)
@@ -226,9 +229,21 @@ void StripChartElement::setPenLimits(int index, const PvLimits &limits)
   if (index < 0 || index >= penCount()) {
     return;
   }
-  pens_[index].limits = limits;
-  pens_[index].limits.precisionDefault =
-      std::clamp(pens_[index].limits.precisionDefault, 0, 17);
+  PvLimits sanitized = limits;
+  sanitized.precisionSource = PvLimitSource::kChannel;
+  sanitized.precisionDefault = 0;
+
+  PvLimits &stored = pens_[index].limits;
+  const bool changed = stored.lowSource != sanitized.lowSource
+      || stored.highSource != sanitized.highSource
+      || stored.lowDefault != sanitized.lowDefault
+      || stored.highDefault != sanitized.highDefault
+      || stored.precisionSource != sanitized.precisionSource
+      || stored.precisionDefault != sanitized.precisionDefault;
+  if (!changed) {
+    return;
+  }
+  stored = sanitized;
   update();
 }
 

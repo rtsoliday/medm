@@ -150,6 +150,17 @@ QString barDirectionString(BarDirection direction)
   }
 }
 
+QString barFillModeString(BarFill fill)
+{
+  switch (fill) {
+  case BarFill::kFromCenter:
+    return QStringLiteral("from center");
+  case BarFill::kFromEdge:
+  default:
+    return QStringLiteral("from edge");
+  }
+}
+
 QString timeUnitsString(TimeUnits units)
 {
   switch (units) {
@@ -392,9 +403,12 @@ void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex)
 {
   writeIndentedLine(stream, level, QStringLiteral("\"monitor\" {"));
-  writeIndentedLine(stream, level + 1,
-      QStringLiteral("%1=\"%2\"")
-          .arg(channelFieldName(0), escapeAdlString(channel)));
+  const QString trimmedChannel = channel.trimmed();
+  if (!trimmedChannel.isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("%1=\"%2\"")
+            .arg(channelFieldName(0), escapeAdlString(trimmedChannel)));
+  }
   writeIndentedLine(stream, level + 1,
       QStringLiteral("clr=%1").arg(colorIndex));
   writeIndentedLine(stream, level + 1,

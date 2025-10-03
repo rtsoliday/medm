@@ -5801,6 +5801,113 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       continue;
     }
 
+    if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("meter {"));
+      AdlWriter::writeObjectSection(stream, 1, meter->geometry());
+      AdlWriter::writeMonitorSection(stream, 1, meter->channel(),
+          AdlWriter::medmColorIndex(meter->foregroundColor()),
+          AdlWriter::medmColorIndex(meter->backgroundColor()));
+      if (meter->label() != MeterLabel::kNone) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::meterLabelString(meter->label())));
+      }
+      if (meter->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(meter->colorMode())));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, meter->limits());
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("bar {"));
+      AdlWriter::writeObjectSection(stream, 1, bar->geometry());
+      AdlWriter::writeMonitorSection(stream, 1, bar->channel(),
+          AdlWriter::medmColorIndex(bar->foregroundColor()),
+          AdlWriter::medmColorIndex(bar->backgroundColor()));
+      if (bar->label() != MeterLabel::kNone) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::meterLabelString(bar->label())));
+      }
+      if (bar->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(bar->colorMode())));
+      }
+      if (bar->direction() != BarDirection::kRight) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("direction=\"%1\"")
+                .arg(AdlWriter::barDirectionString(bar->direction())));
+      }
+      if (bar->fillMode() != BarFill::kFromEdge) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("fillmod=\"%1\"")
+                .arg(AdlWriter::barFillModeString(bar->fillMode())));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, bar->limits());
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("indicator {"));
+      AdlWriter::writeObjectSection(stream, 1, scale->geometry());
+      AdlWriter::writeMonitorSection(stream, 1, scale->channel(),
+          AdlWriter::medmColorIndex(scale->foregroundColor()),
+          AdlWriter::medmColorIndex(scale->backgroundColor()));
+      if (scale->label() != MeterLabel::kNone) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::meterLabelString(scale->label())));
+      }
+      if (scale->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(scale->colorMode())));
+      }
+      if (scale->direction() != BarDirection::kRight) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("direction=\"%1\"")
+                .arg(AdlWriter::barDirectionString(scale->direction())));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, scale->limits());
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("byte {"));
+      AdlWriter::writeObjectSection(stream, 1, byte->geometry());
+      AdlWriter::writeMonitorSection(stream, 1, byte->channel(),
+          AdlWriter::medmColorIndex(byte->foregroundColor()),
+          AdlWriter::medmColorIndex(byte->backgroundColor()));
+      if (byte->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(byte->colorMode())));
+      }
+      if (byte->direction() != BarDirection::kRight) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("direction=\"%1\"")
+                .arg(AdlWriter::barDirectionString(byte->direction())));
+      }
+      if (byte->startBit() != 15) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("sbit=%1").arg(byte->startBit()));
+      }
+      if (byte->endBit() != 0) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("ebit=%1").arg(byte->endBit()));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"text update\" {"));

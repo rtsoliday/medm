@@ -28,6 +28,7 @@ QString alignmentString(Qt::Alignment alignment);
 QString imageTypeString(ImageType type);
 QString meterLabelString(MeterLabel label);
 QString barDirectionString(BarDirection direction);
+QString barFillModeString(BarFill fill);
 QString timeUnitsString(TimeUnits units);
 QString channelFieldName(int index);
 QString textMonitorFormatString(TextMonitorFormat format);

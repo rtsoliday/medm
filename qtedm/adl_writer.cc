@@ -334,6 +334,23 @@ void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 
+void writeControlSection(QTextStream &stream, int level, const QString &channel,
+    int colorIndex, int backgroundIndex)
+{
+  writeIndentedLine(stream, level, QStringLiteral("\"control\" {"));
+  const QString trimmedChannel = channel.trimmed();
+  if (!trimmedChannel.isEmpty()) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("chan=\"%1\"")
+            .arg(escapeAdlString(trimmedChannel)));
+  }
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("clr=%1").arg(colorIndex));
+  writeIndentedLine(stream, level + 1,
+      QStringLiteral("bclr=%1").arg(backgroundIndex));
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
 void writePlotcom(QTextStream &stream, int level, const QString &title,
     const QString &xLabel, const std::array<QString, 4> &yLabels,
     int colorIndex, int backgroundIndex)

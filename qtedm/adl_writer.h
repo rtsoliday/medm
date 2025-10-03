@@ -39,6 +39,8 @@ void writeDynamicAttributeSection(QTextStream &stream, int level,
     const QString &calc, const std::array<QString, 4> &channels);
 void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex);
+void writeControlSection(QTextStream &stream, int level, const QString &channel,
+    int colorIndex, int backgroundIndex);
 QString cartesianPlotStyleString(CartesianPlotStyle style);
 QString cartesianEraseOldestString(bool eraseOldest);
 QString cartesianEraseModeString(CartesianPlotEraseMode mode);

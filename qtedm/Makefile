@@ -36,6 +36,7 @@ qtedm_SRC = qtedm.cc \
             main_window_controller.cc \
             text_font_utils.cc \
             text_element.cc \
+            text_entry_element.cc \
             text_monitor_element.cc \
             byte_monitor_element.cc \
             bar_monitor_element.cc \

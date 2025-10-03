@@ -248,6 +248,7 @@ protected:
         }
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
+            || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
@@ -278,6 +279,12 @@ protected:
           if (auto *text = dynamic_cast<TextElement *>(widget)) {
             selectTextElement(text);
             showResourcePaletteForText(text);
+            event->accept();
+            return;
+          }
+          if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
+            selectTextEntryElement(textEntry);
+            showResourcePaletteForTextEntry(textEntry);
             event->accept();
             return;
           }
@@ -508,6 +515,8 @@ private:
   QPoint lastContextMenuGlobalPos_;
   QList<TextElement *> textElements_;
   TextElement *selectedTextElement_ = nullptr;
+  QList<TextEntryElement *> textEntryElements_;
+  TextEntryElement *selectedTextEntryElement_ = nullptr;
   QList<TextMonitorElement *> textMonitorElements_;
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
   QList<MeterElement *> meterElements_;
@@ -575,6 +584,15 @@ private:
     }
     selectedTextElement_->setSelected(false);
     selectedTextElement_ = nullptr;
+  }
+
+  void clearTextEntrySelection()
+  {
+    if (!selectedTextEntryElement_) {
+      return;
+    }
+    selectedTextEntryElement_->setSelected(false);
+    selectedTextEntryElement_ = nullptr;
   }
 
   void clearTextMonitorSelection()
@@ -707,6 +725,7 @@ private:
   {
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -735,6 +754,7 @@ private:
   {
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -933,6 +953,88 @@ private:
           markDirty();
         },
         std::move(channelGetters), std::move(channelSetters));
+  }
+
+  void showResourcePaletteForTextEntry(TextEntryElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForTextEntry(
+        [element]() {
+          return element->geometry();
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth) {
+            adjusted.setWidth(kMinimumTextWidth);
+          }
+          if (adjusted.height() < kMinimumTextHeight) {
+            adjusted.setHeight(kMinimumTextHeight);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->format();
+        },
+        [this, element](TextMonitorFormat format) {
+          element->setFormat(format);
+          markDirty();
+        },
+        [element]() {
+          return element->precision();
+        },
+        [this, element](int precision) {
+          element->setPrecision(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->precisionSource();
+        },
+        [this, element](PvLimitSource source) {
+          element->setPrecisionSource(source);
+          markDirty();
+        },
+        [element]() {
+          return element->precisionDefault();
+        },
+        [this, element](int precision) {
+          element->setPrecisionDefault(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(value);
+          markDirty();
+        });
   }
 
   void showResourcePaletteForTextMonitor(TextMonitorElement *element)
@@ -2336,6 +2438,7 @@ private:
       selectedTextElement_->setSelected(false);
     }
     clearDisplaySelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2354,6 +2457,36 @@ private:
     bringElementToFront(element);
   }
 
+  void selectTextEntryElement(TextEntryElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedTextEntryElement_) {
+      selectedTextEntryElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedTextEntryElement_ = element;
+    selectedTextEntryElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
   void selectTextMonitorElement(TextMonitorElement *element)
   {
     if (!element) {
@@ -2364,6 +2497,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -2392,6 +2526,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -2420,6 +2555,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2449,6 +2585,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2478,6 +2615,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2507,6 +2645,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2536,6 +2675,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2565,6 +2705,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2592,6 +2733,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2620,6 +2762,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2647,6 +2790,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2675,6 +2819,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2703,6 +2848,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2731,6 +2877,7 @@ private:
     }
     clearDisplaySelection();
     clearTextSelection();
+    clearTextEntrySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -2806,6 +2953,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createTextMonitorElement(rect);
+      break;
+    case CreateTool::kTextEntry:
+      if (rect.width() < kMinimumTextWidth) {
+        rect.setWidth(kMinimumTextWidth);
+      }
+      if (rect.height() < kMinimumTextHeight) {
+        rect.setHeight(kMinimumTextHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createTextEntryElement(rect);
       break;
     case CreateTool::kMeter:
       if (rect.width() < kMinimumMeterSize) {
@@ -3220,6 +3377,33 @@ private:
     markDirty();
   }
 
+  void createTextEntryElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth) {
+      target.setWidth(kMinimumTextWidth);
+    }
+    if (target.height() < kMinimumTextHeight) {
+      target.setHeight(kMinimumTextHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new TextEntryElement(displayArea_);
+    element->setFont(font());
+    element->setGeometry(target);
+    element->show();
+    textEntryElements_.append(element);
+    selectTextEntryElement(element);
+    showResourcePaletteForTextEntry(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createMeterElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -3558,6 +3742,7 @@ private:
     const bool crossCursorActive = state
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
+            || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
@@ -3769,7 +3954,14 @@ private:
     });
 
     auto *controllersMenu = objectMenu->addMenu(QStringLiteral("Controllers"));
-    addMenuAction(controllersMenu, QStringLiteral("Text Entry"));
+    auto *textEntryAction =
+        addMenuAction(controllersMenu, QStringLiteral("Text Entry"));
+    QObject::connect(textEntryAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kTextEntry);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(controllersMenu, QStringLiteral("Choice Button"));
     addMenuAction(controllersMenu, QStringLiteral("Menu"));
     addMenuAction(controllersMenu, QStringLiteral("Slider"));
@@ -4066,6 +4258,28 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("align=\"%1\"")
                 .arg(AdlWriter::alignmentString(text->textAlignment())));
       }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *entry = dynamic_cast<TextEntryElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("\"text entry\" {"));
+      AdlWriter::writeObjectSection(stream, 1, entry->geometry());
+      AdlWriter::writeControlSection(stream, 1, entry->channel(),
+          AdlWriter::medmColorIndex(entry->foregroundColor()),
+          AdlWriter::medmColorIndex(entry->backgroundColor()));
+      if (entry->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(entry->colorMode())));
+      }
+      if (entry->format() != TextMonitorFormat::kDecimal) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("format=\"%1\"")
+                .arg(AdlWriter::textMonitorFormatString(entry->format())));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, entry->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

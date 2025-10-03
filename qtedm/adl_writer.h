@@ -29,6 +29,7 @@ QString imageTypeString(ImageType type);
 QString timeUnitsString(TimeUnits units);
 QString channelFieldName(int index);
 QString textMonitorFormatString(TextMonitorFormat format);
+QString choiceButtonStackingString(ChoiceButtonStacking stacking);
 int medmLineWidthValue(int width);
 int medmColorIndex(const QColor &color);
 void writeObjectSection(QTextStream &stream, int level, const QRect &rect);

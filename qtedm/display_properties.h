@@ -32,6 +32,13 @@ enum class TextMonitorFormat
   kSexagesimalDms,
 };
 
+enum class ChoiceButtonStacking
+{
+  kColumn,
+  kRow,
+  kRowColumn,
+};
+
 enum class MeterLabel
 {
   kNone,

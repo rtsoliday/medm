@@ -199,6 +199,19 @@ QString textMonitorFormatString(TextMonitorFormat format)
   }
 }
 
+QString choiceButtonStackingString(ChoiceButtonStacking stacking)
+{
+  switch (stacking) {
+  case ChoiceButtonStacking::kColumn:
+    return QStringLiteral("column");
+  case ChoiceButtonStacking::kRowColumn:
+    return QStringLiteral("row column");
+  case ChoiceButtonStacking::kRow:
+  default:
+    return QStringLiteral("row");
+  }
+}
+
 int medmLineWidthValue(int width)
 {
   return width <= 1 ? 0 : width;

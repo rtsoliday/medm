@@ -836,6 +836,79 @@ public:
     textEntryLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(textEntrySection_);
 
+    choiceButtonSection_ = new QWidget(entriesWidget_);
+    auto *choiceLayout = new QGridLayout(choiceButtonSection_);
+    choiceLayout->setContentsMargins(0, 0, 0, 0);
+    choiceLayout->setHorizontalSpacing(12);
+    choiceLayout->setVerticalSpacing(6);
+
+    choiceButtonForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(choiceButtonForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(choiceButtonForegroundButton_,
+              QStringLiteral("Choice Button Foreground"),
+              choiceButtonForegroundSetter_);
+        });
+
+    choiceButtonBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(choiceButtonBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(choiceButtonBackgroundButton_,
+              QStringLiteral("Choice Button Background"),
+              choiceButtonBackgroundSetter_);
+        });
+
+    choiceButtonColorModeCombo_ = new QComboBox;
+    choiceButtonColorModeCombo_->setFont(valueFont_);
+    choiceButtonColorModeCombo_->setAutoFillBackground(true);
+    choiceButtonColorModeCombo_->addItem(QStringLiteral("Static"));
+    choiceButtonColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    choiceButtonColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(choiceButtonColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (choiceButtonColorModeSetter_) {
+            choiceButtonColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    choiceButtonStackingCombo_ = new QComboBox;
+    choiceButtonStackingCombo_->setFont(valueFont_);
+    choiceButtonStackingCombo_->setAutoFillBackground(true);
+    choiceButtonStackingCombo_->addItem(QStringLiteral("Row"));
+    choiceButtonStackingCombo_->addItem(QStringLiteral("Column"));
+    choiceButtonStackingCombo_->addItem(QStringLiteral("Row Column"));
+    QObject::connect(choiceButtonStackingCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (choiceButtonStackingSetter_) {
+            choiceButtonStackingSetter_(choiceButtonStackingFromIndex(index));
+          }
+        });
+
+    choiceButtonChannelEdit_ = createLineEdit();
+    committedTexts_.insert(choiceButtonChannelEdit_, choiceButtonChannelEdit_->text());
+    choiceButtonChannelEdit_->installEventFilter(this);
+    QObject::connect(choiceButtonChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitChoiceButtonChannel(); });
+    QObject::connect(choiceButtonChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitChoiceButtonChannel(); });
+
+    addRow(choiceLayout, 0, QStringLiteral("Foreground"),
+        choiceButtonForegroundButton_);
+    addRow(choiceLayout, 1, QStringLiteral("Background"),
+        choiceButtonBackgroundButton_);
+    addRow(choiceLayout, 2, QStringLiteral("Color Mode"),
+        choiceButtonColorModeCombo_);
+    addRow(choiceLayout, 3, QStringLiteral("Stacking"),
+        choiceButtonStackingCombo_);
+    addRow(choiceLayout, 4, QStringLiteral("Channel"),
+        choiceButtonChannelEdit_);
+    choiceLayout->setRowStretch(5, 1);
+    entriesLayout->addWidget(choiceButtonSection_);
+
     meterSection_ = new QWidget(entriesWidget_);
     auto *meterLayout = new QGridLayout(meterSection_);
     meterLayout->setContentsMargins(0, 0, 0, 0);
@@ -1974,6 +2047,333 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Text Entry"));
+    }
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForChoiceButton(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<ChoiceButtonStacking()> stackingGetter,
+      std::function<void(ChoiceButtonStacking)> stackingSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kChoiceButton;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    foregroundColorGetter_ = {};
+    foregroundColorSetter_ = {};
+    backgroundColorGetter_ = {};
+    backgroundColorSetter_ = {};
+    activeColorSetter_ = {};
+    gridSpacingGetter_ = {};
+    gridSpacingSetter_ = {};
+    gridOnGetter_ = {};
+    gridOnSetter_ = {};
+    textGetter_ = {};
+    textSetter_ = {};
+    textForegroundGetter_ = {};
+    textForegroundSetter_ = {};
+    textAlignmentGetter_ = {};
+    textAlignmentSetter_ = {};
+    textColorModeGetter_ = {};
+    textColorModeSetter_ = {};
+    textVisibilityModeGetter_ = {};
+    textVisibilityModeSetter_ = {};
+    textVisibilityCalcGetter_ = {};
+    textVisibilityCalcSetter_ = {};
+    for (auto &getter : textChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : textChannelSetters_) {
+      setter = {};
+    }
+    textMonitorForegroundGetter_ = {};
+    textMonitorForegroundSetter_ = {};
+    textMonitorBackgroundGetter_ = {};
+    textMonitorBackgroundSetter_ = {};
+    textMonitorAlignmentGetter_ = {};
+    textMonitorAlignmentSetter_ = {};
+    textMonitorFormatGetter_ = {};
+    textMonitorFormatSetter_ = {};
+    textMonitorPrecisionGetter_ = {};
+    textMonitorPrecisionSetter_ = {};
+    textMonitorPrecisionSourceGetter_ = {};
+    textMonitorPrecisionSourceSetter_ = {};
+    textMonitorPrecisionDefaultGetter_ = {};
+    textMonitorPrecisionDefaultSetter_ = {};
+    textMonitorColorModeGetter_ = {};
+    textMonitorColorModeSetter_ = {};
+    textMonitorChannelGetter_ = {};
+    textMonitorChannelSetter_ = {};
+    textEntryForegroundGetter_ = {};
+    textEntryForegroundSetter_ = {};
+    textEntryBackgroundGetter_ = {};
+    textEntryBackgroundSetter_ = {};
+    textEntryFormatGetter_ = {};
+    textEntryFormatSetter_ = {};
+    textEntryPrecisionGetter_ = {};
+    textEntryPrecisionSetter_ = {};
+    textEntryPrecisionSourceGetter_ = {};
+    textEntryPrecisionSourceSetter_ = {};
+    textEntryPrecisionDefaultGetter_ = {};
+    textEntryPrecisionDefaultSetter_ = {};
+    textEntryColorModeGetter_ = {};
+    textEntryColorModeSetter_ = {};
+    textEntryChannelGetter_ = {};
+    textEntryChannelSetter_ = {};
+
+    choiceButtonForegroundGetter_ = std::move(foregroundGetter);
+    choiceButtonForegroundSetter_ = std::move(foregroundSetter);
+    choiceButtonBackgroundGetter_ = std::move(backgroundGetter);
+    choiceButtonBackgroundSetter_ = std::move(backgroundSetter);
+    choiceButtonColorModeGetter_ = std::move(colorModeGetter);
+    choiceButtonColorModeSetter_ = std::move(colorModeSetter);
+    choiceButtonStackingGetter_ = std::move(stackingGetter);
+    choiceButtonStackingSetter_ = std::move(stackingSetter);
+    choiceButtonChannelGetter_ = std::move(channelGetter);
+    choiceButtonChannelSetter_ = std::move(channelSetter);
+
+    meterForegroundGetter_ = {};
+    meterForegroundSetter_ = {};
+    meterBackgroundGetter_ = {};
+    meterBackgroundSetter_ = {};
+    meterLabelGetter_ = {};
+    meterLabelSetter_ = {};
+    meterColorModeGetter_ = {};
+    meterColorModeSetter_ = {};
+    meterChannelGetter_ = {};
+    meterChannelSetter_ = {};
+    meterLimitsGetter_ = {};
+    meterLimitsSetter_ = {};
+    barForegroundGetter_ = {};
+    barForegroundSetter_ = {};
+    barBackgroundGetter_ = {};
+    barBackgroundSetter_ = {};
+    barLabelGetter_ = {};
+    barLabelSetter_ = {};
+    barColorModeGetter_ = {};
+    barColorModeSetter_ = {};
+    barDirectionGetter_ = {};
+    barDirectionSetter_ = {};
+    barFillModeGetter_ = {};
+    barFillModeSetter_ = {};
+    barChannelGetter_ = {};
+    barChannelSetter_ = {};
+    barLimitsGetter_ = {};
+    barLimitsSetter_ = {};
+    scaleForegroundGetter_ = {};
+    scaleForegroundSetter_ = {};
+    scaleBackgroundGetter_ = {};
+    scaleBackgroundSetter_ = {};
+    scaleLabelGetter_ = {};
+    scaleLabelSetter_ = {};
+    scaleColorModeGetter_ = {};
+    scaleColorModeSetter_ = {};
+    scaleDirectionGetter_ = {};
+    scaleDirectionSetter_ = {};
+    scaleChannelGetter_ = {};
+    scaleChannelSetter_ = {};
+    scaleLimitsGetter_ = {};
+    scaleLimitsSetter_ = {};
+    stripTitleGetter_ = {};
+    stripTitleSetter_ = {};
+    stripXLabelGetter_ = {};
+    stripXLabelSetter_ = {};
+    stripYLabelGetter_ = {};
+    stripYLabelSetter_ = {};
+    stripForegroundGetter_ = {};
+    stripForegroundSetter_ = {};
+    stripBackgroundGetter_ = {};
+    stripBackgroundSetter_ = {};
+    stripPeriodGetter_ = {};
+    stripPeriodSetter_ = {};
+    stripUnitsGetter_ = {};
+    stripUnitsSetter_ = {};
+    for (auto &getter : stripPenChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : stripPenChannelSetters_) {
+      setter = {};
+    }
+    cartesianTitleGetter_ = {};
+    cartesianTitleSetter_ = {};
+    cartesianXLabelGetter_ = {};
+    cartesianXLabelSetter_ = {};
+    for (auto &getter : cartesianYLabelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianYLabelSetters_) {
+      setter = {};
+    }
+    cartesianForegroundGetter_ = {};
+    cartesianForegroundSetter_ = {};
+    cartesianBackgroundGetter_ = {};
+    cartesianBackgroundSetter_ = {};
+    cartesianStyleGetter_ = {};
+    cartesianStyleSetter_ = {};
+    cartesianEraseOldestGetter_ = {};
+    cartesianEraseOldestSetter_ = {};
+    cartesianCountGetter_ = {};
+    cartesianCountSetter_ = {};
+    cartesianEraseModeGetter_ = {};
+    cartesianEraseModeSetter_ = {};
+    cartesianTriggerGetter_ = {};
+    cartesianTriggerSetter_ = {};
+    cartesianEraseGetter_ = {};
+    cartesianEraseSetter_ = {};
+    cartesianCountPvGetter_ = {};
+    cartesianCountPvSetter_ = {};
+    for (auto &getter : cartesianTraceXGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceXSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceYGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceYSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceColorGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceColorSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceAxisGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceAxisSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianTraceSideGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianTraceSideSetters_) {
+      setter = {};
+    }
+    byteForegroundGetter_ = {};
+    byteForegroundSetter_ = {};
+    byteBackgroundGetter_ = {};
+    byteBackgroundSetter_ = {};
+    byteColorModeGetter_ = {};
+    byteColorModeSetter_ = {};
+    byteDirectionGetter_ = {};
+    byteDirectionSetter_ = {};
+    byteStartBitGetter_ = {};
+    byteStartBitSetter_ = {};
+    byteEndBitGetter_ = {};
+    byteEndBitSetter_ = {};
+    byteChannelGetter_ = {};
+    byteChannelSetter_ = {};
+    rectangleForegroundGetter_ = {};
+    rectangleForegroundSetter_ = {};
+    rectangleFillGetter_ = {};
+    rectangleFillSetter_ = {};
+    rectangleLineStyleGetter_ = {};
+    rectangleLineStyleSetter_ = {};
+    rectangleLineWidthGetter_ = {};
+    rectangleLineWidthSetter_ = {};
+    rectangleColorModeGetter_ = {};
+    rectangleColorModeSetter_ = {};
+    rectangleVisibilityModeGetter_ = {};
+    rectangleVisibilityModeSetter_ = {};
+    rectangleVisibilityCalcGetter_ = {};
+    rectangleVisibilityCalcSetter_ = {};
+    for (auto &getter : rectangleChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : rectangleChannelSetters_) {
+      setter = {};
+    }
+    imageTypeGetter_ = {};
+    imageTypeSetter_ = {};
+    imageNameGetter_ = {};
+    imageNameSetter_ = {};
+    imageCalcGetter_ = {};
+    imageCalcSetter_ = {};
+    imageColorModeGetter_ = {};
+    imageColorModeSetter_ = {};
+    imageVisibilityModeGetter_ = {};
+    imageVisibilityModeSetter_ = {};
+    imageVisibilityCalcGetter_ = {};
+    imageVisibilityCalcSetter_ = {};
+    for (auto &getter : imageChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : imageChannelSetters_) {
+      setter = {};
+    }
+
+    QRect choiceGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (choiceGeometry.width() <= 0) {
+      choiceGeometry.setWidth(kMinimumTextWidth);
+    }
+    if (choiceGeometry.height() <= 0) {
+      choiceGeometry.setHeight(kMinimumTextHeight);
+    }
+    lastCommittedGeometry_ = choiceGeometry;
+
+    updateGeometryEdits(choiceGeometry);
+
+    if (choiceButtonForegroundButton_) {
+      const QColor color = choiceButtonForegroundGetter_
+              ? choiceButtonForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(choiceButtonForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (choiceButtonBackgroundButton_) {
+      const QColor color = choiceButtonBackgroundGetter_
+              ? choiceButtonBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(choiceButtonBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (choiceButtonColorModeCombo_) {
+      const QSignalBlocker blocker(choiceButtonColorModeCombo_);
+      const int index = choiceButtonColorModeGetter_
+              ? colorModeToIndex(choiceButtonColorModeGetter_())
+              : colorModeToIndex(TextColorMode::kStatic);
+      choiceButtonColorModeCombo_->setCurrentIndex(index);
+    }
+
+    if (choiceButtonStackingCombo_) {
+      const QSignalBlocker blocker(choiceButtonStackingCombo_);
+      const int index = choiceButtonStackingGetter_
+              ? choiceButtonStackingToIndex(choiceButtonStackingGetter_())
+              : choiceButtonStackingToIndex(ChoiceButtonStacking::kRow);
+      choiceButtonStackingCombo_->setCurrentIndex(index);
+    }
+
+    if (choiceButtonChannelEdit_) {
+      const QString channel = choiceButtonChannelGetter_
+              ? choiceButtonChannelGetter_()
+              : QString();
+      const QSignalBlocker blocker(choiceButtonChannelEdit_);
+      choiceButtonChannelEdit_->setText(channel);
+      committedTexts_[choiceButtonChannelEdit_] = choiceButtonChannelEdit_->text();
+    }
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Choice Button"));
     }
 
     show();
@@ -4219,6 +4619,16 @@ public:
     textEntryColorModeSetter_ = {};
     textEntryChannelGetter_ = {};
     textEntryChannelSetter_ = {};
+    choiceButtonForegroundGetter_ = {};
+    choiceButtonForegroundSetter_ = {};
+    choiceButtonBackgroundGetter_ = {};
+    choiceButtonBackgroundSetter_ = {};
+    choiceButtonColorModeGetter_ = {};
+    choiceButtonColorModeSetter_ = {};
+    choiceButtonStackingGetter_ = {};
+    choiceButtonStackingSetter_ = {};
+    choiceButtonChannelGetter_ = {};
+    choiceButtonChannelSetter_ = {};
     if (textEntryPvLimitsButton_) {
       textEntryPvLimitsButton_->setEnabled(false);
     }
@@ -4519,6 +4929,7 @@ public:
     }
     resetLineEdit(textEntryPrecisionEdit_);
     resetLineEdit(textEntryChannelEdit_);
+    resetLineEdit(choiceButtonChannelEdit_);
     resetLineEdit(textMonitorPrecisionEdit_);
     resetLineEdit(textMonitorChannelEdit_);
     if (textMonitorPvLimitsButton_) {
@@ -4571,6 +4982,8 @@ public:
     resetColorButton(textForegroundButton_);
     resetColorButton(textMonitorForegroundButton_);
     resetColorButton(textMonitorBackgroundButton_);
+    resetColorButton(choiceButtonForegroundButton_);
+    resetColorButton(choiceButtonBackgroundButton_);
     resetColorButton(meterForegroundButton_);
     resetColorButton(meterBackgroundButton_);
     resetColorButton(barForegroundButton_);
@@ -4622,6 +5035,16 @@ public:
       const QSignalBlocker blocker(textMonitorColorModeCombo_);
       textMonitorColorModeCombo_->setCurrentIndex(
           colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (choiceButtonColorModeCombo_) {
+      const QSignalBlocker blocker(choiceButtonColorModeCombo_);
+      choiceButtonColorModeCombo_->setCurrentIndex(
+          colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (choiceButtonStackingCombo_) {
+      const QSignalBlocker blocker(choiceButtonStackingCombo_);
+      choiceButtonStackingCombo_->setCurrentIndex(
+          choiceButtonStackingToIndex(ChoiceButtonStacking::kRow));
     }
     if (meterLabelCombo_) {
       const QSignalBlocker blocker(meterLabelCombo_);
@@ -4759,6 +5182,7 @@ private:
     kLine,
     kText,
     kTextEntry,
+    kChoiceButton,
     kTextMonitor,
     kMeter,
     kBarMonitor,
@@ -4949,6 +5373,11 @@ private:
       textEntrySection_->setVisible(textEntryVisible);
       textEntrySection_->setEnabled(textEntryVisible);
     }
+    if (choiceButtonSection_) {
+      const bool choiceVisible = kind == SelectionKind::kChoiceButton;
+      choiceButtonSection_->setVisible(choiceVisible);
+      choiceButtonSection_->setEnabled(choiceVisible);
+    }
     if (textMonitorSection_) {
       const bool monitorVisible = kind == SelectionKind::kTextMonitor;
       textMonitorSection_->setVisible(monitorVisible);
@@ -5056,6 +5485,20 @@ private:
     const QString value = textEntryChannelEdit_->text();
     textEntryChannelSetter_(value);
     committedTexts_[textEntryChannelEdit_] = value;
+  }
+
+  void commitChoiceButtonChannel()
+  {
+    if (!choiceButtonChannelEdit_) {
+      return;
+    }
+    if (!choiceButtonChannelSetter_) {
+      revertLineEdit(choiceButtonChannelEdit_);
+      return;
+    }
+    const QString value = choiceButtonChannelEdit_->text();
+    choiceButtonChannelSetter_(value);
+    committedTexts_[choiceButtonChannelEdit_] = value;
   }
 
   void commitTextMonitorChannel()
@@ -6334,6 +6777,32 @@ private:
     }
   }
 
+  ChoiceButtonStacking choiceButtonStackingFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return ChoiceButtonStacking::kColumn;
+    case 2:
+      return ChoiceButtonStacking::kRowColumn;
+    case 0:
+    default:
+      return ChoiceButtonStacking::kRow;
+    }
+  }
+
+  int choiceButtonStackingToIndex(ChoiceButtonStacking stacking) const
+  {
+    switch (stacking) {
+    case ChoiceButtonStacking::kColumn:
+      return 1;
+    case ChoiceButtonStacking::kRowColumn:
+      return 2;
+    case ChoiceButtonStacking::kRow:
+    default:
+      return 0;
+    }
+  }
+
   void positionRelativeTo(QWidget *reference)
   {
     QScreen *screen = screenForWidget(reference);
@@ -6490,6 +6959,12 @@ private:
   QComboBox *textEntryColorModeCombo_ = nullptr;
   QLineEdit *textEntryChannelEdit_ = nullptr;
   QPushButton *textEntryPvLimitsButton_ = nullptr;
+  QWidget *choiceButtonSection_ = nullptr;
+  QPushButton *choiceButtonForegroundButton_ = nullptr;
+  QPushButton *choiceButtonBackgroundButton_ = nullptr;
+  QComboBox *choiceButtonColorModeCombo_ = nullptr;
+  QComboBox *choiceButtonStackingCombo_ = nullptr;
+  QLineEdit *choiceButtonChannelEdit_ = nullptr;
   QWidget *meterSection_ = nullptr;
   QPushButton *meterForegroundButton_ = nullptr;
   QPushButton *meterBackgroundButton_ = nullptr;
@@ -6715,6 +7190,9 @@ private:
     if (textEntryChannelEdit_) {
       committedTexts_[textEntryChannelEdit_] = textEntryChannelEdit_->text();
     }
+    if (choiceButtonChannelEdit_) {
+      committedTexts_[choiceButtonChannelEdit_] = choiceButtonChannelEdit_->text();
+    }
     if (textMonitorPrecisionEdit_) {
       committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
     }
@@ -6910,6 +7388,16 @@ private:
   std::function<void(TextColorMode)> textEntryColorModeSetter_;
   std::function<QString()> textEntryChannelGetter_;
   std::function<void(const QString &)> textEntryChannelSetter_;
+  std::function<QColor()> choiceButtonForegroundGetter_;
+  std::function<void(const QColor &)> choiceButtonForegroundSetter_;
+  std::function<QColor()> choiceButtonBackgroundGetter_;
+  std::function<void(const QColor &)> choiceButtonBackgroundSetter_;
+  std::function<TextColorMode()> choiceButtonColorModeGetter_;
+  std::function<void(TextColorMode)> choiceButtonColorModeSetter_;
+  std::function<ChoiceButtonStacking()> choiceButtonStackingGetter_;
+  std::function<void(ChoiceButtonStacking)> choiceButtonStackingSetter_;
+  std::function<QString()> choiceButtonChannelGetter_;
+  std::function<void(const QString &)> choiceButtonChannelSetter_;
   std::function<QColor()> meterForegroundGetter_;
   std::function<void(const QColor &)> meterForegroundSetter_;
   std::function<QColor()> meterBackgroundGetter_;

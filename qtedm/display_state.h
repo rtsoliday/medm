@@ -16,6 +16,7 @@ enum class CreateTool {
   kSlider,
   kChoiceButton,
   kMenu,
+  kMessageButton,
   kRelatedDisplay,
   kMeter,
   kBarMonitor,

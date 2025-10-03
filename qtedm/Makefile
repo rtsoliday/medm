@@ -37,6 +37,7 @@ qtedm_SRC = qtedm.cc \
             text_font_utils.cc \
             text_element.cc \
             text_entry_element.cc \
+            message_button_element.cc \
             choice_button_element.cc \
             menu_element.cc \
             related_display_element.cc \

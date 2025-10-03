@@ -1064,6 +1064,91 @@ public:
     menuLayout->setRowStretch(4, 1);
     entriesLayout->addWidget(menuSection_);
 
+    messageButtonSection_ = new QWidget(entriesWidget_);
+    auto *messageButtonLayout = new QGridLayout(messageButtonSection_);
+    messageButtonLayout->setContentsMargins(0, 0, 0, 0);
+    messageButtonLayout->setHorizontalSpacing(12);
+    messageButtonLayout->setVerticalSpacing(6);
+
+    messageButtonForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(messageButtonForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(messageButtonForegroundButton_,
+              QStringLiteral("Message Button Foreground"),
+              messageButtonForegroundSetter_);
+        });
+
+    messageButtonBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(messageButtonBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(messageButtonBackgroundButton_,
+              QStringLiteral("Message Button Background"),
+              messageButtonBackgroundSetter_);
+        });
+
+    messageButtonColorModeCombo_ = new QComboBox;
+    messageButtonColorModeCombo_->setFont(valueFont_);
+    messageButtonColorModeCombo_->setAutoFillBackground(true);
+    messageButtonColorModeCombo_->addItem(QStringLiteral("Static"));
+    messageButtonColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    messageButtonColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(messageButtonColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (messageButtonColorModeSetter_) {
+            messageButtonColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    messageButtonLabelEdit_ = createLineEdit();
+    committedTexts_.insert(messageButtonLabelEdit_, messageButtonLabelEdit_->text());
+    messageButtonLabelEdit_->installEventFilter(this);
+    QObject::connect(messageButtonLabelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitMessageButtonLabel(); });
+    QObject::connect(messageButtonLabelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitMessageButtonLabel(); });
+
+    messageButtonPressEdit_ = createLineEdit();
+    committedTexts_.insert(messageButtonPressEdit_, messageButtonPressEdit_->text());
+    messageButtonPressEdit_->installEventFilter(this);
+    QObject::connect(messageButtonPressEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitMessageButtonPressMessage(); });
+    QObject::connect(messageButtonPressEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitMessageButtonPressMessage(); });
+
+    messageButtonReleaseEdit_ = createLineEdit();
+    committedTexts_.insert(messageButtonReleaseEdit_, messageButtonReleaseEdit_->text());
+    messageButtonReleaseEdit_->installEventFilter(this);
+    QObject::connect(messageButtonReleaseEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitMessageButtonReleaseMessage(); });
+    QObject::connect(messageButtonReleaseEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitMessageButtonReleaseMessage(); });
+
+    messageButtonChannelEdit_ = createLineEdit();
+    committedTexts_.insert(messageButtonChannelEdit_, messageButtonChannelEdit_->text());
+    messageButtonChannelEdit_->installEventFilter(this);
+    QObject::connect(messageButtonChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitMessageButtonChannel(); });
+    QObject::connect(messageButtonChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitMessageButtonChannel(); });
+
+    addRow(messageButtonLayout, 0, QStringLiteral("Foreground"),
+        messageButtonForegroundButton_);
+    addRow(messageButtonLayout, 1, QStringLiteral("Background"),
+        messageButtonBackgroundButton_);
+    addRow(messageButtonLayout, 2, QStringLiteral("Color Mode"),
+        messageButtonColorModeCombo_);
+    addRow(messageButtonLayout, 3, QStringLiteral("Label"), messageButtonLabelEdit_);
+    addRow(messageButtonLayout, 4, QStringLiteral("Press Message"),
+        messageButtonPressEdit_);
+    addRow(messageButtonLayout, 5, QStringLiteral("Release Message"),
+        messageButtonReleaseEdit_);
+    addRow(messageButtonLayout, 6, QStringLiteral("Channel"), messageButtonChannelEdit_);
+    messageButtonLayout->setRowStretch(7, 1);
+    entriesLayout->addWidget(messageButtonSection_);
+
     relatedDisplaySection_ = new QWidget(entriesWidget_);
     auto *relatedLayout = new QGridLayout(relatedDisplaySection_);
     relatedLayout->setContentsMargins(0, 0, 0, 0);
@@ -2937,6 +3022,123 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Menu"));
+    }
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForMessageButton(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<QString()> labelGetter,
+      std::function<void(const QString &)> labelSetter,
+      std::function<QString()> pressGetter,
+      std::function<void(const QString &)> pressSetter,
+      std::function<QString()> releaseGetter,
+      std::function<void(const QString &)> releaseSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kMessageButton;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    messageButtonForegroundGetter_ = std::move(foregroundGetter);
+    messageButtonForegroundSetter_ = std::move(foregroundSetter);
+    messageButtonBackgroundGetter_ = std::move(backgroundGetter);
+    messageButtonBackgroundSetter_ = std::move(backgroundSetter);
+    messageButtonColorModeGetter_ = std::move(colorModeGetter);
+    messageButtonColorModeSetter_ = std::move(colorModeSetter);
+    messageButtonLabelGetter_ = std::move(labelGetter);
+    messageButtonLabelSetter_ = std::move(labelSetter);
+    messageButtonPressGetter_ = std::move(pressGetter);
+    messageButtonPressSetter_ = std::move(pressSetter);
+    messageButtonReleaseGetter_ = std::move(releaseGetter);
+    messageButtonReleaseSetter_ = std::move(releaseSetter);
+    messageButtonChannelGetter_ = std::move(channelGetter);
+    messageButtonChannelSetter_ = std::move(channelSetter);
+
+    QRect messageGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (messageGeometry.width() <= 0) {
+      messageGeometry.setWidth(kMinimumTextWidth);
+    }
+    if (messageGeometry.height() <= 0) {
+      messageGeometry.setHeight(kMinimumTextHeight);
+    }
+    lastCommittedGeometry_ = messageGeometry;
+
+    updateGeometryEdits(messageGeometry);
+
+    if (messageButtonForegroundButton_) {
+      const QColor color = messageButtonForegroundGetter_
+              ? messageButtonForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(messageButtonForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (messageButtonBackgroundButton_) {
+      const QColor color = messageButtonBackgroundGetter_
+              ? messageButtonBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(messageButtonBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (messageButtonColorModeCombo_) {
+      const QSignalBlocker blocker(messageButtonColorModeCombo_);
+      const int index = messageButtonColorModeGetter_
+              ? colorModeToIndex(messageButtonColorModeGetter_())
+              : colorModeToIndex(TextColorMode::kStatic);
+      messageButtonColorModeCombo_->setCurrentIndex(index);
+    }
+
+    if (messageButtonLabelEdit_) {
+      const QString text = messageButtonLabelGetter_ ? messageButtonLabelGetter_()
+                                                     : QString();
+      const QSignalBlocker blocker(messageButtonLabelEdit_);
+      messageButtonLabelEdit_->setText(text);
+      committedTexts_[messageButtonLabelEdit_] = text;
+    }
+
+    if (messageButtonPressEdit_) {
+      const QString text = messageButtonPressGetter_ ? messageButtonPressGetter_()
+                                                     : QString();
+      const QSignalBlocker blocker(messageButtonPressEdit_);
+      messageButtonPressEdit_->setText(text);
+      committedTexts_[messageButtonPressEdit_] = text;
+    }
+
+    if (messageButtonReleaseEdit_) {
+      const QString text = messageButtonReleaseGetter_
+              ? messageButtonReleaseGetter_()
+              : QString();
+      const QSignalBlocker blocker(messageButtonReleaseEdit_);
+      messageButtonReleaseEdit_->setText(text);
+      committedTexts_[messageButtonReleaseEdit_] = text;
+    }
+
+    if (messageButtonChannelEdit_) {
+      const QString channel = messageButtonChannelGetter_
+              ? messageButtonChannelGetter_()
+              : QString();
+      const QSignalBlocker blocker(messageButtonChannelEdit_);
+      messageButtonChannelEdit_->setText(channel);
+      committedTexts_[messageButtonChannelEdit_] = channel;
+    }
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Message Button"));
     }
 
     show();
@@ -5363,6 +5565,45 @@ public:
     menuColorModeSetter_ = {};
     menuChannelGetter_ = {};
     menuChannelSetter_ = {};
+    messageButtonForegroundGetter_ = {};
+    messageButtonForegroundSetter_ = {};
+    messageButtonBackgroundGetter_ = {};
+    messageButtonBackgroundSetter_ = {};
+    messageButtonColorModeGetter_ = {};
+    messageButtonColorModeSetter_ = {};
+    messageButtonLabelGetter_ = {};
+    messageButtonLabelSetter_ = {};
+    messageButtonPressGetter_ = {};
+    messageButtonPressSetter_ = {};
+    messageButtonReleaseGetter_ = {};
+    messageButtonReleaseSetter_ = {};
+    messageButtonChannelGetter_ = {};
+    messageButtonChannelSetter_ = {};
+    if (messageButtonColorModeCombo_) {
+      const QSignalBlocker blocker(messageButtonColorModeCombo_);
+      messageButtonColorModeCombo_->setCurrentIndex(
+          colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (messageButtonLabelEdit_) {
+      const QSignalBlocker blocker(messageButtonLabelEdit_);
+      messageButtonLabelEdit_->clear();
+      committedTexts_[messageButtonLabelEdit_] = messageButtonLabelEdit_->text();
+    }
+    if (messageButtonPressEdit_) {
+      const QSignalBlocker blocker(messageButtonPressEdit_);
+      messageButtonPressEdit_->clear();
+      committedTexts_[messageButtonPressEdit_] = messageButtonPressEdit_->text();
+    }
+    if (messageButtonReleaseEdit_) {
+      const QSignalBlocker blocker(messageButtonReleaseEdit_);
+      messageButtonReleaseEdit_->clear();
+      committedTexts_[messageButtonReleaseEdit_] = messageButtonReleaseEdit_->text();
+    }
+    if (messageButtonChannelEdit_) {
+      const QSignalBlocker blocker(messageButtonChannelEdit_);
+      messageButtonChannelEdit_->clear();
+      committedTexts_[messageButtonChannelEdit_] = messageButtonChannelEdit_->text();
+    }
     relatedDisplayForegroundGetter_ = {};
     relatedDisplayForegroundSetter_ = {};
     relatedDisplayBackgroundGetter_ = {};
@@ -5741,6 +5982,10 @@ public:
     resetLineEdit(textEntryChannelEdit_);
     resetLineEdit(choiceButtonChannelEdit_);
     resetLineEdit(menuChannelEdit_);
+    resetLineEdit(messageButtonLabelEdit_);
+    resetLineEdit(messageButtonPressEdit_);
+    resetLineEdit(messageButtonReleaseEdit_);
+    resetLineEdit(messageButtonChannelEdit_);
     resetLineEdit(textMonitorPrecisionEdit_);
     resetLineEdit(textMonitorChannelEdit_);
     if (textMonitorPvLimitsButton_) {
@@ -5797,6 +6042,8 @@ public:
     resetColorButton(choiceButtonBackgroundButton_);
     resetColorButton(menuForegroundButton_);
     resetColorButton(menuBackgroundButton_);
+    resetColorButton(messageButtonForegroundButton_);
+    resetColorButton(messageButtonBackgroundButton_);
     resetColorButton(meterForegroundButton_);
     resetColorButton(meterBackgroundButton_);
     resetColorButton(barForegroundButton_);
@@ -5998,6 +6245,7 @@ private:
     kSlider,
     kChoiceButton,
     kMenu,
+    kMessageButton,
     kRelatedDisplay,
     kTextMonitor,
     kMeter,
@@ -6219,6 +6467,11 @@ private:
       menuSection_->setVisible(menuVisible);
       menuSection_->setEnabled(menuVisible);
     }
+    if (messageButtonSection_) {
+      const bool messageVisible = kind == SelectionKind::kMessageButton;
+      messageButtonSection_->setVisible(messageVisible);
+      messageButtonSection_->setEnabled(messageVisible);
+    }
     if (relatedDisplaySection_) {
       const bool relatedVisible = kind == SelectionKind::kRelatedDisplay;
       relatedDisplaySection_->setVisible(relatedVisible);
@@ -6394,6 +6647,62 @@ private:
     const QString value = menuChannelEdit_->text();
     menuChannelSetter_(value);
     committedTexts_[menuChannelEdit_] = value;
+  }
+
+  void commitMessageButtonLabel()
+  {
+    if (!messageButtonLabelEdit_) {
+      return;
+    }
+    if (!messageButtonLabelSetter_) {
+      revertLineEdit(messageButtonLabelEdit_);
+      return;
+    }
+    const QString value = messageButtonLabelEdit_->text();
+    messageButtonLabelSetter_(value);
+    committedTexts_[messageButtonLabelEdit_] = value;
+  }
+
+  void commitMessageButtonPressMessage()
+  {
+    if (!messageButtonPressEdit_) {
+      return;
+    }
+    if (!messageButtonPressSetter_) {
+      revertLineEdit(messageButtonPressEdit_);
+      return;
+    }
+    const QString value = messageButtonPressEdit_->text();
+    messageButtonPressSetter_(value);
+    committedTexts_[messageButtonPressEdit_] = value;
+  }
+
+  void commitMessageButtonReleaseMessage()
+  {
+    if (!messageButtonReleaseEdit_) {
+      return;
+    }
+    if (!messageButtonReleaseSetter_) {
+      revertLineEdit(messageButtonReleaseEdit_);
+      return;
+    }
+    const QString value = messageButtonReleaseEdit_->text();
+    messageButtonReleaseSetter_(value);
+    committedTexts_[messageButtonReleaseEdit_] = value;
+  }
+
+  void commitMessageButtonChannel()
+  {
+    if (!messageButtonChannelEdit_) {
+      return;
+    }
+    if (!messageButtonChannelSetter_) {
+      revertLineEdit(messageButtonChannelEdit_);
+      return;
+    }
+    const QString value = messageButtonChannelEdit_->text();
+    messageButtonChannelSetter_(value);
+    committedTexts_[messageButtonChannelEdit_] = value;
   }
 
   void commitRelatedDisplayLabel()
@@ -8013,6 +8322,14 @@ private:
   QPushButton *menuBackgroundButton_ = nullptr;
   QComboBox *menuColorModeCombo_ = nullptr;
   QLineEdit *menuChannelEdit_ = nullptr;
+  QWidget *messageButtonSection_ = nullptr;
+  QPushButton *messageButtonForegroundButton_ = nullptr;
+  QPushButton *messageButtonBackgroundButton_ = nullptr;
+  QComboBox *messageButtonColorModeCombo_ = nullptr;
+  QLineEdit *messageButtonLabelEdit_ = nullptr;
+  QLineEdit *messageButtonPressEdit_ = nullptr;
+  QLineEdit *messageButtonReleaseEdit_ = nullptr;
+  QLineEdit *messageButtonChannelEdit_ = nullptr;
   QWidget *relatedDisplaySection_ = nullptr;
   QPushButton *relatedDisplayForegroundButton_ = nullptr;
   QPushButton *relatedDisplayBackgroundButton_ = nullptr;
@@ -8260,6 +8577,18 @@ private:
     if (menuChannelEdit_) {
       committedTexts_[menuChannelEdit_] = menuChannelEdit_->text();
     }
+    if (messageButtonLabelEdit_) {
+      committedTexts_[messageButtonLabelEdit_] = messageButtonLabelEdit_->text();
+    }
+    if (messageButtonPressEdit_) {
+      committedTexts_[messageButtonPressEdit_] = messageButtonPressEdit_->text();
+    }
+    if (messageButtonReleaseEdit_) {
+      committedTexts_[messageButtonReleaseEdit_] = messageButtonReleaseEdit_->text();
+    }
+    if (messageButtonChannelEdit_) {
+      committedTexts_[messageButtonChannelEdit_] = messageButtonChannelEdit_->text();
+    }
     if (textMonitorPrecisionEdit_) {
       committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
     }
@@ -8489,6 +8818,20 @@ private:
   std::function<void(TextColorMode)> menuColorModeSetter_;
   std::function<QString()> menuChannelGetter_;
   std::function<void(const QString &)> menuChannelSetter_;
+  std::function<QColor()> messageButtonForegroundGetter_;
+  std::function<void(const QColor &)> messageButtonForegroundSetter_;
+  std::function<QColor()> messageButtonBackgroundGetter_;
+  std::function<void(const QColor &)> messageButtonBackgroundSetter_;
+  std::function<TextColorMode()> messageButtonColorModeGetter_;
+  std::function<void(TextColorMode)> messageButtonColorModeSetter_;
+  std::function<QString()> messageButtonLabelGetter_;
+  std::function<void(const QString &)> messageButtonLabelSetter_;
+  std::function<QString()> messageButtonPressGetter_;
+  std::function<void(const QString &)> messageButtonPressSetter_;
+  std::function<QString()> messageButtonReleaseGetter_;
+  std::function<void(const QString &)> messageButtonReleaseSetter_;
+  std::function<QString()> messageButtonChannelGetter_;
+  std::function<void(const QString &)> messageButtonChannelSetter_;
   std::function<QColor()> relatedDisplayForegroundGetter_;
   std::function<void(const QColor &)> relatedDisplayForegroundSetter_;
   std::function<QColor()> relatedDisplayBackgroundGetter_;

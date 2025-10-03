@@ -683,14 +683,6 @@ public:
           }
         });
 
-    textMonitorPrecisionEdit_ = createLineEdit();
-    committedTexts_.insert(textMonitorPrecisionEdit_, textMonitorPrecisionEdit_->text());
-    textMonitorPrecisionEdit_->installEventFilter(this);
-    QObject::connect(textMonitorPrecisionEdit_, &QLineEdit::returnPressed, this,
-        [this]() { commitTextMonitorPrecision(); });
-    QObject::connect(textMonitorPrecisionEdit_, &QLineEdit::editingFinished,
-        this, [this]() { commitTextMonitorPrecision(); });
-
     textMonitorColorModeCombo_ = new QComboBox;
     textMonitorColorModeCombo_->setFont(valueFont_);
     textMonitorColorModeCombo_->setAutoFillBackground(true);
@@ -727,15 +719,13 @@ public:
         textMonitorAlignmentCombo_);
     addRow(textMonitorLayout, 3, QStringLiteral("Format"),
         textMonitorFormatCombo_);
-    addRow(textMonitorLayout, 4, QStringLiteral("Precision"),
-        textMonitorPrecisionEdit_);
-    addRow(textMonitorLayout, 5, QStringLiteral("Color Mode"),
+  addRow(textMonitorLayout, 4, QStringLiteral("Color Mode"),
         textMonitorColorModeCombo_);
-    addRow(textMonitorLayout, 6, QStringLiteral("Channel"),
+  addRow(textMonitorLayout, 5, QStringLiteral("Channel"),
         textMonitorChannelEdit_);
-    addRow(textMonitorLayout, 7, QStringLiteral("Channel Limits"),
+  addRow(textMonitorLayout, 6, QStringLiteral("Channel Limits"),
         textMonitorPvLimitsButton_);
-    textMonitorLayout->setRowStretch(8, 1);
+  textMonitorLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(textMonitorSection_);
 
     textEntrySection_ = new QWidget(entriesWidget_);
@@ -3988,19 +3978,6 @@ public:
           textMonitorFormatToIndex(format));
     }
 
-    if (textMonitorPrecisionEdit_) {
-      const int precision = textMonitorPrecisionGetter_
-              ? textMonitorPrecisionGetter_()
-              : -1;
-      const QSignalBlocker blocker(textMonitorPrecisionEdit_);
-      if (precision < 0) {
-        textMonitorPrecisionEdit_->clear();
-      } else {
-        textMonitorPrecisionEdit_->setText(QString::number(precision));
-      }
-      committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
-    }
-
     if (textMonitorColorModeCombo_) {
       const QSignalBlocker blocker(textMonitorColorModeCombo_);
       const TextColorMode mode = textMonitorColorModeGetter_
@@ -6539,7 +6516,6 @@ public:
     for (QLineEdit *edit : shellCommandEntryArgsEdits_) {
       resetLineEdit(edit);
     }
-    resetLineEdit(textMonitorPrecisionEdit_);
     resetLineEdit(textMonitorChannelEdit_);
     if (textMonitorPvLimitsButton_) {
       textMonitorPvLimitsButton_->setEnabled(false);
@@ -6908,7 +6884,7 @@ private:
             || edit == relatedDisplayLabelEdit_) {
           revertLineEdit(edit);
         }
-        if (edit == textMonitorPrecisionEdit_ || edit == textMonitorChannelEdit_
+        if (edit == textMonitorChannelEdit_
             || edit == meterChannelEdit_ || edit == sliderPrecisionEdit_
             || edit == sliderChannelEdit_) {
           revertLineEdit(edit);
@@ -8029,41 +8005,6 @@ private:
     committedTexts_[textEntryPrecisionEdit_] = textEntryPrecisionEdit_->text();
   }
 
-  void commitTextMonitorPrecision()
-  {
-    if (!textMonitorPrecisionEdit_) {
-      return;
-    }
-    if (!textMonitorPrecisionSetter_) {
-      revertLineEdit(textMonitorPrecisionEdit_);
-      return;
-    }
-    const QString raw = textMonitorPrecisionEdit_->text().trimmed();
-    if (raw.isEmpty()) {
-      textMonitorPrecisionSetter_(-1);
-      const QSignalBlocker blocker(textMonitorPrecisionEdit_);
-      textMonitorPrecisionEdit_->clear();
-      committedTexts_[textMonitorPrecisionEdit_] = QString();
-      return;
-    }
-    bool ok = false;
-    int value = raw.toInt(&ok);
-    if (!ok) {
-      revertLineEdit(textMonitorPrecisionEdit_);
-      return;
-    }
-    value = std::clamp(value, -1, 17);
-    textMonitorPrecisionSetter_(value);
-    const QSignalBlocker blocker(textMonitorPrecisionEdit_);
-    if (value < 0) {
-      textMonitorPrecisionEdit_->clear();
-    } else {
-      textMonitorPrecisionEdit_->setText(QString::number(value));
-    }
-    committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
-    updateTextMonitorLimitsFromDialog();
-  }
-
   void updateTextEntryPrecisionEdit()
   {
     if (!textEntryPrecisionEdit_) {
@@ -8113,25 +8054,8 @@ private:
     committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
   }
 
-  void updateTextMonitorPrecisionField()
-  {
-    if (!textMonitorPrecisionEdit_) {
-      return;
-    }
-    const int precision = textMonitorPrecisionGetter_ ? textMonitorPrecisionGetter_()
-                                                     : -1;
-    const QSignalBlocker blocker(textMonitorPrecisionEdit_);
-    if (precision < 0) {
-      textMonitorPrecisionEdit_->clear();
-    } else {
-      textMonitorPrecisionEdit_->setText(QString::number(precision));
-    }
-    committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
-  }
-
   void updateTextMonitorLimitsFromDialog()
   {
-    updateTextMonitorPrecisionField();
     if (!pvLimitsDialog_) {
       return;
     }
@@ -9006,7 +8930,6 @@ private:
   QPushButton *textMonitorBackgroundButton_ = nullptr;
   QComboBox *textMonitorAlignmentCombo_ = nullptr;
   QComboBox *textMonitorFormatCombo_ = nullptr;
-  QLineEdit *textMonitorPrecisionEdit_ = nullptr;
   QComboBox *textMonitorColorModeCombo_ = nullptr;
   QLineEdit *textMonitorChannelEdit_ = nullptr;
   QPushButton *textMonitorPvLimitsButton_ = nullptr;
@@ -9352,9 +9275,6 @@ private:
     }
     if (messageButtonChannelEdit_) {
       committedTexts_[messageButtonChannelEdit_] = messageButtonChannelEdit_->text();
-    }
-    if (textMonitorPrecisionEdit_) {
-      committedTexts_[textMonitorPrecisionEdit_] = textMonitorPrecisionEdit_->text();
     }
     if (textMonitorChannelEdit_) {
       committedTexts_[textMonitorChannelEdit_] = textMonitorChannelEdit_->text();

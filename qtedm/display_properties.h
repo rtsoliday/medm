@@ -63,6 +63,13 @@ struct RelatedDisplayEntry
   RelatedDisplayMode mode = RelatedDisplayMode::kAdd;
 };
 
+struct ShellCommandEntry
+{
+  QString label;
+  QString command;
+  QString args;
+};
+
 enum class MeterLabel
 {
   kNone,
@@ -174,6 +181,7 @@ constexpr int kMinimumCartesianPlotWidth = 160;
 constexpr int kMinimumCartesianPlotHeight = 120;
 constexpr double kDefaultStripChartPeriod = 60.0;
 constexpr int kRelatedDisplayEntryCount = 16;
+constexpr int kShellCommandEntryCount = 16;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
 

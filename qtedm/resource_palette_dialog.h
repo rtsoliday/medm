@@ -1149,6 +1149,120 @@ public:
     messageButtonLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(messageButtonSection_);
 
+    shellCommandSection_ = new QWidget(entriesWidget_);
+    auto *shellCommandLayout = new QGridLayout(shellCommandSection_);
+    shellCommandLayout->setContentsMargins(0, 0, 0, 0);
+    shellCommandLayout->setHorizontalSpacing(12);
+    shellCommandLayout->setVerticalSpacing(6);
+
+    shellCommandForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(shellCommandForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(shellCommandForegroundButton_,
+              QStringLiteral("Shell Command Foreground"),
+              shellCommandForegroundSetter_);
+        });
+
+    shellCommandBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(shellCommandBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(shellCommandBackgroundButton_,
+              QStringLiteral("Shell Command Background"),
+              shellCommandBackgroundSetter_);
+        });
+
+    shellCommandLabelEdit_ = createLineEdit();
+    committedTexts_.insert(shellCommandLabelEdit_, shellCommandLabelEdit_->text());
+    shellCommandLabelEdit_->installEventFilter(this);
+    QObject::connect(shellCommandLabelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitShellCommandLabel(); });
+    QObject::connect(shellCommandLabelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitShellCommandLabel(); });
+
+    shellCommandEntriesWidget_ = new QWidget(shellCommandSection_);
+    auto *commandEntriesLayout = new QGridLayout(shellCommandEntriesWidget_);
+    commandEntriesLayout->setContentsMargins(0, 0, 0, 0);
+    commandEntriesLayout->setHorizontalSpacing(8);
+    commandEntriesLayout->setVerticalSpacing(4);
+
+    auto *shellEntryHeader = new QLabel(QStringLiteral("Entry"));
+    shellEntryHeader->setFont(labelFont_);
+    shellEntryHeader->setAlignment(Qt::AlignCenter);
+    commandEntriesLayout->addWidget(shellEntryHeader, 0, 0);
+
+    auto *shellLabelHeader = new QLabel(QStringLiteral("Label"));
+    shellLabelHeader->setFont(labelFont_);
+    shellLabelHeader->setAlignment(Qt::AlignCenter);
+    commandEntriesLayout->addWidget(shellLabelHeader, 0, 1);
+
+    auto *shellCommandHeader = new QLabel(QStringLiteral("Command"));
+    shellCommandHeader->setFont(labelFont_);
+    shellCommandHeader->setAlignment(Qt::AlignCenter);
+    commandEntriesLayout->addWidget(shellCommandHeader, 0, 2);
+
+    auto *shellArgsHeader = new QLabel(QStringLiteral("Arguments"));
+    shellArgsHeader->setFont(labelFont_);
+    shellArgsHeader->setAlignment(Qt::AlignCenter);
+    commandEntriesLayout->addWidget(shellArgsHeader, 0, 3);
+
+    for (int i = 0; i < kShellCommandEntryCount; ++i) {
+      auto *rowLabel = new QLabel(QStringLiteral("%1").arg(i + 1));
+      rowLabel->setFont(labelFont_);
+      rowLabel->setAlignment(Qt::AlignCenter);
+      commandEntriesLayout->addWidget(rowLabel, i + 1, 0);
+
+      shellCommandEntryLabelEdits_[i] = createLineEdit();
+      committedTexts_.insert(shellCommandEntryLabelEdits_[i],
+          shellCommandEntryLabelEdits_[i]->text());
+      shellCommandEntryLabelEdits_[i]->setMaximumWidth(160);
+      shellCommandEntryLabelEdits_[i]->installEventFilter(this);
+      QObject::connect(shellCommandEntryLabelEdits_[i], &QLineEdit::returnPressed,
+          this, [this, i]() { commitShellCommandEntryLabel(i); });
+      QObject::connect(shellCommandEntryLabelEdits_[i], &QLineEdit::editingFinished,
+          this, [this, i]() { commitShellCommandEntryLabel(i); });
+      commandEntriesLayout->addWidget(shellCommandEntryLabelEdits_[i], i + 1, 1);
+
+      shellCommandEntryCommandEdits_[i] = createLineEdit();
+      committedTexts_.insert(shellCommandEntryCommandEdits_[i],
+          shellCommandEntryCommandEdits_[i]->text());
+      shellCommandEntryCommandEdits_[i]->setMaximumWidth(200);
+      shellCommandEntryCommandEdits_[i]->installEventFilter(this);
+      QObject::connect(shellCommandEntryCommandEdits_[i], &QLineEdit::returnPressed,
+          this, [this, i]() { commitShellCommandEntryCommand(i); });
+      QObject::connect(shellCommandEntryCommandEdits_[i], &QLineEdit::editingFinished,
+          this, [this, i]() { commitShellCommandEntryCommand(i); });
+      commandEntriesLayout->addWidget(shellCommandEntryCommandEdits_[i], i + 1, 2);
+
+      shellCommandEntryArgsEdits_[i] = createLineEdit();
+      committedTexts_.insert(shellCommandEntryArgsEdits_[i],
+          shellCommandEntryArgsEdits_[i]->text());
+      shellCommandEntryArgsEdits_[i]->setMaximumWidth(200);
+      shellCommandEntryArgsEdits_[i]->installEventFilter(this);
+      QObject::connect(shellCommandEntryArgsEdits_[i], &QLineEdit::returnPressed,
+          this, [this, i]() { commitShellCommandEntryArgs(i); });
+      QObject::connect(shellCommandEntryArgsEdits_[i], &QLineEdit::editingFinished,
+          this, [this, i]() { commitShellCommandEntryArgs(i); });
+      commandEntriesLayout->addWidget(shellCommandEntryArgsEdits_[i], i + 1, 3);
+    }
+
+    commandEntriesLayout->setColumnStretch(1, 1);
+    commandEntriesLayout->setColumnStretch(2, 1);
+    commandEntriesLayout->setColumnStretch(3, 1);
+
+    int shellRow = 0;
+    addRow(shellCommandLayout, shellRow++, QStringLiteral("Foreground"),
+        shellCommandForegroundButton_);
+    addRow(shellCommandLayout, shellRow++, QStringLiteral("Background"),
+        shellCommandBackgroundButton_);
+    addRow(shellCommandLayout, shellRow++, QStringLiteral("Label"),
+        shellCommandLabelEdit_);
+    addRow(shellCommandLayout, shellRow++, QStringLiteral("Commands"),
+        shellCommandEntriesWidget_);
+    shellCommandLayout->setRowStretch(shellRow, 1);
+    entriesLayout->addWidget(shellCommandSection_);
+
     relatedDisplaySection_ = new QWidget(entriesWidget_);
     auto *relatedLayout = new QGridLayout(relatedDisplaySection_);
     relatedLayout->setContentsMargins(0, 0, 0, 0);
@@ -1203,30 +1317,30 @@ public:
     relatedEntriesLayout->setHorizontalSpacing(8);
     relatedEntriesLayout->setVerticalSpacing(4);
 
-    auto *displayHeader = new QLabel(QStringLiteral("Display"));
-    displayHeader->setFont(labelFont_);
-    displayHeader->setAlignment(Qt::AlignCenter);
-    relatedEntriesLayout->addWidget(displayHeader, 0, 0);
+    auto *relatedDisplayHeader = new QLabel(QStringLiteral("Display"));
+    relatedDisplayHeader->setFont(labelFont_);
+    relatedDisplayHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(relatedDisplayHeader, 0, 0);
 
-    auto *labelHeader = new QLabel(QStringLiteral("Label"));
-    labelHeader->setFont(labelFont_);
-    labelHeader->setAlignment(Qt::AlignCenter);
-    relatedEntriesLayout->addWidget(labelHeader, 0, 1);
+    auto *relatedLabelHeader = new QLabel(QStringLiteral("Label"));
+    relatedLabelHeader->setFont(labelFont_);
+    relatedLabelHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(relatedLabelHeader, 0, 1);
 
-    auto *nameHeader = new QLabel(QStringLiteral("Name"));
-    nameHeader->setFont(labelFont_);
-    nameHeader->setAlignment(Qt::AlignCenter);
-    relatedEntriesLayout->addWidget(nameHeader, 0, 2);
+    auto *relatedNameHeader = new QLabel(QStringLiteral("Name"));
+    relatedNameHeader->setFont(labelFont_);
+    relatedNameHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(relatedNameHeader, 0, 2);
 
-    auto *argsHeader = new QLabel(QStringLiteral("Args"));
-    argsHeader->setFont(labelFont_);
-    argsHeader->setAlignment(Qt::AlignCenter);
-    relatedEntriesLayout->addWidget(argsHeader, 0, 3);
+    auto *relatedArgsHeader = new QLabel(QStringLiteral("Args"));
+    relatedArgsHeader->setFont(labelFont_);
+    relatedArgsHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(relatedArgsHeader, 0, 3);
 
-    auto *modeHeader = new QLabel(QStringLiteral("Policy"));
-    modeHeader->setFont(labelFont_);
-    modeHeader->setAlignment(Qt::AlignCenter);
-    relatedEntriesLayout->addWidget(modeHeader, 0, 4);
+    auto *relatedModeHeader = new QLabel(QStringLiteral("Policy"));
+    relatedModeHeader->setFont(labelFont_);
+    relatedModeHeader->setAlignment(Qt::AlignCenter);
+    relatedEntriesLayout->addWidget(relatedModeHeader, 0, 4);
 
     for (int i = 0; i < kRelatedDisplayEntryCount; ++i) {
       auto *rowLabel = new QLabel(QStringLiteral("%1").arg(i + 1));
@@ -3139,6 +3253,124 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Message Button"));
+    }
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForShellCommand(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<QString()> labelGetter,
+      std::function<void(const QString &)> labelSetter,
+      std::array<std::function<QString()>, kShellCommandEntryCount> entryLabelGetters,
+      std::array<std::function<void(const QString &)>, kShellCommandEntryCount> entryLabelSetters,
+      std::array<std::function<QString()>, kShellCommandEntryCount> entryCommandGetters,
+      std::array<std::function<void(const QString &)>, kShellCommandEntryCount> entryCommandSetters,
+      std::array<std::function<QString()>, kShellCommandEntryCount> entryArgsGetters,
+      std::array<std::function<void(const QString &)>, kShellCommandEntryCount> entryArgsSetters)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kShellCommand;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    shellCommandForegroundGetter_ = std::move(foregroundGetter);
+    shellCommandForegroundSetter_ = std::move(foregroundSetter);
+    shellCommandBackgroundGetter_ = std::move(backgroundGetter);
+    shellCommandBackgroundSetter_ = std::move(backgroundSetter);
+    shellCommandLabelGetter_ = std::move(labelGetter);
+    shellCommandLabelSetter_ = std::move(labelSetter);
+    shellCommandEntryLabelGetters_ = std::move(entryLabelGetters);
+    shellCommandEntryLabelSetters_ = std::move(entryLabelSetters);
+    shellCommandEntryCommandGetters_ = std::move(entryCommandGetters);
+    shellCommandEntryCommandSetters_ = std::move(entryCommandSetters);
+    shellCommandEntryArgsGetters_ = std::move(entryArgsGetters);
+    shellCommandEntryArgsSetters_ = std::move(entryArgsSetters);
+
+    QRect commandGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (commandGeometry.width() <= 0) {
+      commandGeometry.setWidth(kMinimumTextWidth);
+    }
+    if (commandGeometry.height() <= 0) {
+      commandGeometry.setHeight(kMinimumTextHeight);
+    }
+    lastCommittedGeometry_ = commandGeometry;
+
+    updateGeometryEdits(commandGeometry);
+
+    if (shellCommandForegroundButton_) {
+      const QColor color = shellCommandForegroundGetter_
+              ? shellCommandForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(shellCommandForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+      shellCommandForegroundButton_->setEnabled(
+          static_cast<bool>(shellCommandForegroundSetter_));
+    }
+
+    if (shellCommandBackgroundButton_) {
+      const QColor color = shellCommandBackgroundGetter_
+              ? shellCommandBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(shellCommandBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+      shellCommandBackgroundButton_->setEnabled(
+          static_cast<bool>(shellCommandBackgroundSetter_));
+    }
+
+    if (shellCommandLabelEdit_) {
+      const QString text = shellCommandLabelGetter_ ? shellCommandLabelGetter_() : QString();
+      const QSignalBlocker blocker(shellCommandLabelEdit_);
+      shellCommandLabelEdit_->setText(text);
+      shellCommandLabelEdit_->setEnabled(static_cast<bool>(shellCommandLabelSetter_));
+      committedTexts_[shellCommandLabelEdit_] = text;
+    }
+
+    for (int i = 0; i < kShellCommandEntryCount; ++i) {
+      QLineEdit *labelEdit = shellCommandEntryLabelEdits_[i];
+      if (labelEdit) {
+        const QSignalBlocker blocker(labelEdit);
+        const QString value = shellCommandEntryLabelGetters_[i]
+                                  ? shellCommandEntryLabelGetters_[i]()
+                                  : QString();
+        labelEdit->setText(value);
+        labelEdit->setEnabled(static_cast<bool>(shellCommandEntryLabelSetters_[i]));
+        committedTexts_[labelEdit] = value;
+      }
+
+      QLineEdit *commandEdit = shellCommandEntryCommandEdits_[i];
+      if (commandEdit) {
+        const QSignalBlocker blocker(commandEdit);
+        const QString value = shellCommandEntryCommandGetters_[i]
+                                  ? shellCommandEntryCommandGetters_[i]()
+                                  : QString();
+        commandEdit->setText(value);
+        commandEdit->setEnabled(static_cast<bool>(shellCommandEntryCommandSetters_[i]));
+        committedTexts_[commandEdit] = value;
+      }
+
+      QLineEdit *argsEdit = shellCommandEntryArgsEdits_[i];
+      if (argsEdit) {
+        const QSignalBlocker blocker(argsEdit);
+        const QString value = shellCommandEntryArgsGetters_[i]
+                                  ? shellCommandEntryArgsGetters_[i]()
+                                  : QString();
+        argsEdit->setText(value);
+        argsEdit->setEnabled(static_cast<bool>(shellCommandEntryArgsSetters_[i]));
+        committedTexts_[argsEdit] = value;
+      }
+    }
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Shell Command"));
     }
 
     show();
@@ -5604,6 +5836,66 @@ public:
       messageButtonChannelEdit_->clear();
       committedTexts_[messageButtonChannelEdit_] = messageButtonChannelEdit_->text();
     }
+    shellCommandForegroundGetter_ = {};
+    shellCommandForegroundSetter_ = {};
+    shellCommandBackgroundGetter_ = {};
+    shellCommandBackgroundSetter_ = {};
+    shellCommandLabelGetter_ = {};
+    shellCommandLabelSetter_ = {};
+    for (auto &getter : shellCommandEntryLabelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : shellCommandEntryLabelSetters_) {
+      setter = {};
+    }
+    for (auto &getter : shellCommandEntryCommandGetters_) {
+      getter = {};
+    }
+    for (auto &setter : shellCommandEntryCommandSetters_) {
+      setter = {};
+    }
+    for (auto &getter : shellCommandEntryArgsGetters_) {
+      getter = {};
+    }
+    for (auto &setter : shellCommandEntryArgsSetters_) {
+      setter = {};
+    }
+    if (shellCommandForegroundButton_) {
+      shellCommandForegroundButton_->setEnabled(false);
+    }
+    if (shellCommandBackgroundButton_) {
+      shellCommandBackgroundButton_->setEnabled(false);
+    }
+    if (shellCommandLabelEdit_) {
+      const QSignalBlocker blocker(shellCommandLabelEdit_);
+      shellCommandLabelEdit_->clear();
+      shellCommandLabelEdit_->setEnabled(false);
+      committedTexts_[shellCommandLabelEdit_] = shellCommandLabelEdit_->text();
+    }
+    for (QLineEdit *edit : shellCommandEntryLabelEdits_) {
+      if (edit) {
+        const QSignalBlocker blocker(edit);
+        edit->clear();
+        edit->setEnabled(false);
+        committedTexts_[edit] = edit->text();
+      }
+    }
+    for (QLineEdit *edit : shellCommandEntryCommandEdits_) {
+      if (edit) {
+        const QSignalBlocker blocker(edit);
+        edit->clear();
+        edit->setEnabled(false);
+        committedTexts_[edit] = edit->text();
+      }
+    }
+    for (QLineEdit *edit : shellCommandEntryArgsEdits_) {
+      if (edit) {
+        const QSignalBlocker blocker(edit);
+        edit->clear();
+        edit->setEnabled(false);
+        committedTexts_[edit] = edit->text();
+      }
+    }
     relatedDisplayForegroundGetter_ = {};
     relatedDisplayForegroundSetter_ = {};
     relatedDisplayBackgroundGetter_ = {};
@@ -5986,6 +6278,16 @@ public:
     resetLineEdit(messageButtonPressEdit_);
     resetLineEdit(messageButtonReleaseEdit_);
     resetLineEdit(messageButtonChannelEdit_);
+    resetLineEdit(shellCommandLabelEdit_);
+    for (QLineEdit *edit : shellCommandEntryLabelEdits_) {
+      resetLineEdit(edit);
+    }
+    for (QLineEdit *edit : shellCommandEntryCommandEdits_) {
+      resetLineEdit(edit);
+    }
+    for (QLineEdit *edit : shellCommandEntryArgsEdits_) {
+      resetLineEdit(edit);
+    }
     resetLineEdit(textMonitorPrecisionEdit_);
     resetLineEdit(textMonitorChannelEdit_);
     if (textMonitorPvLimitsButton_) {
@@ -6044,6 +6346,8 @@ public:
     resetColorButton(menuBackgroundButton_);
     resetColorButton(messageButtonForegroundButton_);
     resetColorButton(messageButtonBackgroundButton_);
+    resetColorButton(shellCommandForegroundButton_);
+    resetColorButton(shellCommandBackgroundButton_);
     resetColorButton(meterForegroundButton_);
     resetColorButton(meterBackgroundButton_);
     resetColorButton(barForegroundButton_);
@@ -6246,6 +6550,7 @@ private:
     kChoiceButton,
     kMenu,
     kMessageButton,
+    kShellCommand,
     kRelatedDisplay,
     kTextMonitor,
     kMeter,
@@ -6471,6 +6776,11 @@ private:
       const bool messageVisible = kind == SelectionKind::kMessageButton;
       messageButtonSection_->setVisible(messageVisible);
       messageButtonSection_->setEnabled(messageVisible);
+    }
+    if (shellCommandSection_) {
+      const bool shellVisible = kind == SelectionKind::kShellCommand;
+      shellCommandSection_->setVisible(shellVisible);
+      shellCommandSection_->setEnabled(shellVisible);
     }
     if (relatedDisplaySection_) {
       const bool relatedVisible = kind == SelectionKind::kRelatedDisplay;
@@ -6703,6 +7013,74 @@ private:
     const QString value = messageButtonChannelEdit_->text();
     messageButtonChannelSetter_(value);
     committedTexts_[messageButtonChannelEdit_] = value;
+  }
+
+  void commitShellCommandLabel()
+  {
+    if (!shellCommandLabelEdit_) {
+      return;
+    }
+    if (!shellCommandLabelSetter_) {
+      revertLineEdit(shellCommandLabelEdit_);
+      return;
+    }
+    const QString value = shellCommandLabelEdit_->text();
+    shellCommandLabelSetter_(value);
+    committedTexts_[shellCommandLabelEdit_] = value;
+  }
+
+  void commitShellCommandEntryLabel(int index)
+  {
+    if (index < 0 || index >= kShellCommandEntryCount) {
+      return;
+    }
+    QLineEdit *edit = shellCommandEntryLabelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!shellCommandEntryLabelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    shellCommandEntryLabelSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitShellCommandEntryCommand(int index)
+  {
+    if (index < 0 || index >= kShellCommandEntryCount) {
+      return;
+    }
+    QLineEdit *edit = shellCommandEntryCommandEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!shellCommandEntryCommandSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    shellCommandEntryCommandSetters_[index](value);
+    committedTexts_[edit] = value;
+  }
+
+  void commitShellCommandEntryArgs(int index)
+  {
+    if (index < 0 || index >= kShellCommandEntryCount) {
+      return;
+    }
+    QLineEdit *edit = shellCommandEntryArgsEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!shellCommandEntryArgsSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    shellCommandEntryArgsSetters_[index](value);
+    committedTexts_[edit] = value;
   }
 
   void commitRelatedDisplayLabel()
@@ -8330,6 +8708,14 @@ private:
   QLineEdit *messageButtonPressEdit_ = nullptr;
   QLineEdit *messageButtonReleaseEdit_ = nullptr;
   QLineEdit *messageButtonChannelEdit_ = nullptr;
+  QWidget *shellCommandSection_ = nullptr;
+  QPushButton *shellCommandForegroundButton_ = nullptr;
+  QPushButton *shellCommandBackgroundButton_ = nullptr;
+  QLineEdit *shellCommandLabelEdit_ = nullptr;
+  QWidget *shellCommandEntriesWidget_ = nullptr;
+  std::array<QLineEdit *, kShellCommandEntryCount> shellCommandEntryLabelEdits_{};
+  std::array<QLineEdit *, kShellCommandEntryCount> shellCommandEntryCommandEdits_{};
+  std::array<QLineEdit *, kShellCommandEntryCount> shellCommandEntryArgsEdits_{};
   QWidget *relatedDisplaySection_ = nullptr;
   QPushButton *relatedDisplayForegroundButton_ = nullptr;
   QPushButton *relatedDisplayBackgroundButton_ = nullptr;
@@ -8832,6 +9218,18 @@ private:
   std::function<void(const QString &)> messageButtonReleaseSetter_;
   std::function<QString()> messageButtonChannelGetter_;
   std::function<void(const QString &)> messageButtonChannelSetter_;
+  std::function<QColor()> shellCommandForegroundGetter_;
+  std::function<void(const QColor &)> shellCommandForegroundSetter_;
+  std::function<QColor()> shellCommandBackgroundGetter_;
+  std::function<void(const QColor &)> shellCommandBackgroundSetter_;
+  std::function<QString()> shellCommandLabelGetter_;
+  std::function<void(const QString &)> shellCommandLabelSetter_;
+  std::array<std::function<QString()>, kShellCommandEntryCount> shellCommandEntryLabelGetters_{};
+  std::array<std::function<void(const QString &)>, kShellCommandEntryCount> shellCommandEntryLabelSetters_{};
+  std::array<std::function<QString()>, kShellCommandEntryCount> shellCommandEntryCommandGetters_{};
+  std::array<std::function<void(const QString &)>, kShellCommandEntryCount> shellCommandEntryCommandSetters_{};
+  std::array<std::function<QString()>, kShellCommandEntryCount> shellCommandEntryArgsGetters_{};
+  std::array<std::function<void(const QString &)>, kShellCommandEntryCount> shellCommandEntryArgsSetters_{};
   std::function<QColor()> relatedDisplayForegroundGetter_;
   std::function<void(const QColor &)> relatedDisplayForegroundSetter_;
   std::function<QColor()> relatedDisplayBackgroundGetter_;

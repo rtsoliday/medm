@@ -253,6 +253,7 @@ protected:
             || state->createTool == CreateTool::kChoiceButton
             || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMessageButton
+            || state->createTool == CreateTool::kShellCommand
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
@@ -314,6 +315,12 @@ protected:
           if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
             selectMessageButtonElement(message);
             showResourcePaletteForMessageButton(message);
+            event->accept();
+            return;
+          }
+          if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+            selectShellCommandElement(shell);
+            showResourcePaletteForShellCommand(shell);
             event->accept();
             return;
           }
@@ -560,6 +567,8 @@ private:
   MenuElement *selectedMenuElement_ = nullptr;
   QList<MessageButtonElement *> messageButtonElements_;
   MessageButtonElement *selectedMessageButtonElement_ = nullptr;
+  QList<ShellCommandElement *> shellCommandElements_;
+  ShellCommandElement *selectedShellCommandElement_ = nullptr;
   QList<RelatedDisplayElement *> relatedDisplayElements_;
   RelatedDisplayElement *selectedRelatedDisplayElement_ = nullptr;
   QList<TextMonitorElement *> textMonitorElements_;
@@ -674,6 +683,15 @@ private:
     }
     selectedMessageButtonElement_->setSelected(false);
     selectedMessageButtonElement_ = nullptr;
+  }
+
+  void clearShellCommandSelection()
+  {
+    if (!selectedShellCommandElement_) {
+      return;
+    }
+    selectedShellCommandElement_->setSelected(false);
+    selectedShellCommandElement_ = nullptr;
   }
 
   void clearRelatedDisplaySelection()
@@ -820,6 +838,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -854,6 +873,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -1407,6 +1427,74 @@ private:
           element->setChannel(channel);
           markDirty();
         });
+  }
+
+  void showResourcePaletteForShellCommand(ShellCommandElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    std::array<std::function<QString()>, kShellCommandEntryCount> entryLabelGetters{};
+    std::array<std::function<void(const QString &)>, kShellCommandEntryCount> entryLabelSetters{};
+    std::array<std::function<QString()>, kShellCommandEntryCount> entryCommandGetters{};
+    std::array<std::function<void(const QString &)>, kShellCommandEntryCount> entryCommandSetters{};
+    std::array<std::function<QString()>, kShellCommandEntryCount> entryArgsGetters{};
+    std::array<std::function<void(const QString &)>, kShellCommandEntryCount> entryArgsSetters{};
+
+    for (int i = 0; i < kShellCommandEntryCount; ++i) {
+      entryLabelGetters[i] = [element, i]() { return element->entryLabel(i); };
+      entryLabelSetters[i] = [this, element, i](const QString &value) {
+        element->setEntryLabel(i, value);
+        markDirty();
+      };
+      entryCommandGetters[i] = [element, i]() { return element->entryCommand(i); };
+      entryCommandSetters[i] = [this, element, i](const QString &value) {
+        element->setEntryCommand(i, value);
+        markDirty();
+      };
+      entryArgsGetters[i] = [element, i]() { return element->entryArgs(i); };
+      entryArgsSetters[i] = [this, element, i](const QString &value) {
+        element->setEntryArgs(i, value);
+        markDirty();
+      };
+    }
+
+    dialog->showForShellCommand(
+        [element]() { return element->geometry(); },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth) {
+            adjusted.setWidth(kMinimumTextWidth);
+          }
+          if (adjusted.height() < kMinimumTextHeight) {
+            adjusted.setHeight(kMinimumTextHeight);
+          }
+          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        [element]() { return element->foregroundColor(); },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->backgroundColor(); },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->label(); },
+        [this, element](const QString &text) {
+          element->setLabel(text);
+          markDirty();
+        },
+        std::move(entryLabelGetters), std::move(entryLabelSetters),
+        std::move(entryCommandGetters), std::move(entryCommandSetters),
+        std::move(entryArgsGetters), std::move(entryArgsSetters));
   }
 
   void showResourcePaletteForRelatedDisplay(RelatedDisplayElement *element)
@@ -2896,6 +2984,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -2930,6 +3019,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -2965,6 +3055,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3000,6 +3091,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3035,6 +3127,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3070,6 +3163,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3090,6 +3184,42 @@ private:
     bringElementToFront(element);
   }
 
+  void selectShellCommandElement(ShellCommandElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedShellCommandElement_) {
+      selectedShellCommandElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    selectedShellCommandElement_ = element;
+    selectedShellCommandElement_->setSelected(true);
+    bringElementToFront(element);
+  }
+
   void selectRelatedDisplayElement(RelatedDisplayElement *element)
   {
     if (!element) {
@@ -3105,6 +3235,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3140,6 +3271,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
@@ -3174,6 +3306,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearScaleMonitorSelection();
@@ -3208,6 +3341,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3243,6 +3377,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3278,6 +3413,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3313,6 +3449,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3348,6 +3485,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3383,6 +3521,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3416,6 +3555,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3450,6 +3590,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3483,6 +3624,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3517,6 +3659,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3551,6 +3694,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3585,6 +3729,7 @@ private:
     clearChoiceButtonSelection();
     clearMenuSelection();
     clearMessageButtonSelection();
+    clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearMeterSelection();
@@ -3711,6 +3856,16 @@ private:
       }
       rect = adjustRectToDisplayArea(rect);
       createMessageButtonElement(rect);
+      break;
+    case CreateTool::kShellCommand:
+      if (rect.width() < kMinimumTextWidth) {
+        rect.setWidth(kMinimumTextWidth);
+      }
+      if (rect.height() < kMinimumTextHeight) {
+        rect.setHeight(kMinimumTextHeight);
+      }
+      rect = adjustRectToDisplayArea(rect);
+      createShellCommandElement(rect);
       break;
     case CreateTool::kMeter:
       if (rect.width() < kMinimumMeterSize) {
@@ -4269,6 +4424,34 @@ private:
     markDirty();
   }
 
+  void createShellCommandElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth) {
+      target.setWidth(kMinimumTextWidth);
+    }
+    if (target.height() < kMinimumTextHeight) {
+      target.setHeight(kMinimumTextHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new ShellCommandElement(displayArea_);
+    element->setFont(font());
+    element->setGeometry(target);
+    element->setLabel(QStringLiteral("Shell Command"));
+    element->show();
+    shellCommandElements_.append(element);
+    selectShellCommandElement(element);
+    showResourcePaletteForShellCommand(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createRelatedDisplayElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -4639,6 +4822,7 @@ private:
             || state->createTool == CreateTool::kChoiceButton
             || state->createTool == CreateTool::kMenu
             || state->createTool == CreateTool::kMessageButton
+            || state->createTool == CreateTool::kShellCommand
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kByteMonitor
@@ -4899,7 +5083,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
-    addMenuAction(controllersMenu, QStringLiteral("Shell Command"));
+    auto *shellCommandAction =
+        addMenuAction(controllersMenu, QStringLiteral("Shell Command"));
+    QObject::connect(shellCommandAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kShellCommand);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     addMenuAction(controllersMenu, QStringLiteral("Wheel Switch"));
 
     addMenuAction(&menu, QStringLiteral("Undo"));
@@ -5314,6 +5505,55 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("release_msg=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(release)));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("\"shell command\" {"));
+      AdlWriter::writeObjectSection(stream, 1, shell->geometry());
+      for (int i = 0; i < shell->entryCount(); ++i) {
+        const QString entryLabel = shell->entryLabel(i);
+        const QString entryCommand = shell->entryCommand(i);
+        const QString entryArgs = shell->entryArgs(i);
+        const bool labelEmpty = entryLabel.trimmed().isEmpty();
+        const bool commandEmpty = entryCommand.trimmed().isEmpty();
+        const bool argsEmpty = entryArgs.trimmed().isEmpty();
+        if (labelEmpty && commandEmpty && argsEmpty) {
+          continue;
+        }
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("command[%1] {").arg(i));
+        if (!labelEmpty) {
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("label=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(entryLabel)));
+        }
+        if (!commandEmpty) {
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("name=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(entryCommand)));
+        }
+        if (!argsEmpty) {
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("args=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(entryArgs)));
+        }
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      }
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("clr=%1")
+              .arg(AdlWriter::medmColorIndex(shell->foregroundColor())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("bclr=%1")
+              .arg(AdlWriter::medmColorIndex(shell->backgroundColor())));
+      const QString shellLabel = shell->label();
+      if (!shellLabel.trimmed().isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(shellLabel)));
       }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;

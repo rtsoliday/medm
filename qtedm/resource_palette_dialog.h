@@ -9879,6 +9879,7 @@ private:
         || !textEntryPrecisionDefaultGetter_
         || !textEntryPrecisionDefaultSetter_) {
       dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
       dialog->show();
       dialog->raise();
       dialog->activateWindow();
@@ -9890,6 +9891,7 @@ private:
         textEntryPrecisionSourceSetter_, textEntryPrecisionDefaultGetter_,
         textEntryPrecisionDefaultSetter_,
         [this]() { updateTextEntryLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
     dialog->showForTextMonitor();
   }
 
@@ -9901,6 +9903,7 @@ private:
     }
     if (!textMonitorPrecisionSourceGetter_) {
       dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
       dialog->show();
       dialog->raise();
       dialog->activateWindow();
@@ -9914,6 +9917,7 @@ private:
         textMonitorPrecisionDefaultGetter_,
         textMonitorPrecisionDefaultSetter_,
         [this]() { updateTextMonitorLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
     dialog->showForTextMonitor();
   }
 
@@ -9925,6 +9929,7 @@ private:
     }
     if (!meterLimitsGetter_ || !meterLimitsSetter_) {
       dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
       dialog->show();
       dialog->raise();
       dialog->activateWindow();
@@ -9934,6 +9939,7 @@ private:
                                                      : QString();
     dialog->setMeterCallbacks(channelLabel, meterLimitsGetter_,
         meterLimitsSetter_, [this]() { updateMeterLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
     dialog->showForMeter();
   }
 
@@ -9945,6 +9951,7 @@ private:
     }
     if (!sliderLimitsGetter_ || !sliderLimitsSetter_) {
       dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
       dialog->show();
       dialog->raise();
       dialog->activateWindow();
@@ -9954,6 +9961,7 @@ private:
                                                       : QString();
     dialog->setSliderCallbacks(channelLabel, sliderLimitsGetter_,
         sliderLimitsSetter_, [this]() { updateSliderLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
     dialog->showForSlider();
   }
 
@@ -9965,6 +9973,7 @@ private:
     }
     if (!wheelSwitchLimitsGetter_ || !wheelSwitchLimitsSetter_) {
       dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
       dialog->show();
       dialog->raise();
       dialog->activateWindow();
@@ -9974,6 +9983,7 @@ private:
                                                            : QString();
     dialog->setWheelSwitchCallbacks(channelLabel, wheelSwitchLimitsGetter_,
         wheelSwitchLimitsSetter_, [this]() { updateWheelSwitchLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
     dialog->showForWheelSwitch();
   }
 
@@ -9985,6 +9995,7 @@ private:
     }
     if (!barLimitsGetter_ || !barLimitsSetter_) {
       dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
       dialog->show();
       dialog->raise();
       dialog->activateWindow();
@@ -9994,6 +10005,7 @@ private:
                                                    : QString();
     dialog->setBarCallbacks(channelLabel, barLimitsGetter_, barLimitsSetter_,
         [this]() { updateBarLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
     dialog->showForBarMonitor();
   }
 
@@ -10005,6 +10017,7 @@ private:
     }
     if (!scaleLimitsGetter_ || !scaleLimitsSetter_) {
       dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
       dialog->show();
       dialog->raise();
       dialog->activateWindow();
@@ -10014,7 +10027,68 @@ private:
                                                      : QString();
     dialog->setScaleCallbacks(channelLabel, scaleLimitsGetter_,
         scaleLimitsSetter_, [this]() { updateScaleLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
     dialog->showForScaleMonitor();
+  }
+
+  void positionPvLimitsDialog(PvLimitsDialog *dialog)
+  {
+    if (!dialog) {
+      return;
+    }
+    dialog->adjustSize();
+    const QRect paletteFrame = frameGeometry();
+
+    QRect availableRect;
+    if (QScreen *paletteScreen = screen()) {
+      availableRect = paletteScreen->availableGeometry();
+    } else if (QScreen *screenAtPalette = QGuiApplication::screenAt(paletteFrame.center())) {
+      availableRect = screenAtPalette->availableGeometry();
+    } else {
+      const auto screens = QGuiApplication::screens();
+      if (!screens.isEmpty()) {
+        availableRect = screens.front()->availableGeometry();
+      }
+    }
+    if (!availableRect.isValid() || availableRect.isNull()) {
+      availableRect = QRect(paletteFrame.topLeft(), paletteFrame.size());
+    }
+
+    const QSize dialogSize = dialog->size();
+    const int dialogWidth = dialogSize.width();
+    const int dialogHeight = dialogSize.height();
+
+    const int availableLeft = availableRect.left();
+    const int availableTop = availableRect.top();
+    const int availableRight = availableRect.right();
+    const int availableBottom = availableRect.bottom();
+
+    int maxY = availableBottom - dialogHeight + 1;
+    if (maxY < availableTop) {
+      maxY = availableTop;
+    }
+    int targetY = std::clamp(paletteFrame.top(), availableTop, maxY);
+
+    QPoint rightTop(paletteFrame.right() + 1, targetY);
+    QRect rightRect(rightTop, dialogSize);
+    if (availableRect.contains(rightRect)) {
+      dialog->move(rightRect.topLeft());
+      return;
+    }
+
+    int maxLeft = availableRight - dialogWidth + 1;
+    if (maxLeft < availableLeft) {
+      maxLeft = availableLeft;
+    }
+    int leftX = std::clamp(paletteFrame.left() - dialogWidth, availableLeft, maxLeft);
+    QPoint leftTop(leftX, targetY);
+    QRect leftRect(leftTop, dialogSize);
+    if (!availableRect.contains(leftRect)) {
+      leftX = std::clamp(leftX, availableLeft, maxLeft);
+      leftTop.setX(leftX);
+      leftRect.moveTo(leftTop);
+    }
+    dialog->move(leftRect.topLeft());
   }
 
   QColor colorFromButton(const QPushButton *button) const

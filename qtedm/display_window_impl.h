@@ -7456,12 +7456,20 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("rectangle {"));
       AdlWriter::writeObjectSection(stream, 1, rectangle->geometry());
-      AdlWriter::writeBasicAttributeSection(stream, 1,
-          AdlWriter::medmColorIndex(rectangle->color()), rectangle->lineStyle(),
-          rectangle->fill(), rectangle->lineWidth());
+    AdlWriter::writeBasicAttributeSection(stream, 1,
+      AdlWriter::medmColorIndex(rectangle->color()), rectangle->lineStyle(),
+      rectangle->fill(), rectangle->lineWidth(), true);
+  const auto rawChannels = AdlWriter::collectChannels(rectangle);
+  std::array<QString, 5> rectangleChannels{};
+  // MEDM stores rectangle channels as chan, chanB, chanC, chanD.
+  // Shift the internal ordering to drop chanA when writing.
+      rectangleChannels[0] = rawChannels[0];
+      rectangleChannels[2] = rawChannels[1];
+      rectangleChannels[3] = rawChannels[2];
+      rectangleChannels[4] = rawChannels[3];
       AdlWriter::writeDynamicAttributeSection(stream, 1, rectangle->colorMode(),
           rectangle->visibilityMode(), rectangle->visibilityCalc(),
-          AdlWriter::collectChannels(rectangle));
+          rectangleChannels);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

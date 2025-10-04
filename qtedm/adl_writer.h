@@ -39,7 +39,8 @@ int medmLineWidthValue(int width);
 int medmColorIndex(const QColor &color);
 void writeObjectSection(QTextStream &stream, int level, const QRect &rect);
 void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
-    RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth);
+    RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth,
+    bool writeWidthForSingleLine = false);
 void writeDynamicAttributeSection(QTextStream &stream, int level,
     TextColorMode colorMode, TextVisibilityMode visibilityMode,
     const QString &calc, const std::array<QString, 5> &channels);

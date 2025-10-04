@@ -331,7 +331,8 @@ void writeObjectSection(QTextStream &stream, int level, const QRect &rect)
 }
 
 void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
-    RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth)
+    RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth,
+    bool writeWidthForSingleLine)
 {
   writeIndentedLine(stream, level, QStringLiteral("\"basic attribute\" {"));
   writeIndentedLine(stream, level + 1,
@@ -344,10 +345,17 @@ void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
     writeIndentedLine(stream, level + 1,
         QStringLiteral("fill=\"%1\"").arg(fillString(fill)));
   }
-  const int medmWidth = medmLineWidthValue(lineWidth);
-  if (medmWidth > 0) {
-    writeIndentedLine(stream, level + 1,
-        QStringLiteral("width=%1").arg(medmWidth));
+  if (writeWidthForSingleLine) {
+    if (lineWidth >= 1) {
+      writeIndentedLine(stream, level + 1,
+          QStringLiteral("width=%1").arg(lineWidth));
+    }
+  } else {
+    const int medmWidth = medmLineWidthValue(lineWidth);
+    if (medmWidth > 0) {
+      writeIndentedLine(stream, level + 1,
+          QStringLiteral("width=%1").arg(medmWidth));
+    }
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }

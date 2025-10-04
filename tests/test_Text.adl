@@ -100,7 +100,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 6"
 	align="horiz. centered"
 }
 text {
@@ -118,7 +118,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 7"
 	align="horiz. centered"
 }
 text {
@@ -136,7 +136,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 8"
 	align="horiz. right"
 }
 text {
@@ -154,7 +154,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 9"
 	align="horiz. left"
 }
 text {
@@ -172,7 +172,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 10"
 	align="horiz. right"
 }
 text {
@@ -189,7 +189,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 11"
 	align="horiz. right"
 }
 text {
@@ -207,7 +207,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 12"
 	align="horiz. right"
 }
 text {
@@ -224,7 +224,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 13"
 	align="horiz. left"
 }
 text {
@@ -241,7 +241,7 @@ text {
 		clr="alarm"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 14"
 	align="horiz. centered"
 }
 text {
@@ -259,7 +259,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 15"
 	align="horiz. centered"
 }
 text {
@@ -277,7 +277,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 16"
 	align="horiz. left"
 }
 text {
@@ -295,7 +295,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 17"
 	align="horiz. right"
 }
 text {
@@ -312,7 +312,7 @@ text {
 		clr="alarm"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 18"
 	align="horiz. right"
 }
 text {
@@ -330,7 +330,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 19"
 	align="horiz. right"
 }
 text {
@@ -348,7 +348,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 20"
 	align="horiz. centered"
 }
 text {
@@ -365,7 +365,7 @@ text {
 		clr="static"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 21"
 	align="horiz. left"
 }
 text {
@@ -383,7 +383,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 22"
 	align="horiz. centered"
 }
 text {
@@ -401,7 +401,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 23"
 	align="horiz. right"
 }
 text {
@@ -418,7 +418,7 @@ text {
 		clr="alarm"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 24"
 	align="horiz. left"
 }
 text {
@@ -436,7 +436,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 25"
 	align="horiz. left"
 }
 text {
@@ -453,7 +453,7 @@ text {
 		clr="alarm"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 26"
 	align="horiz. centered"
 }
 text {
@@ -471,7 +471,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 27"
 	align="horiz. left"
 }
 text {
@@ -488,7 +488,7 @@ text {
 		clr="static"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 28"
 	align="horiz. centered"
 }
 text {
@@ -506,7 +506,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 29"
 	align="horiz. right"
 }
 text {
@@ -524,7 +524,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 30"
 	align="horiz. right"
 }
 text {
@@ -542,7 +542,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 31"
 	align="horiz. left"
 }
 text {
@@ -560,7 +560,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 32"
 	align="horiz. right"
 }
 text {
@@ -577,7 +577,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 33"
 	align="horiz. right"
 }
 text {
@@ -595,7 +595,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 34"
 	align="horiz. left"
 }
 text {
@@ -613,7 +613,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 35"
 	align="horiz. centered"
 }
 text {
@@ -631,7 +631,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 36"
 	align="horiz. left"
 }
 text {
@@ -648,7 +648,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 37"
 	align="horiz. left"
 }
 text {
@@ -666,7 +666,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 38"
 	align="horiz. left"
 }
 text {
@@ -683,7 +683,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 39"
 	align="horiz. left"
 }
 text {
@@ -700,7 +700,7 @@ text {
 		clr="alarm"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 40"
 	align="horiz. right"
 }
 text {
@@ -718,7 +718,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 41"
 	align="horiz. centered"
 }
 text {
@@ -736,7 +736,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 42"
 	align="horiz. left"
 }
 text {
@@ -754,7 +754,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 43"
 	align="horiz. left"
 }
 text {
@@ -772,7 +772,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 44"
 	align="horiz. right"
 }
 text {
@@ -790,7 +790,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 45"
 	align="horiz. centered"
 }
 text {
@@ -808,7 +808,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 46"
 	align="horiz. left"
 }
 text {
@@ -826,7 +826,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 47"
 	align="horiz. left"
 }
 text {
@@ -844,7 +844,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 48"
 	align="horiz. left"
 }
 text {
@@ -862,7 +862,7 @@ text {
 		vis="if not zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 49"
 	align="horiz. right"
 }
 text {
@@ -879,7 +879,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 50"
 	align="horiz. right"
 }
 text {
@@ -897,7 +897,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 51"
 	align="horiz. centered"
 }
 text {
@@ -914,7 +914,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 52"
 	align="horiz. right"
 }
 text {
@@ -932,7 +932,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 53"
 	align="horiz. left"
 }
 text {
@@ -949,7 +949,7 @@ text {
 		clr="discrete"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 54"
 	align="horiz. right"
 }
 text {
@@ -967,7 +967,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 55"
 	align="horiz. right"
 }
 text {
@@ -985,7 +985,7 @@ text {
 		vis="if zero"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 56"
 	align="horiz. centered"
 }
 text {
@@ -1003,7 +1003,7 @@ text {
 		vis="calc"
 		calc="visibility.pv"
 	}
-	textix="Example Text"
+	textix="Example Text Height 57"
 	align="horiz. right"
 }
 text {
@@ -1020,7 +1020,7 @@ text {
 		clr="alarm"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 58"
 	align="horiz. centered"
 }
 text {
@@ -1037,7 +1037,7 @@ text {
 		clr="static"
 		vis="static"
 	}
-	textix="Example Text"
+	textix="Example Text Height 59"
 	align="horiz. centered"
 }
 text {
@@ -1058,6 +1058,6 @@ text {
 		chanC="channelC.PV"
 		chanD="channelD.PV"
 	}
-	textix="Example Text"
+	textix="Example Text Height 60"
 	align="horiz. right"
 }

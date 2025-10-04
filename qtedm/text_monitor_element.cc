@@ -84,6 +84,7 @@ void TextMonitorElement::setTextAlignment(Qt::Alignment alignment)
   effective &= ~Qt::AlignVertical_Mask;
   effective |= Qt::AlignTop;
   if (alignment_ == effective) {
+    QLabel::setAlignment(alignment_);
     return;
   }
   alignment_ = effective;
@@ -221,14 +222,7 @@ void TextMonitorElement::paintEvent(QPaintEvent *event)
 
 void TextMonitorElement::updateSelectionVisual()
 {
-  if (selected_) {
-    QPalette pal = palette();
-    pal.setColor(QPalette::WindowText, QColor(Qt::blue));
-    pal.setColor(QPalette::Text, QColor(Qt::blue));
-    setPalette(pal);
-  } else {
-    applyPaletteColors();
-  }
+  applyPaletteColors();
 }
 
 void TextMonitorElement::applyPaletteColors()

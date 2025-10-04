@@ -222,6 +222,9 @@ void PvLimitsDialog::setTextMonitorCallbacks(const QString &channelName,
   if (hoprSourceCombo_) {
     hoprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
   }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+  }
   updatePrecisionControls();
   updateMeterControls();
 }
@@ -261,6 +264,9 @@ void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
   }
   if (hoprSourceCombo_) {
     hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+  }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
   }
 
   if (meterLimitsGetter_ && meterLimitsSetter_) {
@@ -340,6 +346,9 @@ void PvLimitsDialog::setSliderCallbacks(const QString &channelName,
   if (hoprSourceCombo_) {
     hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
   }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+  }
 
   if (meterLimitsGetter_ && meterLimitsSetter_) {
     precisionSourceGetter_ = [this]() {
@@ -417,6 +426,9 @@ void PvLimitsDialog::setWheelSwitchCallbacks(const QString &channelName,
   }
   if (hoprSourceCombo_) {
     hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+  }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
   }
 
   if (meterLimitsGetter_ && meterLimitsSetter_) {
@@ -496,6 +508,9 @@ void PvLimitsDialog::setBarCallbacks(const QString &channelName,
   if (hoprSourceCombo_) {
     hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
   }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+  }
 
   if (meterLimitsGetter_ && meterLimitsSetter_) {
     precisionSourceGetter_ = [this]() {
@@ -574,6 +589,9 @@ void PvLimitsDialog::setScaleCallbacks(const QString &channelName,
   if (hoprSourceCombo_) {
     hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
   }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+  }
 
   if (meterLimitsGetter_ && meterLimitsSetter_) {
     precisionSourceGetter_ = [this]() {
@@ -634,6 +652,9 @@ void PvLimitsDialog::updatePrecisionControls()
       || mode_ == Mode::kBarMonitor
       || mode_ == Mode::kScaleMonitor)
       && static_cast<bool>(precisionSourceGetter_);
+  if (precisionLabel_) {
+    precisionLabel_->setEnabled(hasPrecision);
+  }
   const PvLimitSource source = hasPrecision ? precisionSourceGetter_()
                                             : PvLimitSource::kChannel;
   if (precisionSourceCombo_) {

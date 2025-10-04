@@ -192,13 +192,9 @@ void TextElement::applyTextColor()
 
 void TextElement::updateSelectionVisual()
 {
-  QPalette pal = palette();
-  if (selected_) {
-    pal.setColor(QPalette::WindowText, QColor(Qt::blue));
-  } else {
-    pal.setColor(QPalette::WindowText, foregroundColor_);
-  }
-  setPalette(pal);
+  // Keep the configured foreground color even when selected; the dashed border
+  // drawn in paintEvent() is sufficient to indicate selection.
+  applyTextColor();
   update();
 }
 

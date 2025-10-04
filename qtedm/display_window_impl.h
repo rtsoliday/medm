@@ -876,6 +876,136 @@ private:
     closeResourcePalette();
   }
 
+  template <typename ElementType>
+  bool cutSelectedElement(QList<ElementType *> &elements,
+      ElementType *&selected)
+  {
+    if (!selected) {
+      return false;
+    }
+
+    ElementType *element = selected;
+    selected = nullptr;
+    element->setSelected(false);
+    elements.removeAll(element);
+    removeElementFromStack(element);
+    element->deleteLater();
+    return true;
+  }
+
+  void cutSelection()
+  {
+    if (auto state = state_.lock(); !state || !state->editMode) {
+      return;
+    }
+
+    auto finalizeCut = [this]() {
+      clearSelections();
+      if (displayArea_) {
+        displayArea_->update();
+      }
+      markDirty();
+    };
+
+    if (cutSelectedElement(textElements_, selectedTextElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(textEntryElements_, selectedTextEntryElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(sliderElements_, selectedSliderElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(wheelSwitchElements_, selectedWheelSwitchElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(choiceButtonElements_, selectedChoiceButtonElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(menuElements_, selectedMenuElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(messageButtonElements_,
+            selectedMessageButtonElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(shellCommandElements_,
+            selectedShellCommandElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(relatedDisplayElements_,
+            selectedRelatedDisplayElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(textMonitorElements_, selectedTextMonitorElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(meterElements_, selectedMeterElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(barMonitorElements_, selectedBarMonitorElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(scaleMonitorElements_,
+            selectedScaleMonitorElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(stripChartElements_, selectedStripChartElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(cartesianPlotElements_,
+            selectedCartesianPlotElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(byteMonitorElements_, selectedByteMonitorElement_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(rectangleElements_, selectedRectangle_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(imageElements_, selectedImage_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(ovalElements_, selectedOval_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(arcElements_, selectedArc_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(lineElements_, selectedLine_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(polylineElements_, selectedPolyline_)) {
+      finalizeCut();
+      return;
+    }
+    if (cutSelectedElement(polygonElements_, selectedPolygon_)) {
+      finalizeCut();
+      return;
+    }
+  }
+
   void closeResourcePalette()
   {
     if (!resourcePalette_.isNull() && resourcePalette_->isVisible()) {
@@ -5282,7 +5412,12 @@ private:
     addMenuAction(&menu, QStringLiteral("Undo"));
 
     menu.addSeparator();
-    addMenuAction(&menu, QStringLiteral("Cut"), QKeySequence(QStringLiteral("Shift+Del")));
+    auto *cutAction =
+        addMenuAction(&menu, QStringLiteral("Cut"),
+            QKeySequence(QStringLiteral("Shift+Del")));
+    QObject::connect(cutAction, &QAction::triggered, this, [this]() {
+      cutSelection();
+    });
     addMenuAction(&menu, QStringLiteral("Copy"), QKeySequence(QStringLiteral("Ctrl+Ins")));
     addMenuAction(&menu, QStringLiteral("Paste"), QKeySequence(QStringLiteral("Shift+Ins")));
 

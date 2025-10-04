@@ -2099,6 +2099,22 @@ private:
             setAsActiveDisplay();
             cutSelection();
           });
+      auto *copyShortcut = new QShortcut(
+          QKeySequence(Qt::CTRL | Qt::Key_C), resourcePalette_);
+      copyShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+      QObject::connect(copyShortcut, &QShortcut::activated, this,
+          [this]() {
+            setAsActiveDisplay();
+            copySelection();
+          });
+      auto *pasteShortcut = new QShortcut(
+          QKeySequence(Qt::CTRL | Qt::Key_V), resourcePalette_);
+      pasteShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+      QObject::connect(pasteShortcut, &QShortcut::activated, this,
+          [this]() {
+            setAsActiveDisplay();
+            pasteSelection();
+          });
     }
     return resourcePalette_;
   }

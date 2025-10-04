@@ -6764,6 +6764,7 @@ protected:
   }
 
 private:
+  static constexpr int kPaletteSpacing = 12;
   enum class SelectionKind {
     kNone,
     kDisplay,
@@ -9763,9 +9764,109 @@ private:
     activeColorButton_ = button;
     activeColorSetter_ = setter;
     colorPaletteDialog_->setCurrentColor(colorFromButton(button), description);
+    bool positionedBelow = false;
+    if (!colorPaletteDialog_->isVisible()) {
+      positionedBelow = positionColorPaletteBelowResourceIfPossible();
+    }
     colorPaletteDialog_->show();
+    if (positionedBelow) {
+      scheduleColorPalettePlacement();
+    }
     colorPaletteDialog_->raise();
     colorPaletteDialog_->activateWindow();
+  }
+
+  bool positionColorPaletteBelowResourceIfPossible()
+  {
+    if (!colorPaletteDialog_) {
+      return false;
+    }
+
+    QWidget *reference = this;
+    if (!reference) {
+      return false;
+    }
+
+    colorPaletteDialog_->ensurePolished();
+    if (QLayout *dialogLayout = colorPaletteDialog_->layout()) {
+      dialogLayout->activate();
+    }
+    colorPaletteDialog_->adjustSize();
+
+    QSize paletteSize = colorPaletteDialog_->isVisible()
+        ? colorPaletteDialog_->size()
+        : colorPaletteDialog_->sizeHint().expandedTo(
+            colorPaletteDialog_->minimumSize());
+    if (paletteSize.isEmpty()) {
+      paletteSize = colorPaletteDialog_->size();
+    }
+    if (paletteSize.isEmpty()) {
+      return false;
+    }
+
+    QScreen *screen = screenForWidget(reference);
+    if (!screen) {
+      screen = QGuiApplication::primaryScreen();
+    }
+    const QRect available = screen ? screen->availableGeometry() : QRect();
+
+    const QRect referenceFrame = reference->frameGeometry();
+    if (!referenceFrame.isValid()) {
+      return false;
+    }
+
+    QPoint desiredTopLeft(referenceFrame.left(),
+        referenceFrame.bottom() + kPaletteSpacing);
+    QRect desiredRect(desiredTopLeft, paletteSize);
+    if (!available.isNull() && !available.contains(desiredRect)) {
+      return false;
+    }
+
+    colorPaletteDialog_->move(desiredTopLeft);
+    return true;
+  }
+
+  void scheduleColorPalettePlacement()
+  {
+    if (!colorPaletteDialog_) {
+      return;
+    }
+
+    QPointer<ResourcePaletteDialog> guard(this);
+    QPointer<ColorPaletteDialog> palette(colorPaletteDialog_);
+    QMetaObject::invokeMethod(colorPaletteDialog_, [guard, palette]() {
+      if (!guard || !palette) {
+        return;
+      }
+      if (!palette->isVisible()) {
+        return;
+      }
+
+      QWidget *reference = guard.data();
+      if (!reference) {
+        return;
+      }
+
+      QScreen *screen = guard->screenForWidget(reference);
+      if (!screen) {
+        screen = QGuiApplication::primaryScreen();
+      }
+      const QRect available = screen ? screen->availableGeometry() : QRect();
+
+      const QRect referenceFrame = reference->frameGeometry();
+      if (!referenceFrame.isValid()) {
+        return;
+      }
+
+      QPoint desiredTopLeft(referenceFrame.left(),
+          referenceFrame.bottom() + ResourcePaletteDialog::kPaletteSpacing);
+      QRect desiredRect(desiredTopLeft, palette->size());
+      if (!available.isNull() && !available.contains(desiredRect)) {
+        return;
+      }
+
+      palette->move(desiredTopLeft);
+    }, Qt::QueuedConnection);
   }
 
   void openTextEntryPvLimitsDialog()

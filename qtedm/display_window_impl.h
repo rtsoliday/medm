@@ -607,6 +607,9 @@ private:
   QColor colorForIndex(int index) const;
   TextColorMode parseTextColorMode(const QString &value) const;
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
+  void applyChannelProperties(const AdlNode &node,
+    const std::function<void(int, const QString &)> &setter,
+    int baseChannelIndex, int letterStartIndex) const;
   RectangleFill parseRectangleFill(const QString &value) const;
   RectangleLineStyle parseRectangleLineStyle(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
@@ -7713,6 +7716,66 @@ inline TextVisibilityMode DisplayWindow::parseVisibilityMode(
   return TextVisibilityMode::kStatic;
 }
 
+inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
+    const std::function<void(int, const QString &)> &setter,
+    int baseChannelIndex, int letterStartIndex) const
+{
+  for (const auto &prop : node.properties) {
+    const QString key = prop.key.trimmed();
+    if (key.isEmpty()) {
+      continue;
+    }
+
+    if (key.compare(QStringLiteral("chan"), Qt::CaseInsensitive) == 0) {
+      const QString value = prop.value;
+      if (!value.isEmpty() && baseChannelIndex >= 0
+          && baseChannelIndex < 5) {
+        setter(baseChannelIndex, value);
+      }
+      continue;
+    }
+
+    if (key.length() <= 4
+        || key.left(4).compare(QStringLiteral("chan"), Qt::CaseInsensitive)
+            != 0) {
+      continue;
+    }
+
+    const QString suffix = key.mid(4);
+    if (suffix.isEmpty()) {
+      continue;
+    }
+
+    int index = -1;
+    if (suffix.size() == 1) {
+      const QChar suffixChar = suffix.at(0);
+      if (suffixChar.isLetter()) {
+        index = letterStartIndex
+            + suffixChar.toUpper().unicode() - QChar('A').unicode();
+      } else if (suffixChar.isDigit()) {
+        const int digit = suffixChar.digitValue();
+        if (digit > 0) {
+          index = letterStartIndex + digit - 1;
+        }
+      }
+    }
+    if (index < 0) {
+      bool ok = false;
+      const int numeric = suffix.toInt(&ok);
+      if (ok && numeric > 0) {
+        index = letterStartIndex + numeric - 1;
+      }
+    }
+
+    if (index >= 0 && index < 5) {
+      const QString value = prop.value;
+      if (!value.isEmpty()) {
+        setter(index, value);
+      }
+    }
+  }
+}
+
 inline RectangleFill DisplayWindow::parseRectangleFill(const QString &value) const
 {
   if (value.compare(QStringLiteral("outline"), Qt::CaseInsensitive) == 0) {
@@ -7895,27 +7958,18 @@ inline void DisplayWindow::loadTextElement(const AdlNode &textNode)
     if (!calc.isEmpty()) {
       element->setVisibilityCalc(calc);
     }
-    const QString chan0 = propertyValue(*dyn, QStringLiteral("chan"));
-    if (!chan0.isEmpty()) {
-      element->setChannel(0, chan0);
-    }
-    const QString chanA = propertyValue(*dyn, QStringLiteral("chanA"));
-    if (!chanA.isEmpty()) {
-      element->setChannel(1, chanA);
-    }
-    const QString chanB = propertyValue(*dyn, QStringLiteral("chanB"));
-    if (!chanB.isEmpty()) {
-      element->setChannel(2, chanB);
-    }
-    const QString chanC = propertyValue(*dyn, QStringLiteral("chanC"));
-    if (!chanC.isEmpty()) {
-      element->setChannel(3, chanC);
-    }
-    const QString chanD = propertyValue(*dyn, QStringLiteral("chanD"));
-    if (!chanD.isEmpty()) {
-      element->setChannel(4, chanD);
-    }
+    applyChannelProperties(*dyn,
+        [element](int index, const QString &value) {
+          element->setChannel(index, value);
+        },
+        0, 1);
   }
+
+  applyChannelProperties(textNode,
+      [element](int index, const QString &value) {
+        element->setChannel(index, value);
+      },
+      0, 1);
 
   element->show();
   element->setSelected(false);
@@ -8095,28 +8149,18 @@ inline void DisplayWindow::loadRectangleElement(const AdlNode &rectangleNode)
     if (!calc.isEmpty()) {
       element->setVisibilityCalc(calc);
     }
-
-    const QString chan0 = propertyValue(*dyn, QStringLiteral("chan"));
-    if (!chan0.isEmpty()) {
-      element->setChannel(0, chan0);
-    }
-    const QString chanA = propertyValue(*dyn, QStringLiteral("chanA"));
-    if (!chanA.isEmpty()) {
-      element->setChannel(1, chanA);
-    }
-    const QString chanB = propertyValue(*dyn, QStringLiteral("chanB"));
-    if (!chanB.isEmpty()) {
-      element->setChannel(2, chanB);
-    }
-    const QString chanC = propertyValue(*dyn, QStringLiteral("chanC"));
-    if (!chanC.isEmpty()) {
-      element->setChannel(3, chanC);
-    }
-    const QString chanD = propertyValue(*dyn, QStringLiteral("chanD"));
-    if (!chanD.isEmpty()) {
-      element->setChannel(4, chanD);
-    }
+    applyChannelProperties(*dyn,
+        [element](int index, const QString &value) {
+          element->setChannel(index, value);
+        },
+        0, 0);
   }
+
+  applyChannelProperties(rectangleNode,
+      [element](int index, const QString &value) {
+        element->setChannel(index, value);
+      },
+      0, 0);
 
   element->show();
   element->setSelected(false);

@@ -113,9 +113,15 @@ int main(int argc, char *argv[])
   editMenu->setFont(fixed13Font);
   editMenu->addAction("&Undo");
   editMenu->addSeparator();
-  editMenu->addAction("Cu&t");
-  editMenu->addAction("&Copy");
-  editMenu->addAction("&Paste");
+  auto *cutAct = editMenu->addAction("Cu&t");
+  cutAct->setShortcuts({QKeySequence::Cut,
+      QKeySequence(QStringLiteral("Shift+Del"))});
+  auto *copyAct = editMenu->addAction("&Copy");
+  copyAct->setShortcuts({QKeySequence::Copy,
+      QKeySequence(QStringLiteral("Ctrl+Ins"))});
+  auto *pasteAct = editMenu->addAction("&Paste");
+  pasteAct->setShortcuts({QKeySequence::Paste,
+      QKeySequence(QStringLiteral("Shift+Ins"))});
   editMenu->addSeparator();
   editMenu->addAction("&Raise");
   editMenu->addAction("&Lower");
@@ -266,6 +272,24 @@ int main(int argc, char *argv[])
           active->save();
         }
       });
+  QObject::connect(cutAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->cutSelection();
+        }
+      });
+  QObject::connect(copyAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->copySelection();
+        }
+      });
+  QObject::connect(pasteAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->pasteSelection();
+        }
+      });
   QObject::connect(saveAsAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -295,7 +319,7 @@ int main(int argc, char *argv[])
       displayBackgroundColor);
 
   *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
-      closeAct]() {
+      closeAct, cutAct, copyAct, pasteAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -341,6 +365,12 @@ int main(int argc, char *argv[])
     saveAct->setEnabled(canEditActive && active->isDirty());
     saveAsAct->setEnabled(canEditActive);
     closeAct->setEnabled(active);
+    const bool hasSelection = canEditActive && active
+        && active->hasCopyableSelection();
+    cutAct->setEnabled(hasSelection);
+    copyAct->setEnabled(hasSelection);
+    const bool canPaste = canEditActive && active && active->canPaste();
+    pasteAct->setEnabled(canPaste);
   };
 
   QObject::connect(newAct, &QAction::triggered, &win,

@@ -2,11 +2,24 @@
 
 #include <QList>
 #include <QPointer>
+#include <QPoint>
 
 #include <functional>
 #include <memory>
 
 class DisplayWindow;
+
+struct ClipboardContent
+{
+  std::function<void(DisplayWindow &, const QPoint &)> paste;
+  QPoint nextOffset = QPoint(10, 10);
+  bool hasPasted = false;
+
+  bool isValid() const
+  {
+    return static_cast<bool>(paste);
+  }
+};
 
 enum class CreateTool {
   kNone,
@@ -41,5 +54,6 @@ struct DisplayState {
   CreateTool createTool = CreateTool::kNone;
   QPointer<DisplayWindow> activeDisplay;
   std::shared_ptr<std::function<void()>> updateMenus;
+  std::shared_ptr<ClipboardContent> clipboard;
 };
 

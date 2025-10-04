@@ -151,6 +151,36 @@ public:
           setAsActiveDisplay();
           cutSelection();
         });
+    auto *copyShortcut = new QShortcut(QKeySequence::Copy, this);
+    copyShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(copyShortcut, &QShortcut::activated, this,
+        [this]() {
+          setAsActiveDisplay();
+          copySelection();
+        });
+    auto *copyInsShortcut = new QShortcut(
+        QKeySequence(QStringLiteral("Ctrl+Ins")), this);
+    copyInsShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(copyInsShortcut, &QShortcut::activated, this,
+        [this]() {
+          setAsActiveDisplay();
+          copySelection();
+        });
+    auto *pasteShortcut = new QShortcut(QKeySequence::Paste, this);
+    pasteShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(pasteShortcut, &QShortcut::activated, this,
+        [this]() {
+          setAsActiveDisplay();
+          pasteSelection();
+        });
+    auto *pasteInsShortcut = new QShortcut(
+        QKeySequence(QStringLiteral("Shift+Ins")), this);
+    pasteInsShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(pasteInsShortcut, &QShortcut::activated, this,
+        [this]() {
+          setAsActiveDisplay();
+          pasteSelection();
+        });
     updateDirtyIndicator();
   }
 
@@ -197,6 +227,32 @@ public:
   void clearSelection()
   {
     clearSelections();
+  }
+
+  void cutSelection()
+  {
+    copySelectionInternal(true);
+  }
+
+  void copySelection()
+  {
+    copySelectionInternal(false);
+  }
+
+  void pasteSelection()
+  {
+    pasteFromClipboard();
+  }
+
+  bool hasCopyableSelection() const
+  {
+    return hasAnyElementSelection();
+  }
+
+  bool canPaste() const
+  {
+    auto state = state_.lock();
+    return state && state->editMode && state->clipboard && state->clipboard->isValid();
   }
 
   bool save(QWidget *dialogParent = nullptr);
@@ -902,11 +958,23 @@ private:
     return true;
   }
 
-  void cutSelection()
+  bool copySelectionInternal(bool removeOriginal)
   {
-    if (auto state = state_.lock(); !state || !state->editMode) {
-      return;
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
     }
+
+    auto prepareClipboard = [&](auto &&fn) {
+      if (!state->clipboard) {
+        state->clipboard = std::make_shared<ClipboardContent>();
+      }
+      state->clipboard->paste = std::forward<decltype(fn)>(fn);
+      state->clipboard->nextOffset = QPoint(10, 10);
+      state->clipboard->hasPasted = false;
+      notifyMenus();
+    };
 
     auto finalizeCut = [this]() {
       clearSelections();
@@ -914,105 +982,1078 @@ private:
         displayArea_->update();
       }
       markDirty();
+      notifyMenus();
     };
 
-    if (cutSelectedElement(textElements_, selectedTextElement_)) {
-      finalizeCut();
+    if (selectedTextElement_) {
+      TextElement *element = selectedTextElement_;
+      const QRect geometry = element->geometry();
+      const QString text = element->text();
+      const QColor foreground = element->foregroundColor();
+      const Qt::Alignment alignment = element->textAlignment();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[i] = element->channel(i);
+      }
+      prepareClipboard([geometry, text, foreground, alignment, colorMode,
+                           visibilityMode, visibilityCalc, channels](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new TextElement(target.displayArea_);
+        newElement->setFont(target.font());
+        newElement->setGeometry(rect);
+        newElement->setText(text);
+        newElement->setForegroundColor(foreground);
+        newElement->setTextAlignment(alignment);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int idx = 0; idx < static_cast<int>(channels.size()); ++idx) {
+          newElement->setChannel(idx, channels[idx]);
+        }
+        newElement->show();
+        target.textElements_.append(newElement);
+        target.selectTextElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(textElements_, selectedTextElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedTextEntryElement_) {
+      TextEntryElement *element = selectedTextEntryElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const TextMonitorFormat format = element->format();
+      const int precision = element->precision();
+      const PvLimitSource precisionSource = element->precisionSource();
+      const int precisionDefault = element->precisionDefault();
+      const PvLimits limits = element->limits();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, format,
+                           precision, precisionSource, precisionDefault,
+                           limits, channel](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new TextEntryElement(target.displayArea_);
+        newElement->setFont(target.font());
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setFormat(format);
+        newElement->setPrecision(precision);
+        newElement->setPrecisionSource(precisionSource);
+        newElement->setPrecisionDefault(precisionDefault);
+        newElement->setLimits(limits);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.textEntryElements_.append(newElement);
+        target.selectTextEntryElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(textEntryElements_, selectedTextEntryElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedSliderElement_) {
+      SliderElement *element = selectedSliderElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const MeterLabel label = element->label();
+      const BarDirection direction = element->direction();
+      const double precision = element->precision();
+      const PvLimits limits = element->limits();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, label,
+                           direction, precision, limits, channel](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new SliderElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setLabel(label);
+        newElement->setDirection(direction);
+        newElement->setPrecision(precision);
+        newElement->setLimits(limits);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.sliderElements_.append(newElement);
+        target.selectSliderElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(sliderElements_, selectedSliderElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedWheelSwitchElement_) {
+      WheelSwitchElement *element = selectedWheelSwitchElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const double precision = element->precision();
+      const QString format = element->format();
+      const PvLimits limits = element->limits();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, precision,
+                           format, limits, channel](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new WheelSwitchElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setPrecision(precision);
+        newElement->setFormat(format);
+        newElement->setLimits(limits);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.wheelSwitchElements_.append(newElement);
+        target.selectWheelSwitchElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(wheelSwitchElements_, selectedWheelSwitchElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedChoiceButtonElement_) {
+      ChoiceButtonElement *element = selectedChoiceButtonElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const ChoiceButtonStacking stacking = element->stacking();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, stacking,
+                           channel](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new ChoiceButtonElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setStacking(stacking);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.choiceButtonElements_.append(newElement);
+        target.selectChoiceButtonElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(choiceButtonElements_, selectedChoiceButtonElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedMenuElement_) {
+      MenuElement *element = selectedMenuElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, channel](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new MenuElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.menuElements_.append(newElement);
+        target.selectMenuElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(menuElements_, selectedMenuElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedMessageButtonElement_) {
+      MessageButtonElement *element = selectedMessageButtonElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const QString label = element->label();
+      const QString pressMessage = element->pressMessage();
+      const QString releaseMessage = element->releaseMessage();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, label,
+                           pressMessage, releaseMessage, channel](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new MessageButtonElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setLabel(label);
+        newElement->setPressMessage(pressMessage);
+        newElement->setReleaseMessage(releaseMessage);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.messageButtonElements_.append(newElement);
+        target.selectMessageButtonElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(messageButtonElements_,
+            selectedMessageButtonElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedShellCommandElement_) {
+      ShellCommandElement *element = selectedShellCommandElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const QString label = element->label();
+      std::array<ShellCommandEntry, kShellCommandEntryCount> entries{};
+      for (int i = 0; i < element->entryCount()
+          && i < static_cast<int>(entries.size()); ++i) {
+        entries[static_cast<std::size_t>(i)] = element->entry(i);
+      }
+      prepareClipboard([geometry, foreground, background, label, entries](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new ShellCommandElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setLabel(label);
+        for (int i = 0; i < static_cast<int>(entries.size()); ++i) {
+          newElement->setEntry(i, entries[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.shellCommandElements_.append(newElement);
+        target.selectShellCommandElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(shellCommandElements_,
+            selectedShellCommandElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedRelatedDisplayElement_) {
+      RelatedDisplayElement *element = selectedRelatedDisplayElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const QString label = element->label();
+      const RelatedDisplayVisual visual = element->visual();
+      std::array<RelatedDisplayEntry, kRelatedDisplayEntryCount> entries{};
+      for (int i = 0; i < element->entryCount()
+          && i < static_cast<int>(entries.size()); ++i) {
+        entries[static_cast<std::size_t>(i)] = element->entry(i);
+      }
+      prepareClipboard([geometry, foreground, background, label, visual,
+                           entries](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new RelatedDisplayElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setLabel(label);
+        newElement->setVisual(visual);
+        for (int i = 0; i < static_cast<int>(entries.size()); ++i) {
+          newElement->setEntry(i, entries[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.relatedDisplayElements_.append(newElement);
+        target.selectRelatedDisplayElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(relatedDisplayElements_,
+            selectedRelatedDisplayElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedTextMonitorElement_) {
+      TextMonitorElement *element = selectedTextMonitorElement_;
+      const QRect geometry = element->geometry();
+      const QString text = element->text();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const Qt::Alignment alignment = element->textAlignment();
+      const TextColorMode colorMode = element->colorMode();
+      const TextMonitorFormat format = element->format();
+      const int precision = element->precision();
+      const PvLimitSource precisionSource = element->precisionSource();
+      const int precisionDefault = element->precisionDefault();
+      const PvLimits limits = element->limits();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      prepareClipboard([geometry, text, foreground, background, alignment,
+                           colorMode, format, precision, precisionSource,
+                           precisionDefault, limits, channels](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new TextMonitorElement(target.displayArea_);
+        newElement->setFont(target.font());
+        newElement->setGeometry(rect);
+        newElement->setText(text);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setTextAlignment(alignment);
+        newElement->setColorMode(colorMode);
+        newElement->setFormat(format);
+        newElement->setPrecision(precision);
+        newElement->setPrecisionSource(precisionSource);
+        newElement->setPrecisionDefault(precisionDefault);
+        newElement->setLimits(limits);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.textMonitorElements_.append(newElement);
+        target.selectTextMonitorElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(textMonitorElements_, selectedTextMonitorElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedMeterElement_) {
+      MeterElement *element = selectedMeterElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const MeterLabel label = element->label();
+      const PvLimits limits = element->limits();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, label,
+                           limits, channel](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new MeterElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setLabel(label);
+        newElement->setLimits(limits);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.meterElements_.append(newElement);
+        target.selectMeterElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(meterElements_, selectedMeterElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedBarMonitorElement_) {
+      BarMonitorElement *element = selectedBarMonitorElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const MeterLabel label = element->label();
+      const BarDirection direction = element->direction();
+      const BarFill fillMode = element->fillMode();
+      const PvLimits limits = element->limits();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, label,
+                           direction, fillMode, limits, channel](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new BarMonitorElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setLabel(label);
+        newElement->setDirection(direction);
+        newElement->setFillMode(fillMode);
+        newElement->setLimits(limits);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.barMonitorElements_.append(newElement);
+        target.selectBarMonitorElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(barMonitorElements_, selectedBarMonitorElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedScaleMonitorElement_) {
+      ScaleMonitorElement *element = selectedScaleMonitorElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const MeterLabel label = element->label();
+      const BarDirection direction = element->direction();
+      const PvLimits limits = element->limits();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, label,
+                           direction, limits, channel](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new ScaleMonitorElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setLabel(label);
+        newElement->setDirection(direction);
+        newElement->setLimits(limits);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.scaleMonitorElements_.append(newElement);
+        target.selectScaleMonitorElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(scaleMonitorElements_, selectedScaleMonitorElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedStripChartElement_) {
+      StripChartElement *element = selectedStripChartElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const QString title = element->title();
+      const QString xLabel = element->xLabel();
+      const QString yLabel = element->yLabel();
+      const double period = element->period();
+      const TimeUnits units = element->units();
+      const int penCount = element->penCount();
+      std::array<QString, kStripChartPenCount> channels{};
+      std::array<QColor, kStripChartPenCount> penColors{};
+      std::array<PvLimits, kStripChartPenCount> penLimits{};
+      for (int i = 0; i < penCount && i < kStripChartPenCount; ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+        penColors[static_cast<std::size_t>(i)] = element->penColor(i);
+        penLimits[static_cast<std::size_t>(i)] = element->penLimits(i);
+      }
+      prepareClipboard([geometry, foreground, background, title, xLabel, yLabel,
+                           period, units, penCount, channels, penColors,
+                           penLimits](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new StripChartElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setTitle(title);
+        newElement->setXLabel(xLabel);
+        newElement->setYLabel(yLabel);
+        newElement->setPeriod(period);
+        newElement->setUnits(units);
+        for (int i = 0; i < penCount && i < kStripChartPenCount; ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+          newElement->setPenColor(i, penColors[static_cast<std::size_t>(i)]);
+          newElement->setPenLimits(i, penLimits[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.stripChartElements_.append(newElement);
+        target.selectStripChartElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(stripChartElements_, selectedStripChartElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedCartesianPlotElement_) {
+      CartesianPlotElement *element = selectedCartesianPlotElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const QString title = element->title();
+      const QString xLabel = element->xLabel();
+      std::array<QString, 4> yLabels{};
+      for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
+        yLabels[static_cast<std::size_t>(i)] = element->yLabel(i);
+      }
+      const CartesianPlotStyle style = element->style();
+      const bool eraseOldest = element->eraseOldest();
+      const int count = element->count();
+      const CartesianPlotEraseMode eraseMode = element->eraseMode();
+      const QString triggerChannel = element->triggerChannel();
+      const QString eraseChannel = element->eraseChannel();
+      const QString countChannel = element->countChannel();
+      const int traceCount = element->traceCount();
+      std::array<QString, kCartesianPlotTraceCount> traceX{};
+      std::array<QString, kCartesianPlotTraceCount> traceY{};
+      std::array<QColor, kCartesianPlotTraceCount> traceColors{};
+      std::array<CartesianPlotYAxis, kCartesianPlotTraceCount> traceAxes{};
+      std::array<bool, kCartesianPlotTraceCount> traceRight{};
+      for (int i = 0; i < traceCount && i < kCartesianPlotTraceCount; ++i) {
+        const std::size_t idx = static_cast<std::size_t>(i);
+        traceX[idx] = element->traceXChannel(i);
+        traceY[idx] = element->traceYChannel(i);
+        traceColors[idx] = element->traceColor(i);
+        traceAxes[idx] = element->traceYAxis(i);
+        traceRight[idx] = element->traceUsesRightAxis(i);
+      }
+      prepareClipboard([geometry, foreground, background, title, xLabel, yLabels,
+                           style, eraseOldest, count, eraseMode, triggerChannel,
+                           eraseChannel, countChannel, traceCount, traceX,
+                           traceY, traceColors, traceAxes, traceRight](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new CartesianPlotElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setTitle(title);
+        newElement->setXLabel(xLabel);
+        for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
+          newElement->setYLabel(i, yLabels[static_cast<std::size_t>(i)]);
+        }
+        newElement->setStyle(style);
+        newElement->setEraseOldest(eraseOldest);
+        newElement->setCount(count);
+        newElement->setEraseMode(eraseMode);
+        newElement->setTriggerChannel(triggerChannel);
+        newElement->setEraseChannel(eraseChannel);
+        newElement->setCountChannel(countChannel);
+        for (int i = 0; i < traceCount && i < kCartesianPlotTraceCount; ++i) {
+          const std::size_t idx = static_cast<std::size_t>(i);
+          newElement->setTraceXChannel(i, traceX[idx]);
+          newElement->setTraceYChannel(i, traceY[idx]);
+          newElement->setTraceColor(i, traceColors[idx]);
+          newElement->setTraceYAxis(i, traceAxes[idx]);
+          newElement->setTraceUsesRightAxis(i, traceRight[idx]);
+        }
+        newElement->show();
+        target.cartesianPlotElements_.append(newElement);
+        target.selectCartesianPlotElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(cartesianPlotElements_,
+            selectedCartesianPlotElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedByteMonitorElement_) {
+      ByteMonitorElement *element = selectedByteMonitorElement_;
+      const QRect geometry = element->geometry();
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const TextColorMode colorMode = element->colorMode();
+      const BarDirection direction = element->direction();
+      const int startBit = element->startBit();
+      const int endBit = element->endBit();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, colorMode, direction,
+                           startBit, endBit, channel](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new ByteMonitorElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setColorMode(colorMode);
+        newElement->setDirection(direction);
+        newElement->setStartBit(startBit);
+        newElement->setEndBit(endBit);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.byteMonitorElements_.append(newElement);
+        target.selectByteMonitorElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(byteMonitorElements_, selectedByteMonitorElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedRectangle_) {
+      RectangleElement *element = selectedRectangle_;
+      const QRect geometry = element->geometry();
+      const QColor color = element->color();
+      const RectangleFill fill = element->fill();
+      const RectangleLineStyle lineStyle = element->lineStyle();
+      const int lineWidth = element->lineWidth();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      prepareClipboard([geometry, color, fill, lineStyle, lineWidth, colorMode,
+                           visibilityMode, visibilityCalc, channels](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new RectangleElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(color);
+        newElement->setFill(fill);
+        newElement->setLineStyle(lineStyle);
+        newElement->setLineWidth(lineWidth);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.rectangleElements_.append(newElement);
+        target.selectRectangleElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(rectangleElements_, selectedRectangle_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedImage_) {
+      ImageElement *element = selectedImage_;
+      const QRect geometry = element->geometry();
+      const ImageType imageType = element->imageType();
+      const QString imageName = element->imageName();
+      const QString calc = element->calc();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      prepareClipboard([geometry, imageType, imageName, calc, colorMode,
+                           visibilityMode, visibilityCalc, channels](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new ImageElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setImageType(imageType);
+        newElement->setImageName(imageName);
+        newElement->setCalc(calc);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.imageElements_.append(newElement);
+        target.selectImageElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(imageElements_, selectedImage_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedOval_) {
+      OvalElement *element = selectedOval_;
+      const QRect geometry = element->geometry();
+      const QColor color = element->color();
+      const RectangleFill fill = element->fill();
+      const RectangleLineStyle lineStyle = element->lineStyle();
+      const int lineWidth = element->lineWidth();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      prepareClipboard([geometry, color, fill, lineStyle, lineWidth, colorMode,
+                           visibilityMode, visibilityCalc, channels](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new OvalElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(color);
+        newElement->setFill(fill);
+        newElement->setLineStyle(lineStyle);
+        newElement->setLineWidth(lineWidth);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.ovalElements_.append(newElement);
+        target.selectOvalElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(ovalElements_, selectedOval_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedArc_) {
+      ArcElement *element = selectedArc_;
+      const QRect geometry = element->geometry();
+      const QColor color = element->color();
+      const RectangleFill fill = element->fill();
+      const RectangleLineStyle lineStyle = element->lineStyle();
+      const int lineWidth = element->lineWidth();
+      const int beginAngle = element->beginAngle();
+      const int pathAngle = element->pathAngle();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      prepareClipboard([geometry, color, fill, lineStyle, lineWidth, beginAngle,
+                           pathAngle, colorMode, visibilityMode, visibilityCalc,
+                           channels](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        auto *newElement = new ArcElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(color);
+        newElement->setFill(fill);
+        newElement->setLineStyle(lineStyle);
+        newElement->setLineWidth(lineWidth);
+        newElement->setBeginAngle(beginAngle);
+        newElement->setPathAngle(pathAngle);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.arcElements_.append(newElement);
+        target.selectArcElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(arcElements_, selectedArc_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedLine_) {
+      LineElement *element = selectedLine_;
+      const QRect geometry = element->geometry();
+      const QColor color = element->color();
+      const RectangleLineStyle lineStyle = element->lineStyle();
+      const int lineWidth = element->lineWidth();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      const QVector<QPoint> points = element->absolutePoints();
+      prepareClipboard([geometry, color, lineStyle, lineWidth, colorMode,
+                           visibilityMode, visibilityCalc, channels, points](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = geometry.translated(offset);
+        rect = target.adjustRectToDisplayArea(rect);
+        QVector<QPoint> translatedPoints = points;
+        const QPoint translation = rect.topLeft() - geometry.topLeft();
+        for (QPoint &pt : translatedPoints) {
+          pt += translation;
+        }
+        auto *newElement = new LineElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(color);
+        newElement->setLineStyle(lineStyle);
+        newElement->setLineWidth(lineWidth);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        if (translatedPoints.size() >= 2) {
+          newElement->setLocalEndpoints(
+              translatedPoints[0] - rect.topLeft(),
+              translatedPoints[1] - rect.topLeft());
+        }
+        newElement->show();
+        target.lineElements_.append(newElement);
+        target.selectLineElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(lineElements_, selectedLine_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedPolyline_) {
+      PolylineElement *element = selectedPolyline_;
+      const QColor color = element->color();
+      const RectangleLineStyle lineStyle = element->lineStyle();
+      const int lineWidth = element->lineWidth();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      const QVector<QPoint> points = element->absolutePoints();
+      prepareClipboard([color, lineStyle, lineWidth, colorMode,
+                           visibilityMode, visibilityCalc, channels, points](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QVector<QPoint> translated = points;
+        for (QPoint &pt : translated) {
+          pt += offset;
+        }
+        auto *newElement = new PolylineElement(target.displayArea_);
+        newElement->setAbsolutePoints(translated);
+        newElement->setForegroundColor(color);
+        newElement->setLineStyle(lineStyle);
+        newElement->setLineWidth(lineWidth);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.polylineElements_.append(newElement);
+        target.selectPolylineElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(polylineElements_, selectedPolyline_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedPolygon_) {
+      PolygonElement *element = selectedPolygon_;
+      const QColor color = element->color();
+      const RectangleFill fill = element->fill();
+      const RectangleLineStyle lineStyle = element->lineStyle();
+      const int lineWidth = element->lineWidth();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 4> channels{};
+      for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+        channels[static_cast<std::size_t>(i)] = element->channel(i);
+      }
+      const QVector<QPoint> points = element->absolutePoints();
+      prepareClipboard([color, fill, lineStyle, lineWidth, colorMode,
+                           visibilityMode, visibilityCalc, channels, points](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QVector<QPoint> translated = points;
+        for (QPoint &pt : translated) {
+          pt += offset;
+        }
+        auto *newElement = new PolygonElement(target.displayArea_);
+        newElement->setAbsolutePoints(translated);
+        newElement->setForegroundColor(color);
+        newElement->setFill(fill);
+        newElement->setLineStyle(lineStyle);
+        newElement->setLineWidth(lineWidth);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+          newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
+        }
+        newElement->show();
+        target.polygonElements_.append(newElement);
+        target.selectPolygonElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(polygonElements_, selectedPolygon_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  void pasteFromClipboard()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || !state->clipboard
+        || !state->clipboard->isValid()) {
       return;
     }
-    if (cutSelectedElement(textEntryElements_, selectedTextEntryElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(sliderElements_, selectedSliderElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(wheelSwitchElements_, selectedWheelSwitchElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(choiceButtonElements_, selectedChoiceButtonElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(menuElements_, selectedMenuElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(messageButtonElements_,
-            selectedMessageButtonElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(shellCommandElements_,
-            selectedShellCommandElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(relatedDisplayElements_,
-            selectedRelatedDisplayElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(textMonitorElements_, selectedTextMonitorElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(meterElements_, selectedMeterElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(barMonitorElements_, selectedBarMonitorElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(scaleMonitorElements_,
-            selectedScaleMonitorElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(stripChartElements_, selectedStripChartElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(cartesianPlotElements_,
-            selectedCartesianPlotElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(byteMonitorElements_, selectedByteMonitorElement_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(rectangleElements_, selectedRectangle_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(imageElements_, selectedImage_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(ovalElements_, selectedOval_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(arcElements_, selectedArc_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(lineElements_, selectedLine_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(polylineElements_, selectedPolyline_)) {
-      finalizeCut();
-      return;
-    }
-    if (cutSelectedElement(polygonElements_, selectedPolygon_)) {
-      finalizeCut();
-      return;
-    }
+
+    QPoint offset = state->clipboard->nextOffset;
+    state->clipboard->paste(*this, offset);
+    state->clipboard->hasPasted = true;
+    state->clipboard->nextOffset += QPoint(10, 10);
+    notifyMenus();
+  }
+
+  bool hasAnyElementSelection() const
+  {
+    return selectedTextElement_ || selectedTextEntryElement_
+        || selectedSliderElement_ || selectedWheelSwitchElement_
+        || selectedChoiceButtonElement_ || selectedMenuElement_
+        || selectedMessageButtonElement_ || selectedShellCommandElement_
+        || selectedRelatedDisplayElement_ || selectedTextMonitorElement_
+        || selectedMeterElement_ || selectedBarMonitorElement_
+        || selectedScaleMonitorElement_ || selectedStripChartElement_
+        || selectedCartesianPlotElement_ || selectedByteMonitorElement_
+        || selectedRectangle_ || selectedImage_ || selectedOval_
+        || selectedArc_ || selectedLine_ || selectedPolyline_
+        || selectedPolygon_;
   }
 
   void closeResourcePalette()
@@ -5436,8 +6477,20 @@ private:
       setAsActiveDisplay();
       cutSelection();
     });
-    addMenuAction(&menu, QStringLiteral("Copy"), QKeySequence(QStringLiteral("Ctrl+Ins")));
-    addMenuAction(&menu, QStringLiteral("Paste"), QKeySequence(QStringLiteral("Shift+Ins")));
+    auto *copyAction = addMenuAction(&menu, QStringLiteral("Copy"),
+        QKeySequence(QStringLiteral("Ctrl+Ins")));
+    copyAction->setEnabled(hasAnyElementSelection());
+    QObject::connect(copyAction, &QAction::triggered, this, [this]() {
+      setAsActiveDisplay();
+      copySelection();
+    });
+    auto *pasteAction = addMenuAction(&menu, QStringLiteral("Paste"),
+        QKeySequence(QStringLiteral("Shift+Ins")));
+    pasteAction->setEnabled(canPaste());
+    QObject::connect(pasteAction, &QAction::triggered, this, [this]() {
+      setAsActiveDisplay();
+      pasteSelection();
+    });
 
     menu.addSeparator();
     addMenuAction(&menu, QStringLiteral("Raise"));

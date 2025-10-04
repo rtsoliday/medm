@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QLabel>
 #include <QPaintEvent>
+#include <QRect>
 #include <QResizeEvent>
 #include <QString>
 
@@ -17,6 +18,8 @@ public:
 
   void setSelected(bool selected);
   bool isSelected() const;
+
+  QRect boundingRect() const;
 
   QColor foregroundColor() const;
   void setForegroundColor(const QColor &color);

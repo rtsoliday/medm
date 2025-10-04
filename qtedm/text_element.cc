@@ -10,12 +10,18 @@
 
 #include "text_font_utils.h"
 
+namespace {
+
+constexpr int kTextMargin = 0;
+
+} // namespace
+
 TextElement::TextElement(QWidget *parent)
   : QLabel(parent)
 {
   setAutoFillBackground(false);
   setWordWrap(true);
-  setContentsMargins(2, 2, 2, 2);
+  setContentsMargins(kTextMargin, kTextMargin, kTextMargin, kTextMargin);
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setTextAlignment(Qt::AlignLeft | Qt::AlignTop);
   setForegroundColor(palette().color(QPalette::WindowText));
@@ -61,6 +67,13 @@ void TextElement::setText(const QString &value)
 {
   QLabel::setText(value);
   updateFontForGeometry();
+}
+
+QRect TextElement::boundingRect() const
+{
+  QRect bounds = QLabel::rect();
+  bounds.adjust(-kTextMargin, -kTextMargin, kTextMargin, kTextMargin);
+  return bounds;
 }
 
 Qt::Alignment TextElement::textAlignment() const

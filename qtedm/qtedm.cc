@@ -490,8 +490,6 @@ int main(int argc, char *argv[])
   central->setLayout(layout);
   win.setCentralWidget(central);
 
-  showVersionDialog(&win, fixed13Font, fixed10Font, palette);
-
   win.adjustSize();
   win.setFixedSize(win.sizeHint());
   win.show();

@@ -1,13 +1,14 @@
+
 file {
-	name="tests/test_Text.adl"
+	name="/home/SOLIDAY/github/medm/tests/test_Text_medm.adl"
 	version=030122
 }
 display {
 	object {
 		x=0
-		y=0
+		y=53
 		width=400
-		height=2100
+		height=1355
 	}
 	clr=14
 	bclr=4
@@ -96,10 +97,6 @@ text {
 	"basic attribute" {
 		clr=53
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
 	textix="Example Text Height 6"
 	align="horiz. centered"
 }
@@ -112,11 +109,6 @@ text {
 	}
 	"basic attribute" {
 		clr=18
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 7"
 	align="horiz. centered"
@@ -131,11 +123,6 @@ text {
 	"basic attribute" {
 		clr=24
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 8"
 	align="horiz. right"
 }
@@ -149,13 +136,7 @@ text {
 	"basic attribute" {
 		clr=36
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 9"
-	align="horiz. left"
 }
 text {
 	object {
@@ -166,11 +147,6 @@ text {
 	}
 	"basic attribute" {
 		clr=23
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 10"
 	align="horiz. right"
@@ -185,10 +161,6 @@ text {
 	"basic attribute" {
 		clr=34
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
 	textix="Example Text Height 11"
 	align="horiz. right"
 }
@@ -201,11 +173,6 @@ text {
 	}
 	"basic attribute" {
 		clr=10
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 12"
 	align="horiz. right"
@@ -220,12 +187,7 @@ text {
 	"basic attribute" {
 		clr=13
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
 	textix="Example Text Height 13"
-	align="horiz. left"
 }
 text {
 	object {
@@ -236,10 +198,6 @@ text {
 	}
 	"basic attribute" {
 		clr=30
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="static"
 	}
 	textix="Example Text Height 14"
 	align="horiz. centered"
@@ -254,11 +212,6 @@ text {
 	"basic attribute" {
 		clr=1
 	}
-	"dynamic attribute" {
-		clr="static"
-		vis="calc"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 15"
 	align="horiz. centered"
 }
@@ -272,13 +225,7 @@ text {
 	"basic attribute" {
 		clr=50
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 16"
-	align="horiz. left"
 }
 text {
 	object {
@@ -289,11 +236,6 @@ text {
 	}
 	"basic attribute" {
 		clr=7
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 17"
 	align="horiz. right"
@@ -308,10 +250,6 @@ text {
 	"basic attribute" {
 		clr=57
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="static"
-	}
 	textix="Example Text Height 18"
 	align="horiz. right"
 }
@@ -324,11 +262,6 @@ text {
 	}
 	"basic attribute" {
 		clr=48
-	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 19"
 	align="horiz. right"
@@ -343,11 +276,6 @@ text {
 	"basic attribute" {
 		clr=52
 	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 20"
 	align="horiz. centered"
 }
@@ -361,12 +289,7 @@ text {
 	"basic attribute" {
 		clr=56
 	}
-	"dynamic attribute" {
-		clr="static"
-		vis="static"
-	}
 	textix="Example Text Height 21"
-	align="horiz. left"
 }
 text {
 	object {
@@ -377,11 +300,6 @@ text {
 	}
 	"basic attribute" {
 		clr=17
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 22"
 	align="horiz. centered"
@@ -396,11 +314,6 @@ text {
 	"basic attribute" {
 		clr=3
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 23"
 	align="horiz. right"
 }
@@ -414,12 +327,7 @@ text {
 	"basic attribute" {
 		clr=10
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="static"
-	}
 	textix="Example Text Height 24"
-	align="horiz. left"
 }
 text {
 	object {
@@ -431,13 +339,7 @@ text {
 	"basic attribute" {
 		clr=11
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 25"
-	align="horiz. left"
 }
 text {
 	object {
@@ -448,10 +350,6 @@ text {
 	}
 	"basic attribute" {
 		clr=4
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="static"
 	}
 	textix="Example Text Height 26"
 	align="horiz. centered"
@@ -466,13 +364,7 @@ text {
 	"basic attribute" {
 		clr=6
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="calc"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 27"
-	align="horiz. left"
 }
 text {
 	object {
@@ -483,10 +375,6 @@ text {
 	}
 	"basic attribute" {
 		clr=50
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="static"
 	}
 	textix="Example Text Height 28"
 	align="horiz. centered"
@@ -501,11 +389,6 @@ text {
 	"basic attribute" {
 		clr=44
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 29"
 	align="horiz. right"
 }
@@ -518,11 +401,6 @@ text {
 	}
 	"basic attribute" {
 		clr=40
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="calc"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 30"
 	align="horiz. right"
@@ -537,13 +415,7 @@ text {
 	"basic attribute" {
 		clr=21
 	}
-	"dynamic attribute" {
-		clr="static"
-		vis="calc"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 31"
-	align="horiz. left"
 }
 text {
 	object {
@@ -554,11 +426,6 @@ text {
 	}
 	"basic attribute" {
 		clr=24
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 32"
 	align="horiz. right"
@@ -573,10 +440,6 @@ text {
 	"basic attribute" {
 		clr=36
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
 	textix="Example Text Height 33"
 	align="horiz. right"
 }
@@ -590,13 +453,7 @@ text {
 	"basic attribute" {
 		clr=11
 	}
-	"dynamic attribute" {
-		clr="static"
-		vis="calc"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 34"
-	align="horiz. left"
 }
 text {
 	object {
@@ -607,11 +464,6 @@ text {
 	}
 	"basic attribute" {
 		clr=11
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 35"
 	align="horiz. centered"
@@ -626,13 +478,7 @@ text {
 	"basic attribute" {
 		clr=35
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 36"
-	align="horiz. left"
 }
 text {
 	object {
@@ -644,12 +490,7 @@ text {
 	"basic attribute" {
 		clr=10
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
 	textix="Example Text Height 37"
-	align="horiz. left"
 }
 text {
 	object {
@@ -661,13 +502,7 @@ text {
 	"basic attribute" {
 		clr=57
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="calc"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 38"
-	align="horiz. left"
 }
 text {
 	object {
@@ -679,12 +514,7 @@ text {
 	"basic attribute" {
 		clr=17
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
 	textix="Example Text Height 39"
-	align="horiz. left"
 }
 text {
 	object {
@@ -695,10 +525,6 @@ text {
 	}
 	"basic attribute" {
 		clr=51
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="static"
 	}
 	textix="Example Text Height 40"
 	align="horiz. right"
@@ -713,11 +539,6 @@ text {
 	"basic attribute" {
 		clr=16
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 41"
 	align="horiz. centered"
 }
@@ -731,13 +552,7 @@ text {
 	"basic attribute" {
 		clr=22
 	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 42"
-	align="horiz. left"
 }
 text {
 	object {
@@ -749,13 +564,7 @@ text {
 	"basic attribute" {
 		clr=12
 	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 43"
-	align="horiz. left"
 }
 text {
 	object {
@@ -766,11 +575,6 @@ text {
 	}
 	"basic attribute" {
 		clr=62
-	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="if not zero"
-		calc="visibility.pv"
 	}
 	textix="Example Text Height 44"
 	align="horiz. right"
@@ -785,11 +589,6 @@ text {
 	"basic attribute" {
 		clr=21
 	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="calc"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 45"
 	align="horiz. centered"
 }
@@ -803,247 +602,12 @@ text {
 	"basic attribute" {
 		clr=48
 	}
-	"dynamic attribute" {
-		clr="static"
-		vis="calc"
-		calc="visibility.pv"
-	}
 	textix="Example Text Height 46"
-	align="horiz. left"
 }
 text {
 	object {
 		x=40
 		y=1250
-		width=300
-		height=47
-	}
-	"basic attribute" {
-		clr=48
-	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 47"
-	align="horiz. left"
-}
-text {
-	object {
-		x=40
-		y=1301
-		width=300
-		height=48
-	}
-	"basic attribute" {
-		clr=22
-	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 48"
-	align="horiz. left"
-}
-text {
-	object {
-		x=40
-		y=1353
-		width=300
-		height=49
-	}
-	"basic attribute" {
-		clr=35
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if not zero"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 49"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=1406
-		width=300
-		height=50
-	}
-	"basic attribute" {
-		clr=17
-	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
-	textix="Example Text Height 50"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=1460
-		width=300
-		height=51
-	}
-	"basic attribute" {
-		clr=52
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if zero"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 51"
-	align="horiz. centered"
-}
-text {
-	object {
-		x=40
-		y=1515
-		width=300
-		height=52
-	}
-	"basic attribute" {
-		clr=41
-	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
-	textix="Example Text Height 52"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=1571
-		width=300
-		height=53
-	}
-	"basic attribute" {
-		clr=57
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="if zero"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 53"
-	align="horiz. left"
-}
-text {
-	object {
-		x=40
-		y=1628
-		width=300
-		height=54
-	}
-	"basic attribute" {
-		clr=18
-	}
-	"dynamic attribute" {
-		clr="discrete"
-		vis="static"
-	}
-	textix="Example Text Height 54"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=1686
-		width=300
-		height=55
-	}
-	"basic attribute" {
-		clr=26
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if zero"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 55"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=1745
-		width=300
-		height=56
-	}
-	"basic attribute" {
-		clr=20
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="if zero"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 56"
-	align="horiz. centered"
-}
-text {
-	object {
-		x=40
-		y=1805
-		width=300
-		height=57
-	}
-	"basic attribute" {
-		clr=4
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="calc"
-		calc="visibility.pv"
-	}
-	textix="Example Text Height 57"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=1866
-		width=300
-		height=58
-	}
-	"basic attribute" {
-		clr=15
-	}
-	"dynamic attribute" {
-		clr="alarm"
-		vis="static"
-	}
-	textix="Example Text Height 58"
-	align="horiz. centered"
-}
-text {
-	object {
-		x=40
-		y=1928
-		width=300
-		height=59
-	}
-	"basic attribute" {
-		clr=44
-	}
-	"dynamic attribute" {
-		clr="static"
-		vis="static"
-	}
-	textix="Example Text Height 59"
-	align="horiz. centered"
-}
-text {
-	object {
-		x=40
-		y=1991
 		width=300
 		height=60
 	}
@@ -1051,8 +615,6 @@ text {
 		clr=8
 	}
 	"dynamic attribute" {
-		clr="static"
-		vis="static"
 		chan="channelA.PV"
 		chanB="channelB.PV"
 		chanC="channelC.PV"

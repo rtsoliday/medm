@@ -610,12 +610,16 @@ public:
         [this]() { commitTextVisibilityCalc(); });
 
     for (int i = 0; i < static_cast<int>(textChannelEdits_.size()); ++i) {
+      if (i == kTextPrimaryChannelIndex) {
+        textChannelEdits_[i] = nullptr;
+        continue;
+      }
       textChannelEdits_[i] = createLineEdit();
       QObject::connect(textChannelEdits_[i], &QLineEdit::returnPressed, this,
           [this, i]() { commitTextChannel(i); });
       QObject::connect(textChannelEdits_[i], &QLineEdit::editingFinished, this,
           [this, i]() { commitTextChannel(i); });
-      if (i == 0) {
+      if (i == kTextChannelAIndex) {
         QObject::connect(textChannelEdits_[i], &QLineEdit::textChanged, this,
             [this]() { updateTextChannelDependentControls(); });
       }
@@ -627,12 +631,11 @@ public:
     addRow(textLayout, 3, QStringLiteral("Color Mode"), textColorModeCombo_);
     addRow(textLayout, 4, QStringLiteral("Visibility"), textVisibilityCombo_);
     addRow(textLayout, 5, QStringLiteral("Vis Calc"), textVisibilityCalcEdit_);
-  addRow(textLayout, 6, QStringLiteral("Channel"), textChannelEdits_[0]);
-  addRow(textLayout, 7, QStringLiteral("Channel A"), textChannelEdits_[1]);
-  addRow(textLayout, 8, QStringLiteral("Channel B"), textChannelEdits_[2]);
-  addRow(textLayout, 9, QStringLiteral("Channel C"), textChannelEdits_[3]);
-  addRow(textLayout, 10, QStringLiteral("Channel D"), textChannelEdits_[4]);
-  textLayout->setRowStretch(11, 1);
+  addRow(textLayout, 6, QStringLiteral("Channel A"), textChannelEdits_[kTextChannelAIndex]);
+  addRow(textLayout, 7, QStringLiteral("Channel B"), textChannelEdits_[kTextChannelBIndex]);
+  addRow(textLayout, 8, QStringLiteral("Channel C"), textChannelEdits_[kTextChannelCIndex]);
+  addRow(textLayout, 9, QStringLiteral("Channel D"), textChannelEdits_[kTextChannelDIndex]);
+  textLayout->setRowStretch(10, 1);
   updateTextChannelDependentControls();
     entriesLayout->addWidget(textSection_);
 
@@ -2470,8 +2473,12 @@ public:
       if (!edit) {
         continue;
       }
-      const QString value =
+      QString value =
           textChannelGetters_[i] ? textChannelGetters_[i]() : QString();
+      if (i == kTextChannelAIndex && value.trimmed().isEmpty()
+          && textChannelGetters_[kTextPrimaryChannelIndex]) {
+        value = textChannelGetters_[kTextPrimaryChannelIndex]();
+      }
       const QSignalBlocker blocker(edit);
       edit->setText(value);
       committedTexts_[edit] = edit->text();
@@ -6788,6 +6795,11 @@ protected:
 
 private:
   static constexpr int kPaletteSpacing = 12;
+  static constexpr int kTextPrimaryChannelIndex = 0;
+  static constexpr int kTextChannelAIndex = 1;
+  static constexpr int kTextChannelBIndex = 2;
+  static constexpr int kTextChannelCIndex = 3;
+  static constexpr int kTextChannelDIndex = 4;
   enum class SelectionKind {
     kNone,
     kDisplay,
@@ -7138,7 +7150,10 @@ private:
     const QString value = edit->text();
     textChannelSetters_[index](value);
     committedTexts_[edit] = value;
-    if (index == 0) {
+    if (index == kTextChannelAIndex && textChannelSetters_[kTextPrimaryChannelIndex]) {
+      textChannelSetters_[kTextPrimaryChannelIndex](value);
+    }
+    if (index == kTextChannelAIndex) {
       updateTextChannelDependentControls();
     }
   }
@@ -7146,12 +7161,18 @@ private:
   void updateTextChannelDependentControls()
   {
     bool hasPrimaryChannel = false;
-    QLineEdit *channelEdit = textChannelEdits_[0];
-    if (channelEdit) {
-      hasPrimaryChannel = !channelEdit->text().trimmed().isEmpty();
+    if (textChannelGetters_[kTextPrimaryChannelIndex]) {
+      const QString value = textChannelGetters_[kTextPrimaryChannelIndex]();
+      hasPrimaryChannel = !value.trimmed().isEmpty();
     }
-    if (!hasPrimaryChannel && textChannelGetters_[0]) {
-      const QString value = textChannelGetters_[0]();
+    if (!hasPrimaryChannel) {
+      QLineEdit *channelEdit = textChannelEdits_[kTextChannelAIndex];
+      if (channelEdit) {
+        hasPrimaryChannel = !channelEdit->text().trimmed().isEmpty();
+      }
+    }
+    if (!hasPrimaryChannel && textChannelGetters_[kTextChannelAIndex]) {
+      const QString value = textChannelGetters_[kTextChannelAIndex]();
       hasPrimaryChannel = !value.trimmed().isEmpty();
     }
 

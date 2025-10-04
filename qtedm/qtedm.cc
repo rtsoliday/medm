@@ -430,9 +430,25 @@ int main(int argc, char *argv[])
         }
 
         static QString lastDirectory;
-        const QString selected = QFileDialog::getOpenFileName(&win,
-            QStringLiteral("Open Display"), lastDirectory,
-            QStringLiteral("MEDM Displays (*.adl);;All Files (*)"));
+        QFileDialog dialog(&win, QStringLiteral("Open Display"));
+        dialog.setAcceptMode(QFileDialog::AcceptOpen);
+        dialog.setFileMode(QFileDialog::ExistingFile);
+        dialog.setNameFilters({
+            QStringLiteral("MEDM Display Files (*.adl)"),
+            QStringLiteral("All Files (*)")});
+        dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+        dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
+        dialog.setModal(true);
+        dialog.setWindowModality(Qt::ApplicationModal);
+        if (!lastDirectory.isEmpty()) {
+          dialog.setDirectory(lastDirectory);
+        }
+
+        if (dialog.exec() != QDialog::Accepted) {
+          return;
+        }
+
+        const QString selected = dialog.selectedFiles().value(0);
         if (selected.isEmpty()) {
           return;
         }

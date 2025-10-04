@@ -993,7 +993,7 @@ private:
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
       const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[i] = element->channel(i);
       }
@@ -1358,7 +1358,7 @@ private:
       const PvLimitSource precisionSource = element->precisionSource();
       const int precisionDefault = element->precisionDefault();
       const PvLimits limits = element->limits();
-      std::array<QString, 4> channels{};
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -1698,7 +1698,7 @@ private:
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
       const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -1742,8 +1742,8 @@ private:
       const QString calc = element->calc();
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
-      const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+  const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -1787,8 +1787,8 @@ private:
       const int lineWidth = element->lineWidth();
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
-      const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+  const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -1835,8 +1835,8 @@ private:
       const int pathAngle = element->pathAngle();
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
-      const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+  const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -1883,8 +1883,8 @@ private:
       const int lineWidth = element->lineWidth();
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
-      const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+  const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -1937,8 +1937,8 @@ private:
       const int lineWidth = element->lineWidth();
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
-      const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+  const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -1984,8 +1984,8 @@ private:
       const int lineWidth = element->lineWidth();
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
-      const QString visibilityCalc = element->visibilityCalc();
-      std::array<QString, 4> channels{};
+  const QString visibilityCalc = element->visibilityCalc();
+      std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
@@ -2217,13 +2217,14 @@ private:
     if (!dialog) {
       return;
     }
-    std::array<std::function<QString()>, 4> channelGetters{{
+    std::array<std::function<QString()>, 5> channelGetters{{
         [element]() { return element->channel(0); },
         [element]() { return element->channel(1); },
         [element]() { return element->channel(2); },
         [element]() { return element->channel(3); },
+        [element]() { return element->channel(4); },
     }};
-    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+    std::array<std::function<void(const QString &)>, 5> channelSetters{{
         [this, element](const QString &value) {
           element->setChannel(0, value);
           markDirty();
@@ -2238,6 +2239,10 @@ private:
         },
         [this, element](const QString &value) {
           element->setChannel(3, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(4, value);
           markDirty();
         },
     }};
@@ -7878,6 +7883,10 @@ inline void DisplayWindow::loadTextElement(const AdlNode &textNode)
     const QString chanC = propertyValue(*dyn, QStringLiteral("chanC"));
     if (!chanC.isEmpty()) {
       element->setChannel(3, chanC);
+    }
+    const QString chanD = propertyValue(*dyn, QStringLiteral("chanD"));
+    if (!chanD.isEmpty()) {
+      element->setChannel(4, chanD);
     }
   }
 

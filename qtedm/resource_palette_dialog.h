@@ -597,6 +597,13 @@ public:
         });
 
     textVisibilityCalcEdit_ = createLineEdit();
+  QColor disabledBackground = basePalette.color(QPalette::Disabled, QPalette::Base);
+  if (!disabledBackground.isValid()) {
+    disabledBackground = QColor(0xd3, 0xd3, 0xd3);
+  }
+  textVisibilityCalcEdit_->setStyleSheet(
+    QStringLiteral("QLineEdit:disabled { background-color: %1; }")
+      .arg(disabledBackground.name(QColor::HexRgb).toUpper()));
     QObject::connect(textVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
         [this]() { commitTextVisibilityCalc(); });
     QObject::connect(textVisibilityCalcEdit_, &QLineEdit::editingFinished, this,
@@ -620,11 +627,12 @@ public:
     addRow(textLayout, 3, QStringLiteral("Color Mode"), textColorModeCombo_);
     addRow(textLayout, 4, QStringLiteral("Visibility"), textVisibilityCombo_);
     addRow(textLayout, 5, QStringLiteral("Vis Calc"), textVisibilityCalcEdit_);
-    addRow(textLayout, 6, QStringLiteral("Channel A"), textChannelEdits_[0]);
-    addRow(textLayout, 7, QStringLiteral("Channel B"), textChannelEdits_[1]);
-    addRow(textLayout, 8, QStringLiteral("Channel C"), textChannelEdits_[2]);
-    addRow(textLayout, 9, QStringLiteral("Channel D"), textChannelEdits_[3]);
-    textLayout->setRowStretch(10, 1);
+  addRow(textLayout, 6, QStringLiteral("Channel"), textChannelEdits_[0]);
+  addRow(textLayout, 7, QStringLiteral("Channel A"), textChannelEdits_[1]);
+  addRow(textLayout, 8, QStringLiteral("Channel B"), textChannelEdits_[2]);
+  addRow(textLayout, 9, QStringLiteral("Channel C"), textChannelEdits_[3]);
+  addRow(textLayout, 10, QStringLiteral("Channel D"), textChannelEdits_[4]);
+  textLayout->setRowStretch(11, 1);
   updateTextChannelDependentControls();
     entriesLayout->addWidget(textSection_);
 
@@ -2345,10 +2353,10 @@ public:
       std::function<void(TextColorMode)> colorModeSetter,
       std::function<TextVisibilityMode()> visibilityModeGetter,
       std::function<void(TextVisibilityMode)> visibilityModeSetter,
-      std::function<QString()> visibilityCalcGetter,
-      std::function<void(const QString &)> visibilityCalcSetter,
-      std::array<std::function<QString()>, 4> channelGetters,
-      std::array<std::function<void(const QString &)>, 4> channelSetters)
+  std::function<QString()> visibilityCalcGetter,
+  std::function<void(const QString &)> visibilityCalcSetter,
+  std::array<std::function<QString()>, 5> channelGetters,
+  std::array<std::function<void(const QString &)>, 5> channelSetters)
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kText;
@@ -6859,6 +6867,7 @@ private:
     labelWidget->setAutoFillBackground(false);
     layout->addWidget(labelWidget, row, 0);
     layout->addWidget(field, row, 1);
+    fieldLabels_.insert(field, labelWidget);
   }
 
   bool eventFilter(QObject *object, QEvent *event) override
@@ -7136,24 +7145,29 @@ private:
 
   void updateTextChannelDependentControls()
   {
-    bool hasChannelA = false;
-    QLineEdit *channelAEdit = textChannelEdits_[0];
-    if (channelAEdit) {
-      hasChannelA = !channelAEdit->text().trimmed().isEmpty();
+    bool hasPrimaryChannel = false;
+    QLineEdit *channelEdit = textChannelEdits_[0];
+    if (channelEdit) {
+      hasPrimaryChannel = !channelEdit->text().trimmed().isEmpty();
     }
-    if (!hasChannelA && textChannelGetters_[0]) {
+    if (!hasPrimaryChannel && textChannelGetters_[0]) {
       const QString value = textChannelGetters_[0]();
-      hasChannelA = !value.trimmed().isEmpty();
+      hasPrimaryChannel = !value.trimmed().isEmpty();
     }
 
-    if (textColorModeCombo_) {
-      textColorModeCombo_->setEnabled(hasChannelA);
+    setFieldEnabled(textColorModeCombo_, hasPrimaryChannel);
+    setFieldEnabled(textVisibilityCombo_, hasPrimaryChannel);
+    setFieldEnabled(textVisibilityCalcEdit_, hasPrimaryChannel);
+  }
+
+  void setFieldEnabled(QWidget *field, bool enabled)
+  {
+    if (!field) {
+      return;
     }
-    if (textVisibilityCombo_) {
-      textVisibilityCombo_->setEnabled(hasChannelA);
-    }
-    if (textVisibilityCalcEdit_) {
-      textVisibilityCalcEdit_->setEnabled(hasChannelA);
+    field->setEnabled(enabled);
+    if (QLabel *label = fieldLabels_.value(field, nullptr)) {
+      label->setEnabled(enabled);
     }
   }
 
@@ -8966,7 +8980,7 @@ private:
   QComboBox *textColorModeCombo_ = nullptr;
   QComboBox *textVisibilityCombo_ = nullptr;
   QLineEdit *textVisibilityCalcEdit_ = nullptr;
-  std::array<QLineEdit *, 4> textChannelEdits_{};
+  std::array<QLineEdit *, 5> textChannelEdits_{};
   QWidget *textMonitorSection_ = nullptr;
   QPushButton *textMonitorForegroundButton_ = nullptr;
   QPushButton *textMonitorBackgroundButton_ = nullptr;
@@ -9450,6 +9464,7 @@ private:
   std::function<void(const QRect &)> geometrySetter_;
   QRect lastCommittedGeometry_;
   QHash<QLineEdit *, QString> committedTexts_;
+  QHash<QWidget *, QLabel *> fieldLabels_;
   ColorPaletteDialog *colorPaletteDialog_ = nullptr;
   PvLimitsDialog *pvLimitsDialog_ = nullptr;
   QPushButton *activeColorButton_ = nullptr;
@@ -9474,8 +9489,8 @@ private:
   std::function<void(TextVisibilityMode)> textVisibilityModeSetter_;
   std::function<QString()> textVisibilityCalcGetter_;
   std::function<void(const QString &)> textVisibilityCalcSetter_;
-  std::array<std::function<QString()>, 4> textChannelGetters_{};
-  std::array<std::function<void(const QString &)>, 4> textChannelSetters_{};
+  std::array<std::function<QString()>, 5> textChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 5> textChannelSetters_{};
   std::function<QColor()> textMonitorForegroundGetter_;
   std::function<void(const QColor &)> textMonitorForegroundSetter_;
   std::function<QColor()> textMonitorBackgroundGetter_;

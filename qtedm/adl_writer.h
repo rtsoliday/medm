@@ -42,7 +42,7 @@ void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
     RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth);
 void writeDynamicAttributeSection(QTextStream &stream, int level,
     TextColorMode colorMode, TextVisibilityMode visibilityMode,
-    const QString &calc, const std::array<QString, 4> &channels);
+    const QString &calc, const std::array<QString, 5> &channels);
 void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex);
 void writeControlSection(QTextStream &stream, int level, const QString &channel,
@@ -65,9 +65,9 @@ void writeRelatedDisplayEntry(QTextStream &stream, int level, int index,
     const RelatedDisplayEntry &entry);
 
 template <typename Element>
-std::array<QString, 4> collectChannels(const Element *element)
+std::array<QString, 5> collectChannels(const Element *element)
 {
-  std::array<QString, 4> channels{};
+    std::array<QString, 5> channels{};
   if (!element) {
     return channels;
   }

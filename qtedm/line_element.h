@@ -61,7 +61,7 @@ private:
   TextColorMode colorMode_ = TextColorMode::kStatic;
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
   QString visibilityCalc_;
-  std::array<QString, 4> channels_{};
+  std::array<QString, 5> channels_{};
   QPointF startRatio_{0.0, 0.0};
   QPointF endRatio_{1.0, 1.0};
 };

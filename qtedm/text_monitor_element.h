@@ -65,6 +65,6 @@ private:
   TextColorMode colorMode_ = TextColorMode::kStatic;
   TextMonitorFormat format_ = TextMonitorFormat::kDecimal;
   PvLimits limits_{};
-  std::array<QString, 4> channels_{};
+  std::array<QString, 5> channels_{};
 };
 

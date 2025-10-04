@@ -211,7 +211,7 @@ QString channelFieldName(int index)
   if (index <= 0) {
     return QStringLiteral("chan");
   }
-  return QStringLiteral("chan%1").arg(QChar(QLatin1Char('A' + index)));
+  return QStringLiteral("chan%1").arg(QChar(QLatin1Char('A' + index - 1)));
 }
 
 QString textMonitorFormatString(TextMonitorFormat format)
@@ -353,12 +353,19 @@ void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
 }
 
 void writeDynamicAttributeSection(QTextStream &stream, int level,
-    TextColorMode colorMode, TextVisibilityMode visibilityMode,
-    const QString &calc, const std::array<QString, 4> &channels)
+  TextColorMode colorMode, TextVisibilityMode visibilityMode,
+  const QString &calc, const std::array<QString, 5> &channels)
 {
-  const bool hasColor = colorMode != TextColorMode::kStatic;
-  const bool hasVisibility = visibilityMode != TextVisibilityMode::kStatic;
-  const bool hasCalc = !calc.trimmed().isEmpty();
+  bool hasColor = colorMode != TextColorMode::kStatic;
+  bool hasVisibility = visibilityMode != TextVisibilityMode::kStatic;
+  bool hasCalc = !calc.trimmed().isEmpty();
+  const bool hasChannelA = !channels.empty()
+      && !channels[0].trimmed().isEmpty();
+  if (!hasChannelA) {
+    hasColor = false;
+    hasVisibility = false;
+    hasCalc = false;
+  }
   bool hasChannel = false;
   for (const QString &channel : channels) {
     if (!channel.trimmed().isEmpty()) {
@@ -392,9 +399,10 @@ void writeDynamicAttributeSection(QTextStream &stream, int level,
     if (channel.isEmpty()) {
       continue;
     }
+    const QString fieldName = channelFieldName(i);
     writeIndentedLine(stream, level + 1,
         QStringLiteral("%1=\"%2\"")
-            .arg(channelFieldName(i), escapeAdlString(channel)));
+            .arg(fieldName, escapeAdlString(channel)));
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }

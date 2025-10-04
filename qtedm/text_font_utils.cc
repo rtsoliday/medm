@@ -52,11 +52,6 @@ QFont medmCompatibleTextFont(const QString &text, const QSize &availableSize)
       continue;
     }
 
-    const int fontWidth = metrics.horizontalAdvance(sample);
-    if (fontWidth > availableSize.width()) {
-      continue;
-    }
-
     chosen = font;
     found = true;
   }

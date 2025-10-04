@@ -20,7 +20,7 @@ TextElement::TextElement(QWidget *parent)
   : QLabel(parent)
 {
   setAutoFillBackground(false);
-  setWordWrap(true);
+  setWordWrap(false);
   setContentsMargins(kTextMargin, kTextMargin, kTextMargin, kTextMargin);
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setTextAlignment(Qt::AlignLeft | Qt::AlignTop);

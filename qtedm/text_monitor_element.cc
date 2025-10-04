@@ -13,7 +13,7 @@ TextMonitorElement::TextMonitorElement(QWidget *parent)
   : QLabel(parent)
 {
   setAutoFillBackground(true);
-  setWordWrap(true);
+  setWordWrap(false);
   setContentsMargins(2, 2, 2, 2);
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setTextAlignment(Qt::AlignLeft | Qt::AlignTop);

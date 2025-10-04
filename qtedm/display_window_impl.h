@@ -1004,6 +1004,9 @@ private:
           return;
         }
         QRect rect = geometry.translated(offset);
+        if (rect.height() < kMinimumTextElementHeight) {
+          rect.setHeight(kMinimumTextElementHeight);
+        }
         rect = target.adjustRectToDisplayArea(rect);
         auto *newElement = new TextElement(target.displayArea_);
         newElement->setFont(target.font());
@@ -2247,11 +2250,14 @@ private:
           if (adjusted.width() < kMinimumRectangleSize) {
             adjusted.setWidth(kMinimumRectangleSize);
           }
-          if (adjusted.height() < kMinimumRectangleSize) {
-            adjusted.setHeight(kMinimumRectangleSize);
+          if (adjusted.height() < kMinimumTextElementHeight) {
+            adjusted.setHeight(kMinimumTextElementHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
-          markDirty();
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          if (constrained != element->geometry()) {
+            element->setGeometry(constrained);
+            markDirty();
+          }
         },
         [element]() {
           return element->text();
@@ -5608,7 +5614,11 @@ private:
     if (!displayArea_) {
       return;
     }
-    QRect target = adjustRectToDisplayArea(rect);
+    QRect target = rect;
+    if (target.height() < kMinimumTextElementHeight) {
+      target.setHeight(kMinimumTextElementHeight);
+    }
+    target = adjustRectToDisplayArea(target);
     if (target.width() <= 0 || target.height() <= 0) {
       return;
     }
@@ -7814,6 +7824,9 @@ inline void DisplayWindow::loadTextElement(const AdlNode &textNode)
     return;
   }
   QRect geometry = parseObjectGeometry(textNode);
+  if (geometry.height() < kMinimumTextElementHeight) {
+    geometry.setHeight(kMinimumTextElementHeight);
+  }
   auto *element = new TextElement(displayArea_);
   element->setFont(font());
   element->setGeometry(geometry);

@@ -167,6 +167,7 @@ constexpr int kMinimumGridSpacing = 2;
 constexpr bool kDefaultGridOn = false;
 constexpr bool kDefaultSnapToGrid = false;
 constexpr int kMinimumTextWidth = 40;
+constexpr int kMinimumTextElementHeight = 8;
 constexpr int kMinimumTextHeight = 20;
 constexpr int kMinimumSliderWidth = 80;
 constexpr int kMinimumSliderHeight = 30;

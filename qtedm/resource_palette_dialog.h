@@ -2390,11 +2390,18 @@ public:
     textMonitorChannelSetter_ = {};
 
     QRect textGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    bool geometryAdjusted = false;
     if (textGeometry.width() <= 0) {
       textGeometry.setWidth(kMinimumTextWidth);
+      geometryAdjusted = true;
     }
-    if (textGeometry.height() <= 0) {
-      textGeometry.setHeight(kMinimumTextHeight);
+    if (textGeometry.height() < kMinimumTextElementHeight) {
+      textGeometry.setHeight(kMinimumTextElementHeight);
+      geometryAdjusted = true;
+    }
+    if (geometryAdjusted && geometrySetter_) {
+      geometrySetter_(textGeometry);
+      textGeometry = geometryGetter_ ? geometryGetter_() : textGeometry;
     }
     lastCommittedGeometry_ = textGeometry;
 

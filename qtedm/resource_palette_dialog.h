@@ -608,6 +608,10 @@ public:
           [this, i]() { commitTextChannel(i); });
       QObject::connect(textChannelEdits_[i], &QLineEdit::editingFinished, this,
           [this, i]() { commitTextChannel(i); });
+      if (i == 0) {
+        QObject::connect(textChannelEdits_[i], &QLineEdit::textChanged, this,
+            [this]() { updateTextChannelDependentControls(); });
+      }
     }
 
     addRow(textLayout, 0, QStringLiteral("Text String"), textStringEdit_);
@@ -621,6 +625,7 @@ public:
     addRow(textLayout, 8, QStringLiteral("Channel C"), textChannelEdits_[2]);
     addRow(textLayout, 9, QStringLiteral("Channel D"), textChannelEdits_[3]);
     textLayout->setRowStretch(10, 1);
+  updateTextChannelDependentControls();
     entriesLayout->addWidget(textSection_);
 
     textMonitorSection_ = new QWidget(entriesWidget_);
@@ -2463,6 +2468,8 @@ public:
       edit->setText(value);
       committedTexts_[edit] = edit->text();
     }
+
+    updateTextChannelDependentControls();
 
     elementLabel_->setText(QStringLiteral("Text"));
 
@@ -6505,6 +6512,7 @@ public:
     for (QLineEdit *edit : textChannelEdits_) {
       resetLineEdit(edit);
     }
+    updateTextChannelDependentControls();
     resetLineEdit(textEntryPrecisionEdit_);
     resetLineEdit(textEntryChannelEdit_);
     resetLineEdit(choiceButtonChannelEdit_);
@@ -7121,6 +7129,32 @@ private:
     const QString value = edit->text();
     textChannelSetters_[index](value);
     committedTexts_[edit] = value;
+    if (index == 0) {
+      updateTextChannelDependentControls();
+    }
+  }
+
+  void updateTextChannelDependentControls()
+  {
+    bool hasChannelA = false;
+    QLineEdit *channelAEdit = textChannelEdits_[0];
+    if (channelAEdit) {
+      hasChannelA = !channelAEdit->text().trimmed().isEmpty();
+    }
+    if (!hasChannelA && textChannelGetters_[0]) {
+      const QString value = textChannelGetters_[0]();
+      hasChannelA = !value.trimmed().isEmpty();
+    }
+
+    if (textColorModeCombo_) {
+      textColorModeCombo_->setEnabled(hasChannelA);
+    }
+    if (textVisibilityCombo_) {
+      textVisibilityCombo_->setEnabled(hasChannelA);
+    }
+    if (textVisibilityCalcEdit_) {
+      textVisibilityCalcEdit_->setEnabled(hasChannelA);
+    }
   }
 
   void commitTextEntryChannel()

@@ -9764,19 +9764,19 @@ private:
     activeColorButton_ = button;
     activeColorSetter_ = setter;
     colorPaletteDialog_->setCurrentColor(colorFromButton(button), description);
-    bool positionedBelow = false;
-    if (!colorPaletteDialog_->isVisible()) {
-      positionedBelow = positionColorPaletteBelowResourceIfPossible();
+    const bool dialogWasVisible = colorPaletteDialog_->isVisible();
+    if (!dialogWasVisible) {
+      positionColorPaletteRelativeToResource();
     }
     colorPaletteDialog_->show();
-    if (positionedBelow) {
+    if (!dialogWasVisible) {
       scheduleColorPalettePlacement();
     }
     colorPaletteDialog_->raise();
     colorPaletteDialog_->activateWindow();
   }
 
-  bool positionColorPaletteBelowResourceIfPossible()
+  bool positionColorPaletteRelativeToResource()
   {
     if (!colorPaletteDialog_) {
       return false;
@@ -9815,15 +9815,8 @@ private:
       return false;
     }
 
-    QPoint desiredTopLeft(referenceFrame.left(),
-        referenceFrame.bottom() + kPaletteSpacing);
-    QRect desiredRect(desiredTopLeft, paletteSize);
-    if (!available.isNull() && !available.contains(desiredRect)) {
-      return false;
-    }
-
-    colorPaletteDialog_->move(desiredTopLeft);
-    return true;
+    return placeColorPaletteRelativeToReference(colorPaletteDialog_, paletteSize,
+        referenceFrame, available);
   }
 
   void scheduleColorPalettePlacement()
@@ -9858,15 +9851,69 @@ private:
         return;
       }
 
-      QPoint desiredTopLeft(referenceFrame.left(),
-          referenceFrame.bottom() + ResourcePaletteDialog::kPaletteSpacing);
-      QRect desiredRect(desiredTopLeft, palette->size());
-      if (!available.isNull() && !available.contains(desiredRect)) {
+      QSize paletteSize = palette->size();
+      if (paletteSize.isEmpty()) {
+        paletteSize = palette->sizeHint().expandedTo(palette->minimumSize());
+      }
+      if (paletteSize.isEmpty()) {
         return;
       }
 
-      palette->move(desiredTopLeft);
+      guard->placeColorPaletteRelativeToReference(palette, paletteSize,
+          referenceFrame, available);
     }, Qt::QueuedConnection);
+  }
+
+  bool placeColorPaletteRelativeToReference(ColorPaletteDialog *palette,
+      const QSize &paletteSize, const QRect &referenceFrame,
+      const QRect &available)
+  {
+    if (!palette || paletteSize.isEmpty() || !referenceFrame.isValid()) {
+      return false;
+    }
+
+    const auto clampHorizontal = [&](int desiredX) {
+      if (available.isNull()) {
+        return desiredX;
+      }
+      int minX = available.left();
+      int maxX = available.right() - paletteSize.width() + 1;
+      if (maxX < minX) {
+        maxX = minX;
+      }
+      return std::clamp(desiredX, minX, maxX);
+    };
+
+    const int targetX = clampHorizontal(referenceFrame.left());
+    const int spacing = ResourcePaletteDialog::kPaletteSpacing;
+
+    const int belowY = referenceFrame.bottom() + spacing;
+    QRect belowRect(QPoint(targetX, belowY), paletteSize);
+    if (available.isNull() || available.contains(belowRect)) {
+      palette->move(belowRect.topLeft());
+      return true;
+    }
+
+    const int aboveY = referenceFrame.top() - spacing - paletteSize.height();
+    QRect aboveRect(QPoint(targetX, aboveY), paletteSize);
+    if (available.isNull() || available.contains(aboveRect)) {
+      palette->move(aboveRect.topLeft());
+      return true;
+    }
+
+    if (available.isNull()) {
+      palette->move(belowRect.topLeft());
+      return false;
+    }
+
+    int minY = available.top();
+    int maxY = available.bottom() - paletteSize.height() + 1;
+    if (maxY < minY) {
+      maxY = minY;
+    }
+    const int clampedY = std::clamp(belowY, minY, maxY);
+    palette->move(targetX, clampedY);
+    return false;
   }
 
   void openTextEntryPvLimitsDialog()

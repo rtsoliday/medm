@@ -114,14 +114,11 @@ int main(int argc, char *argv[])
   editMenu->addAction("&Undo");
   editMenu->addSeparator();
   auto *cutAct = editMenu->addAction("Cu&t");
-  cutAct->setShortcuts({QKeySequence::Cut,
-      QKeySequence(QStringLiteral("Shift+Del"))});
+  cutAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_X));
   auto *copyAct = editMenu->addAction("&Copy");
-  copyAct->setShortcuts({QKeySequence::Copy,
-      QKeySequence(QStringLiteral("Ctrl+Ins"))});
+  copyAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_C));
   auto *pasteAct = editMenu->addAction("&Paste");
-  pasteAct->setShortcuts({QKeySequence::Paste,
-      QKeySequence(QStringLiteral("Shift+Ins"))});
+  pasteAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_V));
   editMenu->addSeparator();
   editMenu->addAction("&Raise");
   editMenu->addAction("&Lower");

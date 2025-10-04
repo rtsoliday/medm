@@ -143,40 +143,26 @@ public:
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
     setFocusPolicy(Qt::StrongFocus);
 
-    auto *cutShortcut = new QShortcut(
-        QKeySequence(QStringLiteral("Shift+Del")), this);
+    auto *cutShortcut =
+        new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_X), this);
     cutShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     QObject::connect(cutShortcut, &QShortcut::activated, this,
         [this]() {
           setAsActiveDisplay();
           cutSelection();
         });
-    auto *copyShortcut = new QShortcut(QKeySequence::Copy, this);
+    auto *copyShortcut =
+        new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_C), this);
     copyShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     QObject::connect(copyShortcut, &QShortcut::activated, this,
         [this]() {
           setAsActiveDisplay();
           copySelection();
         });
-    auto *copyInsShortcut = new QShortcut(
-        QKeySequence(QStringLiteral("Ctrl+Ins")), this);
-    copyInsShortcut->setContext(Qt::WidgetWithChildrenShortcut);
-    QObject::connect(copyInsShortcut, &QShortcut::activated, this,
-        [this]() {
-          setAsActiveDisplay();
-          copySelection();
-        });
-    auto *pasteShortcut = new QShortcut(QKeySequence::Paste, this);
+    auto *pasteShortcut =
+        new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_V), this);
     pasteShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     QObject::connect(pasteShortcut, &QShortcut::activated, this,
-        [this]() {
-          setAsActiveDisplay();
-          pasteSelection();
-        });
-    auto *pasteInsShortcut = new QShortcut(
-        QKeySequence(QStringLiteral("Shift+Ins")), this);
-    pasteInsShortcut->setContext(Qt::WidgetWithChildrenShortcut);
-    QObject::connect(pasteInsShortcut, &QShortcut::activated, this,
         [this]() {
           setAsActiveDisplay();
           pasteSelection();
@@ -2106,7 +2092,7 @@ private:
             handleResourcePaletteClosed();
           });
       auto *cutShortcut = new QShortcut(
-          QKeySequence(QStringLiteral("Shift+Del")), resourcePalette_);
+          QKeySequence(Qt::CTRL | Qt::Key_X), resourcePalette_);
       cutShortcut->setContext(Qt::WidgetWithChildrenShortcut);
       QObject::connect(cutShortcut, &QShortcut::activated, this,
           [this]() {
@@ -6470,22 +6456,21 @@ private:
     addMenuAction(&menu, QStringLiteral("Undo"));
 
     menu.addSeparator();
-    auto *cutAction =
-        addMenuAction(&menu, QStringLiteral("Cut"),
-            QKeySequence(QStringLiteral("Shift+Del")));
+    auto *cutAction = addMenuAction(&menu, QStringLiteral("Cut"),
+        QKeySequence(Qt::CTRL | Qt::Key_X));
     QObject::connect(cutAction, &QAction::triggered, this, [this]() {
       setAsActiveDisplay();
       cutSelection();
     });
     auto *copyAction = addMenuAction(&menu, QStringLiteral("Copy"),
-        QKeySequence(QStringLiteral("Ctrl+Ins")));
+        QKeySequence(Qt::CTRL | Qt::Key_C));
     copyAction->setEnabled(hasAnyElementSelection());
     QObject::connect(copyAction, &QAction::triggered, this, [this]() {
       setAsActiveDisplay();
       copySelection();
     });
     auto *pasteAction = addMenuAction(&menu, QStringLiteral("Paste"),
-        QKeySequence(QStringLiteral("Shift+Ins")));
+        QKeySequence(Qt::CTRL | Qt::Key_V));
     pasteAction->setEnabled(canPaste());
     QObject::connect(pasteAction, &QAction::triggered, this, [this]() {
       setAsActiveDisplay();

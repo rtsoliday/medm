@@ -1,6 +1,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QColor>
 #include <QFont>
 #include <QFontDatabase>
@@ -16,6 +18,7 @@
 #include <QPointer>
 #include <QRadioButton>
 #include <QSizePolicy>
+#include <QMessageBox>
 #include <QStyleFactory>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -370,47 +373,86 @@ int main(int argc, char *argv[])
     pasteAct->setEnabled(canPaste);
   };
 
+  auto registerDisplayWindow = [state, updateMenus, &win](
+      DisplayWindow *displayWin) {
+    state->displays.append(displayWin);
+    displayWin->syncCreateCursor();
+
+    QObject::connect(displayWin, &QObject::destroyed, &win,
+        [state, updateMenus,
+            displayPtr = QPointer<DisplayWindow>(displayWin)]() {
+          if (state) {
+            if (state->activeDisplay == displayPtr) {
+              state->activeDisplay.clear();
+            }
+            bool hasLiveDisplay = false;
+            for (auto &display : state->displays) {
+              if (!display.isNull()) {
+                hasLiveDisplay = true;
+                break;
+              }
+            }
+            if (!hasLiveDisplay) {
+              state->createTool = CreateTool::kNone;
+            }
+          }
+          if (updateMenus && *updateMenus) {
+            (*updateMenus)();
+          }
+        });
+
+    displayWin->show();
+    displayWin->raise();
+    displayWin->activateWindow();
+
+    if (updateMenus && *updateMenus) {
+      (*updateMenus)();
+    }
+  };
+
   QObject::connect(newAct, &QAction::triggered, &win,
-      [state, displayPalette, updateMenus, &win, fixed10Font, &palette,
-          fixed13Font]() {
+      [state, displayPalette, &win, fixed10Font, &palette, fixed13Font,
+          registerDisplayWindow]() {
         if (!state->editMode) {
           return;
         }
 
         auto *displayWin = new DisplayWindow(displayPalette, palette,
             fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
-        state->displays.append(displayWin);
-        displayWin->syncCreateCursor();
+        registerDisplayWindow(displayWin);
+      });
 
-        QObject::connect(displayWin, &QObject::destroyed, &win,
-            [state, updateMenus, displayPtr = QPointer<DisplayWindow>(displayWin)]() {
-              if (state) {
-                if (state->activeDisplay == displayPtr) {
-                  state->activeDisplay.clear();
-                }
-                bool hasLiveDisplay = false;
-                for (auto &display : state->displays) {
-                  if (!display.isNull()) {
-                    hasLiveDisplay = true;
-                    break;
-                  }
-                }
-                if (!hasLiveDisplay) {
-                  state->createTool = CreateTool::kNone;
-                }
-              }
-              if (updateMenus && *updateMenus) {
-                (*updateMenus)();
-              }
-            });
-
-        displayWin->show();
-        displayWin->raise();
-        displayWin->activateWindow();
-
-        if (updateMenus && *updateMenus) {
-          (*updateMenus)();
+  QObject::connect(openAct, &QAction::triggered, &win,
+      [state, &win, displayPalette, &palette, fixed10Font, fixed13Font,
+          registerDisplayWindow]() {
+        if (!state->editMode) {
+          return;
         }
+
+        static QString lastDirectory;
+        const QString selected = QFileDialog::getOpenFileName(&win,
+            QStringLiteral("Open Display"), lastDirectory,
+            QStringLiteral("MEDM Displays (*.adl);;All Files (*)"));
+        if (selected.isEmpty()) {
+          return;
+        }
+
+        lastDirectory = QFileInfo(selected).absolutePath();
+
+        QString errorMessage;
+        auto *displayWin = new DisplayWindow(displayPalette, palette,
+            fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
+        if (!displayWin->loadFromFile(selected, &errorMessage)) {
+          const QString message = errorMessage.isEmpty()
+              ? QStringLiteral("Failed to open display:\n%1").arg(selected)
+              : errorMessage;
+          QMessageBox::critical(&win, QStringLiteral("Open Display"),
+              message);
+          delete displayWin;
+          return;
+        }
+
+        registerDisplayWindow(displayWin);
       });
 
   QObject::connect(editModeButton, &QRadioButton::toggled, &win,

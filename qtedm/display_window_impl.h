@@ -243,6 +243,7 @@ public:
 
   bool save(QWidget *dialogParent = nullptr);
   bool saveAs(QWidget *dialogParent = nullptr);
+  bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr);
   QString filePath() const
   {
     return filePath_;
@@ -596,6 +597,18 @@ protected:
 
 private:
   bool writeAdlFile(const QString &filePath) const;
+  void clearAllElements();
+  bool loadDisplaySection(const AdlNode &displayNode);
+  void loadTextElement(const AdlNode &textNode);
+  void loadTextMonitorElement(const AdlNode &textUpdateNode);
+  QRect parseObjectGeometry(const AdlNode &parent) const;
+  void ensureElementInStack(QWidget *element);
+  QColor colorForIndex(int index) const;
+  TextColorMode parseTextColorMode(const QString &value) const;
+  TextVisibilityMode parseVisibilityMode(const QString &value) const;
+  TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
+  PvLimitSource parseLimitSource(const QString &value) const;
+  Qt::Alignment parseAlignment(const QString &value) const;
   void setAsActiveDisplay();
   void markDirty();
   void notifyMenus() const;
@@ -6668,6 +6681,67 @@ inline bool DisplayWindow::saveAs(QWidget *dialogParent)
   return true;
 }
 
+inline bool DisplayWindow::loadFromFile(const QString &filePath,
+    QString *errorMessage)
+{
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Failed to open %1").arg(filePath);
+    }
+    return false;
+  }
+
+  QTextStream stream(&file);
+  stream.setCodec("UTF-8");
+  const QString contents = stream.readAll();
+
+  std::optional<AdlNode> document = AdlParser::parse(contents, errorMessage);
+  if (!document) {
+    return false;
+  }
+
+  clearAllElements();
+
+  bool displayLoaded = false;
+  bool elementLoaded = false;
+  for (const auto &child : document->children) {
+    if (child.name.compare(QStringLiteral("display"), Qt::CaseInsensitive)
+        == 0) {
+      displayLoaded = loadDisplaySection(child) || displayLoaded;
+      continue;
+    }
+    if (child.name.compare(QStringLiteral("text"), Qt::CaseInsensitive)
+        == 0) {
+      loadTextElement(child);
+      elementLoaded = true;
+      continue;
+    }
+    if (child.name.compare(QStringLiteral("text update"), Qt::CaseInsensitive)
+        == 0
+        || child.name.compare(QStringLiteral("text monitor"), Qt::CaseInsensitive)
+            == 0) {
+      loadTextMonitorElement(child);
+      elementLoaded = true;
+    }
+  }
+
+  filePath_ = QFileInfo(filePath).absoluteFilePath();
+  setWindowTitle(QFileInfo(filePath_).fileName());
+
+  dirty_ = false;
+  updateDirtyIndicator();
+  notifyMenus();
+  if (displayArea_) {
+    displayArea_->update();
+  }
+  update();
+  if (auto state = state_.lock()) {
+    state->createTool = CreateTool::kNone;
+  }
+  return displayLoaded || elementLoaded;
+}
+
 inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
 {
   QSaveFile file(filePath);
@@ -7467,6 +7541,448 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     return false;
   }
   return true;
+}
+
+inline void DisplayWindow::clearAllElements()
+{
+  clearSelections();
+  auto clearList = [this](auto &list) {
+    for (auto *element : list) {
+      if (element) {
+        removeElementFromStack(element);
+        element->deleteLater();
+      }
+    }
+    list.clear();
+  };
+  clearList(textElements_);
+  clearList(textEntryElements_);
+  clearList(sliderElements_);
+  clearList(wheelSwitchElements_);
+  clearList(choiceButtonElements_);
+  clearList(menuElements_);
+  clearList(messageButtonElements_);
+  clearList(shellCommandElements_);
+  clearList(relatedDisplayElements_);
+  clearList(textMonitorElements_);
+  clearList(meterElements_);
+  clearList(barMonitorElements_);
+  clearList(scaleMonitorElements_);
+  clearList(stripChartElements_);
+  clearList(cartesianPlotElements_);
+  clearList(byteMonitorElements_);
+  clearList(rectangleElements_);
+  clearList(imageElements_);
+  clearList(ovalElements_);
+  clearList(arcElements_);
+  clearList(lineElements_);
+  clearList(polylineElements_);
+  clearList(polygonElements_);
+  elementStack_.clear();
+  polygonCreationActive_ = false;
+  polygonCreationPoints_.clear();
+  activePolygonElement_ = nullptr;
+  polylineCreationActive_ = false;
+  polylineCreationPoints_.clear();
+  activePolylineElement_ = nullptr;
+  colormapName_.clear();
+  gridOn_ = kDefaultGridOn;
+  gridSpacing_ = kDefaultGridSpacing;
+  displaySelected_ = false;
+  if (displayArea_) {
+    displayArea_->setSelected(false);
+    displayArea_->setGridOn(gridOn_);
+    displayArea_->setGridSpacing(gridSpacing_);
+  }
+}
+
+inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
+{
+  QRect geometry = parseObjectGeometry(displayNode);
+  if (displayArea_) {
+    if (geometry.width() > 0 && geometry.height() > 0) {
+      displayArea_->setMinimumSize(geometry.width(), geometry.height());
+      displayArea_->resize(geometry.size());
+      const QSize current = size();
+      const int extraWidth = current.width() - displayArea_->width();
+      const int extraHeight = current.height() - displayArea_->height();
+      resize(geometry.width() + extraWidth, geometry.height() + extraHeight);
+    }
+    const QString clrStr = propertyValue(displayNode, QStringLiteral("clr"));
+    const QString bclrStr = propertyValue(displayNode, QStringLiteral("bclr"));
+    QPalette areaPalette = displayArea_->palette();
+    bool ok = false;
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      areaPalette.setColor(QPalette::WindowText, colorForIndex(clrIndex));
+    }
+    ok = false;
+    int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      QColor background = colorForIndex(bclrIndex);
+      areaPalette.setColor(QPalette::Window, background);
+      areaPalette.setColor(QPalette::Base, background);
+    }
+    displayArea_->setPalette(areaPalette);
+  }
+
+  const QString cmap = propertyValue(displayNode, QStringLiteral("cmap"));
+  colormapName_ = cmap;
+
+  const QString gridSpacingStr = propertyValue(displayNode,
+      QStringLiteral("gridSpacing"));
+  bool ok = false;
+  int spacing = gridSpacingStr.toInt(&ok);
+  if (ok) {
+    gridSpacing_ = std::max(kMinimumGridSpacing, spacing);
+    if (displayArea_) {
+      displayArea_->setGridSpacing(gridSpacing_);
+    }
+  }
+  const QString gridOnStr = propertyValue(displayNode,
+      QStringLiteral("gridOn"));
+  int gridOnValue = gridOnStr.toInt(&ok);
+  if (ok) {
+    gridOn_ = gridOnValue != 0;
+    if (displayArea_) {
+      displayArea_->setGridOn(gridOn_);
+    }
+  }
+  return true;
+}
+
+inline QColor DisplayWindow::colorForIndex(int index) const
+{
+  const auto &palette = MedmColors::palette();
+  if (index >= 0 && index < static_cast<int>(palette.size())) {
+    return palette[static_cast<std::size_t>(index)];
+  }
+  return QColor(Qt::black);
+}
+
+inline TextColorMode DisplayWindow::parseTextColorMode(
+    const QString &value) const
+{
+  if (value.compare(QStringLiteral("alarm"), Qt::CaseInsensitive) == 0) {
+    return TextColorMode::kAlarm;
+  }
+  if (value.compare(QStringLiteral("discrete"), Qt::CaseInsensitive) == 0) {
+    return TextColorMode::kDiscrete;
+  }
+  return TextColorMode::kStatic;
+}
+
+inline TextVisibilityMode DisplayWindow::parseVisibilityMode(
+    const QString &value) const
+{
+  if (value.compare(QStringLiteral("if not zero"), Qt::CaseInsensitive)
+      == 0) {
+    return TextVisibilityMode::kIfNotZero;
+  }
+  if (value.compare(QStringLiteral("if zero"), Qt::CaseInsensitive) == 0) {
+    return TextVisibilityMode::kIfZero;
+  }
+  if (value.compare(QStringLiteral("calc"), Qt::CaseInsensitive) == 0) {
+    return TextVisibilityMode::kCalc;
+  }
+  return TextVisibilityMode::kStatic;
+}
+
+inline TextMonitorFormat DisplayWindow::parseTextMonitorFormat(
+    const QString &value) const
+{
+  if (value.compare(QStringLiteral("decimal"), Qt::CaseInsensitive) == 0) {
+    return TextMonitorFormat::kDecimal;
+  }
+  if (value.compare(QStringLiteral("exponential"), Qt::CaseInsensitive)
+      == 0) {
+    return TextMonitorFormat::kExponential;
+  }
+  if (value.compare(QStringLiteral("engineering"), Qt::CaseInsensitive)
+      == 0) {
+    return TextMonitorFormat::kEngineering;
+  }
+  if (value.compare(QStringLiteral("compact"), Qt::CaseInsensitive) == 0) {
+    return TextMonitorFormat::kCompact;
+  }
+  if (value.compare(QStringLiteral("truncated"), Qt::CaseInsensitive) == 0) {
+    return TextMonitorFormat::kTruncated;
+  }
+  if (value.compare(QStringLiteral("hexadecimal"), Qt::CaseInsensitive)
+      == 0) {
+    return TextMonitorFormat::kHexadecimal;
+  }
+  if (value.compare(QStringLiteral("octal"), Qt::CaseInsensitive) == 0) {
+    return TextMonitorFormat::kOctal;
+  }
+  if (value.compare(QStringLiteral("string"), Qt::CaseInsensitive) == 0) {
+    return TextMonitorFormat::kString;
+  }
+  if (value.compare(QStringLiteral("sexagesimal"), Qt::CaseInsensitive)
+      == 0) {
+    return TextMonitorFormat::kSexagesimal;
+  }
+  if (value.compare(QStringLiteral("sexagesimal hms"), Qt::CaseInsensitive)
+      == 0) {
+    return TextMonitorFormat::kSexagesimalHms;
+  }
+  if (value.compare(QStringLiteral("sexagesimal dms"), Qt::CaseInsensitive)
+      == 0) {
+    return TextMonitorFormat::kSexagesimalDms;
+  }
+  return TextMonitorFormat::kDecimal;
+}
+
+inline PvLimitSource DisplayWindow::parseLimitSource(
+    const QString &value) const
+{
+  if (value.compare(QStringLiteral("default"), Qt::CaseInsensitive) == 0) {
+    return PvLimitSource::kDefault;
+  }
+  if (value.compare(QStringLiteral("user"), Qt::CaseInsensitive) == 0) {
+    return PvLimitSource::kUser;
+  }
+  return PvLimitSource::kChannel;
+}
+
+inline Qt::Alignment DisplayWindow::parseAlignment(
+    const QString &value) const
+{
+  if (value.compare(QStringLiteral("horiz. centered"), Qt::CaseInsensitive)
+      == 0) {
+    return Qt::AlignHCenter | Qt::AlignTop;
+  }
+  if (value.compare(QStringLiteral("horiz. right"), Qt::CaseInsensitive)
+      == 0) {
+    return Qt::AlignRight | Qt::AlignTop;
+  }
+  if (value.compare(QStringLiteral("center"), Qt::CaseInsensitive) == 0) {
+    return Qt::AlignHCenter | Qt::AlignTop;
+  }
+  if (value.compare(QStringLiteral("right"), Qt::CaseInsensitive) == 0) {
+    return Qt::AlignRight | Qt::AlignTop;
+  }
+  return Qt::AlignLeft | Qt::AlignTop;
+}
+
+inline QRect DisplayWindow::parseObjectGeometry(const AdlNode &parent) const
+{
+  const AdlNode *objectNode = ::findChild(parent, QStringLiteral("object"));
+  if (!objectNode) {
+    return QRect();
+  }
+  bool ok = false;
+  int x = propertyValue(*objectNode, QStringLiteral("x")).toInt(&ok);
+  if (!ok) {
+    x = 0;
+  }
+  ok = false;
+  int y = propertyValue(*objectNode, QStringLiteral("y")).toInt(&ok);
+  if (!ok) {
+    y = 0;
+  }
+  ok = false;
+  int width = propertyValue(*objectNode, QStringLiteral("width")).toInt(&ok);
+  if (!ok) {
+    width = kMinimumTextWidth;
+  }
+  ok = false;
+  int height = propertyValue(*objectNode, QStringLiteral("height")).toInt(&ok);
+  if (!ok) {
+    height = kMinimumTextHeight;
+  }
+  return QRect(x, y, width, height);
+}
+
+inline void DisplayWindow::ensureElementInStack(QWidget *element)
+{
+  if (!element) {
+    return;
+  }
+  for (const auto &entry : elementStack_) {
+    if (entry.data() == element) {
+      return;
+    }
+  }
+  elementStack_.append(QPointer<QWidget>(element));
+  element->raise();
+}
+
+inline void DisplayWindow::loadTextElement(const AdlNode &textNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+  QRect geometry = parseObjectGeometry(textNode);
+  auto *element = new TextElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+  const QString content = propertyValue(textNode, QStringLiteral("textix"));
+  if (!content.isEmpty()) {
+    element->setText(content);
+  }
+  const QString alignValue = propertyValue(textNode, QStringLiteral("align"));
+  if (!alignValue.isEmpty()) {
+    element->setTextAlignment(parseAlignment(alignValue));
+  }
+
+  if (const AdlNode *basic = ::findChild(textNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+  }
+
+  if (const AdlNode *dyn = ::findChild(textNode,
+          QStringLiteral("dynamic attribute"))) {
+    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    if (!colorMode.isEmpty()) {
+      element->setColorMode(parseTextColorMode(colorMode));
+    }
+    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    if (!visibility.isEmpty()) {
+      element->setVisibilityMode(parseVisibilityMode(visibility));
+    }
+    const QString calc = propertyValue(*dyn, QStringLiteral("calc"));
+    if (!calc.isEmpty()) {
+      element->setVisibilityCalc(calc);
+    }
+    const QString chan0 = propertyValue(*dyn, QStringLiteral("chan"));
+    if (!chan0.isEmpty()) {
+      element->setChannel(0, chan0);
+    }
+    const QString chanA = propertyValue(*dyn, QStringLiteral("chanA"));
+    if (!chanA.isEmpty()) {
+      element->setChannel(1, chanA);
+    }
+    const QString chanB = propertyValue(*dyn, QStringLiteral("chanB"));
+    if (!chanB.isEmpty()) {
+      element->setChannel(2, chanB);
+    }
+    const QString chanC = propertyValue(*dyn, QStringLiteral("chanC"));
+    if (!chanC.isEmpty()) {
+      element->setChannel(3, chanC);
+    }
+  }
+
+  element->show();
+  element->setSelected(false);
+  textElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadTextMonitorElement(
+    const AdlNode &textUpdateNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(textUpdateNode);
+  auto *element = new TextMonitorElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+
+  const QString alignValue = propertyValue(textUpdateNode,
+      QStringLiteral("align"));
+  if (!alignValue.isEmpty()) {
+    element->setTextAlignment(parseAlignment(alignValue));
+  }
+
+  const QString formatValue = propertyValue(textUpdateNode,
+      QStringLiteral("format"));
+  if (!formatValue.isEmpty()) {
+    element->setFormat(parseTextMonitorFormat(formatValue));
+  }
+
+  const QString colorModeValue = propertyValue(textUpdateNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  if (const AdlNode *monitor = ::findChild(textUpdateNode,
+          QStringLiteral("monitor"))) {
+    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (!channel.isEmpty()) {
+      element->setChannel(0, channel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*monitor, QStringLiteral("clr"));
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*monitor, QStringLiteral("bclr"));
+    int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(textUpdateNode,
+          QStringLiteral("limits"))) {
+    PvLimits limits = element->limits();
+
+    const QString lowSource = propertyValue(*limitsNode,
+        QStringLiteral("loprSrc"));
+    if (!lowSource.isEmpty()) {
+      limits.lowSource = parseLimitSource(lowSource);
+    }
+
+    const QString lowValue = propertyValue(*limitsNode,
+        QStringLiteral("lopr"));
+    bool ok = false;
+    double lopr = lowValue.toDouble(&ok);
+    if (ok) {
+      limits.lowDefault = lopr;
+    }
+
+    const QString highSource = propertyValue(*limitsNode,
+        QStringLiteral("hoprSrc"));
+    if (!highSource.isEmpty()) {
+      limits.highSource = parseLimitSource(highSource);
+    }
+
+    ok = false;
+    const QString highValue = propertyValue(*limitsNode,
+        QStringLiteral("hopr"));
+    double hopr = highValue.toDouble(&ok);
+    if (ok) {
+      limits.highDefault = hopr;
+    }
+
+    const QString precisionSource = propertyValue(*limitsNode,
+        QStringLiteral("precSrc"));
+    if (!precisionSource.isEmpty()) {
+      limits.precisionSource = parseLimitSource(precisionSource);
+    }
+
+    ok = false;
+    const QString precisionValue = propertyValue(*limitsNode,
+        QStringLiteral("prec"));
+    int precision = precisionValue.toInt(&ok);
+    if (ok) {
+      limits.precisionDefault = precision;
+    }
+
+    element->setLimits(limits);
+  }
+
+  if (element->text().isEmpty()) {
+    element->setText(element->channel(0));
+  }
+
+  element->show();
+  element->setSelected(false);
+  textMonitorElements_.append(element);
+  ensureElementInStack(element);
 }
 
 inline void DisplayWindow::setAsActiveDisplay()

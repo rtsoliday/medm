@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFont>
@@ -59,6 +60,7 @@
 #include <utility>
 #include <vector>
 
+#include "adl_parser.h"
 #include "adl_writer.h"
 #include "arc_element.h"
 #include "cartesian_plot_element.h"

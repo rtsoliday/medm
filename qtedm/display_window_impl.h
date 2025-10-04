@@ -601,11 +601,14 @@ private:
   bool loadDisplaySection(const AdlNode &displayNode);
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
+  void loadRectangleElement(const AdlNode &rectangleNode);
   QRect parseObjectGeometry(const AdlNode &parent) const;
   void ensureElementInStack(QWidget *element);
   QColor colorForIndex(int index) const;
   TextColorMode parseTextColorMode(const QString &value) const;
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
+  RectangleFill parseRectangleFill(const QString &value) const;
+  RectangleLineStyle parseRectangleLineStyle(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
   Qt::Alignment parseAlignment(const QString &value) const;
@@ -6738,6 +6741,13 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
             == 0) {
       loadTextMonitorElement(child);
       elementLoaded = true;
+      continue;
+    }
+    if (child.name.compare(QStringLiteral("rectangle"), Qt::CaseInsensitive)
+        == 0) {
+      loadRectangleElement(child);
+      elementLoaded = true;
+      continue;
     }
   }
 
@@ -7703,6 +7713,23 @@ inline TextVisibilityMode DisplayWindow::parseVisibilityMode(
   return TextVisibilityMode::kStatic;
 }
 
+inline RectangleFill DisplayWindow::parseRectangleFill(const QString &value) const
+{
+  if (value.compare(QStringLiteral("outline"), Qt::CaseInsensitive) == 0) {
+    return RectangleFill::kOutline;
+  }
+  return RectangleFill::kSolid;
+}
+
+inline RectangleLineStyle DisplayWindow::parseRectangleLineStyle(
+    const QString &value) const
+{
+  if (value.compare(QStringLiteral("dash"), Qt::CaseInsensitive) == 0) {
+    return RectangleLineStyle::kDash;
+  }
+  return RectangleLineStyle::kSolid;
+}
+
 inline TextMonitorFormat DisplayWindow::parseTextMonitorFormat(
     const QString &value) const
 {
@@ -8004,6 +8031,96 @@ inline void DisplayWindow::loadTextMonitorElement(
   element->show();
   element->setSelected(false);
   textMonitorElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadRectangleElement(const AdlNode &rectangleNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(rectangleNode);
+  if (geometry.width() < kMinimumRectangleSize) {
+    geometry.setWidth(kMinimumRectangleSize);
+  }
+  if (geometry.height() < kMinimumRectangleSize) {
+    geometry.setHeight(kMinimumRectangleSize);
+  }
+
+  auto *element = new RectangleElement(displayArea_);
+  element->setFill(RectangleFill::kSolid);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *basic = ::findChild(rectangleNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    const QString styleValue = propertyValue(*basic, QStringLiteral("style"));
+    if (!styleValue.isEmpty()) {
+      element->setLineStyle(parseRectangleLineStyle(styleValue));
+    }
+
+    const QString fillValue = propertyValue(*basic, QStringLiteral("fill"),
+        QStringLiteral("solid"));
+    element->setFill(parseRectangleFill(fillValue));
+
+    ok = false;
+    const QString widthValue = propertyValue(*basic, QStringLiteral("width"));
+    int width = widthValue.toInt(&ok);
+    if (!ok || width <= 0) {
+      width = 1;
+    }
+    element->setLineWidth(width);
+  }
+
+  if (const AdlNode *dyn = ::findChild(rectangleNode,
+          QStringLiteral("dynamic attribute"))) {
+    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    if (!colorMode.isEmpty()) {
+      element->setColorMode(parseTextColorMode(colorMode));
+    }
+
+    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    if (!visibility.isEmpty()) {
+      element->setVisibilityMode(parseVisibilityMode(visibility));
+    }
+
+    const QString calc = propertyValue(*dyn, QStringLiteral("calc"));
+    if (!calc.isEmpty()) {
+      element->setVisibilityCalc(calc);
+    }
+
+    const QString chan0 = propertyValue(*dyn, QStringLiteral("chan"));
+    if (!chan0.isEmpty()) {
+      element->setChannel(0, chan0);
+    }
+    const QString chanA = propertyValue(*dyn, QStringLiteral("chanA"));
+    if (!chanA.isEmpty()) {
+      element->setChannel(1, chanA);
+    }
+    const QString chanB = propertyValue(*dyn, QStringLiteral("chanB"));
+    if (!chanB.isEmpty()) {
+      element->setChannel(2, chanB);
+    }
+    const QString chanC = propertyValue(*dyn, QStringLiteral("chanC"));
+    if (!chanC.isEmpty()) {
+      element->setChannel(3, chanC);
+    }
+    const QString chanD = propertyValue(*dyn, QStringLiteral("chanD"));
+    if (!chanD.isEmpty()) {
+      element->setChannel(4, chanD);
+    }
+  }
+
+  element->show();
+  element->setSelected(false);
+  rectangleElements_.append(element);
   ensureElementInStack(element);
 }
 

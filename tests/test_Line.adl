@@ -1,0 +1,361 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_Line_medm.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=10
+		width=720
+		height=440
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=10
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+polyline {
+	object {
+		x=20
+		y=40
+		width=140
+		height=40
+	}
+	"basic attribute" {
+		clr=2
+	}
+	points {
+		(30,60)
+		(150,60)
+	}
+}
+polyline {
+	object {
+		x=20
+		y=100
+		width=160
+		height=60
+	}
+	"basic attribute" {
+		clr=5
+		style="dash"
+		width=3
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="line:alarm1"
+		chanB="line:alarm2"
+	}
+	points {
+		(30,120)
+		(170,140)
+	}
+}
+polyline {
+	object {
+		x=220
+		y=40
+		width=40
+		height=140
+	}
+	"basic attribute" {
+		clr=28
+		fill="outline"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="line:disc0"
+		chanB="line:disc1"
+	}
+	points {
+		(240,50)
+		(240,170)
+	}
+}
+polyline {
+	object {
+		x=280
+		y=40
+		width=140
+		height=120
+	}
+	"basic attribute" {
+		clr=40
+		style="dash"
+		width=6
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="line:calcA"
+		chanB="line:calcB"
+	}
+	points {
+		(300,60)
+		(400,140)
+	}
+}
+polyline {
+	object {
+		x=20
+		y=200
+		width=160
+		height=80
+	}
+	"basic attribute" {
+		clr=12
+		width=5
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		calc="A+B-C"
+		chan="line:multiA"
+		chanB="line:multiB"
+		chanC="line:multiC"
+		chanD="line:multiD"
+	}
+	points {
+		(30,220)
+		(170,260)
+	}
+}
+polyline {
+	object {
+		x=220
+		y=200
+		width=160
+		height=80
+	}
+	"basic attribute" {
+		clr=7
+		style="dash"
+		width=2
+	}
+	"dynamic attribute" {
+		clr="static"
+		vis="static"
+	}
+	points {
+		(240,210)
+		(360,210)
+		(360,270)
+	}
+}
+polyline {
+	object {
+		x=400
+		y=40
+		width=140
+		height=120
+	}
+	"basic attribute" {
+		clr=53
+		width=1
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if zero"
+		chan="line:alarm3"
+	}
+	points {
+		(410,60)
+		(520,150)
+	}
+}
+polyline {
+	object {
+		x=400
+		y=200
+		width=160
+		height=100
+	}
+	"basic attribute" {
+		clr=60
+		style="dash"
+		width=8
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="calc"
+		calc="A<B"
+		chan="line:discCalcA"
+		chanB="line:discCalcB"
+	}
+	points {
+		(410,220)
+		(470,260)
+		(550,280)
+	}
+}
+polyline {
+	object {
+		x=20
+		y=300
+		width=160
+		height=60
+	}
+	"basic attribute" {
+		clr=31
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="line:alarm4"
+	}
+	points {
+		(30,320)
+		(170,340)
+	}
+}
+polyline {
+	object {
+		x=220
+		y=300
+		width=160
+		height=60
+	}
+	"basic attribute" {
+		clr=45
+		style="dash"
+		width=9
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="calc"
+		calc="A>B"
+		chan="line:calcC"
+		chanB="line:calcD"
+	}
+	points {
+		(230,320)
+		(370,340)
+	}
+}
+polyline {
+	object {
+		x=400
+		y=320
+		width=160
+		height=80
+	}
+	"basic attribute" {
+		clr=22
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		clr="static"
+		vis="if zero"
+		chan="line:staticZero"
+	}
+	points {
+		(410,340)
+		(560,380)
+	}
+}
+polyline {
+	object {
+		x=560
+		y=40
+		width=120
+		height=320
+	}
+	"basic attribute" {
+		clr=9
+		style="dash"
+		width=5
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="(A+B)>C"
+		chan="line:longA"
+		chanB="line:longB"
+		chanC="line:longC"
+	}
+	points {
+		(580,60)
+		(620,120)
+		(600,200)
+		(650,320)
+	}
+}

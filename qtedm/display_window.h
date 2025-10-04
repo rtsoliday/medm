@@ -39,6 +39,7 @@
 #include <QSaveFile>
 #include <QScrollArea>
 #include <QSignalBlocker>
+#include <QShortcut>
 #include <QSizePolicy>
 #include <QStyleFactory>
 #include <QString>

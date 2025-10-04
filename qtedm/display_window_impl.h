@@ -142,6 +142,15 @@ public:
 
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
     setFocusPolicy(Qt::StrongFocus);
+
+    auto *cutShortcut = new QShortcut(
+        QKeySequence(QStringLiteral("Shift+Del")), this);
+    cutShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(cutShortcut, &QShortcut::activated, this,
+        [this]() {
+          setAsActiveDisplay();
+          cutSelection();
+        });
     updateDirtyIndicator();
   }
 
@@ -1054,6 +1063,14 @@ private:
           [this]() {
             resourcePalette_.clear();
             handleResourcePaletteClosed();
+          });
+      auto *cutShortcut = new QShortcut(
+          QKeySequence(QStringLiteral("Shift+Del")), resourcePalette_);
+      cutShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+      QObject::connect(cutShortcut, &QShortcut::activated, this,
+          [this]() {
+            setAsActiveDisplay();
+            cutSelection();
           });
     }
     return resourcePalette_;
@@ -5416,6 +5433,7 @@ private:
         addMenuAction(&menu, QStringLiteral("Cut"),
             QKeySequence(QStringLiteral("Shift+Del")));
     QObject::connect(cutAction, &QAction::triggered, this, [this]() {
+      setAsActiveDisplay();
       cutSelection();
     });
     addMenuAction(&menu, QStringLiteral("Copy"), QKeySequence(QStringLiteral("Ctrl+Ins")));

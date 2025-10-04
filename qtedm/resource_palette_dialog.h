@@ -292,6 +292,13 @@ public:
         });
 
     rectangleVisibilityCalcEdit_ = createLineEdit();
+    QColor rectangleDisabledBackground = basePalette.color(QPalette::Disabled, QPalette::Base);
+    if (!rectangleDisabledBackground.isValid()) {
+      rectangleDisabledBackground = QColor(0xd3, 0xd3, 0xd3);
+    }
+    rectangleVisibilityCalcEdit_->setStyleSheet(
+        QStringLiteral("QLineEdit:disabled { background-color: %1; }")
+            .arg(rectangleDisabledBackground.name(QColor::HexRgb).toUpper()));
     committedTexts_.insert(rectangleVisibilityCalcEdit_, rectangleVisibilityCalcEdit_->text());
     rectangleVisibilityCalcEdit_->installEventFilter(this);
     QObject::connect(rectangleVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
@@ -307,7 +314,12 @@ public:
           [this, i]() { commitRectangleChannel(i); });
       QObject::connect(rectangleChannelEdits_[i], &QLineEdit::editingFinished, this,
           [this, i]() { commitRectangleChannel(i); });
+      if (i == 0) {
+        QObject::connect(rectangleChannelEdits_[i], &QLineEdit::textChanged, this,
+            [this]() { updateRectangleChannelDependentControls(); });
+      }
     }
+    updateRectangleChannelDependentControls();
 
     int rectangleRow = 0;
     addRow(rectangleLayout, rectangleRow++, QStringLiteral("Color"), rectangleForegroundButton_);
@@ -5556,6 +5568,8 @@ public:
       committedTexts_[edit] = edit->text();
     }
 
+    updateRectangleChannelDependentControls();
+
     elementLabel_->setText(elementLabel);
 
     show();
@@ -6580,6 +6594,7 @@ public:
     for (QLineEdit *edit : rectangleChannelEdits_) {
       resetLineEdit(edit);
     }
+    updateRectangleChannelDependentControls();
     resetLineEdit(imageNameEdit_);
     resetLineEdit(imageCalcEdit_);
     resetLineEdit(imageVisibilityCalcEdit_);
@@ -7179,6 +7194,24 @@ private:
     setFieldEnabled(textColorModeCombo_, hasPrimaryChannel);
     setFieldEnabled(textVisibilityCombo_, hasPrimaryChannel);
     setFieldEnabled(textVisibilityCalcEdit_, hasPrimaryChannel);
+  }
+
+  void updateRectangleChannelDependentControls()
+  {
+    bool hasChannelA = false;
+    if (rectangleChannelGetters_[0]) {
+      const QString value = rectangleChannelGetters_[0]();
+      hasChannelA = !value.trimmed().isEmpty();
+    }
+    if (!hasChannelA) {
+      QLineEdit *channelEdit = rectangleChannelEdits_[0];
+      if (channelEdit) {
+        hasChannelA = !channelEdit->text().trimmed().isEmpty();
+      }
+    }
+    setFieldEnabled(rectangleColorModeCombo_, hasChannelA);
+    setFieldEnabled(rectangleVisibilityCombo_, hasChannelA);
+    setFieldEnabled(rectangleVisibilityCalcEdit_, hasChannelA);
   }
 
   void setFieldEnabled(QWidget *field, bool enabled)
@@ -8289,6 +8322,9 @@ private:
     const QString value = edit->text();
     rectangleChannelSetters_[index](value);
     committedTexts_[edit] = value;
+    if (index == 0) {
+      updateRectangleChannelDependentControls();
+    }
   }
 
   void commitImageName()

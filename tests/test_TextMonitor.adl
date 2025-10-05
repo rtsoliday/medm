@@ -89,16 +89,236 @@ display {
 }
 "text update" {
 	object {
-		x=24
-		y=18
-		width=109
-		height=39
+		x=14
+		y=104
+		width=400
+		height=10
 	}
 	monitor {
-		chan="one.pv"
-		clr=14
-		bclr=4
+		chan="tm:decimal:slow"
+		clr=21
+		bclr=48
 	}
+	clrmod="alarm"
+	align="horiz. centered"
 	limits {
+		loprDefault=-12.7
+		hoprDefault=68.5
+		precDefault=2
+	}
+}
+"text update" {
+	object {
+		x=431
+		y=114
+		width=400
+		height=12
+	}
+	monitor {
+		chan="tm:exp:fastA"
+		clr=6
+		bclr=56
+	}
+	clrmod="discrete"
+	align="horiz. right"
+	format="exponential"
+	limits {
+		precSrc="default"
+		precDefault=4
+	}
+}
+"text update" {
+	object {
+		x=435
+		y=185
+		width=400
+		height=30
+	}
+	monitor {
+		chan="tm:engr:mix"
+		clr=54
+		bclr=10
+	}
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		loprDefault=-1
+		hoprSrc="default"
+		precDefault=5
+	}
+}
+"text update" {
+	object {
+		x=7
+		y=188
+		width=400
+		height=28
+	}
+	monitor {
+		chan="tm:compact:1"
+		clr=17
+		bclr=60
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprDefault=-0.004
+		hoprDefault=0.012
+		precDefault=6
+	}
+}
+"text update" {
+	object {
+		x=434
+		y=273
+		width=400
+		height=15
+	}
+	monitor {
+		chan="tm:trunc:edge"
+		clr=22
+		bclr=35
+	}
+	align="horiz. centered"
+	format="truncated"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=13
+		y=267
+		width=400
+		height=25
+	}
+	monitor {
+		chan="tm:hex:count"
+		clr=42
+		bclr=14
+	}
+	clrmod="discrete"
+	align="horiz. right"
+	format="hexadecimal"
+	limits {
+		hoprDefault=65535
+		precDefault=1
+	}
+}
+"text update" {
+	object {
+		x=14
+		y=325
+		width=400
+		height=30
+	}
+	monitor {
+		chan="tm:octal:plc"
+		clr=58
+		bclr=5
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="octal"
+	limits {
+		hoprDefault=32767
+	}
+}
+"text update" {
+	object {
+		x=436
+		y=330
+		width=400
+		height=32
+	}
+	monitor {
+		chan="tm:string:status"
+		clr=12
+		bclr=45
+	}
+	format="string"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=15
+		y=385
+		width=400
+		height=30
+	}
+	monitor {
+		chan="tm:sexagesimal:az"
+		clr=29
+		bclr=9
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="sexagesimal"
+	limits {
+		loprDefault=-180
+		hoprDefault=180
+		precDefault=4
+	}
+}
+"text update" {
+	object {
+		x=13
+		y=452
+		width=400
+		height=60
+	}
+	monitor {
+		chan="tm:sexagesimal:hms"
+		clr=25
+		bclr=32
+	}
+	align="horiz. right"
+	format="sexagesimal-hms"
+	limits {
+		loprSrc="default"
+		hoprDefault=86400
+		precDefault=3
+	}
+}
+"text update" {
+	object {
+		x=434
+		y=454
+		width=400
+		height=60
+	}
+	monitor {
+		chan="tm:sexagesimal:dms"
+		clr=47
+		bclr=1
+	}
+	clrmod="discrete"
+	format="sexagesimal-dms"
+	limits {
+		loprDefault=-90
+		hoprDefault=90
+		precDefault=2
+	}
+}
+"text update" {
+	object {
+		x=437
+		y=387
+		width=400
+		height=34
+	}
+	monitor {
+		chan="tm:decimal:telemetry"
+		clr=8
+		bclr=52
+	}
+	clrmod="alarm"
+	align="horiz. right"
+	limits {
+		loprDefault=-999.9
+		hoprDefault=999.9
+		precDefault=1
 	}
 }

@@ -8218,6 +8218,7 @@ inline void DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 
   auto *element = new OvalElement(displayArea_);
   element->setGeometry(geometry);
+  element->setFill(RectangleFill::kSolid);
 
   if (const AdlNode *basic = ::findChild(ovalNode,
           QStringLiteral("basic attribute"))) {

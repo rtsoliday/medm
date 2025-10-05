@@ -8206,7 +8206,7 @@ inline void DisplayWindow::loadPolygonElement(const AdlNode &polygonNode)
 
   QColor color = colorForIndex(14);
   RectangleLineStyle lineStyle = RectangleLineStyle::kSolid;
-  RectangleFill fill = RectangleFill::kOutline;
+  RectangleFill fill = RectangleFill::kSolid;
   int lineWidth = 1;
 
   if (const AdlNode *basic = ::findChild(polygonNode,

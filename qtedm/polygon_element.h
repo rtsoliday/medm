@@ -60,7 +60,7 @@ private:
 
   bool selected_ = false;
   QColor color_;
-  RectangleFill fill_ = RectangleFill::kOutline;
+  RectangleFill fill_ = RectangleFill::kSolid;
   RectangleLineStyle lineStyle_ = RectangleLineStyle::kSolid;
   int lineWidth_ = 1;
   TextColorMode colorMode_ = TextColorMode::kStatic;

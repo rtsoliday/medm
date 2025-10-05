@@ -15,7 +15,7 @@ PolygonElement::PolygonElement(QWidget *parent)
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setAttribute(Qt::WA_NoSystemBackground, true);
   setForegroundColor(defaultForegroundColor());
-  setFill(RectangleFill::kOutline);
+  setFill(RectangleFill::kSolid);
   setLineStyle(RectangleLineStyle::kSolid);
   setLineWidth(1);
   setColorMode(TextColorMode::kStatic);

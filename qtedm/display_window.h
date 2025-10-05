@@ -31,6 +31,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPoint>
+#include <QPolygon>
 #include <QPointer>
 #include <QPushButton>
 #include <QRadioButton>

@@ -602,7 +602,10 @@ private:
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
+  void loadPolylineElement(const AdlNode &polylineNode);
   QRect parseObjectGeometry(const AdlNode &parent) const;
+  bool parseAdlPoint(const QString &text, QPoint *point) const;
+  QVector<QPoint> parsePolylinePoints(const AdlNode &polylineNode) const;
   void ensureElementInStack(QWidget *element);
   QColor colorForIndex(int index) const;
   TextColorMode parseTextColorMode(const QString &value) const;
@@ -6752,6 +6755,14 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("polyline"), Qt::CaseInsensitive)
+        == 0
+        || child.name.compare(QStringLiteral("line"), Qt::CaseInsensitive)
+            == 0) {
+      loadPolylineElement(child);
+      elementLoaded = true;
+      continue;
+    }
   }
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
@@ -8173,6 +8184,226 @@ inline void DisplayWindow::loadRectangleElement(const AdlNode &rectangleNode)
   element->show();
   element->setSelected(false);
   rectangleElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline bool DisplayWindow::parseAdlPoint(const QString &text, QPoint *point) const
+{
+  if (!point) {
+    return false;
+  }
+  QString trimmed = text.trimmed();
+  if (trimmed.isEmpty()) {
+    return false;
+  }
+  if (trimmed.endsWith(QChar(','))) {
+    trimmed.chop(1);
+    trimmed = trimmed.trimmed();
+  }
+  if (trimmed.startsWith(QChar('(')) && trimmed.endsWith(QChar(')'))) {
+    trimmed = trimmed.mid(1, trimmed.size() - 2);
+  }
+  const QStringList parts = trimmed.split(QChar(','), Qt::SkipEmptyParts);
+  if (parts.size() != 2) {
+    return false;
+  }
+  bool okX = false;
+  bool okY = false;
+  const int x = parts.at(0).trimmed().toInt(&okX);
+  const int y = parts.at(1).trimmed().toInt(&okY);
+  if (!okX || !okY) {
+    return false;
+  }
+  *point = QPoint(x, y);
+  return true;
+}
+
+inline QVector<QPoint> DisplayWindow::parsePolylinePoints(
+    const AdlNode &polylineNode) const
+{
+  QVector<QPoint> points;
+  const AdlNode *pointsNode = ::findChild(polylineNode,
+      QStringLiteral("points"));
+  if (!pointsNode) {
+    return points;
+  }
+
+  QStringList tokens;
+  tokens.reserve(pointsNode->properties.size()
+      + pointsNode->children.size());
+  for (const auto &prop : pointsNode->properties) {
+    tokens.append(prop.value);
+  }
+  for (const auto &child : pointsNode->children) {
+    if (!child.properties.isEmpty()) {
+      tokens.append(child.properties.first().value);
+    } else if (!child.name.isEmpty()) {
+      tokens.append(child.name);
+    }
+  }
+
+  if (tokens.isEmpty()) {
+    return points;
+  }
+
+  const QString aggregate = tokens.join(QStringLiteral(" "));
+  int searchPos = 0;
+  while (true) {
+    const int start = aggregate.indexOf(QChar('('), searchPos);
+    if (start < 0) {
+      break;
+    }
+    const int end = aggregate.indexOf(QChar(')'), start + 1);
+    if (end < 0) {
+      break;
+    }
+    QString inside = aggregate.mid(start + 1, end - start - 1).trimmed();
+    inside.replace(QLatin1Char(','), QLatin1Char(' '));
+    if (!inside.isEmpty()) {
+      const QStringList parts = inside.split(QLatin1Char(' '),
+          Qt::SkipEmptyParts);
+      if (parts.size() >= 2) {
+        bool okX = false;
+        bool okY = false;
+        const int x = parts.at(0).toInt(&okX);
+        const int y = parts.at(1).toInt(&okY);
+        if (okX && okY) {
+          points.append(QPoint(x, y));
+        }
+      }
+    }
+    searchPos = end + 1;
+  }
+  return points;
+}
+
+inline void DisplayWindow::loadPolylineElement(
+    const AdlNode &polylineNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QVector<QPoint> points = parsePolylinePoints(polylineNode);
+  if (points.size() < 2) {
+    return;
+  }
+
+  QColor color = colorForIndex(14);
+  RectangleLineStyle lineStyle = RectangleLineStyle::kSolid;
+  int lineWidth = 1;
+
+  if (const AdlNode *basic = ::findChild(polylineNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      color = colorForIndex(clrIndex);
+    }
+
+    const QString styleValue = propertyValue(*basic,
+        QStringLiteral("style"));
+    if (!styleValue.isEmpty()) {
+      lineStyle = parseRectangleLineStyle(styleValue);
+    }
+
+    const QString widthValue = propertyValue(*basic,
+        QStringLiteral("width"));
+    if (!widthValue.isEmpty()) {
+      int widthCandidate = widthValue.toInt(&ok);
+      if (ok) {
+        lineWidth = std::max(1, widthCandidate);
+      }
+    }
+  }
+
+  TextColorMode colorMode = TextColorMode::kStatic;
+  TextVisibilityMode visibilityMode = TextVisibilityMode::kStatic;
+  QString visibilityCalc;
+
+  std::array<QString, 5> channels{};
+  auto channelSetter = [&channels](int index, const QString &value) {
+    if (index >= 0 && index < static_cast<int>(channels.size())) {
+      channels[static_cast<std::size_t>(index)] = value;
+    }
+  };
+
+  if (const AdlNode *dyn = ::findChild(polylineNode,
+          QStringLiteral("dynamic attribute"))) {
+    const QString colorModeValue = propertyValue(*dyn,
+        QStringLiteral("clr"));
+    if (!colorModeValue.isEmpty()) {
+      colorMode = parseTextColorMode(colorModeValue);
+    }
+
+    const QString visibilityValue = propertyValue(*dyn,
+        QStringLiteral("vis"));
+    if (!visibilityValue.isEmpty()) {
+      visibilityMode = parseVisibilityMode(visibilityValue);
+    }
+
+    const QString calcValue = propertyValue(*dyn, QStringLiteral("calc"));
+    if (!calcValue.isEmpty()) {
+      visibilityCalc = calcValue.trimmed();
+    }
+
+    applyChannelProperties(*dyn, channelSetter, 0, 0);
+  }
+
+  applyChannelProperties(polylineNode, channelSetter, 0, 0);
+
+  QPolygon polygon(points);
+  QRect geometry = polygon.boundingRect();
+  if (geometry.width() <= 0) {
+    geometry.setWidth(1);
+  }
+  if (geometry.height() <= 0) {
+    geometry.setHeight(1);
+  }
+
+  if (points.size() == 2) {
+    auto *element = new LineElement(displayArea_);
+    element->setGeometry(geometry);
+    element->setForegroundColor(color);
+    element->setLineStyle(lineStyle);
+    element->setLineWidth(lineWidth);
+    element->setColorMode(colorMode);
+    element->setVisibilityMode(visibilityMode);
+    element->setVisibilityCalc(visibilityCalc);
+    for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+      const QString &channel = channels[static_cast<std::size_t>(i)];
+      if (!channel.isEmpty()) {
+        element->setChannel(i, channel);
+      }
+    }
+    const QPoint localStart = points.first() - geometry.topLeft();
+    const QPoint localEnd = points.last() - geometry.topLeft();
+    element->setLocalEndpoints(localStart, localEnd);
+    element->show();
+    element->setSelected(false);
+    lineElements_.append(element);
+    ensureElementInStack(element);
+    return;
+  }
+
+  auto *element = new PolylineElement(displayArea_);
+  element->setForegroundColor(color);
+  element->setLineStyle(lineStyle);
+  element->setLineWidth(lineWidth);
+  element->setColorMode(colorMode);
+  element->setVisibilityMode(visibilityMode);
+  element->setVisibilityCalc(visibilityCalc);
+  for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+    const QString &channel = channels[static_cast<std::size_t>(i)];
+    if (!channel.isEmpty()) {
+      element->setChannel(i, channel);
+    }
+  }
+  element->setAbsolutePoints(points);
+  element->show();
+  element->setSelected(false);
+  polylineElements_.append(element);
   ensureElementInStack(element);
 }
 

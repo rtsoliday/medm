@@ -389,7 +389,7 @@ public:
     QObject::connect(imageCalcEdit_, &QLineEdit::editingFinished, this,
         [this]() { commitImageCalc(); });
 
-    imageColorModeCombo_ = new QComboBox;
+  imageColorModeCombo_ = new QComboBox(imageSection_);
     imageColorModeCombo_->setFont(valueFont_);
     imageColorModeCombo_->setAutoFillBackground(true);
     imageColorModeCombo_->addItem(QStringLiteral("Static"));
@@ -402,6 +402,7 @@ public:
             imageColorModeSetter_(colorModeFromIndex(index));
           }
         });
+    imageColorModeCombo_->hide();
 
     imageVisibilityCombo_ = new QComboBox;
     imageVisibilityCombo_->setFont(valueFont_);
@@ -444,8 +445,7 @@ public:
     int imageRow = 0;
     addRow(imageLayout, imageRow++, QStringLiteral("Image Type"), imageTypeCombo_);
     addRow(imageLayout, imageRow++, QStringLiteral("Image Name"), imageNameEdit_);
-    addRow(imageLayout, imageRow++, QStringLiteral("Calc"), imageCalcEdit_);
-    addRow(imageLayout, imageRow++, QStringLiteral("Color Mode"), imageColorModeCombo_);
+  addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
     addRow(imageLayout, imageRow++, QStringLiteral("Visibility"), imageVisibilityCombo_);
     addRow(imageLayout, imageRow++, QStringLiteral("Vis Calc"), imageVisibilityCalcEdit_);
     addRow(imageLayout, imageRow++, QStringLiteral("Channel A"), imageChannelEdits_[0]);

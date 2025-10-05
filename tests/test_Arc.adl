@@ -5,7 +5,7 @@ file {
 }
 display {
 	object {
-		x=0
+		x=10
 		y=53
 		width=790
 		height=535
@@ -89,14 +89,170 @@ display {
 }
 arc {
 	object {
-		x=15
-		y=13
-		width=69
-		height=64
+		x=20
+		y=20
+		width=90
+		height=72
 	}
 	"basic attribute" {
-		clr=14
+		clr=23
+		style="dash"
+		fill="outline"
+		width=3
 	}
-	begin=0
-	path=5760
+	begin=3904
+	path=8832
+}
+arc {
+	object {
+		x=140
+		y=28
+		width=108
+		height=102
+	}
+	"basic attribute" {
+		clr=47
+		width=5
+	}
+	begin=1280
+	path=5376
+}
+arc {
+	object {
+		x=270
+		y=12
+		width=96
+		height=118
+	}
+	"basic attribute" {
+		clr=5
+		style="dash"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="arc:discA"
+	}
+	begin=1792
+	path=6400
+}
+arc {
+	object {
+		x=400
+		y=35
+		width=120
+		height=84
+	}
+	"basic attribute" {
+		clr=58
+		fill="outline"
+		width=2
+	}
+	begin=7168
+	path=12160
+}
+arc {
+	object {
+		x=540
+		y=18
+		width=132
+		height=94
+	}
+	"basic attribute" {
+		clr=9
+		style="dash"
+		width=6
+	}
+	begin=20480
+	path=3072
+}
+arc {
+	object {
+		x=60
+		y=150
+		width=145
+		height=120
+	}
+	"basic attribute" {
+		clr=31
+		fill="outline"
+		width=8
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="arc:calcA"
+		chanB="arc:calcB"
+		chanC="arc:calcC"
+		chanD="arc:calcD"
+	}
+	begin=512
+	path=14720
+}
+arc {
+	object {
+		x=240
+		y=170
+		width=105
+		height=105
+	}
+	"basic attribute" {
+		clr=2
+		style="dash"
+		fill="outline"
+		width=5
+	}
+	begin=9728
+	path=8192
+}
+arc {
+	object {
+		x=380
+		y=150
+		width=150
+		height=130
+	}
+	"basic attribute" {
+		clr=43
+		width=3
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		chan="arc:multi"
+		chanB="arc:multi2"
+	}
+	begin=2560
+	path=16640
+}
+arc {
+	object {
+		x=560
+		y=160
+		width=112
+		height=140
+	}
+	"basic attribute" {
+		clr=18
+		fill="outline"
+		width=4
+	}
+	begin=14080
+	path=9600
+}
+arc {
+	object {
+		x=680
+		y=40
+		width=90
+		height=90
+	}
+	"basic attribute" {
+		clr=52
+		style="dash"
+		width=2
+	}
+	begin=448
+	path=13440
 }

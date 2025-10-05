@@ -5,7 +5,7 @@ file {
 }
 display {
 	object {
-		x=0
+		x=10
 		y=53
 		width=792
 		height=534
@@ -89,12 +89,273 @@ display {
 }
 oval {
 	object {
-		x=25
-		y=14
-		width=35
-		height=43
+		x=34
+		y=26
+		width=67
+		height=83
 	}
 	"basic attribute" {
-		clr=14
+		clr=23
+		style="dash"
+		fill="outline"
+		width=5
+	}
+}
+oval {
+	object {
+		x=128
+		y=28
+		width=79
+		height=61
+	}
+	"basic attribute" {
+		clr=7
+		width=2
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="oval:vis:327"
+		chanB="oval:vis:728"
+	}
+}
+oval {
+	object {
+		x=228
+		y=22
+		width=93
+		height=105
+	}
+	"basic attribute" {
+		clr=51
+		fill="outline"
+		width=6
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="oval:disc:044"
+	}
+}
+oval {
+	object {
+		x=344
+		y=30
+		width=84
+		height=72
+	}
+	"basic attribute" {
+		clr=38
+		style="dash"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		chan="oval:alarm:191"
+		chanB="oval:alarm:973"
+		chanC="oval:alarm:624"
+	}
+}
+oval {
+	object {
+		x=36
+		y=148
+		width=102
+		height=114
+	}
+	"basic attribute" {
+		clr=59
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A<B"
+		chan="oval:calc:501"
+		chanB="oval:calc:847"
+	}
+}
+oval {
+	object {
+		x=158
+		y=142
+		width=88
+		height=96
+	}
+	"basic attribute" {
+		clr=12
+		style="dash"
+		fill="outline"
+		width=7
+	}
+}
+oval {
+	object {
+		x=270
+		y=152
+		width=104
+		height=82
+	}
+	"basic attribute" {
+		clr=42
+		width=5
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		chan="oval:mode:662"
+		chanB="oval:mode:905"
+	}
+}
+oval {
+	object {
+		x=388
+		y=146
+		width=86
+		height=110
+	}
+	"basic attribute" {
+		clr=18
+		fill="outline"
+		width=9
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if zero"
+		chan="oval:zero:786"
+	}
+}
+oval {
+	object {
+		x=52
+		y=290
+		width=78
+		height=88
+	}
+	"basic attribute" {
+		clr=26
+		width=3
+	}
+}
+oval {
+	object {
+		x=164
+		y=288
+		width=112
+		height=120
+	}
+	"basic attribute" {
+		clr=31
+		style="dash"
+		fill="outline"
+		width=6
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="oval:state:583"
+	}
+}
+oval {
+	object {
+		x=290
+		y=296
+		width=94
+		height=74
+	}
+	"basic attribute" {
+		clr=9
+		width=4
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A+B>1"
+		chan="oval:calc:125"
+		chanB="oval:calc:954"
+		chanC="oval:calc:732"
+	}
+}
+oval {
+	object {
+		x=406
+		y=288
+		width=80
+		height=118
+	}
+	"basic attribute" {
+		clr=54
+		fill="outline"
+		width=8
+	}
+}
+oval {
+	object {
+		x=46
+		y=420
+		width=110
+		height=92
+	}
+	"basic attribute" {
+		clr=3
+		style="dash"
+		width=5
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if zero"
+		chan="oval:watch:410"
+	}
+}
+oval {
+	object {
+		x=186
+		y=408
+		width=90
+		height=106
+	}
+	"basic attribute" {
+		clr=49
+		fill="outline"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		chan="oval:multi:207"
+		chanB="oval:multi:819"
+		chanC="oval:multi:452"
+		chanD="oval:multi:281"
+	}
+}
+oval {
+	object {
+		x=304
+		y=412
+		width=108
+		height=98
+	}
+	"basic attribute" {
+		clr=15
+		style="dash"
+		fill="outline"
+		width=10
+	}
+}
+oval {
+	object {
+		x=420
+		y=406
+		width=96
+		height=104
+	}
+	"basic attribute" {
+		clr=57
+		width=6
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>C"
+		chan="oval:alert:663"
+		chanB="oval:alert:221"
+		chanC="oval:alert:908"
 	}
 }

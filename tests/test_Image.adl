@@ -5,7 +5,7 @@ file {
 }
 display {
 	object {
-		x=0
+		x=10
 		y=53
 		width=782
 		height=537
@@ -89,11 +89,124 @@ display {
 }
 image {
 	object {
-		x=15
-		y=11
-		width=253
-		height=140
+		x=12
+		y=18
+		width=168
+		height=124
 	}
 	type="gif"
 	"image name"="test.gif"
+}
+image {
+	object {
+		x=214
+		y=36
+		width=196
+		height=136
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A+B*3"
+	"dynamic attribute" {
+		vis="if not zero"
+		chan="img:alpha01"
+	}
+}
+image {
+	object {
+		x=438
+		y=22
+		width=210
+		height=142
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A-(B/2)"
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="img:beta02"
+		chanB="img:beta03"
+	}
+}
+image {
+	object {
+		x=52
+		y=212
+		width=248
+		height=172
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="img:gamma10"
+		chanB="img:gamma11"
+		chanC="img:gamma12"
+	}
+}
+image {
+	object {
+		x=338
+		y=226
+		width=224
+		height=158
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A/3"
+}
+image {
+	object {
+		x=596
+		y=198
+		width=164
+		height=144
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="img:delta21"
+	}
+}
+image {
+	object {
+		x=128
+		y=396
+		width=312
+		height=128
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A*3-B"
+	"dynamic attribute" {
+		vis="if zero"
+		chan="img:frameA"
+		chanB="img:frameB"
+		chanC="img:frameC"
+		chanD="img:frameD"
+	}
+}
+image {
+	object {
+		x=476
+		y=402
+		width=198
+		height=118
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A*0.5"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A<C"
+		chan="img:epsilon05"
+		chanB="img:epsilon06"
+		chanC="img:epsilon07"
+	}
 }

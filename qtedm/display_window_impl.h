@@ -7544,9 +7544,10 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("calc=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(imageCalc)));
       }
-      AdlWriter::writeDynamicAttributeSection(stream, 1, image->colorMode(),
-          image->visibilityMode(), image->visibilityCalc(),
-          AdlWriter::collectChannels(image));
+    const auto imageChannels = AdlWriter::channelsForMedmFourValues(
+      AdlWriter::collectChannels(image));
+    AdlWriter::writeDynamicAttributeSection(stream, 1, image->colorMode(),
+      image->visibilityMode(), image->visibilityCalc(), imageChannels);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -8217,6 +8218,20 @@ inline void DisplayWindow::loadImageElement(const AdlNode &imageNode)
     element->setCalc(calcValue);
   }
 
+  auto imageChannelSetter = [element](int index, const QString &value) {
+    int mappedIndex = -1;
+    if (index == 0) {
+      mappedIndex = 0;
+    } else if (index == 1) {
+      mappedIndex = 1;
+    } else if (index >= 2) {
+      mappedIndex = index - 1;
+    }
+    if (mappedIndex >= 0) {
+      element->setChannel(mappedIndex, value);
+    }
+  };
+
   if (const AdlNode *dyn = ::findChild(imageNode,
           QStringLiteral("dynamic attribute"))) {
     const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
@@ -8235,16 +8250,12 @@ inline void DisplayWindow::loadImageElement(const AdlNode &imageNode)
     }
 
     applyChannelProperties(*dyn,
-        [element](int index, const QString &value) {
-          element->setChannel(index, value);
-        },
+        imageChannelSetter,
         0, 1);
   }
 
   applyChannelProperties(imageNode,
-      [element](int index, const QString &value) {
-        element->setChannel(index, value);
-      },
+      imageChannelSetter,
       0, 1);
 
   element->show();

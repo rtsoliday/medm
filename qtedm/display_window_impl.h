@@ -602,6 +602,7 @@ private:
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
+  void loadOvalElement(const AdlNode &ovalNode);
   void loadPolygonElement(const AdlNode &polygonNode);
   void loadPolylineElement(const AdlNode &polylineNode);
   QRect parseObjectGeometry(const AdlNode &parent) const;
@@ -6756,6 +6757,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("oval"), Qt::CaseInsensitive)
+        == 0) {
+      loadOvalElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("polygon"), Qt::CaseInsensitive)
         == 0) {
       loadPolygonElement(child);
@@ -8192,6 +8199,91 @@ inline void DisplayWindow::loadRectangleElement(const AdlNode &rectangleNode)
   element->show();
   element->setSelected(false);
   rectangleElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(ovalNode);
+  if (geometry.width() < kMinimumRectangleSize) {
+    geometry.setWidth(kMinimumRectangleSize);
+  }
+  if (geometry.height() < kMinimumRectangleSize) {
+    geometry.setHeight(kMinimumRectangleSize);
+  }
+
+  auto *element = new OvalElement(displayArea_);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *basic = ::findChild(ovalNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    const QString styleValue = propertyValue(*basic,
+        QStringLiteral("style"));
+    if (!styleValue.isEmpty()) {
+      element->setLineStyle(parseRectangleLineStyle(styleValue));
+    }
+
+    const QString fillValue = propertyValue(*basic,
+        QStringLiteral("fill"));
+    if (!fillValue.isEmpty()) {
+      element->setFill(parseRectangleFill(fillValue));
+    }
+
+    const QString widthValue = propertyValue(*basic,
+        QStringLiteral("width"));
+    if (!widthValue.isEmpty()) {
+      int width = widthValue.toInt(&ok);
+      if (!ok || width <= 0) {
+        width = 1;
+      }
+      element->setLineWidth(width);
+    }
+  }
+
+  if (const AdlNode *dyn = ::findChild(ovalNode,
+          QStringLiteral("dynamic attribute"))) {
+    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    if (!colorMode.isEmpty()) {
+      element->setColorMode(parseTextColorMode(colorMode));
+    }
+
+    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    if (!visibility.isEmpty()) {
+      element->setVisibilityMode(parseVisibilityMode(visibility));
+    }
+
+    const QString calc = propertyValue(*dyn, QStringLiteral("calc"));
+    if (!calc.isEmpty()) {
+      element->setVisibilityCalc(calc);
+    }
+
+    applyChannelProperties(*dyn,
+        [element](int index, const QString &value) {
+          element->setChannel(index, value);
+        },
+        0, 0);
+  }
+
+  applyChannelProperties(ovalNode,
+      [element](int index, const QString &value) {
+        element->setChannel(index, value);
+      },
+      0, 0);
+
+  element->show();
+  element->setSelected(false);
+  ovalElements_.append(element);
   ensureElementInStack(element);
 }
 

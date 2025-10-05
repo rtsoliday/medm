@@ -21,6 +21,8 @@ public:
 
   QString imageName() const;
   void setImageName(const QString &name);
+  QString baseDirectory() const;
+  void setBaseDirectory(const QString &directory);
 
   QString calc() const;
   void setCalc(const QString &calc);
@@ -53,5 +55,6 @@ private:
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
   QString visibilityCalc_;
   std::array<QString, 5> channels_{};
+  QString baseDirectory_;
   QPixmap pixmap_;
 };

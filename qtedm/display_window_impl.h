@@ -601,6 +601,7 @@ private:
   bool loadDisplaySection(const AdlNode &displayNode);
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
+  void loadImageElement(const AdlNode &imageNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
   void loadOvalElement(const AdlNode &ovalNode);
   void loadArcElement(const AdlNode &arcNode);
@@ -618,6 +619,7 @@ private:
     int baseChannelIndex, int letterStartIndex) const;
   RectangleFill parseRectangleFill(const QString &value) const;
   RectangleLineStyle parseRectangleLineStyle(const QString &value) const;
+  ImageType parseImageType(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
   Qt::Alignment parseAlignment(const QString &value) const;
@@ -632,6 +634,7 @@ private:
   QPointer<ResourcePaletteDialog> resourcePalette_;
   DisplayAreaWidget *displayArea_ = nullptr;
   QString filePath_;
+  QString currentLoadDirectory_;
   QString colormapName_;
   bool dirty_ = true;
   bool displaySelected_ = false;
@@ -1755,12 +1758,14 @@ private:
       const TextColorMode colorMode = element->colorMode();
       const TextVisibilityMode visibilityMode = element->visibilityMode();
   const QString visibilityCalc = element->visibilityCalc();
+      const QString baseDirectory = element->baseDirectory();
       std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
       prepareClipboard([geometry, imageType, imageName, calc, colorMode,
-                           visibilityMode, visibilityCalc, channels](
+                           visibilityMode, visibilityCalc, channels,
+                           baseDirectory](
                            DisplayWindow &target, const QPoint &offset) {
         if (!target.displayArea_) {
           return;
@@ -1770,6 +1775,12 @@ private:
         auto *newElement = new ImageElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setImageType(imageType);
+        if (!baseDirectory.isEmpty()) {
+          newElement->setBaseDirectory(baseDirectory);
+        } else if (!target.filePath_.isEmpty()) {
+          newElement->setBaseDirectory(
+              QFileInfo(target.filePath_).absolutePath());
+        }
         newElement->setImageName(imageName);
         newElement->setCalc(calc);
         newElement->setColorMode(colorMode);
@@ -6087,6 +6098,9 @@ private:
     }
     auto *element = new ImageElement(displayArea_);
     element->setGeometry(target);
+    if (!filePath_.isEmpty()) {
+      element->setBaseDirectory(QFileInfo(filePath_).absolutePath());
+    }
     element->show();
     imageElements_.append(element);
     selectImageElement(element);
@@ -6730,6 +6744,9 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
 
   clearAllElements();
 
+  const QString previousLoadDirectory = currentLoadDirectory_;
+  currentLoadDirectory_ = QFileInfo(filePath).absolutePath();
+
   bool displayLoaded = false;
   bool elementLoaded = false;
   for (const auto &child : document->children) {
@@ -6749,6 +6766,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
         || child.name.compare(QStringLiteral("text monitor"), Qt::CaseInsensitive)
             == 0) {
       loadTextMonitorElement(child);
+      elementLoaded = true;
+      continue;
+    }
+    if (child.name.compare(QStringLiteral("image"), Qt::CaseInsensitive)
+        == 0) {
+      loadImageElement(child);
       elementLoaded = true;
       continue;
     }
@@ -6799,6 +6822,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   if (auto state = state_.lock()) {
     state->createTool = CreateTool::kNone;
   }
+  currentLoadDirectory_ = previousLoadDirectory;
   return displayLoaded || elementLoaded;
 }
 
@@ -7667,6 +7691,7 @@ inline void DisplayWindow::clearAllElements()
     displayArea_->setGridOn(gridOn_);
     displayArea_->setGridSpacing(gridSpacing_);
   }
+  currentLoadDirectory_.clear();
 }
 
 inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
@@ -7836,6 +7861,26 @@ inline RectangleLineStyle DisplayWindow::parseRectangleLineStyle(
     return RectangleLineStyle::kDash;
   }
   return RectangleLineStyle::kSolid;
+}
+
+inline ImageType DisplayWindow::parseImageType(const QString &value) const
+{
+  const QString normalized = value.trimmed();
+  if (normalized.compare(QStringLiteral("gif"), Qt::CaseInsensitive) == 0) {
+    return ImageType::kGif;
+  }
+  if (normalized.compare(QStringLiteral("tiff"), Qt::CaseInsensitive)
+      == 0) {
+    return ImageType::kTiff;
+  }
+  if (normalized.compare(QStringLiteral("no image"), Qt::CaseInsensitive)
+          == 0
+      || normalized.compare(QStringLiteral("none"), Qt::CaseInsensitive)
+          == 0
+      || normalized.isEmpty()) {
+    return ImageType::kNone;
+  }
+  return ImageType::kNone;
 }
 
 inline TextMonitorFormat DisplayWindow::parseTextMonitorFormat(
@@ -8130,6 +8175,81 @@ inline void DisplayWindow::loadTextMonitorElement(
   element->show();
   element->setSelected(false);
   textMonitorElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadImageElement(const AdlNode &imageNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(imageNode);
+  if (geometry.width() < kMinimumRectangleSize) {
+    geometry.setWidth(kMinimumRectangleSize);
+  }
+  if (geometry.height() < kMinimumRectangleSize) {
+    geometry.setHeight(kMinimumRectangleSize);
+  }
+
+  auto *element = new ImageElement(displayArea_);
+  element->setGeometry(geometry);
+
+  const QString typeValue = propertyValue(imageNode, QStringLiteral("type"));
+  if (!typeValue.isEmpty()) {
+    element->setImageType(parseImageType(typeValue));
+  }
+
+  if (!currentLoadDirectory_.isEmpty()) {
+    element->setBaseDirectory(currentLoadDirectory_);
+  } else if (!filePath_.isEmpty()) {
+    element->setBaseDirectory(QFileInfo(filePath_).absolutePath());
+  }
+
+  const QString nameValue = propertyValue(imageNode,
+      QStringLiteral("image name"));
+  if (!nameValue.isEmpty()) {
+    element->setImageName(nameValue);
+  }
+
+  const QString calcValue = propertyValue(imageNode, QStringLiteral("calc"));
+  if (!calcValue.trimmed().isEmpty()) {
+    element->setCalc(calcValue);
+  }
+
+  if (const AdlNode *dyn = ::findChild(imageNode,
+          QStringLiteral("dynamic attribute"))) {
+    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    if (!colorMode.isEmpty()) {
+      element->setColorMode(parseTextColorMode(colorMode));
+    }
+
+    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    if (!visibility.isEmpty()) {
+      element->setVisibilityMode(parseVisibilityMode(visibility));
+    }
+
+    const QString visCalc = propertyValue(*dyn, QStringLiteral("calc"));
+    if (!visCalc.isEmpty()) {
+      element->setVisibilityCalc(visCalc);
+    }
+
+    applyChannelProperties(*dyn,
+        [element](int index, const QString &value) {
+          element->setChannel(index, value);
+        },
+        0, 1);
+  }
+
+  applyChannelProperties(imageNode,
+      [element](int index, const QString &value) {
+        element->setChannel(index, value);
+      },
+      0, 1);
+
+  element->show();
+  element->setSelected(false);
+  imageElements_.append(element);
   ensureElementInStack(element);
 }
 

@@ -1,6 +1,8 @@
 #include "image_element.h"
 
 #include <QApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
@@ -60,6 +62,25 @@ void ImageElement::setImageName(const QString &name)
   } else {
     setToolTip(imageName_);
   }
+  loadPixmap();
+  update();
+}
+
+QString ImageElement::baseDirectory() const
+{
+  return baseDirectory_;
+}
+
+void ImageElement::setBaseDirectory(const QString &directory)
+{
+  QString normalized = directory.trimmed();
+  if (!normalized.isEmpty()) {
+    normalized = QDir(normalized).absolutePath();
+  }
+  if (baseDirectory_ == normalized) {
+    return;
+  }
+  baseDirectory_ = normalized;
   loadPixmap();
   update();
 }
@@ -160,17 +181,43 @@ void ImageElement::paintEvent(QPaintEvent *event)
 
 void ImageElement::loadPixmap()
 {
-  if (imageType_ == ImageType::kNone || imageName_.isEmpty()) {
-    pixmap_ = QPixmap();
+  pixmap_ = QPixmap();
+  if (imageType_ == ImageType::kNone) {
     return;
   }
 
-  QPixmap pixmap(imageName_);
-  if (pixmap.isNull()) {
-    pixmap_ = QPixmap();
+  const QString trimmedName = imageName_.trimmed();
+  if (trimmedName.isEmpty()) {
     return;
   }
-  pixmap_ = pixmap;
+
+  const QFileInfo directInfo(trimmedName);
+  auto tryLoad = [this](const QString &path) {
+    if (path.isEmpty()) {
+      return false;
+    }
+    QPixmap pixmap(path);
+    if (pixmap.isNull()) {
+      return false;
+    }
+    pixmap_ = pixmap;
+    return true;
+  };
+
+  if (directInfo.isAbsolute()) {
+    if (tryLoad(directInfo.filePath())) {
+      return;
+    }
+  } else {
+    if (!baseDirectory_.isEmpty()) {
+      if (tryLoad(QDir(baseDirectory_).absoluteFilePath(trimmedName))) {
+        return;
+      }
+    }
+    if (tryLoad(trimmedName)) {
+      return;
+    }
+  }
 }
 
 QColor ImageElement::foregroundColor() const

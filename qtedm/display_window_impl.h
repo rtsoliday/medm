@@ -7537,8 +7537,8 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *line = dynamic_cast<LineElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("polyline {"));
       AdlWriter::writeObjectSection(stream, 1, line->geometry());
-      AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(line->color()),
-          line->lineStyle(), RectangleFill::kSolid, line->lineWidth());
+    AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(line->color()),
+      line->lineStyle(), RectangleFill::kSolid, line->lineWidth(), true);
     const auto lineChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(line));
     AdlWriter::writeDynamicAttributeSection(stream, 1, line->colorMode(),
@@ -7554,9 +7554,9 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("polyline {"));
       AdlWriter::writeObjectSection(stream, 1, polyline->geometry());
-      AdlWriter::writeBasicAttributeSection(stream, 1,
-          AdlWriter::medmColorIndex(polyline->color()), polyline->lineStyle(),
-          RectangleFill::kSolid, polyline->lineWidth());
+    AdlWriter::writeBasicAttributeSection(stream, 1,
+      AdlWriter::medmColorIndex(polyline->color()), polyline->lineStyle(),
+      RectangleFill::kSolid, polyline->lineWidth(), true);
     const auto polylineChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(polyline));
     AdlWriter::writeDynamicAttributeSection(stream, 1,

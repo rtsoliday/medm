@@ -515,6 +515,13 @@ public:
         });
 
     lineVisibilityCalcEdit_ = createLineEdit();
+    QColor lineDisabledBackground = basePalette.color(QPalette::Disabled, QPalette::Base);
+    if (!lineDisabledBackground.isValid()) {
+      lineDisabledBackground = QColor(0xd3, 0xd3, 0xd3);
+    }
+    lineVisibilityCalcEdit_->setStyleSheet(
+        QStringLiteral("QLineEdit:disabled { background-color: %1; }")
+            .arg(lineDisabledBackground.name(QColor::HexRgb).toUpper()));
     committedTexts_.insert(lineVisibilityCalcEdit_, lineVisibilityCalcEdit_->text());
     lineVisibilityCalcEdit_->installEventFilter(this);
     QObject::connect(lineVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
@@ -530,7 +537,13 @@ public:
           [this, i]() { commitLineChannel(i); });
       QObject::connect(lineChannelEdits_[i], &QLineEdit::editingFinished, this,
           [this, i]() { commitLineChannel(i); });
+      if (i == 0) {
+        QObject::connect(lineChannelEdits_[i], &QLineEdit::textChanged, this,
+            [this]() { updateLineChannelDependentControls(); });
+      }
     }
+
+    updateLineChannelDependentControls();
 
     addRow(lineLayout, 0, QStringLiteral("Color"), lineColorButton_);
     addRow(lineLayout, 1, QStringLiteral("Line Style"), lineLineStyleCombo_);
@@ -5961,7 +5974,9 @@ public:
       committedTexts_[edit] = edit->text();
     }
 
-  elementLabel_->setText(elementLabel);
+    updateLineChannelDependentControls();
+
+    elementLabel_->setText(elementLabel);
 
     show();
     positionRelativeTo(parentWidget());
@@ -6606,6 +6621,7 @@ public:
     for (QLineEdit *edit : lineChannelEdits_) {
       resetLineEdit(edit);
     }
+    updateLineChannelDependentControls();
 
     resetColorButton(foregroundButton_);
     resetColorButton(backgroundButton_);
@@ -7171,6 +7187,24 @@ private:
     if (index == kTextChannelAIndex) {
       updateTextChannelDependentControls();
     }
+  }
+
+  void updateLineChannelDependentControls()
+  {
+    bool hasChannelA = false;
+    if (lineChannelGetters_[0]) {
+      const QString value = lineChannelGetters_[0]();
+      hasChannelA = !value.trimmed().isEmpty();
+    }
+    if (!hasChannelA) {
+      QLineEdit *channelEdit = lineChannelEdits_[0];
+      if (channelEdit) {
+        hasChannelA = !channelEdit->text().trimmed().isEmpty();
+      }
+    }
+    setFieldEnabled(lineColorModeCombo_, hasChannelA);
+    setFieldEnabled(lineVisibilityCombo_, hasChannelA);
+    setFieldEnabled(lineVisibilityCalcEdit_, hasChannelA);
   }
 
   void updateTextChannelDependentControls()
@@ -8442,6 +8476,9 @@ private:
     const QString value = edit->text();
     lineChannelSetters_[index](value);
     committedTexts_[edit] = value;
+    if (index == 0) {
+      updateLineChannelDependentControls();
+    }
   }
 
   Qt::Alignment alignmentFromIndex(int index) const

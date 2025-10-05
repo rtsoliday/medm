@@ -102,3 +102,196 @@ polyline {
 		(158,109)
 	}
 }
+polyline {
+	object {
+		x=200
+		y=40
+		width=140
+		height=20
+	}
+	"basic attribute" {
+		clr=5
+		width=2
+	}
+	points {
+		(200,45)
+		(340,65)
+	}
+}
+polyline {
+	object {
+		x=380
+		y=110
+		width=40
+		height=150
+	}
+	"basic attribute" {
+		clr=32
+		style="dash"
+		width=4
+	}
+	points {
+		(395,110)
+		(395,260)
+	}
+}
+polyline {
+	object {
+		x=450
+		y=100
+		width=150
+		height=100
+	}
+	"basic attribute" {
+		clr=20
+		style="dash"
+		width=3
+	}
+	points {
+		(450,100)
+		(520,200)
+		(600,120)
+	}
+}
+polyline {
+	object {
+		x=90
+		y=160
+		width=220
+		height=110
+	}
+	"basic attribute" {
+		clr=28
+		width=5
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="line:alarmA"
+	}
+	points {
+		(90,160)
+		(200,270)
+		(310,190)
+	}
+}
+polyline {
+	object {
+		x=360
+		y=260
+		width=230
+		height=120
+	}
+	"basic attribute" {
+		clr=12
+		width=6
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="line:disc1"
+		chanB="line:disc2"
+	}
+	points {
+		(360,370)
+		(420,260)
+		(520,320)
+		(590,380)
+	}
+}
+polyline {
+	object {
+		x=120
+		y=320
+		width=200
+		height=90
+	}
+	"basic attribute" {
+		clr=52
+		style="dash"
+		width=2
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="line:multi"
+		chanB="line:multiB"
+		chanC="line:multiC"
+	}
+	points {
+		(120,320)
+		(210,320)
+		(280,350)
+		(320,410)
+	}
+}
+polyline {
+	object {
+		x=430
+		y=380
+		width=210
+		height=80
+	}
+	"basic attribute" {
+		clr=18
+		width=8
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="line:calcA"
+		chanB="line:calcB"
+	}
+	points {
+		(430,380)
+		(520,460)
+		(640,420)
+	}
+}
+polyline {
+	object {
+		x=60
+		y=420
+		width=120
+		height=20
+	}
+	"basic attribute" {
+		clr=9
+		width=1
+	}
+	"dynamic attribute" {
+		vis="if zero"
+		chan="line:vis0"
+	}
+	points {
+		(60,420)
+		(180,420)
+	}
+}
+polyline {
+	object {
+		x=220
+		y=440
+		width=240
+		height=80
+	}
+	"basic attribute" {
+		clr=60
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A+B>C"
+		chan="line:calc1"
+		chanB="line:calc2"
+		chanC="line:calc3"
+	}
+	points {
+		(220,440)
+		(300,500)
+		(400,480)
+		(460,520)
+	}
+}

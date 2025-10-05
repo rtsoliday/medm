@@ -7525,9 +7525,11 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeObjectSection(stream, 1, oval->geometry());
       AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(oval->color()),
           oval->lineStyle(), oval->fill(), oval->lineWidth());
+    const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
+      AdlWriter::collectChannels(oval));
+    // MEDM stores oval channels as chan, chanB, chanC, chanD.
       AdlWriter::writeDynamicAttributeSection(stream, 1, oval->colorMode(),
-          oval->visibilityMode(), oval->visibilityCalc(),
-          AdlWriter::collectChannels(oval));
+      oval->visibilityMode(), oval->visibilityCalc(), ovalChannels);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

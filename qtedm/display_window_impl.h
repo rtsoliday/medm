@@ -7580,9 +7580,11 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeBasicAttributeSection(stream, 1,
           AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
           polygon->fill(), polygon->lineWidth());
-      AdlWriter::writeDynamicAttributeSection(stream, 1, polygon->colorMode(),
-          polygon->visibilityMode(), polygon->visibilityCalc(),
-          AdlWriter::collectChannels(polygon));
+    const auto polygonChannels = AdlWriter::channelsForMedmFourValues(
+      AdlWriter::collectChannels(polygon));
+    AdlWriter::writeDynamicAttributeSection(stream, 1, polygon->colorMode(),
+      polygon->visibilityMode(), polygon->visibilityCalc(),
+      polygonChannels);
       AdlWriter::writePointsSection(stream, 1, polygon->absolutePoints());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;

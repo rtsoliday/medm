@@ -7546,9 +7546,11 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeObjectSection(stream, 1, arc->geometry());
       AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(arc->color()),
           arc->lineStyle(), arc->fill(), arc->lineWidth());
-      AdlWriter::writeDynamicAttributeSection(stream, 1, arc->colorMode(),
-          arc->visibilityMode(), arc->visibilityCalc(),
+      const auto arcChannels = AdlWriter::channelsForMedmFourValues(
           AdlWriter::collectChannels(arc));
+      // MEDM stores arc channels as chan, chanB, chanC, chanD.
+      AdlWriter::writeDynamicAttributeSection(stream, 1, arc->colorMode(),
+          arc->visibilityMode(), arc->visibilityCalc(), arcChannels);
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("begin=%1").arg(arc->beginAngle()));
       AdlWriter::writeIndentedLine(stream, 1,

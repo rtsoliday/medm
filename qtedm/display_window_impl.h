@@ -8314,8 +8314,10 @@ inline void DisplayWindow::loadArcElement(const AdlNode &arcNode)
   auto *element = new ArcElement(displayArea_);
   element->setGeometry(geometry);
 
+  bool fillSpecified = false;
+
   if (const AdlNode *basic = ::findChild(arcNode,
-          QStringLiteral("basic attribute"))) {
+    QStringLiteral("basic attribute"))) {
     bool ok = false;
     const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
     const int clrIndex = clrStr.toInt(&ok);
@@ -8333,6 +8335,7 @@ inline void DisplayWindow::loadArcElement(const AdlNode &arcNode)
         QStringLiteral("fill"));
     if (!fillValue.isEmpty()) {
       element->setFill(parseRectangleFill(fillValue));
+      fillSpecified = true;
     }
 
     const QString widthValue = propertyValue(*basic,
@@ -8344,6 +8347,10 @@ inline void DisplayWindow::loadArcElement(const AdlNode &arcNode)
       }
       element->setLineWidth(width);
     }
+  }
+
+  if (!fillSpecified) {
+    element->setFill(RectangleFill::kSolid);
   }
 
   if (const AdlNode *dyn = ::findChild(arcNode,

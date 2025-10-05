@@ -201,10 +201,10 @@ polyline {
 }
 polyline {
 	object {
-		x=120
-		y=320
-		width=200
-		height=90
+		x=119
+		y=319
+		width=202
+		height=92
 	}
 	"basic attribute" {
 		clr=52
@@ -217,6 +217,7 @@ polyline {
 		chan="line:multi"
 		chanB="line:multiB"
 		chanC="line:multiC"
+		chanD="line:multiD"
 	}
 	points {
 		(120,320)

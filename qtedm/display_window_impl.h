@@ -602,6 +602,7 @@ private:
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
+  void loadPolygonElement(const AdlNode &polygonNode);
   void loadPolylineElement(const AdlNode &polylineNode);
   QRect parseObjectGeometry(const AdlNode &parent) const;
   bool parseAdlPoint(const QString &text, QPoint *point) const;
@@ -6755,6 +6756,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("polygon"), Qt::CaseInsensitive)
+        == 0) {
+      loadPolygonElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("polyline"), Qt::CaseInsensitive)
         == 0
         || child.name.compare(QStringLiteral("line"), Qt::CaseInsensitive)
@@ -8183,6 +8190,108 @@ inline void DisplayWindow::loadRectangleElement(const AdlNode &rectangleNode)
   element->show();
   element->setSelected(false);
   rectangleElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadPolygonElement(const AdlNode &polygonNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QVector<QPoint> points = parsePolylinePoints(polygonNode);
+  if (points.size() < 3) {
+    return;
+  }
+
+  QColor color = colorForIndex(14);
+  RectangleLineStyle lineStyle = RectangleLineStyle::kSolid;
+  RectangleFill fill = RectangleFill::kOutline;
+  int lineWidth = 1;
+
+  if (const AdlNode *basic = ::findChild(polygonNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      color = colorForIndex(clrIndex);
+    }
+
+    const QString styleValue = propertyValue(*basic,
+        QStringLiteral("style"));
+    if (!styleValue.isEmpty()) {
+      lineStyle = parseRectangleLineStyle(styleValue);
+    }
+
+    const QString fillValue = propertyValue(*basic, QStringLiteral("fill"));
+    if (!fillValue.isEmpty()) {
+      fill = parseRectangleFill(fillValue);
+    }
+
+    const QString widthValue = propertyValue(*basic,
+        QStringLiteral("width"));
+    if (!widthValue.isEmpty()) {
+      int widthCandidate = widthValue.toInt(&ok);
+      if (ok) {
+        lineWidth = std::max(1, widthCandidate);
+      }
+    }
+  }
+
+  TextColorMode colorMode = TextColorMode::kStatic;
+  TextVisibilityMode visibilityMode = TextVisibilityMode::kStatic;
+  QString visibilityCalc;
+
+  std::array<QString, 5> channels{};
+  auto channelSetter = [&channels](int index, const QString &value) {
+    if (index >= 0 && index < static_cast<int>(channels.size())) {
+      channels[static_cast<std::size_t>(index)] = value;
+    }
+  };
+
+  if (const AdlNode *dyn = ::findChild(polygonNode,
+          QStringLiteral("dynamic attribute"))) {
+    const QString colorModeValue = propertyValue(*dyn,
+        QStringLiteral("clr"));
+    if (!colorModeValue.isEmpty()) {
+      colorMode = parseTextColorMode(colorModeValue);
+    }
+
+    const QString visibilityValue = propertyValue(*dyn,
+        QStringLiteral("vis"));
+    if (!visibilityValue.isEmpty()) {
+      visibilityMode = parseVisibilityMode(visibilityValue);
+    }
+
+    const QString calcValue = propertyValue(*dyn, QStringLiteral("calc"));
+    if (!calcValue.isEmpty()) {
+      visibilityCalc = calcValue.trimmed();
+    }
+
+    applyChannelProperties(*dyn, channelSetter, 0, 0);
+  }
+
+  applyChannelProperties(polygonNode, channelSetter, 0, 0);
+
+  auto *element = new PolygonElement(displayArea_);
+  element->setForegroundColor(color);
+  element->setFill(fill);
+  element->setLineStyle(lineStyle);
+  element->setLineWidth(lineWidth);
+  element->setColorMode(colorMode);
+  element->setVisibilityMode(visibilityMode);
+  element->setVisibilityCalc(visibilityCalc);
+  for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+    const QString &channel = channels[static_cast<std::size_t>(i)];
+    if (!channel.isEmpty()) {
+      element->setChannel(i, channel);
+    }
+  }
+  element->setAbsolutePoints(points);
+  element->show();
+  element->setSelected(false);
+  polygonElements_.append(element);
   ensureElementInStack(element);
 }
 

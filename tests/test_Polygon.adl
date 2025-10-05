@@ -200,7 +200,7 @@ polygon {
 		chan="poly:calcA"
 		chanB="poly:calcB"
 		chanC="poly:calcC"
-		chanD="poly:calcC"
+		chanD="poly:calcD"
 	}
 	points {
 		(520,90)

@@ -434,7 +434,12 @@ public:
           [this, i]() { commitImageChannel(i); });
       QObject::connect(imageChannelEdits_[i], &QLineEdit::editingFinished, this,
           [this, i]() { commitImageChannel(i); });
+      if (i == 0) {
+        QObject::connect(imageChannelEdits_[i], &QLineEdit::textChanged, this,
+            [this]() { updateImageChannelDependentControls(); });
+      }
     }
+    updateImageChannelDependentControls();
 
     int imageRow = 0;
     addRow(imageLayout, imageRow++, QStringLiteral("Image Type"), imageTypeCombo_);
@@ -5790,6 +5795,8 @@ public:
       committedTexts_[edit] = edit->text();
     }
 
+    updateImageChannelDependentControls();
+
     elementLabel_->setText(QStringLiteral("Image"));
 
     show();
@@ -6616,6 +6623,7 @@ public:
     for (QLineEdit *edit : imageChannelEdits_) {
       resetLineEdit(edit);
     }
+    updateImageChannelDependentControls();
     resetLineEdit(lineLineWidthEdit_);
     resetLineEdit(lineVisibilityCalcEdit_);
     for (QLineEdit *edit : lineChannelEdits_) {
@@ -7187,6 +7195,24 @@ private:
     if (index == kTextChannelAIndex) {
       updateTextChannelDependentControls();
     }
+  }
+
+  void updateImageChannelDependentControls()
+  {
+    bool hasChannelA = false;
+    if (imageChannelGetters_[0]) {
+      const QString value = imageChannelGetters_[0]();
+      hasChannelA = !value.trimmed().isEmpty();
+    }
+    if (!hasChannelA) {
+      QLineEdit *channelEdit = imageChannelEdits_[0];
+      if (channelEdit) {
+        hasChannelA = !channelEdit->text().trimmed().isEmpty();
+      }
+    }
+    setFieldEnabled(imageColorModeCombo_, hasChannelA);
+    setFieldEnabled(imageVisibilityCombo_, hasChannelA);
+    setFieldEnabled(imageVisibilityCalcEdit_, hasChannelA);
   }
 
   void updateLineChannelDependentControls()
@@ -8419,6 +8445,9 @@ private:
     const QString value = edit->text();
     imageChannelSetters_[index](value);
     committedTexts_[edit] = value;
+    if (index == 0) {
+      updateImageChannelDependentControls();
+    }
   }
 
   void commitLineLineWidth()

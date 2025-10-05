@@ -214,6 +214,17 @@ QString channelFieldName(int index)
   return QStringLiteral("chan%1").arg(QChar(QLatin1Char('A' + index - 1)));
 }
 
+std::array<QString, 5> channelsForMedmFourValues(
+    const std::array<QString, 5> &rawChannels)
+{
+  std::array<QString, 5> remapped{};
+  remapped[0] = rawChannels[0];
+  remapped[2] = rawChannels[1];
+  remapped[3] = rawChannels[2];
+  remapped[4] = rawChannels[3];
+  return remapped;
+}
+
 QString textMonitorFormatString(TextMonitorFormat format)
 {
   switch (format) {

@@ -7468,19 +7468,15 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("rectangle {"));
       AdlWriter::writeObjectSection(stream, 1, rectangle->geometry());
     AdlWriter::writeBasicAttributeSection(stream, 1,
-      AdlWriter::medmColorIndex(rectangle->color()), rectangle->lineStyle(),
-      rectangle->fill(), rectangle->lineWidth(), true);
-  const auto rawChannels = AdlWriter::collectChannels(rectangle);
-  std::array<QString, 5> rectangleChannels{};
-  // MEDM stores rectangle channels as chan, chanB, chanC, chanD.
-  // Shift the internal ordering to drop chanA when writing.
-      rectangleChannels[0] = rawChannels[0];
-      rectangleChannels[2] = rawChannels[1];
-      rectangleChannels[3] = rawChannels[2];
-      rectangleChannels[4] = rawChannels[3];
-      AdlWriter::writeDynamicAttributeSection(stream, 1, rectangle->colorMode(),
-          rectangle->visibilityMode(), rectangle->visibilityCalc(),
-          rectangleChannels);
+      AdlWriter::medmColorIndex(rectangle->color()),
+      rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
+      true);
+    const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
+      AdlWriter::collectChannels(rectangle));
+    // MEDM stores rectangle channels as chan, chanB, chanC, chanD.
+    AdlWriter::writeDynamicAttributeSection(stream, 1, rectangle->colorMode(),
+      rectangle->visibilityMode(), rectangle->visibilityCalc(),
+      rectangleChannels);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -7543,9 +7539,10 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeObjectSection(stream, 1, line->geometry());
       AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(line->color()),
           line->lineStyle(), RectangleFill::kSolid, line->lineWidth());
-      AdlWriter::writeDynamicAttributeSection(stream, 1, line->colorMode(),
-          line->visibilityMode(), line->visibilityCalc(),
-          AdlWriter::collectChannels(line));
+    const auto lineChannels = AdlWriter::channelsForMedmFourValues(
+      AdlWriter::collectChannels(line));
+    AdlWriter::writeDynamicAttributeSection(stream, 1, line->colorMode(),
+      line->visibilityMode(), line->visibilityCalc(), lineChannels);
       const QVector<QPoint> points = line->absolutePoints();
       if (points.size() >= 2) {
         AdlWriter::writePointsSection(stream, 1, points);
@@ -7560,9 +7557,11 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       AdlWriter::writeBasicAttributeSection(stream, 1,
           AdlWriter::medmColorIndex(polyline->color()), polyline->lineStyle(),
           RectangleFill::kSolid, polyline->lineWidth());
-      AdlWriter::writeDynamicAttributeSection(stream, 1, polyline->colorMode(),
-          polyline->visibilityMode(), polyline->visibilityCalc(),
-          AdlWriter::collectChannels(polyline));
+    const auto polylineChannels = AdlWriter::channelsForMedmFourValues(
+      AdlWriter::collectChannels(polyline));
+    AdlWriter::writeDynamicAttributeSection(stream, 1,
+      polyline->colorMode(), polyline->visibilityMode(),
+      polyline->visibilityCalc(), polylineChannels);
       AdlWriter::writePointsSection(stream, 1, polyline->absolutePoints());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;

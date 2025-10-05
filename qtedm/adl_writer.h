@@ -65,6 +65,9 @@ void writeCartesianTraceSection(QTextStream &stream, int level, int index,
 void writeRelatedDisplayEntry(QTextStream &stream, int level, int index,
     const RelatedDisplayEntry &entry);
 
+std::array<QString, 5> channelsForMedmFourValues(
+    const std::array<QString, 5> &rawChannels);
+
 template <typename Element>
 std::array<QString, 5> collectChannels(const Element *element)
 {

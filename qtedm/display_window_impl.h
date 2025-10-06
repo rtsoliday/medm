@@ -7269,7 +7269,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("clrmod=\"%1\"")
                 .arg(AdlWriter::colorModeString(meter->colorMode())));
       }
-      AdlWriter::writeLimitsSection(stream, 1, meter->limits());
+  AdlWriter::writeLimitsSection(stream, 1, meter->limits(), true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -8306,8 +8306,11 @@ inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
   }
 
   const QString labelValue = propertyValue(meterNode, QStringLiteral("label"));
-  if (!labelValue.isEmpty()) {
-    element->setLabel(parseMeterLabel(labelValue));
+  const QString trimmedLabel = labelValue.trimmed();
+  if (trimmedLabel.isEmpty()) {
+    element->setLabel(MeterLabel::kNone);
+  } else {
+    element->setLabel(parseMeterLabel(trimmedLabel));
   }
 
   const QString colorModeValue = propertyValue(meterNode,

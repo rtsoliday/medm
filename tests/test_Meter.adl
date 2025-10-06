@@ -1,0 +1,383 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_Meter.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=53
+		width=853
+		height=539
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+meter {
+	object {
+		x=24
+		y=46
+		width=120
+		height=90
+	}
+	monitor {
+		chan="meter:fast:alpha"
+		clr=21
+		bclr=48
+	}
+	label="channel"
+	clrmod="alarm"
+	limits {
+		loprDefault=-14.3
+		hoprDefault=92.7
+		precDefault=2
+	}
+}
+meter {
+	object {
+		x=170
+		y=42
+		width=108
+		height=84
+	}
+	monitor {
+		chan="meter:slow:beta"
+		clr=10
+		bclr=32
+	}
+	label="limits"
+	limits {
+		loprDefault=-85.6
+		hoprDefault=125.4
+		precDefault=1
+	}
+}
+meter {
+	object {
+		x=316
+		y=48
+		width=138
+		height=96
+	}
+	monitor {
+		chan="meter:burst:gamma"
+		clr=33
+		bclr=12
+	}
+	label="outline"
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-3.8
+		hoprSrc="default"
+		hoprDefault=3.8
+		precSrc="default"
+		precDefault=3
+	}
+}
+meter {
+	object {
+		x=476
+		y=44
+		width=124
+		height=92
+	}
+	monitor {
+		chan="meter:demo:delta"
+		clr=27
+		bclr=8
+	}
+	label="no decorations"
+	clrmod="alarm"
+	limits {
+		loprDefault=-47
+		hoprDefault=47
+		precDefault=2
+	}
+}
+meter {
+	object {
+		x=628
+		y=40
+		width=118
+		height=98
+	}
+	monitor {
+		chan="meter:cycle:epsilon"
+		clr=52
+		bclr=4
+	}
+	label="channel"
+	limits {
+		loprDefault=-5.5
+		hoprDefault=68.9
+		precSrc="default"
+		precDefault=1
+	}
+}
+meter {
+	object {
+		x=24
+		y=174
+		width=128
+		height=92
+	}
+	monitor {
+		chan="meter:drift:zeta"
+		clr=15
+		bclr=51
+	}
+	label="limits"
+	clrmod="discrete"
+	limits {
+		precDefault=2
+	}
+}
+meter {
+	object {
+		x=174
+		y=174
+		width=132
+		height=88
+	}
+	monitor {
+		chan="meter:ramp:eta"
+		clr=39
+		bclr=30
+	}
+	clrmod="alarm"
+	limits {
+		loprDefault=-120.6
+		hoprDefault=15.4
+		precDefault=1
+	}
+}
+meter {
+	object {
+		x=330
+		y=172
+		width=110
+		height=102
+	}
+	monitor {
+		chan="meter:noise:theta"
+		clr=5
+		bclr=44
+	}
+	label="outline"
+	limits {
+		loprDefault=-9.2
+		hoprDefault=9.2
+		precDefault=2
+	}
+}
+meter {
+	object {
+		x=482
+		y=176
+		width=140
+		height=100
+	}
+	monitor {
+		chan="meter:pulse:iota"
+		clr=61
+		bclr=14
+	}
+	label="channel"
+	clrmod="discrete"
+	limits {
+		loprDefault=-32.1
+		hoprDefault=105.6
+		precDefault=3
+	}
+}
+meter {
+	object {
+		x=640
+		y=170
+		width=122
+		height=96
+	}
+	monitor {
+		chan="meter:wave:kappa"
+		clr=25
+		bclr=58
+	}
+	label="limits"
+	clrmod="alarm"
+	limits {
+		loprDefault=-1.5
+		hoprDefault=1.5
+		precDefault=4
+	}
+}
+meter {
+	object {
+		x=28
+		y=304
+		width=116
+		height=94
+	}
+	monitor {
+		chan="meter:scan:lambda"
+		clr=47
+		bclr=20
+	}
+	limits {
+		loprDefault=-250
+		hoprDefault=250
+	}
+}
+meter {
+	object {
+		x=176
+		y=304
+		width=134
+		height=100
+	}
+	monitor {
+		chan="meter:burst:mu"
+		clr=12
+		bclr=40
+	}
+	label="channel"
+	clrmod="alarm"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precDefault=1
+	}
+}
+meter {
+	object {
+		x=330
+		y=300
+		width=118
+		height=90
+	}
+	monitor {
+		chan="meter:flux:nu"
+		clr=54
+		bclr=6
+	}
+	label="outline"
+	clrmod="discrete"
+	limits {
+		loprDefault=-75.3
+		hoprDefault=12.9
+		precDefault=2
+	}
+}
+meter {
+	object {
+		x=478
+		y=302
+		width=120
+		height=92
+	}
+	monitor {
+		chan="meter:loop:xi"
+		clr=7
+		bclr=52
+	}
+	label="no decorations"
+	limits {
+		loprDefault=-3.1
+		hoprDefault=42.2
+		precDefault=1
+	}
+}
+meter {
+	object {
+		x=628
+		y=304
+		width=130
+		height=100
+	}
+	monitor {
+		chan="meter:random:omicron"
+		clr=44
+		bclr=18
+	}
+	label="limits"
+	clrmod="discrete"
+	limits {
+		loprDefault=-0.75
+		hoprDefault=8.35
+		precDefault=3
+	}
+}

@@ -7894,43 +7894,61 @@ inline ImageType DisplayWindow::parseImageType(const QString &value) const
 inline TextMonitorFormat DisplayWindow::parseTextMonitorFormat(
     const QString &value) const
 {
-  if (value.compare(QStringLiteral("decimal"), Qt::CaseInsensitive) == 0) {
+  const QString normalized = value.trimmed();
+  if (normalized.compare(QStringLiteral("decimal"), Qt::CaseInsensitive)
+      == 0) {
     return TextMonitorFormat::kDecimal;
   }
-  if (value.compare(QStringLiteral("exponential"), Qt::CaseInsensitive)
+  if (normalized.compare(QStringLiteral("exponential"), Qt::CaseInsensitive)
       == 0) {
     return TextMonitorFormat::kExponential;
   }
-  if (value.compare(QStringLiteral("engineering"), Qt::CaseInsensitive)
-      == 0) {
+  if (normalized.compare(QStringLiteral("engineering"), Qt::CaseInsensitive)
+      == 0
+      || normalized.compare(QStringLiteral("engr. notation"),
+             Qt::CaseInsensitive)
+          == 0
+      || normalized.compare(QStringLiteral("engr notation"),
+             Qt::CaseInsensitive)
+          == 0) {
     return TextMonitorFormat::kEngineering;
   }
-  if (value.compare(QStringLiteral("compact"), Qt::CaseInsensitive) == 0) {
+  if (normalized.compare(QStringLiteral("compact"), Qt::CaseInsensitive)
+      == 0) {
     return TextMonitorFormat::kCompact;
   }
-  if (value.compare(QStringLiteral("truncated"), Qt::CaseInsensitive) == 0) {
+  if (normalized.compare(QStringLiteral("truncated"), Qt::CaseInsensitive)
+      == 0) {
     return TextMonitorFormat::kTruncated;
   }
-  if (value.compare(QStringLiteral("hexadecimal"), Qt::CaseInsensitive)
+  if (normalized.compare(QStringLiteral("hexadecimal"), Qt::CaseInsensitive)
       == 0) {
     return TextMonitorFormat::kHexadecimal;
   }
-  if (value.compare(QStringLiteral("octal"), Qt::CaseInsensitive) == 0) {
+  if (normalized.compare(QStringLiteral("octal"), Qt::CaseInsensitive) == 0) {
     return TextMonitorFormat::kOctal;
   }
-  if (value.compare(QStringLiteral("string"), Qt::CaseInsensitive) == 0) {
+  if (normalized.compare(QStringLiteral("string"), Qt::CaseInsensitive) == 0) {
     return TextMonitorFormat::kString;
   }
-  if (value.compare(QStringLiteral("sexagesimal"), Qt::CaseInsensitive)
+  if (normalized.compare(QStringLiteral("sexagesimal"), Qt::CaseInsensitive)
       == 0) {
     return TextMonitorFormat::kSexagesimal;
   }
-  if (value.compare(QStringLiteral("sexagesimal hms"), Qt::CaseInsensitive)
-      == 0) {
+  if (normalized.compare(QStringLiteral("sexagesimal hms"),
+          Qt::CaseInsensitive)
+          == 0
+      || normalized.compare(QStringLiteral("sexagesimal-hms"),
+             Qt::CaseInsensitive)
+          == 0) {
     return TextMonitorFormat::kSexagesimalHms;
   }
-  if (value.compare(QStringLiteral("sexagesimal dms"), Qt::CaseInsensitive)
-      == 0) {
+  if (normalized.compare(QStringLiteral("sexagesimal dms"),
+          Qt::CaseInsensitive)
+          == 0
+      || normalized.compare(QStringLiteral("sexagesimal-dms"),
+             Qt::CaseInsensitive)
+          == 0) {
     return TextMonitorFormat::kSexagesimalDms;
   }
   return TextMonitorFormat::kDecimal;

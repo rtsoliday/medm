@@ -151,6 +151,15 @@ void ScaleMonitorElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;
   limits_.precisionDefault = std::clamp(limits_.precisionDefault, 0, 17);
+  if (limits_.precisionSource == PvLimitSource::kUser) {
+    limits_.precisionSource = PvLimitSource::kDefault;
+  }
+  if (limits_.lowSource == PvLimitSource::kUser) {
+    limits_.lowSource = PvLimitSource::kDefault;
+  }
+  if (limits_.highSource == PvLimitSource::kUser) {
+    limits_.highSource = PvLimitSource::kDefault;
+  }
   update();
 }
 

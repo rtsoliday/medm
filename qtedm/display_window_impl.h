@@ -7358,7 +7358,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("direction=\"%1\"")
                 .arg(AdlWriter::barDirectionString(scale->direction())));
       }
-      AdlWriter::writeLimitsSection(stream, 1, scale->limits());
+      AdlWriter::writeLimitsSection(stream, 1, scale->limits(), true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -8246,9 +8246,14 @@ inline void DisplayWindow::loadTextMonitorElement(
           QStringLiteral("limits"))) {
     PvLimits limits = element->limits();
 
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8270,6 +8275,7 @@ inline void DisplayWindow::loadTextMonitorElement(
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("hoprSrc"))) {
       limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8291,6 +8297,17 @@ inline void DisplayWindow::loadTextMonitorElement(
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8379,9 +8396,14 @@ inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
           QStringLiteral("limits"))) {
     PvLimits limits = element->limits();
 
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8403,6 +8425,7 @@ inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("hoprSrc"))) {
       limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8424,6 +8447,17 @@ inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8517,9 +8551,14 @@ inline void DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
           QStringLiteral("limits"))) {
     PvLimits limits = element->limits();
 
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8541,6 +8580,7 @@ inline void DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("hoprSrc"))) {
       limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8562,6 +8602,17 @@ inline void DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8651,9 +8702,14 @@ inline void DisplayWindow::loadScaleMonitorElement(
           QStringLiteral("limits"))) {
     PvLimits limits = element->limits();
 
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8675,6 +8731,7 @@ inline void DisplayWindow::loadScaleMonitorElement(
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("hoprSrc"))) {
       limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -8696,6 +8753,17 @@ inline void DisplayWindow::loadScaleMonitorElement(
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,

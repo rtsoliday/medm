@@ -2310,6 +2310,8 @@ public:
     textMonitorColorModeSetter_ = {};
     textMonitorChannelGetter_ = {};
     textMonitorChannelSetter_ = {};
+    textMonitorLimitsGetter_ = {};
+    textMonitorLimitsSetter_ = {};
     imageTypeGetter_ = {};
     imageTypeSetter_ = {};
     imageNameGetter_ = {};
@@ -3845,7 +3847,9 @@ public:
       std::function<TextColorMode()> colorModeGetter,
       std::function<void(TextColorMode)> colorModeSetter,
       std::function<QString()> channelGetter,
-      std::function<void(const QString &)> channelSetter)
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter = {},
+      std::function<void(const PvLimits &)> limitsSetter = {})
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kTextMonitor;
@@ -3954,6 +3958,8 @@ public:
     textMonitorColorModeSetter_ = {};
     textMonitorChannelGetter_ = {};
     textMonitorChannelSetter_ = {};
+    textMonitorLimitsGetter_ = {};
+    textMonitorLimitsSetter_ = {};
     textMonitorForegroundGetter_ = std::move(foregroundGetter);
     textMonitorForegroundSetter_ = std::move(foregroundSetter);
     textMonitorBackgroundGetter_ = std::move(backgroundGetter);
@@ -3972,6 +3978,8 @@ public:
     textMonitorColorModeSetter_ = std::move(colorModeSetter);
     textMonitorChannelGetter_ = std::move(channelGetter);
     textMonitorChannelSetter_ = std::move(channelSetter);
+    textMonitorLimitsGetter_ = std::move(limitsGetter);
+    textMonitorLimitsSetter_ = std::move(limitsSetter);
 
     imageTypeGetter_ = {};
     imageTypeSetter_ = {};
@@ -8237,7 +8245,8 @@ private:
           textMonitorPrecisionSourceGetter_, textMonitorPrecisionSourceSetter_,
           textMonitorPrecisionDefaultGetter_,
           textMonitorPrecisionDefaultSetter_,
-          [this]() { updateTextMonitorLimitsFromDialog(); });
+          [this]() { updateTextMonitorLimitsFromDialog(); },
+          textMonitorLimitsGetter_, textMonitorLimitsSetter_);
     } else {
       pvLimitsDialog_->clearTargets();
     }
@@ -9632,6 +9641,8 @@ private:
   std::function<void(TextColorMode)> textMonitorColorModeSetter_;
   std::function<QString()> textMonitorChannelGetter_;
   std::function<void(const QString &)> textMonitorChannelSetter_;
+  std::function<PvLimits()> textMonitorLimitsGetter_;
+  std::function<void(const PvLimits &)> textMonitorLimitsSetter_;
   std::function<QColor()> textEntryForegroundGetter_;
   std::function<void(const QColor &)> textEntryForegroundSetter_;
   std::function<QColor()> textEntryBackgroundGetter_;
@@ -10142,7 +10153,8 @@ private:
         textMonitorPrecisionSourceGetter_, textMonitorPrecisionSourceSetter_,
         textMonitorPrecisionDefaultGetter_,
         textMonitorPrecisionDefaultSetter_,
-        [this]() { updateTextMonitorLimitsFromDialog(); });
+        [this]() { updateTextMonitorLimitsFromDialog(); },
+        textMonitorLimitsGetter_, textMonitorLimitsSetter_);
     positionPvLimitsDialog(dialog);
     dialog->showForTextMonitor();
   }

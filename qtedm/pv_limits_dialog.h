@@ -25,7 +25,9 @@ public:
       std::function<void(PvLimitSource)> precisionSourceSetter,
       std::function<int()> precisionDefaultGetter,
       std::function<void(int)> precisionDefaultSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier = {},
+      std::function<PvLimits()> limitsGetter = {},
+      std::function<void(const PvLimits &)> limitsSetter = {});
   void showForTextMonitor();
   void setMeterCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,

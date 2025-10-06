@@ -8682,8 +8682,11 @@ inline void DisplayWindow::loadScaleMonitorElement(
 
   const QString labelValue = propertyValue(indicatorNode,
       QStringLiteral("label"));
-  if (!labelValue.trimmed().isEmpty()) {
-    element->setLabel(parseMeterLabel(labelValue));
+  const QString trimmedLabel = labelValue.trimmed();
+  if (trimmedLabel.isEmpty()) {
+    element->setLabel(MeterLabel::kNone);
+  } else {
+    element->setLabel(parseMeterLabel(trimmedLabel));
   }
 
   const QString colorModeValue = propertyValue(indicatorNode,

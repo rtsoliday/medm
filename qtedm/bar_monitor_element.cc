@@ -244,8 +244,8 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
 
   layout.showAxis = (label_ == MeterLabel::kOutline
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
-  layout.showLimits = (label_ == MeterLabel::kLimits
-      || label_ == MeterLabel::kChannel);
+  layout.showLimits = (label_ == MeterLabel::kOutline
+      || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
   layout.channelText = (label_ == MeterLabel::kChannel) ? channel_.trimmed() : QString();
   layout.showChannel = !layout.channelText.isEmpty();
 

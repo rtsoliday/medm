@@ -603,6 +603,7 @@ private:
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
+  void loadByteMonitorElement(const AdlNode &byteNode);
   void loadImageElement(const AdlNode &imageNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
   void loadOvalElement(const AdlNode &ovalNode);
@@ -6793,6 +6794,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("byte"), Qt::CaseInsensitive)
+        == 0) {
+      loadByteMonitorElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("image"), Qt::CaseInsensitive)
         == 0) {
       loadImageElement(child);
@@ -8572,6 +8579,78 @@ inline void DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
   element->show();
   element->setSelected(false);
   barMonitorElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadByteMonitorElement(const AdlNode &byteNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(byteNode);
+  if (geometry.width() < kMinimumByteSize) {
+    geometry.setWidth(kMinimumByteSize);
+  }
+  if (geometry.height() < kMinimumByteSize) {
+    geometry.setHeight(kMinimumByteSize);
+  }
+
+  auto *element = new ByteMonitorElement(displayArea_);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *monitor = ::findChild(byteNode,
+          QStringLiteral("monitor"))) {
+    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (!channel.isEmpty()) {
+      element->setChannel(channel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*monitor, QStringLiteral("clr"));
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*monitor, QStringLiteral("bclr"));
+    int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString colorModeValue = propertyValue(byteNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString directionValue = propertyValue(byteNode,
+      QStringLiteral("direction"));
+  if (!directionValue.isEmpty()) {
+    element->setDirection(parseBarDirection(directionValue));
+  }
+
+  bool ok = false;
+  const QString startBitValue = propertyValue(byteNode,
+      QStringLiteral("sbit"));
+  const int startBit = startBitValue.toInt(&ok);
+  if (ok) {
+    element->setStartBit(startBit);
+  }
+
+  ok = false;
+  const QString endBitValue = propertyValue(byteNode, QStringLiteral("ebit"));
+  const int endBit = endBitValue.toInt(&ok);
+  if (ok) {
+    element->setEndBit(endBit);
+  }
+
+  element->show();
+  element->setSelected(false);
+  byteMonitorElements_.append(element);
   ensureElementInStack(element);
 }
 

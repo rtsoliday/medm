@@ -255,7 +255,8 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
   }
 
   if (layout.showLimits) {
-    layout.readbackText = formattedSampleValue();
+    layout.readbackText = QString::number(0.0, 'f',
+        std::clamp(limits_.precisionDefault, 0, 17));
     layout.showReadback = !layout.readbackText.isEmpty();
   }
 

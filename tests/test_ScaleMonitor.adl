@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=10
+		x=0
 		y=53
 		width=1104
-		height=651
+		height=707
 	}
 	clr=14
 	bclr=4
@@ -303,5 +303,28 @@ indicator {
 		hoprDefault=250
 		precSrc="default"
 		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=508
+		y=402
+		width=300
+		height=300
+	}
+	monitor {
+		chan="test.pv"
+		clr=16
+		bclr=33
+	}
+	label="channel"
+	direction="up"
+	limits {
+		loprSrc="default"
+		loprDefault=-63.5
+		hoprSrc="default"
+		hoprDefault=78.2
+		precSrc="default"
+		precDefault=1
 	}
 }

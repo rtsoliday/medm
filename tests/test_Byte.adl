@@ -1,0 +1,219 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_Byte.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=53
+		width=1123
+		height=659
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+byte {
+	object {
+		x=20
+		y=20
+		width=144
+		height=132
+	}
+	monitor {
+		chan="byte:test:gamma01"
+		clr=31
+		bclr=7
+	}
+	clrmod="alarm"
+	direction="down"
+	sbit=2
+	ebit=12
+}
+byte {
+	object {
+		x=210
+		y=20
+		width=132
+		height=144
+	}
+	monitor {
+		chan="byte:test:gamma02"
+		clr=45
+		bclr=18
+	}
+	clrmod="discrete"
+	sbit=25
+	ebit=8
+}
+byte {
+	object {
+		x=400
+		y=20
+		width=150
+		height=118
+	}
+	monitor {
+		chan="byte:test:gamma03"
+		clr=12
+		bclr=52
+	}
+	sbit=31
+	ebit=16
+}
+byte {
+	object {
+		x=590
+		y=20
+		width=128
+		height=140
+	}
+	monitor {
+		chan="byte:test:gamma04"
+		clr=5
+		bclr=40
+	}
+	clrmod="alarm"
+	direction="down"
+	sbit=0
+	ebit=7
+}
+byte {
+	object {
+		x=780
+		y=20
+		width=156
+		height=124
+	}
+	monitor {
+		chan="byte:test:gamma05"
+		clr=52
+		bclr=13
+	}
+	clrmod="discrete"
+	direction="down"
+	sbit=10
+	ebit=10
+}
+byte {
+	object {
+		x=20
+		y=220
+		width=142
+		height=130
+	}
+	monitor {
+		chan="byte:test:gamma06"
+		clr=59
+		bclr=2
+	}
+	sbit=5
+	ebit=20
+}
+byte {
+	object {
+		x=210
+		y=220
+		width=136
+		height=138
+	}
+	monitor {
+		chan="byte:test:gamma07"
+		clr=27
+		bclr=50
+	}
+	clrmod="alarm"
+	sbit=18
+	ebit=4
+}
+byte {
+	object {
+		x=400
+		y=220
+		width=148
+		height=122
+	}
+	monitor {
+		chan="byte:test:gamma08"
+		clr=11
+		bclr=33
+	}
+	clrmod="discrete"
+	direction="down"
+	sbit=30
+	ebit=24
+}

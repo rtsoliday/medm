@@ -132,6 +132,9 @@ BarDirection ScaleMonitorElement::direction() const
 
 void ScaleMonitorElement::setDirection(BarDirection direction)
 {
+  if (direction != BarDirection::kUp && direction != BarDirection::kRight) {
+    direction = BarDirection::kRight;
+  }
   if (direction_ == direction) {
     return;
   }
@@ -225,11 +228,15 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
   layout.showAxis = (label_ == MeterLabel::kOutline
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
   layout.showLimits = (label_ == MeterLabel::kLimits
+      || label_ == MeterLabel::kChannel
+      || label_ == MeterLabel::kOutline);
+  layout.showReadback = (label_ == MeterLabel::kLimits
       || label_ == MeterLabel::kChannel);
-  layout.showReadback = layout.showLimits;
   if (layout.showLimits) {
     layout.lowLabel = QString::number(limits_.lowDefault, 'g', 5);
     layout.highLabel = QString::number(limits_.highDefault, 'g', 5);
+  }
+  if (layout.showReadback) {
     layout.readbackText = formattedSampleValue();
   }
   if (label_ == MeterLabel::kChannel) {

@@ -1781,13 +1781,11 @@ public:
     scaleDirectionCombo_->setAutoFillBackground(true);
     scaleDirectionCombo_->addItem(QStringLiteral("Up"));
     scaleDirectionCombo_->addItem(QStringLiteral("Right"));
-    scaleDirectionCombo_->addItem(QStringLiteral("Down"));
-    scaleDirectionCombo_->addItem(QStringLiteral("Left"));
     QObject::connect(scaleDirectionCombo_,
         static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
         this, [this](int index) {
           if (scaleDirectionSetter_) {
-            scaleDirectionSetter_(barDirectionFromIndex(index));
+            scaleDirectionSetter_(scaleDirectionFromIndex(index));
           }
         });
 
@@ -4613,7 +4611,7 @@ public:
       const BarDirection direction = scaleDirectionGetter_
               ? scaleDirectionGetter_()
               : BarDirection::kRight;
-      scaleDirectionCombo_->setCurrentIndex(barDirectionToIndex(direction));
+      scaleDirectionCombo_->setCurrentIndex(scaleDirectionToIndex(direction));
     }
 
     if (scaleChannelEdit_) {
@@ -6741,7 +6739,7 @@ public:
     }
     if (scaleDirectionCombo_) {
       const QSignalBlocker blocker(scaleDirectionCombo_);
-      scaleDirectionCombo_->setCurrentIndex(barDirectionToIndex(BarDirection::kRight));
+      scaleDirectionCombo_->setCurrentIndex(scaleDirectionToIndex(BarDirection::kRight));
     }
     if (barDirectionCombo_) {
       const QSignalBlocker blocker(barDirectionCombo_);
@@ -8688,6 +8686,22 @@ private:
     default:
       return 3;
     }
+  }
+
+  BarDirection scaleDirectionFromIndex(int index) const
+  {
+    switch (index) {
+    case 0:
+      return BarDirection::kUp;
+    case 1:
+    default:
+      return BarDirection::kRight;
+    }
+  }
+
+  int scaleDirectionToIndex(BarDirection direction) const
+  {
+    return (direction == BarDirection::kUp) ? 0 : 1;
   }
 
   BarFill barFillFromIndex(int index) const

@@ -7313,7 +7313,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("fillmod=\"%1\"")
                 .arg(AdlWriter::barFillModeString(bar->fillMode())));
       }
-      AdlWriter::writeLimitsSection(stream, 1, bar->limits());
+      AdlWriter::writeLimitsSection(stream, 1, bar->limits(), true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

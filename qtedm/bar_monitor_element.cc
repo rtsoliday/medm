@@ -367,7 +367,7 @@ void BarMonitorElement::paintTrack(QPainter &painter,
   painter.drawRect(trackRect);
 
   if (label_ != MeterLabel::kNoDecorations) {
-    QPen framePen(effectiveForeground().darker(160));
+    QPen framePen(Qt::black);
     framePen.setWidth(1);
     painter.setPen(framePen);
     painter.setBrush(Qt::NoBrush);
@@ -447,7 +447,7 @@ void BarMonitorElement::paintAxis(QPainter &painter, const Layout &layout) const
   }
 
   painter.save();
-  const QColor axisColor = effectiveForeground().darker(140);
+  const QColor axisColor(Qt::black);
   QPen axisPen(axisColor);
   axisPen.setWidth(1);
   painter.setPen(axisPen);
@@ -558,12 +558,12 @@ void BarMonitorElement::paintLabels(QPainter &painter, const Layout &layout) con
   }
 
   painter.save();
-  painter.setPen(effectiveForeground());
+  painter.setPen(Qt::black);
   painter.setBrush(Qt::NoBrush);
 
   if (label_ == MeterLabel::kOutline && layout.trackRect.isValid()
       && !layout.trackRect.isEmpty()) {
-    QPen pen(effectiveForeground().darker(150));
+    QPen pen(Qt::black);
     pen.setStyle(Qt::DotLine);
     pen.setWidth(1);
     painter.setPen(pen);

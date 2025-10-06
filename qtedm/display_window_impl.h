@@ -601,6 +601,7 @@ private:
   bool loadDisplaySection(const AdlNode &displayNode);
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
+  void loadMeterElement(const AdlNode &meterNode);
   void loadImageElement(const AdlNode &imageNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
   void loadOvalElement(const AdlNode &ovalNode);
@@ -614,6 +615,7 @@ private:
   QColor colorForIndex(int index) const;
   TextColorMode parseTextColorMode(const QString &value) const;
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
+  MeterLabel parseMeterLabel(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const;
@@ -6776,6 +6778,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("meter"), Qt::CaseInsensitive)
+        == 0) {
+      loadMeterElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("image"), Qt::CaseInsensitive)
         == 0) {
       loadImageElement(child);
@@ -7794,6 +7802,35 @@ inline TextVisibilityMode DisplayWindow::parseVisibilityMode(
   return TextVisibilityMode::kStatic;
 }
 
+inline MeterLabel DisplayWindow::parseMeterLabel(const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.isEmpty()) {
+    return MeterLabel::kOutline;
+  }
+  if (normalized == QStringLiteral("none")
+      || normalized == QStringLiteral("no label")
+      || normalized == QStringLiteral("no-label")
+      || normalized == QStringLiteral("no_label")) {
+    return MeterLabel::kNone;
+  }
+  if (normalized == QStringLiteral("no decorations")
+      || normalized == QStringLiteral("no-decorations")
+      || normalized == QStringLiteral("no_decorations")) {
+    return MeterLabel::kNoDecorations;
+  }
+  if (normalized == QStringLiteral("limits")) {
+    return MeterLabel::kLimits;
+  }
+  if (normalized == QStringLiteral("channel")) {
+    return MeterLabel::kChannel;
+  }
+  if (normalized == QStringLiteral("outline")) {
+    return MeterLabel::kOutline;
+  }
+  return MeterLabel::kOutline;
+}
+
 inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const
@@ -8226,6 +8263,132 @@ inline void DisplayWindow::loadTextMonitorElement(
   element->show();
   element->setSelected(false);
   textMonitorElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(meterNode);
+  if (geometry.width() < kMinimumMeterSize) {
+    geometry.setWidth(kMinimumMeterSize);
+  }
+  if (geometry.height() < kMinimumMeterSize) {
+    geometry.setHeight(kMinimumMeterSize);
+  }
+
+  auto *element = new MeterElement(displayArea_);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *monitor = ::findChild(meterNode,
+          QStringLiteral("monitor"))) {
+    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (!channel.isEmpty()) {
+      element->setChannel(channel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*monitor, QStringLiteral("clr"));
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*monitor, QStringLiteral("bclr"));
+    int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString labelValue = propertyValue(meterNode, QStringLiteral("label"));
+  if (!labelValue.isEmpty()) {
+    element->setLabel(parseMeterLabel(labelValue));
+  }
+
+  const QString colorModeValue = propertyValue(meterNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(meterNode,
+          QStringLiteral("limits"))) {
+    PvLimits limits = element->limits();
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    }
+
+    element->setLimits(limits);
+  }
+
+  element->show();
+  element->setSelected(false);
+  meterElements_.append(element);
   ensureElementInStack(element);
 }
 

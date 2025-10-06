@@ -604,6 +604,7 @@ private:
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
   void loadScaleMonitorElement(const AdlNode &indicatorNode);
+  void loadStripChartElement(const AdlNode &stripNode);
   void loadByteMonitorElement(const AdlNode &byteNode);
   void loadImageElement(const AdlNode &imageNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
@@ -619,6 +620,7 @@ private:
   TextColorMode parseTextColorMode(const QString &value) const;
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
   MeterLabel parseMeterLabel(const QString &value) const;
+  TimeUnits parseTimeUnits(const QString &value) const;
   BarDirection parseBarDirection(const QString &value) const;
   BarFill parseBarFill(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
@@ -6801,6 +6803,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("strip chart"), Qt::CaseInsensitive)
+        == 0) {
+      loadStripChartElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("byte"), Qt::CaseInsensitive)
         == 0) {
       loadByteMonitorElement(child);
@@ -7854,6 +7862,22 @@ inline MeterLabel DisplayWindow::parseMeterLabel(const QString &value) const
   return MeterLabel::kOutline;
 }
 
+inline TimeUnits DisplayWindow::parseTimeUnits(const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("minute")
+      || normalized == QStringLiteral("minutes")) {
+    return TimeUnits::kMinutes;
+  }
+  if (normalized == QStringLiteral("milli-second")
+      || normalized == QStringLiteral("milli second")
+      || normalized == QStringLiteral("millisecond")
+      || normalized == QStringLiteral("milliseconds")) {
+    return TimeUnits::kMilliseconds;
+  }
+  return TimeUnits::kSeconds;
+}
+
 inline BarDirection DisplayWindow::parseBarDirection(
     const QString &value) const
 {
@@ -8791,6 +8815,220 @@ inline void DisplayWindow::loadScaleMonitorElement(
   element->show();
   element->setSelected(false);
   scaleMonitorElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadStripChartElement(const AdlNode &stripNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(stripNode);
+  if (geometry.width() < kMinimumStripChartWidth) {
+    geometry.setWidth(kMinimumStripChartWidth);
+  }
+  if (geometry.height() < kMinimumStripChartHeight) {
+    geometry.setHeight(kMinimumStripChartHeight);
+  }
+
+  auto *element = new StripChartElement(displayArea_);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *plotcom = ::findChild(stripNode,
+          QStringLiteral("plotcom"))) {
+    const QString title = propertyValue(*plotcom, QStringLiteral("title"));
+    if (!title.trimmed().isEmpty()) {
+      element->setTitle(title.trimmed());
+    }
+
+    const QString xLabel = propertyValue(*plotcom, QStringLiteral("xlabel"));
+    if (!xLabel.trimmed().isEmpty()) {
+      element->setXLabel(xLabel.trimmed());
+    }
+
+    const QString yLabel = propertyValue(*plotcom, QStringLiteral("ylabel"));
+    if (!yLabel.trimmed().isEmpty()) {
+      element->setYLabel(yLabel.trimmed());
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*plotcom, QStringLiteral("clr"));
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*plotcom, QStringLiteral("bclr"));
+    int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  bool ok = false;
+  const QString periodStr = propertyValue(stripNode, QStringLiteral("period"));
+  double periodValue = periodStr.toDouble(&ok);
+  if (ok) {
+    element->setPeriod(periodValue);
+  } else {
+    const QString delayStr = propertyValue(stripNode, QStringLiteral("delay"));
+    periodValue = delayStr.toDouble(&ok);
+    if (ok) {
+      element->setPeriod(periodValue);
+    }
+  }
+
+  const QString unitsStr = propertyValue(stripNode, QStringLiteral("units"));
+  if (!unitsStr.trimmed().isEmpty()) {
+    element->setUnits(parseTimeUnits(unitsStr));
+  }
+
+  auto extractPenIndex = [](const QString &name) {
+    for (int i = 0; i < name.size(); ++i) {
+      const int digit = name.at(i).digitValue();
+      if (digit >= 0) {
+        int value = digit;
+        int j = i + 1;
+        while (j < name.size()) {
+          const int nextDigit = name.at(j).digitValue();
+          if (nextDigit < 0) {
+            break;
+          }
+          value = value * 10 + nextDigit;
+          ++j;
+        }
+        return value;
+      }
+    }
+    return -1;
+  };
+
+  int nextSequentialPen = 0;
+  for (const auto &child : stripNode.children) {
+    if (!child.name.startsWith(QStringLiteral("pen"), Qt::CaseInsensitive)) {
+      continue;
+    }
+
+    int penIndex = extractPenIndex(child.name);
+    if (penIndex < 0) {
+      penIndex = nextSequentialPen;
+      ++nextSequentialPen;
+    } else {
+      if (penIndex >= kStripChartPenCount) {
+        continue;
+      }
+      nextSequentialPen = std::max(nextSequentialPen, penIndex + 1);
+    }
+
+    if (penIndex < 0 || penIndex >= kStripChartPenCount) {
+      continue;
+    }
+
+    const QString channel = propertyValue(child, QStringLiteral("chan"));
+    if (!channel.trimmed().isEmpty()) {
+      element->setChannel(penIndex, channel.trimmed());
+    }
+
+    bool colorOk = false;
+    const QString penColorStr = propertyValue(child, QStringLiteral("clr"));
+    const int penColorIndex = penColorStr.toInt(&colorOk);
+    if (colorOk) {
+      element->setPenColor(penIndex, colorForIndex(penColorIndex));
+    }
+
+    if (const AdlNode *limitsNode = ::findChild(child,
+            QStringLiteral("limits"))) {
+      PvLimits limits = element->penLimits(penIndex);
+
+      bool hasLowSource = false;
+      bool hasHighSource = false;
+      bool hasPrecisionSource = false;
+
+      if (const AdlProperty *prop = ::findProperty(*limitsNode,
+              QStringLiteral("loprSrc"))) {
+        limits.lowSource = parseLimitSource(prop->value);
+        hasLowSource = true;
+      }
+
+      if (const AdlProperty *prop = ::findProperty(*limitsNode,
+              QStringLiteral("lopr"))) {
+        bool limitOk = false;
+        const double value = prop->value.toDouble(&limitOk);
+        if (limitOk) {
+          limits.lowDefault = value;
+        }
+      } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                     QStringLiteral("loprDefault"))) {
+        bool limitOk = false;
+        const double value = prop->value.toDouble(&limitOk);
+        if (limitOk) {
+          limits.lowDefault = value;
+        }
+      }
+
+      if (const AdlProperty *prop = ::findProperty(*limitsNode,
+              QStringLiteral("hoprSrc"))) {
+        limits.highSource = parseLimitSource(prop->value);
+        hasHighSource = true;
+      }
+
+      if (const AdlProperty *prop = ::findProperty(*limitsNode,
+              QStringLiteral("hopr"))) {
+        bool limitOk = false;
+        const double value = prop->value.toDouble(&limitOk);
+        if (limitOk) {
+          limits.highDefault = value;
+        }
+      } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                     QStringLiteral("hoprDefault"))) {
+        bool limitOk = false;
+        const double value = prop->value.toDouble(&limitOk);
+        if (limitOk) {
+          limits.highDefault = value;
+        }
+      }
+
+      if (const AdlProperty *prop = ::findProperty(*limitsNode,
+              QStringLiteral("precSrc"))) {
+        limits.precisionSource = parseLimitSource(prop->value);
+        hasPrecisionSource = true;
+      }
+
+      if (!hasLowSource) {
+        limits.lowSource = PvLimitSource::kChannel;
+      }
+      if (!hasHighSource) {
+        limits.highSource = PvLimitSource::kChannel;
+      }
+      if (!hasPrecisionSource) {
+        limits.precisionSource = PvLimitSource::kChannel;
+      }
+
+      if (const AdlProperty *prop = ::findProperty(*limitsNode,
+              QStringLiteral("prec"))) {
+        bool limitOk = false;
+        const int value = prop->value.toInt(&limitOk);
+        if (limitOk) {
+          limits.precisionDefault = value;
+        }
+      } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                     QStringLiteral("precDefault"))) {
+        bool limitOk = false;
+        const int value = prop->value.toInt(&limitOk);
+        if (limitOk) {
+          limits.precisionDefault = value;
+        }
+      }
+
+      element->setPenLimits(penIndex, limits);
+    }
+  }
+
+  element->show();
+  element->setSelected(false);
+  stripChartElements_.append(element);
   ensureElementInStack(element);
 }
 

@@ -8135,103 +8135,67 @@ inline void DisplayWindow::loadTextMonitorElement(
           QStringLiteral("limits"))) {
     PvLimits limits = element->limits();
 
-    bool lowSourceExplicit = false;
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
-      lowSourceExplicit = true;
     }
 
-    bool lowDefaultSet = false;
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("lopr"))) {
       bool ok = false;
       const double value = prop->value.toDouble(&ok);
       if (ok) {
         limits.lowDefault = value;
-        lowDefaultSet = true;
       }
-    }
-    if (!lowDefaultSet) {
-      if (const AdlProperty *prop = ::findProperty(*limitsNode,
-              QStringLiteral("loprDefault"))) {
-        bool ok = false;
-        const double value = prop->value.toDouble(&ok);
-        if (ok) {
-          limits.lowDefault = value;
-          lowDefaultSet = true;
-        }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
       }
-    }
-    if (lowDefaultSet && !lowSourceExplicit
-        && limits.lowSource == PvLimitSource::kChannel) {
-      limits.lowSource = PvLimitSource::kDefault;
     }
 
-    bool highSourceExplicit = false;
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("hoprSrc"))) {
       limits.highSource = parseLimitSource(prop->value);
-      highSourceExplicit = true;
     }
 
-    bool highDefaultSet = false;
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("hopr"))) {
       bool ok = false;
       const double value = prop->value.toDouble(&ok);
       if (ok) {
         limits.highDefault = value;
-        highDefaultSet = true;
       }
-    }
-    if (!highDefaultSet) {
-      if (const AdlProperty *prop = ::findProperty(*limitsNode,
-              QStringLiteral("hoprDefault"))) {
-        bool ok = false;
-        const double value = prop->value.toDouble(&ok);
-        if (ok) {
-          limits.highDefault = value;
-          highDefaultSet = true;
-        }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
       }
-    }
-    if (highDefaultSet && !highSourceExplicit
-        && limits.highSource == PvLimitSource::kChannel) {
-      limits.highSource = PvLimitSource::kDefault;
     }
 
-    bool precisionSourceExplicit = false;
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
-      precisionSourceExplicit = true;
     }
 
-    bool precisionDefaultSet = false;
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("prec"))) {
       bool ok = false;
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        precisionDefaultSet = true;
       }
-    }
-    if (!precisionDefaultSet) {
-      if (const AdlProperty *prop = ::findProperty(*limitsNode,
-              QStringLiteral("precDefault"))) {
-        bool ok = false;
-        const int value = prop->value.toInt(&ok);
-        if (ok) {
-          limits.precisionDefault = value;
-          precisionDefaultSet = true;
-        }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
       }
-    }
-    if (precisionDefaultSet && !precisionSourceExplicit
-        && limits.precisionSource == PvLimitSource::kChannel) {
-      limits.precisionSource = PvLimitSource::kDefault;
     }
 
     element->setLimits(limits);

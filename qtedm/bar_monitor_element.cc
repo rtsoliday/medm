@@ -1,9 +1,11 @@
 #include "bar_monitor_element.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QApplication>
 #include <QFont>
+#include <QFontMetricsF>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPalette>
@@ -11,9 +13,33 @@
 
 namespace {
 
-constexpr double kSampleFillFraction = 0.65;
+constexpr double kSampleNormalizedValue = 0.65;
+constexpr int kAxisTickCount = 5;
+constexpr qreal kAxisTickLength = 6.0;
+constexpr qreal kMinimumTrackExtent = 8.0;
+constexpr qreal kMinimumAxisExtent = 12.0;
+constexpr qreal kAxisSpacing = 4.0;
+constexpr qreal kLayoutPadding = 6.0;
 
 } // namespace
+
+struct BarMonitorElement::Layout
+{
+  QRectF trackRect;
+  QRectF axisRect;
+  QRectF readbackRect;
+  QRectF channelRect;
+  QString channelText;
+  QString readbackText;
+  QString lowLabel;
+  QString highLabel;
+  qreal lineHeight = 0.0;
+  bool showAxis = false;
+  bool showLimits = false;
+  bool showReadback = false;
+  bool showChannel = false;
+  bool vertical = true;
+};
 
 BarMonitorElement::BarMonitorElement(QWidget *parent)
   : QWidget(parent)
@@ -161,43 +187,171 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
-  QRectF labelRect;
-  QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0, -2.0, -2.0),
-      labelRect);
-  if (!trackRect.isValid() || trackRect.isEmpty()) {
+  const QRectF contentRect = rect().adjusted(kLayoutPadding, kLayoutPadding,
+      -kLayoutPadding, -kLayoutPadding);
+  if (!contentRect.isValid() || contentRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);
     }
     return;
   }
 
-  paintTrack(painter, trackRect);
-  paintFill(painter, trackRect);
-  paintLabels(painter, trackRect, labelRect);
+  QFont labelFont = painter.font();
+  labelFont.setPointSizeF(std::max(8.0,
+      std::min(contentRect.width(), contentRect.height()) / 6.0));
+  painter.setFont(labelFont);
+  const QFontMetricsF metrics(labelFont);
+
+  const Layout layout = calculateLayout(contentRect, metrics);
+  if (!layout.trackRect.isValid() || layout.trackRect.isEmpty()) {
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
+
+  paintTrack(painter, layout.trackRect);
+  paintFill(painter, layout.trackRect);
+  if (layout.showAxis) {
+    paintAxis(painter, layout);
+  }
+  paintLabels(painter, layout);
 
   if (selected_) {
     paintSelectionOverlay(painter);
   }
 }
 
-QRectF BarMonitorElement::trackRectForPainting(
-    QRectF contentRect, QRectF &labelRect) const
+BarMonitorElement::Layout BarMonitorElement::calculateLayout(
+    const QRectF &bounds, const QFontMetricsF &metrics) const
 {
-  labelRect = QRectF();
-  if (label_ == MeterLabel::kChannel || label_ == MeterLabel::kLimits) {
-    const qreal maxLabelHeight = std::min<qreal>(24.0, contentRect.height() * 0.35);
-    if (maxLabelHeight > 6.0) {
-      labelRect = QRectF(contentRect.left(),
-          contentRect.bottom() - maxLabelHeight, contentRect.width(),
-          maxLabelHeight);
-      contentRect.setBottom(labelRect.top() - 4.0);
+  Layout layout;
+  layout.vertical = (direction_ == BarDirection::kUp
+      || direction_ == BarDirection::kDown);
+
+  if (!bounds.isValid() || bounds.isEmpty()) {
+    return layout;
+  }
+
+  layout.lineHeight = std::max<qreal>(metrics.height(), 8.0);
+  const qreal spacing = std::max<qreal>(layout.lineHeight * 0.25, kAxisSpacing);
+
+  layout.showAxis = (label_ == MeterLabel::kOutline
+      || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
+  layout.showLimits = (label_ == MeterLabel::kLimits
+      || label_ == MeterLabel::kChannel);
+  layout.channelText = (label_ == MeterLabel::kChannel) ? channel_.trimmed() : QString();
+  layout.showChannel = !layout.channelText.isEmpty();
+
+  if (layout.showLimits) {
+    layout.lowLabel = QString::number(limits_.lowDefault, 'g', 5);
+    layout.highLabel = QString::number(limits_.highDefault, 'g', 5);
+  }
+
+  if (layout.showLimits) {
+    layout.readbackText = formattedSampleValue();
+    layout.showReadback = !layout.readbackText.isEmpty();
+  }
+
+  qreal left = bounds.left();
+  qreal right = bounds.right();
+  qreal top = bounds.top();
+  qreal bottom = bounds.bottom();
+  qreal readbackTop = bottom;
+
+  if (layout.vertical) {
+    if (layout.showChannel) {
+      layout.channelRect = QRectF(left, top, bounds.width(), layout.lineHeight);
+      top += layout.lineHeight + spacing;
+    }
+
+    if (layout.showReadback) {
+      readbackTop = bottom - layout.lineHeight;
+      bottom = readbackTop - spacing;
+    }
+
+    if (bottom - top < kMinimumTrackExtent) {
+      layout.trackRect = QRectF();
+      layout.axisRect = QRectF();
+      return layout;
+    }
+
+    if (layout.showAxis) {
+      qreal axisWidth = kMinimumAxisExtent;
+      if (layout.showLimits) {
+        const qreal lowWidth = metrics.horizontalAdvance(layout.lowLabel);
+        const qreal highWidth = metrics.horizontalAdvance(layout.highLabel);
+        axisWidth = std::max(axisWidth, lowWidth + 6.0);
+        axisWidth = std::max(axisWidth, highWidth + 6.0);
+      }
+      const qreal available = bounds.width() - spacing - kMinimumTrackExtent;
+      axisWidth = std::min(axisWidth, std::max<qreal>(available, kMinimumAxisExtent));
+      if (axisWidth < kMinimumAxisExtent || axisWidth >= bounds.width()) {
+        layout.showAxis = false;
+        layout.axisRect = QRectF();
+      } else {
+        layout.axisRect = QRectF(left, top, axisWidth, bottom - top);
+        left = layout.axisRect.right() + spacing;
+      }
+    }
+
+    const qreal trackWidth = right - left;
+    if (trackWidth < kMinimumTrackExtent) {
+      layout.trackRect = QRectF();
+      layout.axisRect = QRectF();
+      return layout;
+    }
+    layout.trackRect = QRectF(left, top, trackWidth, bottom - top);
+
+    if (layout.showReadback) {
+      layout.readbackRect = QRectF(layout.trackRect.left(), readbackTop,
+          layout.trackRect.width(), layout.lineHeight);
+    }
+  } else {
+    if (layout.showChannel) {
+      layout.channelRect = QRectF(left, top, bounds.width(), layout.lineHeight);
+      top += layout.lineHeight + spacing;
+    }
+
+    if (layout.showReadback) {
+      readbackTop = bottom - layout.lineHeight;
+      bottom = readbackTop - spacing;
+    }
+
+    if (bottom - top < kMinimumTrackExtent) {
+      layout.trackRect = QRectF();
+      layout.axisRect = QRectF();
+      return layout;
+    }
+
+    if (layout.showAxis) {
+      qreal axisHeight = std::max(layout.lineHeight + 4.0, kMinimumAxisExtent);
+      const qreal available = (bottom - top) - kMinimumTrackExtent;
+      axisHeight = std::min(axisHeight, std::max<qreal>(available, kMinimumAxisExtent));
+      if (axisHeight < kMinimumAxisExtent || axisHeight >= (bottom - top)) {
+        layout.showAxis = false;
+        layout.axisRect = QRectF();
+      } else {
+        layout.axisRect = QRectF(left, top, bounds.width(), axisHeight);
+        top += axisHeight + spacing;
+      }
+    }
+
+    const qreal trackHeight = bottom - top;
+    if (trackHeight < kMinimumTrackExtent) {
+      layout.trackRect = QRectF();
+      layout.axisRect = QRectF();
+      return layout;
+    }
+    layout.trackRect = QRectF(left, top, bounds.width(), trackHeight);
+
+    if (layout.showReadback) {
+      layout.readbackRect = QRectF(layout.trackRect.left(), readbackTop,
+          layout.trackRect.width(), layout.lineHeight);
     }
   }
-  contentRect = contentRect.adjusted(4.0, 4.0, -4.0, -4.0);
-  if (contentRect.width() < 1.0 || contentRect.height() < 1.0) {
-    return QRectF();
-  }
-  return contentRect;
+
+  return layout;
 }
 
 void BarMonitorElement::paintTrack(QPainter &painter,
@@ -235,7 +389,8 @@ void BarMonitorElement::paintFill(QPainter &painter,
     if (totalHeight <= 0.0) {
       return;
     }
-    const double fillHeight = std::clamp(totalHeight * kSampleFillFraction, 0.0,
+    const double fillFraction = std::clamp(normalizedSampleValue(), 0.0, 1.0);
+    const double fillHeight = std::clamp(totalHeight * fillFraction, 0.0,
         totalHeight);
     if (fillMode_ == BarFill::kFromCenter) {
       const double half = fillHeight / 2.0;
@@ -252,7 +407,8 @@ void BarMonitorElement::paintFill(QPainter &painter,
     if (totalWidth <= 0.0) {
       return;
     }
-    const double fillWidth = std::clamp(totalWidth * kSampleFillFraction, 0.0,
+    const double fillFraction = std::clamp(normalizedSampleValue(), 0.0, 1.0);
+    const double fillWidth = std::clamp(totalWidth * fillFraction, 0.0,
         totalWidth);
     if (fillMode_ == BarFill::kFromCenter) {
       const double half = fillWidth / 2.0;
@@ -284,8 +440,118 @@ void BarMonitorElement::paintFill(QPainter &painter,
   painter.restore();
 }
 
-void BarMonitorElement::paintLabels(QPainter &painter,
-    const QRectF &trackRect, const QRectF &labelRect) const
+void BarMonitorElement::paintAxis(QPainter &painter, const Layout &layout) const
+{
+  if (!layout.showAxis || !layout.axisRect.isValid() || layout.axisRect.isEmpty()) {
+    return;
+  }
+
+  painter.save();
+  const QColor axisColor = effectiveForeground().darker(140);
+  QPen axisPen(axisColor);
+  axisPen.setWidth(1);
+  painter.setPen(axisPen);
+  painter.setBrush(Qt::NoBrush);
+
+  const QFontMetricsF metrics(painter.font());
+
+  if (layout.vertical) {
+    const qreal axisX = layout.axisRect.right();
+    const qreal axisHeight = layout.axisRect.height();
+    const qreal tickLength = std::max<qreal>(3.0,
+        std::min<qreal>(kAxisTickLength, layout.axisRect.width() * 0.6));
+
+    painter.drawLine(QPointF(axisX, layout.axisRect.top()),
+        QPointF(axisX, layout.axisRect.bottom()));
+
+    auto positionForNormalized = [&](double normalized) {
+      if (direction_ == BarDirection::kUp) {
+        return layout.axisRect.bottom() - normalized * axisHeight;
+      }
+      return layout.axisRect.top() + normalized * axisHeight;
+    };
+
+    for (int i = 0; i <= kAxisTickCount; ++i) {
+      const double normalized = static_cast<double>(i) / kAxisTickCount;
+      const qreal y = positionForNormalized(normalized);
+      painter.drawLine(QPointF(axisX - tickLength, y), QPointF(axisX, y));
+    }
+
+    if (layout.showLimits) {
+      const qreal textRight = axisX - tickLength - 2.0;
+      const qreal available = std::max<qreal>(textRight - layout.axisRect.left(), 1.0);
+
+      if (!layout.lowLabel.isEmpty()) {
+        const qreal yLow = positionForNormalized(0.0);
+        QRectF lowRect(layout.axisRect.left(),
+            yLow - layout.lineHeight * 0.5, available, layout.lineHeight);
+        painter.drawText(lowRect, Qt::AlignRight | Qt::AlignVCenter,
+            layout.lowLabel);
+      }
+
+      if (!layout.highLabel.isEmpty()) {
+        const qreal yHigh = positionForNormalized(1.0);
+        QRectF highRect(layout.axisRect.left(),
+            yHigh - layout.lineHeight * 0.5, available, layout.lineHeight);
+        painter.drawText(highRect, Qt::AlignRight | Qt::AlignVCenter,
+            layout.highLabel);
+      }
+    }
+  } else {
+    const qreal axisY = layout.axisRect.bottom();
+    const qreal axisWidth = layout.axisRect.width();
+    const qreal tickLength = std::max<qreal>(3.0,
+        std::min<qreal>(kAxisTickLength, layout.axisRect.height() * 0.6));
+
+    painter.drawLine(QPointF(layout.axisRect.left(), axisY),
+        QPointF(layout.axisRect.right(), axisY));
+
+    auto positionForNormalized = [&](double normalized) {
+      if (direction_ == BarDirection::kRight) {
+        return layout.axisRect.left() + normalized * axisWidth;
+      }
+      return layout.axisRect.right() - normalized * axisWidth;
+    };
+
+    for (int i = 0; i <= kAxisTickCount; ++i) {
+      const double normalized = static_cast<double>(i) / kAxisTickCount;
+      const qreal x = positionForNormalized(normalized);
+      painter.drawLine(QPointF(x, axisY), QPointF(x, axisY - tickLength));
+    }
+
+    if (layout.showLimits) {
+      const qreal textHeight = std::max<qreal>(layout.axisRect.height() - tickLength - 2.0,
+          metrics.height());
+      const qreal textTop = axisY - tickLength - textHeight;
+
+      if (!layout.lowLabel.isEmpty()) {
+        const qreal width = metrics.horizontalAdvance(layout.lowLabel) + 6.0;
+        QRectF lowRect((direction_ == BarDirection::kRight)
+                ? layout.axisRect.left()
+                : layout.axisRect.right() - width,
+            textTop, width, textHeight);
+        Qt::Alignment align = (direction_ == BarDirection::kRight)
+            ? Qt::AlignLeft : Qt::AlignRight;
+        painter.drawText(lowRect, align | Qt::AlignVCenter, layout.lowLabel);
+      }
+
+      if (!layout.highLabel.isEmpty()) {
+        const qreal width = metrics.horizontalAdvance(layout.highLabel) + 6.0;
+        QRectF highRect((direction_ == BarDirection::kRight)
+                ? layout.axisRect.right() - width
+                : layout.axisRect.left(),
+            textTop, width, textHeight);
+        Qt::Alignment align = (direction_ == BarDirection::kRight)
+            ? Qt::AlignRight : Qt::AlignLeft;
+        painter.drawText(highRect, align | Qt::AlignVCenter, layout.highLabel);
+      }
+    }
+  }
+
+  painter.restore();
+}
+
+void BarMonitorElement::paintLabels(QPainter &painter, const Layout &layout) const
 {
   if (label_ == MeterLabel::kNone || label_ == MeterLabel::kNoDecorations) {
     return;
@@ -295,41 +561,25 @@ void BarMonitorElement::paintLabels(QPainter &painter,
   painter.setPen(effectiveForeground());
   painter.setBrush(Qt::NoBrush);
 
-  if (label_ == MeterLabel::kOutline) {
+  if (label_ == MeterLabel::kOutline && layout.trackRect.isValid()
+      && !layout.trackRect.isEmpty()) {
     QPen pen(effectiveForeground().darker(150));
     pen.setStyle(Qt::DotLine);
     pen.setWidth(1);
     painter.setPen(pen);
-    painter.drawRect(trackRect.adjusted(3.0, 3.0, -3.0, -3.0));
-    painter.restore();
-    return;
+    painter.drawRect(layout.trackRect.adjusted(3.0, 3.0, -3.0, -3.0));
   }
 
-  QFont labelFont = painter.font();
-  labelFont.setPointSizeF(std::max(8.0, std::min(trackRect.height(),
-      trackRect.width()) / 6.0));
-  painter.setFont(labelFont);
-
-  if (label_ == MeterLabel::kChannel) {
-    const QString text = channel_.trimmed();
-    if (!text.isEmpty() && labelRect.isValid() && !labelRect.isEmpty()) {
-      painter.drawText(labelRect.adjusted(2.0, 0.0, -2.0, -2.0),
-          Qt::AlignHCenter | Qt::AlignBottom, text);
-    }
-    painter.restore();
-    return;
+  if (layout.showChannel && layout.channelRect.isValid()
+      && !layout.channelRect.isEmpty()) {
+    painter.drawText(layout.channelRect.adjusted(2.0, 0.0, -2.0, 0.0),
+        Qt::AlignHCenter | Qt::AlignVCenter, layout.channelText);
   }
 
-  if (label_ == MeterLabel::kLimits) {
-    if (labelRect.isValid() && !labelRect.isEmpty()) {
-      const QString lowText = QString::number(limits_.lowDefault, 'g', 5);
-      const QString highText = QString::number(limits_.highDefault, 'g', 5);
-      const QRectF bounds = labelRect.adjusted(2.0, 0.0, -2.0, -2.0);
-      painter.drawText(bounds, Qt::AlignLeft | Qt::AlignBottom, lowText);
-      painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, highText);
-    }
-    painter.restore();
-    return;
+  if (layout.showReadback && layout.readbackRect.isValid()
+      && !layout.readbackRect.isEmpty()) {
+    painter.drawText(layout.readbackRect.adjusted(2.0, 0.0, -2.0, 0.0),
+        Qt::AlignHCenter | Qt::AlignVCenter, layout.readbackText);
   }
 
   painter.restore();
@@ -379,6 +629,36 @@ QColor BarMonitorElement::barFillColor() const
     color = QColor(Qt::black);
   }
   return color;
+}
+
+double BarMonitorElement::normalizedSampleValue() const
+{
+  return kSampleNormalizedValue;
+}
+
+double BarMonitorElement::sampleValue() const
+{
+  const double normalized = std::clamp(normalizedSampleValue(), 0.0, 1.0);
+  const double low = limits_.lowDefault;
+  const double high = limits_.highDefault;
+
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return normalized;
+  }
+  if (high <= low) {
+    return low;
+  }
+  return low + normalized * (high - low);
+}
+
+QString BarMonitorElement::formattedSampleValue() const
+{
+  const double value = sampleValue();
+  const int precision = std::clamp(limits_.precisionDefault, 0, 17);
+  if (precision > 0) {
+    return QString::number(value, 'f', precision);
+  }
+  return QString::number(value, 'g', 5);
 }
 
 void BarMonitorElement::paintSelectionOverlay(QPainter &painter) const

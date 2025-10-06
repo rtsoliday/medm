@@ -7,6 +7,8 @@
 
 #include "display_properties.h"
 
+class QFontMetricsF;
+
 class BarMonitorElement : public QWidget
 {
 public:
@@ -43,16 +45,21 @@ protected:
   void paintEvent(QPaintEvent *event) override;
 
 private:
-  QRectF trackRectForPainting(QRectF contentRect, QRectF &labelRect) const;
+  struct Layout;
+  Layout calculateLayout(const QRectF &contentRect,
+      const QFontMetricsF &metrics) const;
   void paintTrack(QPainter &painter, const QRectF &trackRect) const;
   void paintFill(QPainter &painter, const QRectF &trackRect) const;
-  void paintLabels(
-      QPainter &painter, const QRectF &trackRect, const QRectF &labelRect) const;
+  void paintAxis(QPainter &painter, const Layout &layout) const;
+  void paintLabels(QPainter &painter, const Layout &layout) const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QColor barTrackColor() const;
   QColor barFillColor() const;
   void paintSelectionOverlay(QPainter &painter) const;
+  double normalizedSampleValue() const;
+  double sampleValue() const;
+  QString formattedSampleValue() const;
 
   bool selected_ = false;
   QColor foregroundColor_;

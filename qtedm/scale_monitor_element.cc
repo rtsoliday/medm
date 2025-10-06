@@ -543,21 +543,30 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
     if (layout.showLimits) {
       const QFontMetricsF metrics(painter.font());
       const qreal textRight = axisX - tickLength - 2.0;
-      const qreal available = std::max<qreal>(
-          textRight - layout.axisRect.left(), metrics.averageCharWidth());
+      const qreal maxWidth = std::max<qreal>(
+          textRight - layout.axisRect.left(), 0.0);
+      auto labelRectForWidth = [&](const QString &label, qreal centerY) {
+        const qreal textWidth = metrics.horizontalAdvance(label);
+        const qreal paddedWidth = std::clamp(
+            textWidth + 2.0 * kLabelTextPadding,
+            std::max(metrics.averageCharWidth(), 1.0),
+            std::max(maxWidth, metrics.averageCharWidth()));
+        const qreal rectWidth = std::min(paddedWidth, maxWidth);
+        const qreal left = textRight - rectWidth;
+        return QRectF(left, centerY - layout.lineHeight * 0.5,
+            rectWidth, layout.lineHeight);
+      };
 
       if (!layout.lowLabel.isEmpty()) {
         const qreal yLow = positionForNormalized(0.0);
-        QRectF lowRect(layout.axisRect.left(),
-            yLow - layout.lineHeight * 0.5, available, layout.lineHeight);
+        const QRectF lowRect = labelRectForWidth(layout.lowLabel, yLow);
         painter.drawText(lowRect, Qt::AlignRight | Qt::AlignVCenter,
             layout.lowLabel);
       }
 
       if (!layout.highLabel.isEmpty()) {
         const qreal yHigh = positionForNormalized(1.0);
-        QRectF highRect(layout.axisRect.left(),
-            yHigh - layout.lineHeight * 0.5, available, layout.lineHeight);
+        const QRectF highRect = labelRectForWidth(layout.highLabel, yHigh);
         painter.drawText(highRect, Qt::AlignRight | Qt::AlignVCenter,
             layout.highLabel);
       }

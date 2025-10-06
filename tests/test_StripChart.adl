@@ -7,8 +7,8 @@ display {
 	object {
 		x=0
 		y=53
-		width=1377
-		height=900
+		width=1235
+		height=537
 	}
 	clr=14
 	bclr=4
@@ -89,32 +89,350 @@ display {
 }
 "strip chart" {
 	object {
-		x=20
-		y=12
-		width=300
-		height=301
+		x=18
+		y=14
+		width=262
+		height=208
 	}
 	plotcom {
-		title="My Data"
-		xlabel="Time"
-		ylabel="Values"
-		clr=14
-		bclr=4
+		title="Flux Pulse 327"
+		xlabel="Sampled Seconds"
+		ylabel="Counts"
+		clr=47
+		bclr=9
 	}
 	pen[0] {
-		chan="Current.PV"
-		clr=14
+		chan="DEV:FLUX:SIG327"
+		clr=23
 		limits {
+			loprSrc="default"
+			loprDefault=-58
+			hoprSrc="default"
+			hoprDefault=212
 		}
 	}
 	pen[1] {
-		chan="Temperature.PV"
-		clr=20
+		chan="DEV:FLUX:RMS011"
+		clr=36
 		limits {
 			loprSrc="default"
-			loprDefault=-20
+			loprDefault=12
 			hoprSrc="default"
-			hoprDefault=120
+			hoprDefault=142
+		}
+	}
+	pen[2] {
+		chan="DEV:FLUX:DRIFT901"
+		clr=6
+		limits {
+			loprSrc="default"
+			loprDefault=-14
+			hoprSrc="default"
+			hoprDefault=96
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=310
+		y=18
+		width=248
+		height=205
+	}
+	plotcom {
+		title="Gradient Scan 984"
+		xlabel="Epoch Index"
+		ylabel="Amps"
+		clr=59
+		bclr=13
+	}
+	pen[0] {
+		chan="SYS:GRAD:LOOP32"
+		clr=41
+		limits {
+			loprSrc="default"
+			loprDefault=-34
+			hoprSrc="default"
+			hoprDefault=68
+		}
+	}
+	pen[1] {
+		chan="SYS:GRAD:ERR765"
+		clr=28
+		limits {
+			loprSrc="default"
+			loprDefault=-7
+			hoprSrc="default"
+			hoprDefault=22
+		}
+	}
+	pen[2] {
+		chan="SYS:GRAD:REF492"
+		clr=52
+		limits {
+			loprSrc="default"
+			loprDefault=4
+			hoprSrc="default"
+			hoprDefault=118
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=596
+		y=16
+		width=274
+		height=214
+	}
+	plotcom {
+		title="Cryo Loop 051"
+		xlabel="Elapsed Minutes"
+		ylabel="mTorr"
+		clr=10
+		bclr=44
+	}
+	pen[0] {
+		chan="CRYO:PRESS:HEAD05"
+		clr=12
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=980
+		}
+	}
+	pen[1] {
+		chan="CRYO:PRESS:TAIL33"
+		clr=25
+		limits {
+			loprSrc="default"
+			loprDefault=-45
+			hoprSrc="default"
+			hoprDefault=620
+		}
+	}
+	pen[2] {
+		chan="CRYO:TEMP:LOOP77"
+		clr=2
+		limits {
+			loprSrc="default"
+			loprDefault=34
+			hoprSrc="default"
+			hoprDefault=488
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=910
+		y=20
+		width=262
+		height=209
+	}
+	plotcom {
+		title="Orbit Tuner 411"
+		xlabel="Sweep"
+		ylabel="Delta"
+		clr=21
+		bclr=50
+	}
+	pen[0] {
+		chan="ORB:TUNE:X411"
+		clr=34
+		limits {
+			loprSrc="default"
+			loprDefault=-3
+			hoprSrc="default"
+			hoprDefault=3
+		}
+	}
+	pen[1] {
+		chan="ORB:TUNE:Y901"
+		clr=17
+		limits {
+			loprSrc="default"
+			loprDefault=-2
+			hoprSrc="default"
+			hoprDefault=2
+		}
+	}
+	pen[2] {
+		chan="ORB:TUNE:ENERGY42"
+		clr=8
+		limits {
+			loprSrc="default"
+			loprDefault=-0.5
+			hoprSrc="default"
+			hoprDefault=0.5
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=18
+		y=252
+		width=268
+		height=212
+	}
+	plotcom {
+		title="Vacuum Trend 672"
+		xlabel="Hours"
+		ylabel="Pressure"
+		clr=4
+		bclr=61
+	}
+	pen[0] {
+		chan="VAC:LINE:A672"
+		clr=46
+		limits {
+			hoprDefault=0
+		}
+	}
+	pen[1] {
+		chan="VAC:LINE:B283"
+		clr=32
+		limits {
+			hoprDefault=0
+		}
+	}
+	pen[2] {
+		chan="VAC:LINE:C914"
+		clr=14
+		limits {
+			hoprDefault=0
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=312
+		y=255
+		width=246
+		height=206
+	}
+	plotcom {
+		title="Klystron 552"
+		xlabel="Pulse #"
+		ylabel="kV"
+		clr=38
+		bclr=6
+	}
+	pen[0] {
+		chan="RF:KLY:VOUT552"
+		clr=53
+		limits {
+			loprSrc="default"
+			loprDefault=540
+			hoprSrc="default"
+			hoprDefault=885
+		}
+	}
+	pen[1] {
+		chan="RF:KLY:PHASE37"
+		clr=30
+		limits {
+			loprSrc="default"
+			loprDefault=-16
+			hoprSrc="default"
+			hoprDefault=21
+		}
+	}
+	pen[2] {
+		chan="RF:KLY:TEMP119"
+		clr=57
+		limits {
+			loprSrc="default"
+			loprDefault=18
+			hoprSrc="default"
+			hoprDefault=64
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=598
+		y=254
+		width=270
+		height=210
+	}
+	plotcom {
+		title="Spectrometer 208"
+		xlabel="Bucket"
+		ylabel="Intensity"
+		clr=7
+		bclr=31
+	}
+	pen[0] {
+		chan="SPEC:DET:A208"
+		clr=11
+		limits {
+			loprSrc="default"
+			loprDefault=120
+			hoprSrc="default"
+			hoprDefault=940
+		}
+	}
+	pen[1] {
+		chan="SPEC:DET:B557"
+		clr=19
+		limits {
+			loprSrc="default"
+			loprDefault=90
+			hoprSrc="default"
+			hoprDefault=810
+		}
+	}
+	pen[2] {
+		chan="SPEC:DET:C904"
+		clr=24
+		limits {
+			loprSrc="default"
+			loprDefault=40
+			hoprSrc="default"
+			hoprDefault=610
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=908
+		y=256
+		width=264
+		height=208
+	}
+	plotcom {
+		title="Ion Beam 763"
+		xlabel="Cycle"
+		ylabel="mA"
+		clr=60
+		bclr=15
+	}
+	pen[0] {
+		chan="ION:BEAM:CUR763"
+		clr=5
+		limits {
+			loprSrc="default"
+			loprDefault=-12
+			hoprSrc="default"
+			hoprDefault=128
+		}
+	}
+	pen[1] {
+		chan="ION:BEAM:LOSS041"
+		clr=26
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=60
+		}
+	}
+	pen[2] {
+		chan="ION:BEAM:SPREAD88"
+		clr=43
+		limits {
+			loprSrc="default"
+			loprDefault=2
+			hoprSrc="default"
+			hoprDefault=39
 		}
 	}
 }

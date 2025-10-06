@@ -602,6 +602,7 @@ private:
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadMeterElement(const AdlNode &meterNode);
+  void loadBarMonitorElement(const AdlNode &barNode);
   void loadImageElement(const AdlNode &imageNode);
   void loadRectangleElement(const AdlNode &rectangleNode);
   void loadOvalElement(const AdlNode &ovalNode);
@@ -616,6 +617,8 @@ private:
   TextColorMode parseTextColorMode(const QString &value) const;
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
   MeterLabel parseMeterLabel(const QString &value) const;
+  BarDirection parseBarDirection(const QString &value) const;
+  BarFill parseBarFill(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const;
@@ -6784,6 +6787,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("bar"), Qt::CaseInsensitive)
+        == 0) {
+      loadBarMonitorElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("image"), Qt::CaseInsensitive)
         == 0) {
       loadImageElement(child);
@@ -7831,6 +7840,39 @@ inline MeterLabel DisplayWindow::parseMeterLabel(const QString &value) const
   return MeterLabel::kOutline;
 }
 
+inline BarDirection DisplayWindow::parseBarDirection(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("up")
+      || normalized == QStringLiteral("top")) {
+    return BarDirection::kUp;
+  }
+  if (normalized == QStringLiteral("down")
+      || normalized == QStringLiteral("bottom")) {
+    return BarDirection::kDown;
+  }
+  if (normalized == QStringLiteral("left")) {
+    return BarDirection::kLeft;
+  }
+  if (normalized == QStringLiteral("right")) {
+    return BarDirection::kRight;
+  }
+  return BarDirection::kRight;
+}
+
+inline BarFill DisplayWindow::parseBarFill(const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("from center")
+      || normalized == QStringLiteral("from-center")
+      || normalized == QStringLiteral("from_center")
+      || normalized == QStringLiteral("center")) {
+    return BarFill::kFromCenter;
+  }
+  return BarFill::kFromEdge;
+}
+
 inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const
@@ -8392,6 +8434,144 @@ inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
   element->show();
   element->setSelected(false);
   meterElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(barNode);
+  if (geometry.width() < kMinimumBarSize) {
+    geometry.setWidth(kMinimumBarSize);
+  }
+  if (geometry.height() < kMinimumBarSize) {
+    geometry.setHeight(kMinimumBarSize);
+  }
+
+  auto *element = new BarMonitorElement(displayArea_);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *monitor = ::findChild(barNode,
+          QStringLiteral("monitor"))) {
+    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (!channel.isEmpty()) {
+      element->setChannel(channel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*monitor, QStringLiteral("clr"));
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*monitor, QStringLiteral("bclr"));
+    int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString labelValue = propertyValue(barNode, QStringLiteral("label"));
+  if (!labelValue.trimmed().isEmpty()) {
+    element->setLabel(parseMeterLabel(labelValue));
+  }
+
+  const QString colorModeValue = propertyValue(barNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString directionValue = propertyValue(barNode,
+      QStringLiteral("direction"));
+  if (!directionValue.isEmpty()) {
+    element->setDirection(parseBarDirection(directionValue));
+  }
+
+  const QString fillModeValue = propertyValue(barNode,
+      QStringLiteral("fillmod"));
+  if (!fillModeValue.isEmpty()) {
+    element->setFillMode(parseBarFill(fillModeValue));
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(barNode,
+          QStringLiteral("limits"))) {
+    PvLimits limits = element->limits();
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    }
+
+    element->setLimits(limits);
+  }
+
+  element->show();
+  element->setSelected(false);
+  barMonitorElements_.append(element);
   ensureElementInStack(element);
 }
 

@@ -42,7 +42,12 @@ private:
   void paintDial(QPainter &painter, const QRectF &dialRect) const;
   void paintTicks(QPainter &painter, const QRectF &dialRect) const;
   void paintNeedle(QPainter &painter, const QRectF &dialRect) const;
-  void paintLabels(QPainter &painter, const QRectF &dialRect) const;
+  void paintLabels(QPainter &painter, const QRectF &dialRect,
+      const QRectF &limitsRect, const QRectF &valueRect,
+      const QRectF &channelRect) const;
+  double normalizedSampleValue() const;
+  double sampleValue() const;
+  QString formattedSampleValue() const;
 
   bool selected_ = false;
   QColor foregroundColor_;

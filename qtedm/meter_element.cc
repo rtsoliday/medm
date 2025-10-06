@@ -4,20 +4,91 @@
 #include <cmath>
 
 #include <QApplication>
+#include <QFontMetrics>
+#include <QFontMetricsF>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QPainterPath>
 
 namespace {
 
-constexpr double kStartAngleDegrees = 225.0;
-constexpr double kSpanAngleDegrees = 270.0;
+constexpr double kStartAngleDegrees = 180.0;
+constexpr double kSpanAngleDegrees = 180.0;
 constexpr int kTickCount = 10;
 constexpr double kInnerTickRatio = 0.78;
-constexpr double kNeedleRatio = 0.72;
+constexpr double kNeedleRatio = 0.8;
+constexpr double kSampleNormalizedValue = 0.65;
+constexpr double kDialInsetRatio = 0.14;
+constexpr double kMinimumDialHeight = 24.0;
 
 inline double degreesToRadians(double degrees)
 {
   return degrees * M_PI / 180.0;
+}
+
+struct MeterLayout
+{
+  QRectF dialRect;
+  QRectF limitsRect;
+  QRectF readbackRect;
+  QRectF channelRect;
+  bool showReadback = false;
+};
+
+MeterLayout calculateLayout(const QRectF &bounds, MeterLabel label,
+    const QFontMetricsF &metrics)
+{
+  MeterLayout layout;
+  if (!bounds.isValid() || bounds.isEmpty()) {
+    return layout;
+  }
+
+  const qreal lineHeight = std::max<qreal>(metrics.height(), 1.0);
+  const qreal spacing = std::max<qreal>(2.0, lineHeight * 0.2);
+
+  qreal top = bounds.top();
+  qreal bottom = bounds.bottom();
+
+  if (label == MeterLabel::kChannel) {
+    layout.channelRect = QRectF(bounds.left(), top, bounds.width(), lineHeight);
+    top += lineHeight + spacing;
+  }
+
+  layout.showReadback = (label == MeterLabel::kLimits || label == MeterLabel::kChannel);
+
+  if (layout.showReadback) {
+    layout.readbackRect = QRectF(bounds.left(), bottom - lineHeight,
+        bounds.width(), lineHeight);
+    bottom -= lineHeight + spacing;
+  }
+
+  layout.limitsRect = QRectF(bounds.left(), bottom - lineHeight,
+      bounds.width(), lineHeight);
+  bottom -= lineHeight + spacing;
+
+  if (bottom <= top) {
+    layout.dialRect = QRectF();
+    return layout;
+  }
+
+  const QRectF dialArea(bounds.left(), top, bounds.width(), bottom - top);
+  if (dialArea.height() < kMinimumDialHeight || dialArea.width() < kMinimumDialHeight) {
+    layout.dialRect = QRectF();
+    return layout;
+  }
+
+  const qreal radius = std::min<qreal>(dialArea.width() / 2.0, dialArea.height());
+  if (radius <= 0.0) {
+    layout.dialRect = QRectF();
+    return layout;
+  }
+
+  const qreal diameter = radius * 2.0;
+  const qreal centerX = dialArea.center().x();
+  const qreal baseY = dialArea.bottom();
+  layout.dialRect = QRectF(centerX - radius, baseY - radius, diameter, diameter);
+
+  return layout;
 }
 
 } // namespace
@@ -143,16 +214,28 @@ void MeterElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
-  const QRectF bounds = rect().adjusted(4.0, 4.0, -4.0, -4.0);
-  const double diameter = std::max(0.0, std::min(bounds.width(), bounds.height()));
-  QRectF dialRect(bounds.center().x() - diameter / 2.0,
-      bounds.center().y() - diameter / 2.0, diameter, diameter);
-  dialRect.adjust(2.0, 2.0, -2.0, -2.0);
+  const QRectF bounds = rect().adjusted(6.0, 6.0, -6.0, -6.0);
+  if (bounds.width() <= 0.0 || bounds.height() <= 0.0) {
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
 
-  paintDial(painter, dialRect);
-  paintTicks(painter, dialRect);
-  paintNeedle(painter, dialRect);
-  paintLabels(painter, dialRect);
+  QFont labelFont = painter.font();
+  labelFont.setPointSizeF(std::max(8.0, bounds.height() / 8.0));
+  painter.setFont(labelFont);
+  const QFontMetricsF metrics(labelFont);
+
+  const MeterLayout layout = calculateLayout(bounds, label_, metrics);
+
+  if (layout.dialRect.isValid() && !layout.dialRect.isEmpty()) {
+    paintDial(painter, layout.dialRect);
+    paintTicks(painter, layout.dialRect);
+    paintNeedle(painter, layout.dialRect);
+  }
+  paintLabels(painter, layout.dialRect, layout.limitsRect,
+      layout.readbackRect, layout.channelRect);
 
   if (selected_) {
     paintSelectionOverlay(painter);
@@ -199,26 +282,79 @@ void MeterElement::paintSelectionOverlay(QPainter &painter)
 
 void MeterElement::paintDial(QPainter &painter, const QRectF &dialRect) const
 {
+  if (!dialRect.isValid() || dialRect.isEmpty()) {
+    return;
+  }
+
   QColor rimColor = effectiveForeground().darker(140);
   QColor faceColor = effectiveBackground().lighter(110);
 
   QPen rimPen(rimColor);
   rimPen.setWidth(2);
+  painter.save();
   painter.setPen(rimPen);
   painter.setBrush(faceColor);
-  painter.drawEllipse(dialRect);
 
-  QRectF inner = dialRect.adjusted(dialRect.width() * 0.12, dialRect.height() * 0.12,
-      -dialRect.width() * 0.12, -dialRect.height() * 0.12);
-  QPen innerPen(faceColor.darker(125));
-  innerPen.setWidth(1);
-  painter.setPen(innerPen);
-  painter.setBrush(faceColor.lighter(105));
-  painter.drawEllipse(inner);
+  QPainterPath outer;
+  outer.moveTo(dialRect.left(), dialRect.center().y());
+  outer.arcTo(dialRect, 180.0, -kSpanAngleDegrees);
+  outer.closeSubpath();
+  painter.drawPath(outer);
+
+  QRectF inner = dialRect.adjusted(dialRect.width() * kDialInsetRatio,
+      dialRect.width() * kDialInsetRatio, -dialRect.width() * kDialInsetRatio,
+      -dialRect.width() * kDialInsetRatio);
+  if (inner.isValid() && inner.width() > 0.0 && inner.height() > 0.0) {
+    QPen innerPen(faceColor.darker(125));
+    innerPen.setWidth(1);
+    painter.setPen(innerPen);
+    painter.setBrush(faceColor.lighter(105));
+    QPainterPath innerPath;
+    innerPath.moveTo(inner.left(), inner.center().y());
+    innerPath.arcTo(inner, 180.0, -kSpanAngleDegrees);
+    innerPath.closeSubpath();
+    painter.drawPath(innerPath);
+  }
+
+  painter.restore();
+}
+
+double MeterElement::normalizedSampleValue() const
+{
+  return kSampleNormalizedValue;
+}
+
+double MeterElement::sampleValue() const
+{
+  const double normalized = std::clamp(normalizedSampleValue(), 0.0, 1.0);
+  const double low = limits_.lowDefault;
+  const double high = limits_.highDefault;
+
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return normalized;
+  }
+  if (high <= low) {
+    return low;
+  }
+  return low + normalized * (high - low);
+}
+
+QString MeterElement::formattedSampleValue() const
+{
+  const double value = sampleValue();
+  const int precision = std::clamp(limits_.precisionDefault, 0, 17);
+  if (precision > 0) {
+    return QString::number(value, 'f', precision);
+  }
+  return QString::number(value, 'g', 5);
 }
 
 void MeterElement::paintTicks(QPainter &painter, const QRectF &dialRect) const
 {
+  if (!dialRect.isValid() || dialRect.isEmpty()) {
+    return;
+  }
+
   const QPointF center = dialRect.center();
   const double radius = dialRect.width() / 2.0;
   const QColor tickColor = effectiveForeground().darker(130);
@@ -240,10 +376,14 @@ void MeterElement::paintTicks(QPainter &painter, const QRectF &dialRect) const
 
 void MeterElement::paintNeedle(QPainter &painter, const QRectF &dialRect) const
 {
+  if (!dialRect.isValid() || dialRect.isEmpty()) {
+    return;
+  }
+
   const QPointF center = dialRect.center();
   const double radius = dialRect.width() / 2.0;
 
-  const double normalizedValue = 0.65;
+  const double normalizedValue = std::clamp(normalizedSampleValue(), 0.0, 1.0);
   const double angle = degreesToRadians(
       kStartAngleDegrees - normalizedValue * kSpanAngleDegrees);
   const double tipX = center.x() + std::cos(angle) * radius * kNeedleRatio;
@@ -256,44 +396,71 @@ void MeterElement::paintNeedle(QPainter &painter, const QRectF &dialRect) const
 
   painter.setBrush(effectiveForeground());
   painter.setPen(Qt::NoPen);
-  painter.drawEllipse(center, radius * 0.07, radius * 0.07);
+  painter.drawEllipse(center, radius * 0.08, radius * 0.08);
 }
 
-void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect) const
+void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
+    const QRectF &limitsRect, const QRectF &valueRect,
+    const QRectF &channelRect) const
 {
-  if (label_ == MeterLabel::kNone || label_ == MeterLabel::kNoDecorations) {
-    return;
-  }
+  const QColor foreground = effectiveForeground();
+  painter.save();
+  painter.setBrush(Qt::NoBrush);
+  painter.setPen(foreground);
 
-  painter.setPen(effectiveForeground());
-  QFont labelFont = painter.font();
-  labelFont.setPointSizeF(std::max(8.0, dialRect.height() / 7.0));
-  painter.setFont(labelFont);
-  if (label_ == MeterLabel::kChannel) {
-    const QString text = channel_.trimmed();
-    if (!text.isEmpty()) {
-      painter.drawText(rect().adjusted(6, 0, -6, -6),
-          Qt::AlignHCenter | Qt::AlignBottom, text);
-    }
-    return;
-  }
-
-  if (label_ == MeterLabel::kOutline) {
-    QPen outlinePen(effectiveForeground().darker(150));
+  if (label_ == MeterLabel::kOutline && dialRect.isValid() && !dialRect.isEmpty()) {
+    QPen outlinePen(foreground.darker(150));
     outlinePen.setStyle(Qt::DotLine);
     outlinePen.setWidth(1);
     painter.setPen(outlinePen);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawEllipse(dialRect.adjusted(6.0, 6.0, -6.0, -6.0));
-    return;
+
+    QRectF outlineRect = dialRect.adjusted(dialRect.width() * 0.08,
+        dialRect.width() * 0.08, -dialRect.width() * 0.08,
+        -dialRect.width() * 0.08);
+    if (outlineRect.isValid() && outlineRect.width() > 0.0 && outlineRect.height() > 0.0) {
+      QPainterPath outlinePath;
+      outlinePath.moveTo(outlineRect.left(), outlineRect.center().y());
+      outlinePath.arcTo(outlineRect, 180.0, -kSpanAngleDegrees);
+      outlinePath.closeSubpath();
+      painter.drawPath(outlinePath);
+    }
+    painter.setPen(foreground);
   }
 
-  if (label_ == MeterLabel::kLimits) {
-    const QString lowText = QString::number(limits_.lowDefault, 'g', 5);
-    const QString highText = QString::number(limits_.highDefault, 'g', 5);
-
-    const QRectF bounds = rect().adjusted(6, 0, -6, -6);
-    painter.drawText(bounds, Qt::AlignLeft | Qt::AlignBottom, lowText);
-    painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, highText);
+  if (label_ == MeterLabel::kChannel) {
+    const QString text = channel_.trimmed();
+    if (!text.isEmpty()) {
+      QRectF textRect = channelRect;
+      if (!textRect.isValid() || textRect.isEmpty()) {
+        textRect = QRectF(rect().left() + 6.0, rect().top() + 4.0,
+            rect().width() - 12.0, painter.fontMetrics().height());
+      }
+      painter.drawText(textRect, Qt::AlignHCenter | Qt::AlignVCenter, text);
+    }
   }
+
+  QRectF limitsArea = limitsRect;
+  if (!limitsArea.isValid() || limitsArea.isEmpty()) {
+    limitsArea = QRectF(rect().left() + 6.0,
+        rect().bottom() - painter.fontMetrics().height() - 6.0,
+        rect().width() - 12.0, painter.fontMetrics().height());
+  }
+  const QString lowText = QString::number(limits_.lowDefault, 'g', 5);
+  const QString highText = QString::number(limits_.highDefault, 'g', 5);
+  painter.drawText(limitsArea, Qt::AlignLeft | Qt::AlignVCenter, lowText);
+  painter.drawText(limitsArea, Qt::AlignRight | Qt::AlignVCenter, highText);
+
+  if (label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel) {
+    QRectF valueArea = valueRect;
+    if (!valueArea.isValid() || valueArea.isEmpty()) {
+      valueArea = QRectF(limitsArea.left(), limitsArea.bottom() + 2.0,
+          limitsArea.width(), limitsArea.height());
+    }
+    const QString valueText = formattedSampleValue();
+    if (!valueText.isEmpty()) {
+      painter.drawText(valueArea, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
+    }
+  }
+
+  painter.restore();
 }

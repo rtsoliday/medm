@@ -1,0 +1,307 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_ScaleMonitor.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=53
+		width=1104
+		height=651
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+indicator {
+	object {
+		x=24
+		y=28
+		width=128
+		height=168
+	}
+	monitor {
+		chan="scale:test:alpha"
+		clr=12
+		bclr=33
+	}
+	label="channel"
+	clrmod="alarm"
+	direction="up"
+	limits {
+		loprSrc="default"
+		loprDefault=-63.5
+		hoprSrc="default"
+		hoprDefault=78.2
+		precSrc="default"
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=212
+		y=32
+		width=140
+		height=150
+	}
+	monitor {
+		chan="scale:test:beta"
+		clr=47
+		bclr=6
+	}
+	label="limits"
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprDefault=-12.7
+		hoprDefault=125.9
+		precSrc="default"
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=396
+		y=26
+		width=156
+		height=142
+	}
+	monitor {
+		chan="scale:test:gamma"
+		clr=30
+		bclr=52
+	}
+	label="outline"
+	clrmod="alarm"
+	limits {
+		loprDefault=-5.4
+		hoprDefault=97.3
+		precSrc="default"
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=584
+		y=30
+		width=132
+		height=148
+	}
+	monitor {
+		chan="scale:test:delta"
+		clr=4
+		bclr=43
+	}
+	label="no decorations"
+	clrmod="alarm"
+	limits {
+		loprSrc="default"
+		loprDefault=-8.4
+		hoprSrc="default"
+		hoprDefault=8.4
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=756
+		y=24
+		width=144
+		height=156
+	}
+	monitor {
+		chan="scale:test:epsilon"
+		clr=51
+		bclr=23
+	}
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprDefault=-48.9
+		hoprSrc="default"
+		hoprDefault=38.6
+		precSrc="default"
+	}
+}
+indicator {
+	object {
+		x=24
+		y=236
+		width=160
+		height=168
+	}
+	monitor {
+		chan="scale:test:zeta"
+		clr=5
+		bclr=58
+	}
+	label="channel"
+	clrmod="discrete"
+	limits {
+		loprDefault=-32.6
+		hoprDefault=58.8
+		precDefault=4
+	}
+}
+indicator {
+	object {
+		x=214
+		y=232
+		width=152
+		height=144
+	}
+	monitor {
+		chan="scale:test:eta"
+		clr=19
+		bclr=7
+	}
+	label="limits"
+	clrmod="alarm"
+	direction="up"
+	limits {
+		loprDefault=-28.1
+		hoprDefault=14.7
+		precSrc="default"
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=398
+		y=228
+		width=128
+		height=152
+	}
+	monitor {
+		chan="scale:test:theta"
+		clr=41
+		bclr=10
+	}
+	label="outline"
+	clrmod="alarm"
+	direction="up"
+	limits {
+		loprSrc="default"
+		loprDefault=-101.4
+		hoprSrc="default"
+		hoprDefault=64.3
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=584
+		y=236
+		width=170
+		height=140
+	}
+	monitor {
+		chan="scale:test:iota"
+		clr=14
+		bclr=36
+	}
+	label="channel"
+	clrmod="discrete"
+	limits {
+		loprDefault=-5.5
+		hoprDefault=5.5
+	}
+}
+indicator {
+	object {
+		x=772
+		y=232
+		width=130
+		height=162
+	}
+	monitor {
+		chan="scale:test:kappa"
+		clr=24
+		bclr=47
+	}
+	label="no decorations"
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprSrc="default"
+		loprDefault=-250
+		hoprSrc="default"
+		hoprDefault=250
+		precSrc="default"
+		precDefault=2
+	}
+}

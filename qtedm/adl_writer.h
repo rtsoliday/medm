@@ -54,7 +54,8 @@ QString cartesianEraseModeString(CartesianPlotEraseMode mode);
 void writePlotcom(QTextStream &stream, int level, const QString &title,
     const QString &xLabel, const std::array<QString, 4> &yLabels,
     int colorIndex, int backgroundIndex);
-void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits);
+void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
+    bool includeChannelDefaults = false);
 void writeStripChartPenSection(QTextStream &stream, int level, int index,
     const QString &channel, int colorIndex, const PvLimits &limits);
 void writePointsSection(

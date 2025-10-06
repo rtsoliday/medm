@@ -515,13 +515,23 @@ QString pvLimitSourceString(PvLimitSource source)
   }
 }
 
-void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
+void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
+  bool includeChannelDefaults)
 {
   const bool hasLow = limits.lowSource != PvLimitSource::kChannel;
   const bool hasHigh = limits.highSource != PvLimitSource::kChannel;
   const bool hasPrecision = limits.precisionSource != PvLimitSource::kChannel;
 
-  if (!hasLow && !hasHigh && !hasPrecision) {
+  const bool includeLowDefault = includeChannelDefaults && !hasLow
+      && std::abs(limits.lowDefault - 0.0) > 1e-9;
+  const bool includeHighDefault = includeChannelDefaults && !hasHigh
+      && std::abs(limits.highDefault - 1.0) > 1e-9;
+  const bool includePrecisionDefault = includeChannelDefaults && !hasPrecision
+    && limits.precisionDefault != 0;
+
+  if (!hasLow && !hasHigh && !hasPrecision
+    && !includeLowDefault && !includeHighDefault
+    && !includePrecisionDefault) {
     return;
   }
 
@@ -538,6 +548,10 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
           QStringLiteral("loprDefault=%1")
               .arg(QString::number(limits.lowDefault, 'g', 6)));
     }
+  } else if (includeLowDefault) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("loprDefault=%1")
+            .arg(QString::number(limits.lowDefault, 'g', 6)));
   }
   if (hasHigh) {
     const PvLimitSource source = limits.highSource == PvLimitSource::kUser
@@ -551,6 +565,10 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
           QStringLiteral("hoprDefault=%1")
               .arg(QString::number(limits.highDefault, 'g', 6)));
     }
+  } else if (includeHighDefault) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("hoprDefault=%1")
+            .arg(QString::number(limits.highDefault, 'g', 6)));
   }
   if (hasPrecision) {
     const PvLimitSource source = limits.precisionSource == PvLimitSource::kUser
@@ -563,6 +581,9 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits)
       writeIndentedLine(stream, level + 1,
           QStringLiteral("precDefault=%1").arg(limits.precisionDefault));
     }
+  } else if (includePrecisionDefault) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("precDefault=%1").arg(limits.precisionDefault));
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }

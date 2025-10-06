@@ -366,7 +366,7 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
   }
 
   painter.save();
-  const QColor axisColor = effectiveForeground().darker(150);
+  const QColor axisColor(Qt::black);
   QPen axisPen(axisColor);
   axisPen.setWidth(1);
   painter.setPen(axisPen);
@@ -476,7 +476,7 @@ void ScaleMonitorElement::paintInternalTicks(
     return;
   }
 
-  const QColor tickColor = effectiveForeground().darker(150);
+  const QColor tickColor(Qt::black);
   QPen tickPen(tickColor);
   tickPen.setWidth(1);
   painter.setPen(tickPen);
@@ -584,7 +584,7 @@ void ScaleMonitorElement::paintLabels(
   }
 
   painter.save();
-  const QColor fg = effectiveForeground();
+  const QColor fg(Qt::black);
   painter.setPen(fg);
   painter.setBrush(Qt::NoBrush);
 

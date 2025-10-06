@@ -263,16 +263,20 @@ void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
-  setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, true);
-  setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, true);
+  const bool hasLimits = static_cast<bool>(meterLimitsGetter_)
+      && static_cast<bool>(meterLimitsSetter_);
+  setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, hasLimits);
+  setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, hasLimits);
   if (loprSourceCombo_) {
-    loprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+    loprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    loprSourceCombo_->setEnabled(hasLimits);
   }
   if (hoprSourceCombo_) {
-    hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+    hoprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    hoprSourceCombo_->setEnabled(hasLimits);
   }
   if (precisionSourceCombo_) {
-    precisionSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
+    precisionSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
   }
 
   if (meterLimitsGetter_ && meterLimitsSetter_) {

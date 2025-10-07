@@ -605,6 +605,7 @@ private:
   void loadSliderElement(const AdlNode &valuatorNode);
   void loadChoiceButtonElement(const AdlNode &choiceNode);
   void loadMenuElement(const AdlNode &menuNode);
+  void loadMessageButtonElement(const AdlNode &messageNode);
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
   void loadScaleMonitorElement(const AdlNode &indicatorNode);
@@ -6871,6 +6872,13 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("message button"),
+            Qt::CaseInsensitive)
+        == 0) {
+      loadMessageButtonElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("meter"), Qt::CaseInsensitive)
         == 0) {
       loadMeterElement(child);
@@ -8960,6 +8968,81 @@ inline void DisplayWindow::loadMenuElement(const AdlNode &menuNode)
   element->show();
   element->setSelected(false);
   menuElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadMessageButtonElement(
+    const AdlNode &messageNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(messageNode);
+  if (geometry.width() < kMinimumTextWidth) {
+    geometry.setWidth(kMinimumTextWidth);
+  }
+  if (geometry.height() < kMinimumTextHeight) {
+    geometry.setHeight(kMinimumTextHeight);
+  }
+
+  auto *element = new MessageButtonElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+
+  const QString colorModeValue = propertyValue(messageNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString labelValue = propertyValue(messageNode,
+      QStringLiteral("label"));
+  const QString trimmedLabel = labelValue.trimmed();
+  if (!trimmedLabel.isEmpty()) {
+    element->setLabel(trimmedLabel);
+  }
+
+  const QString pressValue = propertyValue(messageNode,
+      QStringLiteral("press_msg"));
+  const QString trimmedPress = pressValue.trimmed();
+  if (!trimmedPress.isEmpty()) {
+    element->setPressMessage(trimmedPress);
+  }
+
+  const QString releaseValue = propertyValue(messageNode,
+      QStringLiteral("release_msg"));
+  const QString trimmedRelease = releaseValue.trimmed();
+  if (!trimmedRelease.isEmpty()) {
+    element->setReleaseMessage(trimmedRelease);
+  }
+
+  if (const AdlNode *control = ::findChild(messageNode,
+          QStringLiteral("control"))) {
+    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    const QString trimmedChannel = channel.trimmed();
+    if (!trimmedChannel.isEmpty()) {
+      element->setChannel(trimmedChannel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*control, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*control, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  element->show();
+  element->setSelected(false);
+  messageButtonElements_.append(element);
   ensureElementInStack(element);
 }
 

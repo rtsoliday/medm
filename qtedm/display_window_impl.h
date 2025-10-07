@@ -601,6 +601,7 @@ private:
   bool loadDisplaySection(const AdlNode &displayNode);
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
+  void loadTextEntryElement(const AdlNode &textEntryNode);
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
   void loadScaleMonitorElement(const AdlNode &indicatorNode);
@@ -6835,6 +6836,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("text entry"), Qt::CaseInsensitive)
+        == 0) {
+      loadTextEntryElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("meter"), Qt::CaseInsensitive)
         == 0) {
       loadMeterElement(child);
@@ -8517,6 +8524,154 @@ inline void DisplayWindow::loadTextMonitorElement(
   element->show();
   element->setSelected(false);
   textMonitorElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadTextEntryElement(
+    const AdlNode &textEntryNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(textEntryNode);
+  auto *element = new TextEntryElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+
+  const QString formatValue = propertyValue(textEntryNode,
+      QStringLiteral("format"));
+  if (!formatValue.isEmpty()) {
+    element->setFormat(parseTextMonitorFormat(formatValue));
+  }
+
+  const QString colorModeValue = propertyValue(textEntryNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  if (const AdlNode *control = ::findChild(textEntryNode,
+          QStringLiteral("control"))) {
+    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    if (!channel.trimmed().isEmpty()) {
+      element->setChannel(channel.trimmed());
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*control, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*control, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(textEntryNode,
+          QStringLiteral("limits"))) {
+    PvLimits limits = element->limits();
+
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    }
+
+    element->setLimits(limits);
+  }
+
+  auto channelSetter = [element](int, const QString &value) {
+    const QString trimmed = value.trimmed();
+    if (!trimmed.isEmpty()) {
+      element->setChannel(trimmed);
+    }
+  };
+
+  applyChannelProperties(textEntryNode, channelSetter, 0, 1);
+
+  element->show();
+  element->setSelected(false);
+  textEntryElements_.append(element);
   ensureElementInStack(element);
 }
 

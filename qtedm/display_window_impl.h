@@ -602,6 +602,7 @@ private:
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadTextEntryElement(const AdlNode &textEntryNode);
+  void loadSliderElement(const AdlNode &valuatorNode);
   void loadChoiceButtonElement(const AdlNode &choiceNode);
   void loadMenuElement(const AdlNode &menuNode);
   void loadMeterElement(const AdlNode &meterNode);
@@ -6852,6 +6853,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("valuator"), Qt::CaseInsensitive)
+        == 0) {
+      loadSliderElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("choice button"), Qt::CaseInsensitive)
         == 0) {
       loadChoiceButtonElement(child);
@@ -8716,6 +8723,181 @@ inline void DisplayWindow::loadTextEntryElement(
   element->show();
   element->setSelected(false);
   textEntryElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadSliderElement(const AdlNode &valuatorNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(valuatorNode);
+  if (geometry.width() < kMinimumSliderWidth) {
+    geometry.setWidth(kMinimumSliderWidth);
+  }
+  if (geometry.height() < kMinimumSliderHeight) {
+    geometry.setHeight(kMinimumSliderHeight);
+  }
+
+  auto *element = new SliderElement(displayArea_);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *control = ::findChild(valuatorNode,
+          QStringLiteral("control"))) {
+    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    const QString trimmedChannel = channel.trimmed();
+    if (!trimmedChannel.isEmpty()) {
+      element->setChannel(trimmedChannel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*control, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*control, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString labelValue = propertyValue(valuatorNode, QStringLiteral("label"));
+  const QString trimmedLabel = labelValue.trimmed();
+  if (trimmedLabel.isEmpty()) {
+    element->setLabel(MeterLabel::kNone);
+  } else {
+    element->setLabel(parseMeterLabel(trimmedLabel));
+  }
+
+  const QString colorModeValue = propertyValue(valuatorNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString directionValue = propertyValue(valuatorNode,
+      QStringLiteral("direction"));
+  if (!directionValue.isEmpty()) {
+    element->setDirection(parseBarDirection(directionValue));
+  }
+
+  const QString precisionValue = propertyValue(valuatorNode,
+      QStringLiteral("dPrecision"));
+  if (!precisionValue.isEmpty()) {
+    bool ok = false;
+    const double precision = precisionValue.toDouble(&ok);
+    if (ok) {
+      element->setPrecision(precision);
+    }
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(valuatorNode,
+          QStringLiteral("limits"))) {
+    PvLimits limits = element->limits();
+
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+      }
+    }
+
+    element->setLimits(limits);
+  }
+
+  auto channelSetter = [element](int index, const QString &value) {
+    if (index != 0) {
+      return;
+    }
+    const QString trimmed = value.trimmed();
+    if (!trimmed.isEmpty()) {
+      element->setChannel(trimmed);
+    }
+  };
+
+  applyChannelProperties(valuatorNode, channelSetter, 0, 1);
+
+  element->show();
+  element->setSelected(false);
+  sliderElements_.append(element);
   ensureElementInStack(element);
 }
 

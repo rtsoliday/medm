@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
+		x=2610
+		y=71
 		width=1354
 		height=699
 	}
@@ -481,4 +481,23 @@ display {
 	trigger="TRIG:PLOT6"
 	erase="ERASE:PLOT6"
 	countPvName="CNT:PLOT6"
+}
+"cartesian plot" {
+	object {
+		x=117
+		y=503
+		width=303
+		height=163
+	}
+	plotcom {
+		title="Cartesian Plot"
+		xlabel="X"
+		ylabel="Y1"
+		y2label="Y2"
+		y3label="Y3"
+		y4label="Y4"
+		clr=14
+		bclr=4
+	}
+	style="line"
 }

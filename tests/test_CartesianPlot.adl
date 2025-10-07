@@ -1,0 +1,484 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_CartesianPlot.adl"
+	version=030122
+}
+display {
+	object {
+		x=0
+		y=53
+		width=1354
+		height=699
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+"cartesian plot" {
+	object {
+		x=28
+		y=24
+		width=310
+		height=200
+	}
+	plotcom {
+		title="Random Orbit Alpha"
+		xlabel="Seconds"
+		ylabel="Amplitude"
+		y2label="Phase"
+		y3label="Flux"
+		y4label="Noise"
+		clr=19
+		bclr=7
+	}
+	style="step"
+	erase_oldest="plot last n pts"
+	count="CNT:PLOT1"
+	trace[0] {
+		xdata="SIM:CP1:X0"
+		ydata="SIM:CP1:Y0"
+		data_clr=28
+		yaxis=0
+		yside=1
+	}
+	trace[1] {
+		xdata="SIM:CP1:X1"
+		ydata="SIM:CP1:Y1"
+		data_clr=42
+		yaxis=1
+		yside=0
+	}
+	trace[2] {
+		xdata="SIM:CP1:X2"
+		ydata="SIM:CP1:Y2"
+		data_clr=9
+		yaxis=2
+		yside=1
+	}
+	x_axis {
+		axisStyle="time"
+		rangeStyle="user-specified"
+		minRange=3.200000
+		maxRange=93.750000
+		timeFormat="MMM DD hh:00"
+	}
+	y1_axis {
+		axisStyle="log10"
+		rangeStyle="user-specified"
+		minRange=0.005000
+		maxRange=725.900024
+	}
+	y2_axis {
+		rangeStyle="user-specified"
+		minRange=-22.400000
+		maxRange=48.599998
+	}
+	trigger="TRIG:PLOT1"
+	erase="ERASE:PLOT1"
+	countPvName="CNT:PLOT1"
+	eraseMode="if zero"
+}
+"cartesian plot" {
+	object {
+		x=360
+		y=24
+		width=310
+		height=200
+	}
+	plotcom {
+		title="Scatter Pulse Beta"
+		xlabel="Ticks"
+		ylabel="Charge"
+		y2label="Drift"
+		y3label="Gain"
+		y4label="Offset"
+		clr=34
+		bclr=51
+	}
+	style="fill-under"
+	count="CNT:PLOT2"
+	trace[0] {
+		xdata="SIM:CP2:T0"
+		ydata="SIM:CP2:V4"
+		data_clr=55
+		yaxis=0
+		yside=0
+	}
+	trace[1] {
+		xdata="SIM:CP2:T1"
+		ydata="SIM:CP2:V5"
+		data_clr=8
+		yaxis=1
+		yside=1
+	}
+	trace[2] {
+		xdata="SIM:CP2:T2"
+		ydata="SIM:CP2:V6"
+		data_clr=47
+		yaxis=0
+		yside=0
+	}
+	trace[3] {
+		xdata="SIM:CP2:T3"
+		ydata="SIM:CP2:V7"
+		data_clr=23
+		yaxis=3
+		yside=0
+	}
+	x_axis {
+		rangeStyle="user-specified"
+		minRange=-12.500000
+		maxRange=139.000000
+	}
+	y1_axis {
+		rangeStyle="auto-scale"
+	}
+	y2_axis {
+		axisStyle="log10"
+		rangeStyle="user-specified"
+		minRange=0.100000
+		maxRange=8800.000000
+	}
+	y4_axis {
+		axisStyle="log10"
+		rangeStyle="auto-scale"
+	}
+	trigger="TRIG:PLOT2"
+	erase="ERASE:PLOT2"
+	countPvName="CNT:PLOT2"
+}
+"cartesian plot" {
+	object {
+		x=692
+		y=24
+		width=310
+		height=200
+	}
+	plotcom {
+		title="Noise Sweep Gamma"
+		xlabel="Samples"
+		ylabel="Noise"
+		y2label="Envelope"
+		y3label="Variance"
+		y4label="Bias"
+		clr=11
+		bclr=52
+	}
+	style="line"
+	erase_oldest="plot last n pts"
+	count="CNT:PLOT3"
+	trace[0] {
+		xdata="SIM:CP3:S0"
+		ydata="SIM:CP3:N0"
+		data_clr=6
+		yaxis=0
+		yside=0
+	}
+	trace[1] {
+		xdata="SIM:CP3:S1"
+		ydata="SIM:CP3:N1"
+		data_clr=37
+		yaxis=2
+		yside=1
+	}
+	trace[2] {
+		xdata="SIM:CP3:S2"
+		ydata="SIM:CP3:N2"
+		data_clr=59
+		yaxis=1
+		yside=0
+	}
+	x_axis {
+		axisStyle="time"
+		rangeStyle="auto-scale"
+		timeFormat="wd hh:00"
+	}
+	y1_axis {
+		rangeStyle="user-specified"
+		minRange=-3.150000
+		maxRange=3.150000
+	}
+	y2_axis {
+		axisStyle="log10"
+		rangeStyle="user-specified"
+		minRange=0.001000
+		maxRange=120.000000
+	}
+	y3_axis {
+		rangeStyle="auto-scale"
+	}
+	trigger="TRIG:PLOT3"
+	erase="ERASE:PLOT3"
+	countPvName="CNT:PLOT3"
+	eraseMode="if zero"
+}
+"cartesian plot" {
+	object {
+		x=28
+		y=260
+		width=310
+		height=200
+	}
+	plotcom {
+		title="Vacuum Drift Delta"
+		xlabel="Minutes"
+		ylabel="Pressure"
+		y2label="Flow"
+		y3label="Velocity"
+		y4label="Rate"
+		clr=25
+		bclr=2
+	}
+	count="CNT:PLOT4"
+	trace[0] {
+		xdata="SIM:CP4:M0"
+		ydata="SIM:CP4:P0"
+		data_clr=15
+		yaxis=0
+		yside=1
+	}
+	trace[1] {
+		xdata="SIM:CP4:M1"
+		ydata="SIM:CP4:P1"
+		data_clr=48
+		yaxis=3
+		yside=0
+	}
+	trace[2] {
+		xdata="SIM:CP4:M2"
+		ydata="SIM:CP4:P2"
+		data_clr=30
+		yaxis=1
+		yside=1
+	}
+	x_axis {
+		rangeStyle="user-specified"
+		minRange=1.250000
+		maxRange=240.000000
+	}
+	y1_axis {
+		rangeStyle="auto-scale"
+	}
+	y3_axis {
+		axisStyle="log10"
+		rangeStyle="user-specified"
+		minRange=0.010000
+		maxRange=12.500000
+	}
+	y4_axis {
+		rangeStyle="auto-scale"
+	}
+	trigger="TRIG:PLOT4"
+	erase="ERASE:PLOT4"
+	countPvName="CNT:PLOT4"
+}
+"cartesian plot" {
+	object {
+		x=360
+		y=260
+		width=310
+		height=200
+	}
+	plotcom {
+		title="Spectral Fold Epsilon"
+		xlabel="Cycle"
+		ylabel="Magnitude"
+		y2label="Harmonic"
+		y3label="Deviation"
+		y4label="Residual"
+		clr=44
+		bclr=13
+	}
+	style="fill-under"
+	erase_oldest="plot last n pts"
+	count="CNT:PLOT5"
+	trace[0] {
+		xdata="SIM:CP5:C0"
+		ydata="SIM:CP5:M0"
+		data_clr=18
+		yaxis=0
+		yside=0
+	}
+	trace[1] {
+		xdata="SIM:CP5:C1"
+		ydata="SIM:CP5:M1"
+		data_clr=63
+		yaxis=2
+		yside=1
+	}
+	trace[2] {
+		xdata="SIM:CP5:C2"
+		ydata="SIM:CP5:M2"
+		data_clr=31
+		yaxis=1
+		yside=0
+	}
+	trace[3] {
+		xdata="SIM:CP5:C3"
+		ydata="SIM:CP5:M3"
+		data_clr=4
+		yaxis=3
+		yside=1
+	}
+	x_axis {
+		axisStyle="time"
+		rangeStyle="user-specified"
+		minRange=0.500000
+		maxRange=18.750000
+		timeFormat="hh:mm"
+	}
+	y1_axis {
+		axisStyle="log10"
+		rangeStyle="user-specified"
+		minRange=0.050000
+		maxRange=950.000000
+	}
+	y2_axis {
+		rangeStyle="auto-scale"
+	}
+	trigger="TRIG:PLOT5"
+	erase="ERASE:PLOT5"
+	countPvName="CNT:PLOT5"
+	eraseMode="if zero"
+}
+"cartesian plot" {
+	object {
+		x=692
+		y=260
+		width=500
+		height=400
+	}
+	plotcom {
+		title="Thermal Bloom Zeta"
+		xlabel="Frame"
+		ylabel="Temperature"
+		y2label="Gradient"
+		y3label="Flux"
+		y4label="Drift"
+		clr=14
+		bclr=58
+	}
+	style="line"
+	count="CNT:PLOT6"
+	trace[0] {
+		xdata="SIM:CP6:F0"
+		ydata="SIM:CP6:T0"
+		data_clr=40
+		yaxis=0
+		yside=1
+	}
+	trace[1] {
+		xdata="SIM:CP6:F1"
+		ydata="SIM:CP6:T1"
+		data_clr=24
+		yaxis=1
+		yside=0
+	}
+	trace[2] {
+		xdata="SIM:CP6:F2"
+		ydata="SIM:CP6:T2"
+		data_clr=12
+		yaxis=2
+		yside=1
+	}
+	trace[3] {
+		xdata="SIM:CP6:F3"
+		ydata="SIM:CP6:T3"
+		data_clr=50
+		yaxis=3
+		yside=0
+	}
+	x_axis {
+		rangeStyle="auto-scale"
+	}
+	y1_axis {
+		rangeStyle="user-specified"
+		minRange=-45.000000
+		maxRange=155.500000
+	}
+	y2_axis {
+		axisStyle="log10"
+		rangeStyle="auto-scale"
+	}
+	y4_axis {
+		rangeStyle="user-specified"
+		minRange=-5.500000
+		maxRange=12.250000
+	}
+	trigger="TRIG:PLOT6"
+	erase="ERASE:PLOT6"
+	countPvName="CNT:PLOT6"
+}

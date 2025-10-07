@@ -602,6 +602,7 @@ private:
   void loadTextElement(const AdlNode &textNode);
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadTextEntryElement(const AdlNode &textEntryNode);
+  void loadChoiceButtonElement(const AdlNode &choiceNode);
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
   void loadScaleMonitorElement(const AdlNode &indicatorNode);
@@ -630,6 +631,7 @@ private:
   CartesianPlotTimeFormat parseCartesianTimeFormat(const QString &value) const;
   BarDirection parseBarDirection(const QString &value) const;
   BarFill parseBarFill(const QString &value) const;
+  ChoiceButtonStacking parseChoiceButtonStacking(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const;
@@ -6849,6 +6851,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("choice button"), Qt::CaseInsensitive)
+        == 0) {
+      loadChoiceButtonElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("meter"), Qt::CaseInsensitive)
         == 0) {
       loadMeterElement(child);
@@ -8082,6 +8090,28 @@ inline BarFill DisplayWindow::parseBarFill(const QString &value) const
   return BarFill::kFromEdge;
 }
 
+inline ChoiceButtonStacking DisplayWindow::parseChoiceButtonStacking(
+    const QString &value) const
+{
+  QString normalized = value.trimmed().toLower();
+  normalized.replace(QChar('-'), QChar(' '));
+  normalized.replace(QChar('_'), QChar(' '));
+  const QString simplified = normalized.simplified();
+  const QString compact = QString(normalized).remove(QChar(' '));
+
+  if (simplified == QStringLiteral("column")
+      || compact == QStringLiteral("column")
+      || simplified == QStringLiteral("columns")) {
+    return ChoiceButtonStacking::kColumn;
+  }
+  if (simplified == QStringLiteral("row column")
+      || compact == QStringLiteral("rowcolumn")
+      || simplified == QStringLiteral("row columns")) {
+    return ChoiceButtonStacking::kRowColumn;
+  }
+  return ChoiceButtonStacking::kRow;
+}
+
 inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const
@@ -8679,6 +8709,67 @@ inline void DisplayWindow::loadTextEntryElement(
   element->show();
   element->setSelected(false);
   textEntryElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadChoiceButtonElement(
+    const AdlNode &choiceNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(choiceNode);
+  if (geometry.width() < kMinimumTextWidth) {
+    geometry.setWidth(kMinimumTextWidth);
+  }
+  if (geometry.height() < kMinimumTextHeight) {
+    geometry.setHeight(kMinimumTextHeight);
+  }
+
+  auto *element = new ChoiceButtonElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+
+  const QString colorModeValue = propertyValue(choiceNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString stackingValue = propertyValue(choiceNode,
+      QStringLiteral("stacking"));
+  if (!stackingValue.isEmpty()) {
+    element->setStacking(parseChoiceButtonStacking(stackingValue));
+  }
+
+  if (const AdlNode *control = ::findChild(choiceNode,
+          QStringLiteral("control"))) {
+    const QString channel = propertyValue(*control,
+        QStringLiteral("chan"));
+    if (!channel.trimmed().isEmpty()) {
+      element->setChannel(channel.trimmed());
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*control, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*control,
+        QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  element->show();
+  element->setSelected(false);
+  choiceButtonElements_.append(element);
   ensureElementInStack(element);
 }
 

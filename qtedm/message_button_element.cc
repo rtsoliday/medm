@@ -20,11 +20,42 @@ QString defaultLabel()
   return QStringLiteral("Message Button");
 }
 
+class SelectionAwarePushButton : public QPushButton
+{
+public:
+  explicit SelectionAwarePushButton(MessageButtonElement *owner)
+    : QPushButton(owner)
+    , owner_(owner)
+  {
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    QPushButton::paintEvent(event);
+    if (!owner_ || !owner_->isSelected()) {
+      return;
+    }
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    QPen pen(Qt::black);
+    pen.setStyle(Qt::DashLine);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  }
+
+private:
+  MessageButtonElement *owner_ = nullptr;
+};
+
 } // namespace
 
 MessageButtonElement::MessageButtonElement(QWidget *parent)
   : QWidget(parent)
-  , button_(new QPushButton(this))
+  , button_(new SelectionAwarePushButton(this))
 {
   setAutoFillBackground(false);
   setAttribute(Qt::WA_OpaquePaintEvent, false);
@@ -182,19 +213,6 @@ void MessageButtonElement::changeEvent(QEvent *event)
 void MessageButtonElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
-
-  if (!selected_) {
-    return;
-  }
-
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing, false);
-  QPen pen(Qt::black);
-  pen.setStyle(Qt::DashLine);
-  pen.setWidth(1);
-  painter.setPen(pen);
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(rect().adjusted(0, 0, -1, -1));
 }
 
 void MessageButtonElement::applyPaletteColors()

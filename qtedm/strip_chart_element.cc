@@ -18,6 +18,7 @@ constexpr int kOuterMargin = 3;
 constexpr int kInnerMargin = 6;
 constexpr int kGridLines = 5;
 constexpr double kPenSampleCount = 24.0;
+constexpr int kMinimumLabelPointSize = 10;
 
 constexpr int kDefaultPenColorIndex = 14;
 
@@ -254,18 +255,86 @@ void StripChartElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
+  const QFont labelsFont = labelFont();
+  painter.setFont(labelsFont);
+  const QFontMetrics metrics(labelsFont);
+
   paintFrame(painter);
 
-  const QRect content = chartRect();
-  painter.fillRect(content, effectiveBackground());
+  const Layout layout = calculateLayout(metrics);
 
-  paintGrid(painter, content.adjusted(1, 1, -1, -1));
-  paintPens(painter, content.adjusted(1, 1, -1, -1));
-  paintLabels(painter, content);
+  if (layout.innerRect.isValid() && !layout.innerRect.isEmpty()) {
+    painter.fillRect(layout.innerRect, effectiveBackground());
+  }
+
+  if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
+    painter.fillRect(layout.chartRect, effectiveBackground());
+    if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
+      const QRect plotArea = layout.chartRect.adjusted(1, 1, -1, -1);
+      paintGrid(painter, plotArea);
+      paintPens(painter, plotArea);
+    }
+  }
+
+  paintLabels(painter, layout, metrics);
 
   if (selected_) {
     paintSelectionOverlay(painter);
   }
+}
+
+StripChartElement::Layout StripChartElement::calculateLayout(
+    const QFontMetrics &metrics) const
+{
+  Layout layout;
+  layout.innerRect = rect().adjusted(kOuterMargin, kOuterMargin,
+      -kOuterMargin, -kOuterMargin);
+  layout.titleText = title_.trimmed();
+  layout.xLabelText = xLabel_.trimmed();
+  layout.yLabelText = yLabel_.trimmed();
+
+  if (!layout.innerRect.isValid() || layout.innerRect.isEmpty()) {
+    return layout;
+  }
+
+  int left = layout.innerRect.left();
+  const int right = layout.innerRect.right();
+  int top = layout.innerRect.top();
+  int bottom = layout.innerRect.bottom();
+
+  if (!layout.titleText.isEmpty()) {
+    const int height = metrics.height();
+    layout.titleRect = QRect(left, top, layout.innerRect.width(), height);
+    top += height + kInnerMargin;
+  }
+
+  if (!layout.xLabelText.isEmpty()) {
+    const int height = metrics.height();
+    layout.xLabelRect = QRect(left, bottom - height + 1,
+        layout.innerRect.width(), height);
+    bottom -= height + kInnerMargin;
+  }
+
+  const int verticalExtent = std::max(0, bottom - top + 1);
+
+  if (!layout.yLabelText.isEmpty() && verticalExtent > 0) {
+    int textWidth = 0;
+    for (const QChar &ch : layout.yLabelText) {
+      const int charWidth = metrics.horizontalAdvance(QString(ch));
+      textWidth = std::max(textWidth, charWidth);
+    }
+    if (textWidth > 0) {
+      layout.yLabelRect = QRect(left, top, textWidth, verticalExtent);
+      left += textWidth + kInnerMargin;
+    }
+  }
+
+  if (right >= left && bottom >= top) {
+    layout.chartRect = QRect(left, top, right - left + 1,
+        bottom - top + 1);
+  }
+
+  return layout;
 }
 
 QColor StripChartElement::effectiveForeground() const
@@ -309,8 +378,24 @@ QColor StripChartElement::effectivePenColor(int index) const
 
 QRect StripChartElement::chartRect() const
 {
-  return rect().adjusted(kOuterMargin, kOuterMargin, -kOuterMargin,
-      -kOuterMargin);
+  const QFont labelsFont = labelFont();
+  const QFontMetrics metrics(labelsFont);
+  const Layout layout = calculateLayout(metrics);
+  return layout.chartRect;
+}
+
+QFont StripChartElement::labelFont() const
+{
+  QFont adjusted = font();
+  if (adjusted.pointSizeF() > 0.0) {
+    adjusted.setPointSizeF(std::max(adjusted.pointSizeF(),
+        static_cast<qreal>(kMinimumLabelPointSize)));
+  } else if (adjusted.pointSize() > 0) {
+    adjusted.setPointSize(std::max(adjusted.pointSize(), kMinimumLabelPointSize));
+  } else {
+    adjusted.setPointSize(kMinimumLabelPointSize);
+  }
+  return adjusted;
 }
 
 void StripChartElement::paintFrame(QPainter &painter) const
@@ -380,35 +465,42 @@ void StripChartElement::paintPens(QPainter &painter, const QRect &content) const
   }
 }
 
-void StripChartElement::paintLabels(QPainter &painter, const QRect &content) const
+void StripChartElement::paintLabels(QPainter &painter, const Layout &layout,
+    const QFontMetrics &metrics) const
 {
   painter.save();
   painter.setPen(effectiveForeground());
-  QFontMetrics metrics(font());
 
-  const QRect titleRect = QRect(content.left(), rect().top() + kInnerMargin,
-      content.width(), metrics.height());
-  if (!title_.trimmed().isEmpty()) {
-    painter.drawText(titleRect, Qt::AlignHCenter | Qt::AlignTop,
-        title_.trimmed());
+  if (!layout.titleText.isEmpty() && layout.titleRect.isValid()
+      && !layout.titleRect.isEmpty()) {
+    painter.drawText(layout.titleRect, Qt::AlignHCenter | Qt::AlignTop,
+        layout.titleText);
   }
 
-  const QRect xLabelRect = QRect(content.left(), rect().bottom() - kInnerMargin
-          - metrics.height(),
-      content.width(), metrics.height());
-  if (!xLabel_.trimmed().isEmpty()) {
-    painter.drawText(xLabelRect, Qt::AlignHCenter | Qt::AlignBottom,
-        xLabel_.trimmed());
+  if (!layout.xLabelText.isEmpty() && layout.xLabelRect.isValid()
+      && !layout.xLabelRect.isEmpty()) {
+    painter.drawText(layout.xLabelRect, Qt::AlignHCenter | Qt::AlignBottom,
+        layout.xLabelText);
   }
 
-  if (!yLabel_.trimmed().isEmpty()) {
+  if (!layout.yLabelText.isEmpty() && layout.yLabelRect.isValid()
+      && !layout.yLabelRect.isEmpty()) {
     painter.save();
-    painter.translate(rect().left() + kInnerMargin,
-        content.center().y());
-    painter.rotate(-90.0);
-    painter.drawText(QRect(-content.height() / 2, -metrics.height() / 2,
-                         content.height(), metrics.height()),
-        Qt::AlignCenter, yLabel_.trimmed());
+    const int charHeight = metrics.height();
+    const int charCount = layout.yLabelText.size();
+    if (charHeight > 0 && charCount > 0) {
+      const int totalHeight = charHeight * charCount;
+      int startY = layout.yLabelRect.top();
+      if (layout.yLabelRect.height() > totalHeight) {
+        startY += (layout.yLabelRect.height() - totalHeight) / 2;
+      }
+      for (int i = 0; i < charCount; ++i) {
+        const QString ch(layout.yLabelText.mid(i, 1));
+        QRect cell(layout.yLabelRect.left(), startY + i * charHeight,
+            layout.yLabelRect.width(), charHeight);
+        painter.drawText(cell, Qt::AlignCenter | Qt::AlignVCenter, ch);
+      }
+    }
     painter.restore();
   }
 
@@ -424,4 +516,3 @@ void StripChartElement::paintSelectionOverlay(QPainter &painter) const
   painter.setBrush(Qt::NoBrush);
   painter.drawRect(rect().adjusted(0, 0, -1, -1));
 }
-

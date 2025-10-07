@@ -3,12 +3,14 @@
 #include <array>
 
 #include <QColor>
+#include <QFont>
 #include <QWidget>
 
 #include "display_properties.h"
 
 class QPaintEvent;
 class QPainter;
+class QFontMetrics;
 
 class StripChartElement : public QWidget
 {
@@ -54,6 +56,18 @@ protected:
   void paintEvent(QPaintEvent *event) override;
 
 private:
+  struct Layout
+  {
+    QRect innerRect;
+    QRect chartRect;
+    QRect titleRect;
+    QRect xLabelRect;
+    QRect yLabelRect;
+    QString titleText;
+    QString xLabelText;
+    QString yLabelText;
+  };
+
   struct Pen
   {
     QColor color;
@@ -64,11 +78,14 @@ private:
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QColor effectivePenColor(int index) const;
+  QFont labelFont() const;
   QRect chartRect() const;
+  Layout calculateLayout(const QFontMetrics &metrics) const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRect &content) const;
   void paintPens(QPainter &painter, const QRect &content) const;
-  void paintLabels(QPainter &painter, const QRect &content) const;
+  void paintLabels(QPainter &painter, const Layout &layout,
+      const QFontMetrics &metrics) const;
   void paintSelectionOverlay(QPainter &painter) const;
 
   bool selected_ = false;
@@ -81,4 +98,3 @@ private:
   TimeUnits units_ = TimeUnits::kSeconds;
   std::array<Pen, kStripChartPenCount> pens_{};
 };
-

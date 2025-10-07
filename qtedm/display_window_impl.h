@@ -604,6 +604,7 @@ private:
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
   void loadScaleMonitorElement(const AdlNode &indicatorNode);
+  void loadCartesianPlotElement(const AdlNode &cartesianNode);
   void loadStripChartElement(const AdlNode &stripNode);
   void loadByteMonitorElement(const AdlNode &byteNode);
   void loadImageElement(const AdlNode &imageNode);
@@ -621,6 +622,8 @@ private:
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
   MeterLabel parseMeterLabel(const QString &value) const;
   TimeUnits parseTimeUnits(const QString &value) const;
+  CartesianPlotStyle parseCartesianPlotStyle(const QString &value) const;
+  CartesianPlotEraseMode parseCartesianEraseMode(const QString &value) const;
   BarDirection parseBarDirection(const QString &value) const;
   BarFill parseBarFill(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
@@ -6803,6 +6806,13 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("cartesian plot"),
+            Qt::CaseInsensitive)
+        == 0) {
+      loadCartesianPlotElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("strip chart"), Qt::CaseInsensitive)
         == 0) {
       loadStripChartElement(child);
@@ -7878,6 +7888,41 @@ inline TimeUnits DisplayWindow::parseTimeUnits(const QString &value) const
   return TimeUnits::kSeconds;
 }
 
+inline CartesianPlotStyle DisplayWindow::parseCartesianPlotStyle(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("point")
+      || normalized == QStringLiteral("point plot")) {
+    return CartesianPlotStyle::kPoint;
+  }
+  if (normalized == QStringLiteral("step")) {
+    return CartesianPlotStyle::kStep;
+  }
+  if (normalized == QStringLiteral("fill under")
+      || normalized == QStringLiteral("fill-under")) {
+    return CartesianPlotStyle::kFillUnder;
+  }
+  if (normalized == QStringLiteral("line")
+      || normalized == QStringLiteral("line plot")) {
+    return CartesianPlotStyle::kLine;
+  }
+  return CartesianPlotStyle::kLine;
+}
+
+inline CartesianPlotEraseMode DisplayWindow::parseCartesianEraseMode(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("if zero")) {
+    return CartesianPlotEraseMode::kIfZero;
+  }
+  if (normalized == QStringLiteral("if not zero")) {
+    return CartesianPlotEraseMode::kIfNotZero;
+  }
+  return CartesianPlotEraseMode::kIfNotZero;
+}
+
 inline BarDirection DisplayWindow::parseBarDirection(
     const QString &value) const
 {
@@ -8815,6 +8860,230 @@ inline void DisplayWindow::loadScaleMonitorElement(
   element->show();
   element->setSelected(false);
   scaleMonitorElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadCartesianPlotElement(
+    const AdlNode &cartesianNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(cartesianNode);
+  if (geometry.width() < kMinimumCartesianPlotWidth) {
+    geometry.setWidth(kMinimumCartesianPlotWidth);
+  }
+  if (geometry.height() < kMinimumCartesianPlotHeight) {
+    geometry.setHeight(kMinimumCartesianPlotHeight);
+  }
+
+  auto *element = new CartesianPlotElement(displayArea_);
+  element->setGeometry(geometry);
+
+  if (const AdlNode *plotcom = ::findChild(cartesianNode,
+          QStringLiteral("plotcom"))) {
+    const QString title = propertyValue(*plotcom, QStringLiteral("title"));
+    if (!title.trimmed().isEmpty()) {
+      element->setTitle(title.trimmed());
+    }
+
+    const QString xLabel = propertyValue(*plotcom,
+        QStringLiteral("xlabel"));
+    if (!xLabel.trimmed().isEmpty()) {
+      element->setXLabel(xLabel.trimmed());
+    }
+
+    const QString yLabel = propertyValue(*plotcom, QStringLiteral("ylabel"));
+    if (!yLabel.trimmed().isEmpty()) {
+      element->setYLabel(0, yLabel.trimmed());
+    }
+
+    const QString y2Label = propertyValue(*plotcom,
+        QStringLiteral("y2label"));
+    if (!y2Label.trimmed().isEmpty()) {
+      element->setYLabel(1, y2Label.trimmed());
+    }
+
+    const QString y3Label = propertyValue(*plotcom,
+        QStringLiteral("y3label"));
+    if (!y3Label.trimmed().isEmpty()) {
+      element->setYLabel(2, y3Label.trimmed());
+    }
+
+    const QString y4Label = propertyValue(*plotcom,
+        QStringLiteral("y4label"));
+    if (!y4Label.trimmed().isEmpty()) {
+      element->setYLabel(3, y4Label.trimmed());
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*plotcom, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*plotcom, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString styleValue = propertyValue(cartesianNode,
+      QStringLiteral("style"));
+  if (!styleValue.trimmed().isEmpty()) {
+    element->setStyle(parseCartesianPlotStyle(styleValue));
+  }
+
+  const QString eraseOldestValue = propertyValue(cartesianNode,
+      QStringLiteral("erase_oldest"));
+  if (!eraseOldestValue.trimmed().isEmpty()) {
+    const QString normalized = eraseOldestValue.trimmed().toLower();
+    const bool eraseOldest = normalized == QStringLiteral("on")
+        || normalized == QStringLiteral("plot last n pts");
+    element->setEraseOldest(eraseOldest);
+  }
+
+  QString countChannel;
+  const QString countValue = propertyValue(cartesianNode,
+      QStringLiteral("count")).trimmed();
+  if (!countValue.isEmpty()) {
+    bool ok = false;
+    const int countInt = countValue.toInt(&ok);
+    if (ok) {
+      element->setCount(countInt);
+    }
+    countChannel = countValue;
+  }
+
+  const QString countPvValue = propertyValue(cartesianNode,
+      QStringLiteral("countPvName")).trimmed();
+  if (!countPvValue.isEmpty()) {
+    bool ok = false;
+    const int countInt = countPvValue.toInt(&ok);
+    if (ok) {
+      element->setCount(countInt);
+    }
+    countChannel = countPvValue;
+  }
+
+  if (!countChannel.isEmpty()) {
+    element->setCountChannel(countChannel);
+  }
+
+  const QString triggerValue = propertyValue(cartesianNode,
+      QStringLiteral("trigger")).trimmed();
+  if (!triggerValue.isEmpty()) {
+    element->setTriggerChannel(triggerValue);
+  }
+
+  const QString eraseChannelValue = propertyValue(cartesianNode,
+      QStringLiteral("erase")).trimmed();
+  if (!eraseChannelValue.isEmpty()) {
+    element->setEraseChannel(eraseChannelValue);
+  }
+
+  const QString countChannelValue = propertyValue(cartesianNode,
+      QStringLiteral("countChannel")).trimmed();
+  if (!countChannelValue.isEmpty()) {
+    element->setCountChannel(countChannelValue);
+  }
+
+  const QString eraseModeValue = propertyValue(cartesianNode,
+      QStringLiteral("eraseMode"));
+  if (!eraseModeValue.trimmed().isEmpty()) {
+    element->setEraseMode(parseCartesianEraseMode(eraseModeValue));
+  }
+
+  auto traceIndexForName = [](const QString &name) {
+    int start = name.indexOf(QLatin1Char('['));
+    int end = name.indexOf(QLatin1Char(']'), start + 1);
+    if (start >= 0 && end > start) {
+      bool ok = false;
+      const int value = name.mid(start + 1, end - start - 1).toInt(&ok);
+      if (ok) {
+        return value;
+      }
+    }
+    for (int i = 0; i < name.size(); ++i) {
+      const int digit = name.at(i).digitValue();
+      if (digit >= 0) {
+        int value = digit;
+        int j = i + 1;
+        while (j < name.size()) {
+          const int nextDigit = name.at(j).digitValue();
+          if (nextDigit < 0) {
+            break;
+          }
+          value = value * 10 + nextDigit;
+          ++j;
+        }
+        return value;
+      }
+    }
+    return -1;
+  };
+
+  auto axisForIndex = [](int index) {
+    switch (index) {
+    case 1:
+      return CartesianPlotYAxis::kY2;
+    case 2:
+      return CartesianPlotYAxis::kY3;
+    case 3:
+      return CartesianPlotYAxis::kY4;
+    default:
+      return CartesianPlotYAxis::kY1;
+    }
+  };
+
+  for (const auto &child : cartesianNode.children) {
+    if (!child.name.startsWith(QStringLiteral("trace"), Qt::CaseInsensitive)) {
+      continue;
+    }
+    const int traceIndex = traceIndexForName(child.name);
+    if (traceIndex < 0 || traceIndex >= element->traceCount()) {
+      continue;
+    }
+
+    const QString xdata = propertyValue(child, QStringLiteral("xdata"));
+    if (!xdata.trimmed().isEmpty()) {
+      element->setTraceXChannel(traceIndex, xdata.trimmed());
+    }
+
+    const QString ydata = propertyValue(child, QStringLiteral("ydata"));
+    if (!ydata.trimmed().isEmpty()) {
+      element->setTraceYChannel(traceIndex, ydata.trimmed());
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(child, QStringLiteral("data_clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setTraceColor(traceIndex, colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString axisStr = propertyValue(child, QStringLiteral("yaxis"));
+    const int axisIndex = axisStr.toInt(&ok);
+    if (ok) {
+      element->setTraceYAxis(traceIndex, axisForIndex(axisIndex));
+    }
+
+    ok = false;
+    const QString sideStr = propertyValue(child, QStringLiteral("yside"));
+    const int sideIndex = sideStr.toInt(&ok);
+    if (ok) {
+      element->setTraceUsesRightAxis(traceIndex, sideIndex == 1);
+    }
+  }
+
+  element->show();
+  element->setSelected(false);
+  cartesianPlotElements_.append(element);
   ensureElementInStack(element);
 }
 

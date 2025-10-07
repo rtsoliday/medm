@@ -823,14 +823,6 @@ public:
           }
         });
 
-    textEntryPrecisionEdit_ = createLineEdit();
-    committedTexts_.insert(textEntryPrecisionEdit_, textEntryPrecisionEdit_->text());
-    textEntryPrecisionEdit_->installEventFilter(this);
-    QObject::connect(textEntryPrecisionEdit_, &QLineEdit::returnPressed, this,
-        [this]() { commitTextEntryPrecision(); });
-    QObject::connect(textEntryPrecisionEdit_, &QLineEdit::editingFinished, this,
-        [this]() { commitTextEntryPrecision(); });
-
     textEntryColorModeCombo_ = new QComboBox;
     textEntryColorModeCombo_->setFont(valueFont_);
     textEntryColorModeCombo_->setAutoFillBackground(true);
@@ -865,15 +857,13 @@ public:
         textEntryBackgroundButton_);
     addRow(textEntryLayout, 2, QStringLiteral("Format"),
         textEntryFormatCombo_);
-    addRow(textEntryLayout, 3, QStringLiteral("Precision"),
-        textEntryPrecisionEdit_);
-    addRow(textEntryLayout, 4, QStringLiteral("Color Mode"),
+    addRow(textEntryLayout, 3, QStringLiteral("Color Mode"),
         textEntryColorModeCombo_);
-    addRow(textEntryLayout, 5, QStringLiteral("Channel"),
+    addRow(textEntryLayout, 4, QStringLiteral("Channel"),
         textEntryChannelEdit_);
-    addRow(textEntryLayout, 6, QStringLiteral("Channel Limits"),
+    addRow(textEntryLayout, 5, QStringLiteral("Channel Limits"),
         textEntryPvLimitsButton_);
-    textEntryLayout->setRowStretch(7, 1);
+    textEntryLayout->setRowStretch(6, 1);
     entriesLayout->addWidget(textEntrySection_);
 
     sliderSection_ = new QWidget(entriesWidget_);
@@ -2551,7 +2541,9 @@ public:
       std::function<TextColorMode()> colorModeGetter,
       std::function<void(TextColorMode)> colorModeSetter,
       std::function<QString()> channelGetter,
-      std::function<void(const QString &)> channelSetter)
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter)
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kTextEntry;
@@ -2620,6 +2612,8 @@ public:
     textEntryColorModeSetter_ = std::move(colorModeSetter);
     textEntryChannelGetter_ = std::move(channelGetter);
     textEntryChannelSetter_ = std::move(channelSetter);
+    textEntryLimitsGetter_ = std::move(limitsGetter);
+    textEntryLimitsSetter_ = std::move(limitsSetter);
 
     imageTypeGetter_ = {};
     imageTypeSetter_ = {};
@@ -2673,8 +2667,6 @@ public:
       textEntryFormatCombo_->setCurrentIndex(index);
     }
 
-    updateTextEntryPrecisionEdit();
-
     if (textEntryColorModeCombo_) {
       const QSignalBlocker blocker(textEntryColorModeCombo_);
       const int index = textEntryColorModeGetter_
@@ -2696,7 +2688,9 @@ public:
           static_cast<bool>(textEntryPrecisionSourceGetter_)
           && static_cast<bool>(textEntryPrecisionSourceSetter_)
           && static_cast<bool>(textEntryPrecisionDefaultGetter_)
-          && static_cast<bool>(textEntryPrecisionDefaultSetter_));
+          && static_cast<bool>(textEntryPrecisionDefaultSetter_)
+          && static_cast<bool>(textEntryLimitsGetter_)
+          && static_cast<bool>(textEntryLimitsSetter_));
     }
 
     if (elementLabel_) {
@@ -2795,6 +2789,8 @@ public:
     textEntryColorModeSetter_ = {};
     textEntryChannelGetter_ = {};
     textEntryChannelSetter_ = {};
+    textEntryLimitsGetter_ = {};
+    textEntryLimitsSetter_ = {};
 
     sliderForegroundGetter_ = std::move(foregroundGetter);
     sliderForegroundSetter_ = std::move(foregroundSetter);
@@ -6632,7 +6628,6 @@ public:
       resetLineEdit(edit);
     }
     updateTextChannelDependentControls();
-    resetLineEdit(textEntryPrecisionEdit_);
     resetLineEdit(textEntryChannelEdit_);
     resetLineEdit(choiceButtonChannelEdit_);
     resetLineEdit(menuChannelEdit_);
@@ -8217,55 +8212,6 @@ private:
     }
   }
 
-  void commitTextEntryPrecision()
-  {
-    if (!textEntryPrecisionEdit_) {
-      return;
-    }
-    if (!textEntryPrecisionSetter_) {
-      revertLineEdit(textEntryPrecisionEdit_);
-      return;
-    }
-    const QString raw = textEntryPrecisionEdit_->text().trimmed();
-    if (raw.isEmpty()) {
-      textEntryPrecisionSetter_(-1);
-      const QSignalBlocker blocker(textEntryPrecisionEdit_);
-      textEntryPrecisionEdit_->clear();
-      committedTexts_[textEntryPrecisionEdit_] = QString();
-      return;
-    }
-    bool ok = false;
-    int value = raw.toInt(&ok);
-    if (!ok) {
-      revertLineEdit(textEntryPrecisionEdit_);
-      return;
-    }
-    value = std::clamp(value, 0, 17);
-    textEntryPrecisionSetter_(value);
-    const QSignalBlocker blocker(textEntryPrecisionEdit_);
-    textEntryPrecisionEdit_->setText(QString::number(value));
-    committedTexts_[textEntryPrecisionEdit_] = textEntryPrecisionEdit_->text();
-  }
-
-  void updateTextEntryPrecisionEdit()
-  {
-    if (!textEntryPrecisionEdit_) {
-      return;
-    }
-    const QSignalBlocker blocker(textEntryPrecisionEdit_);
-    if (!textEntryPrecisionGetter_) {
-      textEntryPrecisionEdit_->clear();
-    } else {
-      const int precision = textEntryPrecisionGetter_();
-      if (precision < 0) {
-        textEntryPrecisionEdit_->clear();
-      } else {
-        textEntryPrecisionEdit_->setText(QString::number(precision));
-      }
-    }
-    committedTexts_[textEntryPrecisionEdit_] = textEntryPrecisionEdit_->text();
-  }
-
   void updateSliderPrecisionEdit()
   {
     if (!sliderPrecisionEdit_) {
@@ -8318,7 +8264,6 @@ private:
 
   void updateTextEntryLimitsFromDialog()
   {
-    updateTextEntryPrecisionEdit();
   }
 
   void updateSliderLimitsFromDialog()
@@ -9230,7 +9175,6 @@ private:
   QPushButton *textEntryForegroundButton_ = nullptr;
   QPushButton *textEntryBackgroundButton_ = nullptr;
   QComboBox *textEntryFormatCombo_ = nullptr;
-  QLineEdit *textEntryPrecisionEdit_ = nullptr;
   QComboBox *textEntryColorModeCombo_ = nullptr;
   QLineEdit *textEntryChannelEdit_ = nullptr;
   QPushButton *textEntryPvLimitsButton_ = nullptr;
@@ -9508,9 +9452,6 @@ private:
         committedTexts_[edit] = edit->text();
       }
     }
-    if (textEntryPrecisionEdit_) {
-      committedTexts_[textEntryPrecisionEdit_] = textEntryPrecisionEdit_->text();
-    }
     if (textEntryChannelEdit_) {
       committedTexts_[textEntryChannelEdit_] = textEntryChannelEdit_->text();
     }
@@ -9766,6 +9707,8 @@ private:
   std::function<void(TextColorMode)> textEntryColorModeSetter_;
   std::function<QString()> textEntryChannelGetter_;
   std::function<void(const QString &)> textEntryChannelSetter_;
+  std::function<PvLimits()> textEntryLimitsGetter_;
+  std::function<void(const PvLimits &)> textEntryLimitsSetter_;
   std::function<QColor()> sliderForegroundGetter_;
   std::function<void(const QColor &)> sliderForegroundSetter_;
   std::function<QColor()> sliderBackgroundGetter_;
@@ -10231,7 +10174,8 @@ private:
     }
     if (!textEntryPrecisionSourceGetter_ || !textEntryPrecisionSourceSetter_
         || !textEntryPrecisionDefaultGetter_
-        || !textEntryPrecisionDefaultSetter_) {
+        || !textEntryPrecisionDefaultSetter_
+        || !textEntryLimitsGetter_ || !textEntryLimitsSetter_) {
       dialog->clearTargets();
       positionPvLimitsDialog(dialog);
       dialog->show();
@@ -10244,7 +10188,8 @@ private:
     dialog->setTextMonitorCallbacks(channelLabel, textEntryPrecisionSourceGetter_,
         textEntryPrecisionSourceSetter_, textEntryPrecisionDefaultGetter_,
         textEntryPrecisionDefaultSetter_,
-        [this]() { updateTextEntryLimitsFromDialog(); });
+        [this]() { updateTextEntryLimitsFromDialog(); }, textEntryLimitsGetter_,
+        textEntryLimitsSetter_);
     positionPvLimitsDialog(dialog);
     dialog->showForTextMonitor();
   }

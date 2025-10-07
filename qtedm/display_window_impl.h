@@ -2427,6 +2427,13 @@ private:
         [this, element](const QString &value) {
           element->setChannel(value);
           markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
+          markDirty();
         });
   }
 

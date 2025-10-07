@@ -9,6 +9,7 @@
 class QPushButton;
 class QPaintEvent;
 class QResizeEvent;
+class QEvent;
 
 class MessageButtonElement : public QWidget
 {
@@ -42,10 +43,12 @@ public:
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
+  void changeEvent(QEvent *event) override;
 
 private:
   void applyPaletteColors();
   void updateSelectionVisual();
+  void updateButtonFont();
   QString effectiveLabel() const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
@@ -60,4 +63,3 @@ private:
   QString releaseMessage_;
   QString channel_;
 };
-

@@ -1,5 +1,11 @@
 #include "message_button_element.h"
 
+#include <algorithm>
+
+#include <QEvent>
+#include <QFont>
+#include <QFontInfo>
+#include <QFontMetricsF>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -158,6 +164,18 @@ void MessageButtonElement::resizeEvent(QResizeEvent *event)
   QWidget::resizeEvent(event);
   if (button_) {
     button_->setGeometry(rect());
+    updateButtonFont();
+  }
+}
+
+void MessageButtonElement::changeEvent(QEvent *event)
+{
+  QWidget::changeEvent(event);
+  if (!event) {
+    return;
+  }
+  if (event->type() == QEvent::FontChange) {
+    updateButtonFont();
   }
 }
 
@@ -202,22 +220,81 @@ void MessageButtonElement::updateSelectionVisual()
   if (!button_) {
     return;
   }
-  if (selected_) {
-    QPalette pal = button_->palette();
-    pal.setColor(QPalette::ButtonText, QColor(Qt::blue));
-    pal.setColor(QPalette::WindowText, QColor(Qt::blue));
-    pal.setColor(QPalette::Text, QColor(Qt::blue));
-    button_->setPalette(pal);
-    button_->update();
-  } else {
-    applyPaletteColors();
-  }
+  button_->update();
 }
 
 QString MessageButtonElement::effectiveLabel() const
 {
   const QString trimmed = label_.trimmed();
   return trimmed.isEmpty() ? defaultLabel() : trimmed;
+}
+
+void MessageButtonElement::updateButtonFont()
+{
+  if (!button_) {
+    return;
+  }
+
+  const int widgetHeight = button_->height();
+  if (widgetHeight <= 0) {
+    button_->setFont(font());
+    button_->update();
+    return;
+  }
+
+  int fontLimit = static_cast<int>(0.90 * static_cast<double>(widgetHeight)) - 4;
+  if (fontLimit < 1) {
+    fontLimit = 1;
+  }
+
+  QFont adjusted = font();
+  if (fontLimit <= 0) {
+    button_->setFont(adjusted);
+    button_->update();
+    return;
+  }
+
+  if (adjusted.pixelSize() > 0) {
+    adjusted.setPixelSize(fontLimit);
+  } else {
+    qreal pointSize = adjusted.pointSizeF();
+    if (pointSize <= 0.0) {
+      pointSize = adjusted.pointSize();
+    }
+    if (pointSize <= 0.0) {
+      QFontInfo info(adjusted);
+      pointSize = info.pointSizeF();
+    }
+    if (pointSize <= 0.0) {
+      pointSize = 12.0;
+    }
+
+    QFontMetricsF baseMetrics(adjusted);
+    qreal textHeight = baseMetrics.ascent() + baseMetrics.descent();
+    if (textHeight <= 0.0) {
+      textHeight = static_cast<qreal>(fontLimit);
+    }
+
+    qreal scaledPoint = pointSize * static_cast<qreal>(fontLimit) / textHeight;
+    if (scaledPoint < 1.0) {
+      scaledPoint = 1.0;
+    }
+    adjusted.setPointSizeF(scaledPoint);
+
+    QFontMetricsF scaledMetrics(adjusted);
+    qreal scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
+    int iterations = 0;
+    while (scaledHeight > fontLimit && scaledPoint > 1.0 && iterations < 16) {
+      scaledPoint = std::max(1.0, scaledPoint - 0.5);
+      adjusted.setPointSizeF(scaledPoint);
+      scaledMetrics = QFontMetricsF(adjusted);
+      scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
+      ++iterations;
+    }
+  }
+
+  button_->setFont(adjusted);
+  button_->update();
 }
 
 QColor MessageButtonElement::effectiveForeground() const
@@ -231,4 +308,3 @@ QColor MessageButtonElement::effectiveBackground() const
   return backgroundColor_.isValid() ? backgroundColor_
                                     : palette().color(QPalette::Window);
 }
-

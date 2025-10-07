@@ -7139,7 +7139,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
 
     if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
-          QStringLiteral("\"valuator\" {"));
+          QStringLiteral("valuator {"));
       AdlWriter::writeObjectSection(stream, 1, slider->geometry());
     const QColor sliderForeground = resolvedForegroundColor(slider,
       slider->foregroundColor());
@@ -7168,7 +7168,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("dPrecision=%1")
                 .arg(QString::number(slider->precision(), 'g', 6)));
       }
-      AdlWriter::writeLimitsSection(stream, 1, slider->limits());
+      AdlWriter::writeLimitsSection(stream, 1, slider->limits(), true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

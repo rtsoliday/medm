@@ -195,15 +195,6 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   const bool showLimits = shouldShowLimitLabels();
 
   if (vertical) {
-    if (showLimits) {
-      const qreal maxLabelWidth = std::min<qreal>(24.0,
-          workingRect.width() * 0.35);
-      if (maxLabelWidth > 6.0) {
-        limitRect = QRectF(workingRect.left(), workingRect.top(), maxLabelWidth,
-            workingRect.height());
-        workingRect.setLeft(limitRect.right() + 4.0);
-      }
-    }
     if (showChannel) {
       const qreal maxLabelHeight = std::min<qreal>(24.0,
           workingRect.height() * 0.35);
@@ -211,6 +202,15 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
         channelRect = QRectF(workingRect.left(), workingRect.top(),
             workingRect.width(), maxLabelHeight);
         workingRect.setTop(channelRect.bottom() + 4.0);
+      }
+    }    
+    if (showLimits) {
+      const qreal maxLabelWidth = std::min<qreal>(24.0,
+          workingRect.width() * 0.35);
+      if (maxLabelWidth > 6.0) {
+        limitRect = QRectF(workingRect.left(), workingRect.top(), maxLabelWidth,
+            workingRect.height());
+        workingRect.setLeft(limitRect.right() + 4.0);
       }
     }
   } else {

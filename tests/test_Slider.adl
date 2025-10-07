@@ -92,7 +92,7 @@ valuator {
 		x=18
 		y=18
 		width=154
-		height=52
+		height=100
 	}
 	control {
 		chan="slider:test:alpha"
@@ -135,9 +135,9 @@ valuator {
 }
 valuator {
 	object {
-		x=562
-		y=16
-		width=64
+		x=512
+		y=20
+		width=100
 		height=192
 	}
 	control {
@@ -198,8 +198,8 @@ valuator {
 }
 valuator {
 	object {
-		x=16
-		y=106
+		x=18
+		y=128
 		width=150
 		height=56
 	}
@@ -330,8 +330,8 @@ valuator {
 }
 valuator {
 	object {
-		x=14
-		y=190
+		x=15
+		y=205
 		width=188
 		height=60
 	}

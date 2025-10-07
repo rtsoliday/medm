@@ -185,6 +185,7 @@ void PvLimitsDialog::clearTargets()
   meterLimitsSetter_ = {};
   onChangedCallback_ = {};
   channelLabel_.clear();
+  setPrecisionRowVisible(true);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, false);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, false);
   updatePrecisionControls();
@@ -216,6 +217,7 @@ void PvLimitsDialog::setTextMonitorCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
+  setPrecisionRowVisible(true);
   const bool hasLimits = static_cast<bool>(meterLimitsGetter_)
       && static_cast<bool>(meterLimitsSetter_);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, hasLimits);
@@ -263,6 +265,7 @@ void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
+  setPrecisionRowVisible(true);
   const bool hasLimits = static_cast<bool>(meterLimitsGetter_)
       && static_cast<bool>(meterLimitsSetter_);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, hasLimits);
@@ -331,6 +334,60 @@ void PvLimitsDialog::showForMeter()
   activateWindow();
 }
 
+void PvLimitsDialog::setStripChartCallbacks(const QString &channelName,
+    std::function<PvLimits()> limitsGetter,
+    std::function<void(const PvLimits &)> limitsSetter,
+    std::function<void()> changeNotifier)
+{
+  mode_ = Mode::kStripChart;
+  meterLimitsGetter_ = std::move(limitsGetter);
+  meterLimitsSetter_ = std::move(limitsSetter);
+  onChangedCallback_ = std::move(changeNotifier);
+  channelLabel_ = channelName;
+  precisionSourceGetter_ = {};
+  precisionSourceSetter_ = {};
+  precisionDefaultGetter_ = {};
+  precisionDefaultSetter_ = {};
+  if (titleLabel_) {
+    if (channelLabel_.trimmed().isEmpty()) {
+      titleLabel_->setText(QStringLiteral("Edit Mode Limits"));
+    } else {
+      titleLabel_->setText(channelLabel_.trimmed());
+    }
+  }
+  setPrecisionRowVisible(false);
+  const bool hasLimits = static_cast<bool>(meterLimitsGetter_)
+      && static_cast<bool>(meterLimitsSetter_);
+  setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, hasLimits);
+  setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, hasLimits);
+  if (loprSourceCombo_) {
+    loprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    loprSourceCombo_->setEnabled(hasLimits);
+  }
+  if (hoprSourceCombo_) {
+    hoprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    hoprSourceCombo_->setEnabled(hasLimits);
+  }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    precisionSourceCombo_->setEnabled(false);
+  }
+  updateMeterControls();
+  updatePrecisionControls();
+}
+
+void PvLimitsDialog::showForStripChart()
+{
+  if (mode_ != Mode::kStripChart) {
+    return;
+  }
+  updateMeterControls();
+  updatePrecisionControls();
+  show();
+  raise();
+  activateWindow();
+}
+
 void PvLimitsDialog::setSliderCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
@@ -348,6 +405,7 @@ void PvLimitsDialog::setSliderCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
+  setPrecisionRowVisible(true);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, true);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, true);
   if (loprSourceCombo_) {
@@ -429,6 +487,7 @@ void PvLimitsDialog::setWheelSwitchCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
+  setPrecisionRowVisible(true);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, true);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, true);
   if (loprSourceCombo_) {
@@ -510,6 +569,7 @@ void PvLimitsDialog::setBarCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
+  setPrecisionRowVisible(true);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, true);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, true);
   if (loprSourceCombo_) {
@@ -591,6 +651,7 @@ void PvLimitsDialog::setScaleCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
+  setPrecisionRowVisible(true);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, true);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, true);
   if (loprSourceCombo_) {
@@ -697,7 +758,8 @@ void PvLimitsDialog::updatePrecisionControls()
 void PvLimitsDialog::updateMeterControls()
 {
   const bool hasLimits = (mode_ == Mode::kTextMonitor
-      || mode_ == Mode::kMeter || mode_ == Mode::kSlider
+      || mode_ == Mode::kMeter || mode_ == Mode::kStripChart
+      || mode_ == Mode::kSlider
       || mode_ == Mode::kWheelSwitch || mode_ == Mode::kBarMonitor
       || mode_ == Mode::kScaleMonitor)
       && static_cast<bool>(meterLimitsGetter_)
@@ -807,7 +869,8 @@ void PvLimitsDialog::handleLowSourceChanged(int index)
     return;
   }
   if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kSlider && mode_ != Mode::kWheelSwitch
+          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
+          && mode_ != Mode::kWheelSwitch
           && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
@@ -834,7 +897,8 @@ void PvLimitsDialog::handleHighSourceChanged(int index)
     return;
   }
   if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kSlider && mode_ != Mode::kWheelSwitch
+          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
+          && mode_ != Mode::kWheelSwitch
           && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
@@ -861,7 +925,8 @@ void PvLimitsDialog::commitLowValue()
     return;
   }
   if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kSlider && mode_ != Mode::kWheelSwitch
+          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
+          && mode_ != Mode::kWheelSwitch
           && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
@@ -901,7 +966,8 @@ void PvLimitsDialog::commitHighValue()
     return;
   }
   if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kSlider && mode_ != Mode::kWheelSwitch
+          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
+          && mode_ != Mode::kWheelSwitch
           && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
@@ -953,5 +1019,18 @@ void PvLimitsDialog::setRowEnabled(QLabel *label, QComboBox *combo,
   }
   if (edit) {
     edit->setEnabled(enabled);
+  }
+}
+
+void PvLimitsDialog::setPrecisionRowVisible(bool visible)
+{
+  if (precisionLabel_) {
+    precisionLabel_->setVisible(visible);
+  }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setVisible(visible);
+  }
+  if (precisionEdit_) {
+    precisionEdit_->setVisible(visible);
   }
 }

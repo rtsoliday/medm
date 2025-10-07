@@ -8074,10 +8074,10 @@ private:
       const QString channelLabel = stripPenChannelGetters_[index]
               ? stripPenChannelGetters_[index]()
               : QString();
-      dialog->setMeterCallbacks(channelLabel, stripPenLimitsGetters_[index],
-          stripPenLimitsSetters_[index],
+      dialog->setStripChartCallbacks(channelLabel,
+          stripPenLimitsGetters_[index], stripPenLimitsSetters_[index],
           [this, index]() { updateStripChartPenLimitsFromDialog(index); });
-      dialog->showForMeter();
+      dialog->showForStripChart();
     } else {
       dialog->clearTargets();
       dialog->show();
@@ -8099,7 +8099,7 @@ private:
       const QString channelLabel = stripPenChannelGetters_[index]
               ? stripPenChannelGetters_[index]()
               : QString();
-      pvLimitsDialog_->setMeterCallbacks(channelLabel,
+      pvLimitsDialog_->setStripChartCallbacks(channelLabel,
           stripPenLimitsGetters_[index], stripPenLimitsSetters_[index],
           [this, index]() { updateStripChartPenLimitsFromDialog(index); });
     } else {

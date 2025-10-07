@@ -34,6 +34,11 @@ public:
       std::function<void(const PvLimits &)> limitsSetter,
       std::function<void()> changeNotifier);
   void showForMeter();
+  void setStripChartCallbacks(const QString &channelName,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter,
+      std::function<void()> changeNotifier);
+  void showForStripChart();
   void setSliderCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
@@ -60,6 +65,7 @@ private:
     kNone,
     kTextMonitor,
     kMeter,
+    kStripChart,
     kSlider,
     kWheelSwitch,
     kBarMonitor,
@@ -77,6 +83,7 @@ private:
   void notifyChanged();
   void setRowEnabled(QLabel *label, QComboBox *combo, QLineEdit *edit,
       bool enabled);
+  void setPrecisionRowVisible(bool visible);
 
   Mode mode_ = Mode::kNone;
   QFont labelFont_;

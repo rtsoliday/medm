@@ -603,6 +603,7 @@ private:
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadTextEntryElement(const AdlNode &textEntryNode);
   void loadChoiceButtonElement(const AdlNode &choiceNode);
+  void loadMenuElement(const AdlNode &menuNode);
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
   void loadScaleMonitorElement(const AdlNode &indicatorNode);
@@ -6857,6 +6858,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("menu"), Qt::CaseInsensitive)
+        == 0) {
+      loadMenuElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("meter"), Qt::CaseInsensitive)
         == 0) {
       loadMeterElement(child);
@@ -8709,6 +8716,68 @@ inline void DisplayWindow::loadTextEntryElement(
   element->show();
   element->setSelected(false);
   textEntryElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadMenuElement(const AdlNode &menuNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(menuNode);
+  if (geometry.width() < kMinimumTextWidth) {
+    geometry.setWidth(kMinimumTextWidth);
+  }
+  if (geometry.height() < kMinimumTextHeight) {
+    geometry.setHeight(kMinimumTextHeight);
+  }
+
+  auto *element = new MenuElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+
+  const QString colorModeValue = propertyValue(menuNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  if (const AdlNode *control = ::findChild(menuNode,
+          QStringLiteral("control"))) {
+    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    const QString trimmedChannel = channel.trimmed();
+    if (!trimmedChannel.isEmpty()) {
+      element->setChannel(trimmedChannel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*control, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*control, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  auto channelSetter = [element](int, const QString &value) {
+    const QString trimmed = value.trimmed();
+    if (!trimmed.isEmpty()) {
+      element->setChannel(trimmed);
+    }
+  };
+
+  applyChannelProperties(menuNode, channelSetter, 0, 1);
+
+  element->show();
+  element->setSelected(false);
+  menuElements_.append(element);
   ensureElementInStack(element);
 }
 

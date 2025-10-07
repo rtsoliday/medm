@@ -9044,12 +9044,12 @@ inline void DisplayWindow::loadCartesianPlotElement(
     }
   }
 
+  element->setStyle(CartesianPlotStyle::kPoint);
+
   const QString styleValue = propertyValue(cartesianNode,
       QStringLiteral("style"));
   if (!styleValue.trimmed().isEmpty()) {
     element->setStyle(parseCartesianPlotStyle(styleValue));
-  } else {
-    element->setStyle(CartesianPlotStyle::kPoint);
   }
 
   const QString eraseOldestValue = propertyValue(cartesianNode,

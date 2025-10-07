@@ -624,6 +624,9 @@ private:
   TimeUnits parseTimeUnits(const QString &value) const;
   CartesianPlotStyle parseCartesianPlotStyle(const QString &value) const;
   CartesianPlotEraseMode parseCartesianEraseMode(const QString &value) const;
+  CartesianPlotAxisStyle parseCartesianAxisStyle(const QString &value) const;
+  CartesianPlotRangeStyle parseCartesianRangeStyle(const QString &value) const;
+  CartesianPlotTimeFormat parseCartesianTimeFormat(const QString &value) const;
   BarDirection parseBarDirection(const QString &value) const;
   BarFill parseBarFill(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
@@ -3227,6 +3230,17 @@ private:
     std::array<std::function<bool()>, kCartesianPlotTraceCount> sideGetters{};
     std::array<std::function<void(bool)>, kCartesianPlotTraceCount> sideSetters{};
 
+    std::array<std::function<CartesianPlotAxisStyle()>, kCartesianAxisCount> axisStyleGetters{};
+    std::array<std::function<void(CartesianPlotAxisStyle)>, kCartesianAxisCount> axisStyleSetters{};
+    std::array<std::function<CartesianPlotRangeStyle()>, kCartesianAxisCount> axisRangeGetters{};
+    std::array<std::function<void(CartesianPlotRangeStyle)>, kCartesianAxisCount> axisRangeSetters{};
+    std::array<std::function<double()>, kCartesianAxisCount> axisMinimumGetters{};
+    std::array<std::function<void(double)>, kCartesianAxisCount> axisMinimumSetters{};
+    std::array<std::function<double()>, kCartesianAxisCount> axisMaximumGetters{};
+    std::array<std::function<void(double)>, kCartesianAxisCount> axisMaximumSetters{};
+    std::array<std::function<CartesianPlotTimeFormat()>, kCartesianAxisCount> axisTimeFormatGetters{};
+    std::array<std::function<void(CartesianPlotTimeFormat)>, kCartesianAxisCount> axisTimeFormatSetters{};
+
     for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
       xChannelGetters[i] = [element, i]() { return element->traceXChannel(i); };
       xChannelSetters[i] = [this, element, i](const QString &channel) {
@@ -3251,6 +3265,34 @@ private:
       sideGetters[i] = [element, i]() { return element->traceUsesRightAxis(i); };
       sideSetters[i] = [this, element, i](bool usesRight) {
         element->setTraceUsesRightAxis(i, usesRight);
+        markDirty();
+      };
+    }
+
+    for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+      axisStyleGetters[axis] = [element, axis]() { return element->axisStyle(axis); };
+      axisStyleSetters[axis] = [this, element, axis](CartesianPlotAxisStyle style) {
+        element->setAxisStyle(axis, style);
+        markDirty();
+      };
+      axisRangeGetters[axis] = [element, axis]() { return element->axisRangeStyle(axis); };
+      axisRangeSetters[axis] = [this, element, axis](CartesianPlotRangeStyle style) {
+        element->setAxisRangeStyle(axis, style);
+        markDirty();
+      };
+      axisMinimumGetters[axis] = [element, axis]() { return element->axisMinimum(axis); };
+      axisMinimumSetters[axis] = [this, element, axis](double value) {
+        element->setAxisMinimum(axis, value);
+        markDirty();
+      };
+      axisMaximumGetters[axis] = [element, axis]() { return element->axisMaximum(axis); };
+      axisMaximumSetters[axis] = [this, element, axis](double value) {
+        element->setAxisMaximum(axis, value);
+        markDirty();
+      };
+      axisTimeFormatGetters[axis] = [element, axis]() { return element->axisTimeFormat(axis); };
+      axisTimeFormatSetters[axis] = [this, element, axis](CartesianPlotTimeFormat format) {
+        element->setAxisTimeFormat(axis, format);
         markDirty();
       };
     }
@@ -3300,6 +3342,11 @@ private:
           element->setBackgroundColor(color);
           markDirty();
         },
+        std::move(axisStyleGetters), std::move(axisStyleSetters),
+        std::move(axisRangeGetters), std::move(axisRangeSetters),
+        std::move(axisMinimumGetters), std::move(axisMinimumSetters),
+        std::move(axisMaximumGetters), std::move(axisMaximumSetters),
+        std::move(axisTimeFormatGetters), std::move(axisTimeFormatSetters),
         [element]() {
           return element->style();
         },
@@ -7537,6 +7584,13 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
         AdlWriter::writeCartesianTraceSection(stream, 1, i, xChannel,
             yChannel, colorIndex, axisIndex, usesRightAxis);
       }
+      for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+        const bool includeTimeFormat = axis == 0;
+        AdlWriter::writeCartesianAxisSection(stream, 1, axis,
+            cartesian->axisStyle(axis), cartesian->axisRangeStyle(axis),
+            cartesian->axisMinimum(axis), cartesian->axisMaximum(axis),
+            cartesian->axisTimeFormat(axis), includeTimeFormat);
+      }
       const QString trigger = cartesian->triggerChannel().trimmed();
       if (!trigger.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -7908,6 +7962,64 @@ inline CartesianPlotStyle DisplayWindow::parseCartesianPlotStyle(
     return CartesianPlotStyle::kLine;
   }
   return CartesianPlotStyle::kLine;
+}
+
+inline CartesianPlotAxisStyle DisplayWindow::parseCartesianAxisStyle(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("log10")) {
+    return CartesianPlotAxisStyle::kLog10;
+  }
+  if (normalized == QStringLiteral("time")) {
+    return CartesianPlotAxisStyle::kTime;
+  }
+  return CartesianPlotAxisStyle::kLinear;
+}
+
+inline CartesianPlotRangeStyle DisplayWindow::parseCartesianRangeStyle(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("user-specified")
+      || normalized == QStringLiteral("user specified")) {
+    return CartesianPlotRangeStyle::kUserSpecified;
+  }
+  if (normalized == QStringLiteral("auto-scale")
+      || normalized == QStringLiteral("auto scale")) {
+    return CartesianPlotRangeStyle::kAutoScale;
+  }
+  if (normalized == QStringLiteral("from channel")
+      || normalized == QStringLiteral("channel")) {
+    return CartesianPlotRangeStyle::kChannel;
+  }
+  return CartesianPlotRangeStyle::kChannel;
+}
+
+inline CartesianPlotTimeFormat DisplayWindow::parseCartesianTimeFormat(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("hh:mm")) {
+    return CartesianPlotTimeFormat::kHhMm;
+  }
+  if (normalized == QStringLiteral("hh:00")) {
+    return CartesianPlotTimeFormat::kHh00;
+  }
+  if (normalized == QStringLiteral("mmm dd yyyy")) {
+    return CartesianPlotTimeFormat::kMonthDayYear;
+  }
+  if (normalized == QStringLiteral("mmm dd")) {
+    return CartesianPlotTimeFormat::kMonthDay;
+  }
+  if (normalized == QStringLiteral("mmm dd hh:00")) {
+    return CartesianPlotTimeFormat::kMonthDayHour00;
+  }
+  if (normalized == QStringLiteral("wd hh:00")
+      || normalized == QStringLiteral("weekday hh:00")) {
+    return CartesianPlotTimeFormat::kWeekdayHour00;
+  }
+  return CartesianPlotTimeFormat::kHhMmSs;
 }
 
 inline CartesianPlotEraseMode DisplayWindow::parseCartesianEraseMode(
@@ -8936,6 +9048,8 @@ inline void DisplayWindow::loadCartesianPlotElement(
       QStringLiteral("style"));
   if (!styleValue.trimmed().isEmpty()) {
     element->setStyle(parseCartesianPlotStyle(styleValue));
+  } else {
+    element->setStyle(CartesianPlotStyle::kPoint);
   }
 
   const QString eraseOldestValue = propertyValue(cartesianNode,
@@ -9079,6 +9193,72 @@ inline void DisplayWindow::loadCartesianPlotElement(
     if (ok) {
       element->setTraceUsesRightAxis(traceIndex, sideIndex == 1);
     }
+  }
+
+  auto parseAxisNode = [this, element](const AdlNode &axisNode, int axisIndex) {
+    const QString axisStyleValue = propertyValue(axisNode,
+        QStringLiteral("axisStyle"));
+    if (!axisStyleValue.trimmed().isEmpty()) {
+      element->setAxisStyle(axisIndex,
+          parseCartesianAxisStyle(axisStyleValue));
+    }
+
+    const QString rangeStyleValue = propertyValue(axisNode,
+        QStringLiteral("rangeStyle"));
+    if (!rangeStyleValue.trimmed().isEmpty()) {
+      element->setAxisRangeStyle(axisIndex,
+          parseCartesianRangeStyle(rangeStyleValue));
+    }
+
+    const QString minValue = propertyValue(axisNode,
+        QStringLiteral("minRange")).trimmed();
+    if (!minValue.isEmpty()) {
+      bool ok = false;
+      const double minNumber = minValue.toDouble(&ok);
+      if (ok) {
+        element->setAxisMinimum(axisIndex, minNumber);
+      }
+    }
+
+    const QString maxValue = propertyValue(axisNode,
+        QStringLiteral("maxRange")).trimmed();
+    if (!maxValue.isEmpty()) {
+      bool ok = false;
+      const double maxNumber = maxValue.toDouble(&ok);
+      if (ok) {
+        element->setAxisMaximum(axisIndex, maxNumber);
+      }
+    }
+
+    if (axisIndex == 0) {
+      const QString timeFormatValue = propertyValue(axisNode,
+          QStringLiteral("timeFormat")).trimmed();
+      if (!timeFormatValue.isEmpty()) {
+        element->setAxisTimeFormat(0,
+            parseCartesianTimeFormat(timeFormatValue));
+      }
+    }
+  };
+
+  if (const AdlNode *xAxisNode = ::findChild(cartesianNode,
+          QStringLiteral("x_axis"))) {
+    parseAxisNode(*xAxisNode, 0);
+  }
+  if (const AdlNode *y1AxisNode = ::findChild(cartesianNode,
+          QStringLiteral("y1_axis"))) {
+    parseAxisNode(*y1AxisNode, 1);
+  }
+  if (const AdlNode *y2AxisNode = ::findChild(cartesianNode,
+          QStringLiteral("y2_axis"))) {
+    parseAxisNode(*y2AxisNode, 2);
+  }
+  if (const AdlNode *y3AxisNode = ::findChild(cartesianNode,
+          QStringLiteral("y3_axis"))) {
+    parseAxisNode(*y3AxisNode, 3);
+  }
+  if (const AdlNode *y4AxisNode = ::findChild(cartesianNode,
+          QStringLiteral("y4_axis"))) {
+    parseAxisNode(*y4AxisNode, 4);
   }
 
   element->show();

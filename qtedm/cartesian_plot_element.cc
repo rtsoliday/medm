@@ -51,6 +51,13 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
   for (int i = 0; i < traceCount(); ++i) {
     traces_[i].color = defaultTraceColor(i);
   }
+  for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+    axisStyles_[axis] = CartesianPlotAxisStyle::kLinear;
+    axisRangeStyles_[axis] = CartesianPlotRangeStyle::kChannel;
+    axisMinimums_[axis] = 0.0;
+    axisMaximums_[axis] = 1.0;
+    axisTimeFormats_[axis] = CartesianPlotTimeFormat::kHhMmSs;
+  }
 }
 
 void CartesianPlotElement::setSelected(bool selected)
@@ -344,6 +351,109 @@ void CartesianPlotElement::setTraceUsesRightAxis(int index, bool usesRightAxis)
     return;
   }
   traces_[index].usesRightAxis = usesRightAxis;
+  update();
+}
+
+CartesianPlotAxisStyle CartesianPlotElement::axisStyle(int axisIndex) const
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return CartesianPlotAxisStyle::kLinear;
+  }
+  return axisStyles_[axisIndex];
+}
+
+void CartesianPlotElement::setAxisStyle(int axisIndex,
+    CartesianPlotAxisStyle style)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  if (axisStyles_[axisIndex] == style) {
+    return;
+  }
+  axisStyles_[axisIndex] = style;
+  update();
+}
+
+CartesianPlotRangeStyle CartesianPlotElement::axisRangeStyle(int axisIndex) const
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return CartesianPlotRangeStyle::kChannel;
+  }
+  return axisRangeStyles_[axisIndex];
+}
+
+void CartesianPlotElement::setAxisRangeStyle(int axisIndex,
+    CartesianPlotRangeStyle style)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  if (axisRangeStyles_[axisIndex] == style) {
+    return;
+  }
+  axisRangeStyles_[axisIndex] = style;
+  update();
+}
+
+double CartesianPlotElement::axisMinimum(int axisIndex) const
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return 0.0;
+  }
+  return axisMinimums_[axisIndex];
+}
+
+void CartesianPlotElement::setAxisMinimum(int axisIndex, double value)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  if (axisMinimums_[axisIndex] == value) {
+    return;
+  }
+  axisMinimums_[axisIndex] = value;
+  update();
+}
+
+double CartesianPlotElement::axisMaximum(int axisIndex) const
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return 1.0;
+  }
+  return axisMaximums_[axisIndex];
+}
+
+void CartesianPlotElement::setAxisMaximum(int axisIndex, double value)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  if (axisMaximums_[axisIndex] == value) {
+    return;
+  }
+  axisMaximums_[axisIndex] = value;
+  update();
+}
+
+CartesianPlotTimeFormat CartesianPlotElement::axisTimeFormat(int axisIndex) const
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return CartesianPlotTimeFormat::kHhMmSs;
+  }
+  return axisTimeFormats_[axisIndex];
+}
+
+void CartesianPlotElement::setAxisTimeFormat(int axisIndex,
+    CartesianPlotTimeFormat format)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  if (axisTimeFormats_[axisIndex] == format) {
+    return;
+  }
+  axisTimeFormats_[axisIndex] = format;
   update();
 }
 
@@ -652,4 +762,3 @@ QVector<QPointF> CartesianPlotElement::syntheticTracePoints(const QRectF &rect,
   }
   return points;
 }
-

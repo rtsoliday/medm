@@ -72,6 +72,21 @@ public:
   bool traceUsesRightAxis(int index) const;
   void setTraceUsesRightAxis(int index, bool usesRightAxis);
 
+  CartesianPlotAxisStyle axisStyle(int axisIndex) const;
+  void setAxisStyle(int axisIndex, CartesianPlotAxisStyle style);
+
+  CartesianPlotRangeStyle axisRangeStyle(int axisIndex) const;
+  void setAxisRangeStyle(int axisIndex, CartesianPlotRangeStyle style);
+
+  double axisMinimum(int axisIndex) const;
+  void setAxisMinimum(int axisIndex, double value);
+
+  double axisMaximum(int axisIndex) const;
+  void setAxisMaximum(int axisIndex, double value);
+
+  CartesianPlotTimeFormat axisTimeFormat(int axisIndex) const;
+  void setAxisTimeFormat(int axisIndex, CartesianPlotTimeFormat format);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
 
@@ -112,5 +127,9 @@ private:
   QString eraseChannel_;
   QString countChannel_;
   std::array<Trace, kCartesianPlotTraceCount> traces_{};
+  std::array<CartesianPlotAxisStyle, kCartesianAxisCount> axisStyles_{};
+  std::array<CartesianPlotRangeStyle, kCartesianAxisCount> axisRangeStyles_{};
+  std::array<double, kCartesianAxisCount> axisMinimums_{};
+  std::array<double, kCartesianAxisCount> axisMaximums_{};
+  std::array<CartesianPlotTimeFormat, kCartesianAxisCount> axisTimeFormats_{};
 };
-

@@ -158,8 +158,34 @@ enum class CartesianPlotYAxis
   kY4,
 };
 
+enum class CartesianPlotAxisStyle
+{
+  kLinear,
+  kLog10,
+  kTime,
+};
+
+enum class CartesianPlotRangeStyle
+{
+  kChannel,
+  kUserSpecified,
+  kAutoScale,
+};
+
+enum class CartesianPlotTimeFormat
+{
+  kHhMmSs,
+  kHhMm,
+  kHh00,
+  kMonthDayYear,
+  kMonthDay,
+  kMonthDayHour00,
+  kWeekdayHour00,
+};
+
 constexpr int kStripChartPenCount = 8;
 constexpr int kCartesianPlotTraceCount = 8;
+constexpr int kCartesianAxisCount = 5;
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
 constexpr int kDefaultGridSpacing = 5;
@@ -187,4 +213,3 @@ constexpr int kRelatedDisplayEntryCount = 16;
 constexpr int kShellCommandEntryCount = 16;
 constexpr int kMainWindowRightMargin = 5;
 constexpr int kMainWindowTopMargin = 5;
-

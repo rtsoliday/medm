@@ -38,9 +38,12 @@
 #include <QPalette>
 #include <QPointer>
 #include <QScreen>
+#include <QApplication>
+#include <QDesktopWidget>
 #include <QGuiApplication>
 
 #include "color_palette_dialog.h"
+#include "cartesian_axis_dialog.h"
 #include "display_properties.h"
 #include "pv_limits_dialog.h"
 
@@ -2121,8 +2124,15 @@ public:
     addRow(cartesianLayout, 12, QStringLiteral("Trigger"), cartesianTriggerEdit_);
     addRow(cartesianLayout, 13, QStringLiteral("Erase"), cartesianEraseEdit_);
     addRow(cartesianLayout, 14, QStringLiteral("Count PV"), cartesianCountPvEdit_);
-    addRow(cartesianLayout, 15, QStringLiteral("Traces"), cartesianTraceWidget);
-    cartesianLayout->setRowStretch(16, 1);
+
+    cartesianAxisButton_ = createActionButton(QStringLiteral("Axis Data..."));
+    cartesianAxisButton_->setEnabled(false);
+    QObject::connect(cartesianAxisButton_, &QPushButton::clicked, this,
+        [this]() { openCartesianAxisDialog(); });
+
+    addRow(cartesianLayout, 15, QStringLiteral("Axis Data"), cartesianAxisButton_);
+    addRow(cartesianLayout, 16, QStringLiteral("Traces"), cartesianTraceWidget);
+    cartesianLayout->setRowStretch(17, 1);
     entriesLayout->addWidget(cartesianSection_);
 
     byteSection_ = new QWidget(entriesWidget_);
@@ -3209,6 +3219,36 @@ public:
     cartesianForegroundSetter_ = {};
     cartesianBackgroundGetter_ = {};
     cartesianBackgroundSetter_ = {};
+    for (auto &getter : cartesianAxisStyleGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianAxisStyleSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianAxisRangeGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianAxisRangeSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianAxisMinimumGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianAxisMinimumSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianAxisMaximumGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianAxisMaximumSetters_) {
+      setter = {};
+    }
+    for (auto &getter : cartesianAxisTimeFormatGetters_) {
+      getter = {};
+    }
+    for (auto &setter : cartesianAxisTimeFormatSetters_) {
+      setter = {};
+    }
     cartesianStyleGetter_ = {};
     cartesianStyleSetter_ = {};
     cartesianEraseOldestGetter_ = {};
@@ -4895,6 +4935,16 @@ public:
       std::function<void(const QColor &)> foregroundSetter,
       std::function<QColor()> backgroundGetter,
       std::function<void(const QColor &)> backgroundSetter,
+      std::array<std::function<CartesianPlotAxisStyle()>, kCartesianAxisCount> axisStyleGetters,
+      std::array<std::function<void(CartesianPlotAxisStyle)>, kCartesianAxisCount> axisStyleSetters,
+      std::array<std::function<CartesianPlotRangeStyle()>, kCartesianAxisCount> axisRangeGetters,
+      std::array<std::function<void(CartesianPlotRangeStyle)>, kCartesianAxisCount> axisRangeSetters,
+      std::array<std::function<double()>, kCartesianAxisCount> axisMinimumGetters,
+      std::array<std::function<void(double)>, kCartesianAxisCount> axisMinimumSetters,
+      std::array<std::function<double()>, kCartesianAxisCount> axisMaximumGetters,
+      std::array<std::function<void(double)>, kCartesianAxisCount> axisMaximumSetters,
+      std::array<std::function<CartesianPlotTimeFormat()>, kCartesianAxisCount> axisTimeFormatGetters,
+      std::array<std::function<void(CartesianPlotTimeFormat)>, kCartesianAxisCount> axisTimeFormatSetters,
       std::function<CartesianPlotStyle()> styleGetter,
       std::function<void(CartesianPlotStyle)> styleSetter,
       std::function<bool()> eraseOldestGetter,
@@ -5075,6 +5125,16 @@ public:
     cartesianForegroundSetter_ = std::move(foregroundSetter);
     cartesianBackgroundGetter_ = std::move(backgroundGetter);
     cartesianBackgroundSetter_ = std::move(backgroundSetter);
+    cartesianAxisStyleGetters_ = std::move(axisStyleGetters);
+    cartesianAxisStyleSetters_ = std::move(axisStyleSetters);
+    cartesianAxisRangeGetters_ = std::move(axisRangeGetters);
+    cartesianAxisRangeSetters_ = std::move(axisRangeSetters);
+    cartesianAxisMinimumGetters_ = std::move(axisMinimumGetters);
+    cartesianAxisMinimumSetters_ = std::move(axisMinimumSetters);
+    cartesianAxisMaximumGetters_ = std::move(axisMaximumGetters);
+    cartesianAxisMaximumSetters_ = std::move(axisMaximumSetters);
+    cartesianAxisTimeFormatGetters_ = std::move(axisTimeFormatGetters);
+    cartesianAxisTimeFormatSetters_ = std::move(axisTimeFormatSetters);
     cartesianStyleGetter_ = std::move(styleGetter);
     cartesianStyleSetter_ = std::move(styleSetter);
     cartesianEraseOldestGetter_ = std::move(eraseOldestGetter);
@@ -5261,6 +5321,8 @@ public:
         cartesianTraceSideCombos_[i]->setEnabled(static_cast<bool>(cartesianTraceSideSetters_[i]));
       }
     }
+
+    updateCartesianAxisButtonState();
 
     elementLabel_->setText(QStringLiteral("Cartesian Plot"));
 
@@ -6828,6 +6890,10 @@ public:
 
     committedTexts_.clear();
     updateCommittedTexts();
+    updateCartesianAxisButtonState();
+    if (cartesianAxisDialog_) {
+      cartesianAxisDialog_->clearCallbacks();
+    }
     updateSectionVisibility(selectionKind_);
   }
 
@@ -8333,6 +8399,31 @@ private:
     }
   }
 
+  void updateCartesianAxisButtonState()
+  {
+    if (!cartesianAxisButton_) {
+      return;
+    }
+    bool hasSetter = false;
+    for (int i = 0; i < kCartesianAxisCount; ++i) {
+      if (cartesianAxisStyleSetters_[i]
+          || cartesianAxisRangeSetters_[i]
+          || cartesianAxisMinimumSetters_[i]
+          || cartesianAxisMaximumSetters_[i]
+          || cartesianAxisTimeFormatSetters_[i]) {
+        hasSetter = true;
+        break;
+      }
+    }
+    cartesianAxisButton_->setEnabled(hasSetter);
+    if (hasSetter) {
+      cartesianAxisButton_->setToolTip(
+          QStringLiteral("Edit Cartesian plot axis styles, ranges, and time format"));
+    } else {
+      cartesianAxisButton_->setToolTip(QString());
+    }
+  }
+
   void commitRectangleLineWidth()
   {
     if (!rectangleLineWidthEdit_) {
@@ -9245,6 +9336,7 @@ private:
   QLineEdit *cartesianTriggerEdit_ = nullptr;
   QLineEdit *cartesianEraseEdit_ = nullptr;
   QLineEdit *cartesianCountPvEdit_ = nullptr;
+  QPushButton *cartesianAxisButton_ = nullptr;
   std::array<QPushButton *, kCartesianPlotTraceCount> cartesianTraceColorButtons_{};
   std::array<QLineEdit *, kCartesianPlotTraceCount> cartesianTraceXEdits_{};
   std::array<QLineEdit *, kCartesianPlotTraceCount> cartesianTraceYEdits_{};
@@ -9613,6 +9705,7 @@ private:
   QHash<QWidget *, QLabel *> fieldLabels_;
   ColorPaletteDialog *colorPaletteDialog_ = nullptr;
   PvLimitsDialog *pvLimitsDialog_ = nullptr;
+  CartesianAxisDialog *cartesianAxisDialog_ = nullptr;
   QPushButton *activeColorButton_ = nullptr;
   std::function<QColor()> foregroundColorGetter_;
   std::function<void(const QColor &)> foregroundColorSetter_;
@@ -9859,6 +9952,16 @@ private:
   std::array<std::function<void(CartesianPlotYAxis)>, kCartesianPlotTraceCount> cartesianTraceAxisSetters_{};
   std::array<std::function<bool()>, kCartesianPlotTraceCount> cartesianTraceSideGetters_{};
   std::array<std::function<void(bool)>, kCartesianPlotTraceCount> cartesianTraceSideSetters_{};
+  std::array<std::function<CartesianPlotAxisStyle()>, kCartesianAxisCount> cartesianAxisStyleGetters_{};
+  std::array<std::function<void(CartesianPlotAxisStyle)>, kCartesianAxisCount> cartesianAxisStyleSetters_{};
+  std::array<std::function<CartesianPlotRangeStyle()>, kCartesianAxisCount> cartesianAxisRangeGetters_{};
+  std::array<std::function<void(CartesianPlotRangeStyle)>, kCartesianAxisCount> cartesianAxisRangeSetters_{};
+  std::array<std::function<double()>, kCartesianAxisCount> cartesianAxisMinimumGetters_{};
+  std::array<std::function<void(double)>, kCartesianAxisCount> cartesianAxisMinimumSetters_{};
+  std::array<std::function<double()>, kCartesianAxisCount> cartesianAxisMaximumGetters_{};
+  std::array<std::function<void(double)>, kCartesianAxisCount> cartesianAxisMaximumSetters_{};
+  std::array<std::function<CartesianPlotTimeFormat()>, kCartesianAxisCount> cartesianAxisTimeFormatGetters_{};
+  std::array<std::function<void(CartesianPlotTimeFormat)>, kCartesianAxisCount> cartesianAxisTimeFormatSetters_{};
   std::function<QColor()> byteForegroundGetter_;
   std::function<void(const QColor &)> byteForegroundSetter_;
   std::function<QColor()> byteBackgroundGetter_;
@@ -10283,6 +10386,78 @@ private:
     dialog->showForScaleMonitor();
   }
 
+  void openCartesianAxisDialog()
+  {
+    CartesianAxisDialog *dialog = ensureCartesianAxisDialog();
+    if (!dialog) {
+      return;
+    }
+    bool hasSetter = false;
+    for (int i = 0; i < kCartesianAxisCount; ++i) {
+      if (cartesianAxisStyleSetters_[i]
+          || cartesianAxisRangeSetters_[i]
+          || cartesianAxisMinimumSetters_[i]
+          || cartesianAxisMaximumSetters_[i]
+          || cartesianAxisTimeFormatSetters_[i]) {
+        hasSetter = true;
+        break;
+      }
+    }
+    if (!hasSetter) {
+      dialog->clearCallbacks();
+      dialog->hide();
+      return;
+    }
+    dialog->setCartesianCallbacks(cartesianAxisStyleGetters_,
+        cartesianAxisStyleSetters_, cartesianAxisRangeGetters_,
+        cartesianAxisRangeSetters_, cartesianAxisMinimumGetters_,
+        cartesianAxisMinimumSetters_, cartesianAxisMaximumGetters_,
+        cartesianAxisMaximumSetters_, cartesianAxisTimeFormatGetters_,
+        cartesianAxisTimeFormatSetters_, [this]() {
+          updateCartesianAxisButtonState();
+        });
+    positionCartesianAxisDialog(dialog);
+    dialog->showDialog();
+  }
+
+  void positionCartesianAxisDialog(CartesianAxisDialog *dialog)
+  {
+    if (!dialog) {
+      return;
+    }
+    dialog->adjustSize();
+    const QRect paletteFrame = frameGeometry();
+
+    QRect availableRect;
+    if (QScreen *paletteScreen = screen()) {
+      availableRect = paletteScreen->availableGeometry();
+    } else if (QScreen *screenAtPalette = QGuiApplication::screenAt(paletteFrame.center())) {
+      availableRect = screenAtPalette->availableGeometry();
+    } else {
+      availableRect = QApplication::desktop()->availableGeometry(this);
+    }
+
+    QRect desiredRect(paletteFrame.topRight(), dialog->size());
+    desiredRect.translate(12, 0);
+    if (!availableRect.isNull() && !availableRect.contains(desiredRect)) {
+      desiredRect.moveTopRight(paletteFrame.topLeft());
+      desiredRect.translate(-12, 0);
+      if (!availableRect.contains(desiredRect)) {
+        desiredRect.moveTopLeft(paletteFrame.bottomLeft());
+        desiredRect.translate(0, 12);
+      }
+    }
+
+    if (!availableRect.isNull()) {
+      if (!availableRect.contains(desiredRect)) {
+        desiredRect.moveTopLeft(availableRect.topLeft());
+      }
+      desiredRect.setSize(desiredRect.size().boundedTo(availableRect.size()));
+    }
+
+    dialog->move(desiredRect.topLeft());
+  }
+
   void positionPvLimitsDialog(PvLimitsDialog *dialog)
   {
     if (!dialog) {
@@ -10368,6 +10543,15 @@ private:
       pvLimitsDialog_ = new PvLimitsDialog(palette(), labelFont_, valueFont_, this);
     }
     return pvLimitsDialog_;
+  }
+
+  CartesianAxisDialog *ensureCartesianAxisDialog()
+  {
+    if (!cartesianAxisDialog_) {
+      cartesianAxisDialog_ = new CartesianAxisDialog(palette(), labelFont_,
+          valueFont_, this);
+    }
+    return cartesianAxisDialog_;
   }
 
   QColor currentBackgroundColor() const

@@ -206,6 +206,53 @@ QString cartesianEraseModeString(CartesianPlotEraseMode mode)
   }
 }
 
+QString cartesianAxisStyleString(CartesianPlotAxisStyle style)
+{
+  switch (style) {
+  case CartesianPlotAxisStyle::kLog10:
+    return QStringLiteral("log10");
+  case CartesianPlotAxisStyle::kTime:
+    return QStringLiteral("time");
+  case CartesianPlotAxisStyle::kLinear:
+  default:
+    return QStringLiteral("linear");
+  }
+}
+
+QString cartesianRangeStyleString(CartesianPlotRangeStyle style)
+{
+  switch (style) {
+  case CartesianPlotRangeStyle::kUserSpecified:
+    return QStringLiteral("user-specified");
+  case CartesianPlotRangeStyle::kAutoScale:
+    return QStringLiteral("auto-scale");
+  case CartesianPlotRangeStyle::kChannel:
+  default:
+    return QStringLiteral("from channel");
+  }
+}
+
+QString cartesianTimeFormatString(CartesianPlotTimeFormat format)
+{
+  switch (format) {
+  case CartesianPlotTimeFormat::kHhMm:
+    return QStringLiteral("hh:mm");
+  case CartesianPlotTimeFormat::kHh00:
+    return QStringLiteral("hh:00");
+  case CartesianPlotTimeFormat::kMonthDayYear:
+    return QStringLiteral("MMM DD YYYY");
+  case CartesianPlotTimeFormat::kMonthDay:
+    return QStringLiteral("MMM DD");
+  case CartesianPlotTimeFormat::kMonthDayHour00:
+    return QStringLiteral("MMM DD hh:00");
+  case CartesianPlotTimeFormat::kWeekdayHour00:
+    return QStringLiteral("wd hh:00");
+  case CartesianPlotTimeFormat::kHhMmSs:
+  default:
+    return QStringLiteral("hh:mm:ss");
+  }
+}
+
 QString channelFieldName(int index)
 {
   if (index <= 0) {
@@ -635,6 +682,78 @@ void writeCartesianTraceSection(QTextStream &stream, int level, int index,
       QStringLiteral("yaxis=%1").arg(clampedAxis));
   writeIndentedLine(stream, level + 1,
       QStringLiteral("yside=%1").arg(usesRightAxis ? 1 : 0));
+  writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+void writeCartesianAxisSection(QTextStream &stream, int level, int axisIndex,
+    CartesianPlotAxisStyle axisStyle, CartesianPlotRangeStyle rangeStyle,
+    double minRange, double maxRange, CartesianPlotTimeFormat timeFormat,
+    bool includeTimeFormat)
+{
+  auto nearlyEqual = [](double a, double b) {
+    return std::abs(a - b) < 1e-6;
+  };
+
+  const bool defaultStyle = axisStyle == CartesianPlotAxisStyle::kLinear;
+  const bool defaultRange = rangeStyle == CartesianPlotRangeStyle::kChannel;
+  const bool defaultMin = nearlyEqual(minRange, 0.0);
+  const bool defaultMax = nearlyEqual(maxRange, 1.0);
+  const bool defaultTime = !includeTimeFormat
+      || timeFormat == CartesianPlotTimeFormat::kHhMmSs;
+
+  if (defaultStyle && defaultRange && defaultMin && defaultMax && defaultTime) {
+    return;
+  }
+
+  QString axisName;
+  switch (axisIndex) {
+  case 0:
+    axisName = QStringLiteral("x_axis");
+    break;
+  case 1:
+    axisName = QStringLiteral("y1_axis");
+    break;
+  case 2:
+    axisName = QStringLiteral("y2_axis");
+    break;
+  case 3:
+    axisName = QStringLiteral("y3_axis");
+    break;
+  case 4:
+    axisName = QStringLiteral("y4_axis");
+    break;
+  default:
+    axisName = QStringLiteral("y%1_axis").arg(axisIndex);
+    break;
+  }
+
+  writeIndentedLine(stream, level,
+      QStringLiteral("%1 {").arg(axisName));
+  if (!defaultStyle) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("axisStyle=\"%1\"")
+            .arg(cartesianAxisStyleString(axisStyle)));
+  }
+  if (!defaultRange) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("rangeStyle=\"%1\"")
+            .arg(cartesianRangeStyleString(rangeStyle)));
+  }
+  if (!defaultMin) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("minRange=%1")
+            .arg(QString::number(minRange, 'f', 6)));
+  }
+  if (!defaultMax) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("maxRange=%1")
+            .arg(QString::number(maxRange, 'f', 6)));
+  }
+  if (includeTimeFormat && !defaultTime) {
+    writeIndentedLine(stream, level + 1,
+        QStringLiteral("timeFormat=\"%1\"")
+            .arg(cartesianTimeFormatString(timeFormat)));
+  }
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 

@@ -51,6 +51,9 @@ void writeControlSection(QTextStream &stream, int level, const QString &channel,
 QString cartesianPlotStyleString(CartesianPlotStyle style);
 QString cartesianEraseOldestString(bool eraseOldest);
 QString cartesianEraseModeString(CartesianPlotEraseMode mode);
+QString cartesianAxisStyleString(CartesianPlotAxisStyle style);
+QString cartesianRangeStyleString(CartesianPlotRangeStyle style);
+QString cartesianTimeFormatString(CartesianPlotTimeFormat format);
 void writePlotcom(QTextStream &stream, int level, const QString &title,
     const QString &xLabel, const std::array<QString, 4> &yLabels,
     int colorIndex, int backgroundIndex);
@@ -63,6 +66,10 @@ void writePointsSection(
 void writeCartesianTraceSection(QTextStream &stream, int level, int index,
     const QString &xChannel, const QString &yChannel, int colorIndex,
     int axisIndex, bool usesRightAxis);
+void writeCartesianAxisSection(QTextStream &stream, int level, int axisIndex,
+    CartesianPlotAxisStyle axisStyle, CartesianPlotRangeStyle rangeStyle,
+    double minRange, double maxRange, CartesianPlotTimeFormat timeFormat,
+    bool includeTimeFormat);
 void writeRelatedDisplayEntry(QTextStream &stream, int level, int index,
     const RelatedDisplayEntry &entry);
 

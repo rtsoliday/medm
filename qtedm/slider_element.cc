@@ -162,9 +162,10 @@ void SliderElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
-  QRectF labelRect;
+  QRectF limitRect;
+  QRectF channelRect;
   QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0, -2.0, -2.0),
-      labelRect);
+      limitRect, channelRect);
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);
@@ -175,45 +176,83 @@ void SliderElement::paintEvent(QPaintEvent *event)
   paintTrack(painter, trackRect);
   paintTicks(painter, trackRect);
   paintThumb(painter, trackRect);
-  paintLabels(painter, trackRect, labelRect);
+  paintLabels(painter, trackRect, limitRect, channelRect);
 
   if (selected_) {
     paintSelectionOverlay(painter);
   }
 }
 
-QRectF SliderElement::trackRectForPainting(
-    QRectF contentRect, QRectF &labelRect) const
+QRectF SliderElement::trackRectForPainting(QRectF contentRect,
+    QRectF &limitRect, QRectF &channelRect) const
 {
-  labelRect = QRectF();
-  if (label_ == MeterLabel::kChannel || label_ == MeterLabel::kLimits) {
-    const qreal maxLabelHeight = std::min<qreal>(24.0, contentRect.height() * 0.35);
-    if (maxLabelHeight > 6.0) {
-      labelRect = QRectF(contentRect.left(),
-          contentRect.bottom() - maxLabelHeight, contentRect.width(),
-          maxLabelHeight);
-      contentRect.setBottom(labelRect.top() - 4.0);
+  limitRect = QRectF();
+  channelRect = QRectF();
+
+  QRectF workingRect = contentRect;
+  const bool vertical = isVertical();
+  const bool showChannel = label_ == MeterLabel::kChannel;
+  const bool showLimits = shouldShowLimitLabels();
+
+  if (vertical) {
+    if (showLimits) {
+      const qreal maxLabelWidth = std::min<qreal>(24.0,
+          workingRect.width() * 0.35);
+      if (maxLabelWidth > 6.0) {
+        limitRect = QRectF(workingRect.left(), workingRect.top(), maxLabelWidth,
+            workingRect.height());
+        workingRect.setLeft(limitRect.right() + 4.0);
+      }
+    }
+    if (showChannel) {
+      const qreal maxLabelHeight = std::min<qreal>(24.0,
+          workingRect.height() * 0.35);
+      if (maxLabelHeight > 6.0) {
+        channelRect = QRectF(workingRect.left(), workingRect.top(),
+            workingRect.width(), maxLabelHeight);
+        workingRect.setTop(channelRect.bottom() + 4.0);
+      }
+    }
+  } else {
+    if (showChannel) {
+      const qreal maxLabelHeight = std::min<qreal>(24.0,
+          workingRect.height() * 0.35);
+      if (maxLabelHeight > 6.0) {
+        channelRect = QRectF(workingRect.left(), workingRect.top(),
+            workingRect.width(), maxLabelHeight);
+        workingRect.setTop(channelRect.bottom() + 4.0);
+      }
+    }
+    if (showLimits) {
+      const qreal maxLabelHeight = std::min<qreal>(24.0,
+          workingRect.height() * 0.35);
+      if (maxLabelHeight > 6.0) {
+        limitRect = QRectF(workingRect.left(),
+            workingRect.bottom() - maxLabelHeight, workingRect.width(),
+            maxLabelHeight);
+        workingRect.setBottom(limitRect.top() - 4.0);
+      }
     }
   }
 
-  contentRect = contentRect.adjusted(4.0, 4.0, -4.0, -4.0);
-  if (contentRect.width() < 2.0 || contentRect.height() < 2.0) {
+  workingRect = workingRect.adjusted(4.0, 4.0, -4.0, -4.0);
+  if (workingRect.width() < 2.0 || workingRect.height() < 2.0) {
     return QRectF();
   }
 
-  if (isVertical()) {
+  if (vertical) {
     const qreal trackWidth = std::max<qreal>(8.0,
-        contentRect.width() * kTrackThicknessRatio);
-    const qreal centerX = contentRect.center().x();
-    return QRectF(centerX - trackWidth / 2.0, contentRect.top(), trackWidth,
-        contentRect.height());
+        workingRect.width() * kTrackThicknessRatio);
+    const qreal centerX = workingRect.center().x();
+    return QRectF(centerX - trackWidth / 2.0, workingRect.top(), trackWidth,
+        workingRect.height());
   }
 
   const qreal trackHeight = std::max<qreal>(8.0,
-      contentRect.height() * kTrackThicknessRatio);
-  const qreal centerY = contentRect.center().y();
-  return QRectF(contentRect.left(), centerY - trackHeight / 2.0,
-      contentRect.width(), trackHeight);
+      workingRect.height() * kTrackThicknessRatio);
+  const qreal centerY = workingRect.center().y();
+  return QRectF(workingRect.left(), centerY - trackHeight / 2.0,
+      workingRect.width(), trackHeight);
 }
 
 void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const
@@ -280,23 +319,23 @@ void SliderElement::paintTicks(QPainter &painter, const QRectF &trackRect) const
 }
 
 void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
-    const QRectF &labelRect) const
+    const QRectF &limitRect, const QRectF &channelRect) const
 {
   if (label_ == MeterLabel::kNone || label_ == MeterLabel::kNoDecorations) {
     return;
   }
 
   painter.save();
-  painter.setPen(effectiveForeground());
+  const QColor penColor = effectiveForeground();
+  painter.setPen(penColor);
   painter.setBrush(Qt::NoBrush);
 
   if (label_ == MeterLabel::kOutline) {
-    QPen pen(effectiveForeground().darker(150));
+    QPen pen(penColor.darker(150));
     pen.setStyle(Qt::DotLine);
     painter.setPen(pen);
     painter.drawRect(trackRect.adjusted(3.0, 3.0, -3.0, -3.0));
-    painter.restore();
-    return;
+    painter.setPen(penColor);
   }
 
   QFont labelFont = painter.font();
@@ -306,27 +345,32 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
 
   if (label_ == MeterLabel::kChannel) {
     const QString text = channel_.trimmed();
-    if (!text.isEmpty() && labelRect.isValid() && !labelRect.isEmpty()) {
-      painter.drawText(labelRect.adjusted(2.0, 0.0, -2.0, -2.0),
+    if (!text.isEmpty() && channelRect.isValid() && !channelRect.isEmpty()) {
+      painter.drawText(channelRect.adjusted(2.0, 0.0, -2.0, -2.0),
           Qt::AlignHCenter | Qt::AlignBottom, text);
     }
-    painter.restore();
-    return;
   }
 
-  if (label_ == MeterLabel::kLimits) {
-    if (labelRect.isValid() && !labelRect.isEmpty()) {
-      const QString lowText = formatLimit(limits_.lowDefault);
-      const QString highText = formatLimit(limits_.highDefault);
-      const QRectF bounds = labelRect.adjusted(2.0, 0.0, -2.0, -2.0);
+  if (shouldShowLimitLabels() && limitRect.isValid() && !limitRect.isEmpty()) {
+    const QString lowText = formatLimit(limits_.lowDefault);
+    const QString highText = formatLimit(limits_.highDefault);
+    const QRectF bounds = limitRect.adjusted(2.0, 2.0, -2.0, -2.0);
+    if (isVertical()) {
+      painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, lowText);
+      painter.drawText(bounds, Qt::AlignRight | Qt::AlignTop, highText);
+    } else {
       painter.drawText(bounds, Qt::AlignLeft | Qt::AlignBottom, lowText);
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, highText);
     }
-    painter.restore();
-    return;
   }
 
   painter.restore();
+}
+
+bool SliderElement::shouldShowLimitLabels() const
+{
+  return label_ == MeterLabel::kOutline || label_ == MeterLabel::kLimits
+      || label_ == MeterLabel::kChannel;
 }
 
 QColor SliderElement::effectiveForeground() const

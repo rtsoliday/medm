@@ -43,12 +43,14 @@ protected:
   void paintEvent(QPaintEvent *event) override;
 
 private:
-  QRectF trackRectForPainting(QRectF contentRect, QRectF &labelRect) const;
+  QRectF trackRectForPainting(QRectF contentRect, QRectF &limitRect,
+      QRectF &channelRect) const;
   void paintTrack(QPainter &painter, const QRectF &trackRect) const;
   void paintThumb(QPainter &painter, const QRectF &trackRect) const;
   void paintTicks(QPainter &painter, const QRectF &trackRect) const;
-  void paintLabels(
-      QPainter &painter, const QRectF &trackRect, const QRectF &labelRect) const;
+  void paintLabels(QPainter &painter, const QRectF &trackRect,
+      const QRectF &limitRect, const QRectF &channelRect) const;
+  bool shouldShowLimitLabels() const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   void paintSelectionOverlay(QPainter &painter) const;

@@ -135,8 +135,8 @@ valuator {
 }
 valuator {
 	object {
-		x=420
-		y=20
+		x=562
+		y=16
 		width=64
 		height=192
 	}
@@ -155,8 +155,8 @@ valuator {
 }
 valuator {
 	object {
-		x=520
-		y=24
+		x=655
+		y=11
 		width=70
 		height=208
 	}
@@ -177,8 +177,8 @@ valuator {
 }
 valuator {
 	object {
-		x=640
-		y=18
+		x=224
+		y=420
 		width=188
 		height=60
 	}
@@ -198,8 +198,8 @@ valuator {
 }
 valuator {
 	object {
-		x=20
-		y=260
+		x=16
+		y=106
 		width=150
 		height=56
 	}
@@ -221,8 +221,8 @@ valuator {
 }
 valuator {
 	object {
-		x=210
-		y=236
+		x=760
+		y=16
 		width=72
 		height=214
 	}
@@ -242,8 +242,8 @@ valuator {
 }
 valuator {
 	object {
-		x=324
-		y=264
+		x=209
+		y=101
 		width=184
 		height=58
 	}
@@ -267,8 +267,8 @@ valuator {
 }
 valuator {
 	object {
-		x=540
-		y=266
+		x=231
+		y=187
 		width=172
 		height=56
 	}
@@ -288,8 +288,8 @@ valuator {
 }
 valuator {
 	object {
-		x=740
-		y=240
+		x=850
+		y=258
 		width=66
 		height=220
 	}
@@ -307,5 +307,207 @@ valuator {
 		hoprSrc="default"
 		hoprDefault=510
 		precSrc="default"
+	}
+}
+valuator {
+	object {
+		x=860
+		y=32
+		width=64
+		height=210
+	}
+	control {
+		chan="slider:test:lambda"
+		clr=20
+		bclr=40
+	}
+	direction="up"
+	dPrecision=0.375000
+	limits {
+		precSrc="default"
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=14
+		y=190
+		width=188
+		height=60
+	}
+	control {
+		chan="slider:test:mu"
+		clr=48
+		bclr=16
+	}
+	label="channel"
+	clrmod="alarm"
+	dPrecision=2.250000
+	limits {
+		loprSrc="default"
+		loprDefault=-220.5
+		hoprDefault=420.5
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=545
+		y=248
+		width=68
+		height=204
+	}
+	control {
+		chan="slider:test:nu"
+		clr=6
+		bclr=30
+	}
+	label="outline"
+	clrmod="discrete"
+	direction="down"
+	dPrecision=0.420000
+	limits {
+		loprDefault=-54.2
+		hoprDefault=154.2
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=218
+		y=264
+		width=176
+		height=58
+	}
+	control {
+		chan="slider:test:xi"
+		clr=11
+		bclr=47
+	}
+	label="limits"
+	direction="left"
+	dPrecision=1.333000
+	limits {
+		loprDefault=-17.5
+		hoprDefault=17.5
+	}
+}
+valuator {
+	object {
+		x=34
+		y=416
+		width=150
+		height=62
+	}
+	control {
+		chan="slider:test:omicron"
+		clr=35
+		bclr=5
+	}
+	label="channel"
+	clrmod="discrete"
+	dPrecision=0.720000
+	limits {
+		loprDefault=-8.9
+		hoprDefault=58.9
+		precDefault=3
+	}
+}
+valuator {
+	object {
+		x=755
+		y=253
+		width=80
+		height=212
+	}
+	control {
+		chan="slider:test:pi"
+		clr=17
+		bclr=38
+	}
+	clrmod="alarm"
+	direction="up"
+	dPrecision=5.000000
+	limits {
+		loprSrc="default"
+		hoprDefault=500
+		precSrc="default"
+	}
+}
+valuator {
+	object {
+		x=222
+		y=335
+		width=160
+		height=64
+	}
+	control {
+		chan="slider:test:rho"
+		clr=26
+		bclr=50
+	}
+	dPrecision=0.850000
+	limits {
+		hoprDefault=42
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=649
+		y=256
+		width=70
+		height=210
+	}
+	control {
+		chan="slider:test:sigma"
+		clr=52
+		bclr=8
+	}
+	label="outline"
+	direction="down"
+	dPrecision=0.240000
+	limits {
+		loprDefault=-2.4
+		precDefault=3
+	}
+}
+valuator {
+	object {
+		x=16
+		y=273
+		width=190
+		height=56
+	}
+	control {
+		chan="slider:test:tau"
+		clr=4
+		bclr=28
+	}
+	label="limits"
+	clrmod="discrete"
+	dPrecision=1.600000
+	limits {
+		loprDefault=-160
+		hoprDefault=160
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=18
+		y=336
+		width=166
+		height=58
+	}
+	control {
+		chan="slider:test:upsilon"
+		clr=44
+		bclr=14
+	}
+	label="channel"
+	clrmod="alarm"
+	dPrecision=0.980000
+	limits {
 	}
 }

@@ -214,6 +214,9 @@ display {
 	}
 	clrmod="alarm"
 	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=1
 	}
 }
 "text entry" {
@@ -640,5 +643,37 @@ display {
 	}
 	format="exponential"
 	limits {
+	}
+}
+text {
+	object {
+		x=838
+		y=395
+		width=170
+		height=64
+	}
+	"basic attribute" {
+		clr=14
+	}
+}
+"text update" {
+	object {
+		x=1042
+		y=393
+		width=108
+		height=85
+	}
+	monitor {
+		clr=14
+		bclr=4
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		loprDefault=-72.3
+		hoprSrc="default"
+		hoprDefault=18.6
+		precSrc="default"
+		precDefault=3
 	}
 }

@@ -493,7 +493,7 @@ void writeMonitorSection(QTextStream &stream, int level, const QString &channel,
 void writeControlSection(QTextStream &stream, int level, const QString &channel,
     int colorIndex, int backgroundIndex)
 {
-  writeIndentedLine(stream, level, QStringLiteral("\"control\" {"));
+  writeIndentedLine(stream, level, QStringLiteral("control {"));
   const QString trimmedChannel = channel.trimmed();
   if (!trimmedChannel.isEmpty()) {
     writeIndentedLine(stream, level + 1,

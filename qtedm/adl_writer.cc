@@ -602,7 +602,7 @@ void writeStripChartPenSection(QTextStream &stream, int level, int index,
           .arg(escapeAdlString(trimmedChannel)));
   writeIndentedLine(stream, level + 1,
       QStringLiteral("clr=%1").arg(colorIndex));
-  writeLimitsSection(stream, level + 1, limits);
+  writeLimitsSection(stream, level + 1, limits, true);
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 
@@ -681,4 +681,3 @@ void writeRelatedDisplayEntry(QTextStream &stream, int level, int index,
 }
 
 } // namespace AdlWriter
-

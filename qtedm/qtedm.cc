@@ -126,8 +126,9 @@ int main(int argc, char *argv[])
   auto *raiseAct = editMenu->addAction("&Raise");
   auto *lowerAct = editMenu->addAction("&Lower");
   editMenu->addSeparator();
-  editMenu->addAction("&Group");
-  editMenu->addAction("&Ungroup");
+  auto *groupAct = editMenu->addAction("&Group");
+  auto *ungroupAct = editMenu->addAction("&Ungroup");
+  ungroupAct->setEnabled(false);
   editMenu->addSeparator();
   auto *alignMenu = editMenu->addMenu("&Align");
   alignMenu->setFont(fixed13Font);
@@ -302,6 +303,12 @@ int main(int argc, char *argv[])
           active->lowerSelection();
         }
       });
+  QObject::connect(groupAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->groupSelectedElements();
+        }
+      });
   QObject::connect(saveAsAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -331,7 +338,8 @@ int main(int argc, char *argv[])
       displayBackgroundColor);
 
   *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
-    closeAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct]() {
+    closeAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
+    ungroupAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -387,6 +395,11 @@ int main(int argc, char *argv[])
     const bool canLower = canEditActive && active && active->canLowerSelection();
     raiseAct->setEnabled(canRaise);
     lowerAct->setEnabled(canLower);
+    const bool canGroup = canEditActive && active && active->canGroupSelection();
+    groupAct->setEnabled(canGroup);
+    if (ungroupAct) {
+      ungroupAct->setEnabled(false);
+    }
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

@@ -304,6 +304,104 @@ public:
     }
   }
 
+  void groupSelectedElements()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return;
+    }
+
+    const QList<QWidget *> orderedSelection = selectedWidgetsInStackOrder(true);
+    if (orderedSelection.isEmpty()) {
+      return;
+    }
+
+    QList<QWidget *> candidates;
+    candidates.reserve(orderedSelection.size());
+    QSet<QWidget *> candidateSet;
+    for (QWidget *widget : orderedSelection) {
+      if (!widget || widget == displayArea_) {
+        continue;
+      }
+      if (widget->parentWidget() != displayArea_) {
+        return;
+      }
+      if (candidateSet.contains(widget)) {
+        continue;
+      }
+      candidateSet.insert(widget);
+      candidates.append(widget);
+    }
+
+    if (candidates.size() < 2) {
+      return;
+    }
+
+    QRect compositeRect;
+    for (QWidget *widget : candidates) {
+      const QPoint topLeft = widget->mapTo(displayArea_, QPoint(0, 0));
+      const QRect mappedRect(topLeft, widget->size());
+      compositeRect = compositeRect.isValid() ? compositeRect.united(mappedRect)
+                                              : mappedRect;
+    }
+    if (!compositeRect.isValid() || compositeRect.isEmpty()) {
+      return;
+    }
+
+    auto *composite = new CompositeElement(displayArea_);
+    composite->setGeometry(compositeRect);
+    composite->show();
+
+    int insertIndex = elementStack_.size();
+    for (int i = 0; i < elementStack_.size(); ++i) {
+      QWidget *current = elementStack_.at(i).data();
+      if (current && candidateSet.contains(current)) {
+        insertIndex = std::min(insertIndex, i);
+      }
+    }
+    if (insertIndex < 0 || insertIndex > elementStack_.size()) {
+      insertIndex = elementStack_.size();
+    }
+
+    for (QWidget *widget : candidates) {
+      const QPoint currentTopLeft = widget->mapTo(displayArea_, QPoint(0, 0));
+      const QPoint relativePos = currentTopLeft - compositeRect.topLeft();
+      removeElementFromStack(widget);
+      widget->setParent(composite);
+      widget->move(relativePos);
+      widget->show();
+      composite->adoptChild(widget);
+    }
+
+    elementStack_.insert(insertIndex, QPointer<QWidget>(composite));
+    if (insertIndex == 0) {
+      composite->lower();
+    } else {
+      QWidget *above = nullptr;
+      for (int i = insertIndex + 1; i < elementStack_.size(); ++i) {
+        QWidget *candidate = elementStack_.at(i).data();
+        if (candidate) {
+          above = candidate;
+          break;
+        }
+      }
+      if (above) {
+        composite->stackUnder(above);
+      } else {
+        composite->raise();
+      }
+    }
+
+    compositeElements_.append(composite);
+
+    clearSelections();
+    selectCompositeElement(composite);
+    markDirty();
+    refreshResourcePaletteGeometry();
+    notifyMenus();
+  }
+
   bool canRaiseSelection() const
   {
     auto state = state_.lock();
@@ -320,6 +418,29 @@ public:
       return false;
     }
     return !selectedWidgets().isEmpty();
+  }
+
+  bool canGroupSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return false;
+    }
+
+    int candidateCount = 0;
+    for (QWidget *widget : selectedWidgets()) {
+      if (!widget || widget == displayArea_) {
+        continue;
+      }
+      if (widget->parentWidget() != displayArea_) {
+        return false;
+      }
+      ++candidateCount;
+      if (candidateCount >= 2) {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool hasCopyableSelection() const
@@ -618,28 +739,65 @@ private:
   bool writeAdlFile(const QString &filePath) const;
   void clearAllElements();
   bool loadDisplaySection(const AdlNode &displayNode);
-  void loadTextElement(const AdlNode &textNode);
-  void loadTextMonitorElement(const AdlNode &textUpdateNode);
-  void loadTextEntryElement(const AdlNode &textEntryNode);
-  void loadSliderElement(const AdlNode &valuatorNode);
-  void loadWheelSwitchElement(const AdlNode &wheelNode);
-  void loadChoiceButtonElement(const AdlNode &choiceNode);
-  void loadMenuElement(const AdlNode &menuNode);
-  void loadMessageButtonElement(const AdlNode &messageNode);
-  void loadShellCommandElement(const AdlNode &shellNode);
-  void loadRelatedDisplayElement(const AdlNode &relatedNode);
-  void loadMeterElement(const AdlNode &meterNode);
-  void loadBarMonitorElement(const AdlNode &barNode);
-  void loadScaleMonitorElement(const AdlNode &indicatorNode);
-  void loadCartesianPlotElement(const AdlNode &cartesianNode);
-  void loadStripChartElement(const AdlNode &stripNode);
-  void loadByteMonitorElement(const AdlNode &byteNode);
-  void loadImageElement(const AdlNode &imageNode);
-  void loadRectangleElement(const AdlNode &rectangleNode);
-  void loadOvalElement(const AdlNode &ovalNode);
-  void loadArcElement(const AdlNode &arcNode);
-  void loadPolygonElement(const AdlNode &polygonNode);
-  void loadPolylineElement(const AdlNode &polylineNode);
+  TextElement *loadTextElement(const AdlNode &textNode);
+  TextMonitorElement *loadTextMonitorElement(const AdlNode &textUpdateNode);
+  TextEntryElement *loadTextEntryElement(const AdlNode &textEntryNode);
+  SliderElement *loadSliderElement(const AdlNode &valuatorNode);
+  WheelSwitchElement *loadWheelSwitchElement(const AdlNode &wheelNode);
+  ChoiceButtonElement *loadChoiceButtonElement(const AdlNode &choiceNode);
+  MenuElement *loadMenuElement(const AdlNode &menuNode);
+  MessageButtonElement *loadMessageButtonElement(const AdlNode &messageNode);
+  ShellCommandElement *loadShellCommandElement(const AdlNode &shellNode);
+  RelatedDisplayElement *loadRelatedDisplayElement(const AdlNode &relatedNode);
+  MeterElement *loadMeterElement(const AdlNode &meterNode);
+  BarMonitorElement *loadBarMonitorElement(const AdlNode &barNode);
+  ScaleMonitorElement *loadScaleMonitorElement(const AdlNode &indicatorNode);
+  CartesianPlotElement *loadCartesianPlotElement(const AdlNode &cartesianNode);
+  StripChartElement *loadStripChartElement(const AdlNode &stripNode);
+  ByteMonitorElement *loadByteMonitorElement(const AdlNode &byteNode);
+  ImageElement *loadImageElement(const AdlNode &imageNode);
+  RectangleElement *loadRectangleElement(const AdlNode &rectangleNode);
+  OvalElement *loadOvalElement(const AdlNode &ovalNode);
+  ArcElement *loadArcElement(const AdlNode &arcNode);
+  PolygonElement *loadPolygonElement(const AdlNode &polygonNode);
+  PolylineElement *loadPolylineElement(const AdlNode &polylineNode);
+  CompositeElement *loadCompositeElement(const AdlNode &compositeNode);
+  QWidget *loadElementNode(const AdlNode &node);
+  QWidget *effectiveElementParent() const;
+
+  class ElementLoadContextGuard
+  {
+  public:
+    ElementLoadContextGuard(DisplayWindow &window, QWidget *parent,
+        const QPoint &offset, bool suppressRegistration,
+        CompositeElement *composite)
+      : window_(window)
+      , previousParent_(window.currentElementParent_)
+      , previousOffset_(window.currentElementOffset_)
+      , previousSuppress_(window.suppressLoadRegistration_)
+      , previousComposite_(window.currentCompositeOwner_)
+    {
+      window_.currentElementParent_ = parent;
+      window_.currentElementOffset_ = offset;
+      window_.suppressLoadRegistration_ = suppressRegistration;
+      window_.currentCompositeOwner_ = composite;
+    }
+
+    ~ElementLoadContextGuard()
+    {
+      window_.currentElementParent_ = previousParent_;
+      window_.currentElementOffset_ = previousOffset_;
+      window_.suppressLoadRegistration_ = previousSuppress_;
+      window_.currentCompositeOwner_ = previousComposite_;
+    }
+
+  private:
+    DisplayWindow &window_;
+    QWidget *previousParent_ = nullptr;
+    QPoint previousOffset_;
+    bool previousSuppress_ = false;
+    CompositeElement *previousComposite_ = nullptr;
+  };
   QRect parseObjectGeometry(const AdlNode &parent) const;
   bool parseAdlPoint(const QString &text, QPoint *point) const;
   QVector<QPoint> parsePolylinePoints(const AdlNode &polylineNode) const;
@@ -680,6 +838,10 @@ private:
   DisplayAreaWidget *displayArea_ = nullptr;
   QString filePath_;
   QString currentLoadDirectory_;
+  QWidget *currentElementParent_ = nullptr;
+  QPoint currentElementOffset_ = QPoint();
+  bool suppressLoadRegistration_ = false;
+  CompositeElement *currentCompositeOwner_ = nullptr;
   QString colormapName_;
   bool dirty_ = true;
   bool displaySelected_ = false;
@@ -732,6 +894,8 @@ private:
   PolylineElement *selectedPolyline_ = nullptr;
   QList<PolygonElement *> polygonElements_;
   PolygonElement *selectedPolygon_ = nullptr;
+  QList<CompositeElement *> compositeElements_;
+  CompositeElement *selectedCompositeElement_ = nullptr;
   bool polygonCreationActive_ = false;
   PolygonElement *activePolygonElement_ = nullptr;
   QVector<QPoint> polygonCreationPoints_;
@@ -982,6 +1146,15 @@ private:
     selectedPolygon_ = nullptr;
   }
 
+  void clearCompositeSelection()
+  {
+    if (!selectedCompositeElement_) {
+      return;
+    }
+    selectedCompositeElement_->setSelected(false);
+    selectedCompositeElement_ = nullptr;
+  }
+
   void setWidgetSelectionState(QWidget *widget, bool selected)
   {
     if (!widget) {
@@ -1145,6 +1318,7 @@ private:
     appendUnique(selectedLine_);
     appendUnique(selectedPolyline_);
     appendUnique(selectedPolygon_);
+    appendUnique(selectedCompositeElement_);
 
     return widgets;
   }
@@ -1222,6 +1396,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     closeResourcePalette();
   }
 
@@ -2370,8 +2545,8 @@ private:
         || selectedScaleMonitorElement_ || selectedStripChartElement_
         || selectedCartesianPlotElement_ || selectedByteMonitorElement_
         || selectedRectangle_ || selectedImage_ || selectedOval_
-        || selectedArc_ || selectedLine_ || selectedPolyline_
-        || selectedPolygon_;
+    || selectedArc_ || selectedLine_ || selectedPolyline_
+    || selectedPolygon_ || selectedCompositeElement_;
   }
 
   void closeResourcePalette()
@@ -4693,6 +4868,7 @@ private:
     clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedTextElement_ = element;
     selectedTextElement_->setSelected(true);
   }
@@ -4729,6 +4905,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedTextEntryElement_ = element;
     selectedTextEntryElement_->setSelected(true);
   }
@@ -4765,6 +4942,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedSliderElement_ = element;
     selectedSliderElement_->setSelected(true);
   }
@@ -4801,6 +4979,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedWheelSwitchElement_ = element;
     selectedWheelSwitchElement_->setSelected(true);
   }
@@ -4837,6 +5016,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedChoiceButtonElement_ = element;
     selectedChoiceButtonElement_->setSelected(true);
   }
@@ -4873,6 +5053,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedMenuElement_ = element;
     selectedMenuElement_->setSelected(true);
   }
@@ -4909,6 +5090,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedMessageButtonElement_ = element;
     selectedMessageButtonElement_->setSelected(true);
   }
@@ -4945,6 +5127,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedShellCommandElement_ = element;
     selectedShellCommandElement_->setSelected(true);
   }
@@ -4981,6 +5164,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedRelatedDisplayElement_ = element;
     selectedRelatedDisplayElement_->setSelected(true);
   }
@@ -5016,6 +5200,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedTextMonitorElement_ = element;
     selectedTextMonitorElement_->setSelected(true);
   }
@@ -5051,6 +5236,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedMeterElement_ = element;
     selectedMeterElement_->setSelected(true);
   }
@@ -5086,6 +5272,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedScaleMonitorElement_ = element;
     selectedScaleMonitorElement_->setSelected(true);
   }
@@ -5121,6 +5308,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedStripChartElement_ = element;
     selectedStripChartElement_->setSelected(true);
   }
@@ -5156,6 +5344,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedCartesianPlotElement_ = element;
     selectedCartesianPlotElement_->setSelected(true);
   }
@@ -5191,6 +5380,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedBarMonitorElement_ = element;
     selectedBarMonitorElement_->setSelected(true);
   }
@@ -5226,6 +5416,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedByteMonitorElement_ = element;
     selectedByteMonitorElement_->setSelected(true);
   }
@@ -5259,6 +5450,7 @@ private:
     clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedRectangle_ = element;
     selectedRectangle_->setSelected(true);
   }
@@ -5293,6 +5485,7 @@ private:
     clearLineSelection();
     clearPolylineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedImage_ = element;
     selectedImage_->setSelected(true);
   }
@@ -5326,6 +5519,7 @@ private:
     clearArcSelection();
     clearLineSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedOval_ = element;
     selectedOval_->setSelected(true);
   }
@@ -5360,6 +5554,7 @@ private:
     clearLineSelection();
     clearPolygonSelection();
     clearPolylineSelection();
+    clearCompositeSelection();
     selectedArc_ = element;
     selectedArc_->setSelected(true);
   }
@@ -5394,6 +5589,7 @@ private:
     clearImageSelection();
     clearPolygonSelection();
     clearPolylineSelection();
+    clearCompositeSelection();
     selectedLine_ = element;
     selectedLine_->setSelected(true);
   }
@@ -5428,6 +5624,7 @@ private:
     clearLineSelection();
     clearImageSelection();
     clearPolygonSelection();
+    clearCompositeSelection();
     selectedPolyline_ = element;
     selectedPolyline_->setSelected(true);
   }
@@ -5462,8 +5659,44 @@ private:
     clearPolylineSelection();
     clearImageSelection();
     clearOvalSelection();
+    clearCompositeSelection();
     selectedPolygon_ = element;
     selectedPolygon_->setSelected(true);
+  }
+
+  void selectCompositeElement(CompositeElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedCompositeElement_) {
+      selectedCompositeElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    selectedCompositeElement_ = element;
+    selectedCompositeElement_->setSelected(true);
   }
 
   QWidget *currentSelectedWidget() const
@@ -5541,6 +5774,9 @@ private:
     }
     if (selectedPolygon_) {
       return selectedPolygon_;
+    }
+    if (selectedCompositeElement_) {
+      return selectedCompositeElement_;
     }
     return nullptr;
   }
@@ -5659,6 +5895,10 @@ private:
     if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
       selectPolygonElement(polygon);
       showResourcePaletteForPolygon(polygon);
+      return true;
+    }
+    if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+      selectCompositeElement(composite);
       return true;
     }
     if (auto *line = dynamic_cast<LineElement *>(widget)) {
@@ -7422,8 +7662,12 @@ private:
     });
 
     menu.addSeparator();
-    addMenuAction(&menu, QStringLiteral("Group"));
-    addMenuAction(&menu, QStringLiteral("Ungroup"));
+    auto *groupAction = addMenuAction(&menu, QStringLiteral("Group"));
+    groupAction->setEnabled(canGroupSelection());
+    QObject::connect(groupAction, &QAction::triggered, this, [this]() {
+      groupSelectedElements();
+    });
+    auto *ungroupAction = addMenuAction(&menu, QStringLiteral("Ungroup"));
 
     menu.addSeparator();
     auto *alignMenu = menu.addMenu(QStringLiteral("Align"));
@@ -8641,6 +8885,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(lineElements_);
   clearList(polylineElements_);
   clearList(polygonElements_);
+  clearList(compositeElements_);
   elementStack_.clear();
   polygonCreationActive_ = false;
   polygonCreationPoints_.clear();
@@ -9219,10 +9464,10 @@ inline void DisplayWindow::ensureElementInStack(QWidget *element)
   element->raise();
 }
 
-inline void DisplayWindow::loadTextElement(const AdlNode &textNode)
+inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
   QRect geometry = parseObjectGeometry(textNode);
   if (geometry.height() < kMinimumTextElementHeight) {
@@ -9281,13 +9526,14 @@ inline void DisplayWindow::loadTextElement(const AdlNode &textNode)
   element->setSelected(false);
   textElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadTextMonitorElement(
+inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
     const AdlNode &textUpdateNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(textUpdateNode);
@@ -9430,13 +9676,14 @@ inline void DisplayWindow::loadTextMonitorElement(
   element->setSelected(false);
   textMonitorElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadTextEntryElement(
+inline TextEntryElement *DisplayWindow::loadTextEntryElement(
     const AdlNode &textEntryNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(textEntryNode);
@@ -9578,12 +9825,13 @@ inline void DisplayWindow::loadTextEntryElement(
   element->setSelected(false);
   textEntryElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadSliderElement(const AdlNode &valuatorNode)
+inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(valuatorNode);
@@ -9753,12 +10001,13 @@ inline void DisplayWindow::loadSliderElement(const AdlNode &valuatorNode)
   element->setSelected(false);
   sliderElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadWheelSwitchElement(const AdlNode &wheelNode)
+inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &wheelNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(wheelNode);
@@ -9918,12 +10167,13 @@ inline void DisplayWindow::loadWheelSwitchElement(const AdlNode &wheelNode)
   element->setSelected(false);
   wheelSwitchElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadMenuElement(const AdlNode &menuNode)
+inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(menuNode);
@@ -9980,13 +10230,14 @@ inline void DisplayWindow::loadMenuElement(const AdlNode &menuNode)
   element->setSelected(false);
   menuElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadMessageButtonElement(
+inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
     const AdlNode &messageNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(messageNode);
@@ -10055,13 +10306,14 @@ inline void DisplayWindow::loadMessageButtonElement(
   element->setSelected(false);
   messageButtonElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadShellCommandElement(
+inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
     const AdlNode &shellNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(shellNode);
@@ -10131,13 +10383,14 @@ inline void DisplayWindow::loadShellCommandElement(
   element->setSelected(false);
   shellCommandElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadRelatedDisplayElement(
+inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
     const AdlNode &relatedNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(relatedNode);
@@ -10234,13 +10487,14 @@ inline void DisplayWindow::loadRelatedDisplayElement(
   element->setSelected(false);
   relatedDisplayElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadChoiceButtonElement(
+inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
     const AdlNode &choiceNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(choiceNode);
@@ -10295,12 +10549,13 @@ inline void DisplayWindow::loadChoiceButtonElement(
   element->setSelected(false);
   choiceButtonElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
+inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(meterNode);
@@ -10441,12 +10696,13 @@ inline void DisplayWindow::loadMeterElement(const AdlNode &meterNode)
   element->setSelected(false);
   meterElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
+inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(barNode);
@@ -10596,13 +10852,14 @@ inline void DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
   element->setSelected(false);
   barMonitorElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadScaleMonitorElement(
+inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
     const AdlNode &indicatorNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(indicatorNode);
@@ -10750,13 +11007,14 @@ inline void DisplayWindow::loadScaleMonitorElement(
   element->setSelected(false);
   scaleMonitorElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadCartesianPlotElement(
+inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     const AdlNode &cartesianNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(cartesianNode);
@@ -10935,6 +11193,7 @@ inline void DisplayWindow::loadCartesianPlotElement(
     if (!child.name.startsWith(QStringLiteral("trace"), Qt::CaseInsensitive)) {
       continue;
     }
+
     const int traceIndex = traceIndexForName(child.name);
     if (traceIndex < 0 || traceIndex >= element->traceCount()) {
       continue;
@@ -11042,12 +11301,13 @@ inline void DisplayWindow::loadCartesianPlotElement(
   element->setSelected(false);
   cartesianPlotElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadStripChartElement(const AdlNode &stripNode)
+inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &stripNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(stripNode);
@@ -11256,12 +11516,14 @@ inline void DisplayWindow::loadStripChartElement(const AdlNode &stripNode)
   element->setSelected(false);
   stripChartElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadByteMonitorElement(const AdlNode &byteNode)
+inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
+    const AdlNode &byteNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(byteNode);
@@ -11328,12 +11590,14 @@ inline void DisplayWindow::loadByteMonitorElement(const AdlNode &byteNode)
   element->setSelected(false);
   byteMonitorElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadImageElement(const AdlNode &imageNode)
+inline ImageElement *DisplayWindow::loadImageElement(
+    const AdlNode &imageNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(imageNode);
@@ -11413,12 +11677,14 @@ inline void DisplayWindow::loadImageElement(const AdlNode &imageNode)
   element->setSelected(false);
   imageElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadRectangleElement(const AdlNode &rectangleNode)
+inline RectangleElement *DisplayWindow::loadRectangleElement(
+    const AdlNode &rectangleNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(rectangleNode);
@@ -11493,12 +11759,13 @@ inline void DisplayWindow::loadRectangleElement(const AdlNode &rectangleNode)
   element->setSelected(false);
   rectangleElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
+inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(ovalNode);
@@ -11579,12 +11846,13 @@ inline void DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
   element->setSelected(false);
   ovalElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadArcElement(const AdlNode &arcNode)
+inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(arcNode);
@@ -11685,17 +11953,19 @@ inline void DisplayWindow::loadArcElement(const AdlNode &arcNode)
   element->setSelected(false);
   arcElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
-inline void DisplayWindow::loadPolygonElement(const AdlNode &polygonNode)
+inline PolygonElement *DisplayWindow::loadPolygonElement(
+    const AdlNode &polygonNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QVector<QPoint> points = parsePolylinePoints(polygonNode);
   if (points.size() < 3) {
-    return;
+    return nullptr;
   }
 
   QColor color = colorForIndex(14);
@@ -11787,6 +12057,7 @@ inline void DisplayWindow::loadPolygonElement(const AdlNode &polygonNode)
   element->setSelected(false);
   polygonElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
 inline bool DisplayWindow::parseAdlPoint(const QString &text, QPoint *point) const
@@ -11879,16 +12150,16 @@ inline QVector<QPoint> DisplayWindow::parsePolylinePoints(
   return points;
 }
 
-inline void DisplayWindow::loadPolylineElement(
+inline PolylineElement *DisplayWindow::loadPolylineElement(
     const AdlNode &polylineNode)
 {
   if (!displayArea_) {
-    return;
+    return nullptr;
   }
 
   QVector<QPoint> points = parsePolylinePoints(polylineNode);
   if (points.size() < 2) {
-    return;
+    return nullptr;
   }
 
   QColor color = colorForIndex(14);
@@ -11986,7 +12257,7 @@ inline void DisplayWindow::loadPolylineElement(
     element->setSelected(false);
     lineElements_.append(element);
     ensureElementInStack(element);
-    return;
+    return nullptr;
   }
 
   auto *element = new PolylineElement(displayArea_);
@@ -12007,6 +12278,7 @@ inline void DisplayWindow::loadPolylineElement(
   element->setSelected(false);
   polylineElements_.append(element);
   ensureElementInStack(element);
+  return element;
 }
 
 inline void DisplayWindow::setAsActiveDisplay()

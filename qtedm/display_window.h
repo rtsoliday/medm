@@ -82,6 +82,7 @@
 #include "polygon_element.h"
 #include "polyline_element.h"
 #include "rectangle_element.h"
+#include "composite_element.h"
 #include "resource_palette_dialog.h"
 #include "text_element.h"
 #include "choice_button_element.h"

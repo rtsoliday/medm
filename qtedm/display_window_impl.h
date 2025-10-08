@@ -270,6 +270,31 @@ protected:
   void mousePressEvent(QMouseEvent *event) override
   {
     setAsActiveDisplay();
+    if (event->button() == Qt::MiddleButton) {
+      if (auto state = state_.lock(); state && state->editMode
+          && state->createTool == CreateTool::kNone) {
+        QWidget *hitWidget = elementAt(event->pos());
+        QWidget *selectedWidget = currentSelectedWidget();
+        if (!selectedWidget && hitWidget) {
+          if (selectWidgetForEditing(hitWidget)) {
+            selectedWidget = currentSelectedWidget();
+          }
+        } else if (hitWidget && hitWidget != selectedWidget) {
+          if (selectWidgetForEditing(hitWidget)) {
+            selectedWidget = currentSelectedWidget();
+          }
+        }
+        if (selectedWidget && hitWidget == selectedWidget) {
+          beginMiddleButtonDrag(event->pos());
+          event->accept();
+          return;
+        }
+        if (!selectedWidget && !hitWidget) {
+          event->accept();
+          return;
+        }
+      }
+    }
     if (event->button() == Qt::LeftButton) {
       if (auto state = state_.lock(); state && state->editMode) {
         if (state->createTool == CreateTool::kPolygon) {
@@ -335,141 +360,7 @@ protected:
         }
 
         if (QWidget *widget = elementAt(event->pos())) {
-          if (auto *text = dynamic_cast<TextElement *>(widget)) {
-            selectTextElement(text);
-            showResourcePaletteForText(text);
-            event->accept();
-            return;
-          }
-          if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
-            selectTextEntryElement(textEntry);
-            showResourcePaletteForTextEntry(textEntry);
-            event->accept();
-            return;
-          }
-          if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
-            selectSliderElement(slider);
-            showResourcePaletteForSlider(slider);
-            event->accept();
-            return;
-          }
-          if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
-            selectWheelSwitchElement(wheel);
-            showResourcePaletteForWheelSwitch(wheel);
-            event->accept();
-            return;
-          }
-          if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
-            selectChoiceButtonElement(choice);
-            showResourcePaletteForChoiceButton(choice);
-            event->accept();
-            return;
-          }
-          if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
-            selectMenuElement(menu);
-            showResourcePaletteForMenu(menu);
-            event->accept();
-            return;
-          }
-          if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
-            selectMessageButtonElement(message);
-            showResourcePaletteForMessageButton(message);
-            event->accept();
-            return;
-          }
-          if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
-            selectShellCommandElement(shell);
-            showResourcePaletteForShellCommand(shell);
-            event->accept();
-            return;
-          }
-          if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
-            selectRelatedDisplayElement(related);
-            showResourcePaletteForRelatedDisplay(related);
-            event->accept();
-            return;
-          }
-          if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
-            selectTextMonitorElement(textMonitor);
-            showResourcePaletteForTextMonitor(textMonitor);
-            event->accept();
-            return;
-          }
-          if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
-            selectMeterElement(meter);
-            showResourcePaletteForMeter(meter);
-            event->accept();
-            return;
-          }
-          if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
-            selectScaleMonitorElement(scale);
-            showResourcePaletteForScale(scale);
-            event->accept();
-            return;
-          }
-          if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
-            selectStripChartElement(strip);
-            showResourcePaletteForStripChart(strip);
-            event->accept();
-            return;
-          }
-          if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
-            selectCartesianPlotElement(cart);
-            showResourcePaletteForCartesianPlot(cart);
-            event->accept();
-            return;
-          }
-          if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
-            selectBarMonitorElement(bar);
-            showResourcePaletteForBar(bar);
-            event->accept();
-            return;
-          }
-          if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
-            selectByteMonitorElement(byte);
-            showResourcePaletteForByte(byte);
-            event->accept();
-            return;
-          }
-          if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
-            selectRectangleElement(rectangle);
-            showResourcePaletteForRectangle(rectangle);
-            event->accept();
-            return;
-          }
-          if (auto *image = dynamic_cast<ImageElement *>(widget)) {
-            selectImageElement(image);
-            showResourcePaletteForImage(image);
-            event->accept();
-            return;
-          }
-          if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
-            selectOvalElement(oval);
-            showResourcePaletteForOval(oval);
-            event->accept();
-            return;
-          }
-          if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
-            selectArcElement(arc);
-            showResourcePaletteForArc(arc);
-            event->accept();
-            return;
-          }
-          if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
-            selectPolylineElement(polyline);
-            showResourcePaletteForPolyline(polyline);
-            event->accept();
-            return;
-          }
-          if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
-            selectPolygonElement(polygon);
-            showResourcePaletteForPolygon(polygon);
-            event->accept();
-            return;
-          }
-          if (auto *line = dynamic_cast<LineElement *>(widget)) {
-            selectLineElement(line);
-            showResourcePaletteForLine(line);
+          if (selectWidgetForEditing(widget)) {
             event->accept();
             return;
           }
@@ -520,6 +411,11 @@ protected:
 
   void mouseMoveEvent(QMouseEvent *event) override
   {
+    if (middleButtonDragActive_ && (event->buttons() & Qt::MiddleButton)) {
+      updateMiddleButtonDrag(event->pos());
+      event->accept();
+      return;
+    }
     if (polygonCreationActive_) {
       if (auto state = state_.lock(); state && state->editMode && displayArea_
           && state->createTool == CreateTool::kPolygon) {
@@ -554,6 +450,13 @@ protected:
 
   void mouseReleaseEvent(QMouseEvent *event) override
   {
+    if (event->button() == Qt::MiddleButton) {
+      if (middleButtonDragActive_) {
+        finishMiddleButtonDrag(true);
+        event->accept();
+        return;
+      }
+    }
     if (event->button() == Qt::LeftButton) {
       if (rubberBandActive_) {
         if (auto state = state_.lock(); state && state->editMode
@@ -724,6 +627,11 @@ private:
   bool rubberBandActive_ = false;
   QPoint rubberBandOrigin_;
   CreateTool activeRubberBandTool_ = CreateTool::kNone;
+  QPointer<QWidget> middleButtonDragWidget_;
+  bool middleButtonDragActive_ = false;
+  bool middleButtonDragMoved_ = false;
+  QPoint middleButtonDragStartAreaPos_;
+  QRect middleButtonInitialRect_;
 
   void setDisplaySelected(bool selected)
   {
@@ -954,6 +862,7 @@ private:
 
   void clearSelections()
   {
+    cancelMiddleButtonDrag();
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
@@ -5210,6 +5119,284 @@ private:
     selectedPolygon_ = element;
     selectedPolygon_->setSelected(true);
     bringElementToFront(element);
+  }
+
+  QWidget *currentSelectedWidget() const
+  {
+    if (selectedTextElement_) {
+      return selectedTextElement_;
+    }
+    if (selectedTextEntryElement_) {
+      return selectedTextEntryElement_;
+    }
+    if (selectedSliderElement_) {
+      return selectedSliderElement_;
+    }
+    if (selectedWheelSwitchElement_) {
+      return selectedWheelSwitchElement_;
+    }
+    if (selectedChoiceButtonElement_) {
+      return selectedChoiceButtonElement_;
+    }
+    if (selectedMenuElement_) {
+      return selectedMenuElement_;
+    }
+    if (selectedMessageButtonElement_) {
+      return selectedMessageButtonElement_;
+    }
+    if (selectedShellCommandElement_) {
+      return selectedShellCommandElement_;
+    }
+    if (selectedRelatedDisplayElement_) {
+      return selectedRelatedDisplayElement_;
+    }
+    if (selectedTextMonitorElement_) {
+      return selectedTextMonitorElement_;
+    }
+    if (selectedMeterElement_) {
+      return selectedMeterElement_;
+    }
+    if (selectedBarMonitorElement_) {
+      return selectedBarMonitorElement_;
+    }
+    if (selectedScaleMonitorElement_) {
+      return selectedScaleMonitorElement_;
+    }
+    if (selectedStripChartElement_) {
+      return selectedStripChartElement_;
+    }
+    if (selectedCartesianPlotElement_) {
+      return selectedCartesianPlotElement_;
+    }
+    if (selectedByteMonitorElement_) {
+      return selectedByteMonitorElement_;
+    }
+    if (selectedRectangle_) {
+      return selectedRectangle_;
+    }
+    if (selectedImage_) {
+      return selectedImage_;
+    }
+    if (selectedOval_) {
+      return selectedOval_;
+    }
+    if (selectedArc_) {
+      return selectedArc_;
+    }
+    if (selectedLine_) {
+      return selectedLine_;
+    }
+    if (selectedPolyline_) {
+      return selectedPolyline_;
+    }
+    if (selectedPolygon_) {
+      return selectedPolygon_;
+    }
+    return nullptr;
+  }
+
+  bool selectWidgetForEditing(QWidget *widget)
+  {
+    if (!widget) {
+      return false;
+    }
+    if (auto *text = dynamic_cast<TextElement *>(widget)) {
+      selectTextElement(text);
+      showResourcePaletteForText(text);
+      return true;
+    }
+    if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
+      selectTextEntryElement(textEntry);
+      showResourcePaletteForTextEntry(textEntry);
+      return true;
+    }
+    if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+      selectSliderElement(slider);
+      showResourcePaletteForSlider(slider);
+      return true;
+    }
+    if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+      selectWheelSwitchElement(wheel);
+      showResourcePaletteForWheelSwitch(wheel);
+      return true;
+    }
+    if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
+      selectChoiceButtonElement(choice);
+      showResourcePaletteForChoiceButton(choice);
+      return true;
+    }
+    if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+      selectMenuElement(menu);
+      showResourcePaletteForMenu(menu);
+      return true;
+    }
+    if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
+      selectMessageButtonElement(message);
+      showResourcePaletteForMessageButton(message);
+      return true;
+    }
+    if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+      selectShellCommandElement(shell);
+      showResourcePaletteForShellCommand(shell);
+      return true;
+    }
+    if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+      selectRelatedDisplayElement(related);
+      showResourcePaletteForRelatedDisplay(related);
+      return true;
+    }
+    if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
+      selectTextMonitorElement(textMonitor);
+      showResourcePaletteForTextMonitor(textMonitor);
+      return true;
+    }
+    if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+      selectMeterElement(meter);
+      showResourcePaletteForMeter(meter);
+      return true;
+    }
+    if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      selectScaleMonitorElement(scale);
+      showResourcePaletteForScale(scale);
+      return true;
+    }
+    if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+      selectStripChartElement(strip);
+      showResourcePaletteForStripChart(strip);
+      return true;
+    }
+    if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
+      selectCartesianPlotElement(cart);
+      showResourcePaletteForCartesianPlot(cart);
+      return true;
+    }
+    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+      selectBarMonitorElement(bar);
+      showResourcePaletteForBar(bar);
+      return true;
+    }
+    if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
+      selectByteMonitorElement(byte);
+      showResourcePaletteForByte(byte);
+      return true;
+    }
+    if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+      selectRectangleElement(rectangle);
+      showResourcePaletteForRectangle(rectangle);
+      return true;
+    }
+    if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+      selectImageElement(image);
+      showResourcePaletteForImage(image);
+      return true;
+    }
+    if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
+      selectOvalElement(oval);
+      showResourcePaletteForOval(oval);
+      return true;
+    }
+    if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+      selectArcElement(arc);
+      showResourcePaletteForArc(arc);
+      return true;
+    }
+    if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+      selectPolylineElement(polyline);
+      showResourcePaletteForPolyline(polyline);
+      return true;
+    }
+    if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+      selectPolygonElement(polygon);
+      showResourcePaletteForPolygon(polygon);
+      return true;
+    }
+    if (auto *line = dynamic_cast<LineElement *>(widget)) {
+      selectLineElement(line);
+      showResourcePaletteForLine(line);
+      return true;
+    }
+    return false;
+  }
+
+  void beginMiddleButtonDrag(const QPoint &windowPos)
+  {
+    finishMiddleButtonDrag(false);
+    if (!displayArea_) {
+      return;
+    }
+    QWidget *selected = currentSelectedWidget();
+    if (!selected) {
+      return;
+    }
+    middleButtonDragWidget_ = selected;
+    middleButtonInitialRect_ = selected->geometry();
+    middleButtonDragStartAreaPos_ = displayArea_->mapFrom(this, windowPos);
+    middleButtonDragActive_ = true;
+    middleButtonDragMoved_ = false;
+  }
+
+  void updateMiddleButtonDrag(const QPoint &windowPos)
+  {
+    if (!middleButtonDragActive_ || middleButtonDragWidget_.isNull()
+        || !displayArea_) {
+      return;
+    }
+    const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
+    const QPoint offset = areaPos - middleButtonDragStartAreaPos_;
+    const QPoint clamped =
+        clampOffsetToDisplayArea(middleButtonInitialRect_, offset);
+    const QPoint newTopLeft = middleButtonInitialRect_.topLeft() + clamped;
+    if (middleButtonDragWidget_->pos() == newTopLeft) {
+      return;
+    }
+    middleButtonDragWidget_->move(newTopLeft);
+    middleButtonDragWidget_->update();
+    middleButtonDragMoved_ = true;
+  }
+
+  void finishMiddleButtonDrag(bool applyChanges)
+  {
+    const bool wasActive = middleButtonDragActive_;
+    const bool moved = middleButtonDragMoved_;
+    middleButtonDragActive_ = false;
+    middleButtonDragMoved_ = false;
+    middleButtonInitialRect_ = QRect();
+    middleButtonDragWidget_.clear();
+    if (applyChanges && wasActive && moved) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+    }
+  }
+
+  void cancelMiddleButtonDrag()
+  {
+    finishMiddleButtonDrag(false);
+  }
+
+  void refreshResourcePaletteGeometry()
+  {
+    if (resourcePalette_.isNull()) {
+      return;
+    }
+    resourcePalette_->refreshGeometryFromSelection();
+  }
+
+  QPoint clampOffsetToDisplayArea(const QRect &rect,
+      const QPoint &offset) const
+  {
+    if (!displayArea_) {
+      return offset;
+    }
+    const QRect areaRect = displayArea_->rect();
+    const int maxLeft = std::max(areaRect.left(),
+        areaRect.right() - rect.width() + 1);
+    const int maxTop = std::max(areaRect.top(),
+        areaRect.bottom() - rect.height() + 1);
+    const int clampedLeft = std::clamp(rect.left() + offset.x(),
+        areaRect.left(), maxLeft);
+    const int clampedTop = std::clamp(rect.top() + offset.y(),
+        areaRect.top(), maxTop);
+    return QPoint(clampedLeft - rect.left(), clampedTop - rect.top());
   }
 
   void startCreateRubberBand(const QPoint &areaPos, CreateTool tool)

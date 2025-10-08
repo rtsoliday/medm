@@ -2374,6 +2374,22 @@ public:
     activateWindow();
   }
 
+  void refreshGeometryFromSelection()
+  {
+    if (!isVisible() || !geometryGetter_) {
+      return;
+    }
+    QRect geometry = geometryGetter_();
+    if (!geometry.isValid()) {
+      return;
+    }
+    if (geometry == lastCommittedGeometry_) {
+      return;
+    }
+    lastCommittedGeometry_ = geometry;
+    updateGeometryEdits(geometry);
+  }
+
   void showForText(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QString()> textGetter,

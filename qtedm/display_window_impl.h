@@ -7228,7 +7228,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
             QStringLiteral("format=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(wheelFormat)));
       }
-      AdlWriter::writeLimitsSection(stream, 1, wheel->limits());
+      AdlWriter::writeLimitsSection(stream, 1, wheel->limits(), true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }

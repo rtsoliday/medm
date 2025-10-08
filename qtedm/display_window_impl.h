@@ -1128,6 +1128,7 @@ private:
           newElement->setChannel(idx, channels[idx]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.textElements_.append(newElement);
         target.selectTextElement(newElement);
         target.markDirty();
@@ -1173,6 +1174,7 @@ private:
         newElement->setLimits(limits);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.textEntryElements_.append(newElement);
         target.selectTextEntryElement(newElement);
         target.markDirty();
@@ -1214,6 +1216,7 @@ private:
         newElement->setLimits(limits);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.sliderElements_.append(newElement);
         target.selectSliderElement(newElement);
         target.markDirty();
@@ -1253,6 +1256,7 @@ private:
         newElement->setLimits(limits);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.wheelSwitchElements_.append(newElement);
         target.selectWheelSwitchElement(newElement);
         target.markDirty();
@@ -1288,6 +1292,7 @@ private:
         newElement->setStacking(stacking);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.choiceButtonElements_.append(newElement);
         target.selectChoiceButtonElement(newElement);
         target.markDirty();
@@ -1320,6 +1325,7 @@ private:
         newElement->setColorMode(colorMode);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.menuElements_.append(newElement);
         target.selectMenuElement(newElement);
         target.markDirty();
@@ -1359,6 +1365,7 @@ private:
         newElement->setReleaseMessage(releaseMessage);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.messageButtonElements_.append(newElement);
         target.selectMessageButtonElement(newElement);
         target.markDirty();
@@ -1398,6 +1405,7 @@ private:
           newElement->setEntry(i, entries[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.shellCommandElements_.append(newElement);
         target.selectShellCommandElement(newElement);
         target.markDirty();
@@ -1440,6 +1448,7 @@ private:
           newElement->setEntry(i, entries[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.relatedDisplayElements_.append(newElement);
         target.selectRelatedDisplayElement(newElement);
         target.markDirty();
@@ -1495,6 +1504,7 @@ private:
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.textMonitorElements_.append(newElement);
         target.selectTextMonitorElement(newElement);
         target.markDirty();
@@ -1532,6 +1542,7 @@ private:
         newElement->setLimits(limits);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.meterElements_.append(newElement);
         target.selectMeterElement(newElement);
         target.markDirty();
@@ -1573,6 +1584,7 @@ private:
         newElement->setLimits(limits);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.barMonitorElements_.append(newElement);
         target.selectBarMonitorElement(newElement);
         target.markDirty();
@@ -1612,6 +1624,7 @@ private:
         newElement->setLimits(limits);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.scaleMonitorElements_.append(newElement);
         target.selectScaleMonitorElement(newElement);
         target.markDirty();
@@ -1666,6 +1679,7 @@ private:
           newElement->setPenLimits(i, penLimits[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.stripChartElements_.append(newElement);
         target.selectStripChartElement(newElement);
         target.markDirty();
@@ -1744,6 +1758,7 @@ private:
           newElement->setTraceUsesRightAxis(i, traceRight[idx]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.cartesianPlotElements_.append(newElement);
         target.selectCartesianPlotElement(newElement);
         target.markDirty();
@@ -1784,6 +1799,7 @@ private:
         newElement->setEndBit(endBit);
         newElement->setChannel(channel);
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.byteMonitorElements_.append(newElement);
         target.selectByteMonitorElement(newElement);
         target.markDirty();
@@ -1830,6 +1846,7 @@ private:
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.rectangleElements_.append(newElement);
         target.selectRectangleElement(newElement);
         target.markDirty();
@@ -1882,6 +1899,7 @@ private:
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.imageElements_.append(newElement);
         target.selectImageElement(newElement);
         target.markDirty();
@@ -1928,6 +1946,7 @@ private:
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.ovalElements_.append(newElement);
         target.selectOvalElement(newElement);
         target.markDirty();
@@ -1979,6 +1998,7 @@ private:
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.arcElements_.append(newElement);
         target.selectArcElement(newElement);
         target.markDirty();
@@ -2034,6 +2054,7 @@ private:
               translatedPoints[1] - rect.topLeft());
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.lineElements_.append(newElement);
         target.selectLineElement(newElement);
         target.markDirty();
@@ -2080,6 +2101,7 @@ private:
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.polylineElements_.append(newElement);
         target.selectPolylineElement(newElement);
         target.markDirty();
@@ -2128,6 +2150,7 @@ private:
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }
         newElement->show();
+        target.ensureElementInStack(newElement);
         target.polygonElements_.append(newElement);
         target.selectPolygonElement(newElement);
         target.markDirty();
@@ -4494,7 +4517,6 @@ private:
     clearPolygonSelection();
     selectedTextElement_ = element;
     selectedTextElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectTextEntryElement(TextEntryElement *element)
@@ -4531,7 +4553,6 @@ private:
     clearPolygonSelection();
     selectedTextEntryElement_ = element;
     selectedTextEntryElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectSliderElement(SliderElement *element)
@@ -4568,7 +4589,6 @@ private:
     clearPolygonSelection();
     selectedSliderElement_ = element;
     selectedSliderElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectWheelSwitchElement(WheelSwitchElement *element)
@@ -4605,7 +4625,6 @@ private:
     clearPolygonSelection();
     selectedWheelSwitchElement_ = element;
     selectedWheelSwitchElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectChoiceButtonElement(ChoiceButtonElement *element)
@@ -4642,7 +4661,6 @@ private:
     clearPolygonSelection();
     selectedChoiceButtonElement_ = element;
     selectedChoiceButtonElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectMenuElement(MenuElement *element)
@@ -4679,7 +4697,6 @@ private:
     clearPolygonSelection();
     selectedMenuElement_ = element;
     selectedMenuElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectMessageButtonElement(MessageButtonElement *element)
@@ -4716,7 +4733,6 @@ private:
     clearPolygonSelection();
     selectedMessageButtonElement_ = element;
     selectedMessageButtonElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectShellCommandElement(ShellCommandElement *element)
@@ -4753,7 +4769,6 @@ private:
     clearPolygonSelection();
     selectedShellCommandElement_ = element;
     selectedShellCommandElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectRelatedDisplayElement(RelatedDisplayElement *element)
@@ -4790,7 +4805,6 @@ private:
     clearPolygonSelection();
     selectedRelatedDisplayElement_ = element;
     selectedRelatedDisplayElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectTextMonitorElement(TextMonitorElement *element)
@@ -4826,7 +4840,6 @@ private:
     clearPolygonSelection();
     selectedTextMonitorElement_ = element;
     selectedTextMonitorElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectMeterElement(MeterElement *element)
@@ -4862,7 +4875,6 @@ private:
     clearPolygonSelection();
     selectedMeterElement_ = element;
     selectedMeterElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectScaleMonitorElement(ScaleMonitorElement *element)
@@ -4898,7 +4910,6 @@ private:
     clearPolygonSelection();
     selectedScaleMonitorElement_ = element;
     selectedScaleMonitorElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectStripChartElement(StripChartElement *element)
@@ -4934,7 +4945,6 @@ private:
     clearPolygonSelection();
     selectedStripChartElement_ = element;
     selectedStripChartElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectCartesianPlotElement(CartesianPlotElement *element)
@@ -4970,7 +4980,6 @@ private:
     clearPolygonSelection();
     selectedCartesianPlotElement_ = element;
     selectedCartesianPlotElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectBarMonitorElement(BarMonitorElement *element)
@@ -5006,7 +5015,6 @@ private:
     clearPolygonSelection();
     selectedBarMonitorElement_ = element;
     selectedBarMonitorElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectByteMonitorElement(ByteMonitorElement *element)
@@ -5042,7 +5050,6 @@ private:
     clearPolygonSelection();
     selectedByteMonitorElement_ = element;
     selectedByteMonitorElement_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectRectangleElement(RectangleElement *element)
@@ -5076,7 +5083,6 @@ private:
     clearPolygonSelection();
     selectedRectangle_ = element;
     selectedRectangle_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectImageElement(ImageElement *element)
@@ -5111,7 +5117,6 @@ private:
     clearPolygonSelection();
     selectedImage_ = element;
     selectedImage_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectOvalElement(OvalElement *element)
@@ -5145,7 +5150,6 @@ private:
     clearPolygonSelection();
     selectedOval_ = element;
     selectedOval_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectArcElement(ArcElement *element)
@@ -5180,7 +5184,6 @@ private:
     clearPolylineSelection();
     selectedArc_ = element;
     selectedArc_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectLineElement(LineElement *element)
@@ -5215,7 +5218,6 @@ private:
     clearPolylineSelection();
     selectedLine_ = element;
     selectedLine_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectPolylineElement(PolylineElement *element)
@@ -5250,7 +5252,6 @@ private:
     clearPolygonSelection();
     selectedPolyline_ = element;
     selectedPolyline_->setSelected(true);
-    bringElementToFront(element);
   }
 
   void selectPolygonElement(PolygonElement *element)
@@ -5285,7 +5286,6 @@ private:
     clearOvalSelection();
     selectedPolygon_ = element;
     selectedPolygon_->setSelected(true);
-    bringElementToFront(element);
   }
 
   QWidget *currentSelectedWidget() const
@@ -6314,6 +6314,7 @@ private:
     element->setGeometry(target);
     element->setText(QStringLiteral("Text"));
     element->show();
+    ensureElementInStack(element);
     textElements_.append(element);
     selectTextElement(element);
     showResourcePaletteForText(element);
@@ -6335,6 +6336,7 @@ private:
     element->setGeometry(target);
     element->setText(element->channel(0));
     element->show();
+    ensureElementInStack(element);
     textMonitorElements_.append(element);
     selectTextMonitorElement(element);
     showResourcePaletteForTextMonitor(element);
@@ -6362,6 +6364,7 @@ private:
     element->setFont(font());
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     textEntryElements_.append(element);
     selectTextEntryElement(element);
     showResourcePaletteForTextEntry(element);
@@ -6388,6 +6391,7 @@ private:
     auto *element = new SliderElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     sliderElements_.append(element);
     selectSliderElement(element);
     showResourcePaletteForSlider(element);
@@ -6414,6 +6418,7 @@ private:
     auto *element = new WheelSwitchElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     wheelSwitchElements_.append(element);
     selectWheelSwitchElement(element);
     showResourcePaletteForWheelSwitch(element);
@@ -6441,6 +6446,7 @@ private:
     element->setFont(font());
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     choiceButtonElements_.append(element);
     selectChoiceButtonElement(element);
     showResourcePaletteForChoiceButton(element);
@@ -6468,6 +6474,7 @@ private:
     element->setFont(font());
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     menuElements_.append(element);
     selectMenuElement(element);
     showResourcePaletteForMenu(element);
@@ -6495,6 +6502,7 @@ private:
     element->setFont(font());
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     messageButtonElements_.append(element);
     selectMessageButtonElement(element);
     showResourcePaletteForMessageButton(element);
@@ -6523,6 +6531,7 @@ private:
     element->setGeometry(target);
     element->setLabel(QStringLiteral("Shell Command"));
     element->show();
+    ensureElementInStack(element);
     shellCommandElements_.append(element);
     selectShellCommandElement(element);
     showResourcePaletteForShellCommand(element);
@@ -6550,6 +6559,7 @@ private:
     element->setFont(font());
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     relatedDisplayElements_.append(element);
     selectRelatedDisplayElement(element);
     showResourcePaletteForRelatedDisplay(element);
@@ -6576,6 +6586,7 @@ private:
     auto *element = new MeterElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     meterElements_.append(element);
     selectMeterElement(element);
     showResourcePaletteForMeter(element);
@@ -6602,6 +6613,7 @@ private:
     auto *element = new BarMonitorElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     barMonitorElements_.append(element);
     selectBarMonitorElement(element);
     showResourcePaletteForBar(element);
@@ -6628,6 +6640,7 @@ private:
     auto *element = new ScaleMonitorElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     scaleMonitorElements_.append(element);
     selectScaleMonitorElement(element);
     showResourcePaletteForScale(element);
@@ -6654,6 +6667,7 @@ private:
     auto *element = new StripChartElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     stripChartElements_.append(element);
     selectStripChartElement(element);
     showResourcePaletteForStripChart(element);
@@ -6680,6 +6694,7 @@ private:
     auto *element = new CartesianPlotElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     cartesianPlotElements_.append(element);
     selectCartesianPlotElement(element);
     showResourcePaletteForCartesianPlot(element);
@@ -6706,6 +6721,7 @@ private:
     auto *element = new ByteMonitorElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     byteMonitorElements_.append(element);
     selectByteMonitorElement(element);
     showResourcePaletteForByte(element);
@@ -6732,6 +6748,7 @@ private:
     auto *element = new RectangleElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     rectangleElements_.append(element);
     selectRectangleElement(element);
     showResourcePaletteForRectangle(element);
@@ -6761,6 +6778,7 @@ private:
       element->setBaseDirectory(QFileInfo(filePath_).absolutePath());
     }
     element->show();
+    ensureElementInStack(element);
     imageElements_.append(element);
     selectImageElement(element);
     showResourcePaletteForImage(element);
@@ -6787,6 +6805,7 @@ private:
     auto *element = new OvalElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     ovalElements_.append(element);
     selectOvalElement(element);
     showResourcePaletteForOval(element);
@@ -6813,6 +6832,7 @@ private:
     auto *element = new ArcElement(displayArea_);
     element->setGeometry(target);
     element->show();
+    ensureElementInStack(element);
     arcElements_.append(element);
     selectArcElement(element);
     showResourcePaletteForArc(element);
@@ -6852,6 +6872,7 @@ private:
     element->setGeometry(rect);
     element->setLocalEndpoints(localStart, localEnd);
     element->show();
+    ensureElementInStack(element);
     lineElements_.append(element);
     selectLineElement(element);
     showResourcePaletteForLine(element);

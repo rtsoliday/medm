@@ -1,0 +1,569 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_RelatedDisplay.adl"
+	version=030122
+}
+display {
+	object {
+		x=0
+		y=53
+		width=969
+		height=539
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+"related display" {
+	object {
+		x=18
+		y=12
+		width=160
+		height=88
+	}
+	display[0] {
+		label="FizzBuzz"
+		name="fizzBuzz42.adl"
+		args="PV=RND:42"
+	}
+	display[1] {
+		name="shufflePanel.adl"
+		args="seed=0x1A"
+	}
+	display[2] {
+		label="Gamma Shift"
+		name="gammaShift.adl"
+	}
+	display[3] {
+		label="Rogue Entry"
+		args="ARM=auto"
+	}
+	display[4] {
+		label="NoArgs"
+		name="blankArgs.adl"
+		policy="replace display"
+	}
+	clr=22
+	bclr=47
+	label="randomMenu1"
+}
+"related display" {
+	object {
+		x=20
+		y=424
+		width=600
+		height=22
+	}
+	display[0] {
+		label="Alpha Byte"
+		name="alphaByte.adl"
+		args="ADDR=0xAE"
+	}
+	display[1] {
+		label="Zig"
+		name="zigzag.adl"
+		args="MODE=zig"
+		policy="replace display"
+	}
+	display[2] {
+		label="Quirk"
+		name="quirkPanel.adl"
+	}
+	display[4] {
+		label="Spare"
+		name="spareLaunch.adl"
+		args="FLAG=random"
+	}
+	clr=35
+	bclr=6
+	label="rowWidget"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=378
+		y=12
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Night Owl"
+		name="nightOwl.adl"
+		args="SHIFT=graveyard"
+	}
+	display[1] {
+		label="Latitude"
+		name="mapGrid.adl"
+	}
+	display[2] {
+		name="nullEntry.adl"
+		args="SILENT=1"
+	}
+	display[3] {
+		label="Short"
+	}
+	display[4] {
+		label="Echo"
+		name="echoPanel.adl"
+		args="color=seafoam"
+		policy="replace display"
+	}
+	clr=8
+	bclr=52
+	visual="a column of buttons"
+}
+"related display" {
+	object {
+		x=558
+		y=12
+		width=160
+		height=88
+	}
+	display[0] {
+		label="DryRun"
+		name="dryRun.adl"
+	}
+	display[1] {
+		label="Latency Test"
+		name="latencyTest.adl"
+		args="DELAY=37ms"
+	}
+	display[2] {
+		name="ghostScreen.adl"
+	}
+	display[3] {
+		label="Warp"
+		name="warpField.adl"
+		args="COEFF=9.81"
+	}
+	display[4] {
+		label="Reset"
+	}
+	clr=60
+	bclr=12
+	label="hiddenDeck"
+	visual="invisible"
+}
+"related display" {
+	object {
+		x=22
+		y=458
+		width=600
+		height=17
+	}
+	display[0] {
+		label="Nebula"
+		name="nebulaView.adl"
+		args="SPECTRAL=IR"
+	}
+	display[1] {
+		name="randomNebula.adl"
+	}
+	display[2] {
+		label="Cluster"
+		name="clusterPane.adl"
+		args="NODES=7"
+	}
+	display[3] {
+		label="Vacuum"
+		args="LEVEL=5e-9"
+	}
+	display[4] {
+		label="Dust"
+		name="dustMap.adl"
+		policy="replace display"
+	}
+	clr=44
+	bclr=25
+	label="skyButtons"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=18
+		y=142
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Skyline"
+		name="skylineView.adl"
+		args="FOCUS=west"
+	}
+	display[1] {
+		label="Granite"
+		name="graniteMonitor.adl"
+	}
+	display[2] {
+		name="randomized.adl"
+		args="JITTER=0.003"
+	}
+	display[3] {
+		label="Anomaly"
+		name="anomalyProbe.adl"
+	}
+	display[4] {
+		label="BlankName"
+	}
+	clr=5
+	bclr=33
+	label="MenuSouth"
+}
+"related display" {
+	object {
+		x=20
+		y=397
+		width=600
+		height=20
+	}
+	display[0] {
+		label="Pulse"
+		name="pulseCheck.adl"
+	}
+	display[1] {
+		label="Orbit"
+		name="orbitDiag.adl"
+		args="PHASE=0.75"
+		policy="replace display"
+	}
+	display[2] {
+		label="Note"
+		args="text=random"
+	}
+	display[3] {
+		name="barebones.adl"
+	}
+	display[4] {
+		label="Overflow"
+		name="overflowTrap.adl"
+		args="LIMIT=4096"
+	}
+	clr=18
+	bclr=58
+	label="rowSouth"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=378
+		y=142
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Frost"
+		name="frostMonitor.adl"
+		args="TEMP=-12C"
+	}
+	display[1] {
+		args="STUB=yes"
+	}
+	display[2] {
+		label="Delta"
+		name="deltaPanel.adl"
+	}
+	display[3] {
+		label="Omega"
+		name="omegaPanel.adl"
+		args="STATE=idle"
+		policy="replace display"
+	}
+	display[4] {
+		label="Minor"
+		name="minorLoop.adl"
+	}
+	clr=42
+	bclr=9
+	label="colSouth"
+	visual="a column of buttons"
+}
+"related display" {
+	object {
+		x=558
+		y=142
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Jigsaw"
+		name="jigsawHub.adl"
+		args="PARTS=64"
+	}
+	display[1] {
+		label="Lo-Fi"
+		name="lofi.adl"
+	}
+	display[2] {
+		name="ghostAgain.adl"
+	}
+	display[3] {
+		label="Reset"
+	}
+	display[4] {
+		label="Portal"
+		name="portal.adl"
+		args="MODE=beta"
+	}
+	clr=27
+	bclr=44
+	visual="invisible"
+}
+"related display" {
+	object {
+		x=738
+		y=142
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Glimmer"
+		name="glimmer.adl"
+		args="BLINK=fast"
+	}
+	display[1] {
+		name="scattershot.adl"
+	}
+	display[2] {
+		label="Beacon"
+		name="beaconLamp.adl"
+		args="LUMEN=900"
+	}
+	display[3] {
+		label="Null"
+	}
+	display[4] {
+		label="Echo"
+		name="echoRepeat.adl"
+		args="CYCLE=3"
+		policy="replace display"
+	}
+	clr=16
+	bclr=36
+	label="flashDeck"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=18
+		y=272
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Midnight"
+		name="midnightRun.adl"
+	}
+	display[1] {
+		name="batchJob.adl"
+		args="JOB=nightly"
+	}
+	display[2] {
+		label="Beacon"
+		name="beaconLight.adl"
+		args="DUTY=50"
+	}
+	display[3] {
+		label="Null"
+	}
+	clr=13
+	bclr=40
+	label="thirdRow"
+}
+"related display" {
+	object {
+		x=19
+		y=371
+		width=600
+		height=15
+	}
+	display[0] {
+		label="Sunrise"
+		name="sunriseRun.adl"
+		args="MODE=auto"
+	}
+	display[1] {
+		label="Archive"
+		args="PATH=/tmp/random"
+	}
+	display[2] {
+		name="zeroed.adl"
+	}
+	display[3] {
+		label="Swap"
+		name="swapPanel.adl"
+		policy="replace display"
+	}
+	display[4] {
+		label="Space"
+		name="spacewalk.adl"
+		args="OXY=80"
+	}
+	clr=55
+	bclr=2
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=378
+		y=272
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Flux"
+		name="fluxCap.adl"
+		args="LEVEL=1.21GW"
+	}
+	display[1] {
+		label="Idle"
+		name="idleScreen.adl"
+	}
+	display[3] {
+		label="Tune"
+		name="fineTune.adl"
+		args="STEP=0.125"
+	}
+	display[4] {
+		label="Noise"
+		name="noiseFloor.adl"
+	}
+	clr=9
+	bclr=49
+	label="colThird"
+	visual="a column of buttons"
+}
+"related display" {
+	object {
+		x=558
+		y=272
+		width=160
+		height=88
+	}
+	display[0] {
+		label="Hazard"
+		name="hazardPanel.adl"
+		args="LEVEL=amber"
+	}
+	display[1] {
+		label="Drift"
+		args="DELTA=+0.2"
+	}
+	display[2] {
+		name="fallback.adl"
+	}
+	display[3] {
+		label="Wander"
+		name="wanderer.adl"
+		args="seed=0xFE"
+	}
+	display[4] {
+		label="Mute"
+		name="muteScreen.adl"
+	}
+	clr=31
+	bclr=15
+	label="invisibleThird"
+	visual="invisible"
+}
+"related display" {
+	object {
+		x=738
+		y=272
+		width=160
+		height=88
+	}
+	display[0] {
+		label="PulseTrain"
+		name="pulseTrain.adl"
+		args="COUNT=12"
+	}
+	display[2] {
+		label="Mirror"
+		name="mirrorPane.adl"
+	}
+	display[3] {
+		label="NullArgs"
+		name="nullArgs.adl"
+	}
+	display[4] {
+		label="ArgSpaces"
+		name="argSpaces.adl"
+		args="foo=bar baz=qux"
+	}
+	clr=2
+	bclr=62
+	label="extra"
+}

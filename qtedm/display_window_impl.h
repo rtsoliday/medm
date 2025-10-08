@@ -606,6 +606,7 @@ private:
   void loadChoiceButtonElement(const AdlNode &choiceNode);
   void loadMenuElement(const AdlNode &menuNode);
   void loadMessageButtonElement(const AdlNode &messageNode);
+  void loadRelatedDisplayElement(const AdlNode &relatedNode);
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
   void loadScaleMonitorElement(const AdlNode &indicatorNode);
@@ -635,6 +636,8 @@ private:
   BarDirection parseBarDirection(const QString &value) const;
   BarFill parseBarFill(const QString &value) const;
   ChoiceButtonStacking parseChoiceButtonStacking(const QString &value) const;
+  RelatedDisplayVisual parseRelatedDisplayVisual(const QString &value) const;
+  RelatedDisplayMode parseRelatedDisplayMode(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const;
@@ -6879,6 +6882,13 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("related display"),
+            Qt::CaseInsensitive)
+        == 0) {
+      loadRelatedDisplayElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("meter"), Qt::CaseInsensitive)
         == 0) {
       loadMeterElement(child);
@@ -8134,6 +8144,41 @@ inline ChoiceButtonStacking DisplayWindow::parseChoiceButtonStacking(
   return ChoiceButtonStacking::kRow;
 }
 
+inline RelatedDisplayVisual DisplayWindow::parseRelatedDisplayVisual(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("a row of buttons")
+      || normalized == QStringLiteral("row of buttons")
+      || normalized == QStringLiteral("row")
+      || normalized == QStringLiteral("row buttons")) {
+    return RelatedDisplayVisual::kRowOfButtons;
+  }
+  if (normalized == QStringLiteral("a column of buttons")
+      || normalized == QStringLiteral("column of buttons")
+      || normalized == QStringLiteral("column")
+      || normalized == QStringLiteral("column buttons")) {
+    return RelatedDisplayVisual::kColumnOfButtons;
+  }
+  if (normalized == QStringLiteral("invisible")
+      || normalized == QStringLiteral("hidden")
+      || normalized == QStringLiteral("hidden button")
+      || normalized == QStringLiteral("invisible button")) {
+    return RelatedDisplayVisual::kHiddenButton;
+  }
+  return RelatedDisplayVisual::kMenu;
+}
+
+inline RelatedDisplayMode DisplayWindow::parseRelatedDisplayMode(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.contains(QStringLiteral("replace"))) {
+    return RelatedDisplayMode::kReplace;
+  }
+  return RelatedDisplayMode::kAdd;
+}
+
 inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const
@@ -9043,6 +9088,109 @@ inline void DisplayWindow::loadMessageButtonElement(
   element->show();
   element->setSelected(false);
   messageButtonElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadRelatedDisplayElement(
+    const AdlNode &relatedNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(relatedNode);
+  if (geometry.width() < kMinimumTextWidth) {
+    geometry.setWidth(kMinimumTextWidth);
+  }
+  if (geometry.height() < kMinimumTextHeight) {
+    geometry.setHeight(kMinimumTextHeight);
+  }
+
+  auto *element = new RelatedDisplayElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+
+  bool ok = false;
+  const QString clrValue = propertyValue(relatedNode, QStringLiteral("clr"));
+  const int clrIndex = clrValue.toInt(&ok);
+  if (ok) {
+    element->setForegroundColor(colorForIndex(clrIndex));
+  }
+
+  ok = false;
+  const QString bclrValue = propertyValue(relatedNode,
+      QStringLiteral("bclr"));
+  const int bclrIndex = bclrValue.toInt(&ok);
+  if (ok) {
+    element->setBackgroundColor(colorForIndex(bclrIndex));
+  }
+
+  const QString labelValue = propertyValue(relatedNode,
+      QStringLiteral("label"));
+  const QString trimmedLabel = labelValue.trimmed();
+  if (!trimmedLabel.isEmpty()) {
+    element->setLabel(trimmedLabel);
+  }
+
+  const QString visualValue = propertyValue(relatedNode,
+      QStringLiteral("visual"));
+  if (!visualValue.trimmed().isEmpty()) {
+    element->setVisual(parseRelatedDisplayVisual(visualValue));
+  }
+
+  for (const auto &child : relatedNode.children) {
+    const QString childName = child.name.trimmed();
+    if (!childName.startsWith(QStringLiteral("display"),
+            Qt::CaseInsensitive)) {
+      continue;
+    }
+
+    const int openIndex = childName.indexOf(QLatin1Char('['));
+    const int closeIndex = childName.indexOf(QLatin1Char(']'), openIndex + 1);
+    if (openIndex < 0 || closeIndex <= openIndex + 1) {
+      continue;
+    }
+
+    bool indexOk = false;
+    const int entryIndex = childName.mid(openIndex + 1,
+        closeIndex - openIndex - 1).toInt(&indexOk);
+    if (!indexOk || entryIndex < 0
+        || entryIndex >= kRelatedDisplayEntryCount) {
+      continue;
+    }
+
+    RelatedDisplayEntry entry = element->entry(entryIndex);
+
+    const QString entryLabel = propertyValue(child,
+        QStringLiteral("label")).trimmed();
+    if (!entryLabel.isEmpty()) {
+      entry.label = entryLabel;
+    }
+
+    const QString entryName = propertyValue(child, QStringLiteral("name"))
+        .trimmed();
+    if (!entryName.isEmpty()) {
+      entry.name = entryName;
+    }
+
+    const QString entryArgs = propertyValue(child, QStringLiteral("args"))
+        .trimmed();
+    if (!entryArgs.isEmpty()) {
+      entry.args = entryArgs;
+    }
+
+    const QString policyValue = propertyValue(child,
+        QStringLiteral("policy")).trimmed();
+    if (!policyValue.isEmpty()) {
+      entry.mode = parseRelatedDisplayMode(policyValue);
+    }
+
+    element->setEntry(entryIndex, entry);
+  }
+
+  element->show();
+  element->setSelected(false);
+  relatedDisplayElements_.append(element);
   ensureElementInStack(element);
 }
 

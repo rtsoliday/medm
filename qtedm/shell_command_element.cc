@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QFont>
+#include <QFontInfo>
+#include <QFontMetricsF>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -32,6 +35,66 @@ QString entryDisplayLabel(const ShellCommandEntry &entry)
     return command;
   }
   return QString();
+}
+
+int messageButtonPixelLimit(int height)
+{
+  if (height <= 0) {
+    return 1;
+  }
+  const double scaled = 0.90 * static_cast<double>(height);
+  int limit = static_cast<int>(scaled) - 4;
+  return std::max(1, limit);
+}
+
+QFont scaledFontForHeight(const QFont &base, int pixelLimit)
+{
+  if (pixelLimit <= 0) {
+    return base;
+  }
+
+  QFont adjusted(base);
+  if (adjusted.pixelSize() > 0) {
+    adjusted.setPixelSize(pixelLimit);
+    return adjusted;
+  }
+
+  qreal pointSize = adjusted.pointSizeF();
+  if (pointSize <= 0.0) {
+    pointSize = adjusted.pointSize();
+  }
+  if (pointSize <= 0.0) {
+    QFontInfo info(adjusted);
+    pointSize = info.pointSizeF();
+  }
+  if (pointSize <= 0.0) {
+    pointSize = 12.0;
+  }
+
+  QFontMetricsF metrics(adjusted);
+  qreal textHeight = metrics.ascent() + metrics.descent();
+  if (textHeight <= 0.0) {
+    textHeight = static_cast<qreal>(pixelLimit);
+  }
+
+  qreal scaledPoint = pointSize * static_cast<qreal>(pixelLimit) / textHeight;
+  if (scaledPoint < 1.0) {
+    scaledPoint = 1.0;
+  }
+  adjusted.setPointSizeF(scaledPoint);
+
+  QFontMetricsF scaledMetrics(adjusted);
+  qreal scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
+  int iterations = 0;
+  while (scaledHeight > pixelLimit && scaledPoint > 1.0 && iterations < 16) {
+    scaledPoint = std::max<qreal>(1.0, scaledPoint - 0.5);
+    adjusted.setPointSizeF(scaledPoint);
+    scaledMetrics = QFontMetricsF(adjusted);
+    scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
+    ++iterations;
+  }
+
+  return adjusted;
 }
 
 } // namespace
@@ -209,32 +272,69 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   QRect content = canvas.adjusted(3, 3, -3, -3);
   bool showIcon = true;
   QString text = displayLabel(showIcon);
-  const bool showArrow = activeEntryCount() > 1;
+
+  const int activeCount = activeEntryCount();
+  const bool showArrow = activeCount > 1;
+  const bool singleEntry = activeCount == 1;
 
   QRect arrowRect = content;
   if (showArrow) {
     arrowRect.setLeft(content.right() - 10);
   }
 
+  const int fontLimit = messageButtonPixelLimit(height());
+  const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
+  painter.setFont(labelFont);
+  QFontMetricsF labelMetrics(labelFont);
+  const int textWidth = std::max(0, static_cast<int>(std::ceil(labelMetrics.horizontalAdvance(text))));
+
+  const int iconSize = showIcon ? std::min(content.height(), 24) : 0;
+  const int spacing = (showIcon && !text.isEmpty()) ? 6 : 0;
+
   QRect textRect = content;
   if (showArrow) {
     textRect.setRight(arrowRect.left() - 4);
   }
 
-  QRect iconRect = content;
-  if (showIcon) {
-    const int iconSize = std::min(content.height(), 24);
-    iconRect.setWidth(iconSize);
-    iconRect.setHeight(iconSize);
-    iconRect.moveLeft(content.left());
-    iconRect.moveTop(content.top() + (content.height() - iconSize) / 2);
-    paintIcon(painter, iconRect);
-    textRect.setLeft(iconRect.right() + 6);
+  QRect iconRect;
+
+  if (singleEntry && !showArrow) {
+    int totalWidth = textWidth;
+    if (showIcon && iconSize > 0) {
+      totalWidth += iconSize + spacing;
+    }
+    int layoutLeft = content.left();
+    int extra = content.width() - totalWidth;
+    if (extra > 0) {
+      layoutLeft += extra / 2;
+    }
+    if (showIcon && iconSize > 0) {
+      iconRect = QRect(layoutLeft, content.top(), iconSize, iconSize);
+      iconRect.moveTop(content.top() + (content.height() - iconSize) / 2);
+      layoutLeft = iconRect.right() + spacing;
+    }
+    textRect.setLeft(layoutLeft);
+    textRect.setRight(layoutLeft + textWidth);
+    if (textRect.width() < 0) {
+      textRect.setRight(textRect.left());
+    }
+    textRect.setTop(content.top());
+    textRect.setBottom(content.bottom());
   } else {
-    textRect.setLeft(content.left() + 4);
+    if (showIcon && iconSize > 0) {
+      iconRect = QRect(content.left(), content.top(), iconSize, iconSize);
+      iconRect.moveTop(content.top() + (content.height() - iconSize) / 2);
+      textRect.setLeft(iconRect.right() + spacing);
+    } else {
+      textRect.setLeft(content.left() + 4);
+    }
+    textRect = textRect.adjusted(0, 0, -2, 0);
   }
 
-  textRect = textRect.adjusted(0, 0, -2, 0);
+  if (showIcon && iconSize > 0 && iconRect.width() > 0 && iconRect.height() > 0) {
+    paintIcon(painter, iconRect);
+  }
+
   painter.setPen(fg);
   painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 

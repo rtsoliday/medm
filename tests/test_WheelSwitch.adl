@@ -364,7 +364,7 @@ display {
 		x=420
 		y=290
 		width=178
-		height=50
+		height=80
 	}
 	control {
 		chan="ws:nu"
@@ -382,7 +382,7 @@ display {
 	object {
 		x=620
 		y=290
-		width=185
+		width=100
 		height=54
 	}
 	control {

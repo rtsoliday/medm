@@ -603,6 +603,7 @@ private:
   void loadTextMonitorElement(const AdlNode &textUpdateNode);
   void loadTextEntryElement(const AdlNode &textEntryNode);
   void loadSliderElement(const AdlNode &valuatorNode);
+  void loadWheelSwitchElement(const AdlNode &wheelNode);
   void loadChoiceButtonElement(const AdlNode &choiceNode);
   void loadMenuElement(const AdlNode &menuNode);
   void loadMessageButtonElement(const AdlNode &messageNode);
@@ -6864,6 +6865,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("wheel switch"), Qt::CaseInsensitive)
+        == 0) {
+      loadWheelSwitchElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("choice button"), Qt::CaseInsensitive)
         == 0) {
       loadChoiceButtonElement(child);
@@ -8959,6 +8966,171 @@ inline void DisplayWindow::loadSliderElement(const AdlNode &valuatorNode)
   element->show();
   element->setSelected(false);
   sliderElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadWheelSwitchElement(const AdlNode &wheelNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(wheelNode);
+  if (geometry.width() < kMinimumWheelSwitchWidth) {
+    geometry.setWidth(kMinimumWheelSwitchWidth);
+  }
+  if (geometry.height() < kMinimumWheelSwitchHeight) {
+    geometry.setHeight(kMinimumWheelSwitchHeight);
+  }
+
+  auto *element = new WheelSwitchElement(displayArea_);
+  element->setGeometry(geometry);
+
+  const QString colorModeValue = propertyValue(wheelNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString formatValue = propertyValue(wheelNode,
+      QStringLiteral("format"));
+  const QString trimmedFormat = formatValue.trimmed();
+  if (!trimmedFormat.isEmpty()) {
+    element->setFormat(trimmedFormat);
+  }
+
+  if (const AdlNode *control = ::findChild(wheelNode,
+          QStringLiteral("control"))) {
+    const QString channel = propertyValue(*control,
+        QStringLiteral("chan"));
+    const QString trimmedChannel = channel.trimmed();
+    if (!trimmedChannel.isEmpty()) {
+      element->setChannel(trimmedChannel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*control, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*control, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(wheelNode,
+          QStringLiteral("limits"))) {
+    PvLimits limits = element->limits();
+
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+    bool hasPrecisionValue = false;
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+        hasPrecisionValue = true;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+        hasPrecisionValue = true;
+      }
+    }
+
+    element->setLimits(limits);
+    if (hasPrecisionValue) {
+      element->setPrecision(static_cast<double>(limits.precisionDefault));
+    }
+  }
+
+  auto channelSetter = [element](int index, const QString &value) {
+    if (index != 0) {
+      return;
+    }
+    const QString trimmed = value.trimmed();
+    if (!trimmed.isEmpty()) {
+      element->setChannel(trimmed);
+    }
+  };
+
+  applyChannelProperties(wheelNode, channelSetter, 0, 1);
+
+  element->show();
+  element->setSelected(false);
+  wheelSwitchElements_.append(element);
   ensureElementInStack(element);
 }
 

@@ -1,0 +1,400 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_WheelSwitch.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=53
+		width=840
+		height=380
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+"wheel switch" {
+	object {
+		x=24
+		y=20
+		width=168
+		height=48
+	}
+	control {
+		chan="wheel:test:A1"
+		clr=6
+		bclr=45
+	}
+	clrmod="alarm"
+	format="%+6.2f"
+	limits {
+		loprDefault=-17.25
+		hoprSrc="default"
+		hoprDefault=103.5
+		precSrc="default"
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=220
+		y=20
+		width=176
+		height=50
+	}
+	control {
+		chan="wheel:test:B7"
+		clr=32
+		bclr=2
+	}
+	clrmod="discrete"
+	format="% 7.1f"
+	limits {
+		hoprDefault=47.75
+		precDefault=1
+	}
+}
+"wheel switch" {
+	object {
+		x=420
+		y=20
+		width=180
+		height=52
+	}
+	control {
+		chan="ws:gamma15"
+		clr=11
+		bclr=30
+	}
+	format="% 10.4f"
+	limits {
+		loprDefault=-3.5
+		hoprDefault=3.5
+		precSrc="default"
+		precDefault=4
+	}
+}
+"wheel switch" {
+	object {
+		x=620
+		y=20
+		width=174
+		height=54
+	}
+	control {
+		clr=25
+		bclr=14
+	}
+	limits {
+		hoprDefault=12
+	}
+}
+"wheel switch" {
+	object {
+		x=24
+		y=110
+		width=158
+		height=48
+	}
+	control {
+		chan="wheel:test:delta"
+		clr=44
+		bclr=7
+	}
+	clrmod="alarm"
+	format="% 5.2f"
+	limits {
+		loprSrc="default"
+		loprDefault=-9
+		hoprSrc="default"
+		hoprDefault=9
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=220
+		y=110
+		width=170
+		height=50
+	}
+	control {
+		chan="random:ws:epsilon"
+		clr=58
+		bclr=18
+	}
+	format="% 3.0f"
+	limits {
+		loprDefault=-120
+		hoprSrc="default"
+		hoprDefault=220
+		precSrc="default"
+	}
+}
+"wheel switch" {
+	object {
+		x=420
+		y=110
+		width=178
+		height=50
+	}
+	control {
+		chan="wheel:theta"
+		clr=9
+		bclr=51
+	}
+	clrmod="discrete"
+	format="% 8.3f"
+	limits {
+	}
+}
+"wheel switch" {
+	object {
+		x=620
+		y=110
+		width=175
+		height=52
+	}
+	control {
+		chan="wheel:test:eta"
+		clr=21
+		bclr=37
+	}
+	clrmod="alarm"
+	format="% 6.0f"
+	limits {
+		loprDefault=-1.25
+		hoprDefault=6.75
+		precDefault=3
+	}
+}
+"wheel switch" {
+	object {
+		x=24
+		y=200
+		width=160
+		height=48
+	}
+	control {
+		chan="ws:zeta"
+		clr=3
+		bclr=27
+	}
+	limits {
+		loprSrc="default"
+		precSrc="default"
+	}
+}
+"wheel switch" {
+	object {
+		x=220
+		y=200
+		width=170
+		height=50
+	}
+	control {
+		chan="ws:theta9"
+		clr=50
+		bclr=5
+	}
+	clrmod="alarm"
+	format="% 2.1f"
+	limits {
+		loprDefault=-0.005
+		hoprDefault=0.125
+		precDefault=4
+	}
+}
+"wheel switch" {
+	object {
+		x=420
+		y=200
+		width=176
+		height=52
+	}
+	control {
+		chan="wheel:phi"
+		clr=14
+		bclr=40
+	}
+	clrmod="discrete"
+	format="%+5.1f"
+	limits {
+		hoprDefault=250
+		precSrc="default"
+		precDefault=1
+	}
+}
+"wheel switch" {
+	object {
+		x=620
+		y=200
+		width=178
+		height=54
+	}
+	control {
+		chan="wheel:test:kappa"
+		clr=7
+		bclr=48
+	}
+	clrmod="alarm"
+	format="% 7.3f"
+	limits {
+		loprDefault=-55.75
+		hoprDefault=19.125
+		precDefault=3
+	}
+}
+"wheel switch" {
+	object {
+		x=24
+		y=290
+		width=166
+		height=50
+	}
+	control {
+		chan="ws:lambda"
+		clr=60
+		bclr=16
+	}
+	format="% 9.4f"
+	limits {
+		hoprSrc="default"
+		hoprDefault=0
+		precSrc="default"
+	}
+}
+"wheel switch" {
+	object {
+		x=220
+		y=290
+		width=170
+		height=48
+	}
+	control {
+		chan="ws:mu"
+		clr=2
+		bclr=34
+	}
+	clrmod="alarm"
+	format="% 6.2f"
+	limits {
+		loprSrc="default"
+		loprDefault=-2
+		hoprDefault=2
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=420
+		y=290
+		width=178
+		height=50
+	}
+	control {
+		chan="ws:nu"
+		clr=19
+		bclr=12
+	}
+	clrmod="discrete"
+	format="% 6.1f"
+	limits {
+		loprDefault=-360
+		hoprDefault=360
+	}
+}
+"wheel switch" {
+	object {
+		x=620
+		y=290
+		width=185
+		height=54
+	}
+	control {
+		chan="ws:xi"
+		clr=27
+		bclr=22
+	}
+	format="% 8.2f"
+	limits {
+		loprDefault=-99.99
+		hoprSrc="default"
+		hoprDefault=999.99
+		precDefault=2
+	}
+}

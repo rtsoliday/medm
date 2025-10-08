@@ -274,6 +274,22 @@ protected:
       if (auto state = state_.lock(); state && state->editMode
           && state->createTool == CreateTool::kNone) {
         QWidget *hitWidget = elementAt(event->pos());
+        if (!multiSelection_.isEmpty()) {
+          if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
+            beginMiddleButtonDrag(event->pos());
+            event->accept();
+            return;
+          }
+          if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
+            if (selectWidgetForEditing(hitWidget)) {
+              beginMiddleButtonDrag(event->pos());
+              event->accept();
+              return;
+            }
+          }
+          event->accept();
+          return;
+        }
         QWidget *selectedWidget = currentSelectedWidget();
         if (!selectedWidget && hitWidget) {
           if (selectWidgetForEditing(hitWidget)) {
@@ -358,6 +374,11 @@ protected:
           event->accept();
           return;
         }
+        const QPoint areaPos = displayArea_
+            ? displayArea_->mapFrom(this, event->pos())
+            : QPoint();
+        const bool insideDisplayArea = displayArea_
+            && displayArea_->rect().contains(areaPos);
 
         if (QWidget *widget = elementAt(event->pos())) {
           if (selectWidgetForEditing(widget)) {
@@ -366,32 +387,13 @@ protected:
           }
         }
 
-        clearRectangleSelection();
-        clearOvalSelection();
-        clearTextSelection();
-        clearTextMonitorSelection();
-        clearMeterSelection();
-        clearBarMonitorSelection();
-        clearByteMonitorSelection();
-        clearLineSelection();
-
-        if (displaySelected_) {
-          clearDisplaySelection();
-          closeResourcePalette();
+        if (insideDisplayArea) {
+          beginSelectionRubberBandPending(areaPos, event->pos());
           event->accept();
           return;
         }
 
-        if (ensureResourcePalette()) {
-          for (auto &display : state->displays) {
-            if (!display.isNull() && display != this) {
-              display->clearSelections();
-            }
-          }
-
-          setDisplaySelected(true);
-          showResourcePaletteForDisplay();
-        }
+        handleDisplayBackgroundClick();
         event->accept();
         return;
       }
@@ -436,10 +438,21 @@ protected:
       }
     }
 
+    if ((event->buttons() & Qt::LeftButton) && selectionRubberBandPending_) {
+      const QPoint delta = event->pos() - selectionRubberBandStartWindowPos_;
+      if (delta.manhattanLength() >= QApplication::startDragDistance()) {
+        startSelectionRubberBand();
+      }
+    }
+
     if (rubberBandActive_) {
       if (auto state = state_.lock(); state && state->editMode && displayArea_) {
         const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
-        updateCreateRubberBand(areaPos);
+        if (selectionRubberBandMode_) {
+          updateSelectionRubberBand(areaPos);
+        } else {
+          updateCreateRubberBand(areaPos);
+        }
         event->accept();
         return;
       }
@@ -462,10 +475,21 @@ protected:
         if (auto state = state_.lock(); state && state->editMode
             && displayArea_) {
           const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
-          finishCreateRubberBand(areaPos);
+          if (selectionRubberBandMode_) {
+            finishSelectionRubberBand(areaPos);
+          } else {
+            finishCreateRubberBand(areaPos);
+          }
           event->accept();
           return;
         }
+      } else if (selectionRubberBandPending_) {
+        selectionRubberBandPending_ = false;
+        if (auto state = state_.lock(); state && state->editMode) {
+          handleDisplayBackgroundClick();
+        }
+        event->accept();
+        return;
       }
     }
 
@@ -622,16 +646,22 @@ private:
   bool polylineCreationActive_ = false;
   PolylineElement *activePolylineElement_ = nullptr;
   QVector<QPoint> polylineCreationPoints_;
+  QList<QPointer<QWidget>> multiSelection_;
   QList<QPointer<QWidget>> elementStack_;
   QRubberBand *rubberBand_ = nullptr;
   bool rubberBandActive_ = false;
+  bool selectionRubberBandPending_ = false;
+  bool selectionRubberBandMode_ = false;
+  QPoint selectionRubberBandStartWindowPos_;
+  QPoint pendingSelectionOrigin_;
   QPoint rubberBandOrigin_;
   CreateTool activeRubberBandTool_ = CreateTool::kNone;
-  QPointer<QWidget> middleButtonDragWidget_;
+  QList<QPointer<QWidget>> middleButtonDragWidgets_;
+  QList<QRect> middleButtonInitialRects_;
+  QRect middleButtonBoundingRect_;
   bool middleButtonDragActive_ = false;
   bool middleButtonDragMoved_ = false;
   QPoint middleButtonDragStartAreaPos_;
-  QRect middleButtonInitialRect_;
 
   void setDisplaySelected(bool selected)
   {
@@ -860,9 +890,136 @@ private:
     selectedPolygon_ = nullptr;
   }
 
+  void setWidgetSelectionState(QWidget *widget, bool selected)
+  {
+    if (!widget) {
+      return;
+    }
+    if (auto *text = dynamic_cast<TextElement *>(widget)) {
+      text->setSelected(selected);
+      return;
+    }
+    if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
+      textEntry->setSelected(selected);
+      return;
+    }
+    if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+      slider->setSelected(selected);
+      return;
+    }
+    if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+      wheel->setSelected(selected);
+      return;
+    }
+    if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
+      choice->setSelected(selected);
+      return;
+    }
+    if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+      menu->setSelected(selected);
+      return;
+    }
+    if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
+      message->setSelected(selected);
+      return;
+    }
+    if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+      shell->setSelected(selected);
+      return;
+    }
+    if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+      related->setSelected(selected);
+      return;
+    }
+    if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
+      textMonitor->setSelected(selected);
+      return;
+    }
+    if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+      meter->setSelected(selected);
+      return;
+    }
+    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+      bar->setSelected(selected);
+      return;
+    }
+    if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      scale->setSelected(selected);
+      return;
+    }
+    if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+      strip->setSelected(selected);
+      return;
+    }
+    if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
+      cart->setSelected(selected);
+      return;
+    }
+    if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
+      byte->setSelected(selected);
+      return;
+    }
+    if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+      rectangle->setSelected(selected);
+      return;
+    }
+    if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+      image->setSelected(selected);
+      return;
+    }
+    if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
+      oval->setSelected(selected);
+      return;
+    }
+    if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+      arc->setSelected(selected);
+      return;
+    }
+    if (auto *line = dynamic_cast<LineElement *>(widget)) {
+      line->setSelected(selected);
+      return;
+    }
+    if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+      polyline->setSelected(selected);
+      return;
+    }
+    if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+      polygon->setSelected(selected);
+      return;
+    }
+  }
+
+  void clearMultiSelection()
+  {
+    if (multiSelection_.isEmpty()) {
+      return;
+    }
+    for (const auto &pointer : multiSelection_) {
+      if (QWidget *widget = pointer.data()) {
+        setWidgetSelectionState(widget, false);
+      }
+    }
+    multiSelection_.clear();
+  }
+
+  bool isWidgetInMultiSelection(QWidget *widget) const
+  {
+    if (!widget) {
+      return false;
+    }
+    for (const auto &pointer : multiSelection_) {
+      if (pointer.data() == widget) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void clearSelections()
   {
     cancelMiddleButtonDrag();
+    cancelSelectionRubberBand();
+    clearMultiSelection();
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
@@ -2107,6 +2264,7 @@ private:
           setGeometry(newGeometry);
           if (auto *widget = centralWidget()) {
             widget->setMinimumSize(newGeometry.size());
+
             widget->resize(newGeometry.size());
           }
           markDirty();
@@ -2164,6 +2322,15 @@ private:
         [this](bool gridOn) {
           setGridOn(gridOn);
         });
+  }
+
+  void showResourcePaletteForMultipleSelection()
+  {
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForMultipleSelection();
   }
 
   void showResourcePaletteForText(TextElement *element)
@@ -5123,6 +5290,11 @@ private:
 
   QWidget *currentSelectedWidget() const
   {
+    for (const auto &pointer : multiSelection_) {
+      if (QWidget *widget = pointer.data()) {
+        return widget;
+      }
+    }
     if (selectedTextElement_) {
       return selectedTextElement_;
     }
@@ -5200,6 +5372,7 @@ private:
     if (!widget) {
       return false;
     }
+    clearMultiSelection();
     if (auto *text = dynamic_cast<TextElement *>(widget)) {
       selectTextElement(text);
       showResourcePaletteForText(text);
@@ -5324,12 +5497,34 @@ private:
     if (!displayArea_) {
       return;
     }
-    QWidget *selected = currentSelectedWidget();
-    if (!selected) {
+    QList<QPointer<QWidget>> dragWidgets;
+    if (!multiSelection_.isEmpty()) {
+      dragWidgets = multiSelection_;
+    } else {
+      if (QWidget *selected = currentSelectedWidget()) {
+        dragWidgets.append(QPointer<QWidget>(selected));
+      }
+    }
+    middleButtonDragWidgets_.clear();
+    middleButtonInitialRects_.clear();
+    middleButtonBoundingRect_ = QRect();
+    for (const auto &pointer : dragWidgets) {
+      QWidget *widget = pointer.data();
+      if (!widget) {
+        continue;
+      }
+      middleButtonDragWidgets_.append(QPointer<QWidget>(widget));
+      const QRect rect = widget->geometry();
+      middleButtonInitialRects_.append(rect);
+      if (!middleButtonBoundingRect_.isValid()) {
+        middleButtonBoundingRect_ = rect;
+      } else {
+        middleButtonBoundingRect_ = middleButtonBoundingRect_.united(rect);
+      }
+    }
+    if (middleButtonDragWidgets_.isEmpty()) {
       return;
     }
-    middleButtonDragWidget_ = selected;
-    middleButtonInitialRect_ = selected->geometry();
     middleButtonDragStartAreaPos_ = displayArea_->mapFrom(this, windowPos);
     middleButtonDragActive_ = true;
     middleButtonDragMoved_ = false;
@@ -5337,21 +5532,33 @@ private:
 
   void updateMiddleButtonDrag(const QPoint &windowPos)
   {
-    if (!middleButtonDragActive_ || middleButtonDragWidget_.isNull()
+    if (!middleButtonDragActive_ || middleButtonDragWidgets_.isEmpty()
         || !displayArea_) {
       return;
     }
     const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
     const QPoint offset = areaPos - middleButtonDragStartAreaPos_;
     const QPoint clamped =
-        clampOffsetToDisplayArea(middleButtonInitialRect_, offset);
-    const QPoint newTopLeft = middleButtonInitialRect_.topLeft() + clamped;
-    if (middleButtonDragWidget_->pos() == newTopLeft) {
-      return;
+        clampOffsetToDisplayArea(middleButtonBoundingRect_, offset);
+    bool anyMoved = false;
+    const int widgetCount = middleButtonDragWidgets_.size();
+    for (int i = 0; i < widgetCount; ++i) {
+      QWidget *widget = middleButtonDragWidgets_.at(i).data();
+      if (!widget) {
+        continue;
+      }
+      const QRect initialRect = middleButtonInitialRects_.value(i);
+      const QPoint newTopLeft = initialRect.topLeft() + clamped;
+      if (widget->pos() == newTopLeft) {
+        continue;
+      }
+      widget->move(newTopLeft);
+      widget->update();
+      anyMoved = true;
     }
-    middleButtonDragWidget_->move(newTopLeft);
-    middleButtonDragWidget_->update();
-    middleButtonDragMoved_ = true;
+    if (anyMoved) {
+      middleButtonDragMoved_ = true;
+    }
   }
 
   void finishMiddleButtonDrag(bool applyChanges)
@@ -5360,8 +5567,9 @@ private:
     const bool moved = middleButtonDragMoved_;
     middleButtonDragActive_ = false;
     middleButtonDragMoved_ = false;
-    middleButtonInitialRect_ = QRect();
-    middleButtonDragWidget_.clear();
+    middleButtonInitialRects_.clear();
+    middleButtonDragWidgets_.clear();
+    middleButtonBoundingRect_ = QRect();
     if (applyChanges && wasActive && moved) {
       markDirty();
       refreshResourcePaletteGeometry();
@@ -5399,8 +5607,187 @@ private:
     return QPoint(clampedLeft - rect.left(), clampedTop - rect.top());
   }
 
+  void cancelSelectionRubberBand()
+  {
+    selectionRubberBandPending_ = false;
+    if (!selectionRubberBandMode_) {
+      return;
+    }
+    selectionRubberBandMode_ = false;
+    rubberBandActive_ = false;
+    if (rubberBand_) {
+      rubberBand_->hide();
+    }
+  }
+
+  void beginSelectionRubberBandPending(const QPoint &areaPos,
+      const QPoint &windowPos)
+  {
+    selectionRubberBandPending_ = true;
+    pendingSelectionOrigin_ = clampToDisplayArea(areaPos);
+    selectionRubberBandStartWindowPos_ = windowPos;
+  }
+
+  void startSelectionRubberBand()
+  {
+    if (!displayArea_) {
+      selectionRubberBandPending_ = false;
+      return;
+    }
+    selectionRubberBandPending_ = false;
+    selectionRubberBandMode_ = true;
+    rubberBandActive_ = true;
+    rubberBandOrigin_ = pendingSelectionOrigin_;
+    ensureRubberBand();
+    if (rubberBand_) {
+      rubberBand_->setGeometry(QRect(rubberBandOrigin_, QSize(1, 1)));
+      rubberBand_->show();
+    }
+  }
+
+  void updateSelectionRubberBand(const QPoint &areaPos)
+  {
+    if (!selectionRubberBandMode_ || !rubberBand_) {
+      return;
+    }
+    const QPoint clamped = clampToDisplayArea(areaPos);
+    rubberBand_->setGeometry(QRect(rubberBandOrigin_, clamped).normalized());
+  }
+
+  void finishSelectionRubberBand(const QPoint &areaPos)
+  {
+    selectionRubberBandPending_ = false;
+    if (!selectionRubberBandMode_) {
+      return;
+    }
+    selectionRubberBandMode_ = false;
+    rubberBandActive_ = false;
+    if (rubberBand_) {
+      rubberBand_->hide();
+    }
+    if (!displayArea_) {
+      return;
+    }
+    const QPoint clamped = clampToDisplayArea(areaPos);
+    QRect rect = QRect(rubberBandOrigin_, clamped).normalized();
+    applySelectionRect(rect);
+  }
+
+  void applySelectionRect(const QRect &rect)
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      clearSelections();
+      return;
+    }
+
+    clearSelections();
+
+    QList<QWidget *> matched;
+    auto considerList = [&](const auto &list) {
+      for (auto *element : list) {
+        if (!element || !element->isVisible()) {
+          continue;
+        }
+        if (rect.contains(element->geometry())) {
+          matched.append(element);
+        }
+      }
+    };
+
+    considerList(textElements_);
+    considerList(textEntryElements_);
+    considerList(sliderElements_);
+    considerList(wheelSwitchElements_);
+    considerList(choiceButtonElements_);
+    considerList(menuElements_);
+    considerList(messageButtonElements_);
+    considerList(shellCommandElements_);
+    considerList(relatedDisplayElements_);
+    considerList(textMonitorElements_);
+    considerList(meterElements_);
+    considerList(barMonitorElements_);
+    considerList(scaleMonitorElements_);
+    considerList(stripChartElements_);
+    considerList(cartesianPlotElements_);
+    considerList(byteMonitorElements_);
+    considerList(rectangleElements_);
+    considerList(imageElements_);
+    considerList(ovalElements_);
+    considerList(arcElements_);
+    considerList(lineElements_);
+    considerList(polylineElements_);
+    considerList(polygonElements_);
+
+    if (matched.isEmpty()) {
+      return;
+    }
+
+    if (matched.size() == 1) {
+      selectWidgetForEditing(matched.front());
+      return;
+    }
+
+    multiSelection_.clear();
+    for (QWidget *widget : matched) {
+      setWidgetSelectionState(widget, true);
+      multiSelection_.append(QPointer<QWidget>(widget));
+    }
+    showResourcePaletteForMultipleSelection();
+  }
+
+  void handleDisplayBackgroundClick()
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+    clearMultiSelection();
+    clearRectangleSelection();
+    clearOvalSelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearWheelSwitchSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearImageSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+
+    if (displaySelected_) {
+      clearDisplaySelection();
+      closeResourcePalette();
+      return;
+    }
+
+    if (ensureResourcePalette()) {
+      for (auto &display : state->displays) {
+        if (!display.isNull() && display != this) {
+          display->clearSelections();
+        }
+      }
+      setDisplaySelected(true);
+      showResourcePaletteForDisplay();
+    }
+  }
+
   void startCreateRubberBand(const QPoint &areaPos, CreateTool tool)
   {
+    selectionRubberBandPending_ = false;
+    selectionRubberBandMode_ = false;
     rubberBandActive_ = true;
     activeRubberBandTool_ = tool;
     rubberBandOrigin_ = clampToDisplayArea(areaPos);
@@ -5426,6 +5813,7 @@ private:
       return;
     }
     rubberBandActive_ = false;
+    selectionRubberBandMode_ = false;
     CreateTool tool = activeRubberBandTool_;
     activeRubberBandTool_ = CreateTool::kNone;
     if (rubberBand_) {
@@ -6563,6 +6951,8 @@ private:
       }
       rubberBandActive_ = false;
       activeRubberBandTool_ = CreateTool::kNone;
+      selectionRubberBandPending_ = false;
+      selectionRubberBandMode_ = false;
       if (rubberBand_) {
         rubberBand_->hide();
       }
@@ -6584,6 +6974,8 @@ private:
     }
     rubberBandActive_ = false;
     activeRubberBandTool_ = CreateTool::kNone;
+    selectionRubberBandPending_ = false;
+    selectionRubberBandMode_ = false;
     cancelPolygonCreation();
     cancelPolylineCreation();
     if (rubberBand_) {

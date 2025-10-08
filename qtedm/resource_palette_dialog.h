@@ -2280,7 +2280,6 @@ public:
     clearSelectionState();
     selectionKind_ = SelectionKind::kDisplay;
     updateSectionVisibility(selectionKind_);
-
     geometryGetter_ = std::move(geometryGetter);
     geometrySetter_ = std::move(geometrySetter);
     foregroundColorGetter_ = std::move(foregroundGetter);
@@ -2367,6 +2366,34 @@ public:
     snapToGridCombo_->setCurrentIndex(kDefaultSnapToGrid ? 1 : 0);
 
     elementLabel_->setText(QStringLiteral("Display"));
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
+  void showForMultipleSelection()
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kNone;
+    updateSectionVisibility(selectionKind_);
+
+    auto clearLineEdit = [&](QLineEdit *edit) {
+      if (!edit) {
+        return;
+      }
+      const QSignalBlocker blocker(edit);
+      edit->clear();
+    };
+
+    clearLineEdit(xEdit_);
+    clearLineEdit(yEdit_);
+    clearLineEdit(widthEdit_);
+    clearLineEdit(heightEdit_);
+    clearLineEdit(gridSpacingEdit_);
+    lastCommittedGeometry_ = QRect();
+    updateCommittedTexts();
 
     show();
     positionRelativeTo(parentWidget());

@@ -1,17 +1,70 @@
 #include "wheel_switch_element.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
+#include <QFontMetricsF>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QPalette>
 
+#include "legacy_fonts.h"
+
 namespace {
 
 constexpr double kMinimumCenterHeight = 24.0;
 constexpr double kMinimumButtonHeight = 14.0;
+
+const std::array<QString, 16> kWheelSwitchFontAliases = {
+    QStringLiteral("widgetDM_4"), QStringLiteral("widgetDM_6"),
+    QStringLiteral("widgetDM_8"), QStringLiteral("widgetDM_10"),
+    QStringLiteral("widgetDM_12"), QStringLiteral("widgetDM_14"),
+    QStringLiteral("widgetDM_16"), QStringLiteral("widgetDM_18"),
+    QStringLiteral("widgetDM_20"), QStringLiteral("widgetDM_22"),
+    QStringLiteral("widgetDM_24"), QStringLiteral("widgetDM_30"),
+    QStringLiteral("widgetDM_36"), QStringLiteral("widgetDM_40"),
+    QStringLiteral("widgetDM_48"), QStringLiteral("widgetDM_60"),
+};
+
+QFont wheelSwitchFontForHeight(int widgetHeight)
+{
+  if (widgetHeight <= 0) {
+    return QFont();
+  }
+
+  const double effHeight = std::max(0.0, static_cast<double>(widgetHeight) - 4.0);
+
+  QFont fallback;
+  for (const QString &alias : kWheelSwitchFontAliases) {
+    const QFont candidate = LegacyFonts::font(alias);
+    if (candidate.family().isEmpty()) {
+      continue;
+    }
+    fallback = candidate;
+    break;
+  }
+
+  for (auto it = kWheelSwitchFontAliases.rbegin();
+       it != kWheelSwitchFontAliases.rend(); ++it) {
+    const QFont font = LegacyFonts::font(*it);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    const QFontMetricsF metrics(font);
+    const double totalFontHeight = metrics.ascent() + 2.0 * metrics.descent();
+    const double buttonHeight = metrics.horizontalAdvance(QStringLiteral("0"));
+    const double testHeight = std::max(0.0, effHeight - 2.0 * buttonHeight);
+
+    if (totalFontHeight <= testHeight) {
+      return font;
+    }
+  }
+
+  return fallback;
+}
 
 QColor blendedColor(const QColor &base, int factor)
 {
@@ -271,11 +324,9 @@ void WheelSwitchElement::paintValueDisplay(QPainter &painter,
 
   QString text = formattedSampleValue();
   painter.setPen(effectiveForeground());
-  QFont valueFont = font();
-  if (rect.height() > 0.0) {
-    int pixelSize = static_cast<int>(rect.height() * 0.6);
-    pixelSize = std::clamp(pixelSize, 8, static_cast<int>(rect.height() - 4.0));
-    valueFont.setPixelSize(pixelSize);
+  QFont valueFont = wheelSwitchFontForHeight(height());
+  if (valueFont.family().isEmpty()) {
+    valueFont = font();
   }
   painter.setFont(valueFont);
   painter.drawText(rect.adjusted(4.0, 0.0, -4.0, 0.0),

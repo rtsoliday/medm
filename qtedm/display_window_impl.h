@@ -402,6 +402,72 @@ public:
     notifyMenus();
   }
 
+  void ungroupSelectedElements()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return;
+    }
+
+    QSet<CompositeElement *> composites;
+    for (const auto &pointer : multiSelection_) {
+      if (auto *widget = pointer.data()) {
+        if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+          composites.insert(composite);
+        }
+      }
+    }
+    if (selectedCompositeElement_) {
+      composites.insert(selectedCompositeElement_);
+    }
+    if (composites.isEmpty()) {
+      return;
+    }
+
+    for (CompositeElement *composite : std::as_const(composites)) {
+      if (!composite || composite->parentWidget() != displayArea_) {
+        continue;
+      }
+
+      int stackIndex = elementStack_.size();
+      for (int i = 0; i < elementStack_.size(); ++i) {
+        if (elementStack_.at(i).data() == composite) {
+          stackIndex = i;
+          break;
+        }
+      }
+
+      const QPoint compositeOrigin = composite->mapTo(displayArea_, QPoint(0, 0));
+      const QList<QWidget *> children = composite->childWidgets();
+
+      removeElementFromStack(composite);
+      compositeElements_.removeAll(composite);
+
+      int insertIndex = stackIndex;
+      for (QWidget *child : children) {
+        if (!child) {
+          continue;
+        }
+        const QRect localGeometry = child->geometry();
+        const QRect newGeometry(compositeOrigin + localGeometry.topLeft(),
+            localGeometry.size());
+        child->setParent(displayArea_);
+        child->setGeometry(newGeometry);
+        child->show();
+        elementStack_.insert(insertIndex, QPointer<QWidget>(child));
+        ++insertIndex;
+      }
+
+      composite->deleteLater();
+    }
+
+    clearSelections();
+    markDirty();
+    refreshResourcePaletteGeometry();
+    notifyMenus();
+  }
+
   bool canRaiseSelection() const
   {
     auto state = state_.lock();
@@ -437,6 +503,20 @@ public:
       }
       ++candidateCount;
       if (candidateCount >= 2) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool canUngroupSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return false;
+    }
+    for (QWidget *widget : selectedWidgets()) {
+      if (dynamic_cast<CompositeElement *>(widget)) {
         return true;
       }
     }
@@ -7668,6 +7748,10 @@ private:
       groupSelectedElements();
     });
     auto *ungroupAction = addMenuAction(&menu, QStringLiteral("Ungroup"));
+    ungroupAction->setEnabled(canUngroupSelection());
+    QObject::connect(ungroupAction, &QAction::triggered, this, [this]() {
+      ungroupSelectedElements();
+    });
 
     menu.addSeparator();
     auto *alignMenu = menu.addMenu(QStringLiteral("Align"));

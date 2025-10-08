@@ -128,7 +128,6 @@ int main(int argc, char *argv[])
   editMenu->addSeparator();
   auto *groupAct = editMenu->addAction("&Group");
   auto *ungroupAct = editMenu->addAction("&Ungroup");
-  ungroupAct->setEnabled(false);
   editMenu->addSeparator();
   auto *alignMenu = editMenu->addMenu("&Align");
   alignMenu->setFont(fixed13Font);
@@ -309,6 +308,12 @@ int main(int argc, char *argv[])
           active->groupSelectedElements();
         }
       });
+  QObject::connect(ungroupAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->ungroupSelectedElements();
+        }
+      });
   QObject::connect(saveAsAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -396,10 +401,9 @@ int main(int argc, char *argv[])
     raiseAct->setEnabled(canRaise);
     lowerAct->setEnabled(canLower);
     const bool canGroup = canEditActive && active && active->canGroupSelection();
+    const bool canUngroup = canEditActive && active && active->canUngroupSelection();
     groupAct->setEnabled(canGroup);
-    if (ungroupAct) {
-      ungroupAct->setEnabled(false);
-    }
+    ungroupAct->setEnabled(canUngroup);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

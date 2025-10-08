@@ -3,7 +3,10 @@
 #include <algorithm>
 
 #include <QBrush>
+#include <QFont>
+#include <QFontInfo>
 #include <QFontMetrics>
+#include <QFontMetricsF>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -34,6 +37,92 @@ QString entryDisplayLabel(const RelatedDisplayEntry &entry)
     return name;
   }
   return QString();
+}
+
+int messageButtonPixelLimit(int height)
+{
+  if (height <= 0) {
+    return 1;
+  }
+  const double scaled = 0.90 * static_cast<double>(height);
+  int limit = static_cast<int>(scaled) - 4;
+  return std::max(1, limit);
+}
+
+int relatedDisplayPixelLimit(RelatedDisplayVisual visual, int height,
+    int numButtons)
+{
+  if (height <= 0) {
+    return 1;
+  }
+
+  constexpr int kShadowSize = 4;
+
+  switch (visual) {
+  case RelatedDisplayVisual::kColumnOfButtons: {
+    const int buttons = std::max(1, numButtons);
+    int limit = height / buttons - kShadowSize;
+    return std::max(1, limit);
+  }
+  case RelatedDisplayVisual::kRowOfButtons: {
+    int limit = height - kShadowSize;
+    return std::max(1, limit);
+  }
+  default:
+    break;
+  }
+
+  return messageButtonPixelLimit(height);
+}
+
+QFont scaledFontForHeight(const QFont &base, int pixelLimit)
+{
+  if (pixelLimit <= 0) {
+    return base;
+  }
+
+  QFont adjusted(base);
+  if (adjusted.pixelSize() > 0) {
+    adjusted.setPixelSize(pixelLimit);
+    return adjusted;
+  }
+
+  qreal pointSize = adjusted.pointSizeF();
+  if (pointSize <= 0.0) {
+    pointSize = adjusted.pointSize();
+  }
+  if (pointSize <= 0.0) {
+    QFontInfo info(adjusted);
+    pointSize = info.pointSizeF();
+  }
+  if (pointSize <= 0.0) {
+    pointSize = 12.0;
+  }
+
+  QFontMetricsF metrics(adjusted);
+  qreal textHeight = metrics.ascent() + metrics.descent();
+  if (textHeight <= 0.0) {
+    textHeight = static_cast<qreal>(pixelLimit);
+  }
+
+  qreal scaledPoint = pointSize * static_cast<qreal>(pixelLimit) / textHeight;
+  if (scaledPoint < 1.0) {
+    scaledPoint = 1.0;
+  }
+  adjusted.setPointSizeF(scaledPoint);
+
+  QFontMetricsF scaledMetrics(adjusted);
+  qreal scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
+  int iterations = 0;
+  while (scaledHeight > pixelLimit && scaledPoint > 1.0 && iterations < 16) {
+    scaledPoint = std::max<qreal>(1.0, scaledPoint - 0.5);
+    adjusted.setPointSizeF(scaledPoint);
+    scaledMetrics = QFontMetricsF(adjusted);
+    scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
+    ++iterations;
+  }
+
+  return adjusted;
 }
 
 } // namespace
@@ -307,6 +396,10 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   bool showIcon = true;
   const QString labelText = displayLabel(showIcon);
 
+  const int fontLimit = messageButtonPixelLimit(height());
+  const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
+  painter.setFont(labelFont);
+
   QRect inner = content.adjusted(1, 1, -1, -1);
   int iconWidth = std::min(inner.height(), 24);
   QRect iconRect = inner;
@@ -366,6 +459,10 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   const int buttonWidth = columns > 0 ? content.width() / columns : content.width();
   const int buttonHeight = rows > 0 ? content.height() / rows : content.height();
 
+  const int fontLimit = relatedDisplayPixelLimit(visual_, height(), displayCount);
+  const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
+  painter.setFont(labelFont);
+
   int index = 0;
   for (int row = 0; row < rows; ++row) {
     for (int column = 0; column < columns; ++column) {
@@ -419,6 +516,9 @@ void RelatedDisplayElement::paintHiddenVisual(QPainter &painter,
 
   bool showIcon = false;
   const QString text = displayLabel(showIcon);
+  const int fontLimit = messageButtonPixelLimit(height());
+  const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
+  painter.setFont(labelFont);
   painter.setPen(fg);
   painter.drawText(inner.adjusted(4, 0, -4, 0), Qt::AlignCenter, text);
 

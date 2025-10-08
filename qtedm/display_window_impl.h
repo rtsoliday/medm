@@ -606,6 +606,7 @@ private:
   void loadChoiceButtonElement(const AdlNode &choiceNode);
   void loadMenuElement(const AdlNode &menuNode);
   void loadMessageButtonElement(const AdlNode &messageNode);
+  void loadShellCommandElement(const AdlNode &shellNode);
   void loadRelatedDisplayElement(const AdlNode &relatedNode);
   void loadMeterElement(const AdlNode &meterNode);
   void loadBarMonitorElement(const AdlNode &barNode);
@@ -6882,6 +6883,13 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       continue;
     }
+    if (child.name.compare(QStringLiteral("shell command"),
+            Qt::CaseInsensitive)
+        == 0) {
+      loadShellCommandElement(child);
+      elementLoaded = true;
+      continue;
+    }
     if (child.name.compare(QStringLiteral("related display"),
             Qt::CaseInsensitive)
         == 0) {
@@ -9088,6 +9096,82 @@ inline void DisplayWindow::loadMessageButtonElement(
   element->show();
   element->setSelected(false);
   messageButtonElements_.append(element);
+  ensureElementInStack(element);
+}
+
+inline void DisplayWindow::loadShellCommandElement(
+    const AdlNode &shellNode)
+{
+  if (!displayArea_) {
+    return;
+  }
+
+  QRect geometry = parseObjectGeometry(shellNode);
+  if (geometry.width() < kMinimumTextWidth) {
+    geometry.setWidth(kMinimumTextWidth);
+  }
+  if (geometry.height() < kMinimumTextHeight) {
+    geometry.setHeight(kMinimumTextHeight);
+  }
+
+  auto *element = new ShellCommandElement(displayArea_);
+  element->setFont(font());
+  element->setGeometry(geometry);
+
+  bool ok = false;
+  const QString clrStr = propertyValue(shellNode, QStringLiteral("clr"));
+  const int clrIndex = clrStr.toInt(&ok);
+  if (ok) {
+    element->setForegroundColor(colorForIndex(clrIndex));
+  }
+
+  ok = false;
+  const QString bclrStr = propertyValue(shellNode, QStringLiteral("bclr"));
+  const int bclrIndex = bclrStr.toInt(&ok);
+  if (ok) {
+    element->setBackgroundColor(colorForIndex(bclrIndex));
+  }
+
+  if (const AdlProperty *labelProp = findProperty(shellNode,
+          QStringLiteral("label"))) {
+    element->setLabel(labelProp->value);
+  }
+
+  for (const auto &child : shellNode.children) {
+    if (!child.name.startsWith(QStringLiteral("command["), Qt::CaseInsensitive)) {
+      continue;
+    }
+    const int openIndex = child.name.indexOf(QLatin1Char('['));
+    const int closeIndex = child.name.indexOf(QLatin1Char(']'), openIndex + 1);
+    if (openIndex < 0 || closeIndex <= openIndex + 1) {
+      continue;
+    }
+    bool indexOk = false;
+    const int entryIndex = child.name.mid(openIndex + 1,
+        closeIndex - openIndex - 1).toInt(&indexOk);
+    if (!indexOk || entryIndex < 0 || entryIndex >= element->entryCount()) {
+      continue;
+    }
+
+    ShellCommandEntry entry = element->entry(entryIndex);
+    if (const AdlProperty *entryLabel = findProperty(child,
+            QStringLiteral("label"))) {
+      entry.label = entryLabel->value;
+    }
+    if (const AdlProperty *entryCommand = findProperty(child,
+            QStringLiteral("name"))) {
+      entry.command = entryCommand->value;
+    }
+    if (const AdlProperty *entryArgs = findProperty(child,
+            QStringLiteral("args"))) {
+      entry.args = entryArgs->value;
+    }
+    element->setEntry(entryIndex, entry);
+  }
+
+  element->show();
+  element->setSelected(false);
+  shellCommandElements_.append(element);
   ensureElementInStack(element);
 }
 

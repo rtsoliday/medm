@@ -1,0 +1,224 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_ShellCommand.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=53
+		width=991
+		height=509
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+"shell command" {
+	object {
+		x=24
+		y=13
+		width=200
+		height=30
+	}
+	command[0] {
+		label="touch /tmp/test.bob"
+		name="touch"
+		args="/tmp/bob.test"
+	}
+	clr=14
+	bclr=4
+	label="Run"
+}
+"shell command" {
+	object {
+		x=24
+		y=68
+		width=210
+		height=36
+	}
+	command[0] {
+		label="Echo rnd-9281"
+		name="echo"
+		args="random-9281"
+	}
+	command[1] {
+		label="List tmp"
+		name="ls"
+		args="/tmp"
+	}
+	clr=6
+	bclr=2
+	label="Echo+List"
+}
+"shell command" {
+	object {
+		x=24
+		y=124
+		width=236
+		height=48
+	}
+	command[0] {
+		label="Ping 17"
+		name="ping"
+		args="-c 1 192.0.2.17"
+	}
+	command[1] {
+		name="whoami"
+	}
+	command[2] {
+		label="Sleep"
+		args="0.25"
+	}
+	clr=9
+	bclr=11
+	label="Mixed Entries"
+}
+"shell command" {
+	object {
+		x=24
+		y=188
+		width=220
+		height=44
+	}
+	command[0] {
+		label="Open Hosts"
+		name="xdg-open"
+		args="/etc/hosts"
+	}
+	command[1] {
+		label="Nulled Args"
+		name="printf"
+	}
+	command[2] {
+		name="true"
+	}
+	clr=3
+	bclr=15
+}
+"shell command" {
+	object {
+		x=24
+		y=248
+		width=244
+		height=52
+	}
+	command[0] {
+		label="Random tail"
+		name="tail"
+		args="-n 5 /var/log/syslog"
+	}
+	command[1] {
+		label="Scramble"
+		name="python3"
+		args="-c 'print(431*7)'"
+	}
+	command[2] {
+		args=" blank"
+	}
+	clr=12
+	bclr=5
+	label="Tail+Py"
+}
+"shell command" {
+	object {
+		x=24
+		y=312
+		width=252
+		height=54
+	}
+	command[0] {
+		label="Hash beep"
+		name="sha256sum"
+		args="/tmp/random.file"
+	}
+	command[1] {
+		label="Whitespace"
+		name="   "
+	}
+	command[2] {
+		name="uname"
+		args="-a"
+	}
+	command[3] {
+		label="Fuzz"
+		name="env"
+		args="FOO=bar123"
+	}
+	clr=4
+	bclr=8
+	label="Hash"
+}

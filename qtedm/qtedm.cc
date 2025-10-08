@@ -123,8 +123,8 @@ int main(int argc, char *argv[])
   auto *pasteAct = editMenu->addAction("&Paste");
   pasteAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_V));
   editMenu->addSeparator();
-  editMenu->addAction("&Raise");
-  editMenu->addAction("&Lower");
+  auto *raiseAct = editMenu->addAction("&Raise");
+  auto *lowerAct = editMenu->addAction("&Lower");
   editMenu->addSeparator();
   editMenu->addAction("&Group");
   editMenu->addAction("&Ungroup");
@@ -290,6 +290,18 @@ int main(int argc, char *argv[])
           active->pasteSelection();
         }
       });
+  QObject::connect(raiseAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->raiseSelection();
+        }
+      });
+  QObject::connect(lowerAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->lowerSelection();
+        }
+      });
   QObject::connect(saveAsAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -319,7 +331,7 @@ int main(int argc, char *argv[])
       displayBackgroundColor);
 
   *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
-      closeAct, cutAct, copyAct, pasteAct]() {
+    closeAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -371,6 +383,10 @@ int main(int argc, char *argv[])
     copyAct->setEnabled(hasSelection);
     const bool canPaste = canEditActive && active && active->canPaste();
     pasteAct->setEnabled(canPaste);
+    const bool canRaise = canEditActive && active && active->canRaiseSelection();
+    const bool canLower = canEditActive && active && active->canLowerSelection();
+    raiseAct->setEnabled(canRaise);
+    lowerAct->setEnabled(canLower);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

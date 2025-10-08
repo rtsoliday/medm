@@ -230,6 +230,98 @@ public:
     pasteFromClipboard();
   }
 
+  void raiseSelection()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = selectedWidgetsInStackOrder(true);
+    if (widgets.isEmpty()) {
+      return;
+    }
+
+    bool reordered = false;
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      for (auto it = elementStack_.begin(); it != elementStack_.end(); ++it) {
+        QWidget *current = it->data();
+        if (current == widget) {
+          QPointer<QWidget> pointer = *it;
+          elementStack_.erase(it);
+          elementStack_.append(pointer);
+          widget->raise();
+          reordered = true;
+          break;
+        }
+      }
+    }
+
+    if (reordered) {
+      markDirty();
+      notifyMenus();
+    }
+  }
+
+  void lowerSelection()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = selectedWidgetsInStackOrder(false);
+    if (widgets.isEmpty()) {
+      return;
+    }
+
+    bool reordered = false;
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      for (auto it = elementStack_.begin(); it != elementStack_.end(); ++it) {
+        QWidget *current = it->data();
+        if (current == widget) {
+          QPointer<QWidget> pointer = *it;
+          elementStack_.erase(it);
+          elementStack_.prepend(pointer);
+          widget->lower();
+          reordered = true;
+          break;
+        }
+      }
+    }
+
+    if (reordered) {
+      markDirty();
+      notifyMenus();
+    }
+  }
+
+  bool canRaiseSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
+    }
+    return !selectedWidgets().isEmpty();
+  }
+
+  bool canLowerSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
+    }
+    return !selectedWidgets().isEmpty();
+  }
+
   bool hasCopyableSelection() const
   {
     return hasAnyElementSelection();
@@ -1013,6 +1105,92 @@ private:
       }
     }
     return false;
+  }
+
+  QList<QWidget *> selectedWidgets() const
+  {
+    QList<QWidget *> widgets;
+    QSet<QWidget *> seen;
+    auto appendUnique = [&](QWidget *candidate) {
+      if (!candidate || seen.contains(candidate)) {
+        return;
+      }
+      seen.insert(candidate);
+      widgets.append(candidate);
+    };
+
+    for (const auto &pointer : multiSelection_) {
+      appendUnique(pointer.data());
+    }
+    appendUnique(selectedTextElement_);
+    appendUnique(selectedTextEntryElement_);
+    appendUnique(selectedSliderElement_);
+    appendUnique(selectedWheelSwitchElement_);
+    appendUnique(selectedChoiceButtonElement_);
+    appendUnique(selectedMenuElement_);
+    appendUnique(selectedMessageButtonElement_);
+    appendUnique(selectedShellCommandElement_);
+    appendUnique(selectedRelatedDisplayElement_);
+    appendUnique(selectedTextMonitorElement_);
+    appendUnique(selectedMeterElement_);
+    appendUnique(selectedBarMonitorElement_);
+    appendUnique(selectedScaleMonitorElement_);
+    appendUnique(selectedStripChartElement_);
+    appendUnique(selectedCartesianPlotElement_);
+    appendUnique(selectedByteMonitorElement_);
+    appendUnique(selectedRectangle_);
+    appendUnique(selectedImage_);
+    appendUnique(selectedOval_);
+    appendUnique(selectedArc_);
+    appendUnique(selectedLine_);
+    appendUnique(selectedPolyline_);
+    appendUnique(selectedPolygon_);
+
+    return widgets;
+  }
+
+  QList<QWidget *> selectedWidgetsInStackOrder(bool ascending) const
+  {
+    const QList<QWidget *> selection = selectedWidgets();
+    if (selection.isEmpty()) {
+      return QList<QWidget *>();
+    }
+
+    QSet<QWidget *> selectionSet;
+    selectionSet.reserve(selection.size());
+    for (QWidget *widget : selection) {
+      if (widget) {
+        selectionSet.insert(widget);
+      }
+    }
+
+    QList<QWidget *> ordered;
+    ordered.reserve(selectionSet.size());
+    if (ascending) {
+      for (const auto &entry : elementStack_) {
+        QWidget *widget = entry.data();
+        if (widget && selectionSet.contains(widget)) {
+          ordered.append(widget);
+          selectionSet.remove(widget);
+          if (selectionSet.isEmpty()) {
+            break;
+          }
+        }
+      }
+    } else {
+      for (auto it = elementStack_.crbegin(); it != elementStack_.crend(); ++it) {
+        QWidget *widget = it->data();
+        if (widget && selectionSet.contains(widget)) {
+          ordered.append(widget);
+          selectionSet.remove(widget);
+          if (selectionSet.isEmpty()) {
+            break;
+          }
+        }
+      }
+    }
+
+    return ordered;
   }
 
   void clearSelections()
@@ -7232,8 +7410,16 @@ private:
     });
 
     menu.addSeparator();
-    addMenuAction(&menu, QStringLiteral("Raise"));
-    addMenuAction(&menu, QStringLiteral("Lower"));
+    auto *raiseAction = addMenuAction(&menu, QStringLiteral("Raise"));
+    raiseAction->setEnabled(canRaiseSelection());
+    QObject::connect(raiseAction, &QAction::triggered, this, [this]() {
+      raiseSelection();
+    });
+    auto *lowerAction = addMenuAction(&menu, QStringLiteral("Lower"));
+    lowerAction->setEnabled(canLowerSelection());
+    QObject::connect(lowerAction, &QAction::triggered, this, [this]() {
+      lowerSelection();
+    });
 
     menu.addSeparator();
     addMenuAction(&menu, QStringLiteral("Group"));

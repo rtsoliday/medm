@@ -11,6 +11,8 @@ CompositeElement::CompositeElement(QWidget *parent)
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setAttribute(Qt::WA_NoSystemBackground, true);
   setAttribute(Qt::WA_MouseNoMask, true);
+  foregroundColor_ = defaultForegroundColor();
+  backgroundColor_ = defaultBackgroundColor();
 }
 
 void CompositeElement::setSelected(bool selected)
@@ -45,6 +47,42 @@ QString CompositeElement::compositeFile() const
 void CompositeElement::setCompositeFile(const QString &filePath)
 {
   compositeFile_ = filePath;
+}
+
+QColor CompositeElement::foregroundColor() const
+{
+  if (foregroundColor_.isValid()) {
+    return foregroundColor_;
+  }
+  return defaultForegroundColor();
+}
+
+void CompositeElement::setForegroundColor(const QColor &color)
+{
+  QColor effective = color.isValid() ? color : defaultForegroundColor();
+  if (foregroundColor_ == effective) {
+    return;
+  }
+  foregroundColor_ = effective;
+  update();
+}
+
+QColor CompositeElement::backgroundColor() const
+{
+  if (backgroundColor_.isValid()) {
+    return backgroundColor_;
+  }
+  return defaultBackgroundColor();
+}
+
+void CompositeElement::setBackgroundColor(const QColor &color)
+{
+  QColor effective = color.isValid() ? color : defaultBackgroundColor();
+  if (backgroundColor_ == effective) {
+    return;
+  }
+  backgroundColor_ = effective;
+  update();
 }
 
 TextColorMode CompositeElement::colorMode() const
@@ -132,7 +170,7 @@ void CompositeElement::paintEvent(QPaintEvent *event)
 
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
-  QPen pen(defaultForegroundColor());
+  QPen pen(foregroundColor());
   pen.setStyle(Qt::DashLine);
   pen.setWidth(1);
   painter.setPen(pen);
@@ -149,4 +187,15 @@ QColor CompositeElement::defaultForegroundColor() const
     return qApp->palette().color(QPalette::WindowText);
   }
   return QColor(Qt::black);
+}
+
+QColor CompositeElement::defaultBackgroundColor() const
+{
+  if (const QWidget *parent = parentWidget()) {
+    return parent->palette().color(QPalette::Window);
+  }
+  if (qApp) {
+    return qApp->palette().color(QPalette::Window);
+  }
+  return QColor(Qt::white);
 }

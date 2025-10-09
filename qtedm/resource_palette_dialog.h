@@ -343,6 +343,7 @@ public:
     arcPathLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     arcPathLabel_->setAutoFillBackground(false);
     rectangleLayout->addWidget(arcPathLabel_, rectangleRow, 0);
+
     rectangleLayout->addWidget(arcPathSpin_, rectangleRow, 1);
     ++rectangleRow;
 
@@ -355,6 +356,99 @@ public:
     addRow(rectangleLayout, rectangleRow++, QStringLiteral("Channel D"), rectangleChannelEdits_[3]);
     rectangleLayout->setRowStretch(rectangleRow, 1);
     entriesLayout->addWidget(rectangleSection_);
+
+    compositeSection_ = new QWidget(entriesWidget_);
+    auto *compositeLayout = new QGridLayout(compositeSection_);
+    compositeLayout->setContentsMargins(0, 0, 0, 0);
+    compositeLayout->setHorizontalSpacing(12);
+    compositeLayout->setVerticalSpacing(6);
+
+    compositeForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(compositeForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(compositeForegroundButton_,
+              QStringLiteral("Composite Foreground"),
+              compositeForegroundSetter_);
+        });
+    compositeForegroundButton_->setEnabled(false);
+
+    compositeBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(compositeBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(compositeBackgroundButton_,
+              QStringLiteral("Composite Background"),
+              compositeBackgroundSetter_);
+        });
+    compositeBackgroundButton_->setEnabled(false);
+
+    compositeFileEdit_ = createLineEdit();
+    committedTexts_.insert(compositeFileEdit_, compositeFileEdit_->text());
+    compositeFileEdit_->installEventFilter(this);
+    QObject::connect(compositeFileEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCompositeFile(); });
+    QObject::connect(compositeFileEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCompositeFile(); });
+
+    compositeVisibilityCombo_ = new QComboBox;
+    compositeVisibilityCombo_->setFont(valueFont_);
+    compositeVisibilityCombo_->setAutoFillBackground(true);
+    compositeVisibilityCombo_->addItem(QStringLiteral("Static"));
+    compositeVisibilityCombo_->addItem(QStringLiteral("If Not Zero"));
+    compositeVisibilityCombo_->addItem(QStringLiteral("If Zero"));
+    compositeVisibilityCombo_->addItem(QStringLiteral("Calc"));
+    QObject::connect(compositeVisibilityCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (compositeVisibilityModeSetter_) {
+            compositeVisibilityModeSetter_(visibilityModeFromIndex(index));
+          }
+          updateCompositeChannelDependentControls();
+        });
+
+    compositeVisibilityCalcEdit_ = createLineEdit();
+    QColor compositeDisabledBackground = basePalette.color(QPalette::Disabled, QPalette::Base);
+    if (!compositeDisabledBackground.isValid()) {
+      compositeDisabledBackground = QColor(0xd3, 0xd3, 0xd3);
+    }
+    compositeVisibilityCalcEdit_->setStyleSheet(
+        QStringLiteral("QLineEdit:disabled { background-color: %1; }")
+            .arg(compositeDisabledBackground.name(QColor::HexRgb).toUpper()));
+    committedTexts_.insert(compositeVisibilityCalcEdit_, compositeVisibilityCalcEdit_->text());
+    compositeVisibilityCalcEdit_->installEventFilter(this);
+    QObject::connect(compositeVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitCompositeVisibilityCalc(); });
+    QObject::connect(compositeVisibilityCalcEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitCompositeVisibilityCalc(); });
+
+    for (int i = 0; i < static_cast<int>(compositeChannelEdits_.size()); ++i) {
+      compositeChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(compositeChannelEdits_[i], compositeChannelEdits_[i]->text());
+      compositeChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(compositeChannelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitCompositeChannel(i); });
+      QObject::connect(compositeChannelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitCompositeChannel(i); });
+      if (i == 0) {
+        QObject::connect(compositeChannelEdits_[i], &QLineEdit::textChanged, this,
+            [this]() { updateCompositeChannelDependentControls(); });
+      }
+    }
+    updateCompositeChannelDependentControls();
+
+    int compositeRow = 0;
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Color"), compositeForegroundButton_);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Background"), compositeBackgroundButton_);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Composite File"), compositeFileEdit_);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Visibility"), compositeVisibilityCombo_);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Vis Calc"), compositeVisibilityCalcEdit_);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Channel A"), compositeChannelEdits_[0]);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Channel B"), compositeChannelEdits_[1]);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Channel C"), compositeChannelEdits_[2]);
+    addRow(compositeLayout, compositeRow++, QStringLiteral("Channel D"), compositeChannelEdits_[3]);
+    compositeLayout->setRowStretch(compositeRow, 1);
+    entriesLayout->addWidget(compositeSection_);
 
     imageSection_ = new QWidget(entriesWidget_);
     auto *imageLayout = new QGridLayout(imageSection_);
@@ -2221,6 +2315,7 @@ public:
 
   displaySection_->setVisible(false);
   rectangleSection_->setVisible(false);
+  compositeSection_->setVisible(false);
   imageSection_->setVisible(false);
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
@@ -2445,6 +2540,22 @@ public:
     backgroundColorGetter_ = {};
     backgroundColorSetter_ = {};
     activeColorSetter_ = {};
+    compositeForegroundGetter_ = {};
+    compositeForegroundSetter_ = {};
+    compositeBackgroundGetter_ = {};
+    compositeBackgroundSetter_ = {};
+    compositeFileGetter_ = {};
+    compositeFileSetter_ = {};
+    compositeVisibilityModeGetter_ = {};
+    compositeVisibilityModeSetter_ = {};
+    compositeVisibilityCalcGetter_ = {};
+    compositeVisibilityCalcSetter_ = {};
+    for (auto &getter : compositeChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : compositeChannelSetters_) {
+      setter = {};
+    }
     gridSpacingGetter_ = {};
     gridSpacingSetter_ = {};
     gridOnGetter_ = {};
@@ -5482,6 +5593,118 @@ public:
   }
 
 
+  void showForComposite(std::function<QRect()> geometryGetter,
+    std::function<void(const QRect &)> geometrySetter,
+    std::function<QColor()> foregroundGetter,
+    std::function<void(const QColor &)> foregroundSetter,
+    std::function<QColor()> backgroundGetter,
+    std::function<void(const QColor &)> backgroundSetter,
+      std::function<QString()> fileGetter,
+      std::function<void(const QString &)> fileSetter,
+      std::function<TextVisibilityMode()> visibilityModeGetter,
+      std::function<void(TextVisibilityMode)> visibilityModeSetter,
+      std::function<QString()> visibilityCalcGetter,
+      std::function<void(const QString &)> visibilityCalcSetter,
+      std::array<std::function<QString()>, 4> channelGetters,
+      std::array<std::function<void(const QString &)>, 4> channelSetters,
+      const QString &elementLabel = QStringLiteral("Composite"))
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kComposite;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    compositeForegroundGetter_ = std::move(foregroundGetter);
+    compositeForegroundSetter_ = std::move(foregroundSetter);
+    compositeBackgroundGetter_ = std::move(backgroundGetter);
+    compositeBackgroundSetter_ = std::move(backgroundSetter);
+    compositeFileGetter_ = std::move(fileGetter);
+    compositeFileSetter_ = std::move(fileSetter);
+    compositeVisibilityModeGetter_ = std::move(visibilityModeGetter);
+    compositeVisibilityModeSetter_ = std::move(visibilityModeSetter);
+    compositeVisibilityCalcGetter_ = std::move(visibilityCalcGetter);
+    compositeVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
+    compositeChannelGetters_ = std::move(channelGetters);
+    compositeChannelSetters_ = std::move(channelSetters);
+
+    if (compositeForegroundButton_) {
+      const QColor color = compositeForegroundGetter_ ? compositeForegroundGetter_()
+                                                      : palette().color(QPalette::WindowText);
+      setColorButtonColor(compositeForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+      compositeForegroundButton_->setEnabled(static_cast<bool>(compositeForegroundSetter_));
+    }
+
+    if (compositeBackgroundButton_) {
+      const QColor color = compositeBackgroundGetter_ ? compositeBackgroundGetter_()
+                                                      : palette().color(QPalette::Window);
+      setColorButtonColor(compositeBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+      compositeBackgroundButton_->setEnabled(static_cast<bool>(compositeBackgroundSetter_));
+    }
+
+    QRect compositeGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (compositeGeometry.width() <= 0) {
+      compositeGeometry.setWidth(1);
+    }
+    if (compositeGeometry.height() <= 0) {
+      compositeGeometry.setHeight(1);
+    }
+    lastCommittedGeometry_ = compositeGeometry;
+    updateGeometryEdits(compositeGeometry);
+
+    if (compositeFileEdit_) {
+      const QString file = compositeFileGetter_ ? compositeFileGetter_() : QString();
+      const QSignalBlocker blocker(compositeFileEdit_);
+      compositeFileEdit_->setText(file);
+      compositeFileEdit_->setEnabled(static_cast<bool>(compositeFileSetter_));
+      committedTexts_[compositeFileEdit_] = compositeFileEdit_->text();
+    }
+
+    if (compositeVisibilityCombo_) {
+      const QSignalBlocker blocker(compositeVisibilityCombo_);
+      const TextVisibilityMode mode = compositeVisibilityModeGetter_
+          ? compositeVisibilityModeGetter_()
+          : TextVisibilityMode::kStatic;
+      compositeVisibilityCombo_->setCurrentIndex(visibilityModeToIndex(mode));
+      compositeVisibilityCombo_->setEnabled(static_cast<bool>(compositeVisibilityModeSetter_));
+    }
+
+    if (compositeVisibilityCalcEdit_) {
+      const QString calc = compositeVisibilityCalcGetter_
+          ? compositeVisibilityCalcGetter_()
+          : QString();
+      const QSignalBlocker blocker(compositeVisibilityCalcEdit_);
+      compositeVisibilityCalcEdit_->setText(calc);
+      compositeVisibilityCalcEdit_->setEnabled(static_cast<bool>(compositeVisibilityCalcSetter_));
+      committedTexts_[compositeVisibilityCalcEdit_] = compositeVisibilityCalcEdit_->text();
+    }
+
+    for (int i = 0; i < static_cast<int>(compositeChannelEdits_.size()); ++i) {
+      QLineEdit *edit = compositeChannelEdits_[i];
+      if (!edit) {
+        continue;
+      }
+      const QString value = compositeChannelGetters_[i]
+          ? compositeChannelGetters_[i]()
+          : QString();
+      const QSignalBlocker blocker(edit);
+      edit->setText(value);
+      edit->setEnabled(static_cast<bool>(compositeChannelSetters_[i]));
+      committedTexts_[edit] = edit->text();
+    }
+
+    updateCompositeChannelDependentControls();
+
+    elementLabel_->setText(elementLabel);
+
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    activateWindow();
+  }
+
   void showForRectangle(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> colorGetter,
@@ -6723,6 +6946,23 @@ public:
       resetLineEdit(edit);
     }
     updateRectangleChannelDependentControls();
+    resetLineEdit(compositeFileEdit_);
+    resetLineEdit(compositeVisibilityCalcEdit_);
+    for (QLineEdit *edit : compositeChannelEdits_) {
+      resetLineEdit(edit);
+    }
+    updateCompositeChannelDependentControls();
+    if (compositeFileEdit_) {
+      compositeFileEdit_->setEnabled(false);
+    }
+    if (compositeVisibilityCalcEdit_) {
+      compositeVisibilityCalcEdit_->setEnabled(false);
+    }
+    for (QLineEdit *edit : compositeChannelEdits_) {
+      if (edit) {
+        edit->setEnabled(false);
+      }
+    }
     resetLineEdit(imageNameEdit_);
     resetLineEdit(imageCalcEdit_);
     resetLineEdit(imageVisibilityCalcEdit_);
@@ -6768,6 +7008,14 @@ public:
     }
     resetColorButton(rectangleForegroundButton_);
     resetColorButton(lineColorButton_);
+    resetColorButton(compositeForegroundButton_);
+    resetColorButton(compositeBackgroundButton_);
+    if (compositeForegroundButton_) {
+      compositeForegroundButton_->setEnabled(false);
+    }
+    if (compositeBackgroundButton_) {
+      compositeBackgroundButton_->setEnabled(false);
+    }
 
     if (gridOnCombo_) {
       const QSignalBlocker blocker(gridOnCombo_);
@@ -6871,6 +7119,15 @@ public:
       rectangleVisibilityCombo_->setCurrentIndex(
           visibilityModeToIndex(TextVisibilityMode::kStatic));
     }
+    if (compositeVisibilityCombo_) {
+      const QSignalBlocker blocker(compositeVisibilityCombo_);
+      compositeVisibilityCombo_->setCurrentIndex(
+          visibilityModeToIndex(TextVisibilityMode::kStatic));
+      compositeVisibilityCombo_->setEnabled(false);
+    }
+    if (compositeVisibilityCalcEdit_) {
+      compositeVisibilityCalcEdit_->setEnabled(false);
+    }
     if (imageTypeCombo_) {
       const QSignalBlocker blocker(imageTypeCombo_);
       imageTypeCombo_->setCurrentIndex(imageTypeToIndex(ImageType::kNone));
@@ -6955,6 +7212,7 @@ private:
     kRectangle,
     kImage,
     kPolygon,
+    kComposite,
     kLine,
     kText,
     kTextEntry,
@@ -7044,6 +7302,9 @@ private:
         const bool isImageChannelEdit = std::find(
             imageChannelEdits_.begin(), imageChannelEdits_.end(), edit)
             != imageChannelEdits_.end();
+    const bool isCompositeChannelEdit = std::find(
+      compositeChannelEdits_.begin(), compositeChannelEdits_.end(), edit)
+      != compositeChannelEdits_.end();
         const bool isRelatedLabelEdit = std::find(
             relatedDisplayEntryLabelEdits_.begin(),
             relatedDisplayEntryLabelEdits_.end(), edit)
@@ -7060,12 +7321,15 @@ private:
             || edit == heightEdit_ || edit == gridSpacingEdit_
             || edit == rectangleLineWidthEdit_
             || edit == rectangleVisibilityCalcEdit_
+            || edit == compositeFileEdit_
+            || edit == compositeVisibilityCalcEdit_
             || edit == imageNameEdit_ || edit == imageCalcEdit_
             || edit == imageVisibilityCalcEdit_
             || edit == lineLineWidthEdit_
             || edit == lineVisibilityCalcEdit_
             || isRectangleChannelEdit || isLineChannelEdit
-            || isImageChannelEdit || isRelatedLabelEdit
+            || isImageChannelEdit || isCompositeChannelEdit
+            || isRelatedLabelEdit
             || isRelatedNameEdit || isRelatedArgsEdit
             || edit == relatedDisplayLabelEdit_) {
           revertLineEdit(edit);
@@ -7129,6 +7393,11 @@ private:
           || kind == SelectionKind::kPolygon;
       rectangleSection_->setVisible(rectangleVisible);
       rectangleSection_->setEnabled(rectangleVisible);
+    }
+    if (compositeSection_) {
+      const bool compositeVisible = kind == SelectionKind::kComposite;
+      compositeSection_->setVisible(compositeVisible);
+      compositeSection_->setEnabled(compositeVisible);
     }
     if (imageSection_) {
       const bool imageVisible = kind == SelectionKind::kImage;
@@ -7382,6 +7651,35 @@ private:
     setFieldEnabled(rectangleColorModeCombo_, hasChannelA);
     setFieldEnabled(rectangleVisibilityCombo_, hasChannelA);
     setFieldEnabled(rectangleVisibilityCalcEdit_, hasChannelA);
+  }
+
+  void updateCompositeChannelDependentControls()
+  {
+    bool hasChannelA = false;
+    if (compositeChannelGetters_[0]) {
+      const QString value = compositeChannelGetters_[0]();
+      hasChannelA = !value.trimmed().isEmpty();
+    }
+    if (!hasChannelA) {
+      QLineEdit *channelEdit = compositeChannelEdits_[0];
+      if (channelEdit) {
+        hasChannelA = !channelEdit->text().trimmed().isEmpty();
+      }
+    }
+    if (compositeVisibilityCombo_) {
+      compositeVisibilityCombo_->setEnabled(hasChannelA
+          && static_cast<bool>(compositeVisibilityModeSetter_));
+    }
+    if (compositeVisibilityCalcEdit_) {
+      bool enableCalc = hasChannelA
+          && static_cast<bool>(compositeVisibilityCalcSetter_);
+      if (compositeVisibilityCombo_) {
+        enableCalc = enableCalc
+            && visibilityModeFromIndex(compositeVisibilityCombo_->currentIndex())
+                == TextVisibilityMode::kCalc;
+      }
+      compositeVisibilityCalcEdit_->setEnabled(enableCalc);
+    }
   }
 
   void setFieldEnabled(QWidget *field, bool enabled)
@@ -8473,6 +8771,55 @@ private:
     }
   }
 
+  void commitCompositeFile()
+  {
+    if (!compositeFileEdit_) {
+      return;
+    }
+    if (!compositeFileSetter_) {
+      revertLineEdit(compositeFileEdit_);
+      return;
+    }
+    const QString value = compositeFileEdit_->text();
+    compositeFileSetter_(value);
+    committedTexts_[compositeFileEdit_] = value;
+  }
+
+  void commitCompositeVisibilityCalc()
+  {
+    if (!compositeVisibilityCalcEdit_) {
+      return;
+    }
+    if (!compositeVisibilityCalcSetter_) {
+      revertLineEdit(compositeVisibilityCalcEdit_);
+      return;
+    }
+    const QString value = compositeVisibilityCalcEdit_->text();
+    compositeVisibilityCalcSetter_(value);
+    committedTexts_[compositeVisibilityCalcEdit_] = value;
+  }
+
+  void commitCompositeChannel(int index)
+  {
+    if (index < 0 || index >= static_cast<int>(compositeChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = compositeChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!compositeChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    compositeChannelSetters_[index](value);
+    committedTexts_[edit] = value;
+    if (index == 0) {
+      updateCompositeChannelDependentControls();
+    }
+  }
+
   void commitImageName()
   {
     if (!imageNameEdit_) {
@@ -9190,6 +9537,7 @@ private:
   QWidget *geometrySection_ = nullptr;
   QWidget *displaySection_ = nullptr;
   QWidget *rectangleSection_ = nullptr;
+  QWidget *compositeSection_ = nullptr;
   QWidget *imageSection_ = nullptr;
   QWidget *lineSection_ = nullptr;
   QWidget *textSection_ = nullptr;
@@ -9345,6 +9693,12 @@ private:
   QComboBox *rectangleVisibilityCombo_ = nullptr;
   QLineEdit *rectangleVisibilityCalcEdit_ = nullptr;
   std::array<QLineEdit *, 4> rectangleChannelEdits_{};
+  QPushButton *compositeForegroundButton_ = nullptr;
+  QPushButton *compositeBackgroundButton_ = nullptr;
+  QLineEdit *compositeFileEdit_ = nullptr;
+  QComboBox *compositeVisibilityCombo_ = nullptr;
+  QLineEdit *compositeVisibilityCalcEdit_ = nullptr;
+  std::array<QLineEdit *, 4> compositeChannelEdits_{};
   QComboBox *imageTypeCombo_ = nullptr;
   QLineEdit *imageNameEdit_ = nullptr;
   QLineEdit *imageCalcEdit_ = nullptr;
@@ -9623,6 +9977,17 @@ private:
       committedTexts_[rectangleVisibilityCalcEdit_] = rectangleVisibilityCalcEdit_->text();
     }
     for (QLineEdit *edit : rectangleChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
+    if (compositeFileEdit_) {
+      committedTexts_[compositeFileEdit_] = compositeFileEdit_->text();
+    }
+    if (compositeVisibilityCalcEdit_) {
+      committedTexts_[compositeVisibilityCalcEdit_] = compositeVisibilityCalcEdit_->text();
+    }
+    for (QLineEdit *edit : compositeChannelEdits_) {
       if (edit) {
         committedTexts_[edit] = edit->text();
       }
@@ -9983,6 +10348,18 @@ private:
   std::function<void(const QString &)> rectangleVisibilityCalcSetter_;
   std::array<std::function<QString()>, 4> rectangleChannelGetters_{};
   std::array<std::function<void(const QString &)>, 4> rectangleChannelSetters_{};
+  std::function<QColor()> compositeForegroundGetter_;
+  std::function<void(const QColor &)> compositeForegroundSetter_;
+  std::function<QColor()> compositeBackgroundGetter_;
+  std::function<void(const QColor &)> compositeBackgroundSetter_;
+  std::function<QString()> compositeFileGetter_;
+  std::function<void(const QString &)> compositeFileSetter_;
+  std::function<TextVisibilityMode()> compositeVisibilityModeGetter_;
+  std::function<void(TextVisibilityMode)> compositeVisibilityModeSetter_;
+  std::function<QString()> compositeVisibilityCalcGetter_;
+  std::function<void(const QString &)> compositeVisibilityCalcSetter_;
+  std::array<std::function<QString()>, 4> compositeChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4> compositeChannelSetters_{};
   std::function<ImageType()> imageTypeGetter_;
   std::function<void(ImageType)> imageTypeSetter_;
   std::function<QString()> imageNameGetter_;

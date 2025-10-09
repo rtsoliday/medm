@@ -397,6 +397,7 @@ public:
 
     clearSelections();
     selectCompositeElement(composite);
+    showResourcePaletteForComposite(composite);
     markDirty();
     refreshResourcePaletteGeometry();
     notifyMenus();
@@ -1556,6 +1557,7 @@ private:
         }
         if (newComposite) {
           target.selectCompositeElement(newComposite);
+          target.showResourcePaletteForComposite(newComposite);
           target.markDirty();
         }
       });
@@ -4245,6 +4247,98 @@ private:
         });
   }
 
+  void showResourcePaletteForComposite(CompositeElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
+    }};
+    dialog->showForComposite(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < 1) {
+            adjusted.setWidth(1);
+          }
+          if (adjusted.height() < 1) {
+            adjusted.setHeight(1);
+          }
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          if (constrained != widgetDisplayRect(element)) {
+            setWidgetDisplayRect(element, constrained);
+            markDirty();
+          }
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->compositeFile();
+        },
+        [this, element](const QString &filePath) {
+          element->setCompositeFile(filePath);
+          markDirty();
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [this, element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [this, element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+          markDirty();
+        },
+        channelGetters,
+        channelSetters,
+        element->compositeName().isEmpty() ? QStringLiteral("Composite")
+                                           : element->compositeName());
+  }
+
   void showResourcePaletteForRectangle(RectangleElement *element)
   {
     if (!element) {
@@ -6044,6 +6138,7 @@ private:
     }
     if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
       selectCompositeElement(composite);
+      showResourcePaletteForComposite(composite);
       return true;
     }
     if (auto *line = dynamic_cast<LineElement *>(widget)) {

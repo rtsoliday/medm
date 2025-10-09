@@ -23,6 +23,12 @@ public:
   QString compositeFile() const;
   void setCompositeFile(const QString &filePath);
 
+  QColor foregroundColor() const;
+  void setForegroundColor(const QColor &color);
+
+  QColor backgroundColor() const;
+  void setBackgroundColor(const QColor &color);
+
   TextColorMode colorMode() const;
   void setColorMode(TextColorMode mode);
 
@@ -45,10 +51,13 @@ protected:
 
 private:
   QColor defaultForegroundColor() const;
+  QColor defaultBackgroundColor() const;
 
   bool selected_ = false;
   QString compositeName_;
   QString compositeFile_;
+  QColor foregroundColor_;
+  QColor backgroundColor_;
   TextColorMode colorMode_ = TextColorMode::kStatic;
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
   QString visibilityCalc_;

@@ -885,6 +885,8 @@ private:
   QVector<QPoint> parsePolylinePoints(const AdlNode &polylineNode) const;
   void ensureElementInStack(QWidget *element);
   QColor colorForIndex(int index) const;
+  QRect widgetDisplayRect(const QWidget *widget) const;
+  void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
   void writeWidgetAdl(QTextStream &stream, QWidget *widget, int indent,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveForeground,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveBackground) const;
@@ -1531,7 +1533,7 @@ private:
 
     if (selectedCompositeElement_) {
       CompositeElement *element = selectedCompositeElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       std::optional<AdlNode> node = widgetToAdlNode(element);
       if (!node) {
         return false;
@@ -1567,7 +1569,7 @@ private:
 
     if (selectedTextElement_) {
       TextElement *element = selectedTextElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QString text = element->text();
       const QColor foreground = element->foregroundColor();
       const Qt::Alignment alignment = element->textAlignment();
@@ -1616,7 +1618,7 @@ private:
 
     if (selectedTextEntryElement_) {
       TextEntryElement *element = selectedTextEntryElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -1662,7 +1664,7 @@ private:
 
     if (selectedSliderElement_) {
       SliderElement *element = selectedSliderElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -1704,7 +1706,7 @@ private:
 
     if (selectedWheelSwitchElement_) {
       WheelSwitchElement *element = selectedWheelSwitchElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -1744,7 +1746,7 @@ private:
 
     if (selectedChoiceButtonElement_) {
       ChoiceButtonElement *element = selectedChoiceButtonElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -1780,7 +1782,7 @@ private:
 
     if (selectedMenuElement_) {
       MenuElement *element = selectedMenuElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -1813,7 +1815,7 @@ private:
 
     if (selectedMessageButtonElement_) {
       MessageButtonElement *element = selectedMessageButtonElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -1854,7 +1856,7 @@ private:
 
     if (selectedShellCommandElement_) {
       ShellCommandElement *element = selectedShellCommandElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const QString label = element->label();
@@ -1894,7 +1896,7 @@ private:
 
     if (selectedRelatedDisplayElement_) {
       RelatedDisplayElement *element = selectedRelatedDisplayElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const QString label = element->label();
@@ -1937,7 +1939,7 @@ private:
 
     if (selectedTextMonitorElement_) {
       TextMonitorElement *element = selectedTextMonitorElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QString text = element->text();
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
@@ -1992,7 +1994,7 @@ private:
 
     if (selectedMeterElement_) {
       MeterElement *element = selectedMeterElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -2030,7 +2032,7 @@ private:
 
     if (selectedBarMonitorElement_) {
       BarMonitorElement *element = selectedBarMonitorElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -2072,7 +2074,7 @@ private:
 
     if (selectedScaleMonitorElement_) {
       ScaleMonitorElement *element = selectedScaleMonitorElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -2112,7 +2114,7 @@ private:
 
     if (selectedStripChartElement_) {
       StripChartElement *element = selectedStripChartElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const QString title = element->title();
@@ -2167,7 +2169,7 @@ private:
 
     if (selectedCartesianPlotElement_) {
       CartesianPlotElement *element = selectedCartesianPlotElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const QString title = element->title();
@@ -2247,7 +2249,7 @@ private:
 
     if (selectedByteMonitorElement_) {
       ByteMonitorElement *element = selectedByteMonitorElement_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor foreground = element->foregroundColor();
       const QColor background = element->backgroundColor();
       const TextColorMode colorMode = element->colorMode();
@@ -2287,7 +2289,7 @@ private:
 
     if (selectedRectangle_) {
       RectangleElement *element = selectedRectangle_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor color = element->color();
       const RectangleFill fill = element->fill();
       const RectangleLineStyle lineStyle = element->lineStyle();
@@ -2334,7 +2336,7 @@ private:
 
     if (selectedImage_) {
       ImageElement *element = selectedImage_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const ImageType imageType = element->imageType();
       const QString imageName = element->imageName();
       const QString calc = element->calc();
@@ -2387,7 +2389,7 @@ private:
 
     if (selectedOval_) {
       OvalElement *element = selectedOval_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor color = element->color();
       const RectangleFill fill = element->fill();
       const RectangleLineStyle lineStyle = element->lineStyle();
@@ -2434,7 +2436,7 @@ private:
 
     if (selectedArc_) {
       ArcElement *element = selectedArc_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor color = element->color();
       const RectangleFill fill = element->fill();
       const RectangleLineStyle lineStyle = element->lineStyle();
@@ -2486,7 +2488,7 @@ private:
 
     if (selectedLine_) {
       LineElement *element = selectedLine_;
-      const QRect geometry = element->geometry();
+  const QRect geometry = widgetDisplayRect(element);
       const QColor color = element->color();
       const RectangleLineStyle lineStyle = element->lineStyle();
       const int lineWidth = element->lineWidth();
@@ -2869,8 +2871,8 @@ private:
         },
     }};
     dialog->showForText(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -2881,8 +2883,8 @@ private:
             adjusted.setHeight(kMinimumTextElementHeight);
           }
           const QRect constrained = adjustRectToDisplayArea(adjusted);
-          if (constrained != element->geometry()) {
-            element->setGeometry(constrained);
+          if (constrained != widgetDisplayRect(element)) {
+            setWidgetDisplayRect(element, constrained);
             markDirty();
           }
         },
@@ -2941,8 +2943,8 @@ private:
       return;
     }
     dialog->showForTextEntry(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -2952,7 +2954,8 @@ private:
           if (adjusted.height() < kMinimumTextHeight) {
             adjusted.setHeight(kMinimumTextHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3030,8 +3033,8 @@ private:
       return;
     }
     dialog->showForSlider(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3041,7 +3044,8 @@ private:
           if (adjusted.height() < kMinimumSliderHeight) {
             adjusted.setHeight(kMinimumSliderHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3112,8 +3116,8 @@ private:
       return;
     }
     dialog->showForWheelSwitch(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3123,7 +3127,8 @@ private:
           if (adjusted.height() < kMinimumWheelSwitchHeight) {
             adjusted.setHeight(kMinimumWheelSwitchHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3187,8 +3192,8 @@ private:
       return;
     }
     dialog->showForChoiceButton(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3198,7 +3203,8 @@ private:
           if (adjusted.height() < kMinimumTextHeight) {
             adjusted.setHeight(kMinimumTextHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3248,8 +3254,8 @@ private:
       return;
     }
     dialog->showForMenu(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3259,7 +3265,8 @@ private:
           if (adjusted.height() < kMinimumTextHeight) {
             adjusted.setHeight(kMinimumTextHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3302,8 +3309,8 @@ private:
       return;
     }
     dialog->showForMessageButton(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3313,7 +3320,8 @@ private:
           if (adjusted.height() < kMinimumTextHeight) {
             adjusted.setHeight(kMinimumTextHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3403,7 +3411,9 @@ private:
     }
 
     dialog->showForShellCommand(
-        [element]() { return element->geometry(); },
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
           if (adjusted.width() < kMinimumTextWidth) {
@@ -3412,7 +3422,8 @@ private:
           if (adjusted.height() < kMinimumTextHeight) {
             adjusted.setHeight(kMinimumTextHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() { return element->foregroundColor(); },
@@ -3478,7 +3489,9 @@ private:
     }
 
     dialog->showForRelatedDisplay(
-        [element]() { return element->geometry(); },
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
           if (adjusted.width() < kMinimumTextWidth) {
@@ -3487,7 +3500,8 @@ private:
           if (adjusted.height() < kMinimumTextHeight) {
             adjusted.setHeight(kMinimumTextHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() { return element->foregroundColor(); },
@@ -3525,8 +3539,8 @@ private:
       return;
     }
     dialog->showForTextMonitor(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3536,7 +3550,8 @@ private:
           if (adjusted.height() < kMinimumTextHeight) {
             adjusted.setHeight(kMinimumTextHeight);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3622,8 +3637,8 @@ private:
       return;
     }
     dialog->showForMeter(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3633,7 +3648,8 @@ private:
           if (adjusted.height() < kMinimumMeterSize) {
             adjusted.setHeight(kMinimumMeterSize);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3721,8 +3737,8 @@ private:
     }
 
     dialog->showForStripChart(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3732,8 +3748,8 @@ private:
           if (adjusted.height() < kMinimumStripChartHeight) {
             adjusted.setHeight(kMinimumStripChartHeight);
           }
-          adjusted = adjustRectToDisplayArea(adjusted);
-          element->setGeometry(adjusted);
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -3889,8 +3905,8 @@ private:
     }
 
     dialog->showForCartesianPlot(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -3900,8 +3916,8 @@ private:
           if (adjusted.height() < kMinimumCartesianPlotHeight) {
             adjusted.setHeight(kMinimumCartesianPlotHeight);
           }
-          adjusted = adjustRectToDisplayArea(adjusted);
-          element->setGeometry(adjusted);
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4004,8 +4020,8 @@ private:
       return;
     }
     dialog->showForBarMonitor(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -4015,7 +4031,8 @@ private:
           if (adjusted.height() < kMinimumBarSize) {
             adjusted.setHeight(kMinimumBarSize);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4086,8 +4103,8 @@ private:
       return;
     }
     dialog->showForScaleMonitor(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -4097,7 +4114,8 @@ private:
           if (adjusted.height() < kMinimumScaleSize) {
             adjusted.setHeight(kMinimumScaleSize);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4161,8 +4179,8 @@ private:
       return;
     }
     dialog->showForByteMonitor(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = newGeometry;
@@ -4172,7 +4190,8 @@ private:
           if (adjusted.height() < kMinimumByteSize) {
             adjusted.setHeight(kMinimumByteSize);
           }
-          element->setGeometry(adjustRectToDisplayArea(adjusted));
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4260,11 +4279,12 @@ private:
         },
     }};
     dialog->showForRectangle(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
-          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4353,11 +4373,12 @@ private:
         },
     }};
     dialog->showForImage(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
-          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4439,11 +4460,12 @@ private:
         },
     }};
     dialog->showForRectangle(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
-          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4533,11 +4555,12 @@ private:
         },
     }};
     dialog->showForRectangle(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
-          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4641,11 +4664,12 @@ private:
         },
     }};
     dialog->showForLine(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
-          element->setGeometry(adjustRectToDisplayArea(newGeometry));
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
           markDirty();
         },
         [element]() {
@@ -4730,8 +4754,8 @@ private:
     const QString label = pointCount == 2 ? QStringLiteral("Line")
                                           : QStringLiteral("Polyline");
     dialog->showForLine(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = adjustRectToDisplayArea(newGeometry);
@@ -4741,7 +4765,7 @@ private:
           if (adjusted.height() < 1) {
             adjusted.setHeight(1);
           }
-          element->setGeometry(adjusted);
+          setWidgetDisplayRect(element, adjusted);
           element->update();
           markDirty();
         },
@@ -4824,8 +4848,8 @@ private:
         },
     }};
     dialog->showForRectangle(
-        [element]() {
-          return element->geometry();
+        [this, element]() {
+          return widgetDisplayRect(element);
         },
         [this, element](const QRect &newGeometry) {
           QRect adjusted = adjustRectToDisplayArea(newGeometry);
@@ -4835,7 +4859,7 @@ private:
           if (adjusted.height() < 1) {
             adjusted.setHeight(1);
           }
-          element->setGeometry(adjusted);
+          setWidgetDisplayRect(element, adjusted);
           element->update();
           markDirty();
         },
@@ -8138,7 +8162,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("composite {"));
-      AdlWriter::writeObjectSection(stream, 1, composite->geometry());
+      AdlWriter::writeObjectSection(stream, 1, widgetDisplayRect(composite));
       const QString compositeName = composite->compositeName().trimmed();
       if (!compositeName.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -8887,7 +8911,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("composite {"));
-    AdlWriter::writeObjectSection(stream, next, composite->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(composite));
     const QString compositeName = composite->compositeName().trimmed();
     if (!compositeName.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -8920,7 +8944,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *text = dynamic_cast<TextElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text {"));
-    AdlWriter::writeObjectSection(stream, next, text->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(text));
     const QColor textForeground = resolveForeground(text,
         text->foregroundColor());
     AdlWriter::writeBasicAttributeSection(stream, next,
@@ -8949,7 +8973,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *entry = dynamic_cast<TextEntryElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text entry\" {"));
-    AdlWriter::writeObjectSection(stream, next, entry->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(entry));
     const QColor entryForeground = resolveForeground(entry,
         entry->foregroundColor());
     const QColor entryBackground = resolveBackground(entry,
@@ -8975,7 +8999,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("valuator {"));
-    AdlWriter::writeObjectSection(stream, next, slider->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(slider));
     const QColor sliderForeground = resolveForeground(slider,
         slider->foregroundColor());
     const QColor sliderBackground = resolveBackground(slider,
@@ -9011,7 +9035,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"wheel switch\" {"));
-    AdlWriter::writeObjectSection(stream, next, wheel->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(wheel));
     const QColor wheelForeground = resolveForeground(wheel,
         wheel->foregroundColor());
     const QColor wheelBackground = resolveBackground(wheel,
@@ -9038,7 +9062,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"choice button\" {"));
-    AdlWriter::writeObjectSection(stream, next, choice->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(choice));
     const QColor choiceForeground = resolveForeground(choice,
         choice->foregroundColor());
     const QColor choiceBackground = resolveBackground(choice,
@@ -9062,7 +9086,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("menu {"));
-    AdlWriter::writeObjectSection(stream, next, menu->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(menu));
     const QColor menuForeground = resolveForeground(menu,
         menu->foregroundColor());
     const QColor menuBackground = resolveBackground(menu,
@@ -9082,7 +9106,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"message button\" {"));
-    AdlWriter::writeObjectSection(stream, next, message->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(message));
     const QColor messageForeground = resolveForeground(message,
         message->foregroundColor());
     const QColor messageBackground = resolveBackground(message,
@@ -9120,7 +9144,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"shell command\" {"));
-    AdlWriter::writeObjectSection(stream, next, shell->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(shell));
     const int commandIndent = next + 1;
     for (int i = 0; i < shell->entryCount(); ++i) {
       const QString entryLabel = shell->entryLabel(i);
@@ -9174,7 +9198,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"related display\" {"));
-    AdlWriter::writeObjectSection(stream, next, related->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(related));
     for (int i = 0; i < related->entryCount(); ++i) {
       RelatedDisplayEntry entry = related->entry(i);
       if (entry.label.trimmed().isEmpty() && entry.name.trimmed().isEmpty()
@@ -9210,7 +9234,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("meter {"));
-    AdlWriter::writeObjectSection(stream, next, meter->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(meter));
     const QColor meterForeground = resolveForeground(meter,
         meter->foregroundColor());
     const QColor meterBackground = resolveBackground(meter,
@@ -9235,7 +9259,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
-    AdlWriter::writeObjectSection(stream, next, bar->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(bar));
     const QColor barForeground = resolveForeground(bar,
         bar->foregroundColor());
     const QColor barBackground = resolveBackground(bar,
@@ -9270,7 +9294,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("indicator {"));
-    AdlWriter::writeObjectSection(stream, next, scale->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(scale));
     const QColor scaleForeground = resolveForeground(scale,
         scale->foregroundColor());
     const QColor scaleBackground = resolveBackground(scale,
@@ -9300,7 +9324,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("byte {"));
-    AdlWriter::writeObjectSection(stream, next, byte->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(byte));
     const QColor byteForeground = resolveForeground(byte,
         byte->foregroundColor());
     const QColor byteBackground = resolveBackground(byte,
@@ -9333,7 +9357,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text update\" {"));
-    AdlWriter::writeObjectSection(stream, next, monitor->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(monitor));
     const QColor monitorForeground = resolveForeground(monitor,
         monitor->foregroundColor());
     const QColor monitorBackground = resolveBackground(monitor,
@@ -9366,7 +9390,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"strip chart\" {"));
-    AdlWriter::writeObjectSection(stream, next, strip->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(strip));
     std::array<QString, 4> yLabels{};
     yLabels[0] = strip->yLabel();
     const QColor stripForeground = resolveForeground(strip,
@@ -9401,7 +9425,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *cartesian = dynamic_cast<CartesianPlotElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"cartesian plot\" {"));
-    AdlWriter::writeObjectSection(stream, next, cartesian->geometry());
+    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(cartesian));
     std::array<QString, 4> yLabels{};
     for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
       yLabels[i] = cartesian->yLabel(i);
@@ -9491,7 +9515,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("rectangle {"));
-  AdlWriter::writeObjectSection(stream, next, rectangle->geometry());
+  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(rectangle));
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(rectangle->color()),
     rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
@@ -9507,7 +9531,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *image = dynamic_cast<ImageElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level, QStringLiteral("image {"));
-  AdlWriter::writeObjectSection(stream, next, image->geometry());
+  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(image));
   AdlWriter::writeIndentedLine(stream, next,
     QStringLiteral("type=\"%1\"")
       .arg(AdlWriter::imageTypeString(image->imageType())));
@@ -9534,7 +9558,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
-  AdlWriter::writeObjectSection(stream, next, oval->geometry());
+  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(oval));
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(oval->color()), oval->lineStyle(),
     oval->fill(), oval->lineWidth());
@@ -9549,7 +9573,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level, QStringLiteral("arc {"));
-  AdlWriter::writeObjectSection(stream, next, arc->geometry());
+  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(arc));
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(arc->color()), arc->lineStyle(),
     arc->fill(), arc->lineWidth());
@@ -9569,7 +9593,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *line = dynamic_cast<LineElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("polyline {"));
-  AdlWriter::writeObjectSection(stream, next, line->geometry());
+  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(line));
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
     RectangleFill::kSolid, line->lineWidth(), true);
@@ -9589,7 +9613,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("polyline {"));
-  AdlWriter::writeObjectSection(stream, next, polyline->geometry());
+  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(polyline));
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(polyline->color()),
     polyline->lineStyle(), RectangleFill::kSolid,
@@ -9607,7 +9631,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("polygon {"));
-  AdlWriter::writeObjectSection(stream, next, polygon->geometry());
+  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(polygon));
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
     polygon->fill(), polygon->lineWidth());
@@ -10258,6 +10282,39 @@ inline void DisplayWindow::setObjectGeometry(AdlNode &node,
   objectNode.properties.append(
       {QStringLiteral("height"), QString::number(rect.height())});
   node.children.append(std::move(objectNode));
+}
+
+inline QRect DisplayWindow::widgetDisplayRect(const QWidget *widget) const
+{
+  if (!widget) {
+    return QRect();
+  }
+  const QRect widgetGeometry = widget->geometry();
+  if (!displayArea_) {
+    return widgetGeometry;
+  }
+  const QPoint topLeftInDisplay =
+      displayArea_->mapFromGlobal(widget->mapToGlobal(QPoint(0, 0)));
+  return QRect(topLeftInDisplay, widgetGeometry.size());
+}
+
+inline void DisplayWindow::setWidgetDisplayRect(QWidget *widget,
+    const QRect &displayRect) const
+{
+  if (!widget) {
+    return;
+  }
+  if (!displayArea_) {
+    widget->setGeometry(displayRect);
+    return;
+  }
+  QPoint localTopLeft = displayRect.topLeft();
+  if (QWidget *parent = widget->parentWidget()) {
+    const QPoint parentTopLeftInDisplay =
+        displayArea_->mapFromGlobal(parent->mapToGlobal(QPoint(0, 0)));
+    localTopLeft -= parentTopLeftInDisplay;
+  }
+  widget->setGeometry(QRect(localTopLeft, displayRect.size()));
 }
 
 inline std::optional<AdlNode> DisplayWindow::widgetToAdlNode(QWidget *widget) const

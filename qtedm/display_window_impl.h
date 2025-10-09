@@ -8230,6 +8230,40 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
       continue;
     }
 
+    if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("composite {"));
+      AdlWriter::writeObjectSection(stream, 1, composite->geometry());
+      const QString compositeName = composite->compositeName().trimmed();
+      if (!compositeName.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("\"composite name\"=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(compositeName)));
+      }
+      const QString compositeFile = composite->compositeFile().trimmed();
+      if (!compositeFile.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("\"composite file\"=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(compositeFile)));
+      } else {
+        const QList<QWidget *> children = composite->childWidgets();
+        if (!children.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 1,
+              QStringLiteral("children {"));
+          for (QWidget *child : children) {
+            writeWidgetAdl(stream, child, 2, resolvedForegroundColor,
+                resolvedBackgroundColor);
+          }
+          AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+        }
+      }
+      AdlWriter::writeDynamicAttributeSection(stream, 1,
+          composite->colorMode(), composite->visibilityMode(),
+          composite->visibilityCalc(), composite->channels());
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *text = dynamic_cast<TextElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("text {"));
       AdlWriter::writeObjectSection(stream, 1, text->geometry());
@@ -8932,6 +8966,722 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     return false;
   }
   return true;
+}
+
+inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
+    int indent,
+    const std::function<QColor(const QWidget *, const QColor &)> &resolveForeground,
+    const std::function<QColor(const QWidget *, const QColor &)> &resolveBackground) const
+{
+  if (!widget) {
+    return;
+  }
+
+  const int level = indent;
+  const int next = indent + 1;
+
+  if (auto *text = dynamic_cast<TextElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text {"));
+    AdlWriter::writeObjectSection(stream, next, text->geometry());
+    const QColor textForeground = resolveForeground(text,
+        text->foregroundColor());
+    AdlWriter::writeBasicAttributeSection(stream, next,
+        AdlWriter::medmColorIndex(textForeground),
+        RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        text->colorMode(), text->visibilityMode(), text->visibilityCalc(),
+        AdlWriter::collectChannels(text));
+    const QString content = text->text();
+    if (!content.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("textix=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(content)));
+    }
+    const Qt::Alignment horizontal = text->textAlignment()
+        & Qt::AlignHorizontal_Mask;
+    if (horizontal != Qt::AlignLeft) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("align=\"%1\"")
+              .arg(AdlWriter::alignmentString(text->textAlignment())));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *entry = dynamic_cast<TextEntryElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"text entry\" {"));
+    AdlWriter::writeObjectSection(stream, next, entry->geometry());
+    const QColor entryForeground = resolveForeground(entry,
+        entry->foregroundColor());
+    const QColor entryBackground = resolveBackground(entry,
+        entry->backgroundColor());
+    AdlWriter::writeControlSection(stream, next, entry->channel(),
+        AdlWriter::medmColorIndex(entryForeground),
+        AdlWriter::medmColorIndex(entryBackground));
+    if (entry->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(entry->colorMode())));
+    }
+    if (entry->format() != TextMonitorFormat::kDecimal) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("format=\"%1\"")
+              .arg(AdlWriter::textMonitorFormatString(entry->format())));
+    }
+    AdlWriter::writeLimitsSection(stream, next, entry->limits(), true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("valuator {"));
+    AdlWriter::writeObjectSection(stream, next, slider->geometry());
+    const QColor sliderForeground = resolveForeground(slider,
+        slider->foregroundColor());
+    const QColor sliderBackground = resolveBackground(slider,
+        slider->backgroundColor());
+    AdlWriter::writeControlSection(stream, next, slider->channel(),
+        AdlWriter::medmColorIndex(sliderForeground),
+        AdlWriter::medmColorIndex(sliderBackground));
+    if (slider->label() != MeterLabel::kNone) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::meterLabelString(slider->label())));
+    }
+    if (slider->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(slider->colorMode())));
+    }
+    if (slider->direction() != BarDirection::kRight) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("direction=\"%1\"")
+              .arg(AdlWriter::barDirectionString(slider->direction())));
+    }
+    if (std::abs(slider->precision() - 1.0) > 1e-9) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("dPrecision=%1")
+              .arg(QString::number(slider->precision(), 'g', 6)));
+    }
+    AdlWriter::writeLimitsSection(stream, next, slider->limits(), true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"wheel switch\" {"));
+    AdlWriter::writeObjectSection(stream, next, wheel->geometry());
+    const QColor wheelForeground = resolveForeground(wheel,
+        wheel->foregroundColor());
+    const QColor wheelBackground = resolveBackground(wheel,
+        wheel->backgroundColor());
+    AdlWriter::writeControlSection(stream, next, wheel->channel(),
+        AdlWriter::medmColorIndex(wheelForeground),
+        AdlWriter::medmColorIndex(wheelBackground));
+    if (wheel->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(wheel->colorMode())));
+    }
+    const QString wheelFormat = wheel->format().trimmed();
+    if (!wheelFormat.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("format=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(wheelFormat)));
+    }
+    AdlWriter::writeLimitsSection(stream, next, wheel->limits(), true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"choice button\" {"));
+    AdlWriter::writeObjectSection(stream, next, choice->geometry());
+    const QColor choiceForeground = resolveForeground(choice,
+        choice->foregroundColor());
+    const QColor choiceBackground = resolveBackground(choice,
+        choice->backgroundColor());
+    AdlWriter::writeControlSection(stream, next, choice->channel(),
+        AdlWriter::medmColorIndex(choiceForeground),
+        AdlWriter::medmColorIndex(choiceBackground));
+    if (choice->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(choice->colorMode())));
+    }
+    if (choice->stacking() != ChoiceButtonStacking::kRow) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("stacking=\"%1\"")
+              .arg(AdlWriter::choiceButtonStackingString(choice->stacking())));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("menu {"));
+    AdlWriter::writeObjectSection(stream, next, menu->geometry());
+    const QColor menuForeground = resolveForeground(menu,
+        menu->foregroundColor());
+    const QColor menuBackground = resolveBackground(menu,
+        menu->backgroundColor());
+    AdlWriter::writeControlSection(stream, next, menu->channel(),
+        AdlWriter::medmColorIndex(menuForeground),
+        AdlWriter::medmColorIndex(menuBackground));
+    if (menu->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(menu->colorMode())));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"message button\" {"));
+    AdlWriter::writeObjectSection(stream, next, message->geometry());
+    const QColor messageForeground = resolveForeground(message,
+        message->foregroundColor());
+    const QColor messageBackground = resolveBackground(message,
+        message->backgroundColor());
+    AdlWriter::writeControlSection(stream, next, message->channel(),
+        AdlWriter::medmColorIndex(messageForeground),
+        AdlWriter::medmColorIndex(messageBackground));
+    if (message->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(message->colorMode())));
+    }
+    const QString label = message->label().trimmed();
+    if (!label.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(label)));
+    }
+    const QString press = message->pressMessage().trimmed();
+    if (!press.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("press_msg=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(press)));
+    }
+    const QString release = message->releaseMessage().trimmed();
+    if (!release.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("release_msg=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(release)));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"shell command\" {"));
+    AdlWriter::writeObjectSection(stream, next, shell->geometry());
+    const int commandIndent = next + 1;
+    for (int i = 0; i < shell->entryCount(); ++i) {
+      const QString entryLabel = shell->entryLabel(i);
+      const QString entryCommand = shell->entryCommand(i);
+      const QString entryArgs = shell->entryArgs(i);
+      const bool labelEmpty = entryLabel.trimmed().isEmpty();
+      const bool commandEmpty = entryCommand.trimmed().isEmpty();
+      const bool argsEmpty = entryArgs.trimmed().isEmpty();
+      if (labelEmpty && commandEmpty && argsEmpty) {
+        continue;
+      }
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("command[%1] {").arg(i));
+      if (!labelEmpty) {
+        AdlWriter::writeIndentedLine(stream, commandIndent,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(entryLabel)));
+      }
+      if (!commandEmpty) {
+        AdlWriter::writeIndentedLine(stream, commandIndent,
+            QStringLiteral("name=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(entryCommand)));
+      }
+      if (!argsEmpty) {
+        AdlWriter::writeIndentedLine(stream, commandIndent,
+            QStringLiteral("args=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(entryArgs)));
+      }
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    }
+    const QColor shellForeground = resolveForeground(shell,
+        shell->foregroundColor());
+    const QColor shellBackground = resolveBackground(shell,
+        shell->backgroundColor());
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("clr=%1")
+            .arg(AdlWriter::medmColorIndex(shellForeground)));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("bclr=%1")
+            .arg(AdlWriter::medmColorIndex(shellBackground)));
+    const QString shellLabel = shell->label();
+    if (!shellLabel.trimmed().isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(shellLabel)));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"related display\" {"));
+    AdlWriter::writeObjectSection(stream, next, related->geometry());
+    for (int i = 0; i < related->entryCount(); ++i) {
+      RelatedDisplayEntry entry = related->entry(i);
+      if (entry.label.trimmed().isEmpty() && entry.name.trimmed().isEmpty()
+          && entry.args.trimmed().isEmpty()) {
+        continue;
+      }
+      AdlWriter::writeRelatedDisplayEntry(stream, next, i, entry);
+    }
+    const QColor relatedForeground = resolveForeground(related,
+        related->foregroundColor());
+    const QColor relatedBackground = resolveBackground(related,
+        related->backgroundColor());
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("clr=%1")
+            .arg(AdlWriter::medmColorIndex(relatedForeground)));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("bclr=%1")
+            .arg(AdlWriter::medmColorIndex(relatedBackground)));
+    const QString label = related->label();
+    if (!label.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(label)));
+    }
+    if (related->visual() != RelatedDisplayVisual::kMenu) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("visual=\"%1\"")
+              .arg(AdlWriter::relatedDisplayVisualString(related->visual())));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("meter {"));
+    AdlWriter::writeObjectSection(stream, next, meter->geometry());
+    const QColor meterForeground = resolveForeground(meter,
+        meter->foregroundColor());
+    const QColor meterBackground = resolveBackground(meter,
+        meter->backgroundColor());
+    AdlWriter::writeMonitorSection(stream, next, meter->channel(),
+        AdlWriter::medmColorIndex(meterForeground),
+        AdlWriter::medmColorIndex(meterBackground));
+    if (meter->label() != MeterLabel::kNone) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::meterLabelString(meter->label())));
+    }
+    if (meter->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(meter->colorMode())));
+    }
+    AdlWriter::writeLimitsSection(stream, next, meter->limits(), true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
+    AdlWriter::writeObjectSection(stream, next, bar->geometry());
+    const QColor barForeground = resolveForeground(bar,
+        bar->foregroundColor());
+    const QColor barBackground = resolveBackground(bar,
+        bar->backgroundColor());
+    AdlWriter::writeMonitorSection(stream, next, bar->channel(),
+        AdlWriter::medmColorIndex(barForeground),
+        AdlWriter::medmColorIndex(barBackground));
+    if (bar->label() != MeterLabel::kNone) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::meterLabelString(bar->label())));
+    }
+    if (bar->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(bar->colorMode())));
+    }
+    if (bar->direction() != BarDirection::kRight) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("direction=\"%1\"")
+              .arg(AdlWriter::barDirectionString(bar->direction())));
+    }
+    if (bar->fillMode() != BarFill::kFromEdge) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("fillmod=\"%1\"")
+              .arg(AdlWriter::barFillModeString(bar->fillMode())));
+    }
+    AdlWriter::writeLimitsSection(stream, next, bar->limits(), true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("indicator {"));
+    AdlWriter::writeObjectSection(stream, next, scale->geometry());
+    const QColor scaleForeground = resolveForeground(scale,
+        scale->foregroundColor());
+    const QColor scaleBackground = resolveBackground(scale,
+        scale->backgroundColor());
+    AdlWriter::writeMonitorSection(stream, next, scale->channel(),
+        AdlWriter::medmColorIndex(scaleForeground),
+        AdlWriter::medmColorIndex(scaleBackground));
+    if (scale->label() != MeterLabel::kNone) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::meterLabelString(scale->label())));
+    }
+    if (scale->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(scale->colorMode())));
+    }
+    if (scale->direction() != BarDirection::kRight) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("direction=\"%1\"")
+              .arg(AdlWriter::barDirectionString(scale->direction())));
+    }
+    AdlWriter::writeLimitsSection(stream, next, scale->limits(), true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("byte {"));
+    AdlWriter::writeObjectSection(stream, next, byte->geometry());
+    const QColor byteForeground = resolveForeground(byte,
+        byte->foregroundColor());
+    const QColor byteBackground = resolveBackground(byte,
+        byte->backgroundColor());
+    AdlWriter::writeMonitorSection(stream, next, byte->channel(),
+        AdlWriter::medmColorIndex(byteForeground),
+        AdlWriter::medmColorIndex(byteBackground));
+    if (byte->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(byte->colorMode())));
+    }
+    if (byte->direction() != BarDirection::kRight) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("direction=\"%1\"")
+              .arg(AdlWriter::barDirectionString(byte->direction())));
+    }
+    if (byte->startBit() != 15) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("sbit=%1").arg(byte->startBit()));
+    }
+    if (byte->endBit() != 0) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("ebit=%1").arg(byte->endBit()));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"text update\" {"));
+    AdlWriter::writeObjectSection(stream, next, monitor->geometry());
+    const QColor monitorForeground = resolveForeground(monitor,
+        monitor->foregroundColor());
+    const QColor monitorBackground = resolveBackground(monitor,
+        monitor->backgroundColor());
+    AdlWriter::writeMonitorSection(stream, next, monitor->channel(0),
+        AdlWriter::medmColorIndex(monitorForeground),
+        AdlWriter::medmColorIndex(monitorBackground));
+    if (monitor->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(monitor->colorMode())));
+    }
+    const Qt::Alignment horizontal = monitor->textAlignment()
+        & Qt::AlignHorizontal_Mask;
+    if (horizontal != Qt::AlignLeft) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("align=\"%1\"")
+              .arg(AdlWriter::alignmentString(monitor->textAlignment())));
+    }
+    if (monitor->format() != TextMonitorFormat::kDecimal) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("format=\"%1\"")
+              .arg(AdlWriter::textMonitorFormatString(monitor->format())));
+    }
+    AdlWriter::writeLimitsSection(stream, next, monitor->limits(), true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"strip chart\" {"));
+    AdlWriter::writeObjectSection(stream, next, strip->geometry());
+    std::array<QString, 4> yLabels{};
+    yLabels[0] = strip->yLabel();
+    const QColor stripForeground = resolveForeground(strip,
+        strip->foregroundColor());
+    const QColor stripBackground = resolveBackground(strip,
+        strip->backgroundColor());
+    AdlWriter::writePlotcom(stream, next, strip->title(), strip->xLabel(),
+        yLabels, AdlWriter::medmColorIndex(stripForeground),
+        AdlWriter::medmColorIndex(stripBackground));
+    const double period = strip->period();
+    if (period > 0.0 && std::abs(period - kDefaultStripChartPeriod) > 1e-6) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("period=%1")
+              .arg(QString::number(period, 'f', 6)));
+    }
+    if (strip->units() != TimeUnits::kSeconds) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("units=\"%1\"")
+              .arg(AdlWriter::timeUnitsString(strip->units())));
+    }
+    for (int i = 0; i < strip->penCount(); ++i) {
+      const QString channel = strip->channel(i);
+      const QColor penColor = strip->penColor(i);
+      const PvLimits limits = strip->penLimits(i);
+      AdlWriter::writeStripChartPenSection(stream, next, i, channel,
+          AdlWriter::medmColorIndex(penColor), limits);
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *cartesian = dynamic_cast<CartesianPlotElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("\"cartesian plot\" {"));
+    AdlWriter::writeObjectSection(stream, next, cartesian->geometry());
+    std::array<QString, 4> yLabels{};
+    for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
+      yLabels[i] = cartesian->yLabel(i);
+    }
+    const QColor cartesianForeground = resolveForeground(cartesian,
+        cartesian->foregroundColor());
+    const QColor cartesianBackground = resolveBackground(cartesian,
+        cartesian->backgroundColor());
+    AdlWriter::writePlotcom(stream, next, cartesian->title(),
+        cartesian->xLabel(), yLabels,
+        AdlWriter::medmColorIndex(cartesianForeground),
+        AdlWriter::medmColorIndex(cartesianBackground));
+    if (cartesian->style() != CartesianPlotStyle::kPoint) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("style=\"%1\"")
+              .arg(AdlWriter::cartesianPlotStyleString(cartesian->style())));
+    }
+    if (cartesian->eraseOldest()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("erase_oldest=\"%1\"")
+              .arg(AdlWriter::cartesianEraseOldestString(
+                  cartesian->eraseOldest())));
+    }
+    if (cartesian->count() > 1) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("count=\"%1\"")
+              .arg(QString::number(cartesian->count())));
+    }
+    auto axisIndexFor = [](CartesianPlotYAxis axis) {
+      switch (axis) {
+      case CartesianPlotYAxis::kY2:
+        return 1;
+      case CartesianPlotYAxis::kY3:
+        return 2;
+      case CartesianPlotYAxis::kY4:
+        return 3;
+      case CartesianPlotYAxis::kY1:
+      default:
+        return 0;
+      }
+    };
+    for (int i = 0; i < cartesian->traceCount(); ++i) {
+      const QString xChannel = cartesian->traceXChannel(i);
+      const QString yChannel = cartesian->traceYChannel(i);
+      const int colorIndex = AdlWriter::medmColorIndex(
+          cartesian->traceColor(i));
+      const int axisIndex = axisIndexFor(cartesian->traceYAxis(i));
+      const bool usesRightAxis = cartesian->traceUsesRightAxis(i);
+      AdlWriter::writeCartesianTraceSection(stream, next, i, xChannel,
+          yChannel, colorIndex, axisIndex, usesRightAxis);
+    }
+    for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+      const bool includeTimeFormat = axis == 0;
+      AdlWriter::writeCartesianAxisSection(stream, next, axis,
+          cartesian->axisStyle(axis), cartesian->axisRangeStyle(axis),
+          cartesian->axisMinimum(axis), cartesian->axisMaximum(axis),
+          cartesian->axisTimeFormat(axis), includeTimeFormat);
+    }
+    const QString trigger = cartesian->triggerChannel().trimmed();
+    if (!trigger.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("trigger=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(trigger)));
+    }
+    const QString erase = cartesian->eraseChannel().trimmed();
+    if (!erase.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("erase=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(erase)));
+    }
+    const QString countPv = cartesian->countChannel().trimmed();
+    if (!countPv.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("countPvName=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(countPv)));
+    }
+    if (cartesian->eraseMode() != CartesianPlotEraseMode::kIfNotZero) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("eraseMode=\"%1\"")
+              .arg(AdlWriter::cartesianEraseModeString(
+                  cartesian->eraseMode())));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+  AdlWriter::writeIndentedLine(stream, level,
+    QStringLiteral("rectangle {"));
+  AdlWriter::writeObjectSection(stream, next, rectangle->geometry());
+  AdlWriter::writeBasicAttributeSection(stream, next,
+    AdlWriter::medmColorIndex(rectangle->color()),
+    rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
+    true);
+  const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
+    AdlWriter::collectChannels(rectangle));
+  AdlWriter::writeDynamicAttributeSection(stream, next,
+    rectangle->colorMode(), rectangle->visibilityMode(),
+    rectangle->visibilityCalc(), rectangleChannels);
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+  return;
+  }
+
+  if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("image {"));
+  AdlWriter::writeObjectSection(stream, next, image->geometry());
+  AdlWriter::writeIndentedLine(stream, next,
+    QStringLiteral("type=\"%1\"")
+      .arg(AdlWriter::imageTypeString(image->imageType())));
+  const QString imageName = image->imageName();
+  if (!imageName.isEmpty()) {
+    AdlWriter::writeIndentedLine(stream, next,
+      QStringLiteral("\"image name\"=\"%1\"")
+        .arg(AdlWriter::escapeAdlString(imageName)));
+  }
+  const QString imageCalc = image->calc();
+  if (!imageCalc.trimmed().isEmpty()) {
+    AdlWriter::writeIndentedLine(stream, next,
+      QStringLiteral("calc=\"%1\"")
+        .arg(AdlWriter::escapeAdlString(imageCalc)));
+  }
+  const auto imageChannels = AdlWriter::channelsForMedmFourValues(
+    AdlWriter::collectChannels(image));
+  AdlWriter::writeDynamicAttributeSection(stream, next,
+    image->colorMode(), image->visibilityMode(), image->visibilityCalc(),
+    imageChannels);
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+  return;
+  }
+
+  if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
+  AdlWriter::writeObjectSection(stream, next, oval->geometry());
+  AdlWriter::writeBasicAttributeSection(stream, next,
+    AdlWriter::medmColorIndex(oval->color()), oval->lineStyle(),
+    oval->fill(), oval->lineWidth());
+  const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
+    AdlWriter::collectChannels(oval));
+  AdlWriter::writeDynamicAttributeSection(stream, next,
+    oval->colorMode(), oval->visibilityMode(), oval->visibilityCalc(),
+    ovalChannels);
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+  return;
+  }
+
+  if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("arc {"));
+  AdlWriter::writeObjectSection(stream, next, arc->geometry());
+  AdlWriter::writeBasicAttributeSection(stream, next,
+    AdlWriter::medmColorIndex(arc->color()), arc->lineStyle(),
+    arc->fill(), arc->lineWidth());
+  const auto arcChannels = AdlWriter::channelsForMedmFourValues(
+    AdlWriter::collectChannels(arc));
+  AdlWriter::writeDynamicAttributeSection(stream, next,
+    arc->colorMode(), arc->visibilityMode(), arc->visibilityCalc(),
+    arcChannels);
+  AdlWriter::writeIndentedLine(stream, next,
+    QStringLiteral("begin=%1").arg(arc->beginAngle()));
+  AdlWriter::writeIndentedLine(stream, next,
+    QStringLiteral("path=%1").arg(arc->pathAngle()));
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+  return;
+  }
+
+  if (auto *line = dynamic_cast<LineElement *>(widget)) {
+  AdlWriter::writeIndentedLine(stream, level,
+    QStringLiteral("polyline {"));
+  AdlWriter::writeObjectSection(stream, next, line->geometry());
+  AdlWriter::writeBasicAttributeSection(stream, next,
+    AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
+    RectangleFill::kSolid, line->lineWidth(), true);
+  const auto lineChannels = AdlWriter::channelsForMedmFourValues(
+    AdlWriter::collectChannels(line));
+  AdlWriter::writeDynamicAttributeSection(stream, next,
+    line->colorMode(), line->visibilityMode(),
+    line->visibilityCalc(), lineChannels);
+  const QVector<QPoint> points = line->absolutePoints();
+  if (points.size() >= 2) {
+    AdlWriter::writePointsSection(stream, next, points);
+  }
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+  return;
+  }
+
+  if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+  AdlWriter::writeIndentedLine(stream, level,
+    QStringLiteral("polyline {"));
+  AdlWriter::writeObjectSection(stream, next, polyline->geometry());
+  AdlWriter::writeBasicAttributeSection(stream, next,
+    AdlWriter::medmColorIndex(polyline->color()),
+    polyline->lineStyle(), RectangleFill::kSolid,
+    polyline->lineWidth(), true);
+  const auto polylineChannels = AdlWriter::channelsForMedmFourValues(
+    AdlWriter::collectChannels(polyline));
+  AdlWriter::writeDynamicAttributeSection(stream, next,
+    polyline->colorMode(), polyline->visibilityMode(),
+    polyline->visibilityCalc(), polylineChannels);
+  AdlWriter::writePointsSection(stream, next, polyline->absolutePoints());
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+  return;
+  }
+
+  if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+  AdlWriter::writeIndentedLine(stream, level,
+    QStringLiteral("polygon {"));
+  AdlWriter::writeObjectSection(stream, next, polygon->geometry());
+  AdlWriter::writeBasicAttributeSection(stream, next,
+    AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
+    polygon->fill(), polygon->lineWidth());
+  const auto polygonChannels = AdlWriter::channelsForMedmFourValues(
+    AdlWriter::collectChannels(polygon));
+  AdlWriter::writeDynamicAttributeSection(stream, next,
+    polygon->colorMode(), polygon->visibilityMode(),
+    polygon->visibilityCalc(), polygonChannels);
+  AdlWriter::writePointsSection(stream, next, polygon->absolutePoints());
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+  return;
+  }
 }
 
 inline void DisplayWindow::clearAllElements()

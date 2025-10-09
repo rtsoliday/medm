@@ -842,8 +842,10 @@ private:
   PolygonElement *loadPolygonElement(const AdlNode &polygonNode);
   PolylineElement *loadPolylineElement(const AdlNode &polylineNode);
   CompositeElement *loadCompositeElement(const AdlNode &compositeNode);
-  QWidget *loadElementNode(const AdlNode &node);
+  bool loadElementNode(const AdlNode &node);
   QWidget *effectiveElementParent() const;
+  std::optional<AdlNode> widgetToAdlNode(QWidget *widget) const;
+  void setObjectGeometry(AdlNode &node, const QRect &rect) const;
 
   class ElementLoadContextGuard
   {
@@ -883,6 +885,9 @@ private:
   QVector<QPoint> parsePolylinePoints(const AdlNode &polylineNode) const;
   void ensureElementInStack(QWidget *element);
   QColor colorForIndex(int index) const;
+  void writeWidgetAdl(QTextStream &stream, QWidget *widget, int indent,
+      const std::function<QColor(const QWidget *, const QColor &)> &resolveForeground,
+      const std::function<QColor(const QWidget *, const QColor &)> &resolveBackground) const;
   TextColorMode parseTextColorMode(const QString &value) const;
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
   MeterLabel parseMeterLabel(const QString &value) const;
@@ -1523,6 +1528,42 @@ private:
       markDirty();
       notifyMenus();
     };
+
+    if (selectedCompositeElement_) {
+      CompositeElement *element = selectedCompositeElement_;
+      const QRect geometry = element->geometry();
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = geometry.translated(offset);
+        desired = target.adjustRectToDisplayArea(desired);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        CompositeElement *newComposite = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          newComposite = target.loadCompositeElement(nodeCopy);
+        }
+        if (newComposite) {
+          target.selectCompositeElement(newComposite);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(compositeElements_, selectedCompositeElement_);
+        finalizeCut();
+      }
+      return true;
+    }
 
     if (selectedTextElement_) {
       TextElement *element = selectedTextElement_;
@@ -7953,143 +7994,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       displayLoaded = loadDisplaySection(child) || displayLoaded;
       continue;
     }
-    if (child.name.compare(QStringLiteral("text"), Qt::CaseInsensitive)
-        == 0) {
-      loadTextElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("text update"), Qt::CaseInsensitive)
-        == 0
-        || child.name.compare(QStringLiteral("text monitor"), Qt::CaseInsensitive)
-            == 0) {
-      loadTextMonitorElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("text entry"), Qt::CaseInsensitive)
-        == 0) {
-      loadTextEntryElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("valuator"), Qt::CaseInsensitive)
-        == 0) {
-      loadSliderElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("wheel switch"), Qt::CaseInsensitive)
-        == 0) {
-      loadWheelSwitchElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("choice button"), Qt::CaseInsensitive)
-        == 0) {
-      loadChoiceButtonElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("menu"), Qt::CaseInsensitive)
-        == 0) {
-      loadMenuElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("message button"),
-            Qt::CaseInsensitive)
-        == 0) {
-      loadMessageButtonElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("shell command"),
-            Qt::CaseInsensitive)
-        == 0) {
-      loadShellCommandElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("related display"),
-            Qt::CaseInsensitive)
-        == 0) {
-      loadRelatedDisplayElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("meter"), Qt::CaseInsensitive)
-        == 0) {
-      loadMeterElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("bar"), Qt::CaseInsensitive)
-        == 0) {
-      loadBarMonitorElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("indicator"), Qt::CaseInsensitive)
-        == 0) {
-      loadScaleMonitorElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("cartesian plot"),
-            Qt::CaseInsensitive)
-        == 0) {
-      loadCartesianPlotElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("strip chart"), Qt::CaseInsensitive)
-        == 0) {
-      loadStripChartElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("byte"), Qt::CaseInsensitive)
-        == 0) {
-      loadByteMonitorElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("image"), Qt::CaseInsensitive)
-        == 0) {
-      loadImageElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("rectangle"), Qt::CaseInsensitive)
-        == 0) {
-      loadRectangleElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("oval"), Qt::CaseInsensitive)
-        == 0) {
-      loadOvalElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("arc"), Qt::CaseInsensitive)
-        == 0) {
-      loadArcElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("polygon"), Qt::CaseInsensitive)
-        == 0) {
-      loadPolygonElement(child);
-      elementLoaded = true;
-      continue;
-    }
-    if (child.name.compare(QStringLiteral("polyline"), Qt::CaseInsensitive)
-        == 0
-        || child.name.compare(QStringLiteral("line"), Qt::CaseInsensitive)
-            == 0) {
-      loadPolylineElement(child);
+    if (loadElementNode(child)) {
       elementLoaded = true;
       continue;
     }
@@ -8979,6 +8884,39 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   const int level = indent;
   const int next = indent + 1;
+
+  if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("composite {"));
+    AdlWriter::writeObjectSection(stream, next, composite->geometry());
+    const QString compositeName = composite->compositeName().trimmed();
+    if (!compositeName.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("\"composite name\"=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(compositeName)));
+    }
+    const QString compositeFile = composite->compositeFile().trimmed();
+    if (!compositeFile.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("\"composite file\"=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(compositeFile)));
+    } else {
+      const QList<QWidget *> children = composite->childWidgets();
+      if (!children.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next,
+            QStringLiteral("children {"));
+        for (QWidget *child : children) {
+          writeWidgetAdl(stream, child, next + 1, resolveForeground,
+              resolveBackground);
+        }
+        AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+      }
+    }
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        composite->colorMode(), composite->visibilityMode(),
+        composite->visibilityCalc(), composite->channels());
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
 
   if (auto *text = dynamic_cast<TextElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text {"));
@@ -10284,9 +10222,107 @@ inline QRect DisplayWindow::parseObjectGeometry(const AdlNode &parent) const
   return QRect(x, y, width, height);
 }
 
+inline void DisplayWindow::setObjectGeometry(AdlNode &node,
+    const QRect &rect) const
+{
+  auto setProperty = [](QList<AdlProperty> &properties, const QString &key,
+                          int value) {
+    for (auto &prop : properties) {
+      if (prop.key.compare(key, Qt::CaseInsensitive) == 0) {
+        prop.value = QString::number(value);
+        return;
+      }
+    }
+    properties.append({key, QString::number(value)});
+  };
+
+  for (auto &child : node.children) {
+    if (child.name.compare(QStringLiteral("object"), Qt::CaseInsensitive)
+        == 0) {
+      setProperty(child.properties, QStringLiteral("x"), rect.x());
+      setProperty(child.properties, QStringLiteral("y"), rect.y());
+      setProperty(child.properties, QStringLiteral("width"), rect.width());
+      setProperty(child.properties, QStringLiteral("height"), rect.height());
+      return;
+    }
+  }
+
+  AdlNode objectNode;
+  objectNode.name = QStringLiteral("object");
+  objectNode.properties.append(
+      {QStringLiteral("x"), QString::number(rect.x())});
+  objectNode.properties.append(
+      {QStringLiteral("y"), QString::number(rect.y())});
+  objectNode.properties.append(
+      {QStringLiteral("width"), QString::number(rect.width())});
+  objectNode.properties.append(
+      {QStringLiteral("height"), QString::number(rect.height())});
+  node.children.append(std::move(objectNode));
+}
+
+inline std::optional<AdlNode> DisplayWindow::widgetToAdlNode(QWidget *widget) const
+{
+  if (!widget) {
+    return std::nullopt;
+  }
+
+  QString buffer;
+  QTextStream stream(&buffer);
+  stream.setCodec("UTF-8");
+
+  auto resolveColor = [](const QWidget *source, const QColor &candidate,
+                          QPalette::ColorRole role) {
+    if (candidate.isValid()) {
+      return candidate;
+    }
+    const QWidget *current = source;
+    while (current) {
+      const QColor fromPalette = current->palette().color(role);
+      if (fromPalette.isValid()) {
+        return fromPalette;
+      }
+      current = current->parentWidget();
+    }
+    if (qApp) {
+      const QColor appColor = qApp->palette().color(role);
+      if (appColor.isValid()) {
+        return appColor;
+      }
+    }
+    return role == QPalette::WindowText ? QColor(Qt::black)
+                                        : QColor(Qt::white);
+  };
+
+  auto resolvedForeground = [&resolveColor](const QWidget *source,
+      const QColor &candidate) {
+    return resolveColor(source, candidate, QPalette::WindowText);
+  };
+
+  auto resolvedBackground = [&resolveColor](const QWidget *source,
+      const QColor &candidate) {
+    return resolveColor(source, candidate, QPalette::Window);
+  };
+
+  writeWidgetAdl(stream, widget, 0, resolvedForeground, resolvedBackground);
+
+  std::optional<AdlNode> root = AdlParser::parse(buffer, nullptr);
+  if (!root || root->children.isEmpty()) {
+    return std::nullopt;
+  }
+  return root->children.first();
+}
+
+inline QWidget *DisplayWindow::effectiveElementParent() const
+{
+  if (currentElementParent_) {
+    return currentElementParent_;
+  }
+  return displayArea_;
+}
+
 inline void DisplayWindow::ensureElementInStack(QWidget *element)
 {
-  if (!element) {
+  if (!element || suppressLoadRegistration_) {
     return;
   }
   for (const auto &entry : elementStack_) {
@@ -10300,14 +10336,16 @@ inline void DisplayWindow::ensureElementInStack(QWidget *element)
 
 inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
   QRect geometry = parseObjectGeometry(textNode);
+  geometry.translate(currentElementOffset_);
   if (geometry.height() < kMinimumTextElementHeight) {
     geometry.setHeight(kMinimumTextElementHeight);
   }
-  auto *element = new TextElement(displayArea_);
+  auto *element = new TextElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
   const QString content = propertyValue(textNode, QStringLiteral("textix"));
@@ -10356,6 +10394,10 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
       },
       0, 1);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   textElements_.append(element);
@@ -10366,12 +10408,14 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
 inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
     const AdlNode &textUpdateNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(textUpdateNode);
-  auto *element = new TextMonitorElement(displayArea_);
+  geometry.translate(currentElementOffset_);
+  auto *element = new TextMonitorElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
 
@@ -10506,6 +10550,10 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
     element->setText(element->channel(0));
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   textMonitorElements_.append(element);
@@ -10516,12 +10564,14 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
 inline TextEntryElement *DisplayWindow::loadTextEntryElement(
     const AdlNode &textEntryNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
   QRect geometry = parseObjectGeometry(textEntryNode);
-  auto *element = new TextEntryElement(displayArea_);
+  geometry.translate(currentElementOffset_);
+  auto *element = new TextEntryElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
 
@@ -10655,6 +10705,10 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
 
   applyChannelProperties(textEntryNode, channelSetter, 0, 1);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   textEntryElements_.append(element);
@@ -10664,7 +10718,8 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
 
 inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -10675,8 +10730,9 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
   if (geometry.height() < kMinimumSliderHeight) {
     geometry.setHeight(kMinimumSliderHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new SliderElement(displayArea_);
+  auto *element = new SliderElement(parent);
   element->setGeometry(geometry);
 
   if (const AdlNode *control = ::findChild(valuatorNode,
@@ -10831,6 +10887,10 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
 
   applyChannelProperties(valuatorNode, channelSetter, 0, 1);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   sliderElements_.append(element);
@@ -10840,7 +10900,8 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
 
 inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &wheelNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -10851,8 +10912,9 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
   if (geometry.height() < kMinimumWheelSwitchHeight) {
     geometry.setHeight(kMinimumWheelSwitchHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new WheelSwitchElement(displayArea_);
+  auto *element = new WheelSwitchElement(parent);
   element->setGeometry(geometry);
 
   const QString colorModeValue = propertyValue(wheelNode,
@@ -10997,6 +11059,10 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
 
   applyChannelProperties(wheelNode, channelSetter, 0, 1);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   wheelSwitchElements_.append(element);
@@ -11006,7 +11072,8 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
 
 inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11017,8 +11084,9 @@ inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
   if (geometry.height() < kMinimumTextHeight) {
     geometry.setHeight(kMinimumTextHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new MenuElement(displayArea_);
+  auto *element = new MenuElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
 
@@ -11060,6 +11128,10 @@ inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
 
   applyChannelProperties(menuNode, channelSetter, 0, 1);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   menuElements_.append(element);
@@ -11070,7 +11142,8 @@ inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
 inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
     const AdlNode &messageNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11081,8 +11154,9 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
   if (geometry.height() < kMinimumTextHeight) {
     geometry.setHeight(kMinimumTextHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new MessageButtonElement(displayArea_);
+  auto *element = new MessageButtonElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
 
@@ -11136,6 +11210,10 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
     }
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   messageButtonElements_.append(element);
@@ -11146,7 +11224,8 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
 inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
     const AdlNode &shellNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11157,8 +11236,9 @@ inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
   if (geometry.height() < kMinimumTextHeight) {
     geometry.setHeight(kMinimumTextHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new ShellCommandElement(displayArea_);
+  auto *element = new ShellCommandElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
 
@@ -11213,6 +11293,10 @@ inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
     element->setEntry(entryIndex, entry);
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   shellCommandElements_.append(element);
@@ -11223,7 +11307,8 @@ inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
 inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
     const AdlNode &relatedNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11234,8 +11319,9 @@ inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
   if (geometry.height() < kMinimumTextHeight) {
     geometry.setHeight(kMinimumTextHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new RelatedDisplayElement(displayArea_);
+  auto *element = new RelatedDisplayElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
 
@@ -11317,6 +11403,10 @@ inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
     element->setEntry(entryIndex, entry);
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   relatedDisplayElements_.append(element);
@@ -11327,7 +11417,8 @@ inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
 inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
     const AdlNode &choiceNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11338,8 +11429,9 @@ inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
   if (geometry.height() < kMinimumTextHeight) {
     geometry.setHeight(kMinimumTextHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new ChoiceButtonElement(displayArea_);
+  auto *element = new ChoiceButtonElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
 
@@ -11379,6 +11471,10 @@ inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
     }
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   choiceButtonElements_.append(element);
@@ -11388,7 +11484,8 @@ inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
 
 inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11399,8 +11496,9 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
   if (geometry.height() < kMinimumMeterSize) {
     geometry.setHeight(kMinimumMeterSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new MeterElement(displayArea_);
+  auto *element = new MeterElement(parent);
   element->setGeometry(geometry);
 
   if (const AdlNode *monitor = ::findChild(meterNode,
@@ -11526,6 +11624,10 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
     element->setLimits(limits);
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   meterElements_.append(element);
@@ -11535,7 +11637,8 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
 
 inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &barNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11546,8 +11649,9 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
   if (geometry.height() < kMinimumBarSize) {
     geometry.setHeight(kMinimumBarSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new BarMonitorElement(displayArea_);
+  auto *element = new BarMonitorElement(parent);
   element->setGeometry(geometry);
 
   if (const AdlNode *monitor = ::findChild(barNode,
@@ -11682,6 +11786,10 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
     element->setLimits(limits);
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   barMonitorElements_.append(element);
@@ -11692,7 +11800,8 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
 inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
     const AdlNode &indicatorNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11703,8 +11812,9 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
   if (geometry.height() < kMinimumScaleSize) {
     geometry.setHeight(kMinimumScaleSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new ScaleMonitorElement(displayArea_);
+  auto *element = new ScaleMonitorElement(parent);
   element->setGeometry(geometry);
 
   if (const AdlNode *monitor = ::findChild(indicatorNode,
@@ -11837,6 +11947,10 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
     element->setLimits(limits);
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   scaleMonitorElements_.append(element);
@@ -11847,7 +11961,8 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
 inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     const AdlNode &cartesianNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -11858,8 +11973,9 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
   if (geometry.height() < kMinimumCartesianPlotHeight) {
     geometry.setHeight(kMinimumCartesianPlotHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new CartesianPlotElement(displayArea_);
+  auto *element = new CartesianPlotElement(parent);
   element->setGeometry(geometry);
 
   if (const AdlNode *plotcom = ::findChild(cartesianNode,
@@ -12131,6 +12247,10 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     parseAxisNode(*y4AxisNode, 4);
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   cartesianPlotElements_.append(element);
@@ -12140,7 +12260,8 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
 
 inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &stripNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -12151,8 +12272,9 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
   if (geometry.height() < kMinimumStripChartHeight) {
     geometry.setHeight(kMinimumStripChartHeight);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new StripChartElement(displayArea_);
+  auto *element = new StripChartElement(parent);
   element->setGeometry(geometry);
 
   if (const AdlNode *plotcom = ::findChild(stripNode,
@@ -12324,11 +12446,11 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
       }
       if (!hasPrecisionSource) {
         limits.precisionSource = PvLimitSource::kChannel;
-      }
+    }
 
-      if (const AdlProperty *prop = ::findProperty(*limitsNode,
-              QStringLiteral("prec"))) {
-        bool limitOk = false;
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool limitOk = false;
         const int value = prop->value.toInt(&limitOk);
         if (limitOk) {
           limits.precisionDefault = value;
@@ -12346,6 +12468,10 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
     }
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   stripChartElements_.append(element);
@@ -12356,7 +12482,8 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
 inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
     const AdlNode &byteNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -12367,8 +12494,9 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
   if (geometry.height() < kMinimumByteSize) {
     geometry.setHeight(kMinimumByteSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new ByteMonitorElement(displayArea_);
+  auto *element = new ByteMonitorElement(parent);
   element->setGeometry(geometry);
 
   if (const AdlNode *monitor = ::findChild(byteNode,
@@ -12420,6 +12548,10 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
     element->setEndBit(endBit);
   }
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   byteMonitorElements_.append(element);
@@ -12430,7 +12562,8 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
 inline ImageElement *DisplayWindow::loadImageElement(
     const AdlNode &imageNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -12441,8 +12574,9 @@ inline ImageElement *DisplayWindow::loadImageElement(
   if (geometry.height() < kMinimumRectangleSize) {
     geometry.setHeight(kMinimumRectangleSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new ImageElement(displayArea_);
+  auto *element = new ImageElement(parent);
   element->setGeometry(geometry);
 
   const QString typeValue = propertyValue(imageNode, QStringLiteral("type"));
@@ -12507,6 +12641,10 @@ inline ImageElement *DisplayWindow::loadImageElement(
       imageChannelSetter,
       0, 1);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   imageElements_.append(element);
@@ -12517,7 +12655,8 @@ inline ImageElement *DisplayWindow::loadImageElement(
 inline RectangleElement *DisplayWindow::loadRectangleElement(
     const AdlNode &rectangleNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -12528,8 +12667,9 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
   if (geometry.height() < kMinimumRectangleSize) {
     geometry.setHeight(kMinimumRectangleSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new RectangleElement(displayArea_);
+  auto *element = new RectangleElement(parent);
   element->setFill(RectangleFill::kSolid);
   element->setGeometry(geometry);
 
@@ -12589,6 +12729,10 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
       },
       0, 0);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   rectangleElements_.append(element);
@@ -12598,7 +12742,8 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
 
 inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -12609,8 +12754,9 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
   if (geometry.height() < kMinimumRectangleSize) {
     geometry.setHeight(kMinimumRectangleSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new OvalElement(displayArea_);
+  auto *element = new OvalElement(parent);
   element->setGeometry(geometry);
   element->setFill(RectangleFill::kSolid);
 
@@ -12676,6 +12822,10 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
       },
       0, 0);
 
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
   element->show();
   element->setSelected(false);
   ovalElements_.append(element);
@@ -12685,7 +12835,8 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 
 inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
@@ -12696,8 +12847,9 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
   if (geometry.height() < kMinimumRectangleSize) {
     geometry.setHeight(kMinimumRectangleSize);
   }
+  geometry.translate(currentElementOffset_);
 
-  auto *element = new ArcElement(displayArea_);
+  auto *element = new ArcElement(parent);
   element->setGeometry(geometry);
 
   bool fillSpecified = false;
@@ -12780,7 +12932,11 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
   const QString pathValue = propertyValue(arcNode, QStringLiteral("path"));
   int pathAngle = pathValue.toInt(&ok);
   if (ok) {
-    element->setPathAngle(pathAngle);
+   element->setPathAngle(pathAngle);
+  }
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
   }
 
   element->show();
@@ -12793,13 +12949,20 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 inline PolygonElement *DisplayWindow::loadPolygonElement(
     const AdlNode &polygonNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
   QVector<QPoint> points = parsePolylinePoints(polygonNode);
   if (points.size() < 3) {
     return nullptr;
+  }
+
+  if (!currentElementOffset_.isNull()) {
+    for (QPoint &point : points) {
+      point += currentElementOffset_;
+    }
   }
 
   QColor color = colorForIndex(14);
@@ -12872,7 +13035,7 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
 
   applyChannelProperties(polygonNode, channelSetter, 0, 0);
 
-  auto *element = new PolygonElement(displayArea_);
+  auto *element = new PolygonElement(parent);
   element->setForegroundColor(color);
   element->setFill(fill);
   element->setLineStyle(lineStyle);
@@ -12887,6 +13050,9 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
     }
   }
   element->setAbsolutePoints(points);
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
   element->show();
   element->setSelected(false);
   polygonElements_.append(element);
@@ -12987,13 +13153,20 @@ inline QVector<QPoint> DisplayWindow::parsePolylinePoints(
 inline PolylineElement *DisplayWindow::loadPolylineElement(
     const AdlNode &polylineNode)
 {
-  if (!displayArea_) {
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
     return nullptr;
   }
 
   QVector<QPoint> points = parsePolylinePoints(polylineNode);
   if (points.size() < 2) {
     return nullptr;
+  }
+
+  if (!currentElementOffset_.isNull()) {
+    for (QPoint &point : points) {
+      point += currentElementOffset_;
+    }
   }
 
   QColor color = colorForIndex(14);
@@ -13070,7 +13243,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
   }
 
   if (points.size() == 2) {
-    auto *element = new LineElement(displayArea_);
+    auto *element = new LineElement(parent);
     element->setGeometry(geometry);
     element->setForegroundColor(color);
     element->setLineStyle(lineStyle);
@@ -13087,6 +13260,9 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     const QPoint localStart = points.first() - geometry.topLeft();
     const QPoint localEnd = points.last() - geometry.topLeft();
     element->setLocalEndpoints(localStart, localEnd);
+    if (currentCompositeOwner_) {
+      currentCompositeOwner_->adoptChild(element);
+    }
     element->show();
     element->setSelected(false);
     lineElements_.append(element);
@@ -13094,7 +13270,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     return nullptr;
   }
 
-  auto *element = new PolylineElement(displayArea_);
+  auto *element = new PolylineElement(parent);
   element->setForegroundColor(color);
   element->setLineStyle(lineStyle);
   element->setLineWidth(lineWidth);
@@ -13108,11 +13284,186 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     }
   }
   element->setAbsolutePoints(points);
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
   element->show();
   element->setSelected(false);
   polylineElements_.append(element);
   ensureElementInStack(element);
   return element;
+}
+
+inline CompositeElement *DisplayWindow::loadCompositeElement(
+    const AdlNode &compositeNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(compositeNode);
+  geometry.translate(currentElementOffset_);
+
+  auto *composite = new CompositeElement(parent);
+  composite->setGeometry(geometry);
+
+  const QString compositeName = propertyValue(compositeNode,
+      QStringLiteral("composite name"));
+  if (!compositeName.trimmed().isEmpty()) {
+    composite->setCompositeName(compositeName.trimmed());
+  }
+
+  const QString compositeFile = propertyValue(compositeNode,
+      QStringLiteral("composite file"));
+  if (!compositeFile.trimmed().isEmpty()) {
+    composite->setCompositeFile(compositeFile.trimmed());
+  }
+
+  TextColorMode colorMode = TextColorMode::kStatic;
+  TextVisibilityMode visibilityMode = TextVisibilityMode::kStatic;
+  QString visibilityCalc;
+  std::array<QString, 5> channels{};
+  auto channelSetter = [&channels](int index, const QString &value) {
+    if (index >= 0 && index < static_cast<int>(channels.size())) {
+      channels[static_cast<std::size_t>(index)] = value;
+    }
+  };
+
+  if (const AdlNode *dyn = ::findChild(compositeNode,
+          QStringLiteral("dynamic attribute"))) {
+    const QString colorModeValue = propertyValue(*dyn,
+        QStringLiteral("clr"));
+    if (!colorModeValue.isEmpty()) {
+      colorMode = parseTextColorMode(colorModeValue);
+    }
+
+    const QString visibilityValue = propertyValue(*dyn,
+        QStringLiteral("vis"));
+    if (!visibilityValue.isEmpty()) {
+      visibilityMode = parseVisibilityMode(visibilityValue);
+    }
+
+    const QString calcValue = propertyValue(*dyn, QStringLiteral("calc"));
+    if (!calcValue.isEmpty()) {
+      visibilityCalc = calcValue.trimmed();
+    }
+
+    applyChannelProperties(*dyn, channelSetter, 0, 0);
+  }
+
+  applyChannelProperties(compositeNode, channelSetter, 0, 0);
+
+  composite->setColorMode(colorMode);
+  composite->setVisibilityMode(visibilityMode);
+  composite->setVisibilityCalc(visibilityCalc);
+  for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
+    const QString &channel = channels[static_cast<std::size_t>(i)];
+    if (!channel.isEmpty()) {
+      composite->setChannel(i, channel);
+    }
+  }
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(composite);
+  }
+
+  compositeElements_.append(composite);
+  composite->show();
+  composite->setSelected(false);
+  ensureElementInStack(composite);
+
+  const QString trimmedFile = compositeFile.trimmed();
+  if (trimmedFile.isEmpty()) {
+    if (const AdlNode *childrenNode = ::findChild(compositeNode,
+            QStringLiteral("children"))) {
+      ElementLoadContextGuard guard(*this, composite, QPoint(), true,
+          composite);
+      for (const auto &child : childrenNode->children) {
+        loadElementNode(child);
+      }
+    }
+  }
+
+  return composite;
+}
+
+inline bool DisplayWindow::loadElementNode(const AdlNode &node)
+{
+  const QString name = node.name.trimmed().toLower();
+
+  if (name == QStringLiteral("text")) {
+    return loadTextElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("text update")
+      || name == QStringLiteral("text monitor")) {
+    return loadTextMonitorElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("text entry")) {
+    return loadTextEntryElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("valuator")) {
+    return loadSliderElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("wheel switch")) {
+    return loadWheelSwitchElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("choice button")) {
+    return loadChoiceButtonElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("menu")) {
+    return loadMenuElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("message button")) {
+    return loadMessageButtonElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("shell command")) {
+    return loadShellCommandElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("related display")) {
+    return loadRelatedDisplayElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("meter")) {
+    return loadMeterElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("bar")) {
+    return loadBarMonitorElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("indicator")) {
+    return loadScaleMonitorElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("cartesian plot")) {
+    return loadCartesianPlotElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("strip chart")) {
+    return loadStripChartElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("byte")) {
+    return loadByteMonitorElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("image")) {
+    return loadImageElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("rectangle")) {
+    return loadRectangleElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("oval")) {
+    return loadOvalElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("arc")) {
+    return loadArcElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("polygon")) {
+    return loadPolygonElement(node) != nullptr;
+  }
+  if (name == QStringLiteral("polyline") || name == QStringLiteral("line")) {
+    loadPolylineElement(node);
+    return true;
+  }
+  if (name == QStringLiteral("composite")) {
+    return loadCompositeElement(node) != nullptr;
+  }
+  return false;
 }
 
 inline void DisplayWindow::setAsActiveDisplay()

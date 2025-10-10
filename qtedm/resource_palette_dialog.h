@@ -39,7 +39,6 @@
 #include <QPointer>
 #include <QScreen>
 #include <QApplication>
-#include <QDesktopWidget>
 #include <QGuiApplication>
 
 #include "color_palette_dialog.h"
@@ -10798,8 +10797,8 @@ private:
       availableRect = paletteScreen->availableGeometry();
     } else if (QScreen *screenAtPalette = QGuiApplication::screenAt(paletteFrame.center())) {
       availableRect = screenAtPalette->availableGeometry();
-    } else {
-      availableRect = QApplication::desktop()->availableGeometry(this);
+    } else if (QScreen *primaryScreen = QGuiApplication::primaryScreen()) {
+      availableRect = primaryScreen->availableGeometry();
     }
 
     QRect desiredRect(paletteFrame.topRight(), dialog->size());

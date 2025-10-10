@@ -1,5 +1,18 @@
 #pragma once
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QStringConverter>
+#endif
+
+inline void setUtf8Encoding(QTextStream &stream)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  stream.setEncoding(QStringConverter::Utf8);
+#else
+  stream.setCodec("UTF-8");
+#endif
+}
+
 class DisplayAreaWidget : public QWidget
 {
 public:
@@ -695,8 +708,14 @@ protected:
 
     if (event->button() == Qt::RightButton) {
       if (auto state = state_.lock(); state && state->editMode) {
-        lastContextMenuGlobalPos_ = event->globalPos();
-        showEditContextMenu(event->globalPos());
+  const QPoint globalPos =
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+      event->globalPosition().toPoint();
+#else
+      event->globalPos();
+#endif
+  lastContextMenuGlobalPos_ = globalPos;
+  showEditContextMenu(globalPos);
         event->accept();
         return;
       }
@@ -8092,7 +8111,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   }
 
   QTextStream stream(&file);
-  stream.setCodec("UTF-8");
+  setUtf8Encoding(stream);
   const QString contents = stream.readAll();
 
   std::optional<AdlNode> document = AdlParser::parse(contents, errorMessage);
@@ -8144,7 +8163,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
   }
 
   QTextStream stream(&file);
-  stream.setCodec("UTF-8");
+  setUtf8Encoding(stream);
 
   auto resolveColor = [](const QWidget *widget, const QColor &candidate,
       QPalette::ColorRole role) {
@@ -10420,7 +10439,7 @@ inline std::optional<AdlNode> DisplayWindow::widgetToAdlNode(QWidget *widget) co
 
   QString buffer;
   QTextStream stream(&buffer);
-  stream.setCodec("UTF-8");
+  setUtf8Encoding(stream);
 
   auto resolveColor = [](const QWidget *source, const QColor &candidate,
                           QPalette::ColorRole role) {

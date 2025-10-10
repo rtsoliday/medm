@@ -60,9 +60,11 @@ DIRS += $(SDDS_REPO)/SDDSlib
 DIRS += $(SDDS_REPO)/fftpack
 DIRS += $(SDDS_REPO)/matlib
 DIRS += $(SDDS_REPO)/mdbcommon
-DIRS += printUtils
-DIRS += xc
-DIRS += medm
+ifneq ($(OS), Windows)
+  DIRS += printUtils
+  DIRS += xc
+  DIRS += medm
+endif
 DIRS += qtedm
 
 .PHONY: all $(DIRS) clean distclean
@@ -105,7 +107,7 @@ xc: printUtils
 	$(MAKE) -C $@
 medm: xc
 	$(MAKE) -C $@
-qtedm: medm
+qtedm: $(SDDS_REPO)/mdbcommon
 	$(MAKE) -C $@
 
 clean:

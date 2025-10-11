@@ -2,8 +2,10 @@
 
 #include <QByteArray>
 #include <QFontDatabase>
+#include <QFontInfo>
 #include <QStringList>
 
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MAC)
 #include "resources/fonts/adobe_helvetica_24_otb.h"
 #include "resources/fonts/adobe_helvetica_bold_24_otb.h"
 #include "resources/fonts/adobe_times_18_otb.h"
@@ -17,8 +19,48 @@
 #include "resources/fonts/misc_fixed_9x15_otb.h"
 #include "resources/fonts/sony_fixed_12x24_otb.h"
 #include "resources/fonts/sony_fixed_8x16_otb.h"
+#endif
 
 namespace {
+
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+
+QFont loadSystemFont(const char *family, int pixelSize,
+    QFont::StyleHint styleHint, bool fixedPitch, QFont::Weight weight,
+    int stretch = 100)
+{
+  QFont font(QString::fromLatin1(family));
+
+  font.setStyleHint(styleHint, fixedPitch ? QFont::PreferMatch
+                                          : QFont::PreferDefault);
+  font.setStyleStrategy(QFont::PreferDefault);
+  font.setFixedPitch(fixedPitch);
+  font.setPixelSize(pixelSize);
+  font.setWeight(weight);
+  font.setBold(weight >= QFont::DemiBold);
+  if (stretch != 100) {
+    font.setStretch(stretch);
+  }
+
+  const QFontInfo info(font);
+  if (info.family() != QString::fromLatin1(family)) {
+    const QFontDatabase::SystemFont fallback =
+        fixedPitch ? QFontDatabase::FixedFont : QFontDatabase::GeneralFont;
+    font = QFontDatabase::systemFont(fallback);
+    font.setPixelSize(pixelSize);
+    font.setWeight(weight);
+    font.setBold(weight >= QFont::DemiBold);
+    font.setFixedPitch(fixedPitch);
+    font.setStyleHint(styleHint, QFont::PreferDefault);
+    if (stretch != 100) {
+      font.setStretch(stretch);
+    }
+  }
+
+  return font;
+}
+
+#else
 
 QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
     int pixelSize, QFont::StyleHint styleHint, bool fixedPitch,
@@ -52,6 +94,8 @@ QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
   return font;
 }
 
+#endif
+
 } // namespace
 
 namespace LegacyFonts {
@@ -59,53 +103,101 @@ namespace LegacyFonts {
 const QHash<QString, QFont> &all()
 {
   static const QHash<QString, QFont> fonts = [] {
-    struct FontSpec {
-      const char *key;
-      const unsigned char *data;
-      std::size_t size;
-      int pixelSize;
-      QFont::StyleHint styleHint;
-      bool fixedPitch;
-      QFont::Weight weight;
-    };
-
-    const FontSpec fontSpecs[] = {
-        {"miscFixed8", kMiscFixed8FontData, kMiscFixed8FontSize, 8,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"miscFixed9", kMiscFixed9FontData, kMiscFixed9FontSize, 9,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"miscFixed10", kMiscFixed10FontData, kMiscFixed10FontSize, 10,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"miscFixed13", kMiscFixed13FontData, kMiscFixed13FontSize, 13,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"miscFixed7x13", kMiscFixed7x13FontData, kMiscFixed7x13FontSize, 13,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"miscFixed7x14", kMiscFixed7x14FontData, kMiscFixed7x14FontSize, 14,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"miscFixed9x15", kMiscFixed9x15FontData, kMiscFixed9x15FontSize, 15,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"sonyFixed8x16", kSonyFixed8x16FontData, kSonyFixed8x16FontSize, 16,
-            QFont::TypeWriter, true, QFont::Normal},
-        {"miscFixed10x20", kMiscFixed10x20FontData, kMiscFixed10x20FontSize,
-            20, QFont::TypeWriter, true, QFont::Normal},
-        {"sonyFixed12x24", kSonyFixed12x24FontData, kSonyFixed12x24FontSize,
-            24, QFont::TypeWriter, true, QFont::Normal},
-        {"adobeTimes18", kAdobeTimes18FontData, kAdobeTimes18FontSize, 25,
-            QFont::Serif, false, QFont::Normal},
-        {"adobeHelvetica24", kAdobeHelvetica24FontData,
-            kAdobeHelvetica24FontSize, 34, QFont::SansSerif, false,
-            QFont::Normal},
-        {"adobeHelveticaBold24", kAdobeHelveticaBold24FontData,
-            kAdobeHelveticaBold24FontSize, 34, QFont::SansSerif, false,
-            QFont::Bold},
-    };
-
     QHash<QString, QFont> fonts;
-    for (const FontSpec &spec : fontSpecs) {
-      fonts.insert(QString::fromLatin1(spec.key), loadEmbeddedFont(spec.data,
-          spec.size, spec.pixelSize, spec.styleHint, spec.fixedPitch,
-          spec.weight));
-    }
+
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+  struct FontSpec {
+    const char *key;
+    const char *family;
+    int pixelSize;
+    QFont::StyleHint styleHint;
+    bool fixedPitch;
+    QFont::Weight weight;
+    int stretch;
+  };
+
+  const FontSpec fontSpecs[] = {
+    {"miscFixed8", "Courier New", 8, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"miscFixed9", "Courier New", 9, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"miscFixed10", "Courier New", 10, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"miscFixed13", "Courier New", 13, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"miscFixed7x13", "Courier New", 13, QFont::TypeWriter, true,
+      QFont::Normal, 90},
+    {"miscFixed7x14", "Courier New", 14, QFont::TypeWriter, true,
+      QFont::Normal, 90},
+    {"miscFixed9x15", "Courier New", 15, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"sonyFixed8x16", "Courier New", 16, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"miscFixed10x20", "Courier New", 20, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"sonyFixed12x24", "Courier New", 24, QFont::TypeWriter, true,
+      QFont::Normal, 100},
+    {"adobeTimes18", "Times New Roman", 25, QFont::Serif, false,
+      QFont::Normal, 100},
+    {"adobeHelvetica24", "Arial", 34, QFont::SansSerif, false,
+      QFont::Normal, 100},
+    {"adobeHelveticaBold24", "Arial", 34, QFont::SansSerif, false,
+      QFont::Bold, 100},
+  };
+
+  for (const FontSpec &spec : fontSpecs) {
+    fonts.insert(QString::fromLatin1(spec.key), loadSystemFont(spec.family,
+      spec.pixelSize, spec.styleHint, spec.fixedPitch, spec.weight,
+      spec.stretch));
+  }
+#else
+  struct FontSpec {
+    const char *key;
+    const unsigned char *data;
+    std::size_t size;
+    int pixelSize;
+    QFont::StyleHint styleHint;
+    bool fixedPitch;
+    QFont::Weight weight;
+  };
+
+  const FontSpec fontSpecs[] = {
+    {"miscFixed8", kMiscFixed8FontData, kMiscFixed8FontSize, 8,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"miscFixed9", kMiscFixed9FontData, kMiscFixed9FontSize, 9,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"miscFixed10", kMiscFixed10FontData, kMiscFixed10FontSize, 10,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"miscFixed13", kMiscFixed13FontData, kMiscFixed13FontSize, 13,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"miscFixed7x13", kMiscFixed7x13FontData, kMiscFixed7x13FontSize, 13,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"miscFixed7x14", kMiscFixed7x14FontData, kMiscFixed7x14FontSize, 14,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"miscFixed9x15", kMiscFixed9x15FontData, kMiscFixed9x15FontSize, 15,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"sonyFixed8x16", kSonyFixed8x16FontData, kSonyFixed8x16FontSize, 16,
+      QFont::TypeWriter, true, QFont::Normal},
+    {"miscFixed10x20", kMiscFixed10x20FontData, kMiscFixed10x20FontSize,
+      20, QFont::TypeWriter, true, QFont::Normal},
+    {"sonyFixed12x24", kSonyFixed12x24FontData, kSonyFixed12x24FontSize,
+      24, QFont::TypeWriter, true, QFont::Normal},
+    {"adobeTimes18", kAdobeTimes18FontData, kAdobeTimes18FontSize, 25,
+      QFont::Serif, false, QFont::Normal},
+    {"adobeHelvetica24", kAdobeHelvetica24FontData,
+      kAdobeHelvetica24FontSize, 34, QFont::SansSerif, false,
+      QFont::Normal},
+    {"adobeHelveticaBold24", kAdobeHelveticaBold24FontData,
+      kAdobeHelveticaBold24FontSize, 34, QFont::SansSerif, false,
+      QFont::Bold},
+  };
+
+  for (const FontSpec &spec : fontSpecs) {
+    fonts.insert(QString::fromLatin1(spec.key), loadEmbeddedFont(spec.data,
+      spec.size, spec.pixelSize, spec.styleHint, spec.fixedPitch,
+      spec.weight));
+  }
+#endif
 
     struct FontAlias {
       const char *alias;

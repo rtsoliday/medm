@@ -226,6 +226,95 @@ public:
   void clearSelection()
   {
     clearSelections();
+    notifyMenus();
+  }
+
+  void selectAllElements()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    clearSelections();
+
+    QList<QWidget *> widgets;
+    auto appendVisible = [&](const auto &list) {
+      for (auto *element : list) {
+        if (element && element->isVisible()) {
+          widgets.append(element);
+        }
+      }
+    };
+
+    appendVisible(textElements_);
+    appendVisible(textEntryElements_);
+    appendVisible(sliderElements_);
+    appendVisible(wheelSwitchElements_);
+    appendVisible(choiceButtonElements_);
+    appendVisible(menuElements_);
+    appendVisible(messageButtonElements_);
+    appendVisible(shellCommandElements_);
+    appendVisible(relatedDisplayElements_);
+    appendVisible(textMonitorElements_);
+    appendVisible(meterElements_);
+    appendVisible(barMonitorElements_);
+    appendVisible(scaleMonitorElements_);
+    appendVisible(stripChartElements_);
+    appendVisible(cartesianPlotElements_);
+    appendVisible(byteMonitorElements_);
+    appendVisible(rectangleElements_);
+    appendVisible(imageElements_);
+    appendVisible(ovalElements_);
+    appendVisible(arcElements_);
+    appendVisible(lineElements_);
+    appendVisible(polylineElements_);
+    appendVisible(polygonElements_);
+    appendVisible(compositeElements_);
+
+    if (widgets.isEmpty()) {
+      notifyMenus();
+      return;
+    }
+
+    if (widgets.size() == 1) {
+      selectWidgetForEditing(widgets.front());
+    } else {
+      multiSelection_.clear();
+      for (QWidget *widget : widgets) {
+        setWidgetSelectionState(widget, true);
+        multiSelection_.append(QPointer<QWidget>(widget));
+      }
+      showResourcePaletteForMultipleSelection();
+    }
+
+    notifyMenus();
+  }
+
+  void selectDisplayElement()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    clearSelections();
+    if (!ensureResourcePalette()) {
+      notifyMenus();
+      return;
+    }
+
+    for (auto &display : state->displays) {
+      if (!display.isNull() && display != this) {
+        display->clearSelections();
+      }
+    }
+
+    setDisplaySelected(true);
+    showResourcePaletteForDisplay();
+    notifyMenus();
   }
 
   void cutSelection()
@@ -2680,7 +2769,8 @@ private:
 
   bool hasAnyElementSelection() const
   {
-    return selectedTextElement_ || selectedTextEntryElement_
+    return !multiSelection_.isEmpty() || selectedTextElement_
+        || selectedTextEntryElement_
         || selectedSliderElement_ || selectedWheelSwitchElement_
         || selectedChoiceButtonElement_ || selectedMenuElement_
         || selectedMessageButtonElement_ || selectedShellCommandElement_
@@ -2691,6 +2781,39 @@ private:
         || selectedRectangle_ || selectedImage_ || selectedOval_
     || selectedArc_ || selectedLine_ || selectedPolyline_
     || selectedPolygon_ || selectedCompositeElement_;
+  }
+
+  bool hasAnySelection() const
+  {
+    return displaySelected_ || hasAnyElementSelection();
+  }
+
+  bool hasSelectableElements() const
+  {
+    return !textElements_.isEmpty() || !textEntryElements_.isEmpty()
+        || !sliderElements_.isEmpty() || !wheelSwitchElements_.isEmpty()
+        || !choiceButtonElements_.isEmpty() || !menuElements_.isEmpty()
+        || !messageButtonElements_.isEmpty() || !shellCommandElements_.isEmpty()
+        || !relatedDisplayElements_.isEmpty() || !textMonitorElements_.isEmpty()
+        || !meterElements_.isEmpty() || !barMonitorElements_.isEmpty()
+        || !scaleMonitorElements_.isEmpty() || !stripChartElements_.isEmpty()
+        || !cartesianPlotElements_.isEmpty() || !byteMonitorElements_.isEmpty()
+        || !rectangleElements_.isEmpty() || !imageElements_.isEmpty()
+        || !ovalElements_.isEmpty() || !arcElements_.isEmpty()
+        || !lineElements_.isEmpty() || !polylineElements_.isEmpty()
+        || !polygonElements_.isEmpty() || !compositeElements_.isEmpty();
+  }
+
+  bool canSelectAllElements() const
+  {
+    auto state = state_.lock();
+    return state && state->editMode && hasSelectableElements();
+  }
+
+  bool canSelectDisplay() const
+  {
+    auto state = state_.lock();
+    return state && state->editMode;
   }
 
   void closeResourcePalette()
@@ -7969,9 +8092,23 @@ private:
     addMenuAction(gridMenu, QStringLiteral("Grid Spacing..."));
 
     menu.addSeparator();
-    addMenuAction(&menu, QStringLiteral("Unselect"));
-    addMenuAction(&menu, QStringLiteral("Select All"));
-    addMenuAction(&menu, QStringLiteral("Select Display"));
+    auto *unselectAction = addMenuAction(&menu, QStringLiteral("Unselect"));
+    unselectAction->setEnabled(hasAnySelection());
+    QObject::connect(unselectAction, &QAction::triggered, this, [this]() {
+      setAsActiveDisplay();
+      clearSelection();
+    });
+    auto *selectAllAction = addMenuAction(&menu, QStringLiteral("Select All"));
+    selectAllAction->setEnabled(canSelectAllElements());
+    QObject::connect(selectAllAction, &QAction::triggered, this, [this]() {
+      selectAllElements();
+    });
+    auto *selectDisplayAction =
+        addMenuAction(&menu, QStringLiteral("Select Display"));
+    selectDisplayAction->setEnabled(canSelectDisplay());
+    QObject::connect(selectDisplayAction, &QAction::triggered, this, [this]() {
+      selectDisplayElement();
+    });
 
     menu.addSeparator();
     addMenuAction(&menu, QStringLiteral("Find Outliers"));

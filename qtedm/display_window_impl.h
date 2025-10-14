@@ -1113,9 +1113,18 @@ protected:
             && displayArea_->rect().contains(areaPos);
 
         if (QWidget *widget = elementAt(event->pos())) {
-          if (selectWidgetForEditing(widget)) {
-            event->accept();
-            return;
+          const Qt::KeyboardModifiers mods = event->modifiers();
+          if (mods.testFlag(Qt::ShiftModifier)
+              || mods.testFlag(Qt::ControlModifier)) {
+            if (handleMultiSelectionClick(widget, mods)) {
+              event->accept();
+              return;
+            }
+          } else {
+            if (selectWidgetForEditing(widget)) {
+              event->accept();
+              return;
+            }
           }
         }
 
@@ -1811,6 +1820,380 @@ private:
       }
     }
     return false;
+  }
+
+  void detachSingleSelectionForWidget(QWidget *widget)
+  {
+    if (!widget) {
+      return;
+    }
+    if (auto *text = dynamic_cast<TextElement *>(widget)) {
+      if (selectedTextElement_ == text) {
+        selectedTextElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
+      if (selectedTextEntryElement_ == textEntry) {
+        selectedTextEntryElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+      if (selectedSliderElement_ == slider) {
+        selectedSliderElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+      if (selectedWheelSwitchElement_ == wheel) {
+        selectedWheelSwitchElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
+      if (selectedChoiceButtonElement_ == choice) {
+        selectedChoiceButtonElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+      if (selectedMenuElement_ == menu) {
+        selectedMenuElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
+      if (selectedMessageButtonElement_ == message) {
+        selectedMessageButtonElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+      if (selectedShellCommandElement_ == shell) {
+        selectedShellCommandElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+      if (selectedRelatedDisplayElement_ == related) {
+        selectedRelatedDisplayElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
+      if (selectedTextMonitorElement_ == textMonitor) {
+        selectedTextMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+      if (selectedMeterElement_ == meter) {
+        selectedMeterElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+      if (selectedBarMonitorElement_ == bar) {
+        selectedBarMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      if (selectedScaleMonitorElement_ == scale) {
+        selectedScaleMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+      if (selectedStripChartElement_ == strip) {
+        selectedStripChartElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
+      if (selectedCartesianPlotElement_ == cart) {
+        selectedCartesianPlotElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
+      if (selectedByteMonitorElement_ == byte) {
+        selectedByteMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+      if (selectedRectangle_ == rectangle) {
+        selectedRectangle_ = nullptr;
+      }
+      return;
+    }
+    if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+      if (selectedImage_ == image) {
+        selectedImage_ = nullptr;
+      }
+      return;
+    }
+    if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
+      if (selectedOval_ == oval) {
+        selectedOval_ = nullptr;
+      }
+      return;
+    }
+    if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+      if (selectedArc_ == arc) {
+        selectedArc_ = nullptr;
+      }
+      return;
+    }
+    if (auto *line = dynamic_cast<LineElement *>(widget)) {
+      if (selectedLine_ == line) {
+        selectedLine_ = nullptr;
+      }
+      return;
+    }
+    if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+      if (selectedPolyline_ == polyline) {
+        selectedPolyline_ = nullptr;
+      }
+      return;
+    }
+    if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+      if (selectedPolygon_ == polygon) {
+        selectedPolygon_ = nullptr;
+      }
+      return;
+    }
+    if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+      if (selectedCompositeElement_ == composite) {
+        selectedCompositeElement_ = nullptr;
+      }
+      return;
+    }
+  }
+
+  void addWidgetToMultiSelection(QWidget *widget)
+  {
+    if (!widget) {
+      return;
+    }
+    if (isWidgetInMultiSelection(widget)) {
+      setWidgetSelectionState(widget, true);
+      detachSingleSelectionForWidget(widget);
+      return;
+    }
+    detachSingleSelectionForWidget(widget);
+    setWidgetSelectionState(widget, true);
+    multiSelection_.append(QPointer<QWidget>(widget));
+  }
+
+  void removeWidgetFromMultiSelection(QWidget *widget)
+  {
+    if (!widget) {
+      return;
+    }
+    for (auto it = multiSelection_.begin(); it != multiSelection_.end();) {
+      QWidget *current = it->data();
+      if (!current || current == widget) {
+        it = multiSelection_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
+  void removeWidgetFromSelection(QWidget *widget)
+  {
+    if (!widget) {
+      return;
+    }
+    removeWidgetFromMultiSelection(widget);
+    if (auto *text = dynamic_cast<TextElement *>(widget)) {
+      if (selectedTextElement_ == text) {
+        clearTextSelection();
+        return;
+      }
+    }
+    if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
+      if (selectedTextEntryElement_ == textEntry) {
+        clearTextEntrySelection();
+        return;
+      }
+    }
+    if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+      if (selectedSliderElement_ == slider) {
+        clearSliderSelection();
+        return;
+      }
+    }
+    if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+      if (selectedWheelSwitchElement_ == wheel) {
+        clearWheelSwitchSelection();
+        return;
+      }
+    }
+    if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
+      if (selectedChoiceButtonElement_ == choice) {
+        clearChoiceButtonSelection();
+        return;
+      }
+    }
+    if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+      if (selectedMenuElement_ == menu) {
+        clearMenuSelection();
+        return;
+      }
+    }
+    if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
+      if (selectedMessageButtonElement_ == message) {
+        clearMessageButtonSelection();
+        return;
+      }
+    }
+    if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+      if (selectedShellCommandElement_ == shell) {
+        clearShellCommandSelection();
+        return;
+      }
+    }
+    if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+      if (selectedRelatedDisplayElement_ == related) {
+        clearRelatedDisplaySelection();
+        return;
+      }
+    }
+    if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
+      if (selectedTextMonitorElement_ == textMonitor) {
+        clearTextMonitorSelection();
+        return;
+      }
+    }
+    if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+      if (selectedMeterElement_ == meter) {
+        clearMeterSelection();
+        return;
+      }
+    }
+    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+      if (selectedBarMonitorElement_ == bar) {
+        clearBarMonitorSelection();
+        return;
+      }
+    }
+    if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      if (selectedScaleMonitorElement_ == scale) {
+        clearScaleMonitorSelection();
+        return;
+      }
+    }
+    if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+      if (selectedStripChartElement_ == strip) {
+        clearStripChartSelection();
+        return;
+      }
+    }
+    if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
+      if (selectedCartesianPlotElement_ == cart) {
+        clearCartesianPlotSelection();
+        return;
+      }
+    }
+    if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
+      if (selectedByteMonitorElement_ == byte) {
+        clearByteMonitorSelection();
+        return;
+      }
+    }
+    if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+      if (selectedRectangle_ == rectangle) {
+        clearRectangleSelection();
+        return;
+      }
+    }
+    if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+      if (selectedImage_ == image) {
+        clearImageSelection();
+        return;
+      }
+    }
+    if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
+      if (selectedOval_ == oval) {
+        clearOvalSelection();
+        return;
+      }
+    }
+    if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+      if (selectedArc_ == arc) {
+        clearArcSelection();
+        return;
+      }
+    }
+    if (auto *line = dynamic_cast<LineElement *>(widget)) {
+      if (selectedLine_ == line) {
+        clearLineSelection();
+        return;
+      }
+    }
+    if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+      if (selectedPolyline_ == polyline) {
+        clearPolylineSelection();
+        return;
+      }
+    }
+    if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+      if (selectedPolygon_ == polygon) {
+        clearPolygonSelection();
+        return;
+      }
+    }
+    if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+      if (selectedCompositeElement_ == composite) {
+        clearCompositeSelection();
+        return;
+      }
+    }
+    setWidgetSelectionState(widget, false);
+  }
+
+  void pruneMultiSelection()
+  {
+    for (auto it = multiSelection_.begin(); it != multiSelection_.end();) {
+      if (it->isNull()) {
+        it = multiSelection_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
+  void updateSelectionAfterMultiChange()
+  {
+    pruneMultiSelection();
+    QList<QWidget *> widgets;
+    for (const auto &pointer : multiSelection_) {
+      QWidget *widget = pointer.data();
+      if (widget) {
+        widgets.append(widget);
+      }
+    }
+    if (widgets.isEmpty()) {
+      if (!currentSelectedWidget() && !displaySelected_) {
+        closeResourcePalette();
+      }
+      notifyMenus();
+      return;
+    }
+    if (widgets.size() == 1) {
+      QWidget *single = widgets.front();
+      multiSelection_.clear();
+      setWidgetSelectionState(single, true);
+      selectWidgetForEditing(single);
+      notifyMenus();
+      return;
+    }
+    showResourcePaletteForMultipleSelection();
+    notifyMenus();
   }
 
   QList<QWidget *> selectedWidgets() const
@@ -6620,6 +7003,48 @@ private:
       return true;
     }
     return false;
+  }
+
+  bool handleMultiSelectionClick(QWidget *widget,
+      Qt::KeyboardModifiers modifiers)
+  {
+    if (!widget) {
+      return false;
+    }
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
+    }
+    clearDisplaySelection();
+    pruneMultiSelection();
+    const bool toggle = modifiers.testFlag(Qt::ControlModifier);
+    const QList<QWidget *> currentSelection = selectedWidgets();
+    const bool currentlySelected = currentSelection.contains(widget);
+
+    if (toggle && currentlySelected && multiSelection_.isEmpty()) {
+      removeWidgetFromSelection(widget);
+      if (selectedWidgets().isEmpty() && !displaySelected_) {
+        closeResourcePalette();
+      }
+      notifyMenus();
+      return true;
+    }
+
+    if (toggle && currentlySelected) {
+      removeWidgetFromSelection(widget);
+      updateSelectionAfterMultiChange();
+      return true;
+    }
+
+    if (multiSelection_.isEmpty()) {
+      if (QWidget *primary = currentSelectedWidget()) {
+        addWidgetToMultiSelection(primary);
+      }
+    }
+
+    addWidgetToMultiSelection(widget);
+    updateSelectionAfterMultiChange();
+    return true;
   }
 
   void beginMiddleButtonDrag(const QPoint &windowPos)

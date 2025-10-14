@@ -164,8 +164,8 @@ int main(int argc, char *argv[])
 
   auto *sizeMenu = editMenu->addMenu("&Size");
   sizeMenu->setFont(fixed13Font);
-  sizeMenu->addAction("&Same Size");
-  sizeMenu->addAction("Text to &Contents");
+  auto *sameSizeAct = sizeMenu->addAction("&Same Size");
+  auto *textToContentsAct = sizeMenu->addAction("Text to &Contents");
 
   auto *gridMenu = editMenu->addMenu("&Grid");
   gridMenu->setFont(fixed13Font);
@@ -427,6 +427,18 @@ int main(int argc, char *argv[])
           active->rotateSelectionCounterclockwise();
         }
       });
+  QObject::connect(sameSizeAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->sizeSelectionSameSize();
+        }
+      });
+  QObject::connect(textToContentsAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->sizeSelectionTextToContents();
+        }
+      });
   QObject::connect(toggleGridAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -480,7 +492,7 @@ int main(int argc, char *argv[])
     edgesToGridAct, spaceHorizontalAct, spaceVerticalAct, space2DAct,
     centerHorizontalAct, centerVerticalAct, centerBothAct,
     flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
-    rotateCounterclockwiseAct, toggleGridAct, toggleSnapAct,
+    rotateCounterclockwiseAct, sameSizeAct, textToContentsAct, toggleGridAct, toggleSnapAct,
     gridSpacingAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
@@ -575,6 +587,12 @@ int main(int argc, char *argv[])
     flipVerticalAct->setEnabled(canOrient);
     rotateClockwiseAct->setEnabled(canOrient);
     rotateCounterclockwiseAct->setEnabled(canOrient);
+    const bool canSizeSame = canEditActive && active
+        && active->canSizeSelectionSameSize();
+    const bool canSizeContents = canEditActive && active
+        && active->canSizeSelectionTextToContents();
+    sameSizeAct->setEnabled(canSizeSame);
+    textToContentsAct->setEnabled(canSizeContents);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

@@ -685,6 +685,130 @@ public:
     orientSelectionInternal(OrientationAction::kRotateCounterclockwise);
   }
 
+  void sizeSelectionSameSize()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.isEmpty()) {
+      return;
+    }
+
+    long long totalWidth = 0;
+    long long totalHeight = 0;
+    int count = 0;
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      const QRect rect = widgetDisplayRect(widget);
+      totalWidth += rect.width();
+      totalHeight += rect.height();
+      ++count;
+    }
+
+    if (count <= 0) {
+      return;
+    }
+
+    const int targetWidth =
+        static_cast<int>((totalWidth + count / 2) / count);
+    const int targetHeight =
+        static_cast<int>((totalHeight + count / 2) / count);
+
+    bool changed = false;
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      const QRect currentRect = widgetDisplayRect(widget);
+      QRect newRect = currentRect;
+      newRect.setSize(QSize(std::max(1, targetWidth),
+          std::max(1, targetHeight)));
+      newRect = adjustRectToDisplayArea(newRect);
+      if (newRect == currentRect) {
+        continue;
+      }
+      setWidgetDisplayRect(widget, newRect);
+      changed = true;
+    }
+
+    if (changed) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
+  void sizeSelectionTextToContents()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    QList<TextElement *> textWidgets;
+    for (QWidget *widget : selectedWidgets()) {
+      if (auto *text = dynamic_cast<TextElement *>(widget)) {
+        textWidgets.append(text);
+      }
+    }
+
+    if (textWidgets.isEmpty()) {
+      return;
+    }
+
+    bool changed = false;
+    for (TextElement *text : std::as_const(textWidgets)) {
+      if (!text) {
+        continue;
+      }
+      const QRect currentRect = widgetDisplayRect(text);
+      const QString content = text->text();
+      const QFontMetrics metrics(text->font());
+      const QStringList lines =
+          content.split(QLatin1Char('\n'), Qt::KeepEmptyParts);
+      int usedWidth = 0;
+      for (const QString &line : lines) {
+        QString sanitized = line;
+        sanitized.remove(QLatin1Char('\r'));
+        usedWidth = std::max(usedWidth,
+            metrics.horizontalAdvance(sanitized));
+      }
+      if (lines.isEmpty()) {
+        usedWidth = metrics.horizontalAdvance(content);
+      }
+      const int targetWidth = std::max(1, usedWidth);
+      const int originalWidth = currentRect.width();
+      int newLeft = currentRect.left();
+      const Qt::Alignment alignment = text->textAlignment();
+      if (alignment & Qt::AlignHCenter) {
+        newLeft += (originalWidth - targetWidth) / 2;
+      } else if (alignment & Qt::AlignRight) {
+        newLeft += (originalWidth - targetWidth);
+      }
+      QRect newRect(QPoint(newLeft, currentRect.top()),
+          QSize(targetWidth, currentRect.height()));
+      newRect = adjustRectToDisplayArea(newRect);
+      if (newRect == currentRect) {
+        continue;
+      }
+      setWidgetDisplayRect(text, newRect);
+      changed = true;
+    }
+
+    if (changed) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
   void alignSelectionPositionToGrid()
   {
     alignSelectionToGridInternal(false);
@@ -790,6 +914,29 @@ public:
       return false;
     }
     return !alignableWidgets().isEmpty();
+  }
+
+  bool canSizeSelectionSameSize() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
+    }
+    return alignableWidgets().size() >= 2;
+  }
+
+  bool canSizeSelectionTextToContents() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
+    }
+    for (QWidget *widget : selectedWidgets()) {
+      if (dynamic_cast<TextElement *>(widget)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool canSpaceSelection() const
@@ -9310,8 +9457,19 @@ private:
         });
 
     auto *sizeMenu = menu.addMenu(QStringLiteral("Size"));
-    addMenuAction(sizeMenu, QStringLiteral("Same Size"));
-    addMenuAction(sizeMenu, QStringLiteral("Text to Contents"));
+    auto *sameSizeAction =
+        addMenuAction(sizeMenu, QStringLiteral("Same Size"));
+    sameSizeAction->setEnabled(canSizeSelectionSameSize());
+    QObject::connect(sameSizeAction, &QAction::triggered, this, [this]() {
+      sizeSelectionSameSize();
+    });
+    auto *textToContentsAction =
+        addMenuAction(sizeMenu, QStringLiteral("Text to Contents"));
+    textToContentsAction->setEnabled(canSizeSelectionTextToContents());
+    QObject::connect(textToContentsAction, &QAction::triggered, this,
+        [this]() {
+          sizeSelectionTextToContents();
+        });
 
     auto *gridMenu = menu.addMenu(QStringLiteral("Grid"));
     auto *toggleShowGridAction =

@@ -148,9 +148,11 @@ int main(int argc, char *argv[])
 
   auto *centerMenu = editMenu->addMenu("&Center");
   centerMenu->setFont(fixed13Font);
-  centerMenu->addAction("&Horizontally in Display");
-  centerMenu->addAction("&Vertically in Display");
-  centerMenu->addAction("&Both");
+  auto *centerHorizontalAct =
+      centerMenu->addAction("&Horizontally in Display");
+  auto *centerVerticalAct =
+      centerMenu->addAction("&Vertically in Display");
+  auto *centerBothAct = centerMenu->addAction("&Both");
 
   auto *orientMenu = editMenu->addMenu("&Orient");
   orientMenu->setFont(fixed13Font);
@@ -382,6 +384,24 @@ int main(int argc, char *argv[])
           active->spaceSelection2D();
         }
       });
+  QObject::connect(centerHorizontalAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->centerSelectionHorizontallyInDisplay();
+        }
+      });
+  QObject::connect(centerVerticalAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->centerSelectionVerticallyInDisplay();
+        }
+      });
+  QObject::connect(centerBothAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->centerSelectionInDisplayBoth();
+        }
+      });
   QObject::connect(toggleGridAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -433,6 +453,7 @@ int main(int argc, char *argv[])
     ungroupAct, alignLeftAct, alignHorizontalCenterAct, alignRightAct,
     alignTopAct, alignVerticalCenterAct, alignBottomAct, positionToGridAct,
     edgesToGridAct, spaceHorizontalAct, spaceVerticalAct, space2DAct,
+    centerHorizontalAct, centerVerticalAct, centerBothAct,
     toggleGridAct, toggleSnapAct, gridSpacingAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
@@ -516,6 +537,11 @@ int main(int argc, char *argv[])
     spaceHorizontalAct->setEnabled(canSpace);
     spaceVerticalAct->setEnabled(canSpace);
     space2DAct->setEnabled(canSpace2D);
+    const bool canCenter = canEditActive && active
+        && active->canCenterSelection();
+    centerHorizontalAct->setEnabled(canCenter);
+    centerVerticalAct->setEnabled(canCenter);
+    centerBothAct->setEnabled(canCenter);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

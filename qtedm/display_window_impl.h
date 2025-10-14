@@ -643,6 +643,21 @@ public:
     alignSelectionInternal(AlignmentMode::kBottom);
   }
 
+  void centerSelectionHorizontallyInDisplay()
+  {
+    centerSelectionInDisplayInternal(true, false);
+  }
+
+  void centerSelectionVerticallyInDisplay()
+  {
+    centerSelectionInDisplayInternal(false, true);
+  }
+
+  void centerSelectionInDisplayBoth()
+  {
+    centerSelectionInDisplayInternal(true, true);
+  }
+
   void alignSelectionPositionToGrid()
   {
     alignSelectionToGridInternal(false);
@@ -753,6 +768,15 @@ public:
   bool canSpaceSelection2D() const
   {
     return canSpaceSelection();
+  }
+
+  bool canCenterSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return false;
+    }
+    return !alignableWidgets().isEmpty();
   }
 
   bool hasCopyableSelection() const
@@ -6580,6 +6604,71 @@ private:
     }
   }
 
+  void centerSelectionInDisplayInternal(bool horizontal, bool vertical)
+  {
+    if (!horizontal && !vertical) {
+      return;
+    }
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.isEmpty()) {
+      return;
+    }
+
+    QRect selectionBounds;
+    bool hasBounds = false;
+    QVector<QRect> geometries;
+    geometries.reserve(widgets.size());
+
+    for (QWidget *widget : widgets) {
+      const QRect rect = widgetDisplayRect(widget);
+      geometries.append(rect);
+      if (!hasBounds) {
+        selectionBounds = rect;
+        hasBounds = true;
+      } else {
+        selectionBounds = selectionBounds.united(rect);
+      }
+    }
+
+    if (!hasBounds) {
+      return;
+    }
+
+    const QRect displayRect = displayArea_->rect();
+    const QPoint displayCenter = displayRect.center();
+    const QPoint selectionCenter = selectionBounds.center();
+
+    const int deltaX = horizontal ? (displayCenter.x() - selectionCenter.x()) : 0;
+    const int deltaY = vertical ? (displayCenter.y() - selectionCenter.y()) : 0;
+
+    if (deltaX == 0 && deltaY == 0) {
+      return;
+    }
+
+    bool changed = false;
+    for (int i = 0; i < widgets.size(); ++i) {
+      QWidget *widget = widgets.at(i);
+      QRect rect = geometries.at(i);
+      rect.translate(deltaX, deltaY);
+      if (rect != geometries.at(i)) {
+        setWidgetDisplayRect(widget, rect);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
   void alignSelectionToGridInternal(bool edges)
   {
     setAsActiveDisplay();
@@ -8785,9 +8874,26 @@ private:
     });
 
     auto *centerMenu = menu.addMenu(QStringLiteral("Center"));
-    addMenuAction(centerMenu, QStringLiteral("Horizontally in Display"));
-    addMenuAction(centerMenu, QStringLiteral("Vertically in Display"));
-    addMenuAction(centerMenu, QStringLiteral("Both"));
+    auto *centerHorizontalAction =
+        addMenuAction(centerMenu, QStringLiteral("Horizontally in Display"));
+    centerHorizontalAction->setEnabled(canCenterSelection());
+    QObject::connect(centerHorizontalAction, &QAction::triggered, this,
+        [this]() {
+          centerSelectionHorizontallyInDisplay();
+        });
+    auto *centerVerticalAction =
+        addMenuAction(centerMenu, QStringLiteral("Vertically in Display"));
+    centerVerticalAction->setEnabled(canCenterSelection());
+    QObject::connect(centerVerticalAction, &QAction::triggered, this,
+        [this]() {
+          centerSelectionVerticallyInDisplay();
+        });
+    auto *centerBothAction =
+        addMenuAction(centerMenu, QStringLiteral("Both"));
+    centerBothAction->setEnabled(canCenterSelection());
+    QObject::connect(centerBothAction, &QAction::triggered, this, [this]() {
+      centerSelectionInDisplayBoth();
+    });
 
     auto *orientMenu = menu.addMenu(QStringLiteral("Orient"));
     addMenuAction(orientMenu, QStringLiteral("Flip Horizontally"));

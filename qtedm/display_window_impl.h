@@ -199,6 +199,7 @@ public:
       displayArea_->setGridSpacing(gridSpacing_);
     }
     markDirty();
+    updateResourcePaletteDisplayControls();
   }
 
   bool isGridOn() const
@@ -216,6 +217,36 @@ public:
       displayArea_->setGridOn(gridOn_);
     }
     markDirty();
+    updateResourcePaletteDisplayControls();
+  }
+
+  bool isSnapToGridEnabled() const
+  {
+    return snapToGrid_;
+  }
+
+  void setSnapToGrid(bool snap)
+  {
+    if (snapToGrid_ == snap) {
+      return;
+    }
+    snapToGrid_ = snap;
+    markDirty();
+    updateResourcePaletteDisplayControls();
+  }
+
+  void promptForGridSpacing()
+  {
+    const int current = gridSpacing();
+    bool ok = false;
+    const int spacing = QInputDialog::getInt(this,
+        QStringLiteral("Grid Spacing"),
+        QStringLiteral("Grid Spacing:"), current,
+        kMinimumGridSpacing, 4096, 1, &ok);
+    if (!ok) {
+      return;
+    }
+    setGridSpacing(spacing);
   }
 
   void syncCreateCursor()
@@ -1042,6 +1073,7 @@ private:
   bool dirty_ = true;
   bool displaySelected_ = false;
   bool gridOn_ = kDefaultGridOn;
+  bool snapToGrid_ = kDefaultSnapToGrid;
   int gridSpacing_ = kDefaultGridSpacing;
   QPoint lastContextMenuGlobalPos_;
   QList<TextElement *> textElements_;
@@ -1653,8 +1685,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect desired = geometry.translated(offset);
-        desired = target.adjustRectToDisplayArea(desired);
+        QRect desired = target.translateRectForPaste(geometry, offset);
         AdlNode nodeCopy = node;
         target.setObjectGeometry(nodeCopy, desired);
         CompositeElement *newComposite = nullptr;
@@ -1701,6 +1732,7 @@ private:
           rect.setHeight(kMinimumTextElementHeight);
         }
         rect = target.adjustRectToDisplayArea(rect);
+        rect = target.snapRectOriginToGrid(rect);
         auto *newElement = new TextElement(target.displayArea_);
         newElement->setFont(target.font());
         newElement->setGeometry(rect);
@@ -1745,8 +1777,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new TextEntryElement(target.displayArea_);
         newElement->setFont(target.font());
         newElement->setGeometry(rect);
@@ -1789,8 +1820,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new SliderElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -1830,8 +1860,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new WheelSwitchElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -1868,8 +1897,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new ChoiceButtonElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -1902,8 +1930,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new MenuElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -1939,8 +1966,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new MessageButtonElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -1980,8 +2006,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new ShellCommandElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2022,8 +2047,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new RelatedDisplayElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2071,8 +2095,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new TextMonitorElement(target.displayArea_);
         newElement->setFont(target.font());
         newElement->setGeometry(rect);
@@ -2117,8 +2140,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new MeterElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2157,8 +2179,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new BarMonitorElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2198,8 +2219,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new ScaleMonitorElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2248,8 +2268,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new StripChartElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2317,8 +2336,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new CartesianPlotElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2373,8 +2391,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new ByteMonitorElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(foreground);
@@ -2417,8 +2434,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new RectangleElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(color);
@@ -2465,8 +2481,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new ImageElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setImageType(imageType);
@@ -2517,8 +2532,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new OvalElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(color);
@@ -2567,8 +2581,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         auto *newElement = new ArcElement(target.displayArea_);
         newElement->setGeometry(rect);
         newElement->setForegroundColor(color);
@@ -2616,8 +2629,7 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QRect rect = geometry.translated(offset);
-        rect = target.adjustRectToDisplayArea(rect);
+        QRect rect = target.translateRectForPaste(geometry, offset);
         QVector<QPoint> translatedPoints = points;
         const QPoint translation = rect.topLeft() - geometry.topLeft();
         for (QPoint &pt : translatedPoints) {
@@ -2671,10 +2683,8 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QVector<QPoint> translated = points;
-        for (QPoint &pt : translated) {
-          pt += offset;
-        }
+        QVector<QPoint> translated =
+            target.translatePointsForPaste(points, offset);
         auto *newElement = new PolylineElement(target.displayArea_);
         newElement->setAbsolutePoints(translated);
         newElement->setForegroundColor(color);
@@ -2719,10 +2729,8 @@ private:
         if (!target.displayArea_) {
           return;
         }
-        QVector<QPoint> translated = points;
-        for (QPoint &pt : translated) {
-          pt += offset;
-        }
+        QVector<QPoint> translated =
+            target.translatePointsForPaste(points, offset);
         auto *newElement = new PolygonElement(target.displayArea_);
         newElement->setAbsolutePoints(translated);
         newElement->setForegroundColor(color);
@@ -2964,6 +2972,12 @@ private:
         },
         [this](bool gridOn) {
           setGridOn(gridOn);
+        },
+        [this]() {
+          return isSnapToGridEnabled();
+        },
+        [this](bool snap) {
+          setSnapToGrid(snap);
         });
   }
 
@@ -6338,8 +6352,9 @@ private:
     }
     const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
     const QPoint offset = areaPos - middleButtonDragStartAreaPos_;
-    const QPoint clamped =
+    QPoint clamped =
         clampOffsetToDisplayArea(middleButtonBoundingRect_, offset);
+    clamped = snapOffsetToGrid(middleButtonBoundingRect_, clamped);
     bool anyMoved = false;
     const int widgetCount = middleButtonDragWidgets_.size();
     for (int i = 0; i < widgetCount; ++i) {
@@ -6387,6 +6402,14 @@ private:
       return;
     }
     resourcePalette_->refreshGeometryFromSelection();
+  }
+
+  void updateResourcePaletteDisplayControls()
+  {
+    if (resourcePalette_.isNull()) {
+      return;
+    }
+    resourcePalette_->refreshDisplayControls();
   }
 
   QPoint clampOffsetToDisplayArea(const QRect &rect,
@@ -6591,6 +6614,7 @@ private:
     rubberBandActive_ = true;
     activeRubberBandTool_ = tool;
     rubberBandOrigin_ = clampToDisplayArea(areaPos);
+    rubberBandOrigin_ = snapPointToGrid(rubberBandOrigin_);
     ensureRubberBand();
     if (rubberBand_) {
       rubberBand_->setGeometry(QRect(rubberBandOrigin_, QSize(1, 1)));
@@ -6603,7 +6627,8 @@ private:
     if (!rubberBandActive_ || !rubberBand_) {
       return;
     }
-    const QPoint clamped = clampToDisplayArea(areaPos);
+    QPoint clamped = clampToDisplayArea(areaPos);
+    clamped = snapPointToGrid(clamped);
     rubberBand_->setGeometry(QRect(rubberBandOrigin_, clamped).normalized());
   }
 
@@ -6622,7 +6647,8 @@ private:
     if (!displayArea_) {
       return;
     }
-    const QPoint clamped = clampToDisplayArea(areaPos);
+    QPoint clamped = clampToDisplayArea(areaPos);
+    clamped = snapPointToGrid(clamped);
     QRect rect = QRect(rubberBandOrigin_, clamped).normalized();
     switch (tool) {
     case CreateTool::kText:
@@ -6632,7 +6658,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createTextElement(rect);
       break;
     case CreateTool::kTextMonitor:
@@ -6642,7 +6668,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createTextMonitorElement(rect);
       break;
     case CreateTool::kTextEntry:
@@ -6652,7 +6678,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createTextEntryElement(rect);
       break;
     case CreateTool::kSlider:
@@ -6662,7 +6688,7 @@ private:
       if (rect.height() < kMinimumSliderHeight) {
         rect.setHeight(kMinimumSliderHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createSliderElement(rect);
       break;
     case CreateTool::kWheelSwitch:
@@ -6672,7 +6698,7 @@ private:
       if (rect.height() < kMinimumWheelSwitchHeight) {
         rect.setHeight(kMinimumWheelSwitchHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createWheelSwitchElement(rect);
       break;
     case CreateTool::kChoiceButton:
@@ -6682,7 +6708,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createChoiceButtonElement(rect);
       break;
     case CreateTool::kMenu:
@@ -6692,7 +6718,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createMenuElement(rect);
       break;
     case CreateTool::kMessageButton:
@@ -6702,7 +6728,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createMessageButtonElement(rect);
       break;
     case CreateTool::kShellCommand:
@@ -6712,7 +6738,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createShellCommandElement(rect);
       break;
     case CreateTool::kMeter:
@@ -6722,7 +6748,7 @@ private:
       if (rect.height() < kMinimumMeterSize) {
         rect.setHeight(kMinimumMeterSize);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createMeterElement(rect);
       break;
     case CreateTool::kBarMonitor:
@@ -6732,7 +6758,7 @@ private:
       if (rect.height() < kMinimumBarSize) {
         rect.setHeight(kMinimumBarSize);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createBarMonitorElement(rect);
       break;
     case CreateTool::kByteMonitor:
@@ -6742,7 +6768,7 @@ private:
       if (rect.height() < kMinimumByteSize) {
         rect.setHeight(kMinimumByteSize);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createByteMonitorElement(rect);
       break;
     case CreateTool::kScaleMonitor:
@@ -6752,7 +6778,7 @@ private:
       if (rect.height() < kMinimumScaleSize) {
         rect.setHeight(kMinimumScaleSize);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createScaleMonitorElement(rect);
       break;
     case CreateTool::kStripChart:
@@ -6762,7 +6788,7 @@ private:
       if (rect.height() < kMinimumStripChartHeight) {
         rect.setHeight(kMinimumStripChartHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createStripChartElement(rect);
       break;
     case CreateTool::kCartesianPlot:
@@ -6772,7 +6798,7 @@ private:
       if (rect.height() < kMinimumCartesianPlotHeight) {
         rect.setHeight(kMinimumCartesianPlotHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createCartesianPlotElement(rect);
       break;
     case CreateTool::kRectangle:
@@ -6782,7 +6808,7 @@ private:
       if (rect.height() <= 0) {
         rect.setHeight(1);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createRectangleElement(rect);
       break;
     case CreateTool::kOval:
@@ -6792,7 +6818,7 @@ private:
       if (rect.height() <= 0) {
         rect.setHeight(1);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createOvalElement(rect);
       break;
     case CreateTool::kArc:
@@ -6802,7 +6828,7 @@ private:
       if (rect.height() <= 0) {
         rect.setHeight(1);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createArcElement(rect);
       break;
     case CreateTool::kLine:
@@ -6815,7 +6841,7 @@ private:
       if (rect.height() <= 0) {
         rect.setHeight(1);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createImageElement(rect);
       break;
     case CreateTool::kRelatedDisplay:
@@ -6825,7 +6851,7 @@ private:
       if (rect.height() < kMinimumTextHeight) {
         rect.setHeight(kMinimumTextHeight);
       }
-      rect = adjustRectToDisplayArea(rect);
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createRelatedDisplayElement(rect);
       break;
     default:
@@ -6841,7 +6867,7 @@ private:
 
     const QPoint point = polygonCreationActive_
         ? adjustedPolygonPoint(areaPos, modifiers)
-        : clampToDisplayArea(areaPos);
+        : snapPointToGrid(clampToDisplayArea(areaPos));
 
     if (!polygonCreationActive_) {
       polygonCreationActive_ = true;
@@ -6910,7 +6936,7 @@ private:
 
     const QPoint point = polylineCreationActive_
         ? adjustedPolylinePoint(areaPos, modifiers)
-        : clampToDisplayArea(areaPos);
+        : snapPointToGrid(clampToDisplayArea(areaPos));
 
     if (!polylineCreationActive_) {
       polylineCreationActive_ = true;
@@ -7070,14 +7096,14 @@ private:
   {
     QPoint clamped = clampToDisplayArea(areaPos);
     if (!(modifiers & Qt::ShiftModifier) || points.isEmpty()) {
-      return clamped;
+      return snapPointToGrid(clamped);
     }
 
     const QPoint &reference = points.last();
     const int dx = clamped.x() - reference.x();
     const int dy = clamped.y() - reference.y();
     if (dx == 0 && dy == 0) {
-      return clamped;
+      return snapPointToGrid(clamped);
     }
 
     constexpr double kPi = 3.14159265358979323846;
@@ -7093,7 +7119,7 @@ private:
         + static_cast<int>(std::round(std::cos(snapped) * length));
     const int y = reference.y()
         + static_cast<int>(std::round(std::sin(snapped) * length));
-    return clampToDisplayArea(QPoint(x, y));
+    return snapPointToGrid(clampToDisplayArea(QPoint(x, y)));
   }
 
   void createTextElement(const QRect &rect)
@@ -7713,6 +7739,124 @@ private:
     return QRect(QPoint(x, y), QSize(width, height));
   }
 
+  QPoint snapPointToGrid(const QPoint &point) const
+  {
+    if (!snapToGrid_ || gridSpacing_ <= 0 || !displayArea_) {
+      return point;
+    }
+    const QRect areaRect = displayArea_->rect();
+    const int spacing = gridSpacing_;
+    const int minX = areaRect.left();
+    const int minY = areaRect.top();
+    const int maxX = areaRect.right();
+    const int maxY = areaRect.bottom();
+    auto snapCoord = [&](int value, int minCoord, int maxCoord) {
+      if (maxCoord < minCoord) {
+        return minCoord;
+      }
+      const double units = static_cast<double>(value - minCoord) / spacing;
+      int roundedUnits = static_cast<int>(std::round(units));
+      const int maxUnits = static_cast<int>(
+          std::floor(static_cast<double>(maxCoord - minCoord) / spacing));
+      roundedUnits = std::clamp(roundedUnits, 0, maxUnits);
+      return minCoord + roundedUnits * spacing;
+    };
+    const int clampedX = std::clamp(point.x(), minX, maxX);
+    const int clampedY = std::clamp(point.y(), minY, maxY);
+    return QPoint(
+        snapCoord(clampedX, minX, maxX),
+        snapCoord(clampedY, minY, maxY));
+  }
+
+  QPoint snapTopLeftToGrid(const QPoint &topLeft, const QSize &size) const
+  {
+    if (!snapToGrid_ || gridSpacing_ <= 0 || !displayArea_) {
+      return topLeft;
+    }
+    const QRect areaRect = displayArea_->rect();
+    const int spacing = gridSpacing_;
+    const int minX = areaRect.left();
+    const int minY = areaRect.top();
+    const int maxX = areaRect.right() - size.width() + 1;
+    const int maxY = areaRect.bottom() - size.height() + 1;
+    auto snapCoord = [&](int value, int minCoord, int maxCoord) {
+      if (maxCoord < minCoord) {
+        return minCoord;
+      }
+      const double units = static_cast<double>(value - minCoord) / spacing;
+      int roundedUnits = static_cast<int>(std::round(units));
+      const int maxUnits = static_cast<int>(
+          std::floor(static_cast<double>(maxCoord - minCoord) / spacing));
+      roundedUnits = std::clamp(roundedUnits, 0, maxUnits);
+      return minCoord + roundedUnits * spacing;
+    };
+    const int clampedX = std::clamp(topLeft.x(), minX,
+        std::max(minX, maxX));
+    const int clampedY = std::clamp(topLeft.y(), minY,
+        std::max(minY, maxY));
+    return QPoint(
+        snapCoord(clampedX, minX, maxX),
+        snapCoord(clampedY, minY, maxY));
+  }
+
+  QPoint snapOffsetToGrid(const QRect &rect,
+      const QPoint &offset) const
+  {
+    if (!snapToGrid_ || gridSpacing_ <= 0 || !displayArea_) {
+      return offset;
+    }
+    const QPoint base = rect.topLeft();
+    const QPoint desired = base + offset;
+    const QPoint snapped = snapTopLeftToGrid(desired, rect.size());
+    return snapped - base;
+  }
+
+  QRect snapRectOriginToGrid(const QRect &rect) const
+  {
+    if (!snapToGrid_ || gridSpacing_ <= 0 || !displayArea_) {
+      return rect;
+    }
+    QRect adjusted = rect;
+    adjusted.moveTopLeft(snapTopLeftToGrid(adjusted.topLeft(),
+        adjusted.size()));
+    return adjusted;
+  }
+
+  QRect translateRectForPaste(const QRect &rect,
+      const QPoint &offset) const
+  {
+    QRect translated = rect.translated(offset);
+    translated = adjustRectToDisplayArea(translated);
+    return snapRectOriginToGrid(translated);
+  }
+
+  QVector<QPoint> translatePointsForPaste(const QVector<QPoint> &points,
+      const QPoint &offset) const
+  {
+    QVector<QPoint> translated = points;
+    if (translated.isEmpty()) {
+      return translated;
+    }
+    for (QPoint &pt : translated) {
+      pt += offset;
+    }
+    if (!snapToGrid_ || gridSpacing_ <= 0 || !displayArea_) {
+      return translated;
+    }
+    QRect bounding(translated.first(), translated.first());
+    bounding = bounding.normalized();
+    for (const QPoint &pt : translated) {
+      bounding = bounding.united(QRect(pt, pt));
+    }
+    const QPoint snappedTopLeft =
+        snapTopLeftToGrid(bounding.topLeft(), bounding.size());
+    const QPoint delta = snappedTopLeft - bounding.topLeft();
+    for (QPoint &pt : translated) {
+      pt += delta;
+    }
+    return translated;
+  }
+
   void updateCreateCursor()
   {
     auto state = state_.lock();
@@ -8087,9 +8231,25 @@ private:
     addMenuAction(sizeMenu, QStringLiteral("Text to Contents"));
 
     auto *gridMenu = menu.addMenu(QStringLiteral("Grid"));
-    addMenuAction(gridMenu, QStringLiteral("Toggle Show Grid"));
-    addMenuAction(gridMenu, QStringLiteral("Toggle Snap To Grid"));
-    addMenuAction(gridMenu, QStringLiteral("Grid Spacing..."));
+    auto *toggleShowGridAction =
+        addMenuAction(gridMenu, QStringLiteral("Toggle Show Grid"));
+    QObject::connect(toggleShowGridAction, &QAction::triggered, this,
+        [this]() {
+          setAsActiveDisplay();
+          setGridOn(!isGridOn());
+        });
+    auto *toggleSnapAction =
+        addMenuAction(gridMenu, QStringLiteral("Toggle Snap To Grid"));
+    QObject::connect(toggleSnapAction, &QAction::triggered, this, [this]() {
+      setAsActiveDisplay();
+      setSnapToGrid(!isSnapToGridEnabled());
+    });
+    auto *gridSpacingAction =
+        addMenuAction(gridMenu, QStringLiteral("Grid Spacing..."));
+    QObject::connect(gridSpacingAction, &QAction::triggered, this, [this]() {
+      setAsActiveDisplay();
+      promptForGridSpacing();
+    });
 
     menu.addSeparator();
     auto *unselectAction = addMenuAction(&menu, QStringLiteral("Unselect"));
@@ -8385,7 +8545,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
   AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("gridOn=%1").arg(gridOn_ ? 1 : 0));
   AdlWriter::writeIndentedLine(stream, 1,
-      QStringLiteral("snapToGrid=%1").arg(kDefaultSnapToGrid ? 1 : 0));
+      QStringLiteral("snapToGrid=%1").arg(snapToGrid_ ? 1 : 0));
   AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
 
   AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("\"color map\" {"));
@@ -9942,6 +10102,7 @@ inline void DisplayWindow::clearAllElements()
   activePolylineElement_ = nullptr;
   colormapName_.clear();
   gridOn_ = kDefaultGridOn;
+  snapToGrid_ = kDefaultSnapToGrid;
   gridSpacing_ = kDefaultGridSpacing;
   displaySelected_ = false;
   if (displayArea_) {
@@ -9950,6 +10111,7 @@ inline void DisplayWindow::clearAllElements()
     displayArea_->setGridSpacing(gridSpacing_);
   }
   currentLoadDirectory_.clear();
+  updateResourcePaletteDisplayControls();
 }
 
 inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
@@ -10004,6 +10166,13 @@ inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
       displayArea_->setGridOn(gridOn_);
     }
   }
+  const QString snapStr = propertyValue(displayNode,
+      QStringLiteral("snapToGrid"));
+  int snapValue = snapStr.toInt(&ok);
+  if (ok) {
+    snapToGrid_ = snapValue != 0;
+  }
+  updateResourcePaletteDisplayControls();
   return true;
 }
 

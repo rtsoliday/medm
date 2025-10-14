@@ -166,9 +166,11 @@ int main(int argc, char *argv[])
 
   auto *gridMenu = editMenu->addMenu("&Grid");
   gridMenu->setFont(fixed13Font);
-  gridMenu->addAction("Toggle Show &Grid");
-  gridMenu->addAction("Toggle &Snap To Grid");
-  gridMenu->addAction("Grid &Spacing...");
+  auto *toggleGridAct = gridMenu->addAction("Toggle Show &Grid");
+  auto *toggleSnapAct = gridMenu->addAction("Toggle &Snap To Grid");
+  auto *gridSpacingAct = gridMenu->addAction("Grid &Spacing...");
+  toggleGridAct->setCheckable(true);
+  toggleSnapAct->setCheckable(true);
 
   editMenu->addSeparator();
   editMenu->addAction("U&nselect");
@@ -314,6 +316,24 @@ int main(int argc, char *argv[])
           active->ungroupSelectedElements();
         }
       });
+  QObject::connect(toggleGridAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->setGridOn(!active->isGridOn());
+        }
+      });
+  QObject::connect(toggleSnapAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->setSnapToGrid(!active->isSnapToGridEnabled());
+        }
+      });
+  QObject::connect(gridSpacingAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->promptForGridSpacing();
+        }
+      });
   QObject::connect(saveAsAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -344,7 +364,7 @@ int main(int argc, char *argv[])
 
   *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
     closeAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
-    ungroupAct]() {
+    ungroupAct, toggleGridAct, toggleSnapAct, gridSpacingAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -401,6 +421,11 @@ int main(int argc, char *argv[])
     raiseAct->setEnabled(canRaise);
     lowerAct->setEnabled(canLower);
     const bool canGroup = canEditActive && active && active->canGroupSelection();
+    toggleGridAct->setEnabled(canEditActive);
+    toggleGridAct->setChecked(canEditActive && active && active->isGridOn());
+    toggleSnapAct->setEnabled(canEditActive);
+    toggleSnapAct->setChecked(canEditActive && active && active->isSnapToGridEnabled());
+    gridSpacingAct->setEnabled(canEditActive);
     const bool canUngroup = canEditActive && active && active->canUngroupSelection();
     groupAct->setEnabled(canGroup);
     ungroupAct->setEnabled(canUngroup);

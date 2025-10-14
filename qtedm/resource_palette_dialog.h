@@ -180,6 +180,13 @@ public:
           }
         });
     snapToGridCombo_ = createBooleanComboBox();
+    QObject::connect(snapToGridCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (snapToGridSetter_) {
+            snapToGridSetter_(index == 1);
+          }
+        });
 
     addRow(displayLayout, 0, QStringLiteral("Foreground"), foregroundButton_);
     addRow(displayLayout, 1, QStringLiteral("Background"), backgroundButton_);
@@ -2369,7 +2376,9 @@ public:
       std::function<int()> gridSpacingGetter,
       std::function<void(int)> gridSpacingSetter,
       std::function<bool()> gridOnGetter,
-      std::function<void(bool)> gridOnSetter)
+      std::function<void(bool)> gridOnSetter,
+      std::function<bool()> snapToGridGetter,
+      std::function<void(bool)> snapToGridSetter)
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kDisplay;
@@ -2384,6 +2393,8 @@ public:
     gridSpacingSetter_ = std::move(gridSpacingSetter);
     gridOnGetter_ = std::move(gridOnGetter);
     gridOnSetter_ = std::move(gridOnSetter);
+    snapToGridGetter_ = std::move(snapToGridGetter);
+    snapToGridSetter_ = std::move(snapToGridSetter);
     textGetter_ = {};
     textSetter_ = {};
     committedTextString_.clear();
@@ -2457,7 +2468,12 @@ public:
       const bool gridOn = gridOnGetter_ ? gridOnGetter_() : kDefaultGridOn;
       gridOnCombo_->setCurrentIndex(gridOn ? 1 : 0);
     }
-    snapToGridCombo_->setCurrentIndex(kDefaultSnapToGrid ? 1 : 0);
+    if (snapToGridCombo_) {
+      const QSignalBlocker blocker(snapToGridCombo_);
+      const bool snap = snapToGridGetter_ ? snapToGridGetter_()
+                                          : kDefaultSnapToGrid;
+      snapToGridCombo_->setCurrentIndex(snap ? 1 : 0);
+    }
 
     elementLabel_->setText(QStringLiteral("Display"));
 
@@ -2511,6 +2527,31 @@ public:
     updateGeometryEdits(geometry);
   }
 
+  void refreshDisplayControls()
+  {
+    if (selectionKind_ != SelectionKind::kDisplay) {
+      return;
+    }
+    if (gridSpacingEdit_ && gridSpacingGetter_) {
+      const QSignalBlocker blocker(gridSpacingEdit_);
+      const int spacing = gridSpacingGetter_ ? gridSpacingGetter_()
+                                             : kDefaultGridSpacing;
+      gridSpacingEdit_->setText(
+          QString::number(std::max(kMinimumGridSpacing, spacing)));
+      committedTexts_[gridSpacingEdit_] = gridSpacingEdit_->text();
+    }
+    if (gridOnCombo_ && gridOnGetter_) {
+      const QSignalBlocker blocker(gridOnCombo_);
+      const bool gridOn = gridOnGetter_();
+      gridOnCombo_->setCurrentIndex(gridOn ? 1 : 0);
+    }
+    if (snapToGridCombo_ && snapToGridGetter_) {
+      const QSignalBlocker blocker(snapToGridCombo_);
+      const bool snap = snapToGridGetter_();
+      snapToGridCombo_->setCurrentIndex(snap ? 1 : 0);
+    }
+  }
+
   void showForText(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QString()> textGetter,
@@ -2559,6 +2600,8 @@ public:
     gridSpacingSetter_ = {};
     gridOnGetter_ = {};
     gridOnSetter_ = {};
+    snapToGridGetter_ = {};
+    snapToGridSetter_ = {};
     textGetter_ = std::move(textGetter);
     textSetter_ = std::move(textSetter);
     textForegroundGetter_ = std::move(foregroundGetter);
@@ -10064,6 +10107,8 @@ private:
   std::function<void(int)> gridSpacingSetter_;
   std::function<bool()> gridOnGetter_;
   std::function<void(bool)> gridOnSetter_;
+  std::function<bool()> snapToGridGetter_;
+  std::function<void(bool)> snapToGridSetter_;
   std::function<QString()> textGetter_;
   std::function<void(const QString &)> textSetter_;
   std::function<QColor()> textForegroundGetter_;

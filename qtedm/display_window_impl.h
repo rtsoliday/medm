@@ -602,6 +602,57 @@ public:
     notifyMenus();
   }
 
+private:
+  enum class AlignmentMode {
+    kLeft,
+    kHorizontalCenter,
+    kRight,
+    kTop,
+    kVerticalCenter,
+    kBottom,
+  };
+
+public:
+  void alignSelectionLeft()
+  {
+    alignSelectionInternal(AlignmentMode::kLeft);
+  }
+
+  void alignSelectionHorizontalCenter()
+  {
+    alignSelectionInternal(AlignmentMode::kHorizontalCenter);
+  }
+
+  void alignSelectionRight()
+  {
+    alignSelectionInternal(AlignmentMode::kRight);
+  }
+
+  void alignSelectionTop()
+  {
+    alignSelectionInternal(AlignmentMode::kTop);
+  }
+
+  void alignSelectionVerticalCenter()
+  {
+    alignSelectionInternal(AlignmentMode::kVerticalCenter);
+  }
+
+  void alignSelectionBottom()
+  {
+    alignSelectionInternal(AlignmentMode::kBottom);
+  }
+
+  void alignSelectionPositionToGrid()
+  {
+    alignSelectionToGridInternal(false);
+  }
+
+  void alignSelectionEdgesToGrid()
+  {
+    alignSelectionToGridInternal(true);
+  }
+
   bool canRaiseSelection() const
   {
     auto state = state_.lock();
@@ -655,6 +706,24 @@ public:
       }
     }
     return false;
+  }
+
+  bool canAlignSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
+    }
+    return alignableWidgets().size() >= 2;
+  }
+
+  bool canAlignSelectionToGrid() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode || gridSpacing_ <= 0) {
+      return false;
+    }
+    return !alignableWidgets().isEmpty();
   }
 
   bool hasCopyableSelection() const
@@ -1548,6 +1617,18 @@ private:
     appendUnique(selectedPolygon_);
     appendUnique(selectedCompositeElement_);
 
+    return widgets;
+  }
+
+  QList<QWidget *> alignableWidgets() const
+  {
+    QList<QWidget *> widgets;
+    for (QWidget *widget : selectedWidgets()) {
+      if (!widget || widget == displayArea_) {
+        continue;
+      }
+      widgets.append(widget);
+    }
     return widgets;
   }
 
@@ -6396,6 +6477,160 @@ private:
     finishMiddleButtonDrag(false);
   }
 
+  void alignSelectionInternal(AlignmentMode mode)
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.size() < 2) {
+      return;
+    }
+
+    int minLeft = std::numeric_limits<int>::max();
+    int minTop = std::numeric_limits<int>::max();
+    int maxRight = std::numeric_limits<int>::min();
+    int maxBottom = std::numeric_limits<int>::min();
+
+    QVector<QRect> geometries;
+    geometries.reserve(widgets.size());
+    for (QWidget *widget : widgets) {
+      const QRect rect = widgetDisplayRect(widget);
+      geometries.append(rect);
+      minLeft = std::min(minLeft, rect.left());
+      minTop = std::min(minTop, rect.top());
+      maxRight = std::max(maxRight, rect.left() + rect.width());
+      maxBottom = std::max(maxBottom, rect.top() + rect.height());
+    }
+
+    const int centerX = (minLeft + maxRight) / 2;
+    const int centerY = (minTop + maxBottom) / 2;
+
+    bool changed = false;
+    for (int i = 0; i < widgets.size(); ++i) {
+      QWidget *widget = widgets.at(i);
+      QRect rect = geometries.at(i);
+      int targetLeft = rect.left();
+      int targetTop = rect.top();
+
+      switch (mode) {
+      case AlignmentMode::kLeft:
+        targetLeft = minLeft;
+        break;
+      case AlignmentMode::kHorizontalCenter:
+        targetLeft = centerX - rect.width() / 2;
+        break;
+      case AlignmentMode::kRight:
+        targetLeft = maxRight - rect.width();
+        break;
+      case AlignmentMode::kTop:
+        targetTop = minTop;
+        break;
+      case AlignmentMode::kVerticalCenter:
+        targetTop = centerY - rect.height() / 2;
+        break;
+      case AlignmentMode::kBottom:
+        targetTop = maxBottom - rect.height();
+        break;
+      }
+
+      if (targetLeft != rect.left() || targetTop != rect.top()) {
+        rect.moveTo(targetLeft, targetTop);
+        setWidgetDisplayRect(widget, rect);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
+  void alignSelectionToGridInternal(bool edges)
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || gridSpacing_ <= 0) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.isEmpty()) {
+      return;
+    }
+
+    bool anyChanged = false;
+    const int spacing = gridSpacing_;
+
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      QRect rect = widgetDisplayRect(widget);
+      if (!rect.isValid()) {
+        continue;
+      }
+
+      bool widgetChanged = false;
+      const QPoint originalTopLeft = rect.topLeft();
+      const QPoint snappedTopLeft(
+          snapCoordinateToGrid(originalTopLeft.x(), spacing),
+          snapCoordinateToGrid(originalTopLeft.y(), spacing));
+      if (snappedTopLeft != originalTopLeft) {
+        rect.moveTopLeft(snappedTopLeft);
+        widgetChanged = true;
+      }
+
+      if (edges) {
+        const QPoint currentBottomRight = rect.bottomRight();
+        const QPoint snappedBottomRight(
+            snapCoordinateToGrid(currentBottomRight.x(), spacing),
+            snapCoordinateToGrid(currentBottomRight.y(), spacing));
+        int newWidth = snappedBottomRight.x() - rect.left() + 1;
+        int newHeight = snappedBottomRight.y() - rect.top() + 1;
+        if (newWidth < 1) {
+          newWidth = 1;
+        }
+        if (newHeight < 1) {
+          newHeight = 1;
+        }
+        if (newWidth != rect.width() || newHeight != rect.height()) {
+          rect.setSize(QSize(newWidth, newHeight));
+          widgetChanged = true;
+        }
+      }
+
+      if (widgetChanged) {
+        setWidgetDisplayRect(widget, rect);
+        anyChanged = true;
+      }
+    }
+
+    if (anyChanged) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
+  static int snapCoordinateToGrid(int value, int spacing)
+  {
+    if (spacing <= 0) {
+      return value;
+    }
+    const int base = (value / spacing) * spacing;
+    int offset = value - base;
+    if (offset > spacing / 2) {
+      offset -= spacing;
+    }
+    return value - offset;
+  }
+
   void refreshResourcePaletteGeometry()
   {
     if (resourcePalette_.isNull()) {
@@ -8201,14 +8436,56 @@ private:
 
     menu.addSeparator();
     auto *alignMenu = menu.addMenu(QStringLiteral("Align"));
-    addMenuAction(alignMenu, QStringLiteral("Left"));
-    addMenuAction(alignMenu, QStringLiteral("Horizontal Center"));
-    addMenuAction(alignMenu, QStringLiteral("Right"));
-    addMenuAction(alignMenu, QStringLiteral("Top"));
-    addMenuAction(alignMenu, QStringLiteral("Vertical Center"));
-    addMenuAction(alignMenu, QStringLiteral("Bottom"));
-    addMenuAction(alignMenu, QStringLiteral("Position to Grid"));
-    addMenuAction(alignMenu, QStringLiteral("Edges to Grid"));
+    auto *alignLeftAction =
+        addMenuAction(alignMenu, QStringLiteral("Left"));
+    alignLeftAction->setEnabled(canAlignSelection());
+    QObject::connect(alignLeftAction, &QAction::triggered, this, [this]() {
+      alignSelectionLeft();
+    });
+    auto *alignHorizontalCenterAction =
+        addMenuAction(alignMenu, QStringLiteral("Horizontal Center"));
+    alignHorizontalCenterAction->setEnabled(canAlignSelection());
+    QObject::connect(alignHorizontalCenterAction, &QAction::triggered, this,
+        [this]() {
+          alignSelectionHorizontalCenter();
+        });
+    auto *alignRightAction =
+        addMenuAction(alignMenu, QStringLiteral("Right"));
+    alignRightAction->setEnabled(canAlignSelection());
+    QObject::connect(alignRightAction, &QAction::triggered, this, [this]() {
+      alignSelectionRight();
+    });
+    auto *alignTopAction = addMenuAction(alignMenu, QStringLiteral("Top"));
+    alignTopAction->setEnabled(canAlignSelection());
+    QObject::connect(alignTopAction, &QAction::triggered, this, [this]() {
+      alignSelectionTop();
+    });
+    auto *alignVerticalCenterAction =
+        addMenuAction(alignMenu, QStringLiteral("Vertical Center"));
+    alignVerticalCenterAction->setEnabled(canAlignSelection());
+    QObject::connect(alignVerticalCenterAction, &QAction::triggered, this,
+        [this]() {
+          alignSelectionVerticalCenter();
+        });
+    auto *alignBottomAction =
+        addMenuAction(alignMenu, QStringLiteral("Bottom"));
+    alignBottomAction->setEnabled(canAlignSelection());
+    QObject::connect(alignBottomAction, &QAction::triggered, this, [this]() {
+      alignSelectionBottom();
+    });
+    auto *positionToGridAction =
+        addMenuAction(alignMenu, QStringLiteral("Position to Grid"));
+    positionToGridAction->setEnabled(canAlignSelectionToGrid());
+    QObject::connect(positionToGridAction, &QAction::triggered, this,
+        [this]() {
+          alignSelectionPositionToGrid();
+        });
+    auto *edgesToGridAction =
+        addMenuAction(alignMenu, QStringLiteral("Edges to Grid"));
+    edgesToGridAction->setEnabled(canAlignSelectionToGrid());
+    QObject::connect(edgesToGridAction, &QAction::triggered, this, [this]() {
+      alignSelectionEdgesToGrid();
+    });
 
     auto *spaceMenu = menu.addMenu(QStringLiteral("Space Evenly"));
     addMenuAction(spaceMenu, QStringLiteral("Horizontal"));

@@ -131,14 +131,14 @@ int main(int argc, char *argv[])
   editMenu->addSeparator();
   auto *alignMenu = editMenu->addMenu("&Align");
   alignMenu->setFont(fixed13Font);
-  alignMenu->addAction("&Left");
-  alignMenu->addAction("&Horizontal Center");
-  alignMenu->addAction("&Right");
-  alignMenu->addAction("&Top");
-  alignMenu->addAction("&Vertical Center");
-  alignMenu->addAction("&Bottom");
-  alignMenu->addAction("Position to &Grid");
-  alignMenu->addAction("Ed&ges to Grid");
+  auto *alignLeftAct = alignMenu->addAction("&Left");
+  auto *alignHorizontalCenterAct = alignMenu->addAction("&Horizontal Center");
+  auto *alignRightAct = alignMenu->addAction("&Right");
+  auto *alignTopAct = alignMenu->addAction("&Top");
+  auto *alignVerticalCenterAct = alignMenu->addAction("&Vertical Center");
+  auto *alignBottomAct = alignMenu->addAction("&Bottom");
+  auto *positionToGridAct = alignMenu->addAction("Position to &Grid");
+  auto *edgesToGridAct = alignMenu->addAction("Ed&ges to Grid");
 
   auto *spaceMenu = editMenu->addMenu("Space &Evenly");
   spaceMenu->setFont(fixed13Font);
@@ -316,6 +316,54 @@ int main(int argc, char *argv[])
           active->ungroupSelectedElements();
         }
       });
+  QObject::connect(alignLeftAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionLeft();
+        }
+      });
+  QObject::connect(alignHorizontalCenterAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionHorizontalCenter();
+        }
+      });
+  QObject::connect(alignRightAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionRight();
+        }
+      });
+  QObject::connect(alignTopAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionTop();
+        }
+      });
+  QObject::connect(alignVerticalCenterAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionVerticalCenter();
+        }
+      });
+  QObject::connect(alignBottomAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionBottom();
+        }
+      });
+  QObject::connect(positionToGridAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionPositionToGrid();
+        }
+      });
+  QObject::connect(edgesToGridAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->alignSelectionEdgesToGrid();
+        }
+      });
   QObject::connect(toggleGridAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -364,7 +412,9 @@ int main(int argc, char *argv[])
 
   *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
     closeAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
-    ungroupAct, toggleGridAct, toggleSnapAct, gridSpacingAct]() {
+    ungroupAct, alignLeftAct, alignHorizontalCenterAct, alignRightAct,
+    alignTopAct, alignVerticalCenterAct, alignBottomAct, positionToGridAct,
+    edgesToGridAct, toggleGridAct, toggleSnapAct, gridSpacingAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -429,6 +479,17 @@ int main(int argc, char *argv[])
     const bool canUngroup = canEditActive && active && active->canUngroupSelection();
     groupAct->setEnabled(canGroup);
     ungroupAct->setEnabled(canUngroup);
+    const bool canAlign = canEditActive && active && active->canAlignSelection();
+    alignLeftAct->setEnabled(canAlign);
+    alignHorizontalCenterAct->setEnabled(canAlign);
+    alignRightAct->setEnabled(canAlign);
+    alignTopAct->setEnabled(canAlign);
+    alignVerticalCenterAct->setEnabled(canAlign);
+    alignBottomAct->setEnabled(canAlign);
+    const bool canAlignToGrid = canEditActive && active
+        && active->canAlignSelectionToGrid();
+    positionToGridAct->setEnabled(canAlignToGrid);
+    edgesToGridAct->setEnabled(canAlignToGrid);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

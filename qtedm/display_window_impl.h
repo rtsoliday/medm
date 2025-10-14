@@ -348,6 +348,262 @@ public:
     notifyMenus();
   }
 
+  void findOutliers()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return;
+    }
+
+    clearSelections();
+
+    const QSize areaSize = displayArea_->size();
+    const QRect visibleRect(QPoint(0, 0), areaSize);
+
+    struct OutlierRecord {
+      QWidget *widget = nullptr;
+      QRect rect;
+      bool total = false;
+    };
+
+    QList<OutlierRecord> outliers;
+
+    auto elementTypeName = [](QWidget *widget) -> QString {
+      if (!widget) {
+        return QStringLiteral("Unknown");
+      }
+      if (dynamic_cast<TextElement *>(widget)) {
+        return QStringLiteral("Text");
+      }
+      if (dynamic_cast<TextEntryElement *>(widget)) {
+        return QStringLiteral("Text Entry");
+      }
+      if (dynamic_cast<SliderElement *>(widget)) {
+        return QStringLiteral("Slider");
+      }
+      if (dynamic_cast<WheelSwitchElement *>(widget)) {
+        return QStringLiteral("Wheel Switch");
+      }
+      if (dynamic_cast<ChoiceButtonElement *>(widget)) {
+        return QStringLiteral("Choice Button");
+      }
+      if (dynamic_cast<MenuElement *>(widget)) {
+        return QStringLiteral("Menu");
+      }
+      if (dynamic_cast<MessageButtonElement *>(widget)) {
+        return QStringLiteral("Message Button");
+      }
+      if (dynamic_cast<ShellCommandElement *>(widget)) {
+        return QStringLiteral("Shell Command");
+      }
+      if (dynamic_cast<RelatedDisplayElement *>(widget)) {
+        return QStringLiteral("Related Display");
+      }
+      if (dynamic_cast<TextMonitorElement *>(widget)) {
+        return QStringLiteral("Text Monitor");
+      }
+      if (dynamic_cast<MeterElement *>(widget)) {
+        return QStringLiteral("Meter");
+      }
+      if (dynamic_cast<BarMonitorElement *>(widget)) {
+        return QStringLiteral("Bar Monitor");
+      }
+      if (dynamic_cast<ScaleMonitorElement *>(widget)) {
+        return QStringLiteral("Scale Monitor");
+      }
+      if (dynamic_cast<StripChartElement *>(widget)) {
+        return QStringLiteral("Strip Chart");
+      }
+      if (dynamic_cast<CartesianPlotElement *>(widget)) {
+        return QStringLiteral("Cartesian Plot");
+      }
+      if (dynamic_cast<ByteMonitorElement *>(widget)) {
+        return QStringLiteral("Byte Monitor");
+      }
+      if (dynamic_cast<RectangleElement *>(widget)) {
+        return QStringLiteral("Rectangle");
+      }
+      if (dynamic_cast<ImageElement *>(widget)) {
+        return QStringLiteral("Image");
+      }
+      if (dynamic_cast<OvalElement *>(widget)) {
+        return QStringLiteral("Oval");
+      }
+      if (dynamic_cast<ArcElement *>(widget)) {
+        return QStringLiteral("Arc");
+      }
+      if (dynamic_cast<LineElement *>(widget)) {
+        return QStringLiteral("Line");
+      }
+      if (dynamic_cast<PolylineElement *>(widget)) {
+        return QStringLiteral("Polyline");
+      }
+      if (dynamic_cast<PolygonElement *>(widget)) {
+        return QStringLiteral("Polygon");
+      }
+      if (dynamic_cast<CompositeElement *>(widget)) {
+        return QStringLiteral("Composite");
+      }
+      return QString::fromLatin1(widget->metaObject()->className());
+    };
+
+    auto considerWidget = [&](QWidget *widget) {
+      if (!widget) {
+        return;
+      }
+      const QRect rect = widgetDisplayRect(widget);
+      if (!rect.isValid()) {
+        return;
+      }
+      if (!visibleRect.intersects(rect)) {
+        outliers.append({widget, rect, true});
+        addWidgetToMultiSelection(widget);
+        return;
+      }
+      if (!visibleRect.contains(rect)) {
+        outliers.append({widget, rect, false});
+        addWidgetToMultiSelection(widget);
+      }
+    };
+
+    auto considerList = [&](const auto &list) {
+      for (auto *element : list) {
+        considerWidget(element);
+      }
+    };
+
+    considerList(textElements_);
+    considerList(textEntryElements_);
+    considerList(sliderElements_);
+    considerList(wheelSwitchElements_);
+    considerList(choiceButtonElements_);
+    considerList(menuElements_);
+    considerList(messageButtonElements_);
+    considerList(shellCommandElements_);
+    considerList(relatedDisplayElements_);
+    considerList(textMonitorElements_);
+    considerList(meterElements_);
+    considerList(barMonitorElements_);
+    considerList(scaleMonitorElements_);
+    considerList(stripChartElements_);
+    considerList(cartesianPlotElements_);
+    considerList(byteMonitorElements_);
+    considerList(rectangleElements_);
+    considerList(imageElements_);
+    considerList(ovalElements_);
+    considerList(arcElements_);
+    considerList(lineElements_);
+    considerList(polylineElements_);
+    considerList(polygonElements_);
+    considerList(compositeElements_);
+
+    int partialCount = 0;
+    int totalCount = 0;
+    for (const OutlierRecord &record : outliers) {
+      if (record.total) {
+        ++totalCount;
+      } else {
+        ++partialCount;
+      }
+    }
+
+    if (!outliers.isEmpty()) {
+      updateSelectionAfterMultiChange();
+    } else {
+      notifyMenus();
+    }
+
+    QString summary = QStringLiteral(
+        "There are %1 objects partially out of the visible display area.\n"
+        "There are %2 objects totally out of the visible display area.");
+    summary = summary.arg(partialCount).arg(totalCount);
+    if (!outliers.isEmpty()) {
+      summary.append(QStringLiteral(
+          "\n\nThese %1 objects are currently selected.")
+          .arg(outliers.size()));
+    }
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Information);
+    box.setWindowTitle(QStringLiteral("Find Outliers"));
+    box.setTextFormat(Qt::PlainText);
+    box.setText(summary);
+    box.setStandardButtons(QMessageBox::Ok);
+    QAbstractButton *listButton = nullptr;
+    if (!outliers.isEmpty()) {
+      listButton = box.addButton(QStringLiteral("List Them"),
+          QMessageBox::ActionRole);
+    }
+    box.exec();
+
+    if (listButton && box.clickedButton() == listButton) {
+      QString detail = QStringLiteral("Outliers:\n"
+          "Display width=%1  Display height=%2\n")
+          .arg(visibleRect.width())
+          .arg(visibleRect.height());
+      for (const OutlierRecord &record : outliers) {
+        detail.append(QStringLiteral("%1: x=%2 y=%3 width=%4 height=%5 %6\n")
+            .arg(elementTypeName(record.widget))
+            .arg(record.rect.x())
+            .arg(record.rect.y())
+            .arg(record.rect.width())
+            .arg(record.rect.height())
+            .arg(record.total ? QStringLiteral("(total)")
+                               : QStringLiteral("(partial)")));
+      }
+      QMessageBox detailBox(this);
+      detailBox.setIcon(QMessageBox::Information);
+      detailBox.setWindowTitle(QStringLiteral("Outliers"));
+      detailBox.setTextFormat(Qt::PlainText);
+      detailBox.setText(detail.trimmed());
+      detailBox.addButton(QMessageBox::Ok);
+      detailBox.exec();
+    }
+
+  }
+
+  void refreshDisplayView()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !displayArea_) {
+      return;
+    }
+
+    if (!state->editMode) {
+      displayArea_->update();
+      for (const auto &entry : elementStack_) {
+        if (QWidget *widget = entry.data()) {
+          widget->update();
+        }
+      }
+      return;
+    }
+
+    for (const auto &entry : elementStack_) {
+      QWidget *widget = entry.data();
+      if (!widget) {
+        continue;
+      }
+      if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+        const QList<QWidget *> children = composite->childWidgets();
+        for (QWidget *child : children) {
+          if (child) {
+            child->raise();
+            child->update();
+          }
+        }
+      }
+      widget->raise();
+      widget->update();
+    }
+
+    displayArea_->update();
+    refreshResourcePaletteGeometry();
+    notifyMenus();
+  }
+
   void cutSelection()
   {
     copySelectionInternal(true);
@@ -9937,8 +10193,16 @@ private:
     });
 
     menu.addSeparator();
-    addMenuAction(&menu, QStringLiteral("Find Outliers"));
-    addMenuAction(&menu, QStringLiteral("Refresh"));
+    auto *findOutliersAction =
+        addMenuAction(&menu, QStringLiteral("Find Outliers"));
+    QObject::connect(findOutliersAction, &QAction::triggered, this,
+        [this]() {
+          findOutliers();
+        });
+    auto *refreshAction = addMenuAction(&menu, QStringLiteral("Refresh"));
+    QObject::connect(refreshAction, &QAction::triggered, this, [this]() {
+      refreshDisplayView();
+    });
     addMenuAction(&menu, QStringLiteral("Edit Summary..."));
 
     menu.exec(globalPos);

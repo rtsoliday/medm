@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
 #include <QByteArray>

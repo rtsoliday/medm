@@ -176,12 +176,12 @@ int main(int argc, char *argv[])
   toggleSnapAct->setCheckable(true);
 
   editMenu->addSeparator();
-  editMenu->addAction("U&nselect");
-  editMenu->addAction("Select &All");
-  editMenu->addAction("Select &Display");
+  auto *unselectAct = editMenu->addAction("U&nselect");
+  auto *selectAllAct = editMenu->addAction("Select &All");
+  auto *selectDisplayAct = editMenu->addAction("Select &Display");
   editMenu->addSeparator();
-  editMenu->addAction("Find &Outliers");
-  editMenu->addAction("&Refresh");
+  auto *findOutliersAct = editMenu->addAction("Find &Outliers");
+  auto *refreshAct = editMenu->addAction("&Refresh");
   editMenu->addAction("Edit &Summary...");
 
   editMenu->setEnabled(false);
@@ -457,6 +457,36 @@ int main(int argc, char *argv[])
           active->promptForGridSpacing();
         }
       });
+  QObject::connect(unselectAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->clearSelection();
+        }
+      });
+  QObject::connect(selectAllAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->selectAllElements();
+        }
+      });
+  QObject::connect(selectDisplayAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->selectDisplayElement();
+        }
+      });
+  QObject::connect(findOutliersAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->findOutliers();
+        }
+      });
+  QObject::connect(refreshAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->refreshDisplayView();
+        }
+      });
   QObject::connect(saveAsAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -493,7 +523,8 @@ int main(int argc, char *argv[])
     centerHorizontalAct, centerVerticalAct, centerBothAct,
     flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
     rotateCounterclockwiseAct, sameSizeAct, textToContentsAct, toggleGridAct, toggleSnapAct,
-    gridSpacingAct]() {
+    gridSpacingAct, unselectAct, selectAllAct, selectDisplayAct,
+    findOutliersAct, refreshAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -593,6 +624,12 @@ int main(int argc, char *argv[])
         && active->canSizeSelectionTextToContents();
     sameSizeAct->setEnabled(canSizeSame);
     textToContentsAct->setEnabled(canSizeContents);
+    const bool canOperateSelection = canEditActive && active;
+    unselectAct->setEnabled(canOperateSelection);
+    selectAllAct->setEnabled(canOperateSelection);
+    selectDisplayAct->setEnabled(canOperateSelection);
+    findOutliersAct->setEnabled(canOperateSelection);
+    refreshAct->setEnabled(canOperateSelection);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

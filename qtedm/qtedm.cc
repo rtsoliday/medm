@@ -156,10 +156,11 @@ int main(int argc, char *argv[])
 
   auto *orientMenu = editMenu->addMenu("&Orient");
   orientMenu->setFont(fixed13Font);
-  orientMenu->addAction("Flip &Horizontally");
-  orientMenu->addAction("Flip &Vertically");
-  orientMenu->addAction("Rotate &Clockwise");
-  orientMenu->addAction("Rotate &Counterclockwise");
+  auto *flipHorizontalAct = orientMenu->addAction("Flip &Horizontally");
+  auto *flipVerticalAct = orientMenu->addAction("Flip &Vertically");
+  auto *rotateClockwiseAct = orientMenu->addAction("Rotate &Clockwise");
+  auto *rotateCounterclockwiseAct =
+      orientMenu->addAction("Rotate &Counterclockwise");
 
   auto *sizeMenu = editMenu->addMenu("&Size");
   sizeMenu->setFont(fixed13Font);
@@ -402,6 +403,30 @@ int main(int argc, char *argv[])
           active->centerSelectionInDisplayBoth();
         }
       });
+  QObject::connect(flipHorizontalAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->orientSelectionFlipHorizontal();
+        }
+      });
+  QObject::connect(flipVerticalAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->orientSelectionFlipVertical();
+        }
+      });
+  QObject::connect(rotateClockwiseAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->rotateSelectionClockwise();
+        }
+      });
+  QObject::connect(rotateCounterclockwiseAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->rotateSelectionCounterclockwise();
+        }
+      });
   QObject::connect(toggleGridAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -454,7 +479,9 @@ int main(int argc, char *argv[])
     alignTopAct, alignVerticalCenterAct, alignBottomAct, positionToGridAct,
     edgesToGridAct, spaceHorizontalAct, spaceVerticalAct, space2DAct,
     centerHorizontalAct, centerVerticalAct, centerBothAct,
-    toggleGridAct, toggleSnapAct, gridSpacingAct]() {
+    flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
+    rotateCounterclockwiseAct, toggleGridAct, toggleSnapAct,
+    gridSpacingAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -542,6 +569,12 @@ int main(int argc, char *argv[])
     centerHorizontalAct->setEnabled(canCenter);
     centerVerticalAct->setEnabled(canCenter);
     centerBothAct->setEnabled(canCenter);
+    const bool canOrient = canEditActive && active
+        && active->canOrientSelection();
+    flipHorizontalAct->setEnabled(canOrient);
+    flipVerticalAct->setEnabled(canOrient);
+    rotateClockwiseAct->setEnabled(canOrient);
+    rotateCounterclockwiseAct->setEnabled(canOrient);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

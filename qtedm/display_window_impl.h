@@ -612,6 +612,13 @@ private:
     kBottom,
   };
 
+  enum class OrientationAction {
+    kFlipHorizontal,
+    kFlipVertical,
+    kRotateClockwise,
+    kRotateCounterclockwise,
+  };
+
 public:
   void alignSelectionLeft()
   {
@@ -656,6 +663,26 @@ public:
   void centerSelectionInDisplayBoth()
   {
     centerSelectionInDisplayInternal(true, true);
+  }
+
+  void orientSelectionFlipHorizontal()
+  {
+    orientSelectionInternal(OrientationAction::kFlipHorizontal);
+  }
+
+  void orientSelectionFlipVertical()
+  {
+    orientSelectionInternal(OrientationAction::kFlipVertical);
+  }
+
+  void rotateSelectionClockwise()
+  {
+    orientSelectionInternal(OrientationAction::kRotateClockwise);
+  }
+
+  void rotateSelectionCounterclockwise()
+  {
+    orientSelectionInternal(OrientationAction::kRotateCounterclockwise);
   }
 
   void alignSelectionPositionToGrid()
@@ -751,6 +778,15 @@ public:
   {
     auto state = state_.lock();
     if (!state || !state->editMode || gridSpacing_ <= 0) {
+      return false;
+    }
+    return !alignableWidgets().isEmpty();
+  }
+
+  bool canOrientSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
       return false;
     }
     return !alignableWidgets().isEmpty();
@@ -6604,6 +6640,354 @@ private:
     }
   }
 
+  void orientSelectionInternal(OrientationAction action)
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || !displayArea_) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.isEmpty()) {
+      return;
+    }
+
+    int minLeft = std::numeric_limits<int>::max();
+    int minTop = std::numeric_limits<int>::max();
+    int maxRight = std::numeric_limits<int>::min();
+    int maxBottom = std::numeric_limits<int>::min();
+
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      const QRect rect = widgetDisplayRect(widget);
+      minLeft = std::min(minLeft, rect.left());
+      minTop = std::min(minTop, rect.top());
+      maxRight = std::max(maxRight, rect.left() + rect.width());
+      maxBottom = std::max(maxBottom, rect.top() + rect.height());
+    }
+
+    if (minLeft == std::numeric_limits<int>::max()
+        || minTop == std::numeric_limits<int>::max()
+        || maxRight == std::numeric_limits<int>::min()
+        || maxBottom == std::numeric_limits<int>::min()) {
+      return;
+    }
+
+    const int centerX = (minLeft + maxRight) / 2;
+    const int centerY = (minTop + maxBottom) / 2;
+
+    bool anyChanged = false;
+    QSet<QWidget *> orientedWidgets;
+    orientedWidgets.reserve(widgets.size());
+
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      if (orientedWidgets.contains(widget)) {
+        continue;
+      }
+      if (applyOrientationToWidget(widget, action, centerX, centerY,
+              &orientedWidgets)) {
+        anyChanged = true;
+      }
+    }
+
+    if (anyChanged) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
+  QRect orientedRect(const QRect &rect, OrientationAction action, int centerX,
+      int centerY) const
+  {
+    const int left = rect.left();
+    const int top = rect.top();
+    const int width = rect.width();
+    const int height = rect.height();
+
+    int newLeft = left;
+    int newTop = top;
+    int newWidth = width;
+    int newHeight = height;
+
+    switch (action) {
+    case OrientationAction::kFlipHorizontal:
+      newLeft = 2 * centerX - left - width;
+      break;
+    case OrientationAction::kFlipVertical:
+      newTop = 2 * centerY - top - height;
+      break;
+    case OrientationAction::kRotateClockwise:
+      newLeft = centerX - top + centerY - height;
+      newTop = centerY + left - centerX;
+      newWidth = height;
+      newHeight = width;
+      break;
+    case OrientationAction::kRotateCounterclockwise:
+      newLeft = centerX + top - centerY;
+      newTop = centerY - left + centerX - width;
+      newWidth = height;
+      newHeight = width;
+      break;
+    }
+
+    newLeft = std::max(0, newLeft);
+    newTop = std::max(0, newTop);
+    newWidth = std::max(1, newWidth);
+    newHeight = std::max(1, newHeight);
+
+    return QRect(QPoint(newLeft, newTop), QSize(newWidth, newHeight));
+  }
+
+  QPoint orientedPoint(const QPoint &point, OrientationAction action,
+      int centerX, int centerY) const
+  {
+    int x = point.x();
+    int y = point.y();
+
+    switch (action) {
+    case OrientationAction::kFlipHorizontal:
+      x = 2 * centerX - x;
+      break;
+    case OrientationAction::kFlipVertical:
+      y = 2 * centerY - y;
+      break;
+    case OrientationAction::kRotateClockwise: {
+      const int newX = centerX - y + centerY;
+      const int newY = centerY + x - centerX;
+      x = newX;
+      y = newY;
+      break;
+    }
+    case OrientationAction::kRotateCounterclockwise: {
+      const int newX = centerX + y - centerY;
+      const int newY = centerY - x + centerX;
+      x = newX;
+      y = newY;
+      break;
+    }
+    }
+
+    x = std::max(0, x);
+    y = std::max(0, y);
+    return QPoint(x, y);
+  }
+
+  bool orientGenericWidget(QWidget *widget, OrientationAction action,
+      int centerX, int centerY)
+  {
+    if (!widget) {
+      return false;
+    }
+    const QRect currentRect = widgetDisplayRect(widget);
+    const QRect targetRect =
+        orientedRect(currentRect, action, centerX, centerY);
+    if (targetRect == currentRect) {
+      return false;
+    }
+    setWidgetDisplayRect(widget, targetRect);
+    widget->update();
+    return true;
+  }
+
+  bool orientLineElement(LineElement *line, OrientationAction action,
+      int centerX, int centerY)
+  {
+    if (!line || !displayArea_) {
+      return false;
+    }
+
+    const QVector<QPoint> parentPoints = line->absolutePoints();
+    if (parentPoints.size() < 2) {
+      return false;
+    }
+
+    QVector<QPoint> displayPoints;
+    displayPoints.reserve(parentPoints.size());
+    const QPoint topLeftInParent = line->geometry().topLeft();
+    for (const QPoint &point : parentPoints) {
+      const QPoint localPoint = point - topLeftInParent;
+      displayPoints.append(line->mapTo(displayArea_, localPoint));
+    }
+
+    QVector<QPoint> orientedPoints;
+    orientedPoints.reserve(displayPoints.size());
+    for (const QPoint &point : displayPoints) {
+      orientedPoints.append(orientedPoint(point, action, centerX, centerY));
+    }
+
+    if (displayPoints == orientedPoints) {
+      return false;
+    }
+
+    int minX = std::numeric_limits<int>::max();
+    int minY = std::numeric_limits<int>::max();
+    int maxX = std::numeric_limits<int>::min();
+    int maxY = std::numeric_limits<int>::min();
+    for (const QPoint &point : orientedPoints) {
+      minX = std::min(minX, point.x());
+      minY = std::min(minY, point.y());
+      maxX = std::max(maxX, point.x());
+      maxY = std::max(maxY, point.y());
+    }
+
+    if (minX == std::numeric_limits<int>::max()
+        || minY == std::numeric_limits<int>::max()
+        || maxX == std::numeric_limits<int>::min()
+        || maxY == std::numeric_limits<int>::min()) {
+      return false;
+    }
+
+    const int width = std::max(1, maxX - minX + 1);
+    const int height = std::max(1, maxY - minY + 1);
+    const QRect targetRect(QPoint(minX, minY), QSize(width, height));
+    setWidgetDisplayRect(line, targetRect);
+
+    const QPoint startLocal = orientedPoints.first() - targetRect.topLeft();
+    const QPoint endLocal = orientedPoints.last() - targetRect.topLeft();
+    line->setLocalEndpoints(startLocal, endLocal);
+    line->update();
+    return true;
+  }
+
+  template <typename Element>
+  bool orientElementWithAbsolutePoints(Element *element,
+      OrientationAction action, int centerX, int centerY)
+  {
+    if (!element || !displayArea_) {
+      return false;
+    }
+
+    const QVector<QPoint> parentPoints = element->absolutePoints();
+    if (parentPoints.isEmpty()) {
+      return false;
+    }
+
+    QVector<QPoint> displayPoints;
+    displayPoints.reserve(parentPoints.size());
+    const QPoint topLeftInParent = element->geometry().topLeft();
+    for (const QPoint &point : parentPoints) {
+      const QPoint localPoint = point - topLeftInParent;
+      displayPoints.append(element->mapTo(displayArea_, localPoint));
+    }
+
+    QVector<QPoint> orientedPoints;
+    orientedPoints.reserve(displayPoints.size());
+    for (const QPoint &point : displayPoints) {
+      orientedPoints.append(orientedPoint(point, action, centerX, centerY));
+    }
+
+    if (displayPoints == orientedPoints) {
+      return false;
+    }
+
+    QWidget *parent = element->parentWidget();
+    QVector<QPoint> parentCoordinates;
+    parentCoordinates.reserve(orientedPoints.size());
+    for (const QPoint &point : orientedPoints) {
+      if (parent) {
+        parentCoordinates.append(parent->mapFrom(displayArea_, point));
+      } else {
+        parentCoordinates.append(point);
+      }
+    }
+
+    element->setAbsolutePoints(parentCoordinates);
+    element->update();
+    return true;
+  }
+
+  bool orientArcElement(ArcElement *arc, OrientationAction action,
+      int centerX, int centerY)
+  {
+    if (!arc) {
+      return false;
+    }
+
+    constexpr int kFullCircle = 360 * 64;
+    constexpr int kHalfCircle = 180 * 64;
+    constexpr int kQuarterCircle = 90 * 64;
+
+    int begin = arc->beginAngle();
+    const int path = arc->pathAngle();
+
+    switch (action) {
+    case OrientationAction::kFlipHorizontal:
+      begin = kHalfCircle - begin;
+      begin -= path;
+      break;
+    case OrientationAction::kFlipVertical:
+      begin = -begin;
+      begin -= path;
+      break;
+    case OrientationAction::kRotateClockwise:
+      begin -= kQuarterCircle;
+      break;
+    case OrientationAction::kRotateCounterclockwise:
+      begin += kQuarterCircle;
+      break;
+    }
+
+    while (begin >= kFullCircle) {
+      begin -= kFullCircle;
+    }
+    while (begin < 0) {
+      begin += kFullCircle;
+    }
+
+    const bool angleChanged = begin != arc->beginAngle();
+    if (angleChanged) {
+      arc->setBeginAngle(begin);
+    }
+
+    const bool rectChanged =
+        orientGenericWidget(arc, action, centerX, centerY);
+    return angleChanged || rectChanged;
+  }
+
+  bool applyOrientationToWidget(QWidget *widget, OrientationAction action,
+      int centerX, int centerY, QSet<QWidget *> *orientedWidgets)
+  {
+    if (!widget) {
+      return false;
+    }
+
+    bool changed = false;
+    if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+      for (QWidget *child : composite->childWidgets()) {
+        if (!child) {
+          continue;
+        }
+        changed |= applyOrientationToWidget(child, action, centerX, centerY,
+            orientedWidgets);
+      }
+      changed |= orientGenericWidget(composite, action, centerX, centerY);
+    } else if (auto *line = dynamic_cast<LineElement *>(widget)) {
+      changed |= orientLineElement(line, action, centerX, centerY);
+    } else if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+      changed |= orientElementWithAbsolutePoints(polyline, action, centerX,
+          centerY);
+    } else if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+      changed |= orientElementWithAbsolutePoints(polygon, action, centerX,
+          centerY);
+    } else if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+      changed |= orientArcElement(arc, action, centerX, centerY);
+    } else {
+      changed |= orientGenericWidget(widget, action, centerX, centerY);
+    }
+
+    if (orientedWidgets) {
+      orientedWidgets->insert(widget);
+    }
+    return changed;
+  }
+
   void centerSelectionInDisplayInternal(bool horizontal, bool vertical)
   {
     if (!horizontal && !vertical) {
@@ -8896,10 +9280,34 @@ private:
     });
 
     auto *orientMenu = menu.addMenu(QStringLiteral("Orient"));
-    addMenuAction(orientMenu, QStringLiteral("Flip Horizontally"));
-    addMenuAction(orientMenu, QStringLiteral("Flip Vertically"));
-    addMenuAction(orientMenu, QStringLiteral("Rotate Clockwise"));
-    addMenuAction(orientMenu, QStringLiteral("Rotate Counterclockwise"));
+    auto *flipHorizontalAction =
+        addMenuAction(orientMenu, QStringLiteral("Flip Horizontally"));
+    flipHorizontalAction->setEnabled(canOrientSelection());
+    QObject::connect(flipHorizontalAction, &QAction::triggered, this,
+        [this]() {
+          orientSelectionFlipHorizontal();
+        });
+    auto *flipVerticalAction =
+        addMenuAction(orientMenu, QStringLiteral("Flip Vertically"));
+    flipVerticalAction->setEnabled(canOrientSelection());
+    QObject::connect(flipVerticalAction, &QAction::triggered, this,
+        [this]() {
+          orientSelectionFlipVertical();
+        });
+    auto *rotateClockwiseAction =
+        addMenuAction(orientMenu, QStringLiteral("Rotate Clockwise"));
+    rotateClockwiseAction->setEnabled(canOrientSelection());
+    QObject::connect(rotateClockwiseAction, &QAction::triggered, this,
+        [this]() {
+          rotateSelectionClockwise();
+        });
+    auto *rotateCounterclockwiseAction =
+        addMenuAction(orientMenu, QStringLiteral("Rotate Counterclockwise"));
+    rotateCounterclockwiseAction->setEnabled(canOrientSelection());
+    QObject::connect(rotateCounterclockwiseAction, &QAction::triggered, this,
+        [this]() {
+          rotateSelectionCounterclockwise();
+        });
 
     auto *sizeMenu = menu.addMenu(QStringLiteral("Size"));
     addMenuAction(sizeMenu, QStringLiteral("Same Size"));

@@ -653,6 +653,21 @@ public:
     alignSelectionToGridInternal(true);
   }
 
+  void spaceSelectionHorizontal()
+  {
+    spaceSelectionLinear(Qt::Horizontal);
+  }
+
+  void spaceSelectionVertical()
+  {
+    spaceSelectionLinear(Qt::Vertical);
+  }
+
+  void spaceSelection2D()
+  {
+    spaceSelection2DInternal();
+  }
+
   bool canRaiseSelection() const
   {
     auto state = state_.lock();
@@ -724,6 +739,20 @@ public:
       return false;
     }
     return !alignableWidgets().isEmpty();
+  }
+
+  bool canSpaceSelection() const
+  {
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return false;
+    }
+    return alignableWidgets().size() >= 2;
+  }
+
+  bool canSpaceSelection2D() const
+  {
+    return canSpaceSelection();
   }
 
   bool hasCopyableSelection() const
@@ -6618,6 +6647,253 @@ private:
     }
   }
 
+  void spaceSelectionLinear(Qt::Orientation orientation)
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.size() < 2) {
+      return;
+    }
+
+    struct Entry {
+      QWidget *widget = nullptr;
+      QRect rect;
+    };
+
+    QVector<Entry> entries;
+    entries.reserve(widgets.size());
+    for (QWidget *widget : widgets) {
+      const QRect rect = widgetDisplayRect(widget);
+      if (!rect.isValid()) {
+        continue;
+      }
+      entries.append({widget, rect});
+    }
+
+    if (entries.size() < 2) {
+      return;
+    }
+
+    std::sort(entries.begin(), entries.end(),
+        [orientation](const Entry &lhs, const Entry &rhs) {
+          if (orientation == Qt::Horizontal) {
+            if (lhs.rect.left() == rhs.rect.left()) {
+              return lhs.rect.top() < rhs.rect.top();
+            }
+            return lhs.rect.left() < rhs.rect.left();
+          }
+          if (lhs.rect.top() == rhs.rect.top()) {
+            return lhs.rect.left() < rhs.rect.left();
+          }
+          return lhs.rect.top() < rhs.rect.top();
+        });
+
+    const int spacing = std::max(0, gridSpacing_);
+    bool anyChanged = false;
+    bool firstEntry = true;
+    int nextCoordinate = 0;
+
+    for (auto &entry : entries) {
+      QRect rect = entry.rect;
+      bool entryChanged = false;
+
+      if (firstEntry) {
+        nextCoordinate = orientation == Qt::Horizontal ? rect.left()
+                                                       : rect.top();
+        firstEntry = false;
+      } else {
+        const int target = nextCoordinate;
+        if (orientation == Qt::Horizontal) {
+          if (rect.left() != target) {
+            rect.moveLeft(target);
+            entryChanged = true;
+          }
+        } else {
+          if (rect.top() != target) {
+            rect.moveTop(target);
+            entryChanged = true;
+          }
+        }
+      }
+
+      if (entryChanged) {
+        setWidgetDisplayRect(entry.widget, rect);
+        entry.rect = rect;
+        anyChanged = true;
+      }
+
+      if (orientation == Qt::Horizontal) {
+        nextCoordinate = rect.left() + rect.width() + spacing;
+      } else {
+        nextCoordinate = rect.top() + rect.height() + spacing;
+      }
+    }
+
+    if (anyChanged) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
+  void spaceSelection2DInternal()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode) {
+      return;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.size() < 2) {
+      return;
+    }
+
+    struct Entry {
+      QWidget *widget = nullptr;
+      QRect rect;
+    };
+
+    QVector<Entry> entries;
+    entries.reserve(widgets.size());
+    for (QWidget *widget : widgets) {
+      const QRect rect = widgetDisplayRect(widget);
+      if (!rect.isValid()) {
+        continue;
+      }
+      entries.append({widget, rect});
+    }
+
+    if (entries.size() < 2) {
+      return;
+    }
+
+    int minX = std::numeric_limits<int>::max();
+    int minY = std::numeric_limits<int>::max();
+    int maxY = std::numeric_limits<int>::min();
+    int totalHeight = 0;
+    int elementCount = 0;
+    int maxRowCount = 1;
+
+    for (int i = 0; i < entries.size(); ++i) {
+      const QRect &rect = entries.at(i).rect;
+      minX = std::min(minX, rect.left());
+      minY = std::min(minY, rect.top());
+      maxY = std::max(maxY, rect.top() + rect.height());
+      totalHeight += rect.height();
+      ++elementCount;
+
+      const int xLeft = rect.left();
+      const int xRight = rect.left() + rect.width();
+      int overlapping = 0;
+      for (const Entry &other : std::as_const(entries)) {
+        const int xCenter =
+            other.rect.left() + other.rect.width() / 2;
+        if (xCenter >= xLeft && xCenter <= xRight) {
+          ++overlapping;
+        }
+      }
+      if (overlapping > maxRowCount) {
+        maxRowCount = overlapping;
+      }
+    }
+
+    if (elementCount < 1 || minX == std::numeric_limits<int>::max()
+        || minY == std::numeric_limits<int>::max()) {
+      return;
+    }
+
+    const int spacing = std::max(0, gridSpacing_);
+    const int averageHeight =
+        std::max(1, (totalHeight + elementCount / 2) / elementCount);
+    const int deltaYRaw = maxY - minY;
+    int deltaY = maxRowCount > 0
+        ? ((deltaYRaw + maxRowCount - 1) / maxRowCount)
+        : deltaYRaw;
+    if (deltaY <= 0) {
+      deltaY = averageHeight;
+    }
+    if (deltaY <= 0) {
+      deltaY = 1;
+    }
+    if (maxRowCount <= 0) {
+      maxRowCount = 1;
+    }
+
+    QVector<QVector<int>> rows(maxRowCount);
+    for (int index = 0; index < entries.size(); ++index) {
+      const QRect &rect = entries.at(index).rect;
+      const int centerY = rect.top() + rect.height() / 2;
+      int rowIndex = 0;
+      if (deltaY > 0) {
+        rowIndex = (centerY - minY) / deltaY;
+      }
+      if (rowIndex < 0) {
+        rowIndex = 0;
+      } else if (rowIndex >= maxRowCount) {
+        rowIndex = maxRowCount - 1;
+      }
+      rows[rowIndex].append(index);
+    }
+
+    bool anyChanged = false;
+    const int rowStep = std::max(1, averageHeight + spacing);
+
+    for (int row = 0; row < rows.size(); ++row) {
+      auto &indices = rows[row];
+      if (indices.isEmpty()) {
+        continue;
+      }
+
+      std::sort(indices.begin(), indices.end(),
+          [&entries](int lhs, int rhs) {
+            const QRect &leftRect = entries.at(lhs).rect;
+            const QRect &rightRect = entries.at(rhs).rect;
+            if (leftRect.left() == rightRect.left()) {
+              return leftRect.top() < rightRect.top();
+            }
+            return leftRect.left() < rightRect.left();
+          });
+
+      int currentX = minX;
+      const int targetTop = minY + row * rowStep;
+
+      for (int idx : std::as_const(indices)) {
+        auto &entry = entries[idx];
+        QRect rect = entry.rect;
+        bool entryChanged = false;
+
+        if (rect.left() != currentX) {
+          rect.moveLeft(currentX);
+          entryChanged = true;
+        }
+        if (rect.top() != targetTop) {
+          rect.moveTop(targetTop);
+          entryChanged = true;
+        }
+
+        if (entryChanged) {
+          setWidgetDisplayRect(entry.widget, rect);
+          entry.rect = rect;
+          anyChanged = true;
+        }
+
+        currentX = rect.left() + rect.width() + spacing;
+      }
+    }
+
+    if (anyChanged) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
   static int snapCoordinateToGrid(int value, int spacing)
   {
     if (spacing <= 0) {
@@ -8488,9 +8764,25 @@ private:
     });
 
     auto *spaceMenu = menu.addMenu(QStringLiteral("Space Evenly"));
-    addMenuAction(spaceMenu, QStringLiteral("Horizontal"));
-    addMenuAction(spaceMenu, QStringLiteral("Vertical"));
-    addMenuAction(spaceMenu, QStringLiteral("2-D"));
+    auto *spaceHorizontalAction =
+        addMenuAction(spaceMenu, QStringLiteral("Horizontal"));
+    spaceHorizontalAction->setEnabled(canSpaceSelection());
+    QObject::connect(spaceHorizontalAction, &QAction::triggered, this,
+        [this]() {
+          spaceSelectionHorizontal();
+        });
+    auto *spaceVerticalAction =
+        addMenuAction(spaceMenu, QStringLiteral("Vertical"));
+    spaceVerticalAction->setEnabled(canSpaceSelection());
+    QObject::connect(spaceVerticalAction, &QAction::triggered, this, [this]() {
+      spaceSelectionVertical();
+    });
+    auto *space2DAction =
+        addMenuAction(spaceMenu, QStringLiteral("2-D"));
+    space2DAction->setEnabled(canSpaceSelection2D());
+    QObject::connect(space2DAction, &QAction::triggered, this, [this]() {
+      spaceSelection2D();
+    });
 
     auto *centerMenu = menu.addMenu(QStringLiteral("Center"));
     addMenuAction(centerMenu, QStringLiteral("Horizontally in Display"));

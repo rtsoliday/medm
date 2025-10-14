@@ -142,9 +142,9 @@ int main(int argc, char *argv[])
 
   auto *spaceMenu = editMenu->addMenu("Space &Evenly");
   spaceMenu->setFont(fixed13Font);
-  spaceMenu->addAction("&Horizontal");
-  spaceMenu->addAction("&Vertical");
-  spaceMenu->addAction("&2-D");
+  auto *spaceHorizontalAct = spaceMenu->addAction("&Horizontal");
+  auto *spaceVerticalAct = spaceMenu->addAction("&Vertical");
+  auto *space2DAct = spaceMenu->addAction("&2-D");
 
   auto *centerMenu = editMenu->addMenu("&Center");
   centerMenu->setFont(fixed13Font);
@@ -364,6 +364,24 @@ int main(int argc, char *argv[])
           active->alignSelectionEdgesToGrid();
         }
       });
+  QObject::connect(spaceHorizontalAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->spaceSelectionHorizontal();
+        }
+      });
+  QObject::connect(spaceVerticalAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->spaceSelectionVertical();
+        }
+      });
+  QObject::connect(space2DAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->spaceSelection2D();
+        }
+      });
   QObject::connect(toggleGridAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -414,7 +432,8 @@ int main(int argc, char *argv[])
     closeAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
     ungroupAct, alignLeftAct, alignHorizontalCenterAct, alignRightAct,
     alignTopAct, alignVerticalCenterAct, alignBottomAct, positionToGridAct,
-    edgesToGridAct, toggleGridAct, toggleSnapAct, gridSpacingAct]() {
+    edgesToGridAct, spaceHorizontalAct, spaceVerticalAct, space2DAct,
+    toggleGridAct, toggleSnapAct, gridSpacingAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -490,6 +509,13 @@ int main(int argc, char *argv[])
         && active->canAlignSelectionToGrid();
     positionToGridAct->setEnabled(canAlignToGrid);
     edgesToGridAct->setEnabled(canAlignToGrid);
+    const bool canSpace = canEditActive && active
+        && active->canSpaceSelection();
+    const bool canSpace2D = canEditActive && active
+        && active->canSpaceSelection2D();
+    spaceHorizontalAct->setEnabled(canSpace);
+    spaceVerticalAct->setEnabled(canSpace);
+    space2DAct->setEnabled(canSpace2D);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

@@ -4,6 +4,8 @@
 #include <QStringConverter>
 #endif
 
+#include <cmath>
+
 inline void setUtf8Encoding(QTextStream &stream)
 {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -1284,43 +1286,82 @@ protected:
   {
     setAsActiveDisplay();
     if (event->button() == Qt::MiddleButton) {
+      const bool control = event->modifiers().testFlag(Qt::ControlModifier);
       if (auto state = state_.lock(); state && state->editMode
           && state->createTool == CreateTool::kNone) {
         QWidget *hitWidget = elementAt(event->pos());
-        if (!multiSelection_.isEmpty()) {
-          if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
-            beginMiddleButtonDrag(event->pos());
+        if (control) {
+          if (!multiSelection_.isEmpty()) {
+            if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
+              beginMiddleButtonResize(event->pos());
+              event->accept();
+              return;
+            }
+            if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
+              if (selectWidgetForEditing(hitWidget)) {
+                beginMiddleButtonResize(event->pos());
+                event->accept();
+                return;
+              }
+            }
             event->accept();
             return;
           }
-          if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
+          QWidget *selectedWidget = currentSelectedWidget();
+          if (!selectedWidget && hitWidget) {
             if (selectWidgetForEditing(hitWidget)) {
+              selectedWidget = currentSelectedWidget();
+            }
+          } else if (hitWidget && hitWidget != selectedWidget) {
+            if (selectWidgetForEditing(hitWidget)) {
+              selectedWidget = currentSelectedWidget();
+            }
+          }
+          if (selectedWidget && hitWidget == selectedWidget) {
+            beginMiddleButtonResize(event->pos());
+            event->accept();
+            return;
+          }
+          if (!selectedWidget && !hitWidget) {
+            event->accept();
+            return;
+          }
+        } else {
+          if (!multiSelection_.isEmpty()) {
+            if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
               beginMiddleButtonDrag(event->pos());
               event->accept();
               return;
             }
+            if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
+              if (selectWidgetForEditing(hitWidget)) {
+                beginMiddleButtonDrag(event->pos());
+                event->accept();
+                return;
+              }
+            }
+            event->accept();
+            return;
           }
-          event->accept();
-          return;
-        }
-        QWidget *selectedWidget = currentSelectedWidget();
-        if (!selectedWidget && hitWidget) {
-          if (selectWidgetForEditing(hitWidget)) {
-            selectedWidget = currentSelectedWidget();
+          QWidget *selectedWidget = currentSelectedWidget();
+          if (!selectedWidget && hitWidget) {
+            if (selectWidgetForEditing(hitWidget)) {
+              selectedWidget = currentSelectedWidget();
+            }
+          } else if (hitWidget && hitWidget != selectedWidget) {
+            if (selectWidgetForEditing(hitWidget)) {
+              selectedWidget = currentSelectedWidget();
+            }
           }
-        } else if (hitWidget && hitWidget != selectedWidget) {
-          if (selectWidgetForEditing(hitWidget)) {
-            selectedWidget = currentSelectedWidget();
+          if (selectedWidget && hitWidget == selectedWidget) {
+            beginMiddleButtonDrag(event->pos());
+            event->accept();
+            return;
           }
-        }
-        if (selectedWidget && hitWidget == selectedWidget) {
-          beginMiddleButtonDrag(event->pos());
-          event->accept();
-          return;
-        }
-        if (!selectedWidget && !hitWidget) {
-          event->accept();
-          return;
+          if (!selectedWidget && !hitWidget) {
+            event->accept();
+            return;
+          }
         }
       }
     }
@@ -1445,6 +1486,11 @@ protected:
 
   void mouseMoveEvent(QMouseEvent *event) override
   {
+    if (middleButtonResizeActive_ && (event->buttons() & Qt::MiddleButton)) {
+      updateMiddleButtonResize(event->pos());
+      event->accept();
+      return;
+    }
     if (middleButtonDragActive_ && (event->buttons() & Qt::MiddleButton)) {
       updateMiddleButtonDrag(event->pos());
       event->accept();
@@ -1502,6 +1548,11 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override
   {
     if (event->button() == Qt::MiddleButton) {
+      if (middleButtonResizeActive_) {
+        finishMiddleButtonResize(true);
+        event->accept();
+        return;
+      }
       if (middleButtonDragActive_) {
         finishMiddleButtonDrag(true);
         event->accept();
@@ -1742,6 +1793,14 @@ private:
   QVector<QPoint> polylineCreationPoints_;
   QList<QPointer<QWidget>> multiSelection_;
   QList<QPointer<QWidget>> elementStack_;
+  struct CompositeResizeChildInfo {
+    QPointer<QWidget> widget;
+    QRect initialRect;
+  };
+  struct CompositeResizeInfo {
+    QRect initialRect;
+    QVector<CompositeResizeChildInfo> children;
+  };
   QRubberBand *rubberBand_ = nullptr;
   bool rubberBandActive_ = false;
   bool selectionRubberBandPending_ = false;
@@ -1756,6 +1815,13 @@ private:
   bool middleButtonDragActive_ = false;
   bool middleButtonDragMoved_ = false;
   QPoint middleButtonDragStartAreaPos_;
+  QList<QPointer<QWidget>> middleButtonResizeWidgets_;
+  QList<QRect> middleButtonResizeInitialRects_;
+  QPoint middleButtonResizeStartAreaPos_;
+  bool middleButtonResizeActive_ = false;
+  bool middleButtonResizeMoved_ = false;
+  QHash<CompositeElement *, CompositeResizeInfo> middleButtonResizeCompositeInfo_;
+  QSet<QWidget *> middleButtonResizeCompositeUpdated_;
   VertexEditMode vertexEditMode_ = VertexEditMode::kNone;
   PolygonElement *vertexEditPolygon_ = nullptr;
   PolylineElement *vertexEditPolyline_ = nullptr;
@@ -7356,6 +7422,7 @@ private:
   void beginMiddleButtonDrag(const QPoint &windowPos)
   {
     finishMiddleButtonDrag(false);
+    finishMiddleButtonResize(false);
     if (!displayArea_) {
       return;
     }
@@ -7439,9 +7506,240 @@ private:
     }
   }
 
+  void beginMiddleButtonResize(const QPoint &windowPos)
+  {
+    finishMiddleButtonResize(false);
+    finishMiddleButtonDrag(false);
+    if (!displayArea_) {
+      return;
+    }
+    QList<QWidget *> resizeWidgets;
+    if (!multiSelection_.isEmpty()) {
+      for (const auto &pointer : multiSelection_) {
+        if (QWidget *widget = pointer.data()) {
+          resizeWidgets.append(widget);
+        }
+      }
+    } else {
+      if (QWidget *selected = currentSelectedWidget()) {
+        resizeWidgets.append(selected);
+      }
+    }
+    if (resizeWidgets.isEmpty()) {
+      return;
+    }
+    std::sort(resizeWidgets.begin(), resizeWidgets.end(),
+        [this](QWidget *lhs, QWidget *rhs) {
+          return widgetHierarchyDepth(lhs) < widgetHierarchyDepth(rhs);
+        });
+    middleButtonResizeWidgets_.clear();
+    middleButtonResizeInitialRects_.clear();
+    middleButtonResizeCompositeInfo_.clear();
+    middleButtonResizeCompositeUpdated_.clear();
+    for (QWidget *widget : std::as_const(resizeWidgets)) {
+      if (!widget) {
+        continue;
+      }
+      const QRect rect = widgetDisplayRect(widget);
+      if (!rect.isValid()) {
+        continue;
+      }
+      middleButtonResizeWidgets_.append(QPointer<QWidget>(widget));
+      middleButtonResizeInitialRects_.append(rect);
+      if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+        collectCompositeResizeInfo(composite);
+      }
+    }
+    if (middleButtonResizeWidgets_.isEmpty()) {
+      middleButtonResizeCompositeInfo_.clear();
+      return;
+    }
+    QPoint startPos = displayArea_->mapFrom(this, windowPos);
+    startPos = clampToDisplayArea(startPos);
+    if (snapToGrid_ && gridSpacing_ > 0) {
+      startPos = snapPointToGrid(startPos);
+    }
+    middleButtonResizeStartAreaPos_ = startPos;
+    middleButtonResizeActive_ = true;
+    middleButtonResizeMoved_ = false;
+  }
+
+  void updateMiddleButtonResize(const QPoint &windowPos)
+  {
+    if (!middleButtonResizeActive_ || middleButtonResizeWidgets_.isEmpty()
+        || !displayArea_) {
+      return;
+    }
+    QPoint areaPos = displayArea_->mapFrom(this, windowPos);
+    areaPos = clampToDisplayArea(areaPos);
+    if (snapToGrid_ && gridSpacing_ > 0) {
+      areaPos = snapPointToGrid(areaPos);
+    }
+    const QPoint offset = areaPos - middleButtonResizeStartAreaPos_;
+    bool anyResized = false;
+    middleButtonResizeCompositeUpdated_.clear();
+    const int widgetCount = middleButtonResizeWidgets_.size();
+    for (int i = 0; i < widgetCount; ++i) {
+      QWidget *widget = middleButtonResizeWidgets_.at(i).data();
+      if (!widget) {
+        continue;
+      }
+      if (middleButtonResizeCompositeUpdated_.contains(widget)) {
+        widget->update();
+        continue;
+      }
+      const QRect initialRect = middleButtonResizeInitialRects_.value(i);
+      if (!initialRect.isValid()) {
+        continue;
+      }
+      const int newWidth = std::max(initialRect.width() + offset.x(), 1);
+      const int newHeight = std::max(initialRect.height() + offset.y(), 1);
+      QRect targetRect(initialRect.topLeft(), QSize(newWidth, newHeight));
+      targetRect = adjustRectToDisplayArea(targetRect);
+      const QRect currentRect = widgetDisplayRect(widget);
+      bool widgetChanged = false;
+      if (targetRect != currentRect) {
+        setWidgetDisplayRect(widget, targetRect);
+        widget->update();
+        widgetChanged = true;
+      } else {
+        widget->update();
+      }
+      if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+        if (applyCompositeResize(composite, targetRect)) {
+          widgetChanged = true;
+        }
+      }
+      if (widgetChanged) {
+        anyResized = true;
+      }
+    }
+    if (anyResized) {
+      middleButtonResizeMoved_ = true;
+    }
+  }
+
+  void collectCompositeResizeInfo(CompositeElement *composite)
+  {
+    if (!composite || middleButtonResizeCompositeInfo_.contains(composite)) {
+      return;
+    }
+    CompositeResizeInfo info;
+    info.initialRect = widgetDisplayRect(composite);
+    if (!info.initialRect.isValid()) {
+      middleButtonResizeCompositeInfo_.insert(composite, info);
+      return;
+    }
+    const QList<QWidget *> children = composite->childWidgets();
+    info.children.reserve(children.size());
+    for (QWidget *child : children) {
+      if (!child) {
+        continue;
+      }
+      CompositeResizeChildInfo childInfo;
+      childInfo.widget = child;
+      childInfo.initialRect = widgetDisplayRect(child);
+      info.children.append(childInfo);
+    }
+    middleButtonResizeCompositeInfo_.insert(composite, info);
+    for (QWidget *child : children) {
+      if (auto *childComposite = dynamic_cast<CompositeElement *>(child)) {
+        collectCompositeResizeInfo(childComposite);
+      }
+    }
+  }
+
+  bool applyCompositeResize(CompositeElement *composite,
+      const QRect &targetRect)
+  {
+    auto it = middleButtonResizeCompositeInfo_.find(composite);
+    if (it == middleButtonResizeCompositeInfo_.end()) {
+      return false;
+    }
+    const CompositeResizeInfo &info = it.value();
+    const QRect &initialRect = info.initialRect;
+    if (!initialRect.isValid()) {
+      return false;
+    }
+    const double scaleX = initialRect.width() > 0
+        ? static_cast<double>(targetRect.width()) / initialRect.width()
+        : 1.0;
+    const double scaleY = initialRect.height() > 0
+        ? static_cast<double>(targetRect.height()) / initialRect.height()
+        : 1.0;
+    bool changed = false;
+    for (const CompositeResizeChildInfo &childInfo : info.children) {
+      QWidget *child = childInfo.widget.data();
+      if (!child) {
+        continue;
+      }
+      const QRect childInitialRect = childInfo.initialRect;
+      if (!childInitialRect.isValid()) {
+        continue;
+      }
+      const double relativeLeft =
+          static_cast<double>(childInitialRect.x() - initialRect.x());
+      const double relativeTop =
+          static_cast<double>(childInitialRect.y() - initialRect.y());
+      const int newLeft = targetRect.x()
+          + static_cast<int>(std::round(relativeLeft * scaleX));
+      const int newTop = targetRect.y()
+          + static_cast<int>(std::round(relativeTop * scaleY));
+      const int newWidth = std::max(1,
+          static_cast<int>(std::round(childInitialRect.width() * scaleX)));
+      const int newHeight = std::max(1,
+          static_cast<int>(std::round(childInitialRect.height() * scaleY)));
+      QRect newRect(QPoint(newLeft, newTop), QSize(newWidth, newHeight));
+      const QRect currentRect = widgetDisplayRect(child);
+      if (newRect != currentRect) {
+        setWidgetDisplayRect(child, newRect);
+        changed = true;
+      }
+      child->update();
+      middleButtonResizeCompositeUpdated_.insert(child);
+      if (auto *childComposite = dynamic_cast<CompositeElement *>(child)) {
+        if (applyCompositeResize(childComposite, newRect)) {
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  int widgetHierarchyDepth(QWidget *widget) const
+  {
+    int depth = 0;
+    while (widget) {
+      widget = widget->parentWidget();
+      ++depth;
+      if (widget == displayArea_) {
+        break;
+      }
+    }
+    return depth;
+  }
+
+  void finishMiddleButtonResize(bool applyChanges)
+  {
+    const bool wasActive = middleButtonResizeActive_;
+    const bool resized = middleButtonResizeMoved_;
+    middleButtonResizeActive_ = false;
+    middleButtonResizeMoved_ = false;
+    middleButtonResizeWidgets_.clear();
+    middleButtonResizeInitialRects_.clear();
+    middleButtonResizeCompositeInfo_.clear();
+    middleButtonResizeCompositeUpdated_.clear();
+    if (applyChanges && wasActive && resized) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+  }
+
   void cancelMiddleButtonDrag()
   {
     finishMiddleButtonDrag(false);
+    finishMiddleButtonResize(false);
   }
 
   void alignSelectionInternal(AlignmentMode mode)

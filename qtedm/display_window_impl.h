@@ -565,6 +565,47 @@ public:
 
   }
 
+  void showEditSummaryDialog()
+  {
+    setAsActiveDisplay();
+
+    const QString summary = QStringLiteral(
+        "             EDIT Operations Summary\n"
+        "\n"
+        "When a create tool is active\n"
+        "============================\n"
+        "Btn1         Click or drag to place the selected object.\n"
+        "Shift-Btn1   (Polygon/Polyline) Constrain segments to 45-degree steps.\n"
+        "Double-Btn1  (Polygon/Polyline) Finish drawing.\n"
+        "Btn3         Popup edit menu.\n"
+        "\n"
+        "While selecting and editing\n"
+        "===========================\n"
+        "Btn1         Select the object under the pointer.\n"
+        "Shift-Btn1   Add the object to the current selection.\n"
+        "Ctrl-Btn1    Toggle whether the object is selected.\n"
+        "Btn1-Drag    Box-select objects in the display.\n"
+        "Btn2-Drag    Move the current selection.\n"
+        "Ctrl-Btn2    Resize the current selection.\n"
+        "Btn3         Popup edit menu.\n"
+        "Vertices     Drag polygon/polyline vertices; hold Shift to snap.\n"
+        "\n"
+        "Keyboard\n"
+        "========\n"
+        "Arrow        Move selected objects by 1 pixel.\n"
+        "Shift-Arrow  Move selected objects by 10 pixels.\n"
+        "Ctrl-Arrow   Resize selected objects by 1 pixel.\n"
+        "Ctrl-Shift-Arrow Resize selected objects by 10 pixels.\n");
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Information);
+    box.setWindowTitle(QStringLiteral("Edit Summary"));
+    box.setTextFormat(Qt::PlainText);
+    box.setText(summary);
+    box.setStandardButtons(QMessageBox::Ok);
+    box.exec();
+  }
+
   void refreshDisplayView()
   {
     setAsActiveDisplay();
@@ -11034,13 +11075,17 @@ private:
         addMenuAction(&menu, QStringLiteral("Find Outliers"));
     QObject::connect(findOutliersAction, &QAction::triggered, this,
         [this]() {
-          findOutliers();
-        });
+      findOutliers();
+    });
     auto *refreshAction = addMenuAction(&menu, QStringLiteral("Refresh"));
     QObject::connect(refreshAction, &QAction::triggered, this, [this]() {
       refreshDisplayView();
     });
-    addMenuAction(&menu, QStringLiteral("Edit Summary..."));
+    auto *editSummaryAction =
+        addMenuAction(&menu, QStringLiteral("Edit Summary..."));
+    QObject::connect(editSummaryAction, &QAction::triggered, this, [this]() {
+      showEditSummaryDialog();
+    });
 
     menu.exec(globalPos);
   }

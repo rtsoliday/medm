@@ -2477,10 +2477,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Display"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForMultipleSelection()
@@ -2505,10 +2502,7 @@ public:
     lastCommittedGeometry_ = QRect();
     updateCommittedTexts();
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void refreshGeometryFromSelection()
@@ -2714,10 +2708,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Text"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForTextEntry(std::function<QRect()> geometryGetter,
@@ -2893,10 +2884,7 @@ public:
       elementLabel_->setText(QStringLiteral("Text Entry"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForSlider(std::function<QRect()> geometryGetter,
@@ -3072,10 +3060,7 @@ public:
       elementLabel_->setText(QStringLiteral("Slider"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForWheelSwitch(std::function<QRect()> geometryGetter,
@@ -3237,10 +3222,7 @@ public:
       elementLabel_->setText(QStringLiteral("Wheel Switch"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForChoiceButton(std::function<QRect()> geometryGetter,
@@ -3594,10 +3576,7 @@ public:
       elementLabel_->setText(QStringLiteral("Choice Button"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForMenu(std::function<QRect()> geometryGetter,
@@ -3670,10 +3649,7 @@ public:
       elementLabel_->setText(QStringLiteral("Menu"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForMessageButton(std::function<QRect()> geometryGetter,
@@ -3787,10 +3763,7 @@ public:
       elementLabel_->setText(QStringLiteral("Message Button"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForShellCommand(std::function<QRect()> geometryGetter,
@@ -3905,10 +3878,7 @@ public:
       elementLabel_->setText(QStringLiteral("Shell Command"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForRelatedDisplay(std::function<QRect()> geometryGetter,
@@ -4052,10 +4022,7 @@ public:
       elementLabel_->setText(QStringLiteral("Related Display"));
     }
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForTextMonitor(std::function<QRect()> geometryGetter,
@@ -4301,10 +4268,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Text Monitor"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForMeter(std::function<QRect()> geometryGetter,
@@ -4464,10 +4428,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Meter"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForBarMonitor(std::function<QRect()> geometryGetter,
@@ -4661,10 +4622,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Bar Monitor"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForScaleMonitor(std::function<QRect()> geometryGetter,
@@ -4863,10 +4821,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Scale Monitor"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForStripChart(std::function<QRect()> geometryGetter,
@@ -5109,10 +5064,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Strip Chart"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForCartesianPlot(std::function<QRect()> geometryGetter,
@@ -5518,10 +5470,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Cartesian Plot"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForByteMonitor(std::function<QRect()> geometryGetter,
@@ -5628,10 +5577,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Byte Monitor"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
 
@@ -5741,10 +5687,7 @@ public:
 
     elementLabel_->setText(elementLabel);
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForRectangle(std::function<QRect()> geometryGetter,
@@ -5962,10 +5905,7 @@ public:
 
     elementLabel_->setText(elementLabel);
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForImage(std::function<QRect()> geometryGetter,
@@ -6171,10 +6111,7 @@ public:
 
     elementLabel_->setText(QStringLiteral("Image"));
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void showForLine(std::function<QRect()> geometryGetter,
@@ -6357,10 +6294,7 @@ public:
 
     elementLabel_->setText(elementLabel);
 
-    show();
-    positionRelativeTo(parentWidget());
-    raise();
-    activateWindow();
+    showPaletteWithoutActivating();
   }
 
   void clearSelectionState()
@@ -9454,6 +9388,19 @@ private:
   int relatedDisplayModeToIndex(RelatedDisplayMode mode) const
   {
     return mode == RelatedDisplayMode::kReplace ? 1 : 0;
+  }
+
+  void showPaletteWithoutActivating()
+  {
+    const bool alreadySet =
+        testAttribute(Qt::WA_ShowWithoutActivating);
+    setAttribute(Qt::WA_ShowWithoutActivating, true);
+    show();
+    positionRelativeTo(parentWidget());
+    raise();
+    if (!alreadySet) {
+      setAttribute(Qt::WA_ShowWithoutActivating, false);
+    }
   }
 
   void positionRelativeTo(QWidget *reference)

@@ -882,6 +882,14 @@ private:
     kDown,
   };
 
+  enum class VertexEditMode {
+    kNone,
+    kPolygon,
+    kPolyline,
+  };
+
+  static constexpr int kVertexHitRadius = 6;
+
 public:
   void alignSelectionLeft()
   {
@@ -1379,6 +1387,10 @@ protected:
           event->accept();
           return;
         }
+        if (beginVertexEdit(event->pos(), event->modifiers())) {
+          event->accept();
+          return;
+        }
         const QPoint areaPos = displayArea_
             ? displayArea_->mapFrom(this, event->pos())
             : QPoint();
@@ -1438,6 +1450,12 @@ protected:
       event->accept();
       return;
     }
+    if ((event->buttons() & Qt::LeftButton)
+        && vertexEditMode_ != VertexEditMode::kNone) {
+      updateVertexEdit(event->pos(), event->modifiers());
+      event->accept();
+      return;
+    }
     if (polygonCreationActive_) {
       if (auto state = state_.lock(); state && state->editMode && displayArea_
           && state->createTool == CreateTool::kPolygon) {
@@ -1491,6 +1509,11 @@ protected:
       }
     }
     if (event->button() == Qt::LeftButton) {
+      if (vertexEditMode_ != VertexEditMode::kNone) {
+        finishActiveVertexEdit(true);
+        event->accept();
+        return;
+      }
       if (rubberBandActive_) {
         if (auto state = state_.lock(); state && state->editMode
             && displayArea_) {
@@ -1733,6 +1756,13 @@ private:
   bool middleButtonDragActive_ = false;
   bool middleButtonDragMoved_ = false;
   QPoint middleButtonDragStartAreaPos_;
+  VertexEditMode vertexEditMode_ = VertexEditMode::kNone;
+  PolygonElement *vertexEditPolygon_ = nullptr;
+  PolylineElement *vertexEditPolyline_ = nullptr;
+  int vertexEditIndex_ = -1;
+  QVector<QPoint> vertexEditInitialPoints_;
+  QVector<QPoint> vertexEditCurrentPoints_;
+  bool vertexEditMoved_ = false;
 
   void setDisplaySelected(bool selected)
   {
@@ -1948,6 +1978,7 @@ private:
     if (!selectedPolyline_) {
       return;
     }
+    finishActiveVertexEditFor(selectedPolyline_, true);
     selectedPolyline_->setSelected(false);
     selectedPolyline_ = nullptr;
   }
@@ -1957,6 +1988,7 @@ private:
     if (!selectedPolygon_) {
       return;
     }
+    finishActiveVertexEditFor(selectedPolygon_, true);
     selectedPolygon_->setSelected(false);
     selectedPolygon_ = nullptr;
   }
@@ -2610,6 +2642,7 @@ private:
     }
 
     ElementType *element = selected;
+    finishActiveVertexEditFor(element, true);
     selected = nullptr;
     element->setSelected(false);
     elements.removeAll(element);
@@ -9135,6 +9168,309 @@ private:
     const int y = reference.y()
         + static_cast<int>(std::round(std::sin(snapped) * length));
     return snapPointToGrid(clampToDisplayArea(QPoint(x, y)));
+  }
+
+  bool beginVertexEdit(const QPoint &windowPos, Qt::KeyboardModifiers modifiers)
+  {
+    Q_UNUSED(modifiers);
+    if (!displayArea_ || vertexEditMode_ != VertexEditMode::kNone) {
+      return false;
+    }
+
+    auto state = state_.lock();
+    if (!state || !state->editMode || state->createTool != CreateTool::kNone) {
+      return false;
+    }
+
+    if (!multiSelection_.isEmpty()) {
+      return false;
+    }
+
+    const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
+    if (!displayArea_->rect().contains(areaPos)) {
+      return false;
+    }
+
+    if (selectedPolygon_ && beginPolygonVertexEdit(areaPos)) {
+      return true;
+    }
+
+    if (selectedPolyline_ && beginPolylineVertexEdit(areaPos)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool beginPolygonVertexEdit(const QPoint &areaPos)
+  {
+    PolygonElement *polygon = selectedPolygon_;
+    if (!polygon) {
+      return false;
+    }
+
+    const QVector<QPoint> points = polygon->absolutePoints();
+    if (points.size() < 2) {
+      return false;
+    }
+
+    const int hitIndex = hitTestVertex(points, areaPos);
+    if (hitIndex < 0) {
+      return false;
+    }
+
+    const int index = canonicalPolygonVertexIndex(points, hitIndex);
+    startPolygonVertexEdit(polygon, index, points);
+    return true;
+  }
+
+  bool beginPolylineVertexEdit(const QPoint &areaPos)
+  {
+    PolylineElement *polyline = selectedPolyline_;
+    if (!polyline) {
+      return false;
+    }
+
+    const QVector<QPoint> points = polyline->absolutePoints();
+    if (points.size() < 2) {
+      return false;
+    }
+
+    const int hitIndex = hitTestVertex(points, areaPos);
+    if (hitIndex < 0) {
+      return false;
+    }
+
+    startPolylineVertexEdit(polyline, hitIndex, points);
+    return true;
+  }
+
+  void startPolygonVertexEdit(PolygonElement *polygon, int index,
+      const QVector<QPoint> &points)
+  {
+    if (!polygon || points.isEmpty()) {
+      return;
+    }
+
+    const int maxIndex = std::max(0, static_cast<int>(points.size()) - 1);
+    vertexEditMode_ = VertexEditMode::kPolygon;
+    vertexEditPolygon_ = polygon;
+    vertexEditPolyline_ = nullptr;
+    vertexEditIndex_ = std::clamp(index, 0, maxIndex);
+    vertexEditInitialPoints_ = points;
+    vertexEditCurrentPoints_ = points;
+    vertexEditMoved_ = false;
+  }
+
+  void startPolylineVertexEdit(PolylineElement *polyline, int index,
+      const QVector<QPoint> &points)
+  {
+    if (!polyline || points.isEmpty()) {
+      return;
+    }
+
+    const int maxIndex = std::max(0, static_cast<int>(points.size()) - 1);
+    vertexEditMode_ = VertexEditMode::kPolyline;
+    vertexEditPolyline_ = polyline;
+    vertexEditPolygon_ = nullptr;
+    vertexEditIndex_ = std::clamp(index, 0, maxIndex);
+    vertexEditInitialPoints_ = points;
+    vertexEditCurrentPoints_ = points;
+    vertexEditMoved_ = false;
+  }
+
+  int hitTestVertex(const QVector<QPoint> &points,
+      const QPoint &areaPos) const
+  {
+    if (points.isEmpty()) {
+      return -1;
+    }
+    const int radiusSquared = kVertexHitRadius * kVertexHitRadius;
+    for (int i = 0; i < points.size(); ++i) {
+      const QPoint delta = points.at(i) - areaPos;
+      if (delta.x() * delta.x() + delta.y() * delta.y() <= radiusSquared) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  int canonicalPolygonVertexIndex(const QVector<QPoint> &points,
+      int index) const
+  {
+    if (points.size() >= 2 && index == points.size() - 1
+        && points.first() == points.last()) {
+      return 0;
+    }
+    return index;
+  }
+
+  int previousVertexIndex(const QVector<QPoint> &points, int index,
+      bool closed) const
+  {
+    if (points.isEmpty()) {
+      return -1;
+    }
+    if (index > 0) {
+      return index - 1;
+    }
+    if (closed) {
+      return points.size() >= 2 ? points.size() - 2 : 0;
+    }
+    return points.size() - 1;
+  }
+
+  QPoint adjustedVertexPoint(const QVector<QPoint> &points, int index,
+      const QPoint &areaPos, Qt::KeyboardModifiers modifiers,
+      bool closed) const
+  {
+    QPoint clamped = clampToDisplayArea(areaPos);
+    if (!(modifiers & Qt::ShiftModifier) || points.isEmpty()
+        || index < 0 || index >= points.size()) {
+      return snapPointToGrid(clamped);
+    }
+
+    const int referenceIndex = previousVertexIndex(points, index, closed);
+    if (referenceIndex < 0 || referenceIndex >= points.size()) {
+      return snapPointToGrid(clamped);
+    }
+
+    const QPoint &reference = points.at(referenceIndex);
+    const int dx = clamped.x() - reference.x();
+    const int dy = clamped.y() - reference.y();
+    if (dx == 0 && dy == 0) {
+      return snapPointToGrid(clamped);
+    }
+
+    constexpr double kPi = 3.14159265358979323846;
+    double angle = std::atan2(static_cast<double>(dy), static_cast<double>(dx));
+    if (angle < 0.0) {
+      angle += 2.0 * kPi;
+    }
+    const double step = kPi / 4.0;
+    const double snapped = std::round(angle / step) * step;
+    const double length = std::sqrt(static_cast<double>(dx * dx + dy * dy));
+    const int x = reference.x()
+        + static_cast<int>(std::round(std::cos(snapped) * length));
+    const int y = reference.y()
+        + static_cast<int>(std::round(std::sin(snapped) * length));
+    return snapPointToGrid(clampToDisplayArea(QPoint(x, y)));
+  }
+
+  void updateVertexEdit(const QPoint &windowPos,
+      Qt::KeyboardModifiers modifiers)
+  {
+    if (vertexEditMode_ == VertexEditMode::kNone || !displayArea_
+        || vertexEditIndex_ < 0) {
+      return;
+    }
+
+    if (vertexEditCurrentPoints_.isEmpty()
+        || vertexEditIndex_ >= vertexEditCurrentPoints_.size()) {
+      return;
+    }
+
+    const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
+    const bool closed = vertexEditMode_ == VertexEditMode::kPolygon;
+    const QPoint newPoint = adjustedVertexPoint(vertexEditCurrentPoints_,
+        vertexEditIndex_, areaPos, modifiers, closed);
+    if (vertexEditCurrentPoints_.value(vertexEditIndex_) == newPoint) {
+      return;
+    }
+
+    QVector<QPoint> updated = vertexEditCurrentPoints_;
+    updated[vertexEditIndex_] = newPoint;
+
+    if (vertexEditMode_ == VertexEditMode::kPolygon && !updated.isEmpty()) {
+      const int lastIndex = updated.size() - 1;
+      if (vertexEditIndex_ == 0 && lastIndex > 0) {
+        updated[lastIndex] = newPoint;
+      } else if (vertexEditIndex_ == lastIndex && lastIndex > 0) {
+        updated[0] = newPoint;
+      }
+    }
+
+    switch (vertexEditMode_) {
+    case VertexEditMode::kPolygon:
+      if (vertexEditPolygon_) {
+        vertexEditPolygon_->setAbsolutePoints(updated);
+        vertexEditCurrentPoints_ = vertexEditPolygon_->absolutePoints();
+      }
+      break;
+    case VertexEditMode::kPolyline:
+      if (vertexEditPolyline_) {
+        vertexEditPolyline_->setAbsolutePoints(updated);
+        vertexEditCurrentPoints_ = vertexEditPolyline_->absolutePoints();
+      }
+      break;
+    case VertexEditMode::kNone:
+      break;
+    }
+
+    vertexEditMoved_ = true;
+  }
+
+  void restoreInitialVertexPoints()
+  {
+    switch (vertexEditMode_) {
+    case VertexEditMode::kPolygon:
+      if (vertexEditPolygon_ && !vertexEditInitialPoints_.isEmpty()) {
+        vertexEditPolygon_->setAbsolutePoints(vertexEditInitialPoints_);
+        vertexEditCurrentPoints_ = vertexEditPolygon_->absolutePoints();
+      }
+      break;
+    case VertexEditMode::kPolyline:
+      if (vertexEditPolyline_ && !vertexEditInitialPoints_.isEmpty()) {
+        vertexEditPolyline_->setAbsolutePoints(vertexEditInitialPoints_);
+        vertexEditCurrentPoints_ = vertexEditPolyline_->absolutePoints();
+      }
+      break;
+    case VertexEditMode::kNone:
+      break;
+    }
+  }
+
+  void resetVertexEditState()
+  {
+    vertexEditMode_ = VertexEditMode::kNone;
+    vertexEditPolygon_ = nullptr;
+    vertexEditPolyline_ = nullptr;
+    vertexEditIndex_ = -1;
+    vertexEditInitialPoints_.clear();
+    vertexEditCurrentPoints_.clear();
+    vertexEditMoved_ = false;
+  }
+
+  void finishActiveVertexEdit(bool applyChanges)
+  {
+    if (vertexEditMode_ == VertexEditMode::kNone) {
+      return;
+    }
+
+    if (!applyChanges) {
+      restoreInitialVertexPoints();
+    }
+
+    if (applyChanges && vertexEditMoved_) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+
+    resetVertexEditState();
+  }
+
+  void finishActiveVertexEditFor(QWidget *widget, bool applyChanges)
+  {
+    if (!widget) {
+      return;
+    }
+    if ((vertexEditMode_ == VertexEditMode::kPolygon
+            && widget == vertexEditPolygon_)
+        || (vertexEditMode_ == VertexEditMode::kPolyline
+            && widget == vertexEditPolyline_)) {
+      finishActiveVertexEdit(applyChanges);
+    }
   }
 
   void createTextElement(const QRect &rect)

@@ -875,6 +875,13 @@ private:
     kRotateCounterclockwise,
   };
 
+  enum class ResizeDirection {
+    kLeft,
+    kRight,
+    kUp,
+    kDown,
+  };
+
 public:
   void alignSelectionLeft()
   {
@@ -8210,33 +8217,117 @@ private:
     if (!event) {
       return false;
     }
-    if (event->modifiers().testFlag(Qt::ControlModifier)) {
-      return false;
-    }
+    const bool control = event->modifiers().testFlag(Qt::ControlModifier);
+    const bool shift = event->modifiers().testFlag(Qt::ShiftModifier);
 
     QPoint delta;
     switch (event->key()) {
     case Qt::Key_Left:
+      if (control) {
+        const int amount = shift ? 10 : 1;
+        return resizeSelectionBy(ResizeDirection::kLeft, amount);
+      }
       delta = QPoint(-1, 0);
       break;
     case Qt::Key_Right:
+      if (control) {
+        const int amount = shift ? 10 : 1;
+        return resizeSelectionBy(ResizeDirection::kRight, amount);
+      }
       delta = QPoint(1, 0);
       break;
     case Qt::Key_Up:
+      if (control) {
+        const int amount = shift ? 10 : 1;
+        return resizeSelectionBy(ResizeDirection::kUp, amount);
+      }
       delta = QPoint(0, -1);
       break;
     case Qt::Key_Down:
+      if (control) {
+        const int amount = shift ? 10 : 1;
+        return resizeSelectionBy(ResizeDirection::kDown, amount);
+      }
       delta = QPoint(0, 1);
       break;
     default:
       return false;
     }
 
-    if (event->modifiers().testFlag(Qt::ShiftModifier)) {
+    if (shift) {
       delta *= 10;
     }
 
     return moveSelectionBy(delta);
+  }
+
+  bool resizeSelectionBy(ResizeDirection direction, int amount)
+  {
+    if (amount <= 0) {
+      return false;
+    }
+
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || state->createTool != CreateTool::kNone) {
+      return false;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.isEmpty()) {
+      return false;
+    }
+
+    bool anyProcessed = false;
+    bool anyChanged = false;
+
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      const QRect currentRect = widgetDisplayRect(widget);
+      if (!currentRect.isValid()) {
+        continue;
+      }
+
+      anyProcessed = true;
+      QRect targetRect = currentRect;
+
+      switch (direction) {
+      case ResizeDirection::kLeft:
+        targetRect.setWidth(std::max(currentRect.width() - amount, 1));
+        break;
+      case ResizeDirection::kRight:
+        targetRect.setWidth(currentRect.width() + amount);
+        break;
+      case ResizeDirection::kUp:
+        targetRect.setHeight(std::max(currentRect.height() - amount, 1));
+        break;
+      case ResizeDirection::kDown:
+        targetRect.setHeight(currentRect.height() + amount);
+        break;
+      }
+
+      targetRect = adjustRectToDisplayArea(targetRect);
+      if (targetRect == currentRect) {
+        continue;
+      }
+
+      setWidgetDisplayRect(widget, targetRect);
+      widget->update();
+      anyChanged = true;
+    }
+
+    if (!anyProcessed) {
+      return false;
+    }
+
+    if (anyChanged) {
+      markDirty();
+      refreshResourcePaletteGeometry();
+      notifyMenus();
+    }
+    return true;
   }
 
   bool moveSelectionBy(const QPoint &delta)

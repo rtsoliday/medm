@@ -20,7 +20,6 @@
 #include <QGroupBox>
 #include <QHash>
 #include <QHBoxLayout>
-#include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLayout>
@@ -30,6 +29,8 @@
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QMouseEvent>
+#include <QKeyEvent>
+#include <QEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -58,6 +59,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <array>
 #include <functional>
 #include <limits>

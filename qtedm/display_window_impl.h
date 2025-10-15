@@ -1254,6 +1254,16 @@ protected:
     setAsActiveDisplay();
   }
 
+  void keyPressEvent(QKeyEvent *event) override
+  {
+    setAsActiveDisplay();
+    if (handleEditArrowKey(event)) {
+      event->accept();
+      return;
+    }
+    QMainWindow::keyPressEvent(event);
+  }
+
   void closeEvent(QCloseEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override
   {
@@ -8193,6 +8203,108 @@ private:
       refreshResourcePaletteGeometry();
       notifyMenus();
     }
+  }
+
+  bool handleEditArrowKey(QKeyEvent *event)
+  {
+    if (!event) {
+      return false;
+    }
+    if (event->modifiers().testFlag(Qt::ControlModifier)) {
+      return false;
+    }
+
+    QPoint delta;
+    switch (event->key()) {
+    case Qt::Key_Left:
+      delta = QPoint(-1, 0);
+      break;
+    case Qt::Key_Right:
+      delta = QPoint(1, 0);
+      break;
+    case Qt::Key_Up:
+      delta = QPoint(0, -1);
+      break;
+    case Qt::Key_Down:
+      delta = QPoint(0, 1);
+      break;
+    default:
+      return false;
+    }
+
+    if (event->modifiers().testFlag(Qt::ShiftModifier)) {
+      delta *= 10;
+    }
+
+    return moveSelectionBy(delta);
+  }
+
+  bool moveSelectionBy(const QPoint &delta)
+  {
+    if (delta.isNull()) {
+      return false;
+    }
+
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || state->createTool != CreateTool::kNone) {
+      return false;
+    }
+
+    const QList<QWidget *> widgets = alignableWidgets();
+    if (widgets.isEmpty()) {
+      return false;
+    }
+
+    QRect boundingRect;
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      const QRect rect = widgetDisplayRect(widget);
+      if (!rect.isValid()) {
+        continue;
+      }
+      if (!boundingRect.isValid()) {
+        boundingRect = rect;
+      } else {
+        boundingRect = boundingRect.united(rect);
+      }
+    }
+
+    if (!boundingRect.isValid()) {
+      return false;
+    }
+
+    const QPoint effectiveDelta =
+        clampOffsetToDisplayArea(boundingRect, delta);
+    if (effectiveDelta.isNull()) {
+      return false;
+    }
+
+    bool anyMoved = false;
+    for (QWidget *widget : widgets) {
+      if (!widget) {
+        continue;
+      }
+      const QRect currentRect = widgetDisplayRect(widget);
+      const QRect targetRect = currentRect.translated(effectiveDelta);
+      if (currentRect.topLeft() == targetRect.topLeft()) {
+        continue;
+      }
+      setWidgetDisplayRect(widget, targetRect);
+      widget->update();
+      anyMoved = true;
+    }
+
+    if (!anyMoved) {
+      return false;
+    }
+
+    markDirty();
+    refreshResourcePaletteGeometry();
+    notifyMenus();
+    return true;
   }
 
   static int snapCoordinateToGrid(int value, int spacing)

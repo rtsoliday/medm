@@ -33,6 +33,7 @@
 #include "display_window.h"
 #include "legacy_fonts.h"
 #include "main_window_controller.h"
+#include "object_palette_dialog.h"
 #include "window_utils.h"
 
 int main(int argc, char *argv[])
@@ -198,7 +199,7 @@ int main(int argc, char *argv[])
 
   auto *palettesMenu = menuBar->addMenu("&Palettes");
   palettesMenu->setFont(fixed13Font);
-  palettesMenu->addAction("&Object");
+  auto *objectPaletteAct = palettesMenu->addAction("&Object");
   palettesMenu->addAction("&Resource");
   palettesMenu->addAction("&Color");
   palettesMenu->setEnabled(false);
@@ -276,9 +277,17 @@ int main(int argc, char *argv[])
   auto *displayListDialog = new DisplayListDialog(palette, fixed13Font,
       std::weak_ptr<DisplayState>(state), &win);
 
+  auto *objectPaletteDialog = new ObjectPaletteDialog(palette, fixed13Font,
+      fixed10Font, &win);
+
   QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
       [displayListDialog]() {
         displayListDialog->showAndRaise();
+      });
+
+  QObject::connect(objectPaletteAct, &QAction::triggered,
+      objectPaletteDialog, [objectPaletteDialog]() {
+        objectPaletteDialog->showAndRaise();
       });
 
   QObject::connect(saveAct, &QAction::triggered, &win,

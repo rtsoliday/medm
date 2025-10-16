@@ -320,13 +320,13 @@ int main(int argc, char *argv[])
   QObject::connect(groupAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
-          active->groupSelectedElements();
+          active->triggerGroupFromMenu();
         }
       });
   QObject::connect(ungroupAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
-          active->ungroupSelectedElements();
+          active->triggerUngroupFromMenu();
         }
       });
   QObject::connect(alignLeftAct, &QAction::triggered, &win,

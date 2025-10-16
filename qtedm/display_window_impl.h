@@ -712,6 +712,18 @@ public:
     pasteSelection();
   }
 
+  void triggerGroupFromMenu()
+  {
+    setAsActiveDisplay();
+    groupSelectedElements();
+  }
+
+  void triggerUngroupFromMenu()
+  {
+    setAsActiveDisplay();
+    ungroupSelectedElements();
+  }
+
   void raiseSelection()
   {
     setAsActiveDisplay();
@@ -9096,7 +9108,7 @@ private:
       setWidgetSelectionState(widget, true);
       multiSelection_.append(QPointer<QWidget>(widget));
     }
-    showResourcePaletteForMultipleSelection();
+    updateSelectionAfterMultiChange();
   }
 
   void handleDisplayBackgroundClick()

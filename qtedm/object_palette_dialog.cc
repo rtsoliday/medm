@@ -3,6 +3,8 @@
 #include <QAction>
 #include <QAbstractButton>
 #include <QButtonGroup>
+#include <QCursor>
+#include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -12,6 +14,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QToolButton>
+#include <QToolTip>
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QPixmap>
@@ -216,6 +219,7 @@ QToolButton *ObjectPaletteDialog::createToolButton(
   const int id = nextButtonId_++;
   buttonGroup_->addButton(button, id);
   buttonDescriptions_.insert(id, definition.label);
+  button->installEventFilter(this);
 
   if (definition.label.compare(QStringLiteral("Select"),
       Qt::CaseInsensitive) == 0) {
@@ -223,6 +227,45 @@ QToolButton *ObjectPaletteDialog::createToolButton(
   }
 
   return button;
+}
+
+bool ObjectPaletteDialog::eventFilter(QObject *watched, QEvent *event)
+{
+  auto *button = qobject_cast<QAbstractButton *>(watched);
+  if (!button || buttonGroup_ == nullptr) {
+    return QDialog::eventFilter(watched, event);
+  }
+
+  const int id = buttonGroup_->id(button);
+  if (id < 0) {
+    return QDialog::eventFilter(watched, event);
+  }
+  switch (event->type()) {
+  case QEvent::Enter:
+  case QEvent::HoverEnter: {
+    const QString description = buttonDescriptions_.value(id);
+    if (!description.isEmpty()) {
+      updateStatusLabel(description);
+      QToolTip::showText(QCursor::pos(), description, button);
+    }
+    break;
+  }
+  case QEvent::Leave:
+  case QEvent::HoverLeave: {
+    const int checkedId = buttonGroup_->checkedId();
+    if (checkedId >= 0) {
+      updateStatusLabel(buttonDescriptions_.value(checkedId));
+    } else {
+      updateStatusLabel(QString());
+    }
+    QToolTip::hideText();
+    break;
+  }
+  default:
+    break;
+  }
+
+  return QDialog::eventFilter(watched, event);
 }
 
 void ObjectPaletteDialog::handleButtonToggled(int id, bool checked)

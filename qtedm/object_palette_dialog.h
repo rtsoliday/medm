@@ -11,6 +11,7 @@
 class QAbstractButton;
 class QButtonGroup;
 class QLabel;
+class QEvent;
 class QToolButton;
 class QWidget;
 
@@ -31,8 +32,9 @@ private:
   };
 
   QWidget *createCategory(const QString &title,
-      const std::vector<ButtonDefinition> &buttons);
+    const std::vector<ButtonDefinition> &buttons);
   QToolButton *createToolButton(const ButtonDefinition &definition);
+  bool eventFilter(QObject *watched, QEvent *event) override;
   void handleButtonToggled(int id, bool checked);
   void updateStatusLabel(const QString &description);
   static std::vector<ButtonDefinition> graphicsButtons();

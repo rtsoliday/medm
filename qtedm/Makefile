@@ -61,6 +61,7 @@ qtedm_SRC = qtedm.cc \
             image_element.cc \
             composite_element.cc \
             cartesian_axis_dialog.cc \
+            display_list_dialog.cc \
             color_palette_dialog.cc \
             pv_limits_dialog.cc \
             medm_colors.cc

@@ -29,6 +29,7 @@
 
 #include "display_properties.h"
 #include "display_state.h"
+#include "display_list_dialog.h"
 #include "display_window.h"
 #include "legacy_fonts.h"
 #include "main_window_controller.h"
@@ -193,7 +194,7 @@ int main(int argc, char *argv[])
   viewMenu->setFont(fixed13Font);
   viewMenu->addAction("&Message Window");
   viewMenu->addAction("&Statistics Window");
-  viewMenu->addAction("&Display List");
+  auto *viewDisplayListAct = viewMenu->addAction("&Display List");
 
   auto *palettesMenu = menuBar->addMenu("&Palettes");
   palettesMenu->setFont(fixed13Font);
@@ -272,6 +273,13 @@ int main(int argc, char *argv[])
   win.installEventFilter(mainWindowController);
   auto updateMenus = std::make_shared<std::function<void()>>();
   state->updateMenus = updateMenus;
+  auto *displayListDialog = new DisplayListDialog(palette, fixed13Font,
+      std::weak_ptr<DisplayState>(state), &win);
+
+  QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
+      [displayListDialog]() {
+        displayListDialog->showAndRaise();
+      });
 
   QObject::connect(saveAct, &QAction::triggered, &win,
       [state]() {
@@ -540,7 +548,7 @@ int main(int argc, char *argv[])
     flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
     rotateCounterclockwiseAct, sameSizeAct, textToContentsAct, toggleGridAct, toggleSnapAct,
     gridSpacingAct, unselectAct, selectAllAct, selectDisplayAct,
-    findOutliersAct, refreshAct, editSummaryAct]() {
+    findOutliersAct, refreshAct, editSummaryAct, displayListDialog]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -662,6 +670,10 @@ int main(int argc, char *argv[])
     findOutliersAct->setEnabled(canOperateSelection);
     refreshAct->setEnabled(canOperateSelection);
     editSummaryAct->setEnabled(canOperateSelection);
+
+    if (displayListDialog) {
+      displayListDialog->handleStateChanged();
+    }
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

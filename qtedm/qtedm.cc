@@ -734,12 +734,12 @@ int main(int argc, char *argv[])
 
         static QString lastDirectory;
         QFileDialog dialog(&win, QStringLiteral("Open Display"));
+        dialog.setOption(QFileDialog::DontUseNativeDialog, true);
         dialog.setAcceptMode(QFileDialog::AcceptOpen);
         dialog.setFileMode(QFileDialog::ExistingFile);
         dialog.setNameFilters({
             QStringLiteral("MEDM Display Files (*.adl)"),
             QStringLiteral("All Files (*)")});
-        dialog.setOption(QFileDialog::DontUseNativeDialog, true);
         dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
         dialog.setModal(true);
         dialog.setWindowModality(Qt::ApplicationModal);

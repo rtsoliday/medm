@@ -277,8 +277,9 @@ int main(int argc, char *argv[])
   auto *displayListDialog = new DisplayListDialog(palette, fixed13Font,
       std::weak_ptr<DisplayState>(state), &win);
 
-  auto *objectPaletteDialog = new ObjectPaletteDialog(palette, fixed13Font,
-      fixed10Font, &win);
+  auto objectPaletteDialog = QPointer<ObjectPaletteDialog>(
+      new ObjectPaletteDialog(palette, fixed13Font, fixed10Font,
+          std::weak_ptr<DisplayState>(state), &win));
 
   QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
       [displayListDialog]() {
@@ -286,8 +287,10 @@ int main(int argc, char *argv[])
       });
 
   QObject::connect(objectPaletteAct, &QAction::triggered,
-      objectPaletteDialog, [objectPaletteDialog]() {
-        objectPaletteDialog->showAndRaise();
+      objectPaletteDialog.data(), [objectPaletteDialog]() {
+        if (objectPaletteDialog) {
+          objectPaletteDialog->showAndRaise();
+        }
       });
 
   QObject::connect(saveAct, &QAction::triggered, &win,
@@ -557,7 +560,8 @@ int main(int argc, char *argv[])
     flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
     rotateCounterclockwiseAct, sameSizeAct, textToContentsAct, toggleGridAct, toggleSnapAct,
     gridSpacingAct, unselectAct, selectAllAct, selectDisplayAct,
-    findOutliersAct, refreshAct, editSummaryAct, displayListDialog]() {
+    findOutliersAct, refreshAct, editSummaryAct, displayListDialog,
+    objectPaletteDialog]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -682,6 +686,9 @@ int main(int argc, char *argv[])
 
     if (displayListDialog) {
       displayListDialog->handleStateChanged();
+    }
+    if (objectPaletteDialog) {
+      objectPaletteDialog->refreshSelectionFromState();
     }
   };
 

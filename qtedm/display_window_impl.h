@@ -286,6 +286,15 @@ public:
     updateCreateCursor();
   }
 
+  void setCreateTool(CreateTool tool)
+  {
+    if (tool == CreateTool::kNone) {
+      deactivateCreateTool();
+    } else {
+      activateCreateTool(tool);
+    }
+  }
+
   void clearSelection()
   {
     clearSelections();
@@ -10797,6 +10806,7 @@ private:
       if (rubberBand_) {
         rubberBand_->hide();
       }
+      notifyMenus();
     }
   }
 
@@ -10822,6 +10832,7 @@ private:
     if (rubberBand_) {
       rubberBand_->hide();
     }
+    notifyMenus();
   }
 
   void showEditContextMenu(const QPoint &globalPos)

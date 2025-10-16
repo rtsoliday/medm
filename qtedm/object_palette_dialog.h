@@ -7,6 +7,9 @@
 #include <QString>
 
 #include <vector>
+#include <memory>
+
+#include "display_state.h"
 
 class QAbstractButton;
 class QButtonGroup;
@@ -19,9 +22,11 @@ class ObjectPaletteDialog : public QDialog
 {
 public:
   ObjectPaletteDialog(const QPalette &basePalette, const QFont &labelFont,
-      const QFont &buttonFont, QWidget *parent = nullptr);
+      const QFont &buttonFont, std::weak_ptr<DisplayState> state,
+      QWidget *parent = nullptr);
 
   void showAndRaise();
+  void refreshSelectionFromState();
 
 private:
   struct ButtonDefinition {
@@ -29,6 +34,7 @@ private:
     const unsigned char *bits;
     int width;
     int height;
+    CreateTool tool;
   };
 
   QWidget *createCategory(const QString &title,
@@ -37,6 +43,8 @@ private:
   bool eventFilter(QObject *watched, QEvent *event) override;
   void handleButtonToggled(int id, bool checked);
   void updateStatusLabel(const QString &description);
+  void applyCreateToolSelection(int id);
+  void syncButtonsToState();
   static std::vector<ButtonDefinition> graphicsButtons();
   static std::vector<ButtonDefinition> monitorButtons();
   static std::vector<ButtonDefinition> controlButtons();
@@ -49,5 +57,7 @@ private:
   QLabel *statusLabel_ = nullptr;
   QAbstractButton *selectButton_ = nullptr;
   QHash<int, QString> buttonDescriptions_;
+  QHash<int, CreateTool> buttonTools_;
   int nextButtonId_ = 0;
+  std::weak_ptr<DisplayState> state_;
 };

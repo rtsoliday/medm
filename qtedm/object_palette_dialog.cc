@@ -19,10 +19,13 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QSize>
+#include <QSignalBlocker>
 
 #include <algorithm>
+#include <utility>
 
 #include "../medm/medmPix25.xpm"
+#include "display_window.h"
 
 namespace {
 
@@ -54,11 +57,13 @@ QPixmap createPixmap(const unsigned char *bits, int width, int height)
 }  // namespace
 
 ObjectPaletteDialog::ObjectPaletteDialog(const QPalette &basePalette,
-    const QFont &labelFont, const QFont &buttonFont, QWidget *parent)
+    const QFont &labelFont, const QFont &buttonFont,
+    std::weak_ptr<DisplayState> state, QWidget *parent)
   : QDialog(parent)
   , basePalette_(basePalette)
   , labelFont_(labelFont)
   , buttonFont_(buttonFont)
+  , state_(std::move(state))
 {
   setObjectName(QStringLiteral("qtedmObjectPalette"));
   setWindowTitle(QStringLiteral("Object Palette"));
@@ -148,13 +153,7 @@ ObjectPaletteDialog::ObjectPaletteDialog(const QPalette &basePalette,
 
   mainLayout->addWidget(messageFrame);
 
-  if (selectButton_) {
-    selectButton_->setChecked(true);
-    const int id = buttonGroup_->id(selectButton_);
-    if (id >= 0) {
-      updateStatusLabel(buttonDescriptions_.value(id));
-    }
-  }
+  syncButtonsToState();
 
   adjustSize();
   setMinimumWidth(sizeHint().width());
@@ -219,6 +218,7 @@ QToolButton *ObjectPaletteDialog::createToolButton(
   const int id = nextButtonId_++;
   buttonGroup_->addButton(button, id);
   buttonDescriptions_.insert(id, definition.label);
+  buttonTools_.insert(id, definition.tool);
   button->installEventFilter(this);
 
   if (definition.label.compare(QStringLiteral("Select"),
@@ -273,7 +273,12 @@ void ObjectPaletteDialog::handleButtonToggled(int id, bool checked)
   if (!checked) {
     return;
   }
-  updateStatusLabel(buttonDescriptions_.value(id));
+  applyCreateToolSelection(id);
+}
+
+void ObjectPaletteDialog::refreshSelectionFromState()
+{
+  syncButtonsToState();
 }
 
 void ObjectPaletteDialog::updateStatusLabel(const QString &description)
@@ -289,18 +294,109 @@ void ObjectPaletteDialog::updateStatusLabel(const QString &description)
   }
 }
 
+void ObjectPaletteDialog::applyCreateToolSelection(int id)
+{
+  updateStatusLabel(buttonDescriptions_.value(id));
+  const auto tool = buttonTools_.value(id, CreateTool::kNone);
+  if (auto state = state_.lock()) {
+    bool stateChanged = false;
+    bool handledByDisplay = false;
+    if (tool == CreateTool::kNone) {
+      for (auto &display : state->displays) {
+        if (!display.isNull()) {
+          display->setCreateTool(CreateTool::kNone);
+          handledByDisplay = true;
+          break;
+        }
+      }
+      if (!handledByDisplay && state->createTool != CreateTool::kNone) {
+        state->createTool = CreateTool::kNone;
+        stateChanged = true;
+      }
+    } else {
+      DisplayWindow *target = state->activeDisplay.data();
+      if (!target) {
+        for (auto &display : state->displays) {
+          if (!display.isNull()) {
+            target = display.data();
+            break;
+          }
+        }
+      }
+      if (target) {
+        target->setCreateTool(tool);
+        handledByDisplay = true;
+      } else {
+        if (state->createTool != tool) {
+          state->createTool = tool;
+          stateChanged = true;
+        }
+      }
+    }
+    if (!handledByDisplay && stateChanged
+        && state->updateMenus && *state->updateMenus) {
+      (*state->updateMenus)();
+    }
+  }
+}
+
+void ObjectPaletteDialog::syncButtonsToState()
+{
+  if (!buttonGroup_) {
+    return;
+  }
+  QSignalBlocker blocker(buttonGroup_);
+  if (auto state = state_.lock()) {
+    const CreateTool currentTool = state->createTool;
+    int selectId = -1;
+    for (auto button : buttonGroup_->buttons()) {
+      const int buttonId = buttonGroup_->id(button);
+      const CreateTool toolForButton = buttonTools_.value(buttonId,
+          CreateTool::kNone);
+      if (toolForButton == currentTool) {
+        button->setChecked(true);
+        updateStatusLabel(buttonDescriptions_.value(buttonId));
+        return;
+      }
+      if (button == selectButton_) {
+        selectId = buttonId;
+      }
+    }
+    if (selectId >= 0) {
+      if (auto *button = buttonGroup_->button(selectId)) {
+        button->setChecked(true);
+        updateStatusLabel(buttonDescriptions_.value(selectId));
+      }
+    }
+  } else if (selectButton_) {
+    selectButton_->setChecked(true);
+    const int id = buttonGroup_->id(selectButton_);
+    if (id >= 0) {
+      updateStatusLabel(buttonDescriptions_.value(id));
+    }
+  }
+}
+
 std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::graphicsButtons()
 {
   return {
-      {QStringLiteral("Rectangle"), rectangle25_bits, rectangle25_width, rectangle25_height},
-      {QStringLiteral("Oval"), oval25_bits, oval25_width, oval25_height},
-      {QStringLiteral("Arc"), arc25_bits, arc25_width, arc25_height},
-      {QStringLiteral("Text"), text25_bits, text25_width, text25_height},
-      {QStringLiteral("Polyline"), polyline25_bits, polyline25_width, polyline25_height},
-      {QStringLiteral("Line"), line25_bits, line25_width, line25_height},
-      {QStringLiteral("Polygon"), polygon25_bits, polygon25_width, polygon25_height},
-      {QStringLiteral("Image"), image25_bits, image25_width, image25_height},
+      {QStringLiteral("Rectangle"), rectangle25_bits, rectangle25_width,
+          rectangle25_height, CreateTool::kRectangle},
+      {QStringLiteral("Oval"), oval25_bits, oval25_width, oval25_height,
+          CreateTool::kOval},
+      {QStringLiteral("Arc"), arc25_bits, arc25_width, arc25_height,
+          CreateTool::kArc},
+      {QStringLiteral("Text"), text25_bits, text25_width, text25_height,
+          CreateTool::kText},
+      {QStringLiteral("Polyline"), polyline25_bits, polyline25_width,
+          polyline25_height, CreateTool::kPolyline},
+      {QStringLiteral("Line"), line25_bits, line25_width, line25_height,
+          CreateTool::kLine},
+      {QStringLiteral("Polygon"), polygon25_bits, polygon25_width,
+          polygon25_height, CreateTool::kPolygon},
+      {QStringLiteral("Image"), image25_bits, image25_width,
+          image25_height, CreateTool::kImage},
   };
 }
 
@@ -308,13 +404,21 @@ std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::monitorButtons()
 {
   return {
-      {QStringLiteral("Meter"), meter25_bits, meter25_width, meter25_height},
-      {QStringLiteral("Bar Monitor"), bar25_bits, bar25_width, bar25_height},
-      {QStringLiteral("Strip Chart"), stripChart25_bits, stripChart25_width, stripChart25_height},
-      {QStringLiteral("Text Monitor"), textUpdate25_bits, textUpdate25_width, textUpdate25_height},
-      {QStringLiteral("Scale Monitor"), indicator25_bits, indicator25_width, indicator25_height},
-      {QStringLiteral("Cartesian Plot"), cartesianPlot25_bits, cartesianPlot25_width, cartesianPlot25_height},
-      {QStringLiteral("Byte Monitor"), byte25_bits, byte25_width, byte25_height},
+      {QStringLiteral("Meter"), meter25_bits, meter25_width, meter25_height,
+          CreateTool::kMeter},
+      {QStringLiteral("Bar Monitor"), bar25_bits, bar25_width,
+          bar25_height, CreateTool::kBarMonitor},
+      {QStringLiteral("Strip Chart"), stripChart25_bits, stripChart25_width,
+          stripChart25_height, CreateTool::kStripChart},
+      {QStringLiteral("Text Monitor"), textUpdate25_bits,
+          textUpdate25_width, textUpdate25_height, CreateTool::kTextMonitor},
+      {QStringLiteral("Scale Monitor"), indicator25_bits,
+          indicator25_width, indicator25_height, CreateTool::kScaleMonitor},
+      {QStringLiteral("Cartesian Plot"), cartesianPlot25_bits,
+          cartesianPlot25_width, cartesianPlot25_height,
+          CreateTool::kCartesianPlot},
+      {QStringLiteral("Byte Monitor"), byte25_bits, byte25_width,
+          byte25_height, CreateTool::kByteMonitor},
   };
 }
 
@@ -322,14 +426,27 @@ std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::controlButtons()
 {
   return {
-      {QStringLiteral("Choice Button"), choiceButton25_bits, choiceButton25_width, choiceButton25_height},
-      {QStringLiteral("Text Entry"), textEntry25_bits, textEntry25_width, textEntry25_height},
-      {QStringLiteral("Message Button"), messageButton25_bits, messageButton25_width, messageButton25_height},
-      {QStringLiteral("Menu"), menu25_bits, menu25_width, menu25_height},
-      {QStringLiteral("Slider"), valuator25_bits, valuator25_width, valuator25_height},
-      {QStringLiteral("Related Display"), relatedDisplay25_bits, relatedDisplay25_width, relatedDisplay25_height},
-      {QStringLiteral("Shell Command"), shellCommand25_bits, shellCommand25_width, shellCommand25_height},
-      {QStringLiteral("Wheel Switch"), wheelSwitch25_bits, wheelSwitch25_width, wheelSwitch25_height},
+      {QStringLiteral("Choice Button"), choiceButton25_bits,
+          choiceButton25_width, choiceButton25_height,
+          CreateTool::kChoiceButton},
+      {QStringLiteral("Text Entry"), textEntry25_bits, textEntry25_width,
+          textEntry25_height, CreateTool::kTextEntry},
+      {QStringLiteral("Message Button"), messageButton25_bits,
+          messageButton25_width, messageButton25_height,
+          CreateTool::kMessageButton},
+      {QStringLiteral("Menu"), menu25_bits, menu25_width, menu25_height,
+          CreateTool::kMenu},
+      {QStringLiteral("Slider"), valuator25_bits, valuator25_width,
+          valuator25_height, CreateTool::kSlider},
+      {QStringLiteral("Related Display"), relatedDisplay25_bits,
+          relatedDisplay25_width, relatedDisplay25_height,
+          CreateTool::kRelatedDisplay},
+      {QStringLiteral("Shell Command"), shellCommand25_bits,
+          shellCommand25_width, shellCommand25_height,
+          CreateTool::kShellCommand},
+      {QStringLiteral("Wheel Switch"), wheelSwitch25_bits,
+          wheelSwitch25_width, wheelSwitch25_height,
+          CreateTool::kWheelSwitch},
   };
 }
 
@@ -337,6 +454,7 @@ std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::miscButtons()
 {
   return {
-      {QStringLiteral("Select"), select25_bits, select25_width, select25_height},
+      {QStringLiteral("Select"), select25_bits, select25_width,
+          select25_height, CreateTool::kNone},
   };
 }

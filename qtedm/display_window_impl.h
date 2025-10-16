@@ -206,6 +206,14 @@ public:
     updateDirtyIndicator();
   }
 
+  ~DisplayWindow() override
+  {
+    clearSelections();
+    if (undoStack_) {
+      undoStack_->disconnect(this);
+    }
+  }
+
   int gridSpacing() const
   {
     return gridSpacing_;

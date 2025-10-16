@@ -734,7 +734,7 @@ int main(int argc, char *argv[])
 
         static QString lastDirectory;
         QFileDialog dialog(&win, QStringLiteral("Open Display"));
-        dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+        //dialog.setOption(QFileDialog::DontUseNativeDialog, true); // Disabled because it causes an unitialized value 
         dialog.setAcceptMode(QFileDialog::AcceptOpen);
         dialog.setFileMode(QFileDialog::ExistingFile);
         dialog.setNameFilters({

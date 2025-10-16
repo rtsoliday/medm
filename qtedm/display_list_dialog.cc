@@ -196,20 +196,11 @@ QString DisplayListDialog::labelForDisplay(DisplayWindow *display) const
     return title;
   }
 
-  QString trimmedTitle = title;
-  if (trimmedTitle.endsWith(QLatin1Char('*'))) {
-    trimmedTitle.chop(1);
+  const bool isDirty = title.endsWith(QLatin1Char('*'));
+  if (isDirty) {
+    return path + QLatin1Char('*');
   }
-  const QString fileName = QFileInfo(path).fileName();
-  if (!fileName.isEmpty() && trimmedTitle == fileName) {
-    return title + QStringLiteral("  ") + path;
-  }
-
-  if (title.isEmpty()) {
-    return path;
-  }
-
-  return title + QStringLiteral("  ") + path;
+  return path;
 }
 
 void DisplayListDialog::handleRaiseRequested()

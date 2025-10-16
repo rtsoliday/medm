@@ -1878,7 +1878,7 @@ private:
   std::weak_ptr<DisplayState> state_;
   QFont labelFont_;
   QPalette resourcePaletteBase_;
-  QPointer<ResourcePaletteDialog> resourcePalette_;
+  ResourcePaletteDialog *resourcePalette_ = nullptr;
   DisplayAreaWidget *displayArea_ = nullptr;
   QString filePath_;
   QString currentLoadDirectory_;
@@ -4061,7 +4061,7 @@ private:
 
   void closeResourcePalette()
   {
-    if (!resourcePalette_.isNull() && resourcePalette_->isVisible()) {
+    if (resourcePalette_ && resourcePalette_->isVisible()) {
       resourcePalette_->close();
     }
   }
@@ -4096,7 +4096,7 @@ private:
 
   ResourcePaletteDialog *ensureResourcePalette()
   {
-    if (resourcePalette_.isNull()) {
+    if (!resourcePalette_) {
       resourcePalette_ = new ResourcePaletteDialog(
           resourcePaletteBase_, labelFont_, font(), this);
       QObject::connect(resourcePalette_, &QDialog::finished, this,
@@ -4105,7 +4105,7 @@ private:
           });
       QObject::connect(resourcePalette_, &QObject::destroyed, this,
           [this]() {
-            resourcePalette_.clear();
+            resourcePalette_ = nullptr;
             handleResourcePaletteClosed();
           });
       auto *cutShortcut = new QShortcut(
@@ -8950,7 +8950,7 @@ private:
 
   void refreshResourcePaletteGeometry()
   {
-    if (resourcePalette_.isNull()) {
+    if (!resourcePalette_) {
       return;
     }
     resourcePalette_->refreshGeometryFromSelection();
@@ -8958,7 +8958,7 @@ private:
 
   void updateResourcePaletteDisplayControls()
   {
-    if (resourcePalette_.isNull()) {
+    if (!resourcePalette_) {
       return;
     }
     resourcePalette_->refreshDisplayControls();

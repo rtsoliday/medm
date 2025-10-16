@@ -9489,35 +9489,30 @@ private:
 
   void scheduleDeferredResize(QWidget *reference)
   {
-    QPointer<ResourcePaletteDialog> guard(this);
     QPointer<QWidget> ref(reference);
-    QMetaObject::invokeMethod(this, [guard, ref]() {
-      if (!guard) {
-        return;
-      }
-
-  QWidget *referenceWidget = ref ? ref.data() : guard->parentWidget();
-  QWidget *anchorWidget = referenceWidget ? referenceWidget : guard.data();
-  QScreen *screen = guard->screenForWidget(anchorWidget);
+    QMetaObject::invokeMethod(this, [this, ref]() {
+      QWidget *referenceWidget = ref ? ref.data() : parentWidget();
+      QWidget *anchorWidget = referenceWidget ? referenceWidget : this;
+      QScreen *screen = screenForWidget(anchorWidget);
       if (!screen) {
         screen = QGuiApplication::primaryScreen();
       }
       const QRect available = screen ? screen->availableGeometry() : QRect();
 
-      guard->resizeToFitContents(available);
+      resizeToFitContents(available);
 
       if (referenceWidget) {
         const QRect referenceFrame = referenceWidget->frameGeometry();
         QPoint desiredTopLeft(referenceFrame.topRight());
         desiredTopLeft.rx() += 12;
-        QRect desiredRect(desiredTopLeft, guard->size());
+        QRect desiredRect(desiredTopLeft, size());
         if (available.isNull() || available.contains(desiredRect)) {
-          guard->move(desiredTopLeft);
+          move(desiredTopLeft);
           return;
         }
       }
 
-      guard->moveToTopRight(available, guard->size());
+      moveToTopRight(available, size());
     }, Qt::QueuedConnection);
   }
 
@@ -10486,41 +10481,36 @@ private:
       return;
     }
 
-    QPointer<ResourcePaletteDialog> guard(this);
     QPointer<ColorPaletteDialog> palette(colorPaletteDialog_);
-    QMetaObject::invokeMethod(colorPaletteDialog_, [guard, palette]() {
-      if (!guard || !palette) {
+    QMetaObject::invokeMethod(this, [this, palette]() {
+      ColorPaletteDialog *dialog = palette.data();
+      if (!dialog) {
         return;
       }
-      if (!palette->isVisible()) {
-        return;
-      }
-
-      QWidget *reference = guard.data();
-      if (!reference) {
+      if (!dialog->isVisible()) {
         return;
       }
 
-      QScreen *screen = guard->screenForWidget(reference);
+      QScreen *screen = screenForWidget(this);
       if (!screen) {
         screen = QGuiApplication::primaryScreen();
       }
       const QRect available = screen ? screen->availableGeometry() : QRect();
 
-      const QRect referenceFrame = reference->frameGeometry();
+      const QRect referenceFrame = frameGeometry();
       if (!referenceFrame.isValid()) {
         return;
       }
 
-      QSize paletteSize = palette->size();
+      QSize paletteSize = dialog->size();
       if (paletteSize.isEmpty()) {
-        paletteSize = palette->sizeHint().expandedTo(palette->minimumSize());
+        paletteSize = dialog->sizeHint().expandedTo(dialog->minimumSize());
       }
       if (paletteSize.isEmpty()) {
         return;
       }
 
-      guard->placeColorPaletteRelativeToReference(palette, paletteSize,
+      placeColorPaletteRelativeToReference(dialog, paletteSize,
           referenceFrame, available);
     }, Qt::QueuedConnection);
   }

@@ -694,6 +694,24 @@ public:
     pasteFromClipboard();
   }
 
+  void triggerCutFromMenu()
+  {
+    setAsActiveDisplay();
+    cutSelection();
+  }
+
+  void triggerCopyFromMenu()
+  {
+    setAsActiveDisplay();
+    copySelection();
+  }
+
+  void triggerPasteFromMenu()
+  {
+    setAsActiveDisplay();
+    pasteSelection();
+  }
+
   void raiseSelection()
   {
     setAsActiveDisplay();
@@ -2829,6 +2847,7 @@ private:
     clearPolygonSelection();
     clearCompositeSelection();
     closeResourcePalette();
+    notifyMenus();
   }
 
   template <typename ElementType>
@@ -7386,127 +7405,106 @@ private:
       return false;
     }
     clearMultiSelection();
+    bool handled = false;
     if (auto *text = dynamic_cast<TextElement *>(widget)) {
       selectTextElement(text);
       showResourcePaletteForText(text);
-      return true;
-    }
-    if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
+      handled = true;
+    } else if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
       selectTextEntryElement(textEntry);
       showResourcePaletteForTextEntry(textEntry);
-      return true;
-    }
-    if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
+      handled = true;
+    } else if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
       selectSliderElement(slider);
       showResourcePaletteForSlider(slider);
-      return true;
-    }
-    if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
+      handled = true;
+    } else if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
       selectWheelSwitchElement(wheel);
       showResourcePaletteForWheelSwitch(wheel);
-      return true;
-    }
-    if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
+      handled = true;
+    } else if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
       selectChoiceButtonElement(choice);
       showResourcePaletteForChoiceButton(choice);
-      return true;
-    }
-    if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
+      handled = true;
+    } else if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
       selectMenuElement(menu);
       showResourcePaletteForMenu(menu);
-      return true;
-    }
-    if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
+      handled = true;
+    } else if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
       selectMessageButtonElement(message);
       showResourcePaletteForMessageButton(message);
-      return true;
-    }
-    if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
+      handled = true;
+    } else if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
       selectShellCommandElement(shell);
       showResourcePaletteForShellCommand(shell);
-      return true;
-    }
-    if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
+      handled = true;
+    } else if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
       selectRelatedDisplayElement(related);
       showResourcePaletteForRelatedDisplay(related);
-      return true;
-    }
-    if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
+      handled = true;
+    } else if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
       selectTextMonitorElement(textMonitor);
       showResourcePaletteForTextMonitor(textMonitor);
-      return true;
-    }
-    if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+      handled = true;
+    } else if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
       selectMeterElement(meter);
       showResourcePaletteForMeter(meter);
-      return true;
-    }
-    if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      handled = true;
+    } else if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
       selectScaleMonitorElement(scale);
       showResourcePaletteForScale(scale);
-      return true;
-    }
-    if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
+      handled = true;
+    } else if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
       selectStripChartElement(strip);
       showResourcePaletteForStripChart(strip);
-      return true;
-    }
-    if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
+      handled = true;
+    } else if (auto *cart = dynamic_cast<CartesianPlotElement *>(widget)) {
       selectCartesianPlotElement(cart);
       showResourcePaletteForCartesianPlot(cart);
-      return true;
-    }
-    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+      handled = true;
+    } else if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
       selectBarMonitorElement(bar);
       showResourcePaletteForBar(bar);
-      return true;
-    }
-    if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
+      handled = true;
+    } else if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       selectByteMonitorElement(byte);
       showResourcePaletteForByte(byte);
-      return true;
-    }
-    if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
+      handled = true;
+    } else if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
       selectRectangleElement(rectangle);
       showResourcePaletteForRectangle(rectangle);
-      return true;
-    }
-    if (auto *image = dynamic_cast<ImageElement *>(widget)) {
+      handled = true;
+    } else if (auto *image = dynamic_cast<ImageElement *>(widget)) {
       selectImageElement(image);
       showResourcePaletteForImage(image);
-      return true;
-    }
-    if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
+      handled = true;
+    } else if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       selectOvalElement(oval);
       showResourcePaletteForOval(oval);
-      return true;
-    }
-    if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
+      handled = true;
+    } else if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
       selectArcElement(arc);
       showResourcePaletteForArc(arc);
-      return true;
-    }
-    if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
+      handled = true;
+    } else if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
       selectPolylineElement(polyline);
       showResourcePaletteForPolyline(polyline);
-      return true;
-    }
-    if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
+      handled = true;
+    } else if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
       selectPolygonElement(polygon);
       showResourcePaletteForPolygon(polygon);
-      return true;
-    }
-    if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+      handled = true;
+    } else if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
       selectCompositeElement(composite);
       showResourcePaletteForComposite(composite);
-      return true;
-    }
-    if (auto *line = dynamic_cast<LineElement *>(widget)) {
+      handled = true;
+    } else if (auto *line = dynamic_cast<LineElement *>(widget)) {
       selectLineElement(line);
       showResourcePaletteForLine(line);
-      return true;
+      handled = true;
     }
-    return false;
+    notifyMenus();
+    return handled;
   }
 
   bool handleMultiSelectionClick(QWidget *widget,

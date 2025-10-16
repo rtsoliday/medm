@@ -290,19 +290,19 @@ int main(int argc, char *argv[])
   QObject::connect(cutAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
-          active->cutSelection();
+          active->triggerCutFromMenu();
         }
       });
   QObject::connect(copyAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
-          active->copySelection();
+          active->triggerCopyFromMenu();
         }
       });
   QObject::connect(pasteAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
-          active->pasteSelection();
+          active->triggerPasteFromMenu();
         }
       });
   QObject::connect(raiseAct, &QAction::triggered, &win,

@@ -286,6 +286,9 @@ ifeq ($(OS), Linux)
   RANLIB = ranlib
   CFLAGS = -m64 -O3 -g -Wall -fPIC $(EXTRA_INC_DIRS)
   CCFLAGS = -m64 -O3 -g -Wall -fPIC $(EXTRA_INC_DIRS)
+  #Use this for memory checking with valgrind
+  #CFLAGS = -m64  -g -O0 -Wall -fno-inline -fno-omit-frame-pointer -fPIC $(EXTRA_INC_DIRS)
+  #CCFLAGS = -m64  -g -O0 -Wall -fno-inline -fno-omit-frame-pointer -fPIC $(EXTRA_INC_DIRS)
   LDFLAGS += -rdynamic -m64
   LIBRARY_SYS_LIBS = -lpthread -lm -lrt -ldl -lgcc
   PROD_SYS_LIBS = -lpthread -lm -lrt -ldl -lgcc

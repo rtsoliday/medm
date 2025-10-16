@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
   editMenu->addSeparator();
   auto *findOutliersAct = editMenu->addAction("Find &Outliers");
   auto *refreshAct = editMenu->addAction("&Refresh");
-  editMenu->addAction("Edit &Summary...");
+  auto *editSummaryAct = editMenu->addAction("Edit &Summary...");
 
   editMenu->setEnabled(false);
   editMenu->menuAction()->setEnabled(false);
@@ -497,6 +497,12 @@ int main(int argc, char *argv[])
           active->refreshDisplayView();
         }
       });
+  QObject::connect(editSummaryAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->showEditSummaryDialog();
+        }
+      });
   QObject::connect(saveAsAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
@@ -534,7 +540,7 @@ int main(int argc, char *argv[])
     flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
     rotateCounterclockwiseAct, sameSizeAct, textToContentsAct, toggleGridAct, toggleSnapAct,
     gridSpacingAct, unselectAct, selectAllAct, selectDisplayAct,
-    findOutliersAct, refreshAct]() {
+    findOutliersAct, refreshAct, editSummaryAct]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {
@@ -655,6 +661,7 @@ int main(int argc, char *argv[])
     selectDisplayAct->setEnabled(canOperateSelection);
     findOutliersAct->setEnabled(canOperateSelection);
     refreshAct->setEnabled(canOperateSelection);
+    editSummaryAct->setEnabled(canOperateSelection);
   };
 
   auto registerDisplayWindow = [state, updateMenus, &win](

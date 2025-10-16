@@ -114,7 +114,9 @@ int main(int argc, char *argv[])
 
   auto *editMenu = menuBar->addMenu("&Edit");
   editMenu->setFont(fixed13Font);
-  editMenu->addAction("&Undo");
+  auto *undoAct = editMenu->addAction("&Undo");
+  undoAct->setShortcut(QKeySequence::Undo);
+  undoAct->setEnabled(false);
   editMenu->addSeparator();
   auto *cutAct = editMenu->addAction("Cu&t");
   cutAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_X));
@@ -275,6 +277,14 @@ int main(int argc, char *argv[])
       [state]() {
         if (auto active = state->activeDisplay.data()) {
           active->save();
+        }
+      });
+  QObject::connect(undoAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          if (auto *stack = active->undoStack()) {
+            stack->undo();
+          }
         }
       });
   QObject::connect(cutAct, &QAction::triggered, &win,
@@ -516,7 +526,7 @@ int main(int argc, char *argv[])
       displayBackgroundColor);
 
   *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
-    closeAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
+    closeAct, undoAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
     ungroupAct, alignLeftAct, alignHorizontalCenterAct, alignRightAct,
     alignTopAct, alignVerticalCenterAct, alignBottomAct, positionToGridAct,
     edgesToGridAct, spaceHorizontalAct, spaceVerticalAct, space2DAct,
@@ -570,6 +580,21 @@ int main(int argc, char *argv[])
     saveAct->setEnabled(canEditActive && active->isDirty());
     saveAsAct->setEnabled(canEditActive);
     closeAct->setEnabled(active);
+    QString undoTextLabel = QStringLiteral("&Undo");
+    bool enableUndo = false;
+    if (canEditActive && active) {
+      if (auto *stack = active->undoStack()) {
+        if (stack->canUndo()) {
+          enableUndo = true;
+          const QString stackText = stack->undoText();
+          if (!stackText.isEmpty()) {
+            undoTextLabel = QStringLiteral("&Undo %1").arg(stackText);
+          }
+        }
+      }
+    }
+    undoAct->setEnabled(enableUndo);
+    undoAct->setText(undoTextLabel);
     const bool hasSelection = canEditActive && active
         && active->hasCopyableSelection();
     cutAct->setEnabled(hasSelection);

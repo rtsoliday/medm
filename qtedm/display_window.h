@@ -4,6 +4,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QByteArray>
+#include <QBuffer>
 #include <QCloseEvent>
 #include <QColor>
 #include <QComboBox>
@@ -51,6 +52,8 @@
 #include <QStyleFactory>
 #include <QString>
 #include <QStringList>
+#include <QUndoStack>
+#include <QUndoCommand>
 #include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>

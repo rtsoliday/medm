@@ -155,6 +155,27 @@ public:
     displayArea_->setGridColor(displayPalette.color(QPalette::WindowText));
     setCentralWidget(displayArea_);
 
+    undoStack_ = new QUndoStack(this);
+    cleanStateSnapshot_ = serializeStateForUndo(filePath_);
+    lastCommittedState_ = cleanStateSnapshot_;
+    undoStack_->setClean();
+    QObject::connect(undoStack_, &QUndoStack::cleanChanged, this,
+        [this](bool) {
+          updateDirtyFromUndoStack();
+        });
+    QObject::connect(undoStack_, &QUndoStack::indexChanged, this,
+        [this]() {
+          notifyMenus();
+        });
+    QObject::connect(undoStack_, &QUndoStack::canUndoChanged, this,
+        [this]() {
+          notifyMenus();
+        });
+    QObject::connect(undoStack_, &QUndoStack::undoTextChanged, this,
+        [this]() {
+          notifyMenus();
+        });
+
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
     setFocusPolicy(Qt::StrongFocus);
 
@@ -232,6 +253,7 @@ public:
     if (snapToGrid_ == snap) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Toggle Snap To Grid"));
     snapToGrid_ = snap;
     markDirty();
     updateResourcePaletteDisplayControls();
@@ -649,6 +671,7 @@ public:
 
   void cutSelection()
   {
+    setNextUndoLabel(QStringLiteral("Cut Selection"));
     copySelectionInternal(true);
   }
 
@@ -659,6 +682,7 @@ public:
 
   void pasteSelection()
   {
+    setNextUndoLabel(QStringLiteral("Paste Selection"));
     pasteFromClipboard();
   }
 
@@ -675,6 +699,7 @@ public:
       return;
     }
 
+    setNextUndoLabel(QStringLiteral("Raise Selection"));
     bool reordered = false;
     for (QWidget *widget : widgets) {
       if (!widget) {
@@ -712,6 +737,7 @@ public:
       return;
     }
 
+    setNextUndoLabel(QStringLiteral("Lower Selection"));
     bool reordered = false;
     for (QWidget *widget : widgets) {
       if (!widget) {
@@ -781,6 +807,7 @@ public:
       return;
     }
 
+    setNextUndoLabel(QStringLiteral("Group Elements"));
     auto *composite = new CompositeElement(displayArea_);
     composite->setGeometry(compositeRect);
     composite->show();
@@ -858,6 +885,7 @@ public:
       return;
     }
 
+    setNextUndoLabel(QStringLiteral("Ungroup Elements"));
     for (CompositeElement *composite : std::as_const(composites)) {
       if (!composite || composite->parentWidget() != displayArea_) {
         continue;
@@ -902,6 +930,45 @@ public:
   }
 
 private:
+  class DisplaySnapshotCommand : public QUndoCommand
+  {
+  public:
+    DisplaySnapshotCommand(DisplayWindow &window, QByteArray before,
+        QByteArray after, QString label)
+      : QUndoCommand(std::move(label))
+      , window_(window)
+      , before_(std::move(before))
+      , after_(std::move(after))
+    {
+    }
+
+    void undo() override
+    {
+      window_.restoreSerializedState(before_);
+      skipFirstRedo_ = false;
+    }
+
+    void redo() override
+    {
+      if (skipFirstRedo_) {
+        skipFirstRedo_ = false;
+        return;
+      }
+      window_.restoreSerializedState(after_);
+    }
+
+  private:
+    DisplayWindow &window_;
+    QByteArray before_;
+    QByteArray after_;
+    bool skipFirstRedo_ = true;
+  };
+
+  void setNextUndoLabel(const QString &label);
+  QByteArray serializeStateForUndo(const QString &fileNameHint = QString()) const;
+  bool restoreSerializedState(const QByteArray &data);
+  void updateDirtyFromUndoStack();
+
   enum class AlignmentMode {
     kLeft,
     kHorizontalCenter,
@@ -1029,6 +1096,8 @@ public:
       return;
     }
 
+    setNextUndoLabel(QStringLiteral("Same Size"));
+
     const int targetWidth =
         static_cast<int>((totalWidth + count / 2) / count);
     const int targetHeight =
@@ -1077,12 +1146,14 @@ public:
       return;
     }
 
+    setNextUndoLabel(QStringLiteral("Size to Contents"));
+
     bool changed = false;
     for (TextElement *text : std::as_const(textWidgets)) {
       if (!text) {
         continue;
       }
-      const QRect currentRect = widgetDisplayRect(text);
+      const QRect currentRect = text->geometry();
       const QString content = text->text();
       const QFontMetrics metrics(text->font());
       const QStringList lines =
@@ -1303,6 +1374,11 @@ public:
   bool hasFilePath() const
   {
     return !filePath_.isEmpty();
+  }
+
+  QUndoStack *undoStack() const
+  {
+    return undoStack_;
   }
 
 protected:
@@ -1732,6 +1808,7 @@ private:
   void writeWidgetAdl(QTextStream &stream, QWidget *widget, int indent,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveForeground,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveBackground) const;
+  void writeAdlToStream(QTextStream &stream, const QString &fileNameHint) const;
   TextColorMode parseTextColorMode(const QString &value) const;
   TextVisibilityMode parseVisibilityMode(const QString &value) const;
   MeterLabel parseMeterLabel(const QString &value) const;
@@ -1767,6 +1844,12 @@ private:
   DisplayAreaWidget *displayArea_ = nullptr;
   QString filePath_;
   QString currentLoadDirectory_;
+  QUndoStack *undoStack_ = nullptr;
+  QByteArray lastCommittedState_;
+  QString pendingUndoLabel_;
+  bool suppressUndoCapture_ = false;
+  bool restoringState_ = false;
+  QByteArray cleanStateSnapshot_;
   QWidget *currentElementParent_ = nullptr;
   QPoint currentElementOffset_ = QPoint();
   bool suppressLoadRegistration_ = false;
@@ -7542,6 +7625,7 @@ private:
     middleButtonDragWidgets_.clear();
     middleButtonBoundingRect_ = QRect();
     if (applyChanges && wasActive && moved) {
+      setNextUndoLabel(QStringLiteral("Move Selection"));
       markDirty();
       refreshResourcePaletteGeometry();
     }
@@ -7666,7 +7750,7 @@ private:
       return;
     }
     CompositeResizeInfo info;
-    info.initialRect = widgetDisplayRect(composite);
+    info.initialRect = composite->geometry();
     if (!info.initialRect.isValid()) {
       middleButtonResizeCompositeInfo_.insert(composite, info);
       return;
@@ -7771,6 +7855,7 @@ private:
     middleButtonResizeCompositeInfo_.clear();
     middleButtonResizeCompositeUpdated_.clear();
     if (applyChanges && wasActive && resized) {
+      setNextUndoLabel(QStringLiteral("Resize Selection"));
       markDirty();
       refreshResourcePaletteGeometry();
       notifyMenus();
@@ -7795,6 +7880,32 @@ private:
     if (widgets.size() < 2) {
       return;
     }
+
+    QString label;
+    switch (mode) {
+    case AlignmentMode::kLeft:
+      label = QStringLiteral("Align Left");
+      break;
+    case AlignmentMode::kHorizontalCenter:
+      label = QStringLiteral("Align Horizontal Center");
+      break;
+    case AlignmentMode::kRight:
+      label = QStringLiteral("Align Right");
+      break;
+    case AlignmentMode::kTop:
+      label = QStringLiteral("Align Top");
+      break;
+    case AlignmentMode::kVerticalCenter:
+      label = QStringLiteral("Align Vertical Center");
+      break;
+    case AlignmentMode::kBottom:
+      label = QStringLiteral("Align Bottom");
+      break;
+    }
+    if (label.isEmpty()) {
+      label = QStringLiteral("Align Selection");
+    }
+    setNextUndoLabel(label);
 
     int minLeft = std::numeric_limits<int>::max();
     int minTop = std::numeric_limits<int>::max();
@@ -7869,6 +7980,26 @@ private:
     if (widgets.isEmpty()) {
       return;
     }
+
+    QString label;
+    switch (action) {
+    case OrientationAction::kFlipHorizontal:
+      label = QStringLiteral("Flip Horizontal");
+      break;
+    case OrientationAction::kFlipVertical:
+      label = QStringLiteral("Flip Vertical");
+      break;
+    case OrientationAction::kRotateClockwise:
+      label = QStringLiteral("Rotate Clockwise");
+      break;
+    case OrientationAction::kRotateCounterclockwise:
+      label = QStringLiteral("Rotate Counterclockwise");
+      break;
+    }
+    if (label.isEmpty()) {
+      label = QStringLiteral("Orient Selection");
+    }
+    setNextUndoLabel(label);
 
     int minLeft = std::numeric_limits<int>::max();
     int minTop = std::numeric_limits<int>::max();
@@ -8221,6 +8352,18 @@ private:
       return;
     }
 
+    QString label;
+    if (horizontal && vertical) {
+      label = QStringLiteral("Center Both");
+    } else if (horizontal) {
+      label = QStringLiteral("Center Horizontally");
+    } else if (vertical) {
+      label = QStringLiteral("Center Vertically");
+    } else {
+      label = QStringLiteral("Center Selection");
+    }
+    setNextUndoLabel(label);
+
     QRect selectionBounds;
     bool hasBounds = false;
     QVector<QRect> geometries;
@@ -8425,6 +8568,9 @@ private:
     }
 
     if (anyChanged) {
+      setNextUndoLabel(orientation == Qt::Horizontal
+          ? QStringLiteral("Space Horizontally")
+          : QStringLiteral("Space Vertically"));
       markDirty();
       refreshResourcePaletteGeometry();
       notifyMenus();
@@ -8695,6 +8841,7 @@ private:
     }
 
     if (anyChanged) {
+      setNextUndoLabel(QStringLiteral("Space Evenly"));
       markDirty();
       refreshResourcePaletteGeometry();
       notifyMenus();
@@ -9791,6 +9938,7 @@ private:
     }
 
     if (applyChanges && vertexEditMoved_) {
+      setNextUndoLabel(QStringLiteral("Edit Vertices"));
       markDirty();
       refreshResourcePaletteGeometry();
       notifyMenus();
@@ -9817,6 +9965,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Text"));
     QRect target = rect;
     if (target.height() < kMinimumTextElementHeight) {
       target.setHeight(kMinimumTextElementHeight);
@@ -9843,6 +9992,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Text Monitor"));
     QRect target = adjustRectToDisplayArea(rect);
     if (target.width() <= 0 || target.height() <= 0) {
       return;
@@ -9865,6 +10015,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Text Entry"));
     QRect target = rect;
     if (target.width() < kMinimumTextWidth) {
       target.setWidth(kMinimumTextWidth);
@@ -9893,6 +10044,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Slider"));
     QRect target = rect;
     if (target.width() < kMinimumSliderWidth) {
       target.setWidth(kMinimumSliderWidth);
@@ -9920,6 +10072,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Wheel Switch"));
     QRect target = rect;
     if (target.width() < kMinimumWheelSwitchWidth) {
       target.setWidth(kMinimumWheelSwitchWidth);
@@ -9947,6 +10100,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Choice Button"));
     QRect target = rect;
     if (target.width() < kMinimumTextWidth) {
       target.setWidth(kMinimumTextWidth);
@@ -9975,6 +10129,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Menu"));
     QRect target = rect;
     if (target.width() < kMinimumTextWidth) {
       target.setWidth(kMinimumTextWidth);
@@ -10003,6 +10158,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Message Button"));
     QRect target = rect;
     if (target.width() < kMinimumTextWidth) {
       target.setWidth(kMinimumTextWidth);
@@ -10031,6 +10187,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Shell Command"));
     QRect target = rect;
     if (target.width() < kMinimumTextWidth) {
       target.setWidth(kMinimumTextWidth);
@@ -10060,6 +10217,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Related Display"));
     QRect target = rect;
     if (target.width() < kMinimumTextWidth) {
       target.setWidth(kMinimumTextWidth);
@@ -10088,6 +10246,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Meter"));
     QRect target = rect;
     if (target.width() < kMinimumMeterSize) {
       target.setWidth(kMinimumMeterSize);
@@ -10115,6 +10274,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Bar Monitor"));
     QRect target = rect;
     if (target.width() < kMinimumBarSize) {
       target.setWidth(kMinimumBarSize);
@@ -10142,6 +10302,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Scale Monitor"));
     QRect target = rect;
     if (target.width() < kMinimumScaleSize) {
       target.setWidth(kMinimumScaleSize);
@@ -10169,6 +10330,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Strip Chart"));
     QRect target = rect;
     if (target.width() < kMinimumStripChartWidth) {
       target.setWidth(kMinimumStripChartWidth);
@@ -10196,6 +10358,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Cartesian Plot"));
     QRect target = rect;
     if (target.width() < kMinimumCartesianPlotWidth) {
       target.setWidth(kMinimumCartesianPlotWidth);
@@ -10223,6 +10386,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Byte Monitor"));
     QRect target = rect;
     if (target.width() < kMinimumByteSize) {
       target.setWidth(kMinimumByteSize);
@@ -10250,6 +10414,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Rectangle"));
     QRect target = rect;
     if (target.width() < kMinimumRectangleSize) {
       target.setWidth(kMinimumRectangleSize);
@@ -10277,6 +10442,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Image"));
     QRect target = rect;
     if (target.width() < kMinimumRectangleSize) {
       target.setWidth(kMinimumRectangleSize);
@@ -10307,6 +10473,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Oval"));
     QRect target = rect;
     if (target.width() < kMinimumRectangleSize) {
       target.setWidth(kMinimumRectangleSize);
@@ -10334,6 +10501,7 @@ private:
     if (!displayArea_) {
       return;
     }
+    setNextUndoLabel(QStringLiteral("Create Arc"));
     QRect target = rect;
     if (target.width() < kMinimumRectangleSize) {
       target.setWidth(kMinimumRectangleSize);
@@ -10841,7 +11009,29 @@ private:
       }
     });
 
-    addMenuAction(&menu, QStringLiteral("Undo"));
+    QString undoLabel = QStringLiteral("Undo");
+    bool canUndo = false;
+    if (undoStack_) {
+      if (undoStack_->canUndo()) {
+        canUndo = true;
+        const QString stackText = undoStack_->undoText();
+        if (!stackText.isEmpty()) {
+          undoLabel = QStringLiteral("Undo %1").arg(stackText);
+        }
+      }
+    }
+    auto *undoAction =
+        addMenuAction(&menu, undoLabel, QKeySequence::Undo);
+    undoAction->setEnabled(canUndo);
+    QObject::connect(undoAction, &QAction::triggered, this, [this]() {
+      if (!undoStack_) {
+        return;
+      }
+      setAsActiveDisplay();
+      if (undoStack_->canUndo()) {
+        undoStack_->undo();
+      }
+    });
 
     menu.addSeparator();
     auto *cutAction = addMenuAction(&menu, QStringLiteral("Cut"),
@@ -11141,7 +11331,15 @@ inline bool DisplayWindow::save(QWidget *dialogParent)
   }
   dirty_ = false;
   setWindowTitle(QFileInfo(filePath_).fileName());
-  updateDirtyIndicator();
+  cleanStateSnapshot_ = serializeStateForUndo(filePath_);
+  lastCommittedState_ = cleanStateSnapshot_;
+  if (undoStack_) {
+    const bool previousSuppress = suppressUndoCapture_;
+    suppressUndoCapture_ = true;
+    undoStack_->setClean();
+    suppressUndoCapture_ = previousSuppress;
+  }
+  updateDirtyFromUndoStack();
   notifyMenus();
   return true;
 }
@@ -11203,7 +11401,15 @@ inline bool DisplayWindow::saveAs(QWidget *dialogParent)
   filePath_ = QFileInfo(normalized).absoluteFilePath();
   setWindowTitle(QFileInfo(filePath_).fileName());
   dirty_ = false;
-  updateDirtyIndicator();
+  cleanStateSnapshot_ = serializeStateForUndo(filePath_);
+  lastCommittedState_ = cleanStateSnapshot_;
+  if (undoStack_) {
+    const bool previousSuppress = suppressUndoCapture_;
+    suppressUndoCapture_ = true;
+    undoStack_->setClean();
+    suppressUndoCapture_ = previousSuppress;
+  }
+  updateDirtyFromUndoStack();
   notifyMenus();
   return true;
 }
@@ -11251,8 +11457,16 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   setWindowTitle(QFileInfo(filePath_).fileName());
 
   dirty_ = false;
-  updateDirtyIndicator();
-  notifyMenus();
+  if (undoStack_) {
+    const bool previousSuppress = suppressUndoCapture_;
+    suppressUndoCapture_ = true;
+    undoStack_->clear();
+    undoStack_->setClean();
+    suppressUndoCapture_ = previousSuppress;
+  }
+  cleanStateSnapshot_ = serializeStateForUndo(filePath_);
+  lastCommittedState_ = cleanStateSnapshot_;
+  updateDirtyFromUndoStack();
   if (displayArea_) {
     displayArea_->update();
   }
@@ -11261,19 +11475,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
     state->createTool = CreateTool::kNone;
   }
   currentLoadDirectory_ = previousLoadDirectory;
+  notifyMenus();
   return displayLoaded || elementLoaded;
 }
 
-inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
+inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNameHint) const
 {
-  QSaveFile file(filePath);
-  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    return false;
-  }
-
-  QTextStream stream(&file);
-  setUtf8Encoding(stream);
-
   auto resolveColor = [](const QWidget *widget, const QColor &candidate,
       QPalette::ColorRole role) {
     if (candidate.isValid()) {
@@ -11307,13 +11514,17 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     return resolveColor(widget, candidate, QPalette::Window);
   };
 
-  const QFileInfo info(filePath);
+  const QString hint = fileNameHint.isEmpty() ? filePath_ : fileNameHint;
+  const QFileInfo info(hint);
   QString fileName = info.filePath();
   if (info.isAbsolute()) {
     fileName = info.absoluteFilePath();
   }
   if (fileName.isEmpty()) {
     fileName = info.fileName();
+    if (fileName.isEmpty()) {
+      fileName = QStringLiteral("display.adl");
+    }
   }
   fileName = QDir::cleanPath(fileName);
   AdlWriter::writeIndentedLine(stream, 0, QString());
@@ -11385,7 +11596,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
     if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("composite {"));
-      AdlWriter::writeObjectSection(stream, 1, widgetDisplayRect(composite));
+      AdlWriter::writeObjectSection(stream, 1, composite->geometry());
       const QString compositeName = composite->compositeName().trimmed();
       if (!compositeName.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -12114,11 +12325,45 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
   }
 
   stream << '\n';
+}
+
+inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
+{
+  QSaveFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return false;
+  }
+
+  {
+    QTextStream stream(&file);
+    setUtf8Encoding(stream);
+    writeAdlToStream(stream, filePath);
+    stream.flush();
+  }
+
   if (!file.commit()) {
     return false;
   }
   return true;
 }
+
+
+inline QByteArray DisplayWindow::serializeStateForUndo(const QString &fileNameHint) const
+{
+  QByteArray buffer;
+  QBuffer device(&buffer);
+  if (!device.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return buffer;
+  }
+  QTextStream stream(&device);
+  setUtf8Encoding(stream);
+  const QString hint = fileNameHint.isEmpty() ? filePath_ : fileNameHint;
+  writeAdlToStream(stream, hint);
+  stream.flush();
+  device.close();
+  return buffer;
+}
+
 
 inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     int indent,
@@ -12134,7 +12379,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("composite {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(composite));
+    AdlWriter::writeObjectSection(stream, next, composite->geometry());
     const QString compositeName = composite->compositeName().trimmed();
     if (!compositeName.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -12167,7 +12412,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *text = dynamic_cast<TextElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(text));
+    AdlWriter::writeObjectSection(stream, next, text->geometry());
     const QColor textForeground = resolveForeground(text,
         text->foregroundColor());
     AdlWriter::writeBasicAttributeSection(stream, next,
@@ -12196,7 +12441,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *entry = dynamic_cast<TextEntryElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text entry\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(entry));
+    AdlWriter::writeObjectSection(stream, next, entry->geometry());
     const QColor entryForeground = resolveForeground(entry,
         entry->foregroundColor());
     const QColor entryBackground = resolveBackground(entry,
@@ -12222,7 +12467,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("valuator {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(slider));
+    AdlWriter::writeObjectSection(stream, next, slider->geometry());
     const QColor sliderForeground = resolveForeground(slider,
         slider->foregroundColor());
     const QColor sliderBackground = resolveBackground(slider,
@@ -12258,7 +12503,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"wheel switch\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(wheel));
+    AdlWriter::writeObjectSection(stream, next, wheel->geometry());
     const QColor wheelForeground = resolveForeground(wheel,
         wheel->foregroundColor());
     const QColor wheelBackground = resolveBackground(wheel,
@@ -12285,7 +12530,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"choice button\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(choice));
+    AdlWriter::writeObjectSection(stream, next, choice->geometry());
     const QColor choiceForeground = resolveForeground(choice,
         choice->foregroundColor());
     const QColor choiceBackground = resolveBackground(choice,
@@ -12309,7 +12554,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("menu {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(menu));
+    AdlWriter::writeObjectSection(stream, next, menu->geometry());
     const QColor menuForeground = resolveForeground(menu,
         menu->foregroundColor());
     const QColor menuBackground = resolveBackground(menu,
@@ -12329,7 +12574,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"message button\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(message));
+    AdlWriter::writeObjectSection(stream, next, message->geometry());
     const QColor messageForeground = resolveForeground(message,
         message->foregroundColor());
     const QColor messageBackground = resolveBackground(message,
@@ -12367,7 +12612,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"shell command\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(shell));
+    AdlWriter::writeObjectSection(stream, next, shell->geometry());
     const int commandIndent = next + 1;
     for (int i = 0; i < shell->entryCount(); ++i) {
       const QString entryLabel = shell->entryLabel(i);
@@ -12421,7 +12666,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"related display\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(related));
+    AdlWriter::writeObjectSection(stream, next, related->geometry());
     for (int i = 0; i < related->entryCount(); ++i) {
       RelatedDisplayEntry entry = related->entry(i);
       if (entry.label.trimmed().isEmpty() && entry.name.trimmed().isEmpty()
@@ -12457,7 +12702,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("meter {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(meter));
+    AdlWriter::writeObjectSection(stream, next, meter->geometry());
     const QColor meterForeground = resolveForeground(meter,
         meter->foregroundColor());
     const QColor meterBackground = resolveBackground(meter,
@@ -12482,7 +12727,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(bar));
+    AdlWriter::writeObjectSection(stream, next, bar->geometry());
     const QColor barForeground = resolveForeground(bar,
         bar->foregroundColor());
     const QColor barBackground = resolveBackground(bar,
@@ -12517,7 +12762,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("indicator {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(scale));
+    AdlWriter::writeObjectSection(stream, next, scale->geometry());
     const QColor scaleForeground = resolveForeground(scale,
         scale->foregroundColor());
     const QColor scaleBackground = resolveBackground(scale,
@@ -12547,7 +12792,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("byte {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(byte));
+    AdlWriter::writeObjectSection(stream, next, byte->geometry());
     const QColor byteForeground = resolveForeground(byte,
         byte->foregroundColor());
     const QColor byteBackground = resolveBackground(byte,
@@ -12580,7 +12825,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text update\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(monitor));
+    AdlWriter::writeObjectSection(stream, next, monitor->geometry());
     const QColor monitorForeground = resolveForeground(monitor,
         monitor->foregroundColor());
     const QColor monitorBackground = resolveBackground(monitor,
@@ -12613,7 +12858,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"strip chart\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(strip));
+    AdlWriter::writeObjectSection(stream, next, strip->geometry());
     std::array<QString, 4> yLabels{};
     yLabels[0] = strip->yLabel();
     const QColor stripForeground = resolveForeground(strip,
@@ -12648,7 +12893,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *cartesian = dynamic_cast<CartesianPlotElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"cartesian plot\" {"));
-    AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(cartesian));
+    AdlWriter::writeObjectSection(stream, next, cartesian->geometry());
     std::array<QString, 4> yLabels{};
     for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
       yLabels[i] = cartesian->yLabel(i);
@@ -12738,7 +12983,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("rectangle {"));
-  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(rectangle));
+  AdlWriter::writeObjectSection(stream, next, rectangle->geometry());
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(rectangle->color()),
     rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
@@ -12754,7 +12999,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *image = dynamic_cast<ImageElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level, QStringLiteral("image {"));
-  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(image));
+  AdlWriter::writeObjectSection(stream, next, image->geometry());
   AdlWriter::writeIndentedLine(stream, next,
     QStringLiteral("type=\"%1\"")
       .arg(AdlWriter::imageTypeString(image->imageType())));
@@ -12781,7 +13026,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
-  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(oval));
+  AdlWriter::writeObjectSection(stream, next, oval->geometry());
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(oval->color()), oval->lineStyle(),
     oval->fill(), oval->lineWidth());
@@ -12796,7 +13041,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level, QStringLiteral("arc {"));
-  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(arc));
+  AdlWriter::writeObjectSection(stream, next, arc->geometry());
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(arc->color()), arc->lineStyle(),
     arc->fill(), arc->lineWidth());
@@ -12816,7 +13061,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *line = dynamic_cast<LineElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("polyline {"));
-  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(line));
+  AdlWriter::writeObjectSection(stream, next, line->geometry());
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
     RectangleFill::kSolid, line->lineWidth(), true);
@@ -12836,7 +13081,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("polyline {"));
-  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(polyline));
+  AdlWriter::writeObjectSection(stream, next, polyline->geometry());
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(polyline->color()),
     polyline->lineStyle(), RectangleFill::kSolid,
@@ -12854,7 +13099,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
   AdlWriter::writeIndentedLine(stream, level,
     QStringLiteral("polygon {"));
-  AdlWriter::writeObjectSection(stream, next, widgetDisplayRect(polygon));
+  AdlWriter::writeObjectSection(stream, next, polygon->geometry());
   AdlWriter::writeBasicAttributeSection(stream, next,
     AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
     polygon->fill(), polygon->lineWidth());
@@ -16754,6 +16999,87 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
   }
   return false;
 }
+inline void DisplayWindow::setNextUndoLabel(const QString &label)
+{
+  pendingUndoLabel_ = label;
+}
+
+inline void DisplayWindow::updateDirtyFromUndoStack()
+{
+  const bool previous = dirty_;
+  if (undoStack_) {
+    dirty_ = !undoStack_->isClean();
+  }
+  updateDirtyIndicator();
+  if (dirty_ != previous) {
+    notifyMenus();
+  }
+}
+
+inline bool DisplayWindow::restoreSerializedState(const QByteArray &data)
+{
+  if (data.isEmpty()) {
+    return false;
+  }
+
+  const QString previousFilePath = filePath_;
+  const QString previousTitle = windowTitle();
+  const QString previousLoadDirectory = currentLoadDirectory_;
+
+  suppressUndoCapture_ = true;
+  restoringState_ = true;
+
+  const QString textData = QString::fromUtf8(data);
+  std::optional<AdlNode> document = AdlParser::parse(textData, nullptr);
+  if (!document) {
+    restoringState_ = false;
+    suppressUndoCapture_ = false;
+    return false;
+  }
+
+  clearAllElements();
+
+  bool displayLoaded = false;
+  bool elementLoaded = false;
+  for (const auto &child : document->children) {
+    if (child.name.compare(QStringLiteral("display"), Qt::CaseInsensitive)
+        == 0) {
+      displayLoaded = loadDisplaySection(child) || displayLoaded;
+      continue;
+    }
+    if (loadElementNode(child)) {
+      elementLoaded = true;
+      continue;
+    }
+  }
+
+  filePath_ = previousFilePath;
+  if (!filePath_.isEmpty()) {
+    setWindowTitle(QFileInfo(filePath_).fileName());
+  } else if (!previousTitle.isEmpty()) {
+    setWindowTitle(previousTitle);
+  }
+  currentLoadDirectory_ = previousLoadDirectory;
+
+  if (displayArea_) {
+    displayArea_->update();
+  }
+  update();
+  refreshResourcePaletteGeometry();
+  if (auto state = state_.lock()) {
+    state->createTool = CreateTool::kNone;
+  }
+
+  lastCommittedState_ = serializeStateForUndo(filePath_);
+
+  restoringState_ = false;
+  suppressUndoCapture_ = false;
+
+  updateDirtyFromUndoStack();
+  notifyMenus();
+  return displayLoaded || elementLoaded;
+}
+
 
 inline void DisplayWindow::setAsActiveDisplay()
 {
@@ -16767,8 +17093,32 @@ inline void DisplayWindow::setAsActiveDisplay()
 
 inline void DisplayWindow::markDirty()
 {
+  if (restoringState_) {
+    return;
+  }
   const bool wasDirty = dirty_;
   dirty_ = true;
+
+  if (!suppressUndoCapture_ && undoStack_) {
+    const QByteArray before = lastCommittedState_;
+    const QByteArray after = serializeStateForUndo(filePath_);
+    if (before != after) {
+      QString label = pendingUndoLabel_.trimmed();
+      if (label.isEmpty()) {
+        label = QStringLiteral("Modify Display");
+      }
+      auto *command = new DisplaySnapshotCommand(*this, before, after, label);
+      suppressUndoCapture_ = true;
+      undoStack_->push(command);
+      suppressUndoCapture_ = false;
+      lastCommittedState_ = after;
+      pendingUndoLabel_.clear();
+      updateDirtyFromUndoStack();
+    } else {
+      pendingUndoLabel_.clear();
+    }
+  }
+
   updateDirtyIndicator();
   if (!wasDirty) {
     notifyMenus();

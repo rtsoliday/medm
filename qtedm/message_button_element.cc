@@ -328,12 +328,19 @@ void MessageButtonElement::applyPaletteColors()
   QPalette pal = button_->palette();
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
-  pal.setColor(QPalette::ButtonText, fg);
-  pal.setColor(QPalette::WindowText, fg);
-  pal.setColor(QPalette::Text, fg);
-  pal.setColor(QPalette::Button, bg);
-  pal.setColor(QPalette::Base, bg);
-  pal.setColor(QPalette::Window, bg);
+  const QPalette::ColorRole foregroundRoles[] = {
+      QPalette::ButtonText, QPalette::WindowText, QPalette::Text};
+  const QPalette::ColorRole backgroundRoles[] = {
+      QPalette::Button, QPalette::Base, QPalette::Window};
+
+  for (QPalette::ColorGroup group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
+    for (QPalette::ColorRole role : foregroundRoles) {
+      pal.setColor(group, role, fg);
+    }
+    for (QPalette::ColorRole role : backgroundRoles) {
+      pal.setColor(group, role, bg);
+    }
+  }
   button_->setPalette(pal);
   updateButtonState();
   button_->update();
@@ -423,10 +430,10 @@ void MessageButtonElement::updateButtonFont()
 
 QColor MessageButtonElement::effectiveForeground() const
 {
+  if (executeMode_ && !runtimeConnected_) {
+    return QColor(Qt::white);
+  }
   if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
-    if (!runtimeConnected_) {
-      return QColor(204, 204, 204);
-    }
     return alarmColorForSeverity(runtimeSeverity_);
   }
   if (foregroundColor_.isValid()) {

@@ -186,7 +186,7 @@ display {
 		height=40
 	}
 	control {
-		chan="!weird@chan"
+		chan="weirdChan"
 		clr=6
 		bclr=30
 	}
@@ -202,7 +202,7 @@ display {
 		height=40
 	}
 	control {
-		chan="test/random/42"
+		chan="test:random:42"
 		clr=11
 		bclr=1
 	}
@@ -262,7 +262,7 @@ display {
 		height=40
 	}
 	control {
-		chan="2nd/random"
+		chan="2nd:random"
 		clr=8
 		bclr=25
 	}
@@ -307,7 +307,7 @@ display {
 		height=40
 	}
 	control {
-		chan="omega/777"
+		chan="omega:777"
 		clr=60
 		bclr=16
 	}

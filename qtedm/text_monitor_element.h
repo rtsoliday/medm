@@ -47,6 +47,13 @@ public:
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeText(const QString &text);
+  void setRuntimeConnected(bool connected);
+  void setRuntimeSeverity(short severity);
+
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
@@ -57,6 +64,8 @@ private:
   void updateFontForGeometry();
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
+  QColor effectiveForegroundColor() const;
+  QColor effectiveBackgroundColor() const;
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -66,5 +75,9 @@ private:
   TextMonitorFormat format_ = TextMonitorFormat::kDecimal;
   PvLimits limits_{};
   std::array<QString, 5> channels_{};
+  bool executeMode_ = false;
+  bool runtimeConnected_ = false;
+  short runtimeSeverity_ = 0;
+  QString designModeText_;
 };
 

@@ -44,8 +44,10 @@ qtedm_SRC = qtedm.cc \
             menu_element.cc \
             related_display_element.cc \
             text_monitor_element.cc \
+            text_monitor_runtime.cc \
             byte_monitor_element.cc \
             bar_monitor_element.cc \
+            channel_access_context.cc \
             slider_element.cc \
             wheel_switch_element.cc \
             meter_element.cc \

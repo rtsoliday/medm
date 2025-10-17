@@ -696,6 +696,7 @@ int main(int argc, char *argv[])
       DisplayWindow *displayWin) {
     state->displays.append(displayWin);
     displayWin->syncCreateCursor();
+    displayWin->handleEditModeChanged(state->editMode);
 
     QObject::connect(displayWin, &QObject::destroyed, &win,
         [state, updateMenus,
@@ -797,6 +798,7 @@ int main(int argc, char *argv[])
           state->createTool = CreateTool::kNone;
           for (auto &display : state->displays) {
             if (!display.isNull()) {
+              display->handleEditModeChanged(checked);
               display->clearSelection();
               display->syncCreateCursor();
             }
@@ -804,6 +806,7 @@ int main(int argc, char *argv[])
         } else {
           for (auto &display : state->displays) {
             if (!display.isNull()) {
+              display->handleEditModeChanged(checked);
               display->syncCreateCursor();
             }
           }

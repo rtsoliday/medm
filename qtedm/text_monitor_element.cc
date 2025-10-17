@@ -9,6 +9,26 @@
 
 #include "text_font_utils.h"
 
+namespace {
+
+QColor alarmColorForSeverity(short severity)
+{
+  switch (severity) {
+  case 0:
+    return QColor(0, 205, 0);
+  case 1:
+    return QColor(255, 255, 0);
+  case 2:
+    return QColor(255, 0, 0);
+  case 3:
+    return QColor(255, 255, 255);
+  default:
+    return QColor(204, 204, 204);
+  }
+}
+
+} // namespace
+
 TextMonitorElement::TextMonitorElement(QWidget *parent)
   : QLabel(parent)
 {
@@ -196,6 +216,73 @@ void TextMonitorElement::setChannel(int index, const QString &value)
   channels_[index] = value;
 }
 
+void TextMonitorElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  if (executeMode_) {
+    designModeText_ = QLabel::text();
+    QLabel::setText(QString());
+    runtimeConnected_ = false;
+    runtimeSeverity_ = 0;
+  } else {
+    QLabel::setText(designModeText_);
+    designModeText_.clear();
+    runtimeConnected_ = false;
+    runtimeSeverity_ = 0;
+  }
+  applyPaletteColors();
+  updateFontForGeometry();
+  update();
+}
+
+bool TextMonitorElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void TextMonitorElement::setRuntimeText(const QString &text)
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (QLabel::text() == text) {
+    return;
+  }
+  QLabel::setText(text);
+  updateFontForGeometry();
+  update();
+}
+
+void TextMonitorElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (executeMode_) {
+    applyPaletteColors();
+    update();
+  }
+}
+
+void TextMonitorElement::setRuntimeSeverity(short severity)
+{
+  if (severity < 0) {
+    severity = 0;
+  }
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    applyPaletteColors();
+    update();
+  }
+}
+
 void TextMonitorElement::resizeEvent(QResizeEvent *event)
 {
   QLabel::resizeEvent(event);
@@ -228,10 +315,8 @@ void TextMonitorElement::updateSelectionVisual()
 void TextMonitorElement::applyPaletteColors()
 {
   QPalette pal = palette();
-  const QColor fg = foregroundColor_.isValid() ? foregroundColor_
-                                               : defaultForegroundColor();
-  const QColor bg = backgroundColor_.isValid() ? backgroundColor_
-                                               : defaultBackgroundColor();
+  const QColor fg = effectiveForegroundColor();
+  const QColor bg = effectiveBackgroundColor();
   pal.setColor(QPalette::WindowText, fg);
   pal.setColor(QPalette::Text, fg);
   pal.setColor(QPalette::ButtonText, fg);
@@ -255,6 +340,37 @@ void TextMonitorElement::updateFontForGeometry()
   if (font() != newFont) {
     QLabel::setFont(newFont);
   }
+}
+
+QColor TextMonitorElement::effectiveForegroundColor() const
+{
+  if (!executeMode_) {
+    return foregroundColor_.isValid() ? foregroundColor_
+        : defaultForegroundColor();
+  }
+
+  switch (colorMode_) {
+  case TextColorMode::kAlarm:
+    if (!runtimeConnected_) {
+      return QColor(204, 204, 204);
+    }
+    return alarmColorForSeverity(runtimeSeverity_);
+  case TextColorMode::kDiscrete:
+  case TextColorMode::kStatic:
+  default:
+    if (foregroundColor_.isValid()) {
+      return foregroundColor_;
+    }
+    return defaultForegroundColor();
+  }
+}
+
+QColor TextMonitorElement::effectiveBackgroundColor() const
+{
+  if (backgroundColor_.isValid()) {
+    return backgroundColor_;
+  }
+  return defaultBackgroundColor();
 }
 
 QColor TextMonitorElement::defaultForegroundColor() const

@@ -208,6 +208,7 @@ public:
 
   ~DisplayWindow() override
   {
+    leaveExecuteMode();
     clearSelections();
     if (undoStack_) {
       undoStack_->disconnect(this);
@@ -387,6 +388,20 @@ public:
     setDisplaySelected(true);
     showResourcePaletteForDisplay();
     notifyMenus();
+  }
+
+  void enterExecuteMode();
+  void leaveExecuteMode();
+
+  void handleEditModeChanged(bool editMode)
+  {
+    if (!editMode) {
+      if (!executeModeActive_) {
+        enterExecuteMode();
+      }
+    } else if (executeModeActive_) {
+      leaveExecuteMode();
+    }
   }
 
   void findOutliers()
@@ -1903,6 +1918,7 @@ private:
   CompositeElement *currentCompositeOwner_ = nullptr;
   QString colormapName_;
   bool dirty_ = true;
+  bool executeModeActive_ = false;
   bool displaySelected_ = false;
   bool gridOn_ = kDefaultGridOn;
   bool snapToGrid_ = kDefaultSnapToGrid;
@@ -1927,6 +1943,7 @@ private:
   QList<RelatedDisplayElement *> relatedDisplayElements_;
   RelatedDisplayElement *selectedRelatedDisplayElement_ = nullptr;
   QList<TextMonitorElement *> textMonitorElements_;
+  QHash<TextMonitorElement *, TextMonitorRuntime *> textMonitorRuntimes_;
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
   QList<MeterElement *> meterElements_;
   MeterElement *selectedMeterElement_ = nullptr;
@@ -17159,6 +17176,45 @@ inline void DisplayWindow::notifyMenus() const
   if (auto state = state_.lock()) {
     if (state->updateMenus && *state->updateMenus) {
       (*state->updateMenus)();
+    }
+  }
+}
+
+inline void DisplayWindow::enterExecuteMode()
+{
+  if (executeModeActive_) {
+    return;
+  }
+  executeModeActive_ = true;
+  for (TextMonitorElement *element : textMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!textMonitorRuntimes_.contains(element)) {
+      auto *runtime = new TextMonitorRuntime(element);
+      textMonitorRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
+}
+
+inline void DisplayWindow::leaveExecuteMode()
+{
+  if (!executeModeActive_) {
+    return;
+  }
+  executeModeActive_ = false;
+  for (auto it = textMonitorRuntimes_.begin(); it != textMonitorRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  textMonitorRuntimes_.clear();
+  for (TextMonitorElement *element : textMonitorElements_) {
+    if (element) {
+      element->setExecuteMode(false);
     }
   }
 }

@@ -559,12 +559,28 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
     const double highValue = effectiveHighLimit();
     const QString lowText = formatLimit(lowValue);
     const QString highText = formatLimit(highValue);
+    const bool showValue = executeMode_
+        && (label_ == MeterLabel::kChannel || label_ == MeterLabel::kLimits);
+    QString valueText;
+    if (showValue) {
+      if (runtimeConnected_ && (hasRuntimeValue_ || dragging_)) {
+        valueText = formatLimit(currentDisplayedValue());
+      } else {
+        valueText = QStringLiteral("--");
+      }
+    }
     const QRectF bounds = limitRect.adjusted(2.0, 2.0, -2.0, -2.0);
     if (isVertical()) {
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, lowText);
+      if (showValue) {
+        painter.drawText(bounds, Qt::AlignRight | Qt::AlignVCenter, valueText);
+      }
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignTop, highText);
     } else {
       painter.drawText(bounds, Qt::AlignLeft | Qt::AlignBottom, lowText);
+      if (showValue) {
+        painter.drawText(bounds, Qt::AlignHCenter | Qt::AlignBottom, valueText);
+      }
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, highText);
     }
   }

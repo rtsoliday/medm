@@ -1941,6 +1941,7 @@ private:
   QHash<MenuElement *, MenuRuntime *> menuRuntimes_;
   MenuElement *selectedMenuElement_ = nullptr;
   QList<MessageButtonElement *> messageButtonElements_;
+  QHash<MessageButtonElement *, MessageButtonRuntime *> messageButtonRuntimes_;
   MessageButtonElement *selectedMessageButtonElement_ = nullptr;
   QList<ShellCommandElement *> shellCommandElements_;
   ShellCommandElement *selectedShellCommandElement_ = nullptr;
@@ -2895,6 +2896,7 @@ private:
   void removeSliderRuntime(SliderElement *element);
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
+  void removeMessageButtonRuntime(MessageButtonElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2916,6 +2918,8 @@ private:
       removeChoiceButtonRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MenuElement>) {
       removeMenuRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, MessageButtonElement>) {
+      removeMessageButtonRuntime(element);
     }
     element->deleteLater();
     return true;
@@ -13188,6 +13192,8 @@ inline void DisplayWindow::clearAllElements()
           removeChoiceButtonRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MenuElement *>) {
           removeMenuRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, MessageButtonElement *>) {
+          removeMessageButtonRuntime(element);
         }
         removeElementFromStack(element);
         element->deleteLater();
@@ -14829,6 +14835,14 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
   element->setSelected(false);
   messageButtonElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!messageButtonRuntimes_.contains(element)) {
+      auto *runtime = new MessageButtonRuntime(element);
+      messageButtonRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17269,6 +17283,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (MessageButtonElement *element : messageButtonElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!messageButtonRuntimes_.contains(element)) {
+      auto *runtime = new MessageButtonRuntime(element);
+      messageButtonRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
 }
 
 inline void DisplayWindow::leaveExecuteMode()
@@ -17325,6 +17350,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = messageButtonRuntimes_.begin(); it != messageButtonRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  messageButtonRuntimes_.clear();
+  for (MessageButtonElement *element : messageButtonElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
 }
 
 inline void DisplayWindow::removeSliderRuntime(SliderElement *element)
@@ -17355,6 +17392,17 @@ inline void DisplayWindow::removeMenuRuntime(MenuElement *element)
     return;
   }
   if (auto *runtime = menuRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeMessageButtonRuntime(MessageButtonElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = messageButtonRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

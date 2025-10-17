@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include <QApplication>
 #include <QEvent>
 #include <QFont>
 #include <QFontInfo>
@@ -18,6 +19,22 @@ namespace {
 QString defaultLabel()
 {
   return QStringLiteral("Message Button");
+}
+
+QColor alarmColorForSeverity(short severity)
+{
+  switch (severity) {
+  case 0:
+    return QColor(0, 205, 0);
+  case 1:
+    return QColor(255, 255, 0);
+  case 2:
+    return QColor(255, 0, 0);
+  case 3:
+    return QColor(255, 255, 255);
+  default:
+    return QColor(204, 204, 204);
+  }
 }
 
 class SelectionAwarePushButton : public QPushButton
@@ -66,13 +83,24 @@ MessageButtonElement::MessageButtonElement(QWidget *parent)
   button_->setAutoDefault(false);
   button_->setCheckable(false);
   button_->setContextMenuPolicy(Qt::NoContextMenu);
-  button_->setAttribute(Qt::WA_TransparentForMouseEvents);
+  button_->setCursor(Qt::ArrowCursor);
+  button_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   button_->setText(defaultLabel());
+
+  QObject::connect(button_, &QPushButton::pressed, this,
+      [this]() {
+        handleButtonPressed();
+      });
+  QObject::connect(button_, &QPushButton::released, this,
+      [this]() {
+        handleButtonReleased();
+      });
 
   foregroundColor_ = palette().color(QPalette::WindowText);
   backgroundColor_ = palette().color(QPalette::Window);
   applyPaletteColors();
   updateSelectionVisual();
+  updateButtonFont();
 }
 
 void MessageButtonElement::setSelected(bool selected)
@@ -135,6 +163,9 @@ void MessageButtonElement::setColorMode(TextColorMode mode)
     return;
   }
   colorMode_ = mode;
+  if (executeMode_) {
+    applyPaletteColors();
+  }
   update();
 }
 
@@ -151,6 +182,7 @@ void MessageButtonElement::setLabel(const QString &label)
   label_ = label;
   if (button_) {
     button_->setText(effectiveLabel());
+    updateButtonFont();
   }
 }
 
@@ -188,6 +220,79 @@ void MessageButtonElement::setChannel(const QString &channel)
   if (button_) {
     button_->setToolTip(channel_);
   }
+}
+
+void MessageButtonElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  runtimeConnected_ = false;
+  runtimeWriteAccess_ = false;
+  runtimeSeverity_ = 0;
+  if (button_) {
+    button_->setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
+    button_->setDown(false);
+  }
+  applyPaletteColors();
+  updateButtonState();
+  updateSelectionVisual();
+  update();
+}
+
+bool MessageButtonElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void MessageButtonElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (!executeMode_) {
+    return;
+  }
+  updateButtonState();
+  applyPaletteColors();
+  update();
+}
+
+void MessageButtonElement::setRuntimeSeverity(short severity)
+{
+  short clamped = std::clamp<short>(severity, 0, 3);
+  if (runtimeSeverity_ == clamped) {
+    return;
+  }
+  runtimeSeverity_ = clamped;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    applyPaletteColors();
+    update();
+  }
+}
+
+void MessageButtonElement::setRuntimeWriteAccess(bool writeAccess)
+{
+  if (runtimeWriteAccess_ == writeAccess) {
+    return;
+  }
+  runtimeWriteAccess_ = writeAccess;
+  if (!executeMode_) {
+    return;
+  }
+  updateButtonState();
+}
+
+void MessageButtonElement::setPressCallback(const std::function<void()> &callback)
+{
+  pressCallback_ = callback;
+}
+
+void MessageButtonElement::setReleaseCallback(const std::function<void()> &callback)
+{
+  releaseCallback_ = callback;
 }
 
 void MessageButtonElement::resizeEvent(QResizeEvent *event)
@@ -230,6 +335,7 @@ void MessageButtonElement::applyPaletteColors()
   pal.setColor(QPalette::Base, bg);
   pal.setColor(QPalette::Window, bg);
   button_->setPalette(pal);
+  updateButtonState();
   button_->update();
 }
 
@@ -317,12 +423,81 @@ void MessageButtonElement::updateButtonFont()
 
 QColor MessageButtonElement::effectiveForeground() const
 {
-  return foregroundColor_.isValid() ? foregroundColor_
-                                    : palette().color(QPalette::WindowText);
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    if (!runtimeConnected_) {
+      return QColor(204, 204, 204);
+    }
+    return alarmColorForSeverity(runtimeSeverity_);
+  }
+  if (foregroundColor_.isValid()) {
+    return foregroundColor_;
+  }
+  return palette().color(QPalette::ButtonText);
 }
 
 QColor MessageButtonElement::effectiveBackground() const
 {
-  return backgroundColor_.isValid() ? backgroundColor_
-                                    : palette().color(QPalette::Window);
+  if (executeMode_ && !runtimeConnected_) {
+    return QColor(Qt::white);
+  }
+  if (backgroundColor_.isValid()) {
+    return backgroundColor_;
+  }
+  return palette().color(QPalette::Button);
+}
+
+void MessageButtonElement::updateButtonState()
+{
+  if (!button_) {
+    return;
+  }
+  if (!executeMode_) {
+    button_->setEnabled(true);
+    button_->setCursor(Qt::ArrowCursor);
+    return;
+  }
+
+  const bool enable = runtimeConnected_;
+  button_->setEnabled(enable);
+  if (runtimeConnected_ && runtimeWriteAccess_) {
+    button_->setCursor(Qt::ArrowCursor);
+  } else {
+    button_->setCursor(Qt::ForbiddenCursor);
+  }
+  if (!enable) {
+    button_->setDown(false);
+  }
+}
+
+void MessageButtonElement::handleButtonPressed()
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (!runtimeConnected_ || !runtimeWriteAccess_) {
+    QApplication::beep();
+    if (button_) {
+      button_->setDown(false);
+    }
+    return;
+  }
+  if (pressCallback_) {
+    pressCallback_();
+  }
+}
+
+void MessageButtonElement::handleButtonReleased()
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (!runtimeConnected_ || !runtimeWriteAccess_) {
+    if (button_) {
+      button_->setDown(false);
+    }
+    return;
+  }
+  if (releaseCallback_) {
+    releaseCallback_();
+  }
 }

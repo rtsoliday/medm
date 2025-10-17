@@ -43,6 +43,7 @@ qtedm_SRC = qtedm.cc \
             choice_button_element.cc \
             choice_button_runtime.cc \
             menu_element.cc \
+            menu_runtime.cc \
             related_display_element.cc \
             text_monitor_element.cc \
             text_monitor_runtime.cc \

@@ -2,7 +2,10 @@
 
 #include <QColor>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
+
+#include <functional>
 
 #include "display_properties.h"
 
@@ -30,13 +33,29 @@ public:
   QString channel() const;
   void setChannel(const QString &channel);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeSeverity(short severity);
+  void setRuntimeWriteAccess(bool writeAccess);
+  void setRuntimeLabels(const QStringList &labels);
+  void setRuntimeValue(int value);
+
+  void setActivationCallback(const std::function<void(int)> &callback);
+
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
 
 private:
+  QColor effectiveForegroundColor() const;
+  QColor effectiveBackgroundColor() const;
   void applyPaletteColors();
   void updateSelectionVisual();
+  void populateSampleItems();
+  void updateComboBoxEnabledState();
+  void updateComboBoxCursor();
 
   bool selected_ = false;
   QComboBox *comboBox_ = nullptr;
@@ -44,5 +63,12 @@ private:
   QColor backgroundColor_;
   TextColorMode colorMode_ = TextColorMode::kStatic;
   QString channel_;
+  bool executeMode_ = false;
+  bool runtimeConnected_ = false;
+  bool runtimeWriteAccess_ = false;
+  short runtimeSeverity_ = 0;
+  int runtimeValue_ = -1;
+  QStringList runtimeLabels_;
+  std::function<void(int)> activationCallback_;
 };
 

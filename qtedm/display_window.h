@@ -96,6 +96,7 @@
 #include "choice_button_element.h"
 #include "choice_button_runtime.h"
 #include "menu_element.h"
+#include "menu_runtime.h"
 #include "message_button_element.h"
 #include "shell_command_element.h"
 #include "related_display_element.h"

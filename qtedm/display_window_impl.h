@@ -1937,6 +1937,7 @@ private:
   ChoiceButtonElement *selectedChoiceButtonElement_ = nullptr;
   QHash<ChoiceButtonElement *, ChoiceButtonRuntime *> choiceButtonRuntimes_;
   QList<MenuElement *> menuElements_;
+  QHash<MenuElement *, MenuRuntime *> menuRuntimes_;
   MenuElement *selectedMenuElement_ = nullptr;
   QList<MessageButtonElement *> messageButtonElements_;
   MessageButtonElement *selectedMessageButtonElement_ = nullptr;
@@ -2891,6 +2892,7 @@ private:
   }
 
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
+  void removeMenuRuntime(MenuElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2908,6 +2910,8 @@ private:
     removeElementFromStack(element);
     if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
       removeChoiceButtonRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, MenuElement>) {
+      removeMenuRuntime(element);
     }
     element->deleteLater();
     return true;
@@ -13176,6 +13180,8 @@ inline void DisplayWindow::clearAllElements()
       if (element) {
         if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
           removeChoiceButtonRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, MenuElement *>) {
+          removeMenuRuntime(element);
         }
         removeElementFromStack(element);
         element->deleteLater();
@@ -14727,6 +14733,14 @@ inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
   element->setSelected(false);
   menuElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!menuRuntimes_.contains(element)) {
+      auto *runtime = new MenuRuntime(element);
+      menuRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17227,6 +17241,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (MenuElement *element : menuElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!menuRuntimes_.contains(element)) {
+      auto *runtime = new MenuRuntime(element);
+      menuRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
 }
 
 inline void DisplayWindow::leaveExecuteMode()
@@ -17259,6 +17284,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = menuRuntimes_.begin(); it != menuRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  menuRuntimes_.clear();
+  for (MenuElement *element : menuElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
 }
 
 inline void DisplayWindow::removeChoiceButtonRuntime(ChoiceButtonElement *element)
@@ -17267,6 +17304,17 @@ inline void DisplayWindow::removeChoiceButtonRuntime(ChoiceButtonElement *elemen
     return;
   }
   if (auto *runtime = choiceButtonRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeMenuRuntime(MenuElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = menuRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

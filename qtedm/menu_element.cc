@@ -1,32 +1,59 @@
 #include "menu_element.h"
 
 #include <algorithm>
+#include <array>
 
+#include <QAbstractItemView>
 #include <QComboBox>
+#include <QFont>
+#include <QFontMetrics>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
 #include <QResizeEvent>
 #include <QSignalBlocker>
 
+#include "legacy_fonts.h"
+
 namespace {
 
-constexpr int kSampleItemCount = 3;
+constexpr auto kEditModePlaceholder = "Menu";
 
-QColor alarmColorForSeverity(short severity)
+const std::array<QString, 16> &menuFontAliases()
 {
-  switch (severity) {
-  case 0:
-    return QColor(0, 205, 0);
-  case 1:
-    return QColor(255, 255, 0);
-  case 2:
-    return QColor(255, 0, 0);
-  case 3:
-    return QColor(255, 255, 255);
-  default:
-    return QColor(204, 204, 204);
+  static const std::array<QString, 16> kAliases = {
+      QStringLiteral("widgetDM_4"), QStringLiteral("widgetDM_6"),
+      QStringLiteral("widgetDM_8"), QStringLiteral("widgetDM_10"),
+      QStringLiteral("widgetDM_12"), QStringLiteral("widgetDM_14"),
+      QStringLiteral("widgetDM_16"), QStringLiteral("widgetDM_18"),
+      QStringLiteral("widgetDM_20"), QStringLiteral("widgetDM_22"),
+      QStringLiteral("widgetDM_24"), QStringLiteral("widgetDM_30"),
+      QStringLiteral("widgetDM_36"), QStringLiteral("widgetDM_40"),
+      QStringLiteral("widgetDM_48"), QStringLiteral("widgetDM_60"),
+  };
+  return kAliases;
+}
+
+QFont medmMenuFontForHeight(int widgetHeight)
+{
+  const int availableHeight = std::max(1, widgetHeight - 8);
+  QFont fallback;
+
+  const auto &aliases = menuFontAliases();
+  for (auto it = aliases.rbegin(); it != aliases.rend(); ++it) {
+    const QFont font = LegacyFonts::font(*it);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    fallback = font;
+    const QFontMetrics metrics(font);
+    if (metrics.ascent() + metrics.descent() <= availableHeight) {
+      return font;
+    }
   }
+
+  return fallback;
 }
 
 } // namespace
@@ -71,6 +98,7 @@ MenuElement::MenuElement(QWidget *parent)
   applyPaletteColors();
   updateSelectionVisual();
   updateComboBoxEnabledState();
+  updateComboBoxFont();
 }
 
 void MenuElement::setSelected(bool selected)
@@ -180,6 +208,7 @@ void MenuElement::setExecuteMode(bool execute)
   updateComboBoxCursor();
   applyPaletteColors();
   updateSelectionVisual();
+  updateComboBoxFont();
   update();
 }
 
@@ -246,6 +275,7 @@ void MenuElement::setRuntimeLabels(const QStringList &labels)
   } else {
     comboBox_->setCurrentIndex(-1);
   }
+  updateComboBoxFont();
   comboBox_->update();
 }
 
@@ -275,6 +305,7 @@ void MenuElement::resizeEvent(QResizeEvent *event)
   if (comboBox_) {
     comboBox_->setGeometry(rect());
   }
+  updateComboBoxFont();
 }
 
 void MenuElement::paintEvent(QPaintEvent *event)
@@ -297,14 +328,6 @@ void MenuElement::paintEvent(QPaintEvent *event)
 
 QColor MenuElement::effectiveForegroundColor() const
 {
-  if (executeMode_) {
-    if (!runtimeConnected_) {
-      return QColor(204, 204, 204);
-    }
-    if (colorMode_ == TextColorMode::kAlarm) {
-      return alarmColorForSeverity(runtimeSeverity_);
-    }
-  }
   if (foregroundColor_.isValid()) {
     return foregroundColor_;
   }
@@ -328,10 +351,7 @@ void MenuElement::applyPaletteColors()
     return;
   }
   QPalette pal = comboBox_->palette();
-  QColor fg = effectiveForegroundColor();
-  if (!executeMode_ && selected_) {
-    fg = QColor(Qt::blue);
-  }
+  const QColor fg = effectiveForegroundColor();
   const QColor bg = effectiveBackgroundColor();
   pal.setColor(QPalette::Text, fg);
   pal.setColor(QPalette::WindowText, fg);
@@ -353,12 +373,9 @@ void MenuElement::populateSampleItems()
   if (!comboBox_) {
     return;
   }
-  for (int i = 0; i < kSampleItemCount; ++i) {
-    comboBox_->addItem(QStringLiteral("Menu Item %1").arg(i + 1));
-  }
-  if (comboBox_->count() > 0) {
-    comboBox_->setCurrentIndex(0);
-  }
+  comboBox_->addItem(QString::fromLatin1(kEditModePlaceholder));
+  comboBox_->setCurrentIndex(0);
+  updateComboBoxFont();
 }
 
 void MenuElement::updateComboBoxEnabledState()
@@ -382,6 +399,25 @@ void MenuElement::updateComboBoxCursor()
     comboBox_->setCursor(runtimeWriteAccess_ ? Qt::ArrowCursor : Qt::ForbiddenCursor);
   } else {
     comboBox_->setCursor(Qt::ArrowCursor);
+  }
+}
+
+void MenuElement::updateComboBoxFont()
+{
+  if (!comboBox_) {
+    return;
+  }
+  const QFont font = medmMenuFontForHeight(height());
+  if (font.family().isEmpty()) {
+    return;
+  }
+  if (comboBox_->font() != font) {
+    comboBox_->setFont(font);
+  }
+  if (QAbstractItemView *view = comboBox_->view()) {
+    if (view->font() != font) {
+      view->setFont(font);
+    }
   }
 }
 

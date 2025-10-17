@@ -56,6 +56,7 @@ private:
   void populateSampleItems();
   void updateComboBoxEnabledState();
   void updateComboBoxCursor();
+  void updateComboBoxFont();
 
   bool selected_ = false;
   QComboBox *comboBox_ = nullptr;

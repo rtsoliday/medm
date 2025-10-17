@@ -5,9 +5,9 @@ file {
 }
 display {
 	object {
-		x=10
-		y=53
-		width=1128
+		x=14
+		y=468
+		width=1343
 		height=503
 	}
 	clr=14
@@ -91,7 +91,7 @@ display {
 	object {
 		x=32
 		y=24
-		width=138
+		width=300
 		height=78
 	}
 	control {
@@ -103,10 +103,10 @@ display {
 }
 "choice button" {
 	object {
-		x=212
-		y=22
-		width=166
-		height=72
+		x=336
+		y=28
+		width=300
+		height=25
 	}
 	control {
 		chan="cb:sample:9827"
@@ -118,9 +118,9 @@ display {
 }
 "choice button" {
 	object {
-		x=402
-		y=28
-		width=150
+		x=648
+		y=29
+		width=300
 		height=88
 	}
 	control {
@@ -133,9 +133,9 @@ display {
 }
 "choice button" {
 	object {
-		x=596
-		y=20
-		width=176
+		x=962
+		y=34
+		width=300
 		height=94
 	}
 	control {
@@ -148,8 +148,8 @@ display {
 	object {
 		x=30
 		y=140
-		width=144
-		height=84
+		width=300
+		height=50
 	}
 	control {
 		chan="cb:ctrl:2845"
@@ -161,9 +161,9 @@ display {
 }
 "choice button" {
 	object {
-		x=218
-		y=138
-		width=162
+		x=343
+		y=147
+		width=300
 		height=80
 	}
 	control {
@@ -176,9 +176,9 @@ display {
 }
 "choice button" {
 	object {
-		x=406
-		y=136
-		width=158
+		x=652
+		y=144
+		width=300
 		height=86
 	}
 	control {
@@ -189,10 +189,10 @@ display {
 }
 "choice button" {
 	object {
-		x=600
-		y=134
-		width=182
-		height=92
+		x=962
+		y=143
+		width=300
+		height=50
 	}
 	control {
 		chan="cb:data:8754"
@@ -206,7 +206,7 @@ display {
 	object {
 		x=34
 		y=256
-		width=140
+		width=300
 		height=90
 	}
 	control {
@@ -219,9 +219,9 @@ display {
 }
 "choice button" {
 	object {
-		x=220
-		y=254
-		width=168
+		x=344
+		y=247
+		width=300
 		height=88
 	}
 	control {
@@ -232,9 +232,9 @@ display {
 }
 "choice button" {
 	object {
-		x=408
-		y=252
-		width=154
+		x=650
+		y=246
+		width=300
 		height=96
 	}
 	control {
@@ -247,9 +247,9 @@ display {
 }
 "choice button" {
 	object {
-		x=604
-		y=250
-		width=186
+		x=957
+		y=256
+		width=300
 		height=90
 	}
 	control {
@@ -264,7 +264,7 @@ display {
 	object {
 		x=36
 		y=372
-		width=148
+		width=300
 		height=88
 	}
 	control {
@@ -276,9 +276,9 @@ display {
 }
 "choice button" {
 	object {
-		x=224
-		y=368
-		width=170
+		x=351
+		y=371
+		width=300
 		height=92
 	}
 	control {
@@ -290,9 +290,9 @@ display {
 }
 "choice button" {
 	object {
-		x=412
-		y=366
-		width=160
+		x=658
+		y=367
+		width=300
 		height=84
 	}
 	control {
@@ -305,9 +305,9 @@ display {
 }
 "choice button" {
 	object {
-		x=606
-		y=364
-		width=184
+		x=965
+		y=361
+		width=300
 		height=100
 	}
 	control {

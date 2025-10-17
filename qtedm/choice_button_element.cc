@@ -95,6 +95,34 @@ QFont medmChoiceButtonFont(int widgetHeight, int buttonCount,
   return fallback;
 }
 
+/* Map a logical grid position to an item index. Row-column stacking places
+ * labels in column-major order to match the legacy MEDM layout. */
+int indexForGridCell(int row, int column, int rows, int columns, int itemCount,
+    ChoiceButtonStacking stacking)
+{
+  if (row < 0 || column < 0 || rows <= 0 || columns <= 0 || itemCount <= 0) {
+    return -1;
+  }
+  if (row >= rows || column >= columns) {
+    return -1;
+  }
+
+  if (stacking == ChoiceButtonStacking::kRowColumn) {
+    const int fullColumns = itemCount / rows;
+    const int remainder = itemCount % rows;
+    if (column < fullColumns) {
+      return column * rows + row;
+    }
+    if (column == fullColumns && remainder > 0 && row < remainder) {
+      return fullColumns * rows + row;
+    }
+    return -1;
+  }
+
+  const int index = row * columns + column;
+  return index < itemCount ? index : -1;
+}
+
 QFont shrinkFontToFit(const QString &text, const QRect &bounds, QFont font)
 {
   if (font.pointSizeF() <= 0.0) {
@@ -475,8 +503,9 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
     painter.setPen(Qt::NoPen);
     painter.setBrush(Qt::NoBrush);
 
-    int buttonIndex = 0;
+    int drawnCount = 0;
     int y = content.top();
+    bool done = false;
     for (int row = 0; row < rows; ++row) {
       int rowHeight = cellHeight;
       if (row < extraHeight) {
@@ -484,9 +513,6 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
       }
       int x = content.left();
       for (int column = 0; column < columns; ++column) {
-        if (buttonIndex >= kSampleButtonCount) {
-          break;
-        }
         int columnWidth = cellWidth;
         if (column < extraWidth) {
           columnWidth += 1;
@@ -498,13 +524,20 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
           interior = buttonRect.adjusted(1, 1, -1, -1);
         }
 
+        const int sampleIndex = indexForGridCell(row, column, rows, columns,
+            kSampleButtonCount, stacking_);
+        if (sampleIndex < 0 || sampleIndex >= kSampleButtonCount) {
+          x += columnWidth;
+          continue;
+        }
+
         painter.fillRect(interior,
-            buttonIndex == 0 ? pressedFill : unpressedFill);
+            sampleIndex == 0 ? pressedFill : unpressedFill);
         painter.setPen(QPen(borderColor, 1));
         painter.setBrush(Qt::NoBrush);
         painter.drawRect(interior.adjusted(0, 0, -1, -1));
 
-        QString label = QStringLiteral("%1...").arg(buttonIndex);
+        QString label = QStringLiteral("%1...").arg(sampleIndex);
         const QRect textBounds = interior.adjusted(2, 2, -2, -2);
         QFont labelFont = medmChoiceButtonFont(height(), kSampleButtonCount,
             stacking_, textBounds.height());
@@ -515,8 +548,15 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
         painter.setPen(foreground);
         painter.drawText(textBounds, Qt::AlignCenter, label);
 
-        ++buttonIndex;
         x += columnWidth;
+        ++drawnCount;
+        if (drawnCount >= kSampleButtonCount) {
+          done = true;
+          break;
+        }
+      }
+      if (done) {
+        break;
       }
       y += rowHeight;
     }
@@ -642,7 +682,8 @@ void ChoiceButtonElement::layoutButtons()
   const int extraWidth = content.width() - cellWidth * columns;
   const int extraHeight = content.height() - cellHeight * rows;
 
-  int buttonIndex = 0;
+  int positionedCount = 0;
+  bool done = false;
   int y = content.top();
   for (int row = 0; row < rows; ++row) {
     int rowHeight = cellHeight;
@@ -651,9 +692,6 @@ void ChoiceButtonElement::layoutButtons()
     }
     int x = content.left();
     for (int column = 0; column < columns; ++column) {
-      if (buttonIndex >= buttonCount) {
-        break;
-      }
       int columnWidth = cellWidth;
       if (column < extraWidth) {
         columnWidth += 1;
@@ -665,13 +703,26 @@ void ChoiceButtonElement::layoutButtons()
         interior = buttonRect.adjusted(1, 1, -1, -1);
       }
 
-      if (QAbstractButton *button = buttons_.value(buttonIndex)) {
-        button->setGeometry(interior);
-        applyButtonFont(button, interior);
+      const int index = indexForGridCell(row, column, rows, columns,
+          buttonCount, stacking_);
+      if (index >= 0 && index < buttonCount) {
+        if (QAbstractButton *button = buttons_.value(index)) {
+          button->setGeometry(interior);
+          applyButtonFont(button, interior);
+        }
+        ++positionedCount;
+        if (positionedCount >= buttonCount) {
+          done = true;
+        }
       }
 
-      ++buttonIndex;
       x += columnWidth;
+      if (done) {
+        break;
+      }
+    }
+    if (done) {
+      break;
     }
     y += rowHeight;
   }

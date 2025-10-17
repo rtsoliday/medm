@@ -367,6 +367,9 @@ QColor TextMonitorElement::effectiveForegroundColor() const
 
 QColor TextMonitorElement::effectiveBackgroundColor() const
 {
+  if (executeMode_ && !runtimeConnected_) {
+    return QColor(Qt::white);
+  }
   if (backgroundColor_.isValid()) {
     return backgroundColor_;
   }

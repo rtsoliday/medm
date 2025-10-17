@@ -1931,6 +1931,7 @@ private:
   TextEntryElement *selectedTextEntryElement_ = nullptr;
   QList<SliderElement *> sliderElements_;
   SliderElement *selectedSliderElement_ = nullptr;
+  QHash<SliderElement *, SliderRuntime *> sliderRuntimes_;
   QList<WheelSwitchElement *> wheelSwitchElements_;
   WheelSwitchElement *selectedWheelSwitchElement_ = nullptr;
   QList<ChoiceButtonElement *> choiceButtonElements_;
@@ -2891,6 +2892,7 @@ private:
     notifyMenus();
   }
 
+  void removeSliderRuntime(SliderElement *element);
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
 
@@ -2908,7 +2910,9 @@ private:
     element->setSelected(false);
     elements.removeAll(element);
     removeElementFromStack(element);
-    if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
+    if constexpr (std::is_same_v<ElementType, SliderElement>) {
+      removeSliderRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
       removeChoiceButtonRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MenuElement>) {
       removeMenuRuntime(element);
@@ -13178,7 +13182,9 @@ inline void DisplayWindow::clearAllElements()
     using ElementType = typename std::decay_t<decltype(list)>::value_type;
     for (auto *element : list) {
       if (element) {
-        if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
+        if constexpr (std::is_same_v<ElementType, SliderElement *>) {
+          removeSliderRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
           removeChoiceButtonRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MenuElement *>) {
           removeMenuRuntime(element);
@@ -17219,6 +17225,17 @@ inline void DisplayWindow::enterExecuteMode()
     return;
   }
   executeModeActive_ = true;
+  for (SliderElement *element : sliderElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!sliderRuntimes_.contains(element)) {
+      auto *runtime = new SliderRuntime(element);
+      sliderRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (TextMonitorElement *element : textMonitorElements_) {
     if (!element) {
       continue;
@@ -17260,6 +17277,18 @@ inline void DisplayWindow::leaveExecuteMode()
     return;
   }
   executeModeActive_ = false;
+  for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  sliderRuntimes_.clear();
+  for (SliderElement *element : sliderElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = textMonitorRuntimes_.begin(); it != textMonitorRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17295,6 +17324,17 @@ inline void DisplayWindow::leaveExecuteMode()
     if (element) {
       element->setExecuteMode(false);
     }
+  }
+}
+
+inline void DisplayWindow::removeSliderRuntime(SliderElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = sliderRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
   }
 }
 

@@ -1,11 +1,17 @@
 #pragma once
 
+#include <functional>
+
 #include <QColor>
 #include <QString>
 #include <QWidget>
 #include <QRectF>
 
 #include "display_properties.h"
+
+class QMouseEvent;
+class QPointF;
+class QPainter;
 
 class SliderElement : public QWidget
 {
@@ -39,8 +45,24 @@ public:
   QString channel() const;
   void setChannel(const QString &channel);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeWriteAccess(bool writeAccess);
+  void setRuntimeSeverity(short severity);
+  void setRuntimeLimits(double low, double high);
+  void setRuntimePrecision(int precision);
+  void setRuntimeValue(double value);
+  void clearRuntimeState();
+
+  void setActivationCallback(const std::function<void(double)> &callback);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
   QRectF trackRectForPainting(QRectF contentRect, QRectF &limitRect,
@@ -56,7 +78,21 @@ private:
   void paintSelectionOverlay(QPainter &painter) const;
   bool isVertical() const;
   bool isDirectionInverted() const;
-  double normalizedSampleValue() const;
+  double normalizedValue() const;
+  double currentDisplayedValue() const;
+  double effectiveLowLimit() const;
+  double effectiveHighLimit() const;
+  int effectivePrecision() const;
+  double clampToLimits(double value) const;
+  double valueFromPosition(const QPointF &pos) const;
+  void beginDrag(double value);
+  void updateDrag(double value, bool force);
+  void endDrag(double value, bool force);
+  void sendActivationValue(double value, bool force);
+  void updateCursor();
+  bool isInteractive() const;
+  double sliderEpsilon() const;
+  double defaultSampleValue() const;
   QString formatLimit(double value) const;
 
   bool selected_ = false;
@@ -68,4 +104,19 @@ private:
   double precision_ = 1.0;
   PvLimits limits_{};
   QString channel_;
+  bool executeMode_ = false;
+  bool runtimeConnected_ = false;
+  bool runtimeWriteAccess_ = false;
+  short runtimeSeverity_ = 0;
+  double runtimeLow_ = 0.0;
+  double runtimeHigh_ = 0.0;
+  bool runtimeLimitsValid_ = false;
+  int runtimePrecision_ = -1;
+  double runtimeValue_ = 0.0;
+  bool hasRuntimeValue_ = false;
+  bool dragging_ = false;
+  double dragValue_ = 0.0;
+  double lastSentValue_ = 0.0;
+  bool hasLastSentValue_ = false;
+  std::function<void(double)> activationCallback_;
 };

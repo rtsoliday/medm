@@ -1,6 +1,7 @@
 #include "choice_button_element.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include <QAbstractButton>
@@ -16,10 +17,105 @@
 #include <QSignalBlocker>
 #include <QToolButton>
 
+#include "legacy_fonts.h"
+
 namespace {
 
 constexpr int kSampleButtonCount = 2;
 constexpr int kButtonMargin = 2;
+constexpr int kChoiceButtonShadow = 4;
+
+const std::array<QString, 16> &choiceButtonFontAliases()
+{
+  static const std::array<QString, 16> kAliases = {
+      QStringLiteral("widgetDM_4"), QStringLiteral("widgetDM_6"),
+      QStringLiteral("widgetDM_8"), QStringLiteral("widgetDM_10"),
+      QStringLiteral("widgetDM_12"), QStringLiteral("widgetDM_14"),
+      QStringLiteral("widgetDM_16"), QStringLiteral("widgetDM_18"),
+      QStringLiteral("widgetDM_20"), QStringLiteral("widgetDM_22"),
+      QStringLiteral("widgetDM_24"), QStringLiteral("widgetDM_30"),
+      QStringLiteral("widgetDM_36"), QStringLiteral("widgetDM_40"),
+      QStringLiteral("widgetDM_48"), QStringLiteral("widgetDM_60"),
+  };
+  return kAliases;
+}
+
+int availableFontHeight(int widgetHeight, int buttonCount,
+    ChoiceButtonStacking stacking)
+{
+  const int count = std::max(1, buttonCount);
+  const int totalHeight = std::max(1, widgetHeight);
+
+  int available = 1;
+  switch (stacking) {
+  case ChoiceButtonStacking::kRow: {
+    const int perButton = totalHeight / count;
+    available = perButton - kChoiceButtonShadow;
+    break;
+  }
+  case ChoiceButtonStacking::kRowColumn: {
+    const int perSide = std::max(1,
+        static_cast<int>(std::ceil(std::sqrt(static_cast<double>(count)))));
+    const int perButton = totalHeight / perSide;
+    available = perButton - kChoiceButtonShadow;
+    break;
+  }
+  case ChoiceButtonStacking::kColumn:
+  default:
+    available = totalHeight - kChoiceButtonShadow;
+    break;
+  }
+
+  return std::max(1, available);
+}
+
+QFont medmChoiceButtonFont(int widgetHeight, int buttonCount,
+    ChoiceButtonStacking stacking, int heightLimit)
+{
+  const int clippingHeight = std::max(1, heightLimit);
+  const int maxHeight = std::min(availableFontHeight(widgetHeight, buttonCount,
+                                   stacking),
+      clippingHeight);
+
+  const auto &aliases = choiceButtonFontAliases();
+  QFont fallback;
+  for (auto it = aliases.rbegin(); it != aliases.rend(); ++it) {
+    const QFont font = LegacyFonts::font(*it);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    fallback = font;
+    const QFontMetrics metrics(font);
+    if (metrics.ascent() + metrics.descent() <= maxHeight) {
+      return font;
+    }
+  }
+
+  return fallback;
+}
+
+QFont shrinkFontToFit(const QString &text, const QRect &bounds, QFont font)
+{
+  if (font.pointSizeF() <= 0.0) {
+    font.setPointSize(10);
+  }
+
+  if (bounds.width() <= 0 || bounds.height() <= 0) {
+    return font;
+  }
+
+  QFontMetrics metrics(font);
+  while (!text.isEmpty()
+      && (metrics.horizontalAdvance(text) > bounds.width()
+          || metrics.height() > bounds.height())
+      && font.pointSize() > 4) {
+    font.setPointSize(font.pointSize() - 1);
+    metrics = QFontMetrics(font);
+  }
+
+  return font;
+}
 
 QColor blendedColor(const QColor &base, const QColor &overlay, double factor)
 {
@@ -409,17 +505,11 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
         painter.drawRect(interior.adjusted(0, 0, -1, -1));
 
         QString label = QStringLiteral("%1...").arg(buttonIndex);
-        QFont labelFont = font();
-        if (labelFont.pointSizeF() <= 0.0) {
-          labelFont.setPointSize(10);
-        }
-        QFontMetrics metrics(labelFont);
         const QRect textBounds = interior.adjusted(2, 2, -2, -2);
-        while ((metrics.horizontalAdvance(label) > textBounds.width()
-                  || metrics.height() > textBounds.height())
-            && labelFont.pointSize() > 4) {
-          labelFont.setPointSize(labelFont.pointSize() - 1);
-          metrics = QFontMetrics(labelFont);
+        QFont labelFont = medmChoiceButtonFont(height(), kSampleButtonCount,
+            stacking_, textBounds.height());
+        if (labelFont.family().isEmpty()) {
+          labelFont = shrinkFontToFit(label, textBounds, font());
         }
         painter.setFont(labelFont);
         painter.setPen(foreground);
@@ -633,20 +723,12 @@ void ChoiceButtonElement::applyButtonFont(QAbstractButton *button,
     return;
   }
 
-  const QRect textBounds = bounds.adjusted(2, 2, -2, -2);
-  QFont buttonFont = font();
-  if (buttonFont.pointSizeF() <= 0.0) {
-    buttonFont.setPointSize(10);
-  }
-
-  QFontMetrics metrics(buttonFont);
   const QString label = button->text();
-  while (!label.isEmpty()
-      && (metrics.horizontalAdvance(label) > textBounds.width()
-          || metrics.height() > textBounds.height())
-      && buttonFont.pointSize() > 4) {
-    buttonFont.setPointSize(buttonFont.pointSize() - 1);
-    metrics = QFontMetrics(buttonFont);
+  const QRect textBounds = bounds.adjusted(2, 2, -2, -2);
+  QFont buttonFont = medmChoiceButtonFont(height(), buttons_.size(),
+      stacking_, textBounds.height());
+  if (buttonFont.family().isEmpty()) {
+    buttonFont = shrinkFontToFit(label, textBounds, font());
   }
   button->setFont(buttonFont);
 }

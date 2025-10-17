@@ -41,6 +41,7 @@ qtedm_SRC = qtedm.cc \
             message_button_element.cc \
             shell_command_element.cc \
             choice_button_element.cc \
+            choice_button_runtime.cc \
             menu_element.cc \
             related_display_element.cc \
             text_monitor_element.cc \

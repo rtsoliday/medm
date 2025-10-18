@@ -1,5 +1,7 @@
 #include "text_element.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QFont>
 #include <QFontMetrics>
@@ -13,6 +15,22 @@
 namespace {
 
 constexpr int kTextMargin = 0;
+
+QColor alarmColorForSeverity(short severity)
+{
+  switch (severity) {
+  case 0:
+    return QColor(0, 205, 0);
+  case 1:
+    return QColor(255, 255, 0);
+  case 2:
+    return QColor(255, 0, 0);
+  case 3:
+    return QColor(255, 255, 255);
+  default:
+    return QColor(204, 204, 204);
+  }
+}
 
 } // namespace
 
@@ -28,6 +46,7 @@ TextElement::TextElement(QWidget *parent)
   setColorMode(TextColorMode::kStatic);
   setVisibilityMode(TextVisibilityMode::kStatic);
   updateSelectionVisual();
+  designModeVisible_ = QLabel::isVisible();
 }
 
 void TextElement::setSelected(bool selected)
@@ -51,16 +70,13 @@ QColor TextElement::foregroundColor() const
 
 void TextElement::setForegroundColor(const QColor &color)
 {
-  QColor effective = color;
-  if (!effective.isValid()) {
-    effective = defaultForegroundColor();
+  QColor effective = color.isValid() ? color : defaultForegroundColor();
+  if (foregroundColor_ == effective) {
+    return;
   }
-  const bool changed = (foregroundColor_ != effective);
   foregroundColor_ = effective;
   applyTextColor();
-  if (changed) {
-    update();
-  }
+  update();
 }
 
 void TextElement::setText(const QString &value)
@@ -148,6 +164,79 @@ void TextElement::setChannel(int index, const QString &value)
   channels_[index] = value;
 }
 
+void TextElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+
+  if (execute) {
+    designModeVisible_ = QLabel::isVisible();
+  }
+
+  executeMode_ = execute;
+  runtimeConnected_ = false;
+  runtimeVisible_ = true;
+  runtimeSeverity_ = 0;
+  updateExecuteState();
+}
+
+bool TextElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void TextElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (executeMode_) {
+    if (colorMode_ == TextColorMode::kAlarm) {
+      applyTextColor();
+    }
+    applyTextVisibility();
+    update();
+  }
+}
+
+void TextElement::setRuntimeVisible(bool visible)
+{
+  if (runtimeVisible_ == visible) {
+    return;
+  }
+  runtimeVisible_ = visible;
+  if (executeMode_) {
+    applyTextVisibility();
+    update();
+  }
+}
+
+void TextElement::setRuntimeSeverity(short severity)
+{
+  if (severity < 0) {
+    severity = 0;
+  }
+  severity = std::min<short>(severity, 3);
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    applyTextColor();
+    update();
+  }
+}
+
+void TextElement::setVisible(bool visible)
+{
+  if (!executeMode_) {
+    designModeVisible_ = visible;
+  }
+  QLabel::setVisible(visible);
+}
+
 void TextElement::resizeEvent(QResizeEvent *event)
 {
   QLabel::resizeEvent(event);
@@ -183,11 +272,22 @@ QColor TextElement::defaultForegroundColor() const
 
 void TextElement::applyTextColor()
 {
+  const QColor color = effectiveForegroundColor();
   QPalette pal = palette();
-  pal.setColor(QPalette::WindowText, foregroundColor_);
-  pal.setColor(QPalette::Text, foregroundColor_);
-  pal.setColor(QPalette::ButtonText, foregroundColor_);
+  pal.setColor(QPalette::WindowText, color);
+  pal.setColor(QPalette::Text, color);
+  pal.setColor(QPalette::ButtonText, color);
   setPalette(pal);
+}
+
+void TextElement::applyTextVisibility()
+{
+  if (executeMode_) {
+    const bool visible = designModeVisible_ && runtimeVisible_ && runtimeConnected_;
+    QLabel::setVisible(visible);
+  } else {
+    QLabel::setVisible(designModeVisible_);
+  }
 }
 
 void TextElement::updateSelectionVisual()
@@ -195,6 +295,33 @@ void TextElement::updateSelectionVisual()
   // Keep the configured foreground color even when selected; the dashed border
   // drawn in paintEvent() is sufficient to indicate selection.
   applyTextColor();
+  update();
+}
+
+QColor TextElement::effectiveForegroundColor() const
+{
+  QColor baseColor = foregroundColor_.isValid() ? foregroundColor_ : defaultForegroundColor();
+  if (!executeMode_) {
+    return baseColor;
+  }
+
+  switch (colorMode_) {
+  case TextColorMode::kAlarm:
+    if (!runtimeConnected_) {
+      return QColor(204, 204, 204);
+    }
+    return alarmColorForSeverity(runtimeSeverity_);
+  case TextColorMode::kDiscrete:
+  case TextColorMode::kStatic:
+  default:
+    return baseColor;
+  }
+}
+
+void TextElement::updateExecuteState()
+{
+  applyTextColor();
+  applyTextVisibility();
   update();
 }
 

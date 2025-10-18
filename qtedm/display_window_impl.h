@@ -1927,6 +1927,7 @@ private:
   QPoint lastContextMenuGlobalPos_;
   QList<TextElement *> textElements_;
   TextElement *selectedTextElement_ = nullptr;
+  QHash<TextElement *, TextRuntime *> textRuntimes_;
   QList<TextEntryElement *> textEntryElements_;
   TextEntryElement *selectedTextEntryElement_ = nullptr;
   QList<SliderElement *> sliderElements_;
@@ -2893,6 +2894,7 @@ private:
     notifyMenus();
   }
 
+  void removeTextRuntime(TextElement *element);
   void removeSliderRuntime(SliderElement *element);
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
@@ -2912,7 +2914,9 @@ private:
     element->setSelected(false);
     elements.removeAll(element);
     removeElementFromStack(element);
-    if constexpr (std::is_same_v<ElementType, SliderElement>) {
+    if constexpr (std::is_same_v<ElementType, TextElement>) {
+      removeTextRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, SliderElement>) {
       removeSliderRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
       removeChoiceButtonRuntime(element);
@@ -3028,6 +3032,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.textElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.textRuntimes_.contains(newElement)) {
+            auto *runtime = new TextRuntime(newElement);
+            target.textRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectTextElement(newElement);
         target.markDirty();
       });
@@ -10044,6 +10056,14 @@ private:
     element->show();
     ensureElementInStack(element);
     textElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!textRuntimes_.contains(element)) {
+        auto *runtime = new TextRuntime(element);
+        textRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectTextElement(element);
     showResourcePaletteForText(element);
     deactivateCreateTool();
@@ -13186,7 +13206,9 @@ inline void DisplayWindow::clearAllElements()
     using ElementType = typename std::decay_t<decltype(list)>::value_type;
     for (auto *element : list) {
       if (element) {
-        if constexpr (std::is_same_v<ElementType, SliderElement *>) {
+        if constexpr (std::is_same_v<ElementType, TextElement *>) {
+          removeTextRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, SliderElement *>) {
           removeSliderRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
           removeChoiceButtonRuntime(element);
@@ -14011,6 +14033,14 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
   element->setSelected(false);
   textElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!textRuntimes_.contains(element)) {
+      auto *runtime = new TextRuntime(element);
+      textRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17239,6 +17269,17 @@ inline void DisplayWindow::enterExecuteMode()
     return;
   }
   executeModeActive_ = true;
+  for (TextElement *element : textElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!textRuntimes_.contains(element)) {
+      auto *runtime = new TextRuntime(element);
+      textRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -17302,6 +17343,18 @@ inline void DisplayWindow::leaveExecuteMode()
     return;
   }
   executeModeActive_ = false;
+  for (auto it = textRuntimes_.begin(); it != textRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  textRuntimes_.clear();
+  for (TextElement *element : textElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17361,6 +17414,17 @@ inline void DisplayWindow::leaveExecuteMode()
     if (element) {
       element->setExecuteMode(false);
     }
+  }
+}
+
+inline void DisplayWindow::removeTextRuntime(TextElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = textRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
   }
 }
 

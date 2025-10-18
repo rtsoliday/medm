@@ -41,15 +41,27 @@ public:
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeVisible(bool visible);
+  void setRuntimeSeverity(short severity);
+
+  void setVisible(bool visible) override;
+
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
 
 private:
   QColor defaultForegroundColor() const;
+  QColor effectiveForegroundColor() const;
   void applyTextColor();
+  void applyTextVisibility();
   void updateSelectionVisual();
   void updateFontForGeometry();
+  void updateExecuteState();
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -58,5 +70,10 @@ private:
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
   QString visibilityCalc_;
   std::array<QString, 5> channels_{};
+  bool executeMode_ = false;
+  bool designModeVisible_ = true;
+  bool runtimeConnected_ = false;
+  bool runtimeVisible_ = true;
+  short runtimeSeverity_ = 0;
 };
 

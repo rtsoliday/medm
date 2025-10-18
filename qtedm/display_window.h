@@ -94,6 +94,7 @@
 #include "composite_element.h"
 #include "resource_palette_dialog.h"
 #include "text_element.h"
+#include "text_runtime.h"
 #include "choice_button_element.h"
 #include "choice_button_runtime.h"
 #include "menu_element.h"

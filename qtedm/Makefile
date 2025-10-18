@@ -37,6 +37,7 @@ qtedm_SRC = qtedm.cc \
             main_window_controller.cc \
             text_font_utils.cc \
             text_element.cc \
+            text_runtime.cc \
             text_entry_element.cc \
             message_button_element.cc \
             message_button_runtime.cc \
@@ -71,7 +72,8 @@ qtedm_SRC = qtedm.cc \
             object_palette_dialog.cc \
             color_palette_dialog.cc \
             pv_limits_dialog.cc \
-            medm_colors.cc
+            medm_colors.cc \
+            text_runtime_calc_bridge.c
 
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
 

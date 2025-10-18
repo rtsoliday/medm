@@ -1,6 +1,6 @@
 
 file {
-	name="/home/SOLIDAY/github/medm/tests/test_Text_medm.adl"
+	name="/home/SOLIDAY/github/medm/tests/test_Text.adl"
 	version=030122
 }
 display {
@@ -576,6 +576,12 @@ text {
 	"basic attribute" {
 		clr=62
 	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A+B"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+	}
 	textix="Example Text Height 44"
 	align="horiz. right"
 }
@@ -588,6 +594,10 @@ text {
 	}
 	"basic attribute" {
 		clr=21
+	}
+	"dynamic attribute" {
+		vis="if zero"
+		chan="channelB_PV"
 	}
 	textix="Example Text Height 45"
 	align="horiz. centered"
@@ -602,6 +612,10 @@ text {
 	"basic attribute" {
 		clr=48
 	}
+	"dynamic attribute" {
+		vis="if not zero"
+		chan="channelA_PV"
+	}
 	textix="Example Text Height 46"
 }
 text {
@@ -615,10 +629,10 @@ text {
 		clr=8
 	}
 	"dynamic attribute" {
-		chan="channelA.PV"
-		chanB="channelB.PV"
-		chanC="channelC.PV"
-		chanD="channelD.PV"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 	textix="Example Text Height 60"
 	align="horiz. right"

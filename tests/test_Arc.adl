@@ -132,7 +132,7 @@ arc {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if not zero"
-		chan="arc:discA"
+		chan="channelA_PV"
 	}
 	begin=1792
 	path=6400
@@ -183,10 +183,10 @@ arc {
 		clr="alarm"
 		vis="calc"
 		calc="A>B"
-		chan="arc:calcA"
-		chanB="arc:calcB"
-		chanC="arc:calcC"
-		chanD="arc:calcD"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 	begin=512
 	path=14720
@@ -220,8 +220,8 @@ arc {
 	}
 	"dynamic attribute" {
 		clr="discrete"
-		chan="arc:multi"
-		chanB="arc:multi2"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 	begin=2560
 	path=16640

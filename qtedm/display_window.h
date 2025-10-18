@@ -73,6 +73,7 @@
 #include "adl_parser.h"
 #include "adl_writer.h"
 #include "arc_element.h"
+#include "arc_runtime.h"
 #include "cartesian_plot_element.h"
 #include "byte_monitor_element.h"
 #include "bar_monitor_element.h"

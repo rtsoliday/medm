@@ -64,6 +64,7 @@ qtedm_SRC = qtedm.cc \
             oval_element.cc \
             oval_runtime.cc \
             arc_element.cc \
+            arc_runtime.cc \
             line_element.cc \
             line_runtime.cc \
             polyline_element.cc \

@@ -1972,6 +1972,7 @@ private:
   QHash<OvalElement *, OvalRuntime *> ovalRuntimes_;
   OvalElement *selectedOval_ = nullptr;
   QList<ArcElement *> arcElements_;
+  QHash<ArcElement *, ArcRuntime *> arcRuntimes_;
   ArcElement *selectedArc_ = nullptr;
   QList<LineElement *> lineElements_;
   QHash<LineElement *, LineRuntime *> lineRuntimes_;
@@ -2904,6 +2905,7 @@ private:
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
   void removeMessageButtonRuntime(MessageButtonElement *element);
+  void removeArcRuntime(ArcElement *element);
   void removeOvalRuntime(OvalElement *element);
   void removeLineRuntime(LineElement *element);
   void removeRectangleRuntime(RectangleElement *element);
@@ -2938,6 +2940,8 @@ private:
       removeLineRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, RectangleElement>) {
       removeRectangleRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, ArcElement>) {
+      removeArcRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, OvalElement>) {
       removeOvalRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, PolylineElement>) {
@@ -3927,6 +3931,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.arcElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.arcRuntimes_.contains(newElement)) {
+            auto *runtime = new ArcRuntime(newElement);
+            target.arcRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectArcElement(newElement);
         target.markDirty();
       });
@@ -10693,6 +10705,14 @@ private:
     element->show();
     ensureElementInStack(element);
     arcElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!arcRuntimes_.contains(element)) {
+        auto *runtime = new ArcRuntime(element);
+        arcRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectArcElement(element);
     showResourcePaletteForArc(element);
     deactivateCreateTool();
@@ -13320,6 +13340,8 @@ inline void DisplayWindow::clearAllElements()
           removeLineRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, RectangleElement *>) {
           removeRectangleRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, ArcElement *>) {
+          removeArcRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, OvalElement *>) {
           removeOvalRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, PolylineElement *>) {
@@ -16732,6 +16754,14 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
   element->setSelected(false);
   arcElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!arcRuntimes_.contains(element)) {
+      auto *runtime = new ArcRuntime(element);
+      arcRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17452,6 +17482,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (ArcElement *element : arcElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!arcRuntimes_.contains(element)) {
+      auto *runtime = new ArcRuntime(element);
+      arcRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (LineElement *element : lineElements_) {
     if (!element) {
       continue;
@@ -17584,6 +17625,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = arcRuntimes_.begin(); it != arcRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  arcRuntimes_.clear();
+  for (ArcElement *element : arcElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = lineRuntimes_.begin(); it != lineRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17688,6 +17741,17 @@ inline void DisplayWindow::removeTextRuntime(TextElement *element)
     return;
   }
   if (auto *runtime = textRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeArcRuntime(ArcElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = arcRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

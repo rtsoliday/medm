@@ -43,6 +43,15 @@ public:
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeVisible(bool visible);
+  void setRuntimeSeverity(short severity);
+
+  void setVisible(bool visible) override;
+
   void setAbsolutePoints(const QVector<QPoint> &points);
   QVector<QPoint> absolutePoints() const;
   bool containsGlobalPoint(const QPoint &point) const;
@@ -53,6 +62,9 @@ protected:
 
 private:
   QColor defaultForegroundColor() const;
+  QColor effectiveForegroundColor() const;
+  void applyRuntimeVisibility();
+  void updateExecuteState();
   void recalcLocalPolyline();
 
   bool selected_ = false;
@@ -63,6 +75,11 @@ private:
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
   QString visibilityCalc_;
   std::array<QString, 5> channels_{};
+  bool executeMode_ = false;
+  bool designModeVisible_ = true;
+  bool runtimeConnected_ = false;
+  bool runtimeVisible_ = true;
+  short runtimeSeverity_ = 0;
   QVector<QPointF> normalizedPoints_;
   QPolygon localPolyline_;
 };

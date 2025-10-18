@@ -2,11 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include <QApplication>
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+
+#include "medm_colors.h"
 
 PolylineElement::PolylineElement(QWidget *parent)
   : QWidget(parent)
@@ -19,6 +22,7 @@ PolylineElement::PolylineElement(QWidget *parent)
   setLineWidth(1);
   setColorMode(TextColorMode::kStatic);
   setVisibilityMode(TextVisibilityMode::kStatic);
+  designModeVisible_ = QWidget::isVisible();
   update();
 }
 
@@ -135,6 +139,73 @@ void PolylineElement::setChannel(int index, const QString &value)
   channels_[index] = value;
 }
 
+void PolylineElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+
+  if (execute) {
+    designModeVisible_ = QWidget::isVisible();
+  }
+
+  executeMode_ = execute;
+  runtimeConnected_ = false;
+  runtimeVisible_ = true;
+  runtimeSeverity_ = 0;
+  updateExecuteState();
+}
+
+bool PolylineElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void PolylineElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (executeMode_) {
+    updateExecuteState();
+  }
+}
+
+void PolylineElement::setRuntimeVisible(bool visible)
+{
+  if (runtimeVisible_ == visible) {
+    return;
+  }
+  runtimeVisible_ = visible;
+  if (executeMode_) {
+    applyRuntimeVisibility();
+  }
+}
+
+void PolylineElement::setRuntimeSeverity(short severity)
+{
+  if (severity < 0) {
+    severity = 0;
+  }
+  severity = std::min<short>(severity, 3);
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    update();
+  }
+}
+
+void PolylineElement::setVisible(bool visible)
+{
+  if (!executeMode_) {
+    designModeVisible_ = visible;
+  }
+  QWidget::setVisible(visible);
+}
+
 void PolylineElement::setAbsolutePoints(const QVector<QPoint> &points)
 {
   if (points.size() < 2) {
@@ -244,7 +315,7 @@ void PolylineElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
-  const QColor effectiveColor = color_.isValid() ? color_ : defaultForegroundColor();
+  const QColor effectiveColor = effectiveForegroundColor();
 
   QPen pen(effectiveColor);
   pen.setWidth(lineWidth_);
@@ -278,6 +349,42 @@ QColor PolylineElement::defaultForegroundColor() const
     return qApp->palette().color(QPalette::WindowText);
   }
   return QColor(Qt::black);
+}
+
+QColor PolylineElement::effectiveForegroundColor() const
+{
+  const QColor baseColor = color_.isValid() ? color_ : defaultForegroundColor();
+  if (!executeMode_) {
+    return baseColor;
+  }
+
+  switch (colorMode_) {
+  case TextColorMode::kAlarm: {
+    const short severity = runtimeConnected_ ? runtimeSeverity_
+        : std::numeric_limits<short>::max();
+    return MedmColors::alarmColorForSeverity(severity);
+  }
+  case TextColorMode::kDiscrete:
+  case TextColorMode::kStatic:
+  default:
+    return baseColor;
+  }
+}
+
+void PolylineElement::applyRuntimeVisibility()
+{
+  if (executeMode_) {
+    const bool visible = designModeVisible_ && runtimeVisible_;
+    QWidget::setVisible(visible);
+  } else {
+    QWidget::setVisible(designModeVisible_);
+  }
+}
+
+void PolylineElement::updateExecuteState()
+{
+  applyRuntimeVisibility();
+  update();
 }
 
 void PolylineElement::recalcLocalPolyline()

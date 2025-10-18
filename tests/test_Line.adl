@@ -155,10 +155,10 @@ polyline {
 }
 polyline {
 	object {
-		x=90
-		y=160
-		width=220
-		height=110
+		x=88
+		y=158
+		width=225
+		height=115
 	}
 	"basic attribute" {
 		clr=28
@@ -167,7 +167,7 @@ polyline {
 	"dynamic attribute" {
 		clr="alarm"
 		vis="if not zero"
-		chan="line:alarmA"
+		chan="channelA_PV"
 	}
 	points {
 		(90,160)
@@ -179,8 +179,8 @@ polyline {
 	object {
 		x=360
 		y=260
-		width=230
-		height=120
+		width=231
+		height=121
 	}
 	"basic attribute" {
 		clr=12
@@ -189,14 +189,14 @@ polyline {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if zero"
-		chan="line:disc1"
-		chanB="line:disc2"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 	points {
-		(360,370)
-		(420,260)
-		(520,320)
-		(590,380)
+		(363,368)
+		(422,263)
+		(519,321)
+		(588,378)
 	}
 }
 polyline {
@@ -214,10 +214,10 @@ polyline {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if not zero"
-		chan="line:multi"
-		chanB="line:multiB"
-		chanC="line:multiC"
-		chanD="line:multiD"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 	points {
 		(120,320)
@@ -230,8 +230,8 @@ polyline {
 	object {
 		x=430
 		y=380
-		width=210
-		height=80
+		width=211
+		height=81
 	}
 	"basic attribute" {
 		clr=18
@@ -241,21 +241,21 @@ polyline {
 		clr="alarm"
 		vis="calc"
 		calc="A>B"
-		chan="line:calcA"
-		chanB="line:calcB"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 	points {
-		(430,380)
-		(520,460)
-		(640,420)
+		(434,384)
+		(521,457)
+		(637,421)
 	}
 }
 polyline {
 	object {
 		x=60
 		y=420
-		width=120
-		height=20
+		width=121
+		height=1
 	}
 	"basic attribute" {
 		clr=9
@@ -263,7 +263,7 @@ polyline {
 	}
 	"dynamic attribute" {
 		vis="if zero"
-		chan="line:vis0"
+		chan="channelA_PV"
 	}
 	points {
 		(60,420)
@@ -274,8 +274,8 @@ polyline {
 	object {
 		x=220
 		y=440
-		width=240
-		height=80
+		width=241
+		height=81
 	}
 	"basic attribute" {
 		clr=60
@@ -285,14 +285,14 @@ polyline {
 		clr="alarm"
 		vis="calc"
 		calc="A+B>C"
-		chan="line:calc1"
-		chanB="line:calc2"
-		chanC="line:calc3"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
 	}
 	points {
-		(220,440)
-		(300,500)
-		(400,480)
-		(460,520)
+		(222,442)
+		(301,500)
+		(400,481)
+		(459,519)
 	}
 }

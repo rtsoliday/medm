@@ -1975,6 +1975,7 @@ private:
   QList<LineElement *> lineElements_;
   LineElement *selectedLine_ = nullptr;
   QList<PolylineElement *> polylineElements_;
+  QHash<PolylineElement *, PolylineRuntime *> polylineRuntimes_;
   PolylineElement *selectedPolyline_ = nullptr;
   QList<PolygonElement *> polygonElements_;
   PolygonElement *selectedPolygon_ = nullptr;
@@ -2901,6 +2902,7 @@ private:
   void removeMenuRuntime(MenuElement *element);
   void removeMessageButtonRuntime(MessageButtonElement *element);
   void removeRectangleRuntime(RectangleElement *element);
+  void removePolylineRuntime(PolylineElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2928,6 +2930,8 @@ private:
       removeMessageButtonRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, RectangleElement>) {
       removeRectangleRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, PolylineElement>) {
+      removePolylineRuntime(element);
     }
     element->deleteLater();
     return true;
@@ -4003,6 +4007,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.polylineElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.polylineRuntimes_.contains(newElement)) {
+            auto *runtime = new PolylineRuntime(newElement);
+            target.polylineRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectPolylineElement(newElement);
         target.markDirty();
       });
@@ -9662,6 +9674,14 @@ private:
     polylineCreationPoints_.clear();
     activePolylineElement_ = nullptr;
     polylineElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!polylineRuntimes_.contains(element)) {
+        auto *runtime = new PolylineRuntime(element);
+        polylineRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectPolylineElement(element);
     showResourcePaletteForPolyline(element);
     deactivateCreateTool();
@@ -13238,6 +13258,8 @@ inline void DisplayWindow::clearAllElements()
           removeMessageButtonRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, RectangleElement *>) {
           removeRectangleRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, PolylineElement *>) {
+          removePolylineRuntime(element);
         }
         removeElementFromStack(element);
         element->deleteLater();
@@ -16984,6 +17006,14 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
   element->setSelected(false);
   polylineElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!polylineRuntimes_.contains(element)) {
+      auto *runtime = new PolylineRuntime(element);
+      polylineRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17321,6 +17351,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (PolylineElement *element : polylineElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!polylineRuntimes_.contains(element)) {
+      auto *runtime = new PolylineRuntime(element);
+      polylineRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -17408,6 +17449,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = polylineRuntimes_.begin(); it != polylineRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  polylineRuntimes_.clear();
+  for (PolylineElement *element : polylineElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17487,6 +17540,17 @@ inline void DisplayWindow::removeRectangleRuntime(RectangleElement *element)
     return;
   }
   if (auto *runtime = rectangleRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removePolylineRuntime(PolylineElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = polylineRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

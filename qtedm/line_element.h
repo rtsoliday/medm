@@ -45,11 +45,23 @@ public:
   void setLocalEndpoints(const QPoint &start, const QPoint &end);
   QVector<QPoint> absolutePoints() const;
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeVisible(bool visible);
+  void setRuntimeSeverity(short severity);
+
+  void setVisible(bool visible) override;
+
 protected:
   void paintEvent(QPaintEvent *event) override;
 
 private:
   QColor defaultForegroundColor() const;
+  QColor effectiveForegroundColor() const;
+  void applyRuntimeVisibility();
+  void updateExecuteState();
   QPoint clampToSize(const QPoint &point, const QSize &size) const;
   QPointF ratioForPoint(const QPoint &point, const QSize &size) const;
   QPoint pointFromRatio(const QPointF &ratio) const;
@@ -62,6 +74,11 @@ private:
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
   QString visibilityCalc_;
   std::array<QString, 5> channels_{};
+  bool executeMode_ = false;
+  bool designModeVisible_ = true;
+  bool runtimeConnected_ = false;
+  bool runtimeVisible_ = true;
+  short runtimeSeverity_ = 0;
   QPointF startRatio_{0.0, 0.0};
   QPointF endRatio_{1.0, 1.0};
 };

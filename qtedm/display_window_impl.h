@@ -1973,6 +1973,7 @@ private:
   QList<ArcElement *> arcElements_;
   ArcElement *selectedArc_ = nullptr;
   QList<LineElement *> lineElements_;
+  QHash<LineElement *, LineRuntime *> lineRuntimes_;
   LineElement *selectedLine_ = nullptr;
   QList<PolylineElement *> polylineElements_;
   QHash<PolylineElement *, PolylineRuntime *> polylineRuntimes_;
@@ -2901,6 +2902,7 @@ private:
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
   void removeMessageButtonRuntime(MessageButtonElement *element);
+  void removeLineRuntime(LineElement *element);
   void removeRectangleRuntime(RectangleElement *element);
   void removePolylineRuntime(PolylineElement *element);
 
@@ -2928,6 +2930,8 @@ private:
       removeMenuRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MessageButtonElement>) {
       removeMessageButtonRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, LineElement>) {
+      removeLineRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, RectangleElement>) {
       removeRectangleRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, PolylineElement>) {
@@ -3962,6 +3966,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.lineElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.lineRuntimes_.contains(newElement)) {
+            auto *runtime = new LineRuntime(newElement);
+            target.lineRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectLineElement(newElement);
         target.markDirty();
       });
@@ -10681,6 +10693,14 @@ private:
     element->show();
     ensureElementInStack(element);
     lineElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!lineRuntimes_.contains(element)) {
+        auto *runtime = new LineRuntime(element);
+        lineRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectLineElement(element);
     showResourcePaletteForLine(element);
     deactivateCreateTool();
@@ -13256,6 +13276,8 @@ inline void DisplayWindow::clearAllElements()
           removeMenuRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MessageButtonElement *>) {
           removeMessageButtonRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, LineElement *>) {
+          removeLineRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, RectangleElement *>) {
           removeRectangleRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, PolylineElement *>) {
@@ -16981,6 +17003,14 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     element->show();
     element->setSelected(false);
     lineElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!lineRuntimes_.contains(element)) {
+        auto *runtime = new LineRuntime(element);
+        lineRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     ensureElementInStack(element);
     return nullptr;
   }
@@ -17351,6 +17381,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (LineElement *element : lineElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!lineRuntimes_.contains(element)) {
+      auto *runtime = new LineRuntime(element);
+      lineRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (PolylineElement *element : polylineElements_) {
     if (!element) {
       continue;
@@ -17449,6 +17490,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = lineRuntimes_.begin(); it != lineRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  lineRuntimes_.clear();
+  for (LineElement *element : lineElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = polylineRuntimes_.begin(); it != polylineRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17529,6 +17582,17 @@ inline void DisplayWindow::removeTextRuntime(TextElement *element)
     return;
   }
   if (auto *runtime = textRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeLineRuntime(LineElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = lineRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

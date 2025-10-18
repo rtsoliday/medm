@@ -85,6 +85,7 @@
 #include "image_element.h"
 #include "meter_element.h"
 #include "line_element.h"
+#include "line_runtime.h"
 #include "medm_colors.h"
 #include "oval_element.h"
 #include "strip_chart_element.h"

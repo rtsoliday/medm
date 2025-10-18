@@ -1,11 +1,14 @@
 #include "oval_element.h"
 
 #include <algorithm>
+#include <limits>
 
 #include <QApplication>
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+
+#include "medm_colors.h"
 
 OvalElement::OvalElement(QWidget *parent)
   : QWidget(parent)
@@ -19,6 +22,7 @@ OvalElement::OvalElement(QWidget *parent)
   setLineWidth(1);
   setColorMode(TextColorMode::kStatic);
   setVisibilityMode(TextVisibilityMode::kStatic);
+  designModeVisible_ = QWidget::isVisible();
   update();
 }
 
@@ -149,6 +153,73 @@ void OvalElement::setChannel(int index, const QString &value)
   channels_[index] = value;
 }
 
+void OvalElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+
+  if (execute) {
+    designModeVisible_ = QWidget::isVisible();
+  }
+
+  executeMode_ = execute;
+  runtimeConnected_ = false;
+  runtimeVisible_ = true;
+  runtimeSeverity_ = 0;
+  updateExecuteState();
+}
+
+bool OvalElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void OvalElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (executeMode_) {
+    updateExecuteState();
+  }
+}
+
+void OvalElement::setRuntimeVisible(bool visible)
+{
+  if (runtimeVisible_ == visible) {
+    return;
+  }
+  runtimeVisible_ = visible;
+  if (executeMode_) {
+    applyRuntimeVisibility();
+  }
+}
+
+void OvalElement::setRuntimeSeverity(short severity)
+{
+  if (severity < 0) {
+    severity = 0;
+  }
+  severity = std::min<short>(severity, 3);
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    update();
+  }
+}
+
+void OvalElement::setVisible(bool visible)
+{
+  if (!executeMode_) {
+    designModeVisible_ = visible;
+  }
+  QWidget::setVisible(visible);
+}
+
 void OvalElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -156,7 +227,7 @@ void OvalElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
-  const QColor effectiveColor = color_.isValid() ? color_ : defaultForegroundColor();
+  const QColor effectiveColor = effectiveForegroundColor();
   QRect drawRect = rect().adjusted(0, 0, -1, -1);
 
   if (fill_ == RectangleFill::kSolid) {
@@ -199,5 +270,42 @@ QColor OvalElement::defaultForegroundColor() const
     return qApp->palette().color(QPalette::WindowText);
   }
   return Qt::black;
+}
+
+QColor OvalElement::effectiveForegroundColor() const
+{
+  const QColor baseColor = color_.isValid() ? color_ : defaultForegroundColor();
+  if (!executeMode_) {
+    return baseColor;
+  }
+
+  switch (colorMode_) {
+  case TextColorMode::kAlarm: {
+    const short severity = runtimeConnected_
+        ? runtimeSeverity_
+        : std::numeric_limits<short>::max();
+    return MedmColors::alarmColorForSeverity(severity);
+  }
+  case TextColorMode::kDiscrete:
+  case TextColorMode::kStatic:
+  default:
+    return baseColor;
+  }
+}
+
+void OvalElement::applyRuntimeVisibility()
+{
+  if (executeMode_) {
+    const bool visible = designModeVisible_ && runtimeVisible_;
+    QWidget::setVisible(visible);
+  } else {
+    QWidget::setVisible(designModeVisible_);
+  }
+}
+
+void OvalElement::updateExecuteState()
+{
+  applyRuntimeVisibility();
+  update();
 }
 

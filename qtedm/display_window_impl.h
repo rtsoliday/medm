@@ -1969,6 +1969,7 @@ private:
   QList<ImageElement *> imageElements_;
   ImageElement *selectedImage_ = nullptr;
   QList<OvalElement *> ovalElements_;
+  QHash<OvalElement *, OvalRuntime *> ovalRuntimes_;
   OvalElement *selectedOval_ = nullptr;
   QList<ArcElement *> arcElements_;
   ArcElement *selectedArc_ = nullptr;
@@ -2903,6 +2904,7 @@ private:
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
   void removeMessageButtonRuntime(MessageButtonElement *element);
+  void removeOvalRuntime(OvalElement *element);
   void removeLineRuntime(LineElement *element);
   void removeRectangleRuntime(RectangleElement *element);
   void removePolylineRuntime(PolylineElement *element);
@@ -2936,6 +2938,8 @@ private:
       removeLineRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, RectangleElement>) {
       removeRectangleRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, OvalElement>) {
+      removeOvalRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, PolylineElement>) {
       removePolylineRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, PolygonElement>) {
@@ -3864,6 +3868,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.ovalElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.ovalRuntimes_.contains(newElement)) {
+            auto *runtime = new OvalRuntime(newElement);
+            target.ovalRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectOvalElement(newElement);
         target.markDirty();
       });
@@ -10645,6 +10657,14 @@ private:
     element->show();
     ensureElementInStack(element);
     ovalElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!ovalRuntimes_.contains(element)) {
+        auto *runtime = new OvalRuntime(element);
+        ovalRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectOvalElement(element);
     showResourcePaletteForOval(element);
     deactivateCreateTool();
@@ -13300,6 +13320,8 @@ inline void DisplayWindow::clearAllElements()
           removeLineRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, RectangleElement *>) {
           removeRectangleRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, OvalElement *>) {
+          removeOvalRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, PolylineElement *>) {
           removePolylineRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, PolygonElement *>) {
@@ -16589,6 +16611,14 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
   element->setSelected(false);
   ovalElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!ovalRuntimes_.contains(element)) {
+      auto *runtime = new OvalRuntime(element);
+      ovalRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17411,6 +17441,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (OvalElement *element : ovalElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!ovalRuntimes_.contains(element)) {
+      auto *runtime = new OvalRuntime(element);
+      ovalRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (LineElement *element : lineElements_) {
     if (!element) {
       continue;
@@ -17531,6 +17572,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = ovalRuntimes_.begin(); it != ovalRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  ovalRuntimes_.clear();
+  for (OvalElement *element : ovalElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = lineRuntimes_.begin(); it != lineRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17635,6 +17688,17 @@ inline void DisplayWindow::removeTextRuntime(TextElement *element)
     return;
   }
   if (auto *runtime = textRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeOvalRuntime(OvalElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = ovalRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

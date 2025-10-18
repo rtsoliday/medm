@@ -115,8 +115,8 @@ oval {
 	"dynamic attribute" {
 		clr="alarm"
 		vis="if not zero"
-		chan="oval:vis:327"
-		chanB="oval:vis:728"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 }
 oval {
@@ -134,7 +134,7 @@ oval {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if zero"
-		chan="oval:disc:044"
+		chan="channelA_PV"
 	}
 }
 oval {
@@ -151,9 +151,9 @@ oval {
 	}
 	"dynamic attribute" {
 		clr="alarm"
-		chan="oval:alarm:191"
-		chanB="oval:alarm:973"
-		chanC="oval:alarm:624"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
 	}
 }
 oval {
@@ -171,8 +171,8 @@ oval {
 	"dynamic attribute" {
 		vis="calc"
 		calc="A<B"
-		chan="oval:calc:501"
-		chanB="oval:calc:847"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 }
 oval {
@@ -202,8 +202,8 @@ oval {
 	}
 	"dynamic attribute" {
 		clr="discrete"
-		chan="oval:mode:662"
-		chanB="oval:mode:905"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 }
 oval {
@@ -221,7 +221,7 @@ oval {
 	"dynamic attribute" {
 		clr="alarm"
 		vis="if zero"
-		chan="oval:zero:786"
+		chan="channelA_PV"
 	}
 }
 oval {
@@ -252,7 +252,7 @@ oval {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if not zero"
-		chan="oval:state:583"
+		chan="channelA_PV"
 	}
 }
 oval {
@@ -269,9 +269,9 @@ oval {
 	"dynamic attribute" {
 		vis="calc"
 		calc="A+B>1"
-		chan="oval:calc:125"
-		chanB="oval:calc:954"
-		chanC="oval:calc:732"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
 	}
 }
 oval {
@@ -302,7 +302,7 @@ oval {
 	"dynamic attribute" {
 		clr="alarm"
 		vis="if zero"
-		chan="oval:watch:410"
+		chan="channelA_PV"
 	}
 }
 oval {
@@ -319,10 +319,10 @@ oval {
 	}
 	"dynamic attribute" {
 		clr="discrete"
-		chan="oval:multi:207"
-		chanB="oval:multi:819"
-		chanC="oval:multi:452"
-		chanD="oval:multi:281"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 }
 oval {
@@ -354,8 +354,8 @@ oval {
 		clr="alarm"
 		vis="calc"
 		calc="A>C"
-		chan="oval:alert:663"
-		chanB="oval:alert:221"
-		chanC="oval:alert:908"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
 	}
 }

@@ -88,6 +88,7 @@
 #include "line_runtime.h"
 #include "medm_colors.h"
 #include "oval_element.h"
+#include "oval_runtime.h"
 #include "strip_chart_element.h"
 #include "polygon_element.h"
 #include "polyline_element.h"

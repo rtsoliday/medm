@@ -7,6 +7,26 @@
 #include <QPalette>
 #include <QPen>
 
+namespace {
+
+QColor alarmColorForSeverity(short severity)
+{
+  switch (severity) {
+  case 0:
+    return QColor(0, 205, 0);
+  case 1:
+    return QColor(255, 255, 0);
+  case 2:
+    return QColor(255, 0, 0);
+  case 3:
+    return QColor(255, 255, 255);
+  default:
+    return QColor(204, 204, 204);
+  }
+}
+
+} // namespace
+
 RectangleElement::RectangleElement(QWidget *parent)
   : QWidget(parent)
 {
@@ -19,6 +39,7 @@ RectangleElement::RectangleElement(QWidget *parent)
   setLineWidth(1);
   setColorMode(TextColorMode::kStatic);
   setVisibilityMode(TextVisibilityMode::kStatic);
+  designModeVisible_ = QWidget::isVisible();
   update();
 }
 
@@ -149,6 +170,73 @@ void RectangleElement::setChannel(int index, const QString &value)
   channels_[index] = value;
 }
 
+void RectangleElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+
+  if (execute) {
+    designModeVisible_ = QWidget::isVisible();
+  }
+
+  executeMode_ = execute;
+  runtimeConnected_ = false;
+  runtimeVisible_ = true;
+  runtimeSeverity_ = 0;
+  updateExecuteState();
+}
+
+bool RectangleElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void RectangleElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (executeMode_) {
+    updateExecuteState();
+  }
+}
+
+void RectangleElement::setRuntimeVisible(bool visible)
+{
+  if (runtimeVisible_ == visible) {
+    return;
+  }
+  runtimeVisible_ = visible;
+  if (executeMode_) {
+    applyRuntimeVisibility();
+  }
+}
+
+void RectangleElement::setRuntimeSeverity(short severity)
+{
+  if (severity < 0) {
+    severity = 0;
+  }
+  severity = std::min<short>(severity, 3);
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    update();
+  }
+}
+
+void RectangleElement::setVisible(bool visible)
+{
+  if (!executeMode_) {
+    designModeVisible_ = visible;
+  }
+  QWidget::setVisible(visible);
+}
+
 void RectangleElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -156,16 +244,16 @@ void RectangleElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
-  const QColor effectiveColor = color_.isValid() ? color_ : defaultForegroundColor();
+  const QColor currentColor = effectiveForegroundColor();
   QRect drawRect = rect().adjusted(0, 0, -1, -1);
 
   if (fill_ == RectangleFill::kSolid) {
     painter.setPen(Qt::NoPen);
-    painter.setBrush(effectiveColor);
+    painter.setBrush(currentColor);
     painter.drawRect(drawRect);
   } else {
     painter.setBrush(Qt::NoBrush);
-    QPen pen(effectiveColor);
+    QPen pen(currentColor);
     pen.setWidth(lineWidth_);
     pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
                                                          : Qt::SolidLine);
@@ -186,7 +274,7 @@ void RectangleElement::paintEvent(QPaintEvent *event)
     pen.setWidth(1);
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
-    painter.drawRect(drawRect);
+      painter.drawRect(drawRect);
   }
 }
 
@@ -199,5 +287,41 @@ QColor RectangleElement::defaultForegroundColor() const
     return qApp->palette().color(QPalette::WindowText);
   }
   return QColor(Qt::black);
+}
+
+QColor RectangleElement::effectiveForegroundColor() const
+{
+  QColor baseColor = color_.isValid() ? color_ : defaultForegroundColor();
+  if (!executeMode_) {
+    return baseColor;
+  }
+
+  switch (colorMode_) {
+  case TextColorMode::kAlarm:
+    if (!runtimeConnected_) {
+      return QColor(204, 204, 204);
+    }
+    return alarmColorForSeverity(runtimeSeverity_);
+  case TextColorMode::kDiscrete:
+  case TextColorMode::kStatic:
+  default:
+    return baseColor;
+  }
+}
+
+void RectangleElement::applyRuntimeVisibility()
+{
+  if (executeMode_) {
+    const bool visible = designModeVisible_ && runtimeVisible_ && runtimeConnected_;
+    QWidget::setVisible(visible);
+  } else {
+    QWidget::setVisible(designModeVisible_);
+  }
+}
+
+void RectangleElement::updateExecuteState()
+{
+  applyRuntimeVisibility();
+  update();
 }
 

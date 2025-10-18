@@ -1,6 +1,6 @@
 
 file {
-	name="/home/SOLIDAY/github/medm/tests/test_rectangle_medm.adl"
+	name="/home/SOLIDAY/github/medm/tests/test_rectangle.adl"
 	version=030122
 }
 display {
@@ -150,10 +150,10 @@ rectangle {
 	}
 	"dynamic attribute" {
 		clr="alarm"
-		chan="rect:alarm1"
-		chanB="rect:alarm2"
-		chanC="rect:alarm3"
-		chanD="rect:alarm4"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 }
 rectangle {
@@ -171,7 +171,7 @@ rectangle {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if not zero"
-		chan="rect:disc1"
+		chan="channelA_PV"
 	}
 }
 rectangle {
@@ -187,7 +187,7 @@ rectangle {
 	}
 	"dynamic attribute" {
 		vis="if zero"
-		chan="rect:vis0"
+		chan="channelA_PV"
 	}
 }
 rectangle {
@@ -206,8 +206,8 @@ rectangle {
 		clr="alarm"
 		vis="calc"
 		calc="A>B"
-		chan="rect:calcA"
-		chanB="rect:calcB"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 }
 rectangle {
@@ -224,8 +224,8 @@ rectangle {
 	}
 	"dynamic attribute" {
 		clr="discrete"
-		chan="rect:multi"
-		chanB="rect:multi2"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 }
 rectangle {
@@ -241,7 +241,7 @@ rectangle {
 	"dynamic attribute" {
 		clr="alarm"
 		vis="if not zero"
-		chan="rect:alarm3"
+		chan="channelA_PV"
 	}
 }
 rectangle {
@@ -272,7 +272,7 @@ rectangle {
 		clr="discrete"
 		vis="calc"
 		calc="A>B"
-		chan="rect:discCalcA"
-		chanB="rect:discCalcB"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 }

@@ -1964,6 +1964,7 @@ private:
   QList<ByteMonitorElement *> byteMonitorElements_;
   ByteMonitorElement *selectedByteMonitorElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
+  QHash<RectangleElement *, RectangleRuntime *> rectangleRuntimes_;
   RectangleElement *selectedRectangle_ = nullptr;
   QList<ImageElement *> imageElements_;
   ImageElement *selectedImage_ = nullptr;
@@ -2899,6 +2900,7 @@ private:
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
   void removeMessageButtonRuntime(MessageButtonElement *element);
+  void removeRectangleRuntime(RectangleElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2924,6 +2926,8 @@ private:
       removeMenuRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MessageButtonElement>) {
       removeMessageButtonRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, RectangleElement>) {
+      removeRectangleRuntime(element);
     }
     element->deleteLater();
     return true;
@@ -3742,6 +3746,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.rectangleElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.rectangleRuntimes_.contains(newElement)) {
+            auto *runtime = new RectangleRuntime(newElement);
+            target.rectangleRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectRectangleElement(newElement);
         target.markDirty();
       });
@@ -10514,6 +10526,14 @@ private:
     element->show();
     ensureElementInStack(element);
     rectangleElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!rectangleRuntimes_.contains(element)) {
+        auto *runtime = new RectangleRuntime(element);
+        rectangleRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectRectangleElement(element);
     showResourcePaletteForRectangle(element);
     deactivateCreateTool();
@@ -13216,6 +13236,8 @@ inline void DisplayWindow::clearAllElements()
           removeMenuRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MessageButtonElement *>) {
           removeMessageButtonRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, RectangleElement *>) {
+          removeRectangleRuntime(element);
         }
         removeElementFromStack(element);
         element->deleteLater();
@@ -16400,6 +16422,14 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
   element->setSelected(false);
   rectangleElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!rectangleRuntimes_.contains(element)) {
+      auto *runtime = new RectangleRuntime(element);
+      rectangleRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17280,6 +17310,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (RectangleElement *element : rectangleElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!rectangleRuntimes_.contains(element)) {
+      auto *runtime = new RectangleRuntime(element);
+      rectangleRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -17355,6 +17396,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = rectangleRuntimes_.begin(); it != rectangleRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  rectangleRuntimes_.clear();
+  for (RectangleElement *element : rectangleElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17423,6 +17476,17 @@ inline void DisplayWindow::removeTextRuntime(TextElement *element)
     return;
   }
   if (auto *runtime = textRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeRectangleRuntime(RectangleElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = rectangleRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

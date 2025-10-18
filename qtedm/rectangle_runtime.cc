@@ -467,7 +467,7 @@ void RectangleRuntime::evaluateState()
   if (!allConnected) {
     element_->setRuntimeConnected(false);
     element_->setRuntimeSeverity(kInvalidSeverity);
-    element_->setRuntimeVisible(false);
+    element_->setRuntimeVisible(true);
     return;
   }
 

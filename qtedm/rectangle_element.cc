@@ -1,31 +1,14 @@
 #include "rectangle_element.h"
 
 #include <algorithm>
+#include <limits>
 
 #include <QApplication>
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
 
-namespace {
-
-QColor alarmColorForSeverity(short severity)
-{
-  switch (severity) {
-  case 0:
-    return QColor(0, 205, 0);
-  case 1:
-    return QColor(255, 255, 0);
-  case 2:
-    return QColor(255, 0, 0);
-  case 3:
-    return QColor(255, 255, 255);
-  default:
-    return QColor(204, 204, 204);
-  }
-}
-
-} // namespace
+#include "medm_colors.h"
 
 RectangleElement::RectangleElement(QWidget *parent)
   : QWidget(parent)
@@ -298,10 +281,11 @@ QColor RectangleElement::effectiveForegroundColor() const
 
   switch (colorMode_) {
   case TextColorMode::kAlarm:
-    if (!runtimeConnected_) {
-      return QColor(204, 204, 204);
+    {
+      const short severity = runtimeConnected_ ? runtimeSeverity_
+          : std::numeric_limits<short>::max();
+      return MedmColors::alarmColorForSeverity(severity);
     }
-    return alarmColorForSeverity(runtimeSeverity_);
   case TextColorMode::kDiscrete:
   case TextColorMode::kStatic:
   default:
@@ -312,7 +296,7 @@ QColor RectangleElement::effectiveForegroundColor() const
 void RectangleElement::applyRuntimeVisibility()
 {
   if (executeMode_) {
-    const bool visible = designModeVisible_ && runtimeVisible_ && runtimeConnected_;
+    const bool visible = designModeVisible_ && runtimeVisible_;
     QWidget::setVisible(visible);
   } else {
     QWidget::setVisible(designModeVisible_);

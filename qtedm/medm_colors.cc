@@ -2,6 +2,17 @@
 
 namespace MedmColors {
 
+namespace {
+
+constexpr std::array<QColor, 5> kAlarmColors = {
+    QColor(0, 205, 0),   // Green3
+    QColor(255, 255, 0), // Yellow
+    QColor(255, 0, 0),   // Red
+    QColor(255, 255, 255), // White
+    QColor(204, 204, 204)}; // Gray80 fallback
+
+} // namespace
+
 const std::array<QColor, 65> &palette()
 {
   static const std::array<QColor, 65> colors = {QColor(255, 255, 255),
@@ -44,6 +55,15 @@ int indexForColor(const QColor &color)
     }
   }
   return -1;
+}
+
+QColor alarmColorForSeverity(short severity)
+{
+  int index = static_cast<int>(severity);
+  if (index < 0 || index >= static_cast<int>(kAlarmColors.size() - 1)) {
+    index = static_cast<int>(kAlarmColors.size() - 1);
+  }
+  return kAlarmColors[static_cast<std::size_t>(index)];
 }
 
 } // namespace MedmColors

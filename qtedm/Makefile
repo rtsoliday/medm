@@ -56,6 +56,7 @@ qtedm_SRC = qtedm.cc \
             slider_runtime.cc \
             wheel_switch_element.cc \
             meter_element.cc \
+            meter_runtime.cc \
             scale_monitor_element.cc \
             strip_chart_element.cc \
             cartesian_plot_element.cc \

@@ -1952,6 +1952,7 @@ private:
   QHash<TextMonitorElement *, TextMonitorRuntime *> textMonitorRuntimes_;
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
   QList<MeterElement *> meterElements_;
+  QHash<MeterElement *, MeterRuntime *> meterRuntimes_;
   MeterElement *selectedMeterElement_ = nullptr;
   QList<BarMonitorElement *> barMonitorElements_;
   BarMonitorElement *selectedBarMonitorElement_ = nullptr;
@@ -2913,6 +2914,7 @@ private:
   void removeImageRuntime(ImageElement *element);
   void removePolylineRuntime(PolylineElement *element);
   void removePolygonRuntime(PolygonElement *element);
+  void removeMeterRuntime(MeterElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2932,6 +2934,8 @@ private:
       removeTextRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, SliderElement>) {
       removeSliderRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, MeterElement>) {
+      removeMeterRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
       removeChoiceButtonRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MenuElement>) {
@@ -13348,6 +13352,8 @@ inline void DisplayWindow::clearAllElements()
           removeTextRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, SliderElement *>) {
           removeSliderRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, MeterElement *>) {
+          removeMeterRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
           removeChoiceButtonRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MenuElement *>) {
@@ -17565,6 +17571,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (MeterElement *element : meterElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!meterRuntimes_.contains(element)) {
+      auto *runtime = new MeterRuntime(element);
+      meterRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -17724,6 +17741,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = meterRuntimes_.begin(); it != meterRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  meterRuntimes_.clear();
+  for (MeterElement *element : meterElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17869,6 +17898,17 @@ inline void DisplayWindow::removePolygonRuntime(PolygonElement *element)
     return;
   }
   if (auto *runtime = polygonRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeMeterRuntime(MeterElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = meterRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

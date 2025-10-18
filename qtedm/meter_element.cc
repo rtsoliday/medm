@@ -9,6 +9,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPainterPath>
+#include <QPalette>
 
 namespace {
 
@@ -20,6 +21,8 @@ constexpr double kNeedleRatio = 0.8;
 constexpr double kSampleNormalizedValue = 0.65;
 constexpr double kDialInsetRatio = 0.14;
 constexpr double kMinimumDialHeight = 24.0;
+constexpr short kInvalidSeverity = 3;
+constexpr double kValueEpsilonFactor = 1e-6;
 
 inline double degreesToRadians(double degrees)
 {
@@ -91,6 +94,22 @@ MeterLayout calculateLayout(const QRectF &bounds, MeterLabel label,
   return layout;
 }
 
+QColor alarmColorForSeverity(short severity)
+{
+  switch (severity) {
+  case 0:
+    return QColor(0, 205, 0);
+  case 1:
+    return QColor(255, 255, 0);
+  case 2:
+    return QColor(255, 0, 0);
+  case 3:
+    return QColor(255, 255, 255);
+  default:
+    return QColor(204, 204, 204);
+  }
+}
+
 } // namespace
 
 MeterElement::MeterElement(QWidget *parent)
@@ -98,6 +117,8 @@ MeterElement::MeterElement(QWidget *parent)
 {
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
+  clearRuntimeState();
+  runtimeValue_ = defaultSampleValue();
 }
 
 void MeterElement::setSelected(bool selected)
@@ -188,6 +209,13 @@ void MeterElement::setLimits(const PvLimits &limits)
   if (limits_.highSource == PvLimitSource::kUser) {
     limits_.highSource = PvLimitSource::kDefault;
   }
+  runtimeLimitsValid_ = false;
+  if (!executeMode_) {
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
+    runtimePrecision_ = limits_.precisionDefault;
+    runtimeValue_ = defaultSampleValue();
+  }
   update();
 }
 
@@ -202,6 +230,103 @@ void MeterElement::setChannel(const QString &channel)
     return;
   }
   channel_ = channel;
+  setToolTip(channel_.trimmed());
+  update();
+}
+
+void MeterElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  clearRuntimeState();
+}
+
+bool MeterElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void MeterElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeSeverity_ = kInvalidSeverity;
+    hasRuntimeValue_ = false;
+  }
+  update();
+}
+
+void MeterElement::setRuntimeSeverity(short severity)
+{
+  short clamped = std::clamp<short>(severity, 0, 3);
+  if (runtimeSeverity_ == clamped) {
+    return;
+  }
+  runtimeSeverity_ = clamped;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    update();
+  }
+}
+
+void MeterElement::setRuntimeValue(double value)
+{
+  if (!std::isfinite(value)) {
+    return;
+  }
+  double clamped = clampToLimits(value);
+  bool firstValue = !hasRuntimeValue_;
+  bool changed = firstValue || std::abs(clamped - runtimeValue_) > meterEpsilon();
+  runtimeValue_ = clamped;
+  hasRuntimeValue_ = true;
+  if (executeMode_ && runtimeConnected_ && changed) {
+    update();
+  }
+}
+
+void MeterElement::setRuntimeLimits(double low, double high)
+{
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return;
+  }
+  if (std::abs(high - low) < 1e-12) {
+    high = low + 1.0;
+  }
+  runtimeLow_ = low;
+  runtimeHigh_ = high;
+  runtimeLimitsValid_ = true;
+  if (executeMode_) {
+    runtimeValue_ = clampToLimits(runtimeValue_);
+    update();
+  }
+}
+
+void MeterElement::setRuntimePrecision(int precision)
+{
+  int clamped = std::clamp(precision, 0, 17);
+  if (runtimePrecision_ == clamped) {
+    return;
+  }
+  runtimePrecision_ = clamped;
+  if (executeMode_) {
+    update();
+  }
+}
+
+void MeterElement::clearRuntimeState()
+{
+  runtimeConnected_ = false;
+  runtimeLimitsValid_ = false;
+  hasRuntimeValue_ = false;
+  runtimeLow_ = limits_.lowDefault;
+  runtimeHigh_ = limits_.highDefault;
+  runtimePrecision_ = -1;
+  runtimeValue_ = defaultSampleValue();
+  runtimeSeverity_ = kInvalidSeverity;
   update();
 }
 
@@ -244,6 +369,14 @@ void MeterElement::paintEvent(QPaintEvent *event)
 
 QColor MeterElement::effectiveForeground() const
 {
+  if (executeMode_) {
+    if (colorMode_ == TextColorMode::kAlarm) {
+      if (!runtimeConnected_) {
+        return QColor(204, 204, 204);
+      }
+      return alarmColorForSeverity(runtimeSeverity_);
+    }
+  }
   if (foregroundColor_.isValid()) {
     return foregroundColor_;
   }
@@ -258,6 +391,9 @@ QColor MeterElement::effectiveForeground() const
 
 QColor MeterElement::effectiveBackground() const
 {
+  if (executeMode_ && !runtimeConnected_) {
+    return QColor(Qt::white);
+  }
   if (backgroundColor_.isValid()) {
     return backgroundColor_;
   }
@@ -268,6 +404,100 @@ QColor MeterElement::effectiveBackground() const
     return qApp->palette().color(QPalette::Window);
   }
   return QColor(Qt::white);
+}
+
+double MeterElement::effectiveLowLimit() const
+{
+  if (executeMode_ && limits_.lowSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeLow_;
+  }
+  return limits_.lowDefault;
+}
+
+double MeterElement::effectiveHighLimit() const
+{
+  if (executeMode_ && limits_.highSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeHigh_;
+  }
+  return limits_.highDefault;
+}
+
+int MeterElement::effectivePrecision() const
+{
+  if (limits_.precisionSource == PvLimitSource::kChannel) {
+    if (runtimePrecision_ >= 0) {
+      return std::clamp(runtimePrecision_, 0, 17);
+    }
+    return std::clamp(limits_.precisionDefault, 0, 17);
+  }
+  return std::clamp(limits_.precisionDefault, 0, 17);
+}
+
+double MeterElement::currentValue() const
+{
+  if (executeMode_ && runtimeConnected_ && hasRuntimeValue_) {
+    return runtimeValue_;
+  }
+  return defaultSampleValue();
+}
+
+double MeterElement::defaultSampleValue() const
+{
+  const double low = limits_.lowDefault;
+  const double high = limits_.highDefault;
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return 0.0;
+  }
+  const double span = high - low;
+  if (std::abs(span) < 1e-12) {
+    return low;
+  }
+  const double clamped = std::clamp(kSampleNormalizedValue, 0.0, 1.0);
+  return low + span * clamped;
+}
+
+double MeterElement::clampToLimits(double value) const
+{
+  double low = effectiveLowLimit();
+  double high = effectiveHighLimit();
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return value;
+  }
+  if (low > high) {
+    std::swap(low, high);
+  }
+  if (value < low) {
+    return low;
+  }
+  if (value > high) {
+    return high;
+  }
+  return value;
+}
+
+double MeterElement::meterEpsilon() const
+{
+  double span = effectiveHighLimit() - effectiveLowLimit();
+  if (!std::isfinite(span)) {
+    span = 1.0;
+  }
+  span = std::abs(span);
+  double epsilon = span * kValueEpsilonFactor;
+  if (!std::isfinite(epsilon) || epsilon <= 0.0) {
+    epsilon = 1e-9;
+  }
+  return epsilon;
+}
+
+QString MeterElement::formatValue(double value) const
+{
+  if (!std::isfinite(value)) {
+    return QStringLiteral("--");
+  }
+  const int digits = effectivePrecision();
+  return QString::number(value, 'f', digits);
 }
 
 void MeterElement::paintSelectionOverlay(QPainter &painter)
@@ -321,32 +551,28 @@ void MeterElement::paintDial(QPainter &painter, const QRectF &dialRect) const
 
 double MeterElement::normalizedSampleValue() const
 {
-  return kSampleNormalizedValue;
-}
-
-double MeterElement::sampleValue() const
-{
-  const double normalized = std::clamp(normalizedSampleValue(), 0.0, 1.0);
-  const double low = limits_.lowDefault;
-  const double high = limits_.highDefault;
-
-  if (!std::isfinite(low) || !std::isfinite(high)) {
-    return normalized;
+  const double low = effectiveLowLimit();
+  const double high = effectiveHighLimit();
+  const double value = currentValue();
+  if (!std::isfinite(low) || !std::isfinite(high) || !std::isfinite(value)) {
+    return std::clamp(kSampleNormalizedValue, 0.0, 1.0);
   }
-  if (high <= low) {
-    return low;
+  const double span = high - low;
+  if (std::abs(span) < 1e-12) {
+    return 0.0;
   }
-  return low + normalized * (high - low);
+  double normalized = (value - low) / span;
+  return std::clamp(normalized, 0.0, 1.0);
 }
 
 QString MeterElement::formattedSampleValue() const
 {
-  const double value = sampleValue();
-  const int precision = std::clamp(limits_.precisionDefault, 0, 17);
-  if (precision > 0) {
-    return QString::number(value, 'f', precision);
+  if (executeMode_) {
+    if (!runtimeConnected_ || !hasRuntimeValue_) {
+      return QStringLiteral("--");
+    }
   }
-  return QString::number(value, 'g', 5);
+  return formatValue(currentValue());
 }
 
 void MeterElement::paintTicks(QPainter &painter, const QRectF &dialRect) const
@@ -445,8 +671,10 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
         rect().bottom() - painter.fontMetrics().height() - 6.0,
         rect().width() - 12.0, painter.fontMetrics().height());
   }
-  const QString lowText = QString::number(limits_.lowDefault, 'g', 5);
-  const QString highText = QString::number(limits_.highDefault, 'g', 5);
+  const double lowLimit = effectiveLowLimit();
+  const double highLimit = effectiveHighLimit();
+  const QString lowText = formatValue(lowLimit);
+  const QString highText = formatValue(highLimit);
   painter.drawText(limitsArea, Qt::AlignLeft | Qt::AlignVCenter, lowText);
   painter.drawText(limitsArea, Qt::AlignRight | Qt::AlignVCenter, highText);
 
@@ -457,9 +685,7 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
           limitsArea.width(), limitsArea.height());
     }
     const QString valueText = formattedSampleValue();
-    if (!valueText.isEmpty()) {
-      painter.drawText(valueArea, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
-    }
+    painter.drawText(valueArea, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
   }
 
   painter.restore();

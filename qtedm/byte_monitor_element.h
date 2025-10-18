@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QString>
 #include <QWidget>
+#include <QtGlobal>
 
 #include "display_properties.h"
 
@@ -35,6 +36,13 @@ public:
   QString channel() const;
   void setChannel(const QString &channel);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+  void setRuntimeConnected(bool connected);
+  void setRuntimeSeverity(short severity);
+  void setRuntimeValue(quint32 value);
+  void clearRuntimeState();
+
 protected:
   void paintEvent(QPaintEvent *event) override;
 
@@ -42,6 +50,9 @@ private:
   void paintSelectionOverlay(QPainter &painter) const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
+  QColor defaultForeground() const;
+  QColor defaultBackground() const;
+  quint32 currentValue() const;
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -51,5 +62,10 @@ private:
   int startBit_ = 15;
   int endBit_ = 0;
   QString channel_;
+  bool executeMode_ = false;
+  bool runtimeConnected_ = false;
+  bool hasRuntimeValue_ = false;
+  quint32 runtimeValue_ = 0u;
+  short runtimeSeverity_ = 3;
 };
 

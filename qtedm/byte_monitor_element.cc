@@ -10,9 +10,13 @@
 #include <QPen>
 #include <QtGlobal>
 
+#include "medm_colors.h"
+
 namespace {
 
 constexpr quint32 kSamplePattern = 0x5A5AA5A5u;
+constexpr short kInvalidSeverity = 3;
+constexpr short kDisconnectedSeverity = kInvalidSeverity + 1;
 
 bool isVertical(BarDirection direction)
 {
@@ -142,6 +146,76 @@ void ByteMonitorElement::setChannel(const QString &channel)
   update();
 }
 
+void ByteMonitorElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  clearRuntimeState();
+}
+
+bool ByteMonitorElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void ByteMonitorElement::setRuntimeConnected(bool connected)
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeSeverity_ = kInvalidSeverity;
+    hasRuntimeValue_ = false;
+    runtimeValue_ = 0u;
+  }
+  update();
+}
+
+void ByteMonitorElement::setRuntimeSeverity(short severity)
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (severity < 0) {
+    severity = 0;
+  }
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (colorMode_ == TextColorMode::kAlarm) {
+    update();
+  }
+}
+
+void ByteMonitorElement::setRuntimeValue(quint32 value)
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (hasRuntimeValue_ && runtimeValue_ == value) {
+    return;
+  }
+  runtimeValue_ = value;
+  hasRuntimeValue_ = true;
+  update();
+}
+
+void ByteMonitorElement::clearRuntimeState()
+{
+  runtimeConnected_ = false;
+  runtimeSeverity_ = kInvalidSeverity;
+  hasRuntimeValue_ = false;
+  runtimeValue_ = 0u;
+  update();
+}
+
 void ByteMonitorElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
@@ -150,14 +224,16 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QRect outerRect = rect().adjusted(0, 0, -1, -1);
-  painter.fillRect(rect(), effectiveBackground());
+  const QColor background = effectiveBackground();
+  painter.fillRect(rect(), background);
 
   const int segmentCount = std::max(1, std::abs(endBit_ - startBit_) + 1);
   const QRect contentRect = rect().adjusted(1, 1, -1, -1);
 
   if (contentRect.width() <= 0 || contentRect.height() <= 0
       || segmentCount <= 0) {
-    painter.setPen(QPen(effectiveForeground(), 1));
+    const QColor fg = effectiveForeground();
+    painter.setPen(QPen(fg, 1));
     painter.setBrush(Qt::NoBrush);
     painter.drawRect(outerRect);
     if (selected_) {
@@ -168,6 +244,10 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
 
   const bool vertical = isVertical(direction_);
   const bool increasing = endBit_ > startBit_;
+  const bool drawRuntimeBits = !executeMode_ || runtimeConnected_;
+  const quint32 displayValue = currentValue();
+  const QColor foreground = effectiveForeground();
+  const QColor dividerColor = foreground.darker(160);
 
   painter.save();
   painter.setPen(Qt::NoPen);
@@ -188,13 +268,13 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
       if (segment.height() > 1 && segment.width() > 1) {
         const QRect fillRect = segment.adjusted(1, 1, -1, -1);
         const int bitIndex = increasing ? (startBit_ + i) : (startBit_ - i);
-        const bool bitSet = bitIndex >= 0 && bitIndex < 32
-            && ((kSamplePattern >> bitIndex) & 0x1u);
+        const bool bitSet = drawRuntimeBits && bitIndex >= 0 && bitIndex < 32
+            && ((displayValue >> bitIndex) & 0x1u);
         if (bitSet) {
-          painter.fillRect(fillRect, effectiveForeground());
+          painter.fillRect(fillRect, foreground);
         }
       }
-      painter.setPen(QPen(effectiveForeground().darker(160), 1));
+      painter.setPen(QPen(dividerColor, 1));
       if (i < segmentCount - 1 && segment.height() > 0) {
         const int y = contentRect.top() + nextOffset;
         painter.drawLine(contentRect.left(), y,
@@ -219,13 +299,13 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
       if (segment.width() > 1 && segment.height() > 1) {
         const QRect fillRect = segment.adjusted(1, 1, -1, -1);
         const int bitIndex = increasing ? (startBit_ + i) : (startBit_ - i);
-        const bool bitSet = bitIndex >= 0 && bitIndex < 32
-            && ((kSamplePattern >> bitIndex) & 0x1u);
+        const bool bitSet = drawRuntimeBits && bitIndex >= 0 && bitIndex < 32
+            && ((displayValue >> bitIndex) & 0x1u);
         if (bitSet) {
-          painter.fillRect(fillRect, effectiveForeground());
+          painter.fillRect(fillRect, foreground);
         }
       }
-      painter.setPen(QPen(effectiveForeground().darker(160), 1));
+      painter.setPen(QPen(dividerColor, 1));
       if (i < segmentCount - 1 && segment.width() > 0) {
         const int x = contentRect.left() + nextOffset;
         painter.drawLine(x, contentRect.top(), x, contentRect.bottom());
@@ -237,7 +317,7 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
 
   painter.restore();
 
-  painter.setPen(QPen(effectiveForeground().darker(160), 1));
+  painter.setPen(QPen(dividerColor, 1));
   painter.setBrush(Qt::NoBrush);
   painter.drawRect(outerRect);
 
@@ -260,9 +340,39 @@ void ByteMonitorElement::paintSelectionOverlay(QPainter &painter) const
 
 QColor ByteMonitorElement::effectiveForeground() const
 {
-  if (foregroundColor_.isValid()) {
-    return foregroundColor_;
+  if (!executeMode_) {
+    if (foregroundColor_.isValid()) {
+      return foregroundColor_;
+    }
+    return defaultForeground();
   }
+
+  switch (colorMode_) {
+  case TextColorMode::kAlarm:
+    if (!runtimeConnected_) {
+      return MedmColors::alarmColorForSeverity(kDisconnectedSeverity);
+    }
+    return MedmColors::alarmColorForSeverity(runtimeSeverity_);
+  case TextColorMode::kDiscrete:
+  case TextColorMode::kStatic:
+  default:
+    if (foregroundColor_.isValid()) {
+      return foregroundColor_;
+    }
+    return defaultForeground();
+  }
+}
+
+QColor ByteMonitorElement::effectiveBackground() const
+{
+  if (backgroundColor_.isValid()) {
+    return backgroundColor_;
+  }
+  return defaultBackground();
+}
+
+QColor ByteMonitorElement::defaultForeground() const
+{
   if (const QWidget *parent = parentWidget()) {
     return parent->palette().color(QPalette::WindowText);
   }
@@ -272,11 +382,8 @@ QColor ByteMonitorElement::effectiveForeground() const
   return QColor(Qt::black);
 }
 
-QColor ByteMonitorElement::effectiveBackground() const
+QColor ByteMonitorElement::defaultBackground() const
 {
-  if (backgroundColor_.isValid()) {
-    return backgroundColor_;
-  }
   if (const QWidget *parent = parentWidget()) {
     return parent->palette().color(QPalette::Window);
   }
@@ -284,5 +391,16 @@ QColor ByteMonitorElement::effectiveBackground() const
     return qApp->palette().color(QPalette::Window);
   }
   return QColor(Qt::white);
+}
+
+quint32 ByteMonitorElement::currentValue() const
+{
+  if (!executeMode_) {
+    return kSamplePattern;
+  }
+  if (hasRuntimeValue_) {
+    return runtimeValue_;
+  }
+  return 0u;
 }
 

@@ -1964,6 +1964,7 @@ private:
   QList<CartesianPlotElement *> cartesianPlotElements_;
   CartesianPlotElement *selectedCartesianPlotElement_ = nullptr;
   QList<ByteMonitorElement *> byteMonitorElements_;
+  QHash<ByteMonitorElement *, ByteMonitorRuntime *> byteMonitorRuntimes_;
   ByteMonitorElement *selectedByteMonitorElement_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
   QHash<RectangleElement *, RectangleRuntime *> rectangleRuntimes_;
@@ -2917,6 +2918,7 @@ private:
   void removePolygonRuntime(PolygonElement *element);
   void removeMeterRuntime(MeterElement *element);
   void removeBarMonitorRuntime(BarMonitorElement *element);
+  void removeByteMonitorRuntime(ByteMonitorElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2940,6 +2942,8 @@ private:
       removeMeterRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, BarMonitorElement>) {
       removeBarMonitorRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement>) {
+      removeByteMonitorRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
       removeChoiceButtonRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MenuElement>) {
@@ -13360,6 +13364,8 @@ inline void DisplayWindow::clearAllElements()
           removeMeterRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, BarMonitorElement *>) {
           removeBarMonitorRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement *>) {
+          removeByteMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
           removeChoiceButtonRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MenuElement *>) {
@@ -17599,6 +17605,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (ByteMonitorElement *element : byteMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!byteMonitorRuntimes_.contains(element)) {
+      auto *runtime = new ByteMonitorRuntime(element);
+      byteMonitorRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -17782,6 +17799,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = byteMonitorRuntimes_.begin(); it != byteMonitorRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  byteMonitorRuntimes_.clear();
+  for (ByteMonitorElement *element : byteMonitorElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17949,6 +17978,17 @@ inline void DisplayWindow::removeBarMonitorRuntime(BarMonitorElement *element)
     return;
   }
   if (auto *runtime = barMonitorRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeByteMonitorRuntime(ByteMonitorElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = byteMonitorRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

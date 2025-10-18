@@ -50,6 +50,7 @@ qtedm_SRC = qtedm.cc \
             text_monitor_element.cc \
             text_monitor_runtime.cc \
             byte_monitor_element.cc \
+            byte_monitor_runtime.cc \
             bar_monitor_element.cc \
             bar_monitor_runtime.cc \
             channel_access_context.cc \

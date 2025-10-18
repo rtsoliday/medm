@@ -76,6 +76,7 @@
 #include "arc_runtime.h"
 #include "cartesian_plot_element.h"
 #include "byte_monitor_element.h"
+#include "byte_monitor_runtime.h"
 #include "bar_monitor_element.h"
 #include "bar_monitor_runtime.h"
 #include "slider_element.h"

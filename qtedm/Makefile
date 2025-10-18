@@ -51,6 +51,7 @@ qtedm_SRC = qtedm.cc \
             text_monitor_runtime.cc \
             byte_monitor_element.cc \
             bar_monitor_element.cc \
+            bar_monitor_runtime.cc \
             channel_access_context.cc \
             slider_element.cc \
             slider_runtime.cc \

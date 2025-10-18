@@ -349,7 +349,7 @@ bar {
 		height=300
 	}
 	monitor {
-		chan="test.pv"
+		chan="test_bar_pv"
 		clr=21
 		bclr=9
 	}

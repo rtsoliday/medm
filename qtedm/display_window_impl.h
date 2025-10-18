@@ -1955,6 +1955,7 @@ private:
   QHash<MeterElement *, MeterRuntime *> meterRuntimes_;
   MeterElement *selectedMeterElement_ = nullptr;
   QList<BarMonitorElement *> barMonitorElements_;
+  QHash<BarMonitorElement *, BarMonitorRuntime *> barMonitorRuntimes_;
   BarMonitorElement *selectedBarMonitorElement_ = nullptr;
   QList<ScaleMonitorElement *> scaleMonitorElements_;
   ScaleMonitorElement *selectedScaleMonitorElement_ = nullptr;
@@ -2915,6 +2916,7 @@ private:
   void removePolylineRuntime(PolylineElement *element);
   void removePolygonRuntime(PolygonElement *element);
   void removeMeterRuntime(MeterElement *element);
+  void removeBarMonitorRuntime(BarMonitorElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2936,6 +2938,8 @@ private:
       removeSliderRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MeterElement>) {
       removeMeterRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, BarMonitorElement>) {
+      removeBarMonitorRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
       removeChoiceButtonRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MenuElement>) {
@@ -13354,6 +13358,8 @@ inline void DisplayWindow::clearAllElements()
           removeSliderRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MeterElement *>) {
           removeMeterRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, BarMonitorElement *>) {
+          removeBarMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
           removeChoiceButtonRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MenuElement *>) {
@@ -17582,6 +17588,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (BarMonitorElement *element : barMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!barMonitorRuntimes_.contains(element)) {
+      auto *runtime = new BarMonitorRuntime(element);
+      barMonitorRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -17753,6 +17770,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = barMonitorRuntimes_.begin(); it != barMonitorRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  barMonitorRuntimes_.clear();
+  for (BarMonitorElement *element : barMonitorElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17909,6 +17938,17 @@ inline void DisplayWindow::removeMeterRuntime(MeterElement *element)
     return;
   }
   if (auto *runtime = meterRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeBarMonitorRuntime(BarMonitorElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = barMonitorRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

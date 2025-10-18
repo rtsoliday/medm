@@ -1,5 +1,7 @@
 #include "bar_monitor_element.h"
 
+#include "medm_colors.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -14,6 +16,7 @@
 namespace {
 
 constexpr double kSampleNormalizedValue = 0.65;
+constexpr short kInvalidSeverity = 3;
 constexpr int kAxisTickCount = 5;
 constexpr qreal kAxisTickLength = 6.0;
 constexpr qreal kMinimumTrackExtent = 8.0;
@@ -54,6 +57,7 @@ BarMonitorElement::BarMonitorElement(QWidget *parent)
   limits_.lowDefault = 0.0;
   limits_.highDefault = 100.0;
   limits_.precisionDefault = 1;
+  clearRuntimeState();
 }
 
 void BarMonitorElement::setSelected(bool selected)
@@ -172,6 +176,13 @@ void BarMonitorElement::setLimits(const PvLimits &limits)
   if (limits_.highSource == PvLimitSource::kUser) {
     limits_.highSource = PvLimitSource::kDefault;
   }
+  runtimeLimitsValid_ = false;
+  if (!executeMode_) {
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
+    runtimePrecision_ = limits_.precisionDefault;
+    runtimeValue_ = defaultSampleValue();
+  }
   update();
 }
 
@@ -186,6 +197,104 @@ void BarMonitorElement::setChannel(const QString &channel)
     return;
   }
   channel_ = channel;
+  setToolTip(channel_.trimmed());
+  update();
+}
+
+void BarMonitorElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  clearRuntimeState();
+}
+
+bool BarMonitorElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void BarMonitorElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeSeverity_ = kInvalidSeverity;
+    hasRuntimeValue_ = false;
+  }
+  update();
+}
+
+void BarMonitorElement::setRuntimeSeverity(short severity)
+{
+  short clamped = std::clamp<short>(severity, 0, 3);
+  if (runtimeSeverity_ == clamped) {
+    return;
+  }
+  runtimeSeverity_ = clamped;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    update();
+  }
+}
+
+void BarMonitorElement::setRuntimeValue(double value)
+{
+  if (!std::isfinite(value)) {
+    return;
+  }
+  const double clamped = clampToLimits(value);
+  const bool firstValue = !hasRuntimeValue_;
+  const bool changed = firstValue
+      || std::abs(clamped - runtimeValue_) > valueEpsilon();
+  runtimeValue_ = clamped;
+  hasRuntimeValue_ = true;
+  if (executeMode_ && runtimeConnected_ && changed) {
+    update();
+  }
+}
+
+void BarMonitorElement::setRuntimeLimits(double low, double high)
+{
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return;
+  }
+  if (std::abs(high - low) < 1e-12) {
+    high = low + 1.0;
+  }
+  runtimeLow_ = low;
+  runtimeHigh_ = high;
+  runtimeLimitsValid_ = true;
+  if (executeMode_) {
+    runtimeValue_ = clampToLimits(runtimeValue_);
+    update();
+  }
+}
+
+void BarMonitorElement::setRuntimePrecision(int precision)
+{
+  const int clamped = std::clamp(precision, 0, 17);
+  if (runtimePrecision_ == clamped) {
+    return;
+  }
+  runtimePrecision_ = clamped;
+  if (executeMode_) {
+    update();
+  }
+}
+
+void BarMonitorElement::clearRuntimeState()
+{
+  runtimeConnected_ = false;
+  runtimeLimitsValid_ = false;
+  hasRuntimeValue_ = false;
+  runtimeLow_ = limits_.lowDefault;
+  runtimeHigh_ = limits_.highDefault;
+  runtimePrecision_ = -1;
+  runtimeValue_ = defaultSampleValue();
+  runtimeSeverity_ = kInvalidSeverity;
   update();
 }
 
@@ -366,18 +475,19 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
   layout.showLimits = (label_ == MeterLabel::kOutline
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
-  layout.channelText = (label_ == MeterLabel::kChannel) ? channel_.trimmed() : QString();
+  layout.showReadback = (label_ == MeterLabel::kOutline
+      || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
+  layout.channelText = (label_ == MeterLabel::kChannel)
+      ? channel_.trimmed() : QString();
   layout.showChannel = !layout.channelText.isEmpty();
 
   if (layout.showLimits) {
-    layout.lowLabel = QString::number(limits_.lowDefault, 'g', 5);
-    layout.highLabel = QString::number(limits_.highDefault, 'g', 5);
+    layout.lowLabel = axisLabelText(effectiveLowLimit());
+    layout.highLabel = axisLabelText(effectiveHighLimit());
   }
 
-  if (layout.showLimits) {
-    layout.readbackText = QString::number(0.0, 'f',
-        std::clamp(limits_.precisionDefault, 0, 17));
-    layout.showReadback = !layout.readbackText.isEmpty();
+  if (layout.showReadback) {
+    layout.readbackText = formattedSampleValue();
   }
 
   qreal left = bounds.left();
@@ -510,42 +620,96 @@ void BarMonitorElement::paintFill(QPainter &painter,
     return;
   }
 
-  QRectF fillRect = trackRect;
+  const double normalized = std::clamp(normalizedSampleValue(), 0.0, 1.0);
+  QRectF fillRect;
+
   if (direction_ == BarDirection::kUp || direction_ == BarDirection::kDown) {
-    const double totalHeight = trackRect.height();
-    if (totalHeight <= 0.0) {
+    const double length = trackRect.height();
+    if (length <= 0.0) {
       return;
     }
-    const double fillFraction = std::clamp(normalizedSampleValue(), 0.0, 1.0);
-    const double fillHeight = std::clamp(totalHeight * fillFraction, 0.0,
-        totalHeight);
+    const double d = std::clamp(normalized * length, 0.0, length);
+    const double mid = length / 2.0;
     if (fillMode_ == BarFill::kFromCenter) {
-      const double half = fillHeight / 2.0;
-      const double center = trackRect.center().y();
-      fillRect.setTop(center - half);
-      fillRect.setBottom(center + half);
-    } else if (direction_ == BarDirection::kUp) {
-      fillRect.setTop(trackRect.bottom() - fillHeight);
-    } else { // Down
-      fillRect.setBottom(trackRect.top() + fillHeight);
+      if (direction_ == BarDirection::kUp) {
+        if (d >= mid) {
+          const double height = d - mid;
+          const double top = trackRect.bottom() - d;
+          fillRect = QRectF(trackRect.left(), top,
+              trackRect.width(), height);
+        } else {
+          const double height = mid - d;
+          const double top = trackRect.bottom() - mid;
+          fillRect = QRectF(trackRect.left(), top,
+              trackRect.width(), height);
+        }
+      } else { // Down
+        if (d >= mid) {
+          const double height = d - mid;
+          const double top = trackRect.top() + mid;
+          fillRect = QRectF(trackRect.left(), top,
+              trackRect.width(), height);
+        } else {
+          const double height = mid - d;
+          const double top = trackRect.top() + d;
+          fillRect = QRectF(trackRect.left(), top,
+              trackRect.width(), height);
+        }
+      }
+    } else {
+      const double height = d;
+      if (direction_ == BarDirection::kUp) {
+        const double top = trackRect.bottom() - height;
+        fillRect = QRectF(trackRect.left(), top,
+            trackRect.width(), height);
+      } else { // Down
+        fillRect = QRectF(trackRect.left(), trackRect.top(),
+            trackRect.width(), height);
+      }
     }
   } else {
-    const double totalWidth = trackRect.width();
-    if (totalWidth <= 0.0) {
+    const double length = trackRect.width();
+    if (length <= 0.0) {
       return;
     }
-    const double fillFraction = std::clamp(normalizedSampleValue(), 0.0, 1.0);
-    const double fillWidth = std::clamp(totalWidth * fillFraction, 0.0,
-        totalWidth);
+    const double d = std::clamp(normalized * length, 0.0, length);
+    const double mid = length / 2.0;
     if (fillMode_ == BarFill::kFromCenter) {
-      const double half = fillWidth / 2.0;
-      const double center = trackRect.center().x();
-      fillRect.setLeft(center - half);
-      fillRect.setRight(center + half);
-    } else if (direction_ == BarDirection::kLeft) {
-      fillRect.setLeft(trackRect.right() - fillWidth);
-    } else { // Right
-      fillRect.setRight(trackRect.left() + fillWidth);
+      if (direction_ == BarDirection::kRight) {
+        if (d >= mid) {
+          const double width = d - mid;
+          const double left = trackRect.left() + mid;
+          fillRect = QRectF(left, trackRect.top(),
+              width, trackRect.height());
+        } else {
+          const double width = mid - d;
+          const double left = trackRect.left() + d;
+          fillRect = QRectF(left, trackRect.top(),
+              width, trackRect.height());
+        }
+      } else { // Left
+        if (d >= mid) {
+          const double width = d - mid;
+          const double left = trackRect.right() - d;
+          fillRect = QRectF(left, trackRect.top(),
+              width, trackRect.height());
+        } else {
+          const double width = mid - d;
+          const double left = trackRect.left() + mid;
+          fillRect = QRectF(left, trackRect.top(),
+              width, trackRect.height());
+        }
+      }
+    } else {
+      const double width = d;
+      if (direction_ == BarDirection::kRight) {
+        fillRect = QRectF(trackRect.left(), trackRect.top(),
+            width, trackRect.height());
+      } else { // Left
+        const double left = trackRect.right() - width;
+        fillRect = QRectF(left, trackRect.top(),
+            width, trackRect.height());
+      }
     }
   }
 
@@ -714,6 +878,14 @@ void BarMonitorElement::paintLabels(QPainter &painter, const Layout &layout) con
 
 QColor BarMonitorElement::effectiveForeground() const
 {
+  if (executeMode_) {
+    if (colorMode_ == TextColorMode::kAlarm) {
+      if (!runtimeConnected_) {
+        return QColor(204, 204, 204);
+      }
+      return MedmColors::alarmColorForSeverity(runtimeSeverity_);
+    }
+  }
   if (foregroundColor_.isValid()) {
     return foregroundColor_;
   }
@@ -728,6 +900,9 @@ QColor BarMonitorElement::effectiveForeground() const
 
 QColor BarMonitorElement::effectiveBackground() const
 {
+  if (executeMode_ && !runtimeConnected_) {
+    return QColor(Qt::white);
+  }
   if (backgroundColor_.isValid()) {
     return backgroundColor_;
   }
@@ -760,32 +935,136 @@ QColor BarMonitorElement::barFillColor() const
 
 double BarMonitorElement::normalizedSampleValue() const
 {
-  return kSampleNormalizedValue;
+  const double low = effectiveLowLimit();
+  const double high = effectiveHighLimit();
+  const double value = sampleValue();
+  if (!std::isfinite(low) || !std::isfinite(high) || !std::isfinite(value)) {
+    return std::clamp(kSampleNormalizedValue, 0.0, 1.0);
+  }
+  const double span = high - low;
+  if (std::abs(span) < 1e-12) {
+    return 0.0;
+  }
+  double normalized = (value - low) / span;
+  return std::clamp(normalized, 0.0, 1.0);
 }
 
 double BarMonitorElement::sampleValue() const
 {
-  const double normalized = std::clamp(normalizedSampleValue(), 0.0, 1.0);
-  const double low = limits_.lowDefault;
-  const double high = limits_.highDefault;
-
-  if (!std::isfinite(low) || !std::isfinite(high)) {
-    return normalized;
-  }
-  if (high <= low) {
-    return low;
-  }
-  return low + normalized * (high - low);
+  return clampToLimits(currentValue());
 }
 
 QString BarMonitorElement::formattedSampleValue() const
 {
-  const double value = sampleValue();
-  const int precision = std::clamp(limits_.precisionDefault, 0, 17);
-  if (precision > 0) {
-    return QString::number(value, 'f', precision);
+  if (executeMode_) {
+    if (!runtimeConnected_ || !hasRuntimeValue_) {
+      return QStringLiteral("--");
+    }
   }
-  return QString::number(value, 'g', 5);
+  return formatValue(sampleValue());
+}
+
+double BarMonitorElement::effectiveLowLimit() const
+{
+  if (executeMode_ && limits_.lowSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeLow_;
+  }
+  return limits_.lowDefault;
+}
+
+double BarMonitorElement::effectiveHighLimit() const
+{
+  if (executeMode_ && limits_.highSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeHigh_;
+  }
+  return limits_.highDefault;
+}
+
+int BarMonitorElement::effectivePrecision() const
+{
+  if (limits_.precisionSource == PvLimitSource::kChannel) {
+    if (runtimePrecision_ >= 0) {
+      return std::clamp(runtimePrecision_, 0, 17);
+    }
+  }
+  return std::clamp(limits_.precisionDefault, 0, 17);
+}
+
+double BarMonitorElement::currentValue() const
+{
+  if (executeMode_ && runtimeConnected_ && hasRuntimeValue_) {
+    return runtimeValue_;
+  }
+  return defaultSampleValue();
+}
+
+double BarMonitorElement::defaultSampleValue() const
+{
+  const double low = limits_.lowDefault;
+  const double high = limits_.highDefault;
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return 0.0;
+  }
+  const double span = high - low;
+  if (std::abs(span) < 1e-12) {
+    return low;
+  }
+  const double normalized = std::clamp(kSampleNormalizedValue, 0.0, 1.0);
+  return low + span * normalized;
+}
+
+double BarMonitorElement::clampToLimits(double value) const
+{
+  double low = effectiveLowLimit();
+  double high = effectiveHighLimit();
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return value;
+  }
+  if (low > high) {
+    std::swap(low, high);
+  }
+  if (value < low) {
+    return low;
+  }
+  if (value > high) {
+    return high;
+  }
+  return value;
+}
+
+QString BarMonitorElement::formatValue(double value, char format, int precision) const
+{
+  if (!std::isfinite(value)) {
+    return QStringLiteral("--");
+  }
+  int digits = precision;
+  if (digits < 0) {
+    digits = effectivePrecision();
+  } else {
+    digits = std::clamp(digits, 0, 17);
+  }
+  return QString::number(value, format, digits);
+}
+
+QString BarMonitorElement::axisLabelText(double value) const
+{
+  return formatValue(value, 'g', 5);
+}
+
+double BarMonitorElement::valueEpsilon() const
+{
+  double span = effectiveHighLimit() - effectiveLowLimit();
+  if (!std::isfinite(span)) {
+    span = 1.0;
+  }
+  span = std::abs(span);
+  double epsilon = span * 1e-6;
+  if (!std::isfinite(epsilon) || epsilon <= 0.0) {
+    epsilon = 1e-9;
+  }
+  return epsilon;
 }
 
 void BarMonitorElement::paintSelectionOverlay(QPainter &painter) const

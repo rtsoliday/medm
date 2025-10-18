@@ -92,6 +92,7 @@
 #include "polygon_element.h"
 #include "polyline_element.h"
 #include "polyline_runtime.h"
+#include "polygon_runtime.h"
 #include "rectangle_element.h"
 #include "rectangle_runtime.h"
 #include "composite_element.h"

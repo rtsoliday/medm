@@ -1977,6 +1977,7 @@ private:
   LineElement *selectedLine_ = nullptr;
   QList<PolylineElement *> polylineElements_;
   QHash<PolylineElement *, PolylineRuntime *> polylineRuntimes_;
+  QHash<PolygonElement *, PolygonRuntime *> polygonRuntimes_;
   PolylineElement *selectedPolyline_ = nullptr;
   QList<PolygonElement *> polygonElements_;
   PolygonElement *selectedPolygon_ = nullptr;
@@ -2905,6 +2906,7 @@ private:
   void removeLineRuntime(LineElement *element);
   void removeRectangleRuntime(RectangleElement *element);
   void removePolylineRuntime(PolylineElement *element);
+  void removePolygonRuntime(PolygonElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -2936,6 +2938,8 @@ private:
       removeRectangleRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, PolylineElement>) {
       removePolylineRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, PolygonElement>) {
+      removePolygonRuntime(element);
     }
     element->deleteLater();
     return true;
@@ -4074,6 +4078,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.polygonElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.polygonRuntimes_.contains(newElement)) {
+            auto *runtime = new PolygonRuntime(newElement);
+            target.polygonRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectPolygonElement(newElement);
         target.markDirty();
       });
@@ -9661,6 +9673,14 @@ private:
     polygonCreationPoints_.clear();
     activePolygonElement_ = nullptr;
     polygonElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!polygonRuntimes_.contains(element)) {
+        auto *runtime = new PolygonRuntime(element);
+        polygonRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectPolygonElement(element);
     showResourcePaletteForPolygon(element);
     deactivateCreateTool();
@@ -13282,6 +13302,8 @@ inline void DisplayWindow::clearAllElements()
           removeRectangleRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, PolylineElement *>) {
           removePolylineRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, PolygonElement *>) {
+          removePolygonRuntime(element);
         }
         removeElementFromStack(element);
         element->deleteLater();
@@ -16794,6 +16816,14 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
   element->setSelected(false);
   polygonElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!polygonRuntimes_.contains(element)) {
+      auto *runtime = new PolygonRuntime(element);
+      polygonRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17403,6 +17433,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (PolygonElement *element : polygonElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!polygonRuntimes_.contains(element)) {
+      auto *runtime = new PolygonRuntime(element);
+      polygonRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -17514,6 +17555,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = polygonRuntimes_.begin(); it != polygonRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  polygonRuntimes_.clear();
+  for (PolygonElement *element : polygonElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -17615,6 +17668,17 @@ inline void DisplayWindow::removePolylineRuntime(PolylineElement *element)
     return;
   }
   if (auto *runtime = polylineRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removePolygonRuntime(PolygonElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = polygonRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

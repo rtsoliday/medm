@@ -46,9 +46,17 @@ public:
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+  void setRuntimeConnected(bool connected);
+  void setRuntimeVisible(bool visible);
+  void setRuntimeSeverity(short severity);
+
   void setAbsolutePoints(const QVector<QPoint> &points);
   QVector<QPoint> absolutePoints() const;
   bool containsGlobalPoint(const QPoint &point) const;
+
+  void setVisible(bool visible) override;
 
 protected:
   void paintEvent(QPaintEvent *event) override;
@@ -56,6 +64,9 @@ protected:
 
 private:
   QColor defaultForegroundColor() const;
+  QColor effectiveForegroundColor() const;
+  void applyRuntimeVisibility();
+  void updateExecuteState();
   void recalcLocalPolygon();
 
   bool selected_ = false;
@@ -69,5 +80,10 @@ private:
   std::array<QString, 5> channels_{};
   QVector<QPointF> normalizedPoints_;
   QPolygon localPolygon_;
+  bool executeMode_ = false;
+  bool runtimeConnected_ = false;
+  bool runtimeVisible_ = true;
+  short runtimeSeverity_ = 0;
+  bool designModeVisible_ = true;
 };
 

@@ -5,7 +5,7 @@ file {
 }
 display {
 	object {
-		x=10
+		x=0
 		y=53
 		width=793
 		height=536
@@ -142,7 +142,7 @@ polygon {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if not zero"
-		chan="poly:discA"
+		chan="channelA_PV"
 	}
 	points {
 		(220,60)
@@ -170,8 +170,8 @@ polygon {
 	"dynamic attribute" {
 		clr="alarm"
 		vis="if zero"
-		chan="poly:alarm1"
-		chanB="poly:alarm2"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 	points {
 		(360,180)
@@ -197,10 +197,10 @@ polygon {
 	"dynamic attribute" {
 		vis="calc"
 		calc="A+B>C"
-		chan="poly:calcA"
-		chanB="poly:calcB"
-		chanC="poly:calcC"
-		chanD="poly:calcD"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 	points {
 		(520,90)
@@ -247,7 +247,7 @@ polygon {
 	}
 	"dynamic attribute" {
 		vis="if not zero"
-		chan="poly:vis1"
+		chan="channelA_PV"
 	}
 	points {
 		(250,260)
@@ -274,7 +274,7 @@ polygon {
 	}
 	"dynamic attribute" {
 		clr="alarm"
-		chan="poly:alarmX"
+		chan="channelA_PV"
 	}
 	points {
 		(410,300)
@@ -322,8 +322,8 @@ polygon {
 	"dynamic attribute" {
 		vis="calc"
 		calc="(A+B)/2"
-		chan="poly:avgA"
-		chanB="poly:avgB"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 	points {
 		(130,360)

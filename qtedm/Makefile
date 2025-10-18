@@ -68,6 +68,7 @@ qtedm_SRC = qtedm.cc \
             polyline_element.cc \
             polyline_runtime.cc \
             polygon_element.cc \
+            polygon_runtime.cc \
             image_element.cc \
             composite_element.cc \
             cartesian_axis_dialog.cc \

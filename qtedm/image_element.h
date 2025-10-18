@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QPixmap>
 #include <QWidget>
+#include <QMovie>
 
 #include "display_properties.h"
 
@@ -39,11 +40,27 @@ public:
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeVisible(bool visible);
+  void setRuntimeSeverity(short severity);
+  void setRuntimeAnimate(bool animate);
+  void setRuntimeFrameIndex(int index);
+  void setRuntimeFrameValid(bool valid);
+
+  int frameCount() const;
+
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void setVisible(bool visible) override;
 
 private:
-  void loadPixmap();
+  void reloadImage();
+  void disposeMovie();
+  void updateCurrentPixmap();
+  void applyRuntimeVisibility();
   QColor foregroundColor() const;
   QColor backgroundColor() const;
 
@@ -57,4 +74,14 @@ private:
   std::array<QString, 5> channels_{};
   QString baseDirectory_;
   QPixmap pixmap_;
+  QMovie *movie_ = nullptr;
+  int cachedFrameCount_ = 0;
+  bool executeMode_ = false;
+  bool designModeVisible_ = true;
+  bool runtimeConnected_ = false;
+  bool runtimeVisible_ = true;
+  short runtimeSeverity_ = 0;
+  bool runtimeAnimate_ = false;
+  bool runtimeFrameValid_ = true;
+  int runtimeFrameIndex_ = 0;
 };

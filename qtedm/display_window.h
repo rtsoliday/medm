@@ -84,6 +84,7 @@
 #include "display_properties.h"
 #include "display_state.h"
 #include "image_element.h"
+#include "image_runtime.h"
 #include "meter_element.h"
 #include "line_element.h"
 #include "line_runtime.h"

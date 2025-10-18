@@ -5,7 +5,7 @@ file {
 }
 display {
 	object {
-		x=10
+		x=0
 		y=53
 		width=782
 		height=537
@@ -109,7 +109,7 @@ image {
 	calc="A+B*3"
 	"dynamic attribute" {
 		vis="if not zero"
-		chan="img:alpha01"
+		chan="channelA_PV"
 	}
 }
 image {
@@ -125,8 +125,8 @@ image {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if zero"
-		chan="img:beta02"
-		chanB="img:beta03"
+		chan="channelA_PV"
+		chanB="channelB_PV"
 	}
 }
 image {
@@ -142,9 +142,9 @@ image {
 		clr="alarm"
 		vis="calc"
 		calc="A>B"
-		chan="img:gamma10"
-		chanB="img:gamma11"
-		chanC="img:gamma12"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
 	}
 }
 image {
@@ -170,7 +170,7 @@ image {
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if not zero"
-		chan="img:delta21"
+		chan="channelA_PV"
 	}
 }
 image {
@@ -185,10 +185,10 @@ image {
 	calc="A*3-B"
 	"dynamic attribute" {
 		vis="if zero"
-		chan="img:frameA"
-		chanB="img:frameB"
-		chanC="img:frameC"
-		chanD="img:frameD"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 }
 image {
@@ -205,8 +205,8 @@ image {
 		clr="alarm"
 		vis="calc"
 		calc="A<C"
-		chan="img:epsilon05"
-		chanB="img:epsilon06"
-		chanC="img:epsilon07"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
 	}
 }

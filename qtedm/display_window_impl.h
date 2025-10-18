@@ -1967,6 +1967,7 @@ private:
   QHash<RectangleElement *, RectangleRuntime *> rectangleRuntimes_;
   RectangleElement *selectedRectangle_ = nullptr;
   QList<ImageElement *> imageElements_;
+  QHash<ImageElement *, ImageRuntime *> imageRuntimes_;
   ImageElement *selectedImage_ = nullptr;
   QList<OvalElement *> ovalElements_;
   QHash<OvalElement *, OvalRuntime *> ovalRuntimes_;
@@ -2909,6 +2910,7 @@ private:
   void removeOvalRuntime(OvalElement *element);
   void removeLineRuntime(LineElement *element);
   void removeRectangleRuntime(RectangleElement *element);
+  void removeImageRuntime(ImageElement *element);
   void removePolylineRuntime(PolylineElement *element);
   void removePolygonRuntime(PolygonElement *element);
 
@@ -3826,6 +3828,14 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.imageElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.imageRuntimes_.contains(newElement)) {
+            auto *runtime = new ImageRuntime(newElement);
+            target.imageRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
         target.selectImageElement(newElement);
         target.markDirty();
       });
@@ -10641,6 +10651,14 @@ private:
     element->show();
     ensureElementInStack(element);
     imageElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!imageRuntimes_.contains(element)) {
+        auto *runtime = new ImageRuntime(element);
+        imageRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
     selectImageElement(element);
     showResourcePaletteForImage(element);
     deactivateCreateTool();
@@ -13340,6 +13358,8 @@ inline void DisplayWindow::clearAllElements()
           removeLineRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, RectangleElement *>) {
           removeRectangleRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, ImageElement *>) {
+          removeImageRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ArcElement *>) {
           removeArcRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, OvalElement *>) {
@@ -16444,6 +16464,14 @@ inline ImageElement *DisplayWindow::loadImageElement(
   element->setSelected(false);
   imageElements_.append(element);
   ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!imageRuntimes_.contains(element)) {
+      auto *runtime = new ImageRuntime(element);
+      imageRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -17471,6 +17499,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (ImageElement *element : imageElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!imageRuntimes_.contains(element)) {
+      auto *runtime = new ImageRuntime(element);
+      imageRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (OvalElement *element : ovalElements_) {
     if (!element) {
       continue;
@@ -17609,6 +17648,18 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   rectangleRuntimes_.clear();
   for (RectangleElement *element : rectangleElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (auto it = imageRuntimes_.begin(); it != imageRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  imageRuntimes_.clear();
+  for (ImageElement *element : imageElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
@@ -17785,6 +17836,17 @@ inline void DisplayWindow::removeRectangleRuntime(RectangleElement *element)
     return;
   }
   if (auto *runtime = rectangleRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeImageRuntime(ImageElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = imageRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

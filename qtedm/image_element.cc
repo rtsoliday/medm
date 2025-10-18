@@ -1,5 +1,7 @@
 #include "image_element.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -7,13 +9,18 @@
 #include <QPalette>
 #include <QPen>
 
+namespace {
+constexpr int kDefaultFrameIndex = 0;
+}
+
 ImageElement::ImageElement(QWidget *parent)
   : QWidget(parent)
 {
   setAutoFillBackground(false);
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setAttribute(Qt::WA_NoSystemBackground, true);
-  loadPixmap();
+  designModeVisible_ = QWidget::isVisible();
+  reloadImage();
   update();
 }
 
@@ -42,7 +49,7 @@ void ImageElement::setImageType(ImageType type)
     return;
   }
   imageType_ = type;
-  loadPixmap();
+  reloadImage();
   update();
 }
 
@@ -62,7 +69,7 @@ void ImageElement::setImageName(const QString &name)
   } else {
     setToolTip(imageName_);
   }
-  loadPixmap();
+  reloadImage();
   update();
 }
 
@@ -81,7 +88,7 @@ void ImageElement::setBaseDirectory(const QString &directory)
     return;
   }
   baseDirectory_ = normalized;
-  loadPixmap();
+  reloadImage();
   update();
 }
 
@@ -150,6 +157,151 @@ void ImageElement::setChannel(int index, const QString &value)
   channels_[index] = value;
 }
 
+void ImageElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  if (execute) {
+    designModeVisible_ = QWidget::isVisible();
+  }
+  executeMode_ = execute;
+  runtimeConnected_ = false;
+  runtimeVisible_ = true;
+  runtimeSeverity_ = 0;
+  runtimeAnimate_ = false;
+  runtimeFrameValid_ = !pixmap_.isNull();
+  runtimeFrameIndex_ = kDefaultFrameIndex;
+  if (movie_) {
+    movie_->setPaused(true);
+    movie_->jumpToFrame(runtimeFrameIndex_);
+    updateCurrentPixmap();
+  }
+  applyRuntimeVisibility();
+  update();
+}
+
+bool ImageElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void ImageElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    setRuntimeAnimate(false);
+  }
+  if (executeMode_) {
+    update();
+  }
+}
+
+void ImageElement::setRuntimeVisible(bool visible)
+{
+  if (runtimeVisible_ == visible) {
+    return;
+  }
+  runtimeVisible_ = visible;
+  applyRuntimeVisibility();
+}
+
+void ImageElement::setRuntimeSeverity(short severity)
+{
+  if (severity < 0) {
+    severity = 0;
+  }
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (executeMode_) {
+    update();
+  }
+}
+
+void ImageElement::setRuntimeAnimate(bool animate)
+{
+  const bool shouldAnimate = animate && frameCount() > 1;
+  if (runtimeAnimate_ == shouldAnimate) {
+    return;
+  }
+  runtimeAnimate_ = shouldAnimate;
+  if (!movie_) {
+    runtimeAnimate_ = false;
+    return;
+  }
+
+  if (runtimeAnimate_) {
+    if (movie_->state() != QMovie::Running) {
+      movie_->start();
+    }
+    movie_->setPaused(false);
+  } else {
+    movie_->setPaused(true);
+    movie_->jumpToFrame(runtimeFrameIndex_);
+    updateCurrentPixmap();
+  }
+  update();
+}
+
+void ImageElement::setRuntimeFrameIndex(int index)
+{
+  const int count = frameCount();
+  if (count <= 0) {
+    runtimeFrameIndex_ = kDefaultFrameIndex;
+    return;
+  }
+
+  const int clamped = std::clamp(index, 0, count - 1);
+  if (runtimeFrameIndex_ == clamped && (!movie_ || !runtimeAnimate_)) {
+    return;
+  }
+
+  runtimeFrameIndex_ = clamped;
+  if (movie_) {
+    if (!runtimeAnimate_) {
+      movie_->setPaused(true);
+      movie_->jumpToFrame(runtimeFrameIndex_);
+      updateCurrentPixmap();
+    }
+  }
+  update();
+}
+
+void ImageElement::setRuntimeFrameValid(bool valid)
+{
+  if (runtimeFrameValid_ == valid) {
+    return;
+  }
+  runtimeFrameValid_ = valid;
+  if (!valid) {
+    setRuntimeAnimate(false);
+  }
+  update();
+}
+
+int ImageElement::frameCount() const
+{
+  if (movie_) {
+    int count = movie_->frameCount();
+    if (count <= 0) {
+      count = cachedFrameCount_;
+    }
+    if (count <= 0) {
+      count = 1;
+    }
+    return count;
+  }
+  if (!pixmap_.isNull()) {
+    return 1;
+  }
+  return 0;
+}
+
 void ImageElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -158,7 +310,10 @@ void ImageElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
   const QRect drawRect = rect().adjusted(0, 0, -1, -1);
 
-  if (!pixmap_.isNull()) {
+  const bool showImage = !pixmap_.isNull()
+      && (!executeMode_ || (runtimeConnected_ && runtimeFrameValid_));
+
+  if (showImage) {
     painter.drawPixmap(drawRect, pixmap_);
   } else {
     painter.fillRect(drawRect, backgroundColor());
@@ -179,9 +334,22 @@ void ImageElement::paintEvent(QPaintEvent *event)
   }
 }
 
-void ImageElement::loadPixmap()
+void ImageElement::setVisible(bool visible)
 {
+  if (!executeMode_) {
+    designModeVisible_ = visible;
+  }
+  QWidget::setVisible(visible);
+}
+
+void ImageElement::reloadImage()
+{
+  disposeMovie();
   pixmap_ = QPixmap();
+  cachedFrameCount_ = 0;
+  runtimeFrameIndex_ = kDefaultFrameIndex;
+  runtimeFrameValid_ = false;
+
   if (imageType_ == ImageType::kNone) {
     return;
   }
@@ -192,7 +360,37 @@ void ImageElement::loadPixmap()
   }
 
   const QFileInfo directInfo(trimmedName);
-  auto tryLoad = [this](const QString &path) {
+
+  auto tryLoadMovie = [this](const QString &path) {
+    if (path.isEmpty()) {
+      return false;
+    }
+    auto *movie = new QMovie(path, QByteArray(), this);
+    if (!movie->isValid()) {
+      delete movie;
+      return false;
+    }
+    movie->setCacheMode(QMovie::CacheAll);
+    movie_ = movie;
+    movie_->jumpToFrame(kDefaultFrameIndex);
+    cachedFrameCount_ = movie_->frameCount();
+    if (cachedFrameCount_ <= 0) {
+      cachedFrameCount_ = 1;
+    }
+    QObject::connect(movie_, &QMovie::frameChanged, this,
+        [this](int frame) {
+          if (frame >= 0) {
+            runtimeFrameIndex_ = frame;
+          }
+          updateCurrentPixmap();
+        });
+    movie_->setPaused(true);
+    updateCurrentPixmap();
+    runtimeFrameValid_ = !pixmap_.isNull();
+    return true;
+  };
+
+  auto tryLoadPixmap = [this](const QString &path) {
     if (path.isEmpty()) {
       return false;
     }
@@ -201,22 +399,84 @@ void ImageElement::loadPixmap()
       return false;
     }
     pixmap_ = pixmap;
+    cachedFrameCount_ = 1;
+    runtimeFrameIndex_ = kDefaultFrameIndex;
+    runtimeFrameValid_ = true;
     return true;
   };
 
+  bool loaded = false;
   if (directInfo.isAbsolute()) {
-    if (tryLoad(directInfo.filePath())) {
-      return;
+    if (imageType_ == ImageType::kGif) {
+      loaded = tryLoadMovie(directInfo.filePath());
+      if (!loaded) {
+        loaded = tryLoadPixmap(directInfo.filePath());
+      }
+    } else {
+      loaded = tryLoadPixmap(directInfo.filePath());
     }
   } else {
     if (!baseDirectory_.isEmpty()) {
-      if (tryLoad(QDir(baseDirectory_).absoluteFilePath(trimmedName))) {
-        return;
+      const QString candidate = QDir(baseDirectory_).absoluteFilePath(trimmedName);
+      if (imageType_ == ImageType::kGif) {
+        loaded = tryLoadMovie(candidate);
+        if (!loaded) {
+          loaded = tryLoadPixmap(candidate);
+        }
+      } else {
+        loaded = tryLoadPixmap(candidate);
       }
     }
-    if (tryLoad(trimmedName)) {
-      return;
+    if (!loaded) {
+      if (imageType_ == ImageType::kGif) {
+        loaded = tryLoadMovie(trimmedName);
+        if (!loaded) {
+          loaded = tryLoadPixmap(trimmedName);
+        }
+      } else {
+        loaded = tryLoadPixmap(trimmedName);
+      }
     }
+  }
+
+  if (!loaded) {
+    disposeMovie();
+    pixmap_ = QPixmap();
+    runtimeFrameValid_ = false;
+    cachedFrameCount_ = 0;
+  }
+}
+
+void ImageElement::disposeMovie()
+{
+  if (!movie_) {
+    return;
+  }
+  disconnect(movie_, nullptr, this, nullptr);
+  movie_->stop();
+  delete movie_;
+  movie_ = nullptr;
+}
+
+void ImageElement::updateCurrentPixmap()
+{
+  if (!movie_) {
+    return;
+  }
+  const QPixmap frame = movie_->currentPixmap();
+  if (!frame.isNull()) {
+    pixmap_ = frame;
+    runtimeFrameValid_ = true;
+  }
+  update();
+}
+
+void ImageElement::applyRuntimeVisibility()
+{
+  if (executeMode_) {
+    QWidget::setVisible(designModeVisible_ && runtimeVisible_);
+  } else {
+    QWidget::setVisible(designModeVisible_);
   }
 }
 
@@ -241,3 +501,4 @@ QColor ImageElement::backgroundColor() const
   }
   return Qt::white;
 }
+

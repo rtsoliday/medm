@@ -12,10 +12,12 @@
 #include <QPen>
 #include <QPolygonF>
 
+#include "medm_colors.h"
+
 namespace {
 
 constexpr int kTickCount = 10;
-constexpr double kPointerSampleValue = 0.65;
+constexpr double kSampleNormalizedValue = 0.65;
 constexpr qreal kOuterPadding = 4.0;
 constexpr qreal kAxisSpacing = 4.0;
 constexpr qreal kMinimumChartExtent = 16.0;
@@ -26,6 +28,8 @@ constexpr qreal kFontShrinkFactor = 0.9;
 constexpr qreal kFontGrowFactor = 1.05;
 constexpr qreal kLabelTextPadding = 2.0;
 constexpr int kMaxFontSizeIterations = 12;
+constexpr short kInvalidSeverity = 3;
+constexpr short kDisconnectedSeverity = kInvalidSeverity + 1;
 
 } // namespace
 
@@ -58,6 +62,11 @@ ScaleMonitorElement::ScaleMonitorElement(QWidget *parent)
   limits_.lowDefault = 0.0;
   limits_.highDefault = 100.0;
   limits_.precisionDefault = 1;
+  runtimeLow_ = limits_.lowDefault;
+  runtimeHigh_ = limits_.highDefault;
+  runtimePrecision_ = -1;
+  runtimeValue_ = defaultSampleValue();
+  runtimeSeverity_ = kInvalidSeverity;
 }
 
 void ScaleMonitorElement::setSelected(bool selected)
@@ -165,6 +174,15 @@ void ScaleMonitorElement::setLimits(const PvLimits &limits)
   if (limits_.highSource == PvLimitSource::kUser) {
     limits_.highSource = PvLimitSource::kDefault;
   }
+  if (!executeMode_) {
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
+    runtimePrecision_ = -1;
+    runtimeValue_ = defaultSampleValue();
+  } else if (!runtimeLimitsValid_) {
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
+  }
   update();
 }
 
@@ -179,6 +197,116 @@ void ScaleMonitorElement::setChannel(const QString &channel)
     return;
   }
   channel_ = channel;
+  update();
+}
+
+void ScaleMonitorElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  clearRuntimeState();
+}
+
+bool ScaleMonitorElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void ScaleMonitorElement::setRuntimeConnected(bool connected)
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeSeverity_ = kInvalidSeverity;
+    runtimeLimitsValid_ = false;
+    runtimePrecision_ = -1;
+    hasRuntimeValue_ = false;
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
+    runtimeValue_ = defaultSampleValue();
+  }
+  update();
+}
+
+void ScaleMonitorElement::setRuntimeSeverity(short severity)
+{
+  if (!executeMode_) {
+    return;
+  }
+  if (severity < 0) {
+    severity = 0;
+  }
+  if (runtimeSeverity_ == severity) {
+    return;
+  }
+  runtimeSeverity_ = severity;
+  if (colorMode_ == TextColorMode::kAlarm) {
+    update();
+  }
+}
+
+void ScaleMonitorElement::setRuntimeValue(double value)
+{
+  if (!executeMode_ || !std::isfinite(value)) {
+    return;
+  }
+  const double clamped = clampToLimits(value);
+  const bool firstValue = !hasRuntimeValue_;
+  const bool changed = firstValue
+      || std::abs(clamped - runtimeValue_) > valueEpsilon();
+  runtimeValue_ = clamped;
+  hasRuntimeValue_ = true;
+  if (runtimeConnected_ && changed) {
+    update();
+  }
+}
+
+void ScaleMonitorElement::setRuntimeLimits(double low, double high)
+{
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return;
+  }
+  if (std::abs(high - low) < 1e-12) {
+    high = low + 1.0;
+  }
+  runtimeLow_ = low;
+  runtimeHigh_ = high;
+  runtimeLimitsValid_ = true;
+  if (executeMode_) {
+    runtimeValue_ = clampToLimits(runtimeValue_);
+    update();
+  }
+}
+
+void ScaleMonitorElement::setRuntimePrecision(int precision)
+{
+  const int clamped = std::clamp(precision, 0, 17);
+  if (runtimePrecision_ == clamped) {
+    return;
+  }
+  runtimePrecision_ = clamped;
+  if (executeMode_) {
+    update();
+  }
+}
+
+void ScaleMonitorElement::clearRuntimeState()
+{
+  runtimeConnected_ = false;
+  runtimeLimitsValid_ = false;
+  hasRuntimeValue_ = false;
+  runtimeLow_ = limits_.lowDefault;
+  runtimeHigh_ = limits_.highDefault;
+  runtimePrecision_ = -1;
+  runtimeValue_ = defaultSampleValue();
+  runtimeSeverity_ = kInvalidSeverity;
   update();
 }
 
@@ -372,12 +500,11 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
   layout.showReadback = (label_ == MeterLabel::kLimits
       || label_ == MeterLabel::kChannel);
   if (layout.showLimits) {
-    layout.lowLabel = QString::number(limits_.lowDefault, 'g', 5);
-    layout.highLabel = QString::number(limits_.highDefault, 'g', 5);
+    layout.lowLabel = axisLabelText(effectiveLowLimit());
+    layout.highLabel = axisLabelText(effectiveHighLimit());
   }
   if (layout.showReadback) {
-    layout.readbackText = QString::number(0.0, 'f',
-        std::clamp(limits_.precisionDefault, 0, 17));
+    layout.readbackText = formattedSampleValue();
   }
   if (label_ == MeterLabel::kChannel) {
     layout.channelText = channel_.trimmed();
@@ -667,6 +794,10 @@ void ScaleMonitorElement::paintPointer(QPainter &painter,
     return;
   }
 
+  if (executeMode_ && !runtimeConnected_) {
+    return;
+  }
+
   const bool vertical = layout.vertical;
   double ratio = normalizedSampleValue();
   if (isDirectionInverted()) {
@@ -773,55 +904,44 @@ void ScaleMonitorElement::paintLabels(
 
 double ScaleMonitorElement::sampleValue() const
 {
-  const double normalized = std::clamp(normalizedSampleValue(), 0.0, 1.0);
-  const double low = limits_.lowDefault;
-  const double high = limits_.highDefault;
-
-  if (!std::isfinite(low) || !std::isfinite(high)) {
-    return normalized;
-  }
-  if (high <= low) {
-    return low;
-  }
-  return low + normalized * (high - low);
+  return clampToLimits(currentValue());
 }
 
 QString ScaleMonitorElement::formattedSampleValue() const
 {
-  const double value = sampleValue();
-  const int precision = std::clamp(limits_.precisionDefault, 0, 17);
-  if (precision > 0) {
-    return QString::number(value, 'f', precision);
+  if (executeMode_) {
+    if (!runtimeConnected_ || !hasRuntimeValue_) {
+      return QStringLiteral("--");
+    }
   }
-  return QString::number(value, 'g', 5);
+  return formatValue(sampleValue());
 }
 
 QColor ScaleMonitorElement::effectiveForeground() const
 {
+  if (executeMode_) {
+    if (colorMode_ == TextColorMode::kAlarm) {
+      if (!runtimeConnected_) {
+        return MedmColors::alarmColorForSeverity(kDisconnectedSeverity);
+      }
+      return MedmColors::alarmColorForSeverity(runtimeSeverity_);
+    }
+  }
   if (foregroundColor_.isValid()) {
     return foregroundColor_;
   }
-  if (const QWidget *parent = parentWidget()) {
-    return parent->palette().color(QPalette::WindowText);
-  }
-  if (qApp) {
-    return qApp->palette().color(QPalette::WindowText);
-  }
-  return QColor(Qt::black);
+  return defaultForeground();
 }
 
 QColor ScaleMonitorElement::effectiveBackground() const
 {
+  if (executeMode_ && !runtimeConnected_) {
+    return QColor(Qt::white);
+  }
   if (backgroundColor_.isValid()) {
     return backgroundColor_;
   }
-  if (const QWidget *parent = parentWidget()) {
-    return parent->palette().color(QPalette::Window);
-  }
-  if (qApp) {
-    return qApp->palette().color(QPalette::Window);
-  }
-  return QColor(Qt::white);
+  return defaultBackground();
 }
 
 bool ScaleMonitorElement::isVertical() const
@@ -846,5 +966,141 @@ void ScaleMonitorElement::paintSelectionOverlay(QPainter &painter) const
 
 double ScaleMonitorElement::normalizedSampleValue() const
 {
-  return kPointerSampleValue;
+  const double low = effectiveLowLimit();
+  const double high = effectiveHighLimit();
+  const double value = sampleValue();
+  if (!std::isfinite(low) || !std::isfinite(high) || !std::isfinite(value)) {
+    return std::clamp(kSampleNormalizedValue, 0.0, 1.0);
+  }
+  const double span = high - low;
+  if (std::abs(span) < 1e-12) {
+    return 0.0;
+  }
+  double normalized = (value - low) / span;
+  return std::clamp(normalized, 0.0, 1.0);
+}
+
+QColor ScaleMonitorElement::defaultForeground() const
+{
+  if (const QWidget *parent = parentWidget()) {
+    return parent->palette().color(QPalette::WindowText);
+  }
+  if (qApp) {
+    return qApp->palette().color(QPalette::WindowText);
+  }
+  return QColor(Qt::black);
+}
+
+QColor ScaleMonitorElement::defaultBackground() const
+{
+  if (const QWidget *parent = parentWidget()) {
+    return parent->palette().color(QPalette::Window);
+  }
+  if (qApp) {
+    return qApp->palette().color(QPalette::Window);
+  }
+  return QColor(Qt::white);
+}
+
+double ScaleMonitorElement::effectiveLowLimit() const
+{
+  if (executeMode_ && limits_.lowSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeLow_;
+  }
+  return limits_.lowDefault;
+}
+
+double ScaleMonitorElement::effectiveHighLimit() const
+{
+  if (executeMode_ && limits_.highSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeHigh_;
+  }
+  return limits_.highDefault;
+}
+
+int ScaleMonitorElement::effectivePrecision() const
+{
+  if (limits_.precisionSource == PvLimitSource::kChannel) {
+    if (runtimePrecision_ >= 0) {
+      return std::clamp(runtimePrecision_, 0, 17);
+    }
+  }
+  return std::clamp(limits_.precisionDefault, 0, 17);
+}
+
+double ScaleMonitorElement::currentValue() const
+{
+  if (executeMode_ && runtimeConnected_ && hasRuntimeValue_) {
+    return runtimeValue_;
+  }
+  return defaultSampleValue();
+}
+
+double ScaleMonitorElement::defaultSampleValue() const
+{
+  const double low = limits_.lowDefault;
+  const double high = limits_.highDefault;
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return 0.0;
+  }
+  const double span = high - low;
+  if (std::abs(span) < 1e-12) {
+    return low;
+  }
+  const double normalized = std::clamp(kSampleNormalizedValue, 0.0, 1.0);
+  return low + span * normalized;
+}
+
+QString ScaleMonitorElement::formatValue(double value, char format, int precision) const
+{
+  if (!std::isfinite(value)) {
+    return QStringLiteral("--");
+  }
+  int digits = precision;
+  if (digits < 0) {
+    digits = effectivePrecision();
+  } else {
+    digits = std::clamp(digits, 0, 17);
+  }
+  return QString::number(value, format, digits);
+}
+
+QString ScaleMonitorElement::axisLabelText(double value) const
+{
+  return formatValue(value, 'g', 5);
+}
+
+double ScaleMonitorElement::clampToLimits(double value) const
+{
+  double low = effectiveLowLimit();
+  double high = effectiveHighLimit();
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return value;
+  }
+  if (low > high) {
+    std::swap(low, high);
+  }
+  if (value < low) {
+    return low;
+  }
+  if (value > high) {
+    return high;
+  }
+  return value;
+}
+
+double ScaleMonitorElement::valueEpsilon() const
+{
+  double span = effectiveHighLimit() - effectiveLowLimit();
+  if (!std::isfinite(span)) {
+    span = 1.0;
+  }
+  span = std::abs(span);
+  double epsilon = span * 1e-6;
+  if (!std::isfinite(epsilon) || epsilon <= 0.0) {
+    epsilon = 1e-9;
+  }
+  return epsilon;
 }

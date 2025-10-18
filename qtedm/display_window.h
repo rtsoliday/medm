@@ -79,6 +79,7 @@
 #include "byte_monitor_runtime.h"
 #include "bar_monitor_element.h"
 #include "bar_monitor_runtime.h"
+#include "scale_monitor_runtime.h"
 #include "slider_element.h"
 #include "slider_runtime.h"
 #include "wheel_switch_element.h"

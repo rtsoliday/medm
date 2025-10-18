@@ -5,7 +5,7 @@ file {
 }
 display {
 	object {
-		x=0
+		x=10
 		y=53
 		width=1104
 		height=707
@@ -313,7 +313,7 @@ indicator {
 		height=300
 	}
 	monitor {
-		chan="test.pv"
+		chan="test_scale_pv"
 		clr=16
 		bclr=33
 	}

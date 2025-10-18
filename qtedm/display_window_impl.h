@@ -1961,6 +1961,7 @@ private:
   QHash<ScaleMonitorElement *, ScaleMonitorRuntime *> scaleMonitorRuntimes_;
   ScaleMonitorElement *selectedScaleMonitorElement_ = nullptr;
   QList<StripChartElement *> stripChartElements_;
+  QHash<StripChartElement *, StripChartRuntime *> stripChartRuntimes_;
   StripChartElement *selectedStripChartElement_ = nullptr;
   QList<CartesianPlotElement *> cartesianPlotElements_;
   CartesianPlotElement *selectedCartesianPlotElement_ = nullptr;
@@ -2920,6 +2921,7 @@ private:
   void removeMeterRuntime(MeterElement *element);
   void removeBarMonitorRuntime(BarMonitorElement *element);
   void removeScaleMonitorRuntime(ScaleMonitorElement *element);
+  void removeStripChartRuntime(StripChartElement *element);
   void removeByteMonitorRuntime(ByteMonitorElement *element);
 
   template <typename ElementType>
@@ -2946,6 +2948,8 @@ private:
       removeBarMonitorRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ScaleMonitorElement>) {
       removeScaleMonitorRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, StripChartElement>) {
+      removeStripChartRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement>) {
       removeByteMonitorRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
@@ -13370,6 +13374,8 @@ inline void DisplayWindow::clearAllElements()
           removeBarMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ScaleMonitorElement *>) {
           removeScaleMonitorRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, StripChartElement *>) {
+          removeStripChartRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement *>) {
           removeByteMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
@@ -17611,6 +17617,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (StripChartElement *element : stripChartElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!stripChartRuntimes_.contains(element)) {
+      auto *runtime = new StripChartRuntime(element);
+      stripChartRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (BarMonitorElement *element : barMonitorElements_) {
     if (!element) {
       continue;
@@ -17817,6 +17834,19 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = stripChartRuntimes_.begin();
+      it != stripChartRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  stripChartRuntimes_.clear();
+  for (StripChartElement *element : stripChartElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = barMonitorRuntimes_.begin(); it != barMonitorRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -18019,6 +18049,17 @@ inline void DisplayWindow::removeScaleMonitorRuntime(ScaleMonitorElement *elemen
     return;
   }
   if (auto *runtime = scaleMonitorRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeStripChartRuntime(StripChartElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = stripChartRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

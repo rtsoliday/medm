@@ -96,6 +96,7 @@
 #include "oval_element.h"
 #include "oval_runtime.h"
 #include "strip_chart_element.h"
+#include "strip_chart_runtime.h"
 #include "polygon_element.h"
 #include "polyline_element.h"
 #include "polyline_runtime.h"

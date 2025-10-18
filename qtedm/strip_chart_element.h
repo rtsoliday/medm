@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <deque>
 
 #include <QColor>
 #include <QFont>
@@ -8,9 +9,12 @@
 
 #include "display_properties.h"
 
+class QTimer;
+
 class QPaintEvent;
 class QPainter;
 class QFontMetrics;
+class QResizeEvent;
 
 class StripChartElement : public QWidget
 {
@@ -52,8 +56,17 @@ public:
   PvLimits penLimits(int index) const;
   void setPenLimits(int index, const PvLimits &limits);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+  void setRuntimeConnected(int index, bool connected);
+  void setRuntimeLimits(int index, double low, double high);
+  void addRuntimeSample(int index, double value, qint64 timestampMs);
+  void clearRuntimeState();
+  void clearPenRuntimeState(int index);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 private:
   struct Layout
@@ -73,6 +86,13 @@ private:
     QColor color;
     QString channel;
     PvLimits limits;
+    bool runtimeConnected = false;
+    bool runtimeLimitsValid = false;
+    double runtimeLow = 0.0;
+    double runtimeHigh = 0.0;
+    std::deque<double> samples;
+    double runtimeValue = 0.0;
+    bool hasRuntimeValue = false;
   };
 
   QColor effectiveForeground() const;
@@ -84,9 +104,23 @@ private:
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRect &content) const;
   void paintPens(QPainter &painter, const QRect &content) const;
+  void paintDesignPens(QPainter &painter, const QRect &content) const;
+  void paintRuntimePens(QPainter &painter, const QRect &content) const;
   void paintLabels(QPainter &painter, const Layout &layout,
       const QFontMetrics &metrics) const;
   void paintSelectionOverlay(QPainter &painter) const;
+  double periodMilliseconds() const;
+  double effectivePenLow(int index) const;
+  double effectivePenHigh(int index) const;
+  void ensureRefreshTimer();
+  void updateRefreshTimer();
+  void handleRefreshTimer();
+  void updateSamplingGeometry(int chartWidth);
+  void enforceSampleCapacity(int capacity);
+  void maybeAppendSamples(qint64 nowMs);
+  void appendSampleColumn();
+  bool anyPenConnected() const;
+  bool anyPenReady() const;
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -97,4 +131,10 @@ private:
   double period_ = kDefaultStripChartPeriod;
   TimeUnits units_ = TimeUnits::kSeconds;
   std::array<Pen, kStripChartPenCount> pens_{};
+  bool executeMode_ = false;
+  QTimer *refreshTimer_ = nullptr;
+  double sampleIntervalMs_ = 1000.0;
+  qint64 lastSampleMs_ = 0;
+  int cachedChartWidth_ = 0;
+  int sampleHistoryLength_ = 0;
 };

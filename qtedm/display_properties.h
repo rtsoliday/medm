@@ -183,9 +183,23 @@ enum class CartesianPlotTimeFormat
   kWeekdayHour00,
 };
 
+enum class CartesianPlotTraceMode
+{
+  kNone,
+  kXYScalar,
+  kXScalar,
+  kYScalar,
+  kXVector,
+  kYVector,
+  kXVectorYScalar,
+  kYVectorXScalar,
+  kXYVector,
+};
+
 constexpr int kStripChartPenCount = 8;
 constexpr int kCartesianPlotTraceCount = 8;
 constexpr int kCartesianAxisCount = 5;
+constexpr int kCartesianPlotMaximumSampleCount = 256;
 constexpr int kDefaultDisplayWidth = 400;
 constexpr int kDefaultDisplayHeight = 400;
 constexpr int kDefaultGridSpacing = 5;

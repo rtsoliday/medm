@@ -24,7 +24,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "../medm/medmPix25.xpm"
+#include "medmPix25.xpm"
 #include "display_window.h"
 
 namespace {

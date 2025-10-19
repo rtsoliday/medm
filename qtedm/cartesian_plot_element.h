@@ -87,6 +87,18 @@ public:
   CartesianPlotTimeFormat axisTimeFormat(int axisIndex) const;
   void setAxisTimeFormat(int axisIndex, CartesianPlotTimeFormat format);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+  void setTraceRuntimeMode(int index, CartesianPlotTraceMode mode);
+  void setTraceRuntimeConnected(int index, bool connected);
+  void updateTraceRuntimeData(int index, QVector<QPointF> points);
+  void clearTraceRuntimeData(int index);
+  void clearRuntimeState();
+  void setRuntimeCount(int count);
+  int effectiveSampleCapacity() const;
+  void setAxisRuntimeLimits(int axisIndex, double minimum, double maximum,
+      bool valid);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
 
@@ -98,6 +110,9 @@ private:
     QColor color;
     CartesianPlotYAxis yAxis = CartesianPlotYAxis::kY1;
     bool usesRightAxis = false;
+    CartesianPlotTraceMode runtimeMode = CartesianPlotTraceMode::kNone;
+    bool runtimeConnected = false;
+    QVector<QPointF> runtimePoints;
   };
 
   QColor effectiveForeground() const;
@@ -112,6 +127,22 @@ private:
   void paintSelectionOverlay(QPainter &painter) const;
   QVector<QPointF> syntheticTracePoints(const QRectF &rect,
       int traceIndex, int sampleCount) const;
+  void paintTracesExecute(QPainter &painter, const QRectF &rect) const;
+  struct AxisRange
+  {
+    double minimum = 0.0;
+    double maximum = 1.0;
+    bool valid = false;
+    CartesianPlotAxisStyle style = CartesianPlotAxisStyle::kLinear;
+  };
+  AxisRange computeAxisRange(int axisIndex,
+      const std::array<bool, kCartesianAxisCount> &hasData,
+      const std::array<double, kCartesianAxisCount> &autoMinimums,
+      const std::array<double, kCartesianAxisCount> &autoMaximums) const;
+  bool mapPointToChart(const QPointF &value, const AxisRange &xRange,
+      const AxisRange &yRange, const QRectF &rect, QPointF *mapped) const;
+  int axisIndexForTrace(int traceIndex) const;
+  void ensureRuntimeArraySizes();
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -121,7 +152,7 @@ private:
   std::array<QString, 4> yLabels_{};
   CartesianPlotStyle style_ = CartesianPlotStyle::kLine;
   bool eraseOldest_ = false;
-  int count_ = 1;
+  int count_ = 0;
   CartesianPlotEraseMode eraseMode_ = CartesianPlotEraseMode::kIfNotZero;
   QString triggerChannel_;
   QString eraseChannel_;
@@ -132,4 +163,10 @@ private:
   std::array<double, kCartesianAxisCount> axisMinimums_{};
   std::array<double, kCartesianAxisCount> axisMaximums_{};
   std::array<CartesianPlotTimeFormat, kCartesianAxisCount> axisTimeFormats_{};
+  bool executeMode_ = false;
+  int runtimeCount_ = 0;
+  bool runtimeCountValid_ = false;
+  std::array<bool, kCartesianAxisCount> axisRuntimeValid_{};
+  std::array<double, kCartesianAxisCount> axisRuntimeMinimums_{};
+  std::array<double, kCartesianAxisCount> axisRuntimeMaximums_{};
 };

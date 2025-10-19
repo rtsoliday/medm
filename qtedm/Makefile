@@ -64,6 +64,7 @@ qtedm_SRC = qtedm.cc \
             strip_chart_element.cc \
             strip_chart_runtime.cc \
             cartesian_plot_element.cc \
+            cartesian_plot_runtime.cc \
             rectangle_element.cc \
             rectangle_runtime.cc \
             oval_element.cc \

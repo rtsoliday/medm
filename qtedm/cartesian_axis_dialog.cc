@@ -99,16 +99,6 @@ CartesianPlotTimeFormat indexToTimeFormat(int index)
   return kTimeFormatItems[index].format;
 }
 
-QString timeFormatLabel(CartesianPlotTimeFormat format)
-{
-  for (const auto &item : kTimeFormatItems) {
-    if (item.format == format) {
-      return QString::fromLatin1(item.label);
-    }
-  }
-  return QStringLiteral("hh:mm:ss");
-}
-
 QString styleDisplayName(CartesianPlotAxisStyle style)
 {
   switch (style) {

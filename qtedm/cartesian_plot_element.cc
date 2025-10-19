@@ -2,6 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <optional>
+
+#include <QtGlobal>
 
 #include <QPaintEvent>
 #include <QPainter>
@@ -18,7 +22,7 @@ constexpr int kInnerMargin = 8;
 constexpr int kGridLines = 5;
 constexpr double kTwoPi = 6.28318530717958647692;
 constexpr int kMinimumSampleCount = 8;
-constexpr int kMaximumSampleCount = 256;
+constexpr int kMaximumSampleCount = kCartesianPlotMaximumSampleCount;
 
 constexpr int kDefaultTraceColorIndex = 14;
 
@@ -185,11 +189,14 @@ int CartesianPlotElement::count() const
 
 void CartesianPlotElement::setCount(int count)
 {
-  const int clamped = std::clamp(count, 1, kMaximumSampleCount);
+  const int clamped = std::clamp(count, 0, kMaximumSampleCount);
   if (count_ == clamped) {
     return;
   }
   count_ = clamped;
+  if (executeMode_) {
+    clearRuntimeState();
+  }
   update();
 }
 
@@ -457,6 +464,136 @@ void CartesianPlotElement::setAxisTimeFormat(int axisIndex,
   update();
 }
 
+void CartesianPlotElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  clearRuntimeState();
+  update();
+}
+
+bool CartesianPlotElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void CartesianPlotElement::setTraceRuntimeMode(int index,
+    CartesianPlotTraceMode mode)
+{
+  if (index < 0 || index >= traceCount()) {
+    return;
+  }
+  traces_[index].runtimeMode = mode;
+}
+
+void CartesianPlotElement::setTraceRuntimeConnected(int index, bool connected)
+{
+  if (index < 0 || index >= traceCount()) {
+    return;
+  }
+  if (traces_[index].runtimeConnected == connected) {
+    return;
+  }
+  traces_[index].runtimeConnected = connected;
+  update();
+}
+
+void CartesianPlotElement::updateTraceRuntimeData(int index,
+    QVector<QPointF> points)
+{
+  if (index < 0 || index >= traceCount()) {
+    return;
+  }
+  traces_[index].runtimePoints = std::move(points);
+  update();
+}
+
+void CartesianPlotElement::clearTraceRuntimeData(int index)
+{
+  if (index < 0 || index >= traceCount()) {
+    return;
+  }
+  if (traces_[index].runtimePoints.isEmpty()) {
+    return;
+  }
+  traces_[index].runtimePoints.clear();
+  update();
+}
+
+void CartesianPlotElement::clearRuntimeState()
+{
+  runtimeCountValid_ = false;
+  runtimeCount_ = 0;
+  axisRuntimeValid_.fill(false);
+  axisRuntimeMinimums_.fill(0.0);
+  axisRuntimeMaximums_.fill(0.0);
+  for (Trace &trace : traces_) {
+    trace.runtimePoints.clear();
+    trace.runtimeConnected = false;
+    trace.runtimeMode = CartesianPlotTraceMode::kNone;
+  }
+  update();
+}
+
+void CartesianPlotElement::setRuntimeCount(int count)
+{
+  if (count <= 0) {
+    if (!runtimeCountValid_) {
+      return;
+    }
+    runtimeCountValid_ = false;
+    runtimeCount_ = 0;
+    update();
+    return;
+  }
+  const int clamped = std::clamp(count, 1, kMaximumSampleCount);
+  if (runtimeCountValid_ && runtimeCount_ == clamped) {
+    return;
+  }
+  runtimeCountValid_ = true;
+  runtimeCount_ = clamped;
+  update();
+}
+
+int CartesianPlotElement::effectiveSampleCapacity() const
+{
+  if (runtimeCountValid_) {
+    return runtimeCount_;
+  }
+  if (count_ > 0) {
+    return std::clamp(count_, 1, kMaximumSampleCount);
+  }
+  return kMaximumSampleCount;
+}
+
+void CartesianPlotElement::setAxisRuntimeLimits(int axisIndex,
+    double minimum, double maximum, bool valid)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  if (!valid || !std::isfinite(minimum) || !std::isfinite(maximum)
+      || maximum <= minimum) {
+    if (!axisRuntimeValid_[axisIndex]) {
+      return;
+    }
+    axisRuntimeValid_[axisIndex] = false;
+    update();
+    return;
+  }
+  if (axisRuntimeValid_[axisIndex]
+      && qFuzzyCompare(axisRuntimeMinimums_[axisIndex], minimum)
+      && qFuzzyCompare(axisRuntimeMaximums_[axisIndex], maximum)) {
+    return;
+  }
+  axisRuntimeValid_[axisIndex] = true;
+  axisRuntimeMinimums_[axisIndex] = minimum;
+  axisRuntimeMaximums_[axisIndex] = maximum;
+  update();
+}
+
 void CartesianPlotElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -660,8 +797,14 @@ void CartesianPlotElement::paintTraces(QPainter &painter, const QRectF &rect) co
     return;
   }
 
-  const int samples = std::clamp(count_, kMinimumSampleCount,
-      kMaximumSampleCount);
+  if (executeMode_) {
+    paintTracesExecute(painter, rect);
+    return;
+  }
+
+  const int baseSamples = count_ > 0 ? count_ : kMinimumSampleCount;
+  const int samples = std::clamp(baseSamples, kMinimumSampleCount,
+    kMaximumSampleCount);
 
   for (int i = 0; i < traceCount(); ++i) {
     const QString yChannel = traces_[i].yChannel.trimmed();
@@ -761,4 +904,274 @@ QVector<QPointF> CartesianPlotElement::syntheticTracePoints(const QRectF &rect,
     points.append(QPointF(x, y));
   }
   return points;
+}
+
+void CartesianPlotElement::paintTracesExecute(QPainter &painter,
+    const QRectF &rect) const
+{
+  std::array<double, kCartesianAxisCount> autoMinimums{};
+  std::array<double, kCartesianAxisCount> autoMaximums{};
+  std::array<bool, kCartesianAxisCount> hasData{};
+  for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+    autoMinimums[axis] = std::numeric_limits<double>::infinity();
+    autoMaximums[axis] = -std::numeric_limits<double>::infinity();
+    hasData[axis] = false;
+  }
+
+  for (int i = 0; i < traceCount(); ++i) {
+    const QVector<QPointF> &points = traces_[i].runtimePoints;
+    if (points.isEmpty()) {
+      continue;
+    }
+    const int yAxisIndex = axisIndexForTrace(i);
+    for (const QPointF &valuePoint : points) {
+      const double xValue = valuePoint.x();
+      const double yValue = valuePoint.y();
+      if (std::isfinite(xValue)) {
+        if (!hasData[0]) {
+          autoMinimums[0] = xValue;
+          autoMaximums[0] = xValue;
+          hasData[0] = true;
+        } else {
+          autoMinimums[0] = std::min(autoMinimums[0], xValue);
+          autoMaximums[0] = std::max(autoMaximums[0], xValue);
+        }
+      }
+      if (yAxisIndex >= 0 && yAxisIndex < kCartesianAxisCount
+          && std::isfinite(yValue)) {
+        if (!hasData[yAxisIndex]) {
+          autoMinimums[yAxisIndex] = yValue;
+          autoMaximums[yAxisIndex] = yValue;
+          hasData[yAxisIndex] = true;
+        } else {
+          autoMinimums[yAxisIndex] = std::min(autoMinimums[yAxisIndex], yValue);
+          autoMaximums[yAxisIndex] = std::max(autoMaximums[yAxisIndex], yValue);
+        }
+      }
+    }
+  }
+
+  std::array<AxisRange, kCartesianAxisCount> ranges{};
+  for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+    ranges[axis] = computeAxisRange(axis, hasData, autoMinimums, autoMaximums);
+  }
+
+  if (!ranges[0].valid) {
+    return;
+  }
+
+  for (int i = 0; i < traceCount(); ++i) {
+    const QVector<QPointF> &valuePoints = traces_[i].runtimePoints;
+    if (valuePoints.isEmpty()) {
+      continue;
+    }
+    const int yAxisIndex = axisIndexForTrace(i);
+    if (yAxisIndex < 0 || yAxisIndex >= kCartesianAxisCount) {
+      continue;
+    }
+    const AxisRange &xRange = ranges[0];
+    const AxisRange &yRange = ranges[yAxisIndex];
+    if (!yRange.valid) {
+      continue;
+    }
+
+    QVector<QPointF> mappedPoints;
+    mappedPoints.reserve(valuePoints.size());
+    for (const QPointF &value : valuePoints) {
+      QPointF mapped;
+      if (!mapPointToChart(value, xRange, yRange, rect, &mapped)) {
+        continue;
+      }
+      mappedPoints.append(mapped);
+    }
+    if (mappedPoints.isEmpty()) {
+      continue;
+    }
+
+    const QColor color = effectiveTraceColor(i);
+    QPen pen(color);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    switch (style_) {
+    case CartesianPlotStyle::kPoint: {
+      painter.save();
+      painter.setBrush(color);
+      for (const QPointF &point : mappedPoints) {
+        painter.drawEllipse(point, 2.0, 2.0);
+      }
+      painter.restore();
+      break;
+    }
+    case CartesianPlotStyle::kLine: {
+      QPainterPath path(mappedPoints.front());
+      for (int j = 1; j < mappedPoints.size(); ++j) {
+        path.lineTo(mappedPoints[j]);
+      }
+      painter.drawPath(path);
+      break;
+    }
+    case CartesianPlotStyle::kStep: {
+      QPainterPath path(mappedPoints.front());
+      for (int j = 1; j < mappedPoints.size(); ++j) {
+        const QPointF &prev = mappedPoints[j - 1];
+        const QPointF &curr = mappedPoints[j];
+        path.lineTo(curr.x(), prev.y());
+        path.lineTo(curr);
+      }
+      painter.drawPath(path);
+      break;
+    }
+    case CartesianPlotStyle::kFillUnder: {
+      QPainterPath path(mappedPoints.front());
+      for (int j = 1; j < mappedPoints.size(); ++j) {
+        path.lineTo(mappedPoints[j]);
+      }
+      path.lineTo(QPointF(mappedPoints.back().x(), rect.bottom()));
+      path.lineTo(QPointF(mappedPoints.front().x(), rect.bottom()));
+      path.closeSubpath();
+      QColor fillColor = color;
+      fillColor.setAlpha(80);
+      painter.save();
+      painter.setBrush(fillColor);
+      painter.drawPath(path);
+      painter.restore();
+      break;
+    }
+    }
+  }
+}
+
+CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
+    int axisIndex, const std::array<bool, kCartesianAxisCount> &hasData,
+    const std::array<double, kCartesianAxisCount> &autoMinimums,
+    const std::array<double, kCartesianAxisCount> &autoMaximums) const
+{
+  AxisRange range;
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return range;
+  }
+
+  range.style = axisStyles_[axisIndex];
+  const CartesianPlotRangeStyle rangeStyle = axisRangeStyles_[axisIndex];
+
+  double minimum = axisMinimums_[axisIndex];
+  double maximum = axisMaximums_[axisIndex];
+  bool valid = false;
+
+  switch (rangeStyle) {
+  case CartesianPlotRangeStyle::kUserSpecified:
+    valid = std::isfinite(minimum) && std::isfinite(maximum)
+        && maximum > minimum;
+    break;
+  case CartesianPlotRangeStyle::kChannel:
+    if (axisRuntimeValid_[axisIndex]) {
+      minimum = axisRuntimeMinimums_[axisIndex];
+      maximum = axisRuntimeMaximums_[axisIndex];
+      valid = true;
+    } else {
+      valid = std::isfinite(minimum) && std::isfinite(maximum)
+          && maximum > minimum;
+    }
+    break;
+  case CartesianPlotRangeStyle::kAutoScale:
+    if (hasData[axisIndex]) {
+      minimum = autoMinimums[axisIndex];
+      maximum = autoMaximums[axisIndex];
+      valid = (maximum > minimum)
+          && std::isfinite(minimum) && std::isfinite(maximum);
+    } else if (axisRuntimeValid_[axisIndex]) {
+      minimum = axisRuntimeMinimums_[axisIndex];
+      maximum = axisRuntimeMaximums_[axisIndex];
+      valid = true;
+    } else {
+      valid = std::isfinite(minimum) && std::isfinite(maximum)
+          && maximum > minimum;
+    }
+    break;
+  }
+
+  if (!valid) {
+    minimum = 0.0;
+    maximum = 1.0;
+    valid = true;
+  }
+
+  if (range.style == CartesianPlotAxisStyle::kLog10) {
+    if (minimum <= 0.0) {
+      minimum = 1e-3;
+    }
+    if (maximum <= minimum) {
+      maximum = minimum * 10.0;
+    }
+  } else if (maximum <= minimum) {
+    maximum = minimum + 1.0;
+  }
+
+  range.minimum = minimum;
+  range.maximum = maximum;
+  range.valid = true;
+  return range;
+}
+
+bool CartesianPlotElement::mapPointToChart(const QPointF &value,
+    const AxisRange &xRange, const AxisRange &yRange, const QRectF &rect,
+    QPointF *mapped) const
+{
+  if (!xRange.valid || !yRange.valid || !mapped) {
+    return false;
+  }
+
+  auto normalize = [](double v, const AxisRange &range) -> std::optional<double> {
+    if (!std::isfinite(v)) {
+      return std::nullopt;
+    }
+    if (range.style == CartesianPlotAxisStyle::kLog10) {
+      if (v <= 0.0) {
+        return std::nullopt;
+      }
+      const double logMin = std::log10(range.minimum);
+      const double logMax = std::log10(range.maximum);
+      if (!std::isfinite(logMin) || !std::isfinite(logMax)
+          || logMax <= logMin) {
+        return std::nullopt;
+      }
+      const double logValue = std::log10(v);
+      return (logValue - logMin) / (logMax - logMin);
+    }
+    const double span = range.maximum - range.minimum;
+    if (span <= 0.0) {
+      return std::nullopt;
+    }
+    return (v - range.minimum) / span;
+  };
+
+  const std::optional<double> xNorm = normalize(value.x(), xRange);
+  const std::optional<double> yNorm = normalize(value.y(), yRange);
+  if (!xNorm.has_value() || !yNorm.has_value()) {
+    return false;
+  }
+
+  *mapped = QPointF(rect.left() + xNorm.value() * rect.width(),
+      rect.bottom() - yNorm.value() * rect.height());
+  return true;
+}
+
+int CartesianPlotElement::axisIndexForTrace(int traceIndex) const
+{
+  if (traceIndex < 0 || traceIndex >= traceCount()) {
+    return 1;
+  }
+  switch (traces_[traceIndex].yAxis) {
+  case CartesianPlotYAxis::kY1:
+    return 1;
+  case CartesianPlotYAxis::kY2:
+    return 2;
+  case CartesianPlotYAxis::kY3:
+    return 3;
+  case CartesianPlotYAxis::kY4:
+    return 4;
+  }
+  return 1;
 }

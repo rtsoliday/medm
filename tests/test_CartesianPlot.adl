@@ -1,4 +1,3 @@
-
 file {
 	name="/home/SOLIDAY/github/medm/tests/test_CartesianPlot.adl"
 	version=030122
@@ -106,24 +105,24 @@ display {
 	}
 	style="step"
 	erase_oldest="plot last n pts"
-	count="CNT:PLOT1"
+	count="cb:ctrl:2845"
 	trace[0] {
-		xdata="SIM:CP1:X0"
-		ydata="SIM:CP1:Y0"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:SIG327"
 		data_clr=28
 		yaxis=0
 		yside=1
 	}
 	trace[1] {
-		xdata="SIM:CP1:X1"
-		ydata="SIM:CP1:Y1"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:RMS011"
 		data_clr=42
 		yaxis=1
 		yside=0
 	}
 	trace[2] {
-		xdata="SIM:CP1:X2"
-		ydata="SIM:CP1:Y2"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:DRIFT901"
 		data_clr=9
 		yaxis=2
 		yside=1
@@ -146,9 +145,9 @@ display {
 		minRange=-22.400000
 		maxRange=48.599998
 	}
-	trigger="TRIG:PLOT1"
-	erase="ERASE:PLOT1"
-	countPvName="CNT:PLOT1"
+	trigger="cb:logic:7319"
+	erase="cb:scan:8095"
+	countPvName="cb:ctrl:2845"
 	eraseMode="if zero"
 }
 "cartesian plot" {
@@ -169,31 +168,31 @@ display {
 		bclr=51
 	}
 	style="fill-under"
-	count="CNT:PLOT2"
+	count="cb:ctrl:2845"
 	trace[0] {
-		xdata="SIM:CP2:T0"
-		ydata="SIM:CP2:V4"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:SIG327"
 		data_clr=55
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SIM:CP2:T1"
-		ydata="SIM:CP2:V5"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:RMS011"
 		data_clr=8
 		yaxis=1
 		yside=1
 	}
 	trace[2] {
-		xdata="SIM:CP2:T2"
-		ydata="SIM:CP2:V6"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:DRIFT901"
 		data_clr=47
 		yaxis=0
 		yside=0
 	}
 	trace[3] {
-		xdata="SIM:CP2:T3"
-		ydata="SIM:CP2:V7"
+		xdata="SPEC:DET:A208"
+		ydata="SYS:GRAD:LOOP32"
 		data_clr=23
 		yaxis=3
 		yside=0
@@ -216,9 +215,9 @@ display {
 		axisStyle="log10"
 		rangeStyle="auto-scale"
 	}
-	trigger="TRIG:PLOT2"
-	erase="ERASE:PLOT2"
-	countPvName="CNT:PLOT2"
+	trigger="cb:logic:7319"
+	erase="cb:scan:8095"
+	countPvName="cb:ctrl:2845"
 }
 "cartesian plot" {
 	object {
@@ -239,24 +238,24 @@ display {
 	}
 	style="line"
 	erase_oldest="plot last n pts"
-	count="CNT:PLOT3"
+	count="cb:ctrl:2845"
 	trace[0] {
-		xdata="SIM:CP3:S0"
-		ydata="SIM:CP3:N0"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:SIG327"
 		data_clr=6
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SIM:CP3:S1"
-		ydata="SIM:CP3:N1"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:RMS011"
 		data_clr=37
 		yaxis=2
 		yside=1
 	}
 	trace[2] {
-		xdata="SIM:CP3:S2"
-		ydata="SIM:CP3:N2"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:DRIFT901"
 		data_clr=59
 		yaxis=1
 		yside=0
@@ -280,9 +279,9 @@ display {
 	y3_axis {
 		rangeStyle="auto-scale"
 	}
-	trigger="TRIG:PLOT3"
-	erase="ERASE:PLOT3"
-	countPvName="CNT:PLOT3"
+	trigger="cb:logic:7319"
+	erase="cb:scan:8095"
+	countPvName="cb:ctrl:2845"
 	eraseMode="if zero"
 }
 "cartesian plot" {
@@ -302,24 +301,24 @@ display {
 		clr=25
 		bclr=2
 	}
-	count="CNT:PLOT4"
+	count="cb:ctrl:2845"
 	trace[0] {
-		xdata="SIM:CP4:M0"
-		ydata="SIM:CP4:P0"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:SIG327"
 		data_clr=15
 		yaxis=0
 		yside=1
 	}
 	trace[1] {
-		xdata="SIM:CP4:M1"
-		ydata="SIM:CP4:P1"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:RMS011"
 		data_clr=48
 		yaxis=3
 		yside=0
 	}
 	trace[2] {
-		xdata="SIM:CP4:M2"
-		ydata="SIM:CP4:P2"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:DRIFT901"
 		data_clr=30
 		yaxis=1
 		yside=1
@@ -341,9 +340,9 @@ display {
 	y4_axis {
 		rangeStyle="auto-scale"
 	}
-	trigger="TRIG:PLOT4"
-	erase="ERASE:PLOT4"
-	countPvName="CNT:PLOT4"
+	trigger="cb:logic:7319"
+	erase="cb:scan:8095"
+	countPvName="cb:ctrl:2845"
 }
 "cartesian plot" {
 	object {
@@ -364,31 +363,31 @@ display {
 	}
 	style="fill-under"
 	erase_oldest="plot last n pts"
-	count="CNT:PLOT5"
+	count="cb:ctrl:2845"
 	trace[0] {
-		xdata="SIM:CP5:C0"
-		ydata="SIM:CP5:M0"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:SIG327"
 		data_clr=18
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SIM:CP5:C1"
-		ydata="SIM:CP5:M1"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:RMS011"
 		data_clr=63
 		yaxis=2
 		yside=1
 	}
 	trace[2] {
-		xdata="SIM:CP5:C2"
-		ydata="SIM:CP5:M2"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:DRIFT901"
 		data_clr=31
 		yaxis=1
 		yside=0
 	}
 	trace[3] {
-		xdata="SIM:CP5:C3"
-		ydata="SIM:CP5:M3"
+		xdata="SPEC:DET:A208"
+		ydata="SYS:GRAD:LOOP32"
 		data_clr=4
 		yaxis=3
 		yside=1
@@ -409,9 +408,9 @@ display {
 	y2_axis {
 		rangeStyle="auto-scale"
 	}
-	trigger="TRIG:PLOT5"
-	erase="ERASE:PLOT5"
-	countPvName="CNT:PLOT5"
+	trigger="cb:logic:7319"
+	erase="cb:scan:8095"
+	countPvName="cb:ctrl:2845"
 	eraseMode="if zero"
 }
 "cartesian plot" {
@@ -432,31 +431,31 @@ display {
 		bclr=58
 	}
 	style="line"
-	count="CNT:PLOT6"
+	count="cb:ctrl:2845"
 	trace[0] {
-		xdata="SIM:CP6:F0"
-		ydata="SIM:CP6:T0"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:SIG327"
 		data_clr=40
 		yaxis=0
 		yside=1
 	}
 	trace[1] {
-		xdata="SIM:CP6:F1"
-		ydata="SIM:CP6:T1"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:RMS011"
 		data_clr=24
 		yaxis=1
 		yside=0
 	}
 	trace[2] {
-		xdata="SIM:CP6:F2"
-		ydata="SIM:CP6:T2"
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:DRIFT901"
 		data_clr=12
 		yaxis=2
 		yside=1
 	}
 	trace[3] {
-		xdata="SIM:CP6:F3"
-		ydata="SIM:CP6:T3"
+		xdata="SPEC:DET:A208"
+		ydata="SYS:GRAD:LOOP32"
 		data_clr=50
 		yaxis=3
 		yside=0
@@ -478,9 +477,9 @@ display {
 		minRange=-5.500000
 		maxRange=12.250000
 	}
-	trigger="TRIG:PLOT6"
-	erase="ERASE:PLOT6"
-	countPvName="CNT:PLOT6"
+	trigger="cb:logic:7319"
+	erase="cb:scan:8095"
+	countPvName="cb:ctrl:2845"
 }
 "cartesian plot" {
 	object {

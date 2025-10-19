@@ -21,8 +21,8 @@
 
 namespace {
 
-constexpr double kMinimumCenterHeight = 24.0;
-constexpr double kMinimumButtonHeight = 14.0;
+constexpr double kMinimumCenterHeight = 12.0;
+constexpr double kMinimumButtonHeight = 7.0;
 constexpr int kRepeatInitialDelayMs = 350;
 constexpr int kRepeatIntervalMs = 90;
 constexpr double kValueEpsilonFactor = 1e-9;

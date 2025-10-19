@@ -152,7 +152,8 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
     auto *developedLabel = new QLabel(
         QStringLiteral(
             "Developed at Argonne National Laboratory\n"
-            "by Robert Soliday"),
+            "by Robert Soliday. Based off of MEDM by\n"
+            "Mark Anderson, Fred Vong & Ken Evans\n"),
         dialog);
     developedLabel->setFont(bodyFont);
     developedLabel->setAlignment(Qt::AlignLeft);

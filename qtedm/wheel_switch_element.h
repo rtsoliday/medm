@@ -1,10 +1,18 @@
 #pragma once
 
 #include <QColor>
+#include <QEvent>
 #include <QString>
 #include <QWidget>
+#include <QRectF>
+
+#include <functional>
 
 #include "display_properties.h"
+
+class QMouseEvent;
+class QKeyEvent;
+class QTimer;
 
 class WheelSwitchElement : public QWidget
 {
@@ -35,17 +43,70 @@ public:
   QString channel() const;
   void setChannel(const QString &channel);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeWriteAccess(bool writeAccess);
+  void setRuntimeSeverity(short severity);
+  void setRuntimeLimits(double low, double high);
+  void setRuntimePrecision(int precision);
+  void setRuntimeValue(double value);
+  void clearRuntimeState();
+
+  void setActivationCallback(const std::function<void(double)> &callback);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
+  void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
+  enum class RepeatDirection
+  {
+    kNone,
+    kUp,
+    kDown,
+  };
+
+  struct Layout
+  {
+    QRectF outer;
+    QRectF topButton;
+    QRectF bottomButton;
+    QRectF valueRect;
+  };
+
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
-  void paintButton(QPainter &painter, const QRectF &rect, bool isUp) const;
+  QColor valueForeground() const;
+  QColor buttonFillColor(bool isUp, bool pressed, bool enabled) const;
+  Layout layoutForRect(const QRectF &bounds) const;
+  void paintButton(QPainter &painter, const QRectF &rect, bool isUp,
+      bool pressed, bool enabled) const;
   void paintValueDisplay(QPainter &painter, const QRectF &rect) const;
   void paintSelectionOverlay(QPainter &painter) const;
   QString formattedSampleValue() const;
+  int formatDecimals() const;
+  double displayedValue() const;
+  double effectiveLowLimit() const;
+  double effectiveHighLimit() const;
+  int effectivePrecision() const;
   double sampleValue() const;
+  double defaultSampleValue() const;
+  double clampToLimits(double value) const;
+  double valueStep(Qt::KeyboardModifiers mods) const;
+  void startRepeating(RepeatDirection direction, Qt::KeyboardModifiers mods);
+  void stopRepeating();
+  void performStep(RepeatDirection direction, double step, bool forceSend);
+  void activateValue(double value, bool forceSend);
+  void updateCursor();
+  bool isInteractive() const;
+  double valueEpsilon() const;
+
+  void handleRepeatTimeout();
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -55,4 +116,22 @@ private:
   QString format_;
   PvLimits limits_{};
   QString channel_;
+  bool executeMode_ = false;
+  bool runtimeConnected_ = false;
+  bool runtimeWriteAccess_ = false;
+  short runtimeSeverity_ = 0;
+  double runtimeLow_ = 0.0;
+  double runtimeHigh_ = 0.0;
+  bool runtimeLimitsValid_ = false;
+  int runtimePrecision_ = -1;
+  double runtimeValue_ = 0.0;
+  bool hasRuntimeValue_ = false;
+  bool topPressed_ = false;
+  bool bottomPressed_ = false;
+  RepeatDirection repeatDirection_ = RepeatDirection::kNone;
+  double repeatStep_ = 0.0;
+  QTimer *repeatTimer_ = nullptr;
+  std::function<void(double)> activationCallback_;
+  double lastSentValue_ = 0.0;
+  bool hasLastSentValue_ = false;
 };

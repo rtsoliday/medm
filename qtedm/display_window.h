@@ -84,6 +84,7 @@
 #include "slider_element.h"
 #include "slider_runtime.h"
 #include "wheel_switch_element.h"
+#include "wheel_switch_runtime.h"
 #include "scale_monitor_element.h"
 #include "display_properties.h"
 #include "display_state.h"

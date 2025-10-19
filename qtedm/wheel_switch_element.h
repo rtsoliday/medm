@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QEvent>
 #include <QFont>
+#include <QPointF>
 #include <QRectF>
 #include <QString>
 #include <QWidget>
@@ -64,6 +65,8 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;
   void keyReleaseEvent(QKeyEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void leaveEvent(QEvent *event) override;
 
 private:
   enum class RepeatDirection
@@ -100,7 +103,7 @@ private:
   QColor buttonFillColor(bool isUp, bool pressed, bool enabled) const;
   Layout layoutForRect(const QRectF &bounds) const;
   void paintButton(QPainter &painter, const QRectF &rect, bool isUp,
-      bool pressed, bool enabled) const;
+    bool pressed, bool enabled, bool hovered) const;
   void paintValueDisplay(QPainter &painter, const Layout &layout) const;
   void paintSelectionOverlay(QPainter &painter) const;
   QString displayText() const;
@@ -123,6 +126,8 @@ private:
   double valueEpsilon() const;
   int slotIndexForStep(const Layout &layout, double step) const;
   int defaultSlotIndex(const Layout &layout) const;
+  void updateHoverState(const QPointF &pos);
+  void clearHoverState();
 
   void handleRepeatTimeout();
 
@@ -152,4 +157,6 @@ private:
   std::function<void(double)> activationCallback_;
   double lastSentValue_ = 0.0;
   bool hasLastSentValue_ = false;
+  int hoveredSlotIndex_ = -1;
+  RepeatDirection hoveredDirection_ = RepeatDirection::kNone;
 };

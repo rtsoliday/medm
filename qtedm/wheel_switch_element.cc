@@ -104,6 +104,7 @@ WheelSwitchElement::WheelSwitchElement(QWidget *parent)
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
   setFocusPolicy(Qt::StrongFocus);
+  setMouseTracking(true);
 
   limits_.lowSource = PvLimitSource::kDefault;
   limits_.highSource = PvLimitSource::kDefault;
@@ -388,18 +389,24 @@ void WheelSwitchElement::setActivationCallback(const std::function<void(double)>
 
 void WheelSwitchElement::mousePressEvent(QMouseEvent *event)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF pos = event->position();
+#else
+  const QPointF pos = event->localPos();
+#endif
+
+  if (QRectF(rect()).contains(pos)) {
+    updateHoverState(pos);
+  } else {
+    clearHoverState();
+  }
+
   if (event->button() != Qt::LeftButton || !isInteractive()) {
     QWidget::mousePressEvent(event);
     return;
   }
 
   setFocus(Qt::MouseFocusReason);
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-  const QPointF pos = event->position();
-#else
-  const QPointF pos = event->localPos();
-#endif
 
   const QRectF outer = rect().adjusted(0.5, 0.5, -0.5, -0.5);
   const Layout layout = layoutForRect(outer);
@@ -438,6 +445,18 @@ void WheelSwitchElement::mousePressEvent(QMouseEvent *event)
 
 void WheelSwitchElement::mouseReleaseEvent(QMouseEvent *event)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF pos = event->position();
+#else
+  const QPointF pos = event->localPos();
+#endif
+
+  if (QRectF(rect()).contains(pos)) {
+    updateHoverState(pos);
+  } else {
+    clearHoverState();
+  }
+
   if (event->button() != Qt::LeftButton || !isInteractive()) {
     QWidget::mouseReleaseEvent(event);
     return;
@@ -449,6 +468,24 @@ void WheelSwitchElement::mouseReleaseEvent(QMouseEvent *event)
   } else {
     QWidget::mouseReleaseEvent(event);
   }
+}
+
+void WheelSwitchElement::mouseMoveEvent(QMouseEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF pos = event->position();
+#else
+  const QPointF pos = event->localPos();
+#endif
+
+  updateHoverState(pos);
+  QWidget::mouseMoveEvent(event);
+}
+
+void WheelSwitchElement::leaveEvent(QEvent *event)
+{
+  clearHoverState();
+  QWidget::leaveEvent(event);
 }
 
 void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
@@ -590,8 +627,14 @@ void WheelSwitchElement::paintEvent(QPaintEvent *event)
     const bool downPressed = (pressedSlotIndex_ == i
         && pressedDirection_ == RepeatDirection::kDown);
 
-    paintButton(painter, column.upButton, true, upPressed, enabled);
-    paintButton(painter, column.downButton, false, downPressed, enabled);
+  const bool upHovered = (hoveredSlotIndex_ == i
+    && hoveredDirection_ == RepeatDirection::kUp);
+  const bool downHovered = (hoveredSlotIndex_ == i
+    && hoveredDirection_ == RepeatDirection::kDown);
+
+  paintButton(painter, column.upButton, true, upPressed, enabled, upHovered);
+  paintButton(painter, column.downButton, false, downPressed, enabled,
+    downHovered);
   }
 
   if (selected_) {
@@ -779,6 +822,48 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   return layout;
 }
 
+void WheelSwitchElement::updateHoverState(const QPointF &pos)
+{
+  const QRectF outer = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+  const Layout layout = layoutForRect(outer);
+
+  int newIndex = -1;
+  RepeatDirection newDirection = RepeatDirection::kNone;
+
+  for (int i = 0; i < static_cast<int>(layout.columns.size()); ++i) {
+    const Layout::Slot &column = layout.columns.at(i);
+    if (!column.hasButtons) {
+      continue;
+    }
+    if (column.upButton.contains(pos)) {
+      newIndex = i;
+      newDirection = RepeatDirection::kUp;
+      break;
+    }
+    if (column.downButton.contains(pos)) {
+      newIndex = i;
+      newDirection = RepeatDirection::kDown;
+      break;
+    }
+  }
+
+  if (newIndex != hoveredSlotIndex_ || newDirection != hoveredDirection_) {
+    hoveredSlotIndex_ = newIndex;
+    hoveredDirection_ = newDirection;
+    update();
+  }
+}
+
+void WheelSwitchElement::clearHoverState()
+{
+  if (hoveredSlotIndex_ == -1 && hoveredDirection_ == RepeatDirection::kNone) {
+    return;
+  }
+  hoveredSlotIndex_ = -1;
+  hoveredDirection_ = RepeatDirection::kNone;
+  update();
+}
+
 QColor WheelSwitchElement::buttonFillColor(bool isUp, bool pressed, bool enabled) const
 {
   QColor base = effectiveBackground();
@@ -786,16 +871,16 @@ QColor WheelSwitchElement::buttonFillColor(bool isUp, bool pressed, bool enabled
     base = QColor(220, 220, 220);
   }
   if (!enabled) {
-    return QColor(210, 210, 210);
+    return base;
   }
   if (pressed) {
-    return isUp ? blendedColor(base, 105) : blendedColor(base, 85);
+    return isUp ? blendedColor(base, 108) : blendedColor(base, 92);
   }
-  return isUp ? blendedColor(base, 120) : blendedColor(base, 95);
+  return base;
 }
 
 void WheelSwitchElement::paintButton(QPainter &painter, const QRectF &rect,
-    bool isUp, bool pressed, bool enabled) const
+    bool isUp, bool pressed, bool enabled, bool hovered) const
 {
   if (!rect.isValid() || rect.width() < 4.0 || rect.height() < 4.0) {
     return;
@@ -806,9 +891,11 @@ void WheelSwitchElement::paintButton(QPainter &painter, const QRectF &rect,
   painter.setBrush(buttonFillColor(isUp, pressed, enabled));
   painter.drawRoundedRect(rect, 3.0, 3.0);
 
-  painter.setPen(QPen(QColor(0, 0, 0, 100)));
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRoundedRect(rect, 3.0, 3.0);
+  if (hovered) {
+    painter.setPen(QPen(QColor(0, 0, 0, 100)));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(rect, 3.0, 3.0);
+  }
 
   const QPointF center = rect.center();
   const qreal halfWidth = rect.width() * 0.22;

@@ -103,7 +103,7 @@ private:
       bool pressed, bool enabled) const;
   void paintValueDisplay(QPainter &painter, const Layout &layout) const;
   void paintSelectionOverlay(QPainter &painter) const;
-  QString formattedSampleValue() const;
+  QString displayText() const;
   int formatDecimals() const;
   double displayedValue() const;
   double effectiveLowLimit() const;

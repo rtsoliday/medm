@@ -17,6 +17,7 @@
 #include <QTimer>
 
 #include "legacy_fonts.h"
+#include "medm_colors.h"
 
 namespace {
 
@@ -93,24 +94,6 @@ QColor blendedColor(const QColor &base, int factor)
   adjusted = factor > 100 ? adjusted.lighter(factor) : adjusted.darker(200 - factor);
 
   return adjusted;
-}
-
-QColor alarmColorForSeverity(short severity)
-{
-  switch (severity) {
-  case 0:
-    return QColor(0, 205, 0);
-  case 1:
-    return QColor(255, 255, 0);
-
-  case 2:
-    return QColor(255, 0, 0);
-  case 3:
-
-    return QColor(255, 255, 255);
-  default:
-    return QColor(204, 204, 204);
-  }
 }
 
 } // namespace
@@ -652,9 +635,9 @@ QColor WheelSwitchElement::valueForeground() const
   if (executeMode_) {
     if (colorMode_ == TextColorMode::kAlarm) {
       if (!runtimeConnected_) {
-        return QColor(204, 204, 204);
+        return MedmColors::alarmColorForSeverity(kInvalidSeverity);
       }
-      return alarmColorForSeverity(runtimeSeverity_);
+      return MedmColors::alarmColorForSeverity(runtimeSeverity_);
     }
   }
   return effectiveForeground();
@@ -665,10 +648,7 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   Layout layout{};
   layout.outer = bounds;
 
-  layout.text = formattedSampleValue();
-  if (layout.text.isEmpty()) {
-    layout.text = QStringLiteral("0");
-  }
+  layout.text = displayText();
 
   layout.font = wheelSwitchFontForHeight(height());
   if (layout.font.family().isEmpty()) {
@@ -861,16 +841,7 @@ void WheelSwitchElement::paintValueDisplay(QPainter &painter,
   }
 
   painter.save();
-  QColor base = effectiveBackground();
-  QColor fill = base.isValid() ? blendedColor(base, 115) : QColor(245, 245, 245);
-  painter.setPen(Qt::NoPen);
-  painter.setBrush(fill);
-  painter.drawRoundedRect(layout.valueRect, 3.0, 3.0);
-
-  painter.setPen(QPen(QColor(0, 0, 0, 90)));
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRoundedRect(layout.valueRect, 3.0, 3.0);
-
+  painter.setClipRect(layout.valueRect);
   painter.setPen(valueForeground());
   painter.setFont(layout.font);
 
@@ -897,8 +868,14 @@ void WheelSwitchElement::paintSelectionOverlay(QPainter &painter) const
   painter.restore();
 }
 
-QString WheelSwitchElement::formattedSampleValue() const
+QString WheelSwitchElement::displayText() const
 {
+  if (executeMode_) {
+    if (!runtimeConnected_ || !hasRuntimeValue_) {
+      return QString();
+    }
+  }
+
   const double value = displayedValue();
   const QString trimmed = format_.trimmed();
   if (!trimmed.isEmpty()) {

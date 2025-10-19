@@ -109,7 +109,7 @@ void WheelSwitchRuntime::resetRuntimeState()
   elementCount_ = 1;
   lastValue_ = 0.0;
   hasLastValue_ = false;
-  lastSeverity_ = 0;
+  lastSeverity_ = kInvalidSeverity;
   lastWriteAccess_ = false;
 
   if (element_) {
@@ -180,6 +180,7 @@ void WheelSwitchRuntime::handleConnectionEvent(const connection_handler_args &ar
     connected_ = true;
     fieldType_ = ca_field_type(channelId_);
     elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
+    lastSeverity_ = kInvalidSeverity;
     if (!isNumericFieldType(fieldType_)) {
       qWarning() << "Wheel switch channel" << channelName_
                  << "is not a numeric type";

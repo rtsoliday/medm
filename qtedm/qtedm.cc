@@ -194,7 +194,8 @@ int main(int argc, char *argv[])
 
   auto *viewMenu = menuBar->addMenu("&View");
   viewMenu->setFont(fixed13Font);
-  viewMenu->addAction("&Message Window");
+  auto *messageWindowAct = viewMenu->addAction("&Message Window");
+  messageWindowAct->setEnabled(false);
   auto *statisticsWindowAct = viewMenu->addAction("&Statistics Window");
   auto *viewDisplayListAct = viewMenu->addAction("&Display List");
 

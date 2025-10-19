@@ -13,6 +13,7 @@
 
 #include "channel_access_context.h"
 #include "text_element.h"
+#include "statistics_tracker.h"
 
 extern "C" {
 long calcPerform(double *parg, double *presult, char *post);
@@ -63,6 +64,7 @@ void TextRuntime::start()
 
   resetState();
   started_ = true;
+  StatisticsTracker::instance().registerDisplayObjectStarted();
 
   if (element_->visibilityMode() == TextVisibilityMode::kCalc) {
     const QString calcExpr = element_->visibilityCalc().trimmed();
@@ -93,6 +95,7 @@ void TextRuntime::stop()
   }
 
   started_ = false;
+  StatisticsTracker::instance().registerDisplayObjectStopped();
   cleanupChannels();
   resetState();
 }
@@ -149,6 +152,7 @@ void TextRuntime::initializeChannels()
       channel.channelId = nullptr;
       continue;
     }
+    StatisticsTracker::instance().registerChannelCreated();
     ca_set_puser(channel.channelId, &channel);
   }
 
@@ -159,15 +163,21 @@ void TextRuntime::initializeChannels()
 
 void TextRuntime::cleanupChannels()
 {
+  auto &stats = StatisticsTracker::instance();
   for (auto &channel : channels_) {
     if (channel.subscriptionId) {
       ca_clear_subscription(channel.subscriptionId);
       channel.subscriptionId = nullptr;
     }
+    if (channel.connected) {
+      stats.registerChannelDisconnected();
+      channel.connected = false;
+    }
     if (channel.channelId) {
       ca_set_puser(channel.channelId, nullptr);
       ca_clear_channel(channel.channelId);
       channel.channelId = nullptr;
+      stats.registerChannelDestroyed();
     }
   }
 
@@ -282,8 +292,14 @@ void TextRuntime::handleChannelConnection(ChannelRuntime &channel,
     return;
   }
 
+  auto &stats = StatisticsTracker::instance();
+
   if (args.op == CA_OP_CONN_UP) {
+    const bool wasConnected = channel.connected;
     channel.connected = true;
+    if (!wasConnected) {
+      stats.registerChannelConnected();
+    }
     channel.fieldType = ca_field_type(args.chid);
     channel.elementCount = std::max<long>(ca_element_count(args.chid), 1);
     channel.hasValue = false;
@@ -293,7 +309,11 @@ void TextRuntime::handleChannelConnection(ChannelRuntime &channel,
     subscribeChannel(channel);
     requestControlInfo(channel);
   } else if (args.op == CA_OP_CONN_DOWN) {
+    const bool wasConnected = channel.connected;
     channel.connected = false;
+    if (wasConnected) {
+      stats.registerChannelDisconnected();
+    }
     channel.hasValue = false;
     channel.value = 0.0;
     channel.severity = 0;
@@ -403,6 +423,13 @@ void TextRuntime::handleChannelValue(ChannelRuntime &channel,
 
   if (!processed) {
     return;
+  }
+
+  {
+    auto &stats = StatisticsTracker::instance();
+    stats.registerCaEvent();
+    stats.registerUpdateRequest(true);
+    stats.registerUpdateExecuted();
   }
 
   channel.value = newValue;

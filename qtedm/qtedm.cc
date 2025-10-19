@@ -34,6 +34,7 @@
 #include "legacy_fonts.h"
 #include "main_window_controller.h"
 #include "object_palette_dialog.h"
+#include "statistics_window.h"
 #include "window_utils.h"
 
 int main(int argc, char *argv[])
@@ -194,7 +195,7 @@ int main(int argc, char *argv[])
   auto *viewMenu = menuBar->addMenu("&View");
   viewMenu->setFont(fixed13Font);
   viewMenu->addAction("&Message Window");
-  viewMenu->addAction("&Statistics Window");
+  auto *statisticsWindowAct = viewMenu->addAction("&Statistics Window");
   auto *viewDisplayListAct = viewMenu->addAction("&Display List");
 
   auto *palettesMenu = menuBar->addMenu("&Palettes");
@@ -281,6 +282,9 @@ int main(int argc, char *argv[])
       new ObjectPaletteDialog(palette, fixed13Font, fixed10Font,
           std::weak_ptr<DisplayState>(state), &win));
 
+  auto statisticsWindow = QPointer<StatisticsWindow>(
+    new StatisticsWindow(palette, fixed13Font, fixed10Font, &win));
+
   QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
       [displayListDialog]() {
         displayListDialog->showAndRaise();
@@ -290,6 +294,13 @@ int main(int argc, char *argv[])
       objectPaletteDialog.data(), [objectPaletteDialog]() {
         if (objectPaletteDialog) {
           objectPaletteDialog->showAndRaise();
+        }
+      });
+
+  QObject::connect(statisticsWindowAct, &QAction::triggered, &win,
+      [statisticsWindow]() {
+        if (statisticsWindow) {
+          statisticsWindow->showAndRaise();
         }
       });
 

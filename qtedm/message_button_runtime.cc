@@ -13,6 +13,7 @@
 
 #include "channel_access_context.h"
 #include "message_button_element.h"
+#include "statistics_tracker.h"
 
 namespace {
 constexpr short kInvalidSeverity = 3;
@@ -46,6 +47,7 @@ void MessageButtonRuntime::start()
   }
 
   started_ = true;
+  StatisticsTracker::instance().registerDisplayObjectStarted();
   resetRuntimeState();
 
   element_->setPressCallback([this]() {
@@ -71,6 +73,8 @@ void MessageButtonRuntime::start()
     return;
   }
 
+  StatisticsTracker::instance().registerChannelCreated();
+
   ca_set_puser(channelId_, this);
   ca_replace_access_rights_event(channelId_,
       &MessageButtonRuntime::accessRightsCallback);
@@ -85,6 +89,7 @@ void MessageButtonRuntime::stop()
   }
 
   started_ = false;
+  StatisticsTracker::instance().registerDisplayObjectStopped();
   unsubscribe();
   if (element_) {
     element_->setPressCallback(std::function<void()>());
@@ -164,13 +169,19 @@ void MessageButtonRuntime::subscribe()
 
 void MessageButtonRuntime::unsubscribe()
 {
+  auto &stats = StatisticsTracker::instance();
   if (subscriptionId_) {
     ca_clear_subscription(subscriptionId_);
     subscriptionId_ = nullptr;
   }
   if (channelId_) {
+    if (connected_) {
+      stats.registerChannelDisconnected();
+      connected_ = false;
+    }
     ca_replace_access_rights_event(channelId_, nullptr);
     ca_clear_channel(channelId_);
+    stats.registerChannelDestroyed();
     channelId_ = nullptr;
   }
   if (ChannelAccessContext::instance().isInitialized()) {
@@ -216,8 +227,14 @@ void MessageButtonRuntime::handleConnectionEvent(
     return;
   }
 
+  auto &stats = StatisticsTracker::instance();
+
   if (args.op == CA_OP_CONN_UP) {
+    const bool wasConnected = connected_;
     connected_ = true;
+    if (!wasConnected) {
+      stats.registerChannelConnected();
+    }
     fieldType_ = ca_field_type(channelId_);
     elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
     enumStrings_.clear();
@@ -229,7 +246,11 @@ void MessageButtonRuntime::handleConnectionEvent(
     subscribe();
     requestControlInfo();
   } else if (args.op == CA_OP_CONN_DOWN) {
+    const bool wasConnected = connected_;
     connected_ = false;
+    if (wasConnected) {
+      stats.registerChannelDisconnected();
+    }
     lastWriteAccess_ = false;
     enumStrings_.clear();
     invokeOnElement([](MessageButtonElement *element) {
@@ -271,6 +292,13 @@ void MessageButtonRuntime::handleValueEvent(const event_handler_args &args)
     break;
   default:
     return;
+  }
+
+  {
+    auto &stats = StatisticsTracker::instance();
+    stats.registerCaEvent();
+    stats.registerUpdateRequest(true);
+    stats.registerUpdateExecuted();
   }
 
   if (severity != lastSeverity_) {

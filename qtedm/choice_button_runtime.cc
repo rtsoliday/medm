@@ -9,6 +9,7 @@
 
 #include "channel_access_context.h"
 #include "choice_button_element.h"
+#include "statistics_tracker.h"
 
 namespace {
 constexpr short kInvalidSeverity = 3;
@@ -43,6 +44,7 @@ void ChoiceButtonRuntime::start()
 
   resetRuntimeState();
   started_ = true;
+  StatisticsTracker::instance().registerDisplayObjectStarted();
 
   channelName_ = element_->channel().trimmed();
   element_->setActivationCallback([this](int value) {
@@ -64,6 +66,8 @@ void ChoiceButtonRuntime::start()
     return;
   }
 
+  StatisticsTracker::instance().registerChannelCreated();
+
   ca_set_puser(channelId_, this);
   ca_replace_access_rights_event(channelId_,
       &ChoiceButtonRuntime::accessRightsCallback);
@@ -78,6 +82,7 @@ void ChoiceButtonRuntime::stop()
   }
 
   started_ = false;
+  StatisticsTracker::instance().registerDisplayObjectStopped();
   unsubscribe();
   if (element_) {
     element_->setActivationCallback(std::function<void(int)>());
@@ -126,13 +131,19 @@ void ChoiceButtonRuntime::subscribe()
 
 void ChoiceButtonRuntime::unsubscribe()
 {
+  auto &stats = StatisticsTracker::instance();
   if (subscriptionId_) {
     ca_clear_subscription(subscriptionId_);
     subscriptionId_ = nullptr;
   }
   if (channelId_) {
+    if (connected_) {
+      stats.registerChannelDisconnected();
+      connected_ = false;
+    }
     ca_replace_access_rights_event(channelId_, nullptr);
     ca_clear_channel(channelId_);
+    stats.registerChannelDestroyed();
     channelId_ = nullptr;
   }
   if (ChannelAccessContext::instance().isInitialized()) {
@@ -163,8 +174,14 @@ void ChoiceButtonRuntime::handleConnectionEvent(
     return;
   }
 
+  auto &stats = StatisticsTracker::instance();
+
   if (args.op == CA_OP_CONN_UP) {
+    const bool wasConnected = connected_;
     connected_ = true;
+    if (!wasConnected) {
+      stats.registerChannelConnected();
+    }
     fieldType_ = ca_field_type(channelId_);
     updateWriteAccess();
     if (element_) {
@@ -180,7 +197,11 @@ void ChoiceButtonRuntime::handleConnectionEvent(
     subscribe();
     requestControlInfo();
   } else if (args.op == CA_OP_CONN_DOWN) {
+    const bool wasConnected = connected_;
     connected_ = false;
+    if (wasConnected) {
+      stats.registerChannelDisconnected();
+    }
     lastWriteAccess_ = false;
     if (element_) {
       invokeOnElement([](ChoiceButtonElement *element) {
@@ -205,6 +226,13 @@ void ChoiceButtonRuntime::handleValueEvent(const event_handler_args &args)
   const auto *value = static_cast<const dbr_time_enum *>(args.dbr);
   short severity = value->severity;
   short enumValue = value->value;
+
+  {
+    auto &stats = StatisticsTracker::instance();
+    stats.registerCaEvent();
+    stats.registerUpdateRequest(true);
+    stats.registerUpdateExecuted();
+  }
 
   if (severity != lastSeverity_) {
     lastSeverity_ = severity;

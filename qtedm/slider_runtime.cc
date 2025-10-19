@@ -11,6 +11,7 @@
 
 #include "channel_access_context.h"
 #include "slider_element.h"
+#include "statistics_tracker.h"
 
 namespace {
 constexpr short kInvalidSeverity = 3;
@@ -60,6 +61,7 @@ void SliderRuntime::start()
 
   resetRuntimeState();
   started_ = true;
+  StatisticsTracker::instance().registerDisplayObjectStarted();
 
   channelName_ = element_->channel().trimmed();
   element_->setActivationCallback([this](double value) {
@@ -81,6 +83,8 @@ void SliderRuntime::start()
     return;
   }
 
+  StatisticsTracker::instance().registerChannelCreated();
+
   ca_set_puser(channelId_, this);
   ca_replace_access_rights_event(channelId_,
       &SliderRuntime::accessRightsCallback);
@@ -95,6 +99,7 @@ void SliderRuntime::stop()
   }
 
   started_ = false;
+  StatisticsTracker::instance().registerDisplayObjectStopped();
   unsubscribe();
   if (element_) {
     element_->setActivationCallback(std::function<void(double)>());
@@ -140,13 +145,19 @@ void SliderRuntime::subscribe()
 
 void SliderRuntime::unsubscribe()
 {
+  auto &stats = StatisticsTracker::instance();
   if (subscriptionId_) {
     ca_clear_subscription(subscriptionId_);
     subscriptionId_ = nullptr;
   }
   if (channelId_) {
+    if (connected_) {
+      stats.registerChannelDisconnected();
+      connected_ = false;
+    }
     ca_replace_access_rights_event(channelId_, nullptr);
     ca_clear_channel(channelId_);
+    stats.registerChannelDestroyed();
     channelId_ = nullptr;
   }
   if (ChannelAccessContext::instance().isInitialized()) {
@@ -176,8 +187,14 @@ void SliderRuntime::handleConnectionEvent(const connection_handler_args &args)
     return;
   }
 
+  auto &stats = StatisticsTracker::instance();
+
   if (args.op == CA_OP_CONN_UP) {
+    const bool wasConnected = connected_;
     connected_ = true;
+    if (!wasConnected) {
+      stats.registerChannelConnected();
+    }
     fieldType_ = ca_field_type(channelId_);
     elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
     if (!isNumericFieldType(fieldType_)) {
@@ -197,7 +214,11 @@ void SliderRuntime::handleConnectionEvent(const connection_handler_args &args)
     subscribe();
     requestControlInfo();
   } else if (args.op == CA_OP_CONN_DOWN) {
+    const bool wasConnected = connected_;
     connected_ = false;
+    if (wasConnected) {
+      stats.registerChannelDisconnected();
+    }
     lastWriteAccess_ = false;
     invokeOnElement([](SliderElement *element) {
       element->setRuntimeConnected(false);
@@ -219,6 +240,13 @@ void SliderRuntime::handleValueEvent(const event_handler_args &args)
   const auto *value = static_cast<const dbr_time_double *>(args.dbr);
   const double numericValue = value->value;
   const short severity = value->severity;
+
+  {
+    auto &stats = StatisticsTracker::instance();
+    stats.registerCaEvent();
+    stats.registerUpdateRequest(true);
+    stats.registerUpdateExecuted();
+  }
 
   if (severity != lastSeverity_) {
     lastSeverity_ = severity;

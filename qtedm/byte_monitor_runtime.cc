@@ -9,6 +9,7 @@
 
 #include "byte_monitor_element.h"
 #include "channel_access_context.h"
+#include "statistics_tracker.h"
 
 namespace {
 constexpr short kInvalidSeverity = 3;
@@ -59,6 +60,7 @@ void ByteMonitorRuntime::start()
 
   resetRuntimeState();
   started_ = true;
+  StatisticsTracker::instance().registerDisplayObjectStarted();
 
   channelName_ = element_->channel().trimmed();
   if (channelName_.isEmpty()) {
@@ -76,6 +78,8 @@ void ByteMonitorRuntime::start()
     return;
   }
 
+  StatisticsTracker::instance().registerChannelCreated();
+
   ca_set_puser(channelId_, this);
   ca_flush_io();
 }
@@ -87,6 +91,7 @@ void ByteMonitorRuntime::stop()
   }
 
   started_ = false;
+  StatisticsTracker::instance().registerDisplayObjectStopped();
   unsubscribe();
   resetRuntimeState();
 }
@@ -128,12 +133,18 @@ void ByteMonitorRuntime::subscribe()
 
 void ByteMonitorRuntime::unsubscribe()
 {
+  auto &stats = StatisticsTracker::instance();
   if (subscriptionId_) {
     ca_clear_subscription(subscriptionId_);
     subscriptionId_ = nullptr;
   }
   if (channelId_) {
+    if (connected_) {
+      stats.registerChannelDisconnected();
+      connected_ = false;
+    }
     ca_clear_channel(channelId_);
+    stats.registerChannelDestroyed();
     channelId_ = nullptr;
   }
   if (ChannelAccessContext::instance().isInitialized()) {
@@ -147,8 +158,14 @@ void ByteMonitorRuntime::handleConnectionEvent(const connection_handler_args &ar
     return;
   }
 
+  auto &stats = StatisticsTracker::instance();
+
   if (args.op == CA_OP_CONN_UP) {
+    const bool wasConnected = connected_;
     connected_ = true;
+    if (!wasConnected) {
+      stats.registerChannelConnected();
+    }
     fieldType_ = ca_field_type(channelId_);
     elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
     hasLastValue_ = false;
@@ -175,7 +192,11 @@ void ByteMonitorRuntime::handleConnectionEvent(const connection_handler_args &ar
     });
     subscribe();
   } else if (args.op == CA_OP_CONN_DOWN) {
+    const bool wasConnected = connected_;
     connected_ = false;
+    if (wasConnected) {
+      stats.registerChannelDisconnected();
+    }
     hasLastValue_ = false;
     invokeOnElement([](ByteMonitorElement *element) {
       element->setRuntimeConnected(false);
@@ -196,6 +217,13 @@ void ByteMonitorRuntime::handleValueEvent(const event_handler_args &args)
   const auto *value = static_cast<const dbr_time_long *>(args.dbr);
   const quint32 numericValue = static_cast<quint32>(value->value);
   const short severity = value->severity;
+
+  {
+    auto &stats = StatisticsTracker::instance();
+    stats.registerCaEvent();
+    stats.registerUpdateRequest(true);
+    stats.registerUpdateExecuted();
+  }
 
   if (severity != lastSeverity_) {
     lastSeverity_ = severity;

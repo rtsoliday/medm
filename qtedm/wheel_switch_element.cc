@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
+#include <vector>
 
 #include <QApplication>
 #include <QFontMetricsF>
@@ -382,8 +384,14 @@ void WheelSwitchElement::clearRuntimeState()
   hasRuntimeValue_ = false;
   runtimeValue_ = defaultSampleValue();
   hasLastSentValue_ = false;
-  topPressed_ = false;
-  bottomPressed_ = false;
+  pressedSlotIndex_ = -1;
+  pressedDirection_ = RepeatDirection::kNone;
+  repeatDirection_ = RepeatDirection::kNone;
+  repeatStep_ = 0.0;
+  if (repeatTimer_) {
+    repeatTimer_->stop();
+    repeatTimer_->setSingleShot(true);
+  }
   updateCursor();
   update();
 }
@@ -414,16 +422,27 @@ void WheelSwitchElement::mousePressEvent(QMouseEvent *event)
   const Layout layout = layoutForRect(outer);
   bool handled = false;
 
-  if (layout.topButton.contains(pos)) {
-    topPressed_ = true;
-    bottomPressed_ = false;
-    startRepeating(RepeatDirection::kUp, event->modifiers());
-    handled = true;
-  } else if (layout.bottomButton.contains(pos)) {
-    bottomPressed_ = true;
-    topPressed_ = false;
-    startRepeating(RepeatDirection::kDown, event->modifiers());
-    handled = true;
+  for (int i = 0; i < static_cast<int>(layout.columns.size()); ++i) {
+    const Layout::Slot &column = layout.columns.at(i);
+    if (!column.hasButtons) {
+      continue;
+    }
+    const double baseStep = column.step;
+    if (!std::isfinite(baseStep) || baseStep <= 0.0) {
+      continue;
+    }
+    if (column.upButton.contains(pos)) {
+      const double step = applyModifiersToStep(baseStep, event->modifiers());
+      startRepeating(RepeatDirection::kUp, step, i);
+      handled = true;
+      break;
+    }
+    if (column.downButton.contains(pos)) {
+      const double step = applyModifiersToStep(baseStep, event->modifiers());
+      startRepeating(RepeatDirection::kDown, step, i);
+      handled = true;
+      break;
+    }
   }
 
   if (handled) {
@@ -441,7 +460,7 @@ void WheelSwitchElement::mouseReleaseEvent(QMouseEvent *event)
     return;
   }
 
-  if (topPressed_ || bottomPressed_ || repeatDirection_ != RepeatDirection::kNone) {
+  if (pressedSlotIndex_ >= 0 || repeatDirection_ != RepeatDirection::kNone) {
     stopRepeating();
     event->accept();
   } else {
@@ -461,23 +480,46 @@ void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
     return;
   }
 
+  const QRectF outer = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+  const Layout layout = layoutForRect(outer);
+
   switch (event->key()) {
   case Qt::Key_Up:
-  case Qt::Key_Right:
-    topPressed_ = true;
-    bottomPressed_ = false;
-    startRepeating(RepeatDirection::kUp, event->modifiers());
-    update();
-    event->accept();
-    return;
+  case Qt::Key_Right: {
+    double step = valueStep(event->modifiers());
+    if (!std::isfinite(step) || step <= 0.0) {
+      step = 1.0;
+    }
+    int slotIndex = slotIndexForStep(layout, step);
+    if (slotIndex < 0) {
+      slotIndex = defaultSlotIndex(layout);
+    }
+    if (slotIndex >= 0) {
+      startRepeating(RepeatDirection::kUp, step, slotIndex);
+      update();
+      event->accept();
+      return;
+    }
+    break;
+  }
   case Qt::Key_Down:
-  case Qt::Key_Left:
-    bottomPressed_ = true;
-    topPressed_ = false;
-    startRepeating(RepeatDirection::kDown, event->modifiers());
-    update();
-    event->accept();
-    return;
+  case Qt::Key_Left: {
+    double step = valueStep(event->modifiers());
+    if (!std::isfinite(step) || step <= 0.0) {
+      step = 1.0;
+    }
+    int slotIndex = slotIndexForStep(layout, step);
+    if (slotIndex < 0) {
+      slotIndex = defaultSlotIndex(layout);
+    }
+    if (slotIndex >= 0) {
+      startRepeating(RepeatDirection::kDown, step, slotIndex);
+      update();
+      event->accept();
+      return;
+    }
+    break;
+  }
   case Qt::Key_PageUp:
     stopRepeating();
     activateValue(displayedValue() + valueStep(event->modifiers()) * 10.0, true);
@@ -551,11 +593,22 @@ void WheelSwitchElement::paintEvent(QPaintEvent *event)
   const Layout layout = layoutForRect(outer);
   const bool enabled = isInteractive();
 
-  paintButton(painter, layout.topButton, true, topPressed_, enabled);
-  paintButton(painter, layout.bottomButton, false, bottomPressed_, enabled);
-
   if (layout.valueRect.height() > 6.0 && layout.valueRect.width() > 6.0) {
-    paintValueDisplay(painter, layout.valueRect);
+    paintValueDisplay(painter, layout);
+  }
+
+  for (int i = 0; i < static_cast<int>(layout.columns.size()); ++i) {
+    const Layout::Slot &column = layout.columns.at(i);
+    if (!column.hasButtons) {
+      continue;
+    }
+    const bool upPressed = (pressedSlotIndex_ == i
+        && pressedDirection_ == RepeatDirection::kUp);
+    const bool downPressed = (pressedSlotIndex_ == i
+        && pressedDirection_ == RepeatDirection::kDown);
+
+    paintButton(painter, column.upButton, true, upPressed, enabled);
+    paintButton(painter, column.downButton, false, downPressed, enabled);
   }
 
   if (selected_) {
@@ -612,27 +665,137 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   Layout layout{};
   layout.outer = bounds;
 
-  qreal buttonHeight = std::max(kMinimumButtonHeight, bounds.height() * 0.22);
-  const qreal maxButtonHeight = std::max(kMinimumButtonHeight,
-      (bounds.height() - kMinimumCenterHeight) / 2.0);
+  layout.text = formattedSampleValue();
+  if (layout.text.isEmpty()) {
+    layout.text = QStringLiteral("0");
+  }
+
+  layout.font = wheelSwitchFontForHeight(height());
+  if (layout.font.family().isEmpty()) {
+    layout.font = font();
+  }
+
+  const double totalHeight = std::max(0.0, bounds.height());
+  double buttonHeight = std::max(kMinimumButtonHeight, totalHeight * 0.22);
+  const double maxButtonHeight = std::max(kMinimumButtonHeight,
+      (totalHeight - kMinimumCenterHeight) / 2.0);
   if (buttonHeight > maxButtonHeight) {
     buttonHeight = maxButtonHeight;
   }
-  if (bounds.height() - 2.0 * buttonHeight < kMinimumCenterHeight) {
+  if (totalHeight - 2.0 * buttonHeight < kMinimumCenterHeight) {
     buttonHeight = std::max(kMinimumButtonHeight,
-        (bounds.height() - kMinimumCenterHeight) / 2.0);
+        (totalHeight - kMinimumCenterHeight) / 2.0);
   }
-  buttonHeight = std::clamp(buttonHeight, kMinimumButtonHeight, bounds.height() / 2.0);
+  buttonHeight = std::clamp(buttonHeight, kMinimumButtonHeight, totalHeight / 2.0);
+  layout.buttonHeight = buttonHeight;
 
-  layout.topButton = QRectF(bounds.left() + 1.0, bounds.top() + 1.0,
-      bounds.width() - 2.0, std::max(0.0, buttonHeight - 2.0));
-  layout.bottomButton = QRectF(bounds.left() + 1.0,
-      bounds.bottom() - buttonHeight + 1.0, bounds.width() - 2.0,
-      std::max(0.0, buttonHeight - 2.0));
+  const double centralHeight = std::max(0.0, totalHeight - 2.0 * buttonHeight);
+  layout.valueRect = QRectF(bounds.left() + 4.0,
+      bounds.top() + buttonHeight,
+      std::max(0.0, bounds.width() - 8.0), centralHeight);
 
-  layout.valueRect = QRectF(bounds.left() + 4.0, layout.topButton.bottom() + 4.0,
-      bounds.width() - 8.0,
-      layout.bottomButton.top() - layout.topButton.bottom() - 8.0);
+  layout.columns.clear();
+  layout.columns.reserve(layout.text.size());
+
+  if (layout.text.isEmpty()) {
+    return layout;
+  }
+
+  const QFontMetricsF metrics(layout.font);
+  const double zeroWidth = std::max(4.0, metrics.horizontalAdvance(QStringLiteral("0")));
+  const double minimalWidth = std::max(4.0, zeroWidth * 0.6);
+
+  std::vector<double> charWidths;
+  charWidths.reserve(layout.text.size());
+  double totalWidth = 0.0;
+  for (QChar ch : layout.text) {
+    double width = metrics.horizontalAdvance(ch);
+    if (!std::isfinite(width) || width < minimalWidth) {
+      if (ch == QLatin1Char('.') || ch == QLatin1Char('-')) {
+        width = std::max(minimalWidth * 0.8, 4.0);
+      } else {
+        width = minimalWidth;
+      }
+    }
+    charWidths.push_back(width);
+    totalWidth += width;
+  }
+
+  const double maxAvailableWidth = std::max(0.0, bounds.width() - 4.0);
+  const double desiredValueWidth = std::min(maxAvailableWidth,
+      std::max(layout.valueRect.width(), totalWidth + 8.0));
+  const double valueCenterX = bounds.center().x();
+  double valueLeft = valueCenterX - desiredValueWidth / 2.0;
+  const double minValueLeft = bounds.left() + 2.0;
+  if (valueLeft < minValueLeft) {
+    valueLeft = minValueLeft;
+  }
+  double valueRight = valueLeft + desiredValueWidth;
+  const double maxValueRight = bounds.right() - 2.0;
+  if (valueRight > maxValueRight) {
+    const double shift = valueRight - maxValueRight;
+    valueLeft = std::max(minValueLeft, valueLeft - shift);
+    valueRight = valueLeft + desiredValueWidth;
+  }
+  layout.valueRect.setLeft(valueLeft);
+  layout.valueRect.setRight(valueRight);
+
+  double startX = layout.valueRect.left();
+  if (totalWidth < layout.valueRect.width()) {
+    startX += (layout.valueRect.width() - totalWidth) / 2.0;
+  }
+
+  int decimalIndex = layout.text.indexOf(QLatin1Char('.'));
+  if (decimalIndex < 0) {
+    decimalIndex = layout.text.size();
+  }
+
+  int digitsLeft = 0;
+  for (int i = 0; i < decimalIndex; ++i) {
+    if (layout.text.at(i).isDigit()) {
+      ++digitsLeft;
+    }
+  }
+  int leftCounter = digitsLeft;
+  int rightCounter = 0;
+
+  for (int i = 0; i < layout.text.size(); ++i) {
+    const QChar ch = layout.text.at(i);
+    const double width = charWidths.at(i);
+    Layout::Slot slot;
+    slot.character = ch;
+    slot.charRect = QRectF(startX, layout.valueRect.top(), width,
+        layout.valueRect.height());
+
+    if (ch.isDigit()) {
+      slot.hasButtons = true;
+      int exponent = 0;
+      if (i < decimalIndex) {
+        --leftCounter;
+        exponent = leftCounter;
+      } else if (i > decimalIndex) {
+        ++rightCounter;
+        exponent = -rightCounter;
+      } else {
+        exponent = 0;
+      }
+      slot.exponent = exponent;
+      slot.step = std::pow(10.0, exponent);
+
+      const double inset = std::min(3.0, width * 0.2);
+      const double buttonWidth = std::max(4.0, width - 2.0 * inset);
+      const double buttonX = startX + (width - buttonWidth) / 2.0;
+      const double buttonHeightAdjusted = std::max(0.0, buttonHeight - 2.0);
+      slot.upButton = QRectF(buttonX, bounds.top() + 1.0,
+          buttonWidth, buttonHeightAdjusted);
+      slot.downButton = QRectF(buttonX,
+          bounds.bottom() - buttonHeight + 1.0, buttonWidth, buttonHeightAdjusted);
+    }
+
+    layout.columns.push_back(slot);
+    startX += width;
+  }
+
   return layout;
 }
 
@@ -690,28 +853,36 @@ void WheelSwitchElement::paintButton(QPainter &painter, const QRectF &rect,
 }
 
 void WheelSwitchElement::paintValueDisplay(QPainter &painter,
-    const QRectF &rect) const
+    const Layout &layout) const
 {
+  if (!layout.valueRect.isValid() || layout.valueRect.width() <= 0.0
+      || layout.valueRect.height() <= 0.0) {
+    return;
+  }
+
   painter.save();
   QColor base = effectiveBackground();
   QColor fill = base.isValid() ? blendedColor(base, 115) : QColor(245, 245, 245);
   painter.setPen(Qt::NoPen);
   painter.setBrush(fill);
-  painter.drawRoundedRect(rect, 3.0, 3.0);
+  painter.drawRoundedRect(layout.valueRect, 3.0, 3.0);
 
   painter.setPen(QPen(QColor(0, 0, 0, 90)));
   painter.setBrush(Qt::NoBrush);
-  painter.drawRoundedRect(rect, 3.0, 3.0);
+  painter.drawRoundedRect(layout.valueRect, 3.0, 3.0);
 
-  QString text = formattedSampleValue();
   painter.setPen(valueForeground());
-  QFont valueFont = wheelSwitchFontForHeight(height());
-  if (valueFont.family().isEmpty()) {
-    valueFont = font();
+  painter.setFont(layout.font);
+
+  for (const Layout::Slot &slot : layout.columns) {
+    if (!slot.charRect.isValid() || slot.charRect.width() <= 0.0
+        || slot.charRect.height() <= 0.0) {
+      continue;
+    }
+    painter.drawText(slot.charRect, Qt::AlignCenter | Qt::AlignVCenter,
+        QString(slot.character));
   }
-  painter.setFont(valueFont);
-  painter.drawText(rect.adjusted(4.0, 0.0, -4.0, 0.0),
-      Qt::AlignCenter | Qt::AlignVCenter, text);
+
   painter.restore();
 }
 
@@ -863,18 +1034,87 @@ double WheelSwitchElement::valueStep(Qt::KeyboardModifiers mods) const
   return base;
 }
 
-void WheelSwitchElement::startRepeating(RepeatDirection direction,
-    Qt::KeyboardModifiers mods)
+double WheelSwitchElement::applyModifiersToStep(double step,
+    Qt::KeyboardModifiers mods) const
 {
+  double adjusted = std::abs(step);
+  if (!std::isfinite(adjusted) || adjusted <= 0.0) {
+    return adjusted;
+  }
+  if (mods & Qt::ControlModifier) {
+    adjusted *= 100.0;
+  } else if (mods & Qt::ShiftModifier) {
+    adjusted *= 10.0;
+  }
+  return adjusted;
+}
+
+int WheelSwitchElement::slotIndexForStep(const Layout &layout, double step) const
+{
+  if (!std::isfinite(step) || step <= 0.0) {
+    return -1;
+  }
+
+  const double target = std::abs(step);
+  const double tolerance = target * 1e-4 + 1e-9;
+  int bestIndex = -1;
+  double bestDiff = std::numeric_limits<double>::max();
+
+  for (int i = 0; i < static_cast<int>(layout.columns.size()); ++i) {
+    const Layout::Slot &slot = layout.columns.at(i);
+    if (!slot.hasButtons || !std::isfinite(slot.step) || slot.step <= 0.0) {
+      continue;
+    }
+    const double diff = std::abs(slot.step - target);
+    if (diff <= tolerance) {
+      return i;
+    }
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIndex = i;
+    }
+  }
+
+  return bestIndex;
+}
+
+int WheelSwitchElement::defaultSlotIndex(const Layout &layout) const
+{
+  int result = -1;
+  double smallestStep = std::numeric_limits<double>::max();
+  for (int i = 0; i < static_cast<int>(layout.columns.size()); ++i) {
+    const Layout::Slot &slot = layout.columns.at(i);
+    if (!slot.hasButtons || !std::isfinite(slot.step) || slot.step <= 0.0) {
+      continue;
+    }
+    if (slot.step < smallestStep) {
+      smallestStep = slot.step;
+      result = i;
+    }
+  }
+  return result;
+}
+
+void WheelSwitchElement::startRepeating(RepeatDirection direction, double step,
+    int slotIndex)
+{
+  if (!isInteractive() || direction == RepeatDirection::kNone) {
+    return;
+  }
+
   repeatDirection_ = direction;
-  repeatStep_ = valueStep(mods);
+  repeatStep_ = std::abs(step);
   if (!std::isfinite(repeatStep_) || repeatStep_ <= 0.0) {
     repeatStep_ = 1.0;
   }
+  pressedSlotIndex_ = slotIndex;
+  pressedDirection_ = direction;
+
   performStep(direction, repeatStep_, true);
   repeatTimer_->setInterval(kRepeatInitialDelayMs);
   repeatTimer_->setSingleShot(true);
   repeatTimer_->start();
+  update();
 }
 
 void WheelSwitchElement::stopRepeating()
@@ -883,8 +1123,8 @@ void WheelSwitchElement::stopRepeating()
   repeatTimer_->setSingleShot(true);
   repeatDirection_ = RepeatDirection::kNone;
   repeatStep_ = 0.0;
-  topPressed_ = false;
-  bottomPressed_ = false;
+  pressedSlotIndex_ = -1;
+  pressedDirection_ = RepeatDirection::kNone;
   update();
 }
 

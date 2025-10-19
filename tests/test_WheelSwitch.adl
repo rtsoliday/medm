@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=10
-		y=53
+		x=130
+		y=609
 		width=840
 		height=380
 	}
@@ -89,10 +89,10 @@ display {
 }
 "wheel switch" {
 	object {
-		x=24
-		y=20
-		width=168
-		height=48
+		x=5
+		y=5
+		width=170
+		height=100
 	}
 	control {
 		chan="wheel:test:A1"
@@ -112,8 +112,8 @@ display {
 "wheel switch" {
 	object {
 		x=220
-		y=20
-		width=176
+		y=5
+		width=170
 		height=50
 	}
 	control {
@@ -165,10 +165,10 @@ display {
 }
 "wheel switch" {
 	object {
-		x=24
+		x=5
 		y=110
-		width=158
-		height=48
+		width=170
+		height=80
 	}
 	control {
 		chan="wheel:test:delta"
@@ -188,9 +188,9 @@ display {
 "wheel switch" {
 	object {
 		x=220
-		y=110
+		y=60
 		width=170
-		height=50
+		height=40
 	}
 	control {
 		chan="random:ws:epsilon"
@@ -244,10 +244,10 @@ display {
 }
 "wheel switch" {
 	object {
-		x=24
-		y=200
-		width=160
-		height=48
+		x=5
+		y=195
+		width=170
+		height=70
 	}
 	control {
 		chan="ws:zeta"
@@ -321,10 +321,10 @@ display {
 }
 "wheel switch" {
 	object {
-		x=24
-		y=290
-		width=166
-		height=50
+		x=5
+		y=270
+		width=170
+		height=60
 	}
 	control {
 		chan="ws:lambda"

@@ -2,11 +2,13 @@
 
 #include <QColor>
 #include <QEvent>
+#include <QFont>
+#include <QRectF>
 #include <QString>
 #include <QWidget>
-#include <QRectF>
 
 #include <functional>
+#include <vector>
 
 #include "display_properties.h"
 
@@ -73,10 +75,23 @@ private:
 
   struct Layout
   {
+    struct Slot
+    {
+      QRectF charRect;
+      QRectF upButton;
+      QRectF downButton;
+      QChar character;
+      double step = 0.0;
+      int exponent = 0;
+      bool hasButtons = false;
+    };
+
     QRectF outer;
-    QRectF topButton;
-    QRectF bottomButton;
     QRectF valueRect;
+    double buttonHeight = 0.0;
+    QString text;
+    QFont font;
+    std::vector<Slot> columns;
   };
 
   QColor effectiveForeground() const;
@@ -86,7 +101,7 @@ private:
   Layout layoutForRect(const QRectF &bounds) const;
   void paintButton(QPainter &painter, const QRectF &rect, bool isUp,
       bool pressed, bool enabled) const;
-  void paintValueDisplay(QPainter &painter, const QRectF &rect) const;
+  void paintValueDisplay(QPainter &painter, const Layout &layout) const;
   void paintSelectionOverlay(QPainter &painter) const;
   QString formattedSampleValue() const;
   int formatDecimals() const;
@@ -98,13 +113,16 @@ private:
   double defaultSampleValue() const;
   double clampToLimits(double value) const;
   double valueStep(Qt::KeyboardModifiers mods) const;
-  void startRepeating(RepeatDirection direction, Qt::KeyboardModifiers mods);
+  double applyModifiersToStep(double step, Qt::KeyboardModifiers mods) const;
+  void startRepeating(RepeatDirection direction, double step, int slotIndex);
   void stopRepeating();
   void performStep(RepeatDirection direction, double step, bool forceSend);
   void activateValue(double value, bool forceSend);
   void updateCursor();
   bool isInteractive() const;
   double valueEpsilon() const;
+  int slotIndexForStep(const Layout &layout, double step) const;
+  int defaultSlotIndex(const Layout &layout) const;
 
   void handleRepeatTimeout();
 
@@ -126,8 +144,8 @@ private:
   int runtimePrecision_ = -1;
   double runtimeValue_ = 0.0;
   bool hasRuntimeValue_ = false;
-  bool topPressed_ = false;
-  bool bottomPressed_ = false;
+  int pressedSlotIndex_ = -1;
+  RepeatDirection pressedDirection_ = RepeatDirection::kNone;
   RepeatDirection repeatDirection_ = RepeatDirection::kNone;
   double repeatStep_ = 0.0;
   QTimer *repeatTimer_ = nullptr;

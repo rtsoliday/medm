@@ -1053,6 +1053,56 @@ int main(int argc, char *argv[])
       std::weak_ptr<DisplayState>(state), &win);
   state->displayListDialog = displayListDialog;
 
+//TODO: Implement embedded display (container) widget supporting macro substitution.
+//TODO: Add tabbed container / stacked widget support for multi-view displays.
+//TODO: Implement LED array / multi-bit indicator widget for compact status visualization.
+//TODO: Add combo box (mbbo/mbbi) widget for enumerated PV states.
+//TODO: Implement linked slider + numeric spinbox widget for analog control PVs.
+//TODO: Create real-time stripplot widget using Qwt or QtCharts for scalar PVs.
+//TODO: Add XY plot widget for displaying related PV pairs or SDDS data.
+//TODO: Implement bar graph / analog meter / gauge widgets for analog feedback values.
+
+//TODO: Implement 2D image viewer for EPICS areaDetector NDArray PVs.
+//TODO: Add 2D contour / heatmap widget (like sddscontour) for SDDS or array PVs.
+//TODO: Implement vector/arrow field widget for displaying field maps or quiver data.
+//TODO: Add spectrogram / FFT display widget for frequency-domain visualization.
+//TODO: Create scrolling log or mini-alarm panel widget with timestamps.
+
+//TODO: Implement modern toggle switch and pushbutton styles (with LED indicators).
+//TODO: Add numeric spinbox with PV unit display (from EPICS metadata).
+//TODO: Implement logarithmic slider / knob for wide dynamic-range parameters.
+//TODO: Create rotary knob / dial widget for continuous analog setpoints.
+//TODO: Implement PV table / matrix editor widget for grouped parameter control.
+//TODO: Add macro-enabled button widget to execute macros or scripts on click.
+
+//TODO: Implement alarm summary / banner widget showing active alarms inline.
+//TODO: Add PV tree / hierarchical browser widget for structured PV navigation.
+//TODO: Create embedded WebView widget for docs, Grafana panels, or logs.
+//TODO: Design scriptable widget framework (Python or JavaScript per widget).
+
+//TODO: Implement SDDS table viewer widget for displaying tabular SDDS datasets.
+//TODO: Add SDDS plot widget for static or live plotting of SDDS data columns.
+//TODO: Create lattice / beamline schematic widget for visualizing beamline elements.
+//TODO: Implement PV waveform scope widget for fast waveform diagnostics.
+
+//TODO: Add theme/palette system (dark, light, facility-specific branding).
+//TODO: Implement dockable layouts so operators can rearrange displays.
+//TODO: Add searchable PV inspection mode (show PV name and metadata on click).
+//TODO: Implement developer overlay for PV connection state and update rate.
+//TODO: Add undo/redo support to the display editor.
+
+//TODO: Add support for importing caQtDM .ui and CSS .opi display files.
+//TODO: Design plugin API for custom widgets (C++ or Python registration).
+//TODO: Add EPICS PVAccess (PVA) support alongside Channel Access.
+//TODO: Implement versioned schema system for forward/backward compatibility.
+
+//TODO: Phase 1 – Complete MEDM compatibility and core widgets.
+//TODO: Phase 2 – Add visualization widgets and areaDetector integration.
+//TODO: Phase 3 – Introduce scripting and SDDS widget extensions.
+//TODO: Phase 4 – Improve operator UX and theming support.
+//TODO: Phase 5 – Develop plugin framework and PVA integration.
+
+
   auto objectPaletteDialog = QPointer<ObjectPaletteDialog>(
       new ObjectPaletteDialog(palette, fixed13Font, fixed10Font,
           std::weak_ptr<DisplayState>(state), &win));

@@ -87,6 +87,7 @@ qtedm_SRC = qtedm.cc \
             object_palette_dialog.cc \
             color_palette_dialog.cc \
             pv_limits_dialog.cc \
+            pv_info_dialog.cc \
             medm_colors.cc \
             statistics_tracker.cc \
             statistics_window.cc \

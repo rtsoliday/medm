@@ -6,25 +6,39 @@
 
 #include <cmath>
 #include <type_traits>
+#include <cstring>
 
 #include <QDebug>
 #include <QClipboard>
 #include <QDrag>
 #include <QGuiApplication>
+#include <QDateTime>
+#include <QCursor>
 #include <QFont>
+#include <QPen>
+#include <QPainter>
+#include <QPixmap>
 #include <QLabel>
 #include <QMimeData>
 #include <QPointer>
+#include <QSet>
 #include <QStringList>
+#include <QTextStream>
 
 #include <cadef.h>
+#include <db_access.h>
+#include <alarm.h>
+#include <epicsTime.h>
 
 #include "channel_access_context.h"
 #include "statistics_tracker.h"
 #include "display_list_dialog.h"
+#include "pv_info_dialog.h"
 
 namespace {
 constexpr double kChannelRetryTimeoutSeconds = 1.0;
+constexpr double kPvInfoTimeoutSeconds = 1.0;
+constexpr qint64 kEpicsEpochOffsetSeconds = 631152000; // 1990-01-01 -> 1970-01-01
 }
 
 inline void setUtf8Encoding(QTextStream &stream)
@@ -1478,6 +1492,13 @@ protected:
   void keyPressEvent(QKeyEvent *event) override
   {
     setAsActiveDisplay();
+    if (pvInfoPickingActive_) {
+      if (event->key() == Qt::Key_Escape) {
+        cancelPvInfoPickMode();
+        event->accept();
+        return;
+      }
+    }
     if (handleEditArrowKey(event)) {
       event->accept();
       return;
@@ -1489,6 +1510,17 @@ protected:
   void mousePressEvent(QMouseEvent *event) override
   {
     setAsActiveDisplay();
+    if (pvInfoPickingActive_) {
+      if (event->button() == Qt::LeftButton) {
+        completePvInfoPick(event->pos());
+        event->accept();
+        return;
+      }
+      if (event->button() == Qt::RightButton
+          || event->button() == Qt::MiddleButton) {
+        cancelPvInfoPickMode();
+      }
+    }
     if (event->button() == Qt::MiddleButton) {
       if (auto state = state_.lock()) {
         if (!state->editMode) {
@@ -1988,9 +2020,44 @@ private:
     QString label;
     QString command;
   };
+
+  struct PvInfoChannelRef {
+    QString name;
+    chid channelId = nullptr;
+  };
+
+  struct PvInfoChannelDetails {
+    QString name;
+    QString desc;
+    QString recordType;
+    chtype fieldType = -1;
+    unsigned long elementCount = 0;
+    bool readAccess = false;
+    bool writeAccess = false;
+    QString host;
+    QString value;
+    bool hasValue = false;
+    epicsTimeStamp timestamp{};
+    bool hasTimestamp = false;
+    short severity = 0;
+    short status = 0;
+    double hopr = 0.0;
+    double lopr = 0.0;
+    bool hasLimits = false;
+    int precision = -1;
+   bool hasPrecision = false;
+   QStringList states;
+   bool hasStates = false;
+    QString error;
+  };
   bool executeContextMenuInitialized_ = false;
   bool executeCascadeAvailable_ = false;
   QVector<ExecuteMenuEntry> executeMenuEntries_;
+  QPointer<PvInfoDialog> pvInfoDialog_;
+  bool pvInfoPickingActive_ = false;
+  bool pvInfoCursorInitialized_ = false;
+  bool pvInfoCursorActive_ = false;
+  QCursor pvInfoCursor_;
   QList<TextElement *> textElements_;
   TextElement *selectedTextElement_ = nullptr;
   QHash<TextElement *, TextRuntime *> textRuntimes_;
@@ -6759,6 +6826,775 @@ private:
     return channels;
   }
 
+  void startPvInfoPickMode()
+  {
+    if (!executeModeActive_) {
+      return;
+    }
+    if (pvInfoPickingActive_) {
+      cancelPvInfoPickMode();
+    }
+    if (!pvInfoCursorInitialized_) {
+      pvInfoCursor_ = createPvInfoCursor();
+      pvInfoCursorInitialized_ = true;
+    }
+    QGuiApplication::setOverrideCursor(pvInfoCursor_);
+    pvInfoCursorActive_ = true;
+    pvInfoPickingActive_ = true;
+  }
+
+  void cancelPvInfoPickMode()
+  {
+    if (!pvInfoPickingActive_) {
+      return;
+    }
+    pvInfoPickingActive_ = false;
+    if (pvInfoCursorActive_) {
+      QGuiApplication::restoreOverrideCursor();
+      pvInfoCursorActive_ = false;
+    }
+  }
+
+  void completePvInfoPick(const QPoint &windowPos)
+  {
+    if (!pvInfoPickingActive_) {
+      return;
+    }
+    QWidget *widget = elementAt(windowPos);
+    const QPoint globalPos = mapToGlobal(windowPos);
+    lastContextMenuGlobalPos_ = globalPos;
+
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitialized();
+
+    QString content;
+    if (!context.isInitialized()) {
+      content = QStringLiteral(
+          "           PV Information\n\nChannel Access is not available.\n");
+    } else if (widget) {
+      content = buildPvInfoText(widget);
+    } else {
+      content = buildPvInfoBackgroundText();
+    }
+
+    cancelPvInfoPickMode();
+    showPvInfoContent(content);
+  }
+
+  void showPvInfoContent(const QString &text)
+  {
+    PvInfoDialog *dialog = ensurePvInfoDialog();
+    if (!dialog) {
+      return;
+    }
+    dialog->setContent(text);
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+  }
+
+  QCursor createPvInfoCursor() const
+  {
+    QPixmap pixmap(32, 32);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(QPen(Qt::black, 1));
+    painter.setBrush(Qt::white);
+    painter.drawEllipse(QPoint(6, 16), 4, 4);
+
+    QFont font = painter.font();
+    font.setBold(true);
+    font.setPointSize(10);
+    painter.setFont(font);
+    painter.setPen(Qt::white);
+    painter.drawText(QRect(12, 4, 18, 24),
+        Qt::AlignVCenter | Qt::AlignLeft, QStringLiteral("PV"));
+    painter.end();
+
+    return QCursor(pixmap, 4, 16);
+  }
+
+  QString buildPvInfoBackgroundText() const
+  {
+    QString result;
+    QTextStream stream(&result);
+    setUtf8Encoding(stream);
+
+    const QString timestamp =
+        QDateTime::currentDateTime().toString(
+            QStringLiteral("ddd MMM dd, yyyy HH:mm:ss"));
+
+    stream << "           PV Information\n\n";
+    stream << "Object: Display Background\n";
+    stream << timestamp << "\n\n";
+    stream << "No process variables are associated with this location.\n\n";
+
+    return result;
+  }
+
+  QString pvInfoElementLabel(QWidget *widget) const
+  {
+    if (!widget) {
+      return QStringLiteral("Unknown");
+    }
+    if (dynamic_cast<TextElement *>(widget)) {
+      return QStringLiteral("Text");
+    }
+    if (dynamic_cast<TextMonitorElement *>(widget)) {
+      return QStringLiteral("Text Monitor");
+    }
+    if (dynamic_cast<TextEntryElement *>(widget)) {
+      return QStringLiteral("Text Entry");
+    }
+    if (dynamic_cast<SliderElement *>(widget)) {
+      return QStringLiteral("Slider");
+    }
+    if (dynamic_cast<WheelSwitchElement *>(widget)) {
+      return QStringLiteral("Wheel Switch");
+    }
+    if (dynamic_cast<ChoiceButtonElement *>(widget)) {
+      return QStringLiteral("Choice Button");
+    }
+    if (dynamic_cast<MenuElement *>(widget)) {
+      return QStringLiteral("Menu");
+    }
+    if (dynamic_cast<MessageButtonElement *>(widget)) {
+      return QStringLiteral("Message Button");
+    }
+    if (dynamic_cast<ShellCommandElement *>(widget)) {
+      return QStringLiteral("Shell Command");
+    }
+    if (dynamic_cast<RelatedDisplayElement *>(widget)) {
+      return QStringLiteral("Related Display");
+    }
+    if (dynamic_cast<MeterElement *>(widget)) {
+      return QStringLiteral("Meter");
+    }
+    if (dynamic_cast<BarMonitorElement *>(widget)) {
+      return QStringLiteral("Bar Monitor");
+    }
+    if (dynamic_cast<ScaleMonitorElement *>(widget)) {
+      return QStringLiteral("Scale Monitor");
+    }
+    if (dynamic_cast<ByteMonitorElement *>(widget)) {
+      return QStringLiteral("Byte Monitor");
+    }
+    if (dynamic_cast<StripChartElement *>(widget)) {
+      return QStringLiteral("Strip Chart");
+    }
+    if (dynamic_cast<CartesianPlotElement *>(widget)) {
+      return QStringLiteral("Cartesian Plot");
+    }
+    if (dynamic_cast<RectangleElement *>(widget)) {
+      return QStringLiteral("Rectangle");
+    }
+    if (dynamic_cast<ImageElement *>(widget)) {
+      return QStringLiteral("Image");
+    }
+    if (dynamic_cast<OvalElement *>(widget)) {
+      return QStringLiteral("Oval");
+    }
+    if (dynamic_cast<ArcElement *>(widget)) {
+      return QStringLiteral("Arc");
+    }
+    if (dynamic_cast<LineElement *>(widget)) {
+      return QStringLiteral("Line");
+    }
+    if (dynamic_cast<PolylineElement *>(widget)) {
+      return QStringLiteral("Polyline");
+    }
+    if (dynamic_cast<PolygonElement *>(widget)) {
+      return QStringLiteral("Polygon");
+    }
+    if (dynamic_cast<CompositeElement *>(widget)) {
+      return QStringLiteral("Composite");
+    }
+    return QStringLiteral("Unknown");
+  }
+
+  QVector<PvInfoChannelRef> gatherPvInfoChannels(QWidget *widget) const
+  {
+    QVector<PvInfoChannelRef> refs;
+    if (!widget) {
+      return refs;
+    }
+
+    auto addRef = [&](const QString &channel, chid channelId) {
+      const QString trimmed = channel.trimmed();
+      if (trimmed.isEmpty()) {
+        return;
+      }
+      PvInfoChannelRef ref;
+      ref.name = trimmed;
+      ref.channelId = channelId;
+      refs.append(ref);
+    };
+
+    if (auto *element = dynamic_cast<TextElement *>(widget)) {
+      if (auto *runtime = textRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
+      if (auto *runtime = textMonitorRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
+      if (auto *runtime = textEntryRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {
+      if (auto *runtime = sliderRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {
+      if (auto *runtime = wheelSwitchRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<ChoiceButtonElement *>(widget)) {
+      if (auto *runtime = choiceButtonRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<MenuElement *>(widget)) {
+      if (auto *runtime = menuRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<MessageButtonElement *>(widget)) {
+      if (auto *runtime = messageButtonRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<MeterElement *>(widget)) {
+      if (auto *runtime = meterRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
+      if (auto *runtime = barMonitorRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      if (auto *runtime = scaleMonitorRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
+      if (auto *runtime = byteMonitorRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_, runtime->channelId_);
+      } else {
+        addRef(element->channel(), nullptr);
+      }
+    } else if (auto *element = dynamic_cast<RectangleElement *>(widget)) {
+      if (auto *runtime = rectangleRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<ImageElement *>(widget)) {
+      if (auto *runtime = imageRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
+      if (auto *runtime = ovalRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<ArcElement *>(widget)) {
+      if (auto *runtime = arcRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<LineElement *>(widget)) {
+      if (auto *runtime = lineRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<PolylineElement *>(widget)) {
+      if (auto *runtime = polylineRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<PolygonElement *>(widget)) {
+      if (auto *runtime = polygonRuntimes_.value(element, nullptr)) {
+        for (const auto &channel : runtime->channels_) {
+          addRef(channel.name, channel.channelId);
+        }
+      } else {
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel, nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<CompositeElement *>(widget)) {
+      const auto rawChannels = element->channels();
+      for (const QString &channel : rawChannels) {
+        addRef(channel, nullptr);
+      }
+    } else if (auto *element = dynamic_cast<StripChartElement *>(widget)) {
+      if (auto *runtime = stripChartRuntimes_.value(element, nullptr)) {
+        for (const auto &pen : runtime->pens_) {
+          addRef(pen.channelName, pen.channelId);
+        }
+      } else {
+        const int penCount = element->penCount();
+        for (int i = 0; i < penCount; ++i) {
+          addRef(element->channel(i), nullptr);
+        }
+      }
+    } else if (auto *element = dynamic_cast<CartesianPlotElement *>(widget)) {
+      if (auto *runtime = cartesianPlotRuntimes_.value(element, nullptr)) {
+        for (const auto &trace : runtime->traces_) {
+          addRef(trace.x.name, trace.x.channelId);
+          addRef(trace.y.name, trace.y.channelId);
+        }
+        addRef(runtime->triggerChannel_.name, runtime->triggerChannel_.channelId);
+        addRef(runtime->eraseChannel_.name, runtime->eraseChannel_.channelId);
+        addRef(runtime->countChannel_.name, runtime->countChannel_.channelId);
+      } else {
+        addRef(element->triggerChannel(), nullptr);
+        addRef(element->eraseChannel(), nullptr);
+        addRef(element->countChannel(), nullptr);
+        const int traceCount = element->traceCount();
+        for (int i = 0; i < traceCount; ++i) {
+          addRef(element->traceXChannel(i), nullptr);
+          addRef(element->traceYChannel(i), nullptr);
+        }
+      }
+    }
+
+    return refs;
+  }
+
+  QString buildPvInfoText(QWidget *widget) const
+  {
+    QString result;
+    QTextStream stream(&result);
+    setUtf8Encoding(stream);
+
+    const QString objectLabel = pvInfoElementLabel(widget);
+    const QString timestamp =
+        QDateTime::currentDateTime().toString(
+            QStringLiteral("ddd MMM dd, yyyy HH:mm:ss"));
+
+    stream << "           PV Information\n\n";
+    stream << "Object: " << objectLabel << '\n';
+    stream << timestamp << "\n\n";
+
+    const QVector<PvInfoChannelRef> refs = gatherPvInfoChannels(widget);
+    QSet<QString> seen;
+    bool addedSection = false;
+
+    for (const auto &ref : refs) {
+      const QString channel = ref.name;
+      if (channel.isEmpty() || seen.contains(channel)) {
+        continue;
+      }
+      seen.insert(channel);
+      PvInfoChannelDetails details;
+      if (populatePvInfoDetails(channel, ref.channelId, details)) {
+        stream << formatPvInfoSection(details);
+      } else {
+        stream << channel << '\n';
+        stream << "======================================\n";
+        if (!details.error.isEmpty()) {
+          stream << "Error: " << details.error << '\n';
+        } else {
+          stream << "Error: Unable to retrieve channel data.\n";
+        }
+        stream << '\n';
+      }
+      addedSection = true;
+    }
+
+    if (!addedSection) {
+      stream << "No process variables are associated with this object.\n\n";
+    }
+
+    return result;
+  }
+
+  QString formatPvInfoSection(const PvInfoChannelDetails &details) const
+  {
+    QString result;
+    QTextStream stream(&result);
+    setUtf8Encoding(stream);
+
+    const char *typeName = nullptr;
+    if (details.fieldType >= 0) {
+      typeName = dbf_type_to_text(details.fieldType);
+    }
+
+    QString access;
+    if (details.readAccess) {
+      access.append(QLatin1Char('R'));
+    }
+    if (details.writeAccess) {
+      access.append(QLatin1Char('W'));
+    }
+
+    const QString descValue = details.desc.isEmpty()
+        ? QStringLiteral("Not Available")
+        : details.desc;
+    const QString rtypValue = details.recordType.isEmpty()
+        ? QStringLiteral("Not Available")
+        : details.recordType;
+
+    stream << details.name << '\n';
+    stream << "======================================\n";
+    stream << "DESC: " << descValue << '\n';
+    stream << "RTYP: " << rtypValue << '\n';
+    stream << "TYPE: "
+           << (typeName ? QString::fromLatin1(typeName)
+                        : QStringLiteral("Unknown"))
+           << '\n';
+    stream << "COUNT: " << details.elementCount << '\n';
+    stream << "ACCESS: " << access << '\n';
+    stream << "HOST: "
+           << (details.host.isEmpty() ? QStringLiteral("Unknown")
+                                      : details.host)
+           << '\n';
+
+    const QString valueLabel = (details.elementCount > 1)
+        ? QStringLiteral("FIRST VALUE")
+        : QStringLiteral("VALUE");
+    const QString valueText = details.hasValue
+        ? details.value
+        : (details.value.isEmpty() ? QStringLiteral("Not Available")
+                                   : details.value);
+    stream << valueLabel << ": " << valueText << '\n';
+
+    if (details.hasTimestamp) {
+      stream << "STAMP: " << formatPvInfoTimestamp(details.timestamp) << '\n';
+    } else {
+      stream << "STAMP: Not Available\n";
+    }
+
+    stream << "ALARM: " << alarmSeverityString(details.severity) << '\n';
+
+    auto formatDouble = [](double value) {
+      return QString::number(value, 'g', 12);
+    };
+
+    if (details.fieldType == DBF_ENUM && details.hasStates) {
+      stream << '\n';
+      stream << "STATES: " << details.states.size() << '\n';
+      for (int i = 0; i < details.states.size(); ++i) {
+        QString stateLine = QStringLiteral("STATE %1: %2")
+            .arg(i, 2, 10, QLatin1Char(' '))
+            .arg(details.states.at(i));
+        stream << stateLine << '\n';
+      }
+      stream << '\n';
+    } else if ((details.fieldType == DBF_CHAR ||
+                details.fieldType == DBF_SHORT ||
+                details.fieldType == DBF_LONG) && details.hasLimits) {
+      stream << '\n';
+      stream << "HOPR: " << formatDouble(details.hopr)
+             << "  LOPR: " << formatDouble(details.lopr) << '\n';
+      stream << '\n';
+    } else if ((details.fieldType == DBF_FLOAT ||
+                details.fieldType == DBF_DOUBLE) && details.hasLimits) {
+      stream << '\n';
+      if (details.hasPrecision) {
+        stream << "PRECISION: " << details.precision << '\n';
+      } else {
+        stream << "PRECISION: Not Available\n";
+      }
+      stream << "HOPR: " << formatDouble(details.hopr)
+             << "  LOPR: " << formatDouble(details.lopr) << '\n';
+      stream << '\n';
+    } else {
+      stream << '\n';
+    }
+
+    return result;
+  }
+
+  QString formatPvInfoTimestamp(const epicsTimeStamp &stamp) const
+  {
+    const qint64 seconds = static_cast<qint64>(stamp.secPastEpoch)
+        + kEpicsEpochOffsetSeconds;
+    const qint64 msecs = seconds * 1000
+        + static_cast<qint64>(stamp.nsec) / 1000000;
+    const int fractional =
+        static_cast<int>((stamp.nsec % 1000000000) / 1000000);
+    QDateTime dateTime =
+        QDateTime::fromMSecsSinceEpoch(msecs, Qt::LocalTime);
+    const QString base =
+        dateTime.toString(QStringLiteral("ddd MMM dd, yyyy HH:mm:ss"));
+    const QString fraction =
+        QStringLiteral("%1").arg(fractional, 3, 10, QLatin1Char('0'));
+    return QStringLiteral("%1.%2").arg(base, fraction);
+  }
+
+  QString alarmSeverityString(short severity) const
+  {
+    switch (severity) {
+    case NO_ALARM:
+      return QStringLiteral("NO");
+    case MINOR_ALARM:
+      return QStringLiteral("MINOR");
+    case MAJOR_ALARM:
+      return QStringLiteral("MAJOR");
+    case INVALID_ALARM:
+      return QStringLiteral("INVALID");
+    default:
+      return QStringLiteral("Unknown (%1)").arg(severity);
+    }
+  }
+
+  QString pvInfoRelatedFieldName(const QString &channelName,
+      const QString &fieldSuffix) const
+  {
+    const int dotIndex = channelName.indexOf(QLatin1Char('.'));
+    if (dotIndex >= 0) {
+      return channelName.left(dotIndex) + fieldSuffix;
+    }
+    return channelName + fieldSuffix;
+  }
+
+  QString fetchPvInfoRelatedField(const QString &channelName,
+      const QString &fieldSuffix) const
+  {
+    const QString fieldName =
+        pvInfoRelatedFieldName(channelName, fieldSuffix).trimmed();
+    if (fieldName.isEmpty()) {
+      return QString();
+    }
+
+    QByteArray fieldBytes = fieldName.toLatin1();
+    if (fieldBytes.isEmpty()) {
+      return QString();
+    }
+
+    chid fieldId = nullptr;
+    int status = ca_create_channel(fieldBytes.constData(), nullptr, nullptr,
+        CA_PRIORITY_DEFAULT, &fieldId);
+    if (status != ECA_NORMAL) {
+      return QString();
+    }
+
+    struct ChannelCleanup {
+      chid id = nullptr;
+      bool owned = false;
+      ~ChannelCleanup()
+      {
+        if (owned && id) {
+          ca_clear_channel(id);
+        }
+      }
+    } cleanup{fieldId, true};
+
+    status = ca_pend_io(kPvInfoTimeoutSeconds);
+    if (status != ECA_NORMAL || ca_state(fieldId) != cs_conn) {
+      return QString();
+    }
+
+    dbr_string_t value{};
+    status = ca_array_get(DBR_STRING, 1, fieldId, &value);
+    if (status != ECA_NORMAL) {
+      return QString();
+    }
+    status = ca_pend_io(kPvInfoTimeoutSeconds);
+    if (status != ECA_NORMAL) {
+      return QString();
+    }
+
+    return QString::fromLatin1(value);
+  }
+
+  bool populatePvInfoDetails(const QString &channelName, chid existingChid,
+      PvInfoChannelDetails &details) const
+  {
+    details = PvInfoChannelDetails{};
+    details.name = channelName;
+
+    const QString trimmed = channelName.trimmed();
+    if (trimmed.isEmpty()) {
+      details.error = QStringLiteral("Channel name is empty.");
+      return false;
+    }
+
+    chid channelId = nullptr;
+    bool createdChannel = false;
+    if (existingChid && ca_state(existingChid) == cs_conn) {
+      channelId = existingChid;
+    } else {
+      QByteArray nameBytes = trimmed.toLatin1();
+      if (nameBytes.isEmpty()) {
+        details.error =
+            QStringLiteral("Channel name cannot be converted to ASCII.");
+        return false;
+      }
+      int status = ca_create_channel(nameBytes.constData(), nullptr, nullptr,
+          CA_PRIORITY_DEFAULT, &channelId);
+      if (status != ECA_NORMAL) {
+        details.error = QStringLiteral("ca_create_channel failed: %1")
+            .arg(QString::fromLatin1(ca_message(status)));
+        return false;
+      }
+      createdChannel = true;
+      status = ca_pend_io(kPvInfoTimeoutSeconds);
+      if (status != ECA_NORMAL) {
+        details.error = QStringLiteral("Timeout waiting for channel connection (%1)")
+            .arg(QString::fromLatin1(ca_message(status)));
+        ca_clear_channel(channelId);
+        return false;
+      }
+      if (ca_state(channelId) != cs_conn) {
+        details.error = QStringLiteral("Channel is not connected.");
+        ca_clear_channel(channelId);
+        return false;
+      }
+    }
+
+    struct ChannelCleanup {
+      chid id = nullptr;
+      bool owned = false;
+      ~ChannelCleanup()
+      {
+        if (owned && id) {
+          ca_clear_channel(id);
+        }
+      }
+    } cleanup{channelId, createdChannel};
+
+    details.fieldType = ca_field_type(channelId);
+    details.elementCount = static_cast<unsigned long>(ca_element_count(channelId));
+    details.readAccess = ca_read_access(channelId);
+    details.writeAccess = ca_write_access(channelId);
+    if (const char *host = ca_host_name(channelId)) {
+      details.host = QString::fromLatin1(host);
+    }
+
+    dbr_time_string timeValue{};
+    int status = ca_array_get(DBR_TIME_STRING, 1, channelId, &timeValue);
+    if (status == ECA_NORMAL) {
+      status = ca_pend_io(kPvInfoTimeoutSeconds);
+      if (status == ECA_NORMAL) {
+        details.value = QString::fromLatin1(timeValue.value);
+        details.hasValue = true;
+        details.timestamp = timeValue.stamp;
+        details.hasTimestamp = true;
+        details.severity = timeValue.severity;
+        details.status = timeValue.status;
+      } else {
+        details.value = QStringLiteral("Unavailable (%1)")
+            .arg(QString::fromLatin1(ca_message(status)));
+      }
+    } else {
+      details.value = QStringLiteral("Unavailable (%1)")
+          .arg(QString::fromLatin1(ca_message(status)));
+    }
+
+    switch (details.fieldType) {
+    case DBF_ENUM: {
+      dbr_ctrl_enum ctrl{};
+      status = ca_array_get(DBR_CTRL_ENUM, 1, channelId, &ctrl);
+      if (status == ECA_NORMAL) {
+        status = ca_pend_io(kPvInfoTimeoutSeconds);
+        if (status == ECA_NORMAL) {
+          for (unsigned short i = 0; i < ctrl.no_str; ++i) {
+            details.states.append(QString::fromLatin1(ctrl.strs[i]));
+          }
+          details.hasStates = !details.states.isEmpty();
+        }
+      }
+      break;
+    }
+    case DBF_CHAR:
+    case DBF_SHORT:
+    case DBF_LONG:
+    case DBF_FLOAT:
+    case DBF_DOUBLE: {
+      dbr_ctrl_double ctrl{};
+      status = ca_array_get(DBR_CTRL_DOUBLE, 1, channelId, &ctrl);
+      if (status == ECA_NORMAL) {
+        status = ca_pend_io(kPvInfoTimeoutSeconds);
+        if (status == ECA_NORMAL) {
+          details.hopr = ctrl.upper_ctrl_limit;
+          details.lopr = ctrl.lower_ctrl_limit;
+          details.hasLimits = true;
+          details.precision = ctrl.precision;
+          details.hasPrecision = (ctrl.precision >= 0);
+        }
+      }
+      break;
+    }
+    default:
+      break;
+    }
+
+    details.desc = fetchPvInfoRelatedField(trimmed, QStringLiteral(".DESC"));
+    details.recordType = fetchPvInfoRelatedField(trimmed, QStringLiteral(".RTYP"));
+    details.error.clear();
+    return true;
+  }
+
   bool prepareExecuteChannelDrag(const QPoint &windowPos)
   {
     if (!executeModeActive_) {
@@ -11402,7 +12238,12 @@ private:
           setAsActiveDisplay();
           close();
         });
-    menu.addAction(QStringLiteral("PV Info"));
+    QAction *pvInfoAction = menu.addAction(QStringLiteral("PV Info"));
+    QObject::connect(pvInfoAction, &QAction::triggered, this,
+        [this]() {
+          setAsActiveDisplay();
+          startPvInfoPickMode();
+        });
     menu.addAction(QStringLiteral("PV Limits"));
     QAction *mainWindowAction =
       menu.addAction(QStringLiteral("QtEDM Main Window"));
@@ -11464,6 +12305,15 @@ private:
         dialog->showAndRaise();
       }
     }
+  }
+
+  PvInfoDialog *ensurePvInfoDialog()
+  {
+    if (!pvInfoDialog_) {
+      auto *dialog = new PvInfoDialog(palette(), labelFont_, font(), this);
+      pvInfoDialog_ = dialog;
+    }
+    return pvInfoDialog_.data();
   }
 
   bool attemptChannelRetry(const QString &channelName,
@@ -18366,6 +19216,10 @@ inline void DisplayWindow::leaveExecuteMode()
     return;
   }
   executeModeActive_ = false;
+  cancelPvInfoPickMode();
+  if (pvInfoDialog_) {
+    pvInfoDialog_->hide();
+  }
   cancelExecuteChannelDrag();
   for (auto it = textRuntimes_.begin(); it != textRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {

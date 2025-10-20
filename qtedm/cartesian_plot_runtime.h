@@ -14,8 +14,11 @@
 
 class CartesianPlotElement;
 
+class DisplayWindow;
+
 class CartesianPlotRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit CartesianPlotRuntime(CartesianPlotElement *element);
   ~CartesianPlotRuntime() override;

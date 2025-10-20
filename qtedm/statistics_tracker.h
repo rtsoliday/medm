@@ -3,6 +3,8 @@
 #include <QElapsedTimer>
 #include <QMutex>
 
+#include <utility>
+
 struct StatisticsSnapshot {
   double intervalSeconds = 0.0;
   int channelCount = 0;
@@ -34,10 +36,12 @@ public:
   StatisticsSnapshot snapshotAndReset();
   void reset();
 
+  std::pair<int, int> channelCounts() const;
+
 private:
   StatisticsTracker();
 
-  QMutex mutex_;
+  mutable QMutex mutex_;
   QElapsedTimer intervalTimer_;
   bool timerInitialized_ = false;
 

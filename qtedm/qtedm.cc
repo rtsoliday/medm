@@ -271,6 +271,7 @@ int main(int argc, char *argv[])
   modeBox->setLayout(modeLayout);
 
   auto state = std::make_shared<DisplayState>();
+  state->mainWindow = &win;
   auto *mainWindowController = new MainWindowController(&win,
       std::weak_ptr<DisplayState>(state));
   win.installEventFilter(mainWindowController);
@@ -278,6 +279,7 @@ int main(int argc, char *argv[])
   state->updateMenus = updateMenus;
   auto *displayListDialog = new DisplayListDialog(palette, fixed13Font,
       std::weak_ptr<DisplayState>(state), &win);
+  state->displayListDialog = displayListDialog;
 
   auto objectPaletteDialog = QPointer<ObjectPaletteDialog>(
       new ObjectPaletteDialog(palette, fixed13Font, fixed10Font,

@@ -10,8 +10,11 @@
 
 class OvalElement;
 
+class DisplayWindow;
+
 class OvalRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit OvalRuntime(OvalElement *element);
   ~OvalRuntime() override;

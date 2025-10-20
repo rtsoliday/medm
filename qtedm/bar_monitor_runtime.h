@@ -11,8 +11,11 @@
 
 class BarMonitorElement;
 
+class DisplayWindow;
+
 class BarMonitorRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit BarMonitorRuntime(BarMonitorElement *element);
   ~BarMonitorRuntime() override;

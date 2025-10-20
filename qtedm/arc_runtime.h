@@ -10,8 +10,11 @@
 
 class ArcElement;
 
+class DisplayWindow;
+
 class ArcRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit ArcRuntime(ArcElement *element);
   ~ArcRuntime() override;

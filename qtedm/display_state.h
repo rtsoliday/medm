@@ -8,6 +8,8 @@
 #include <memory>
 
 class DisplayWindow;
+class QMainWindow;
+class DisplayListDialog;
 
 struct ClipboardContent
 {
@@ -52,6 +54,8 @@ struct DisplayState {
   bool editMode = true;
   QList<QPointer<DisplayWindow>> displays;
   CreateTool createTool = CreateTool::kNone;
+  QPointer<QMainWindow> mainWindow;
+  QPointer<DisplayListDialog> displayListDialog;
   QPointer<DisplayWindow> activeDisplay;
   std::shared_ptr<std::function<void()>> updateMenus;
   std::shared_ptr<ClipboardContent> clipboard;

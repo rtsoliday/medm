@@ -10,8 +10,11 @@
 
 class RectangleElement;
 
+class DisplayWindow;
+
 class RectangleRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit RectangleRuntime(RectangleElement *element);
   ~RectangleRuntime() override;

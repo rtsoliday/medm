@@ -11,8 +11,11 @@
 
 class MeterElement;
 
+class DisplayWindow;
+
 class MeterRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit MeterRuntime(MeterElement *element);
   ~MeterRuntime() override;

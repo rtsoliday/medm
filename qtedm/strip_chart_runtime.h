@@ -13,8 +13,11 @@
 
 class StripChartElement;
 
+class DisplayWindow;
+
 class StripChartRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit StripChartRuntime(StripChartElement *element);
   ~StripChartRuntime() override;

@@ -10,8 +10,11 @@
 
 class ImageElement;
 
+class DisplayWindow;
+
 class ImageRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit ImageRuntime(ImageElement *element);
   ~ImageRuntime() override;

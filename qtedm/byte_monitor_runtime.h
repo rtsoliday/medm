@@ -12,8 +12,11 @@
 
 class ByteMonitorElement;
 
+class DisplayWindow;
+
 class ByteMonitorRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit ByteMonitorRuntime(ByteMonitorElement *element);
   ~ByteMonitorRuntime() override;

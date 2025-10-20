@@ -121,3 +121,9 @@ void StatisticsTracker::reset()
   intervalTimer_.restart();
   timerInitialized_ = true;
 }
+
+std::pair<int, int> StatisticsTracker::channelCounts() const
+{
+  QMutexLocker locker(&mutex_);
+  return {channelCount_, channelConnected_};
+}

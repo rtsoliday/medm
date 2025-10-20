@@ -10,8 +10,11 @@
 
 class PolylineElement;
 
+class DisplayWindow;
+
 class PolylineRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit PolylineRuntime(PolylineElement *element);
   ~PolylineRuntime() override;

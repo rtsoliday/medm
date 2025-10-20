@@ -12,8 +12,11 @@
 
 class MenuElement;
 
+class DisplayWindow;
+
 class MenuRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit MenuRuntime(MenuElement *element);
   ~MenuRuntime() override;

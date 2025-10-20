@@ -10,8 +10,11 @@
 
 class LineElement;
 
+class DisplayWindow;
+
 class LineRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit LineRuntime(LineElement *element);
   ~LineRuntime() override;

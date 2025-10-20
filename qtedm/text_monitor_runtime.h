@@ -13,8 +13,11 @@ class QByteArray;
 
 class TextMonitorElement;
 
+class DisplayWindow;
+
 class TextMonitorRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit TextMonitorRuntime(TextMonitorElement *element);
   ~TextMonitorRuntime() override;

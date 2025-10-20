@@ -10,8 +10,11 @@
 
 class TextElement;
 
+class DisplayWindow;
+
 class TextRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit TextRuntime(TextElement *element);
   ~TextRuntime() override;

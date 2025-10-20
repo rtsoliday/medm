@@ -7,6 +7,18 @@
 #include <cmath>
 #include <type_traits>
 
+#include <QDebug>
+
+#include <cadef.h>
+
+#include "channel_access_context.h"
+#include "statistics_tracker.h"
+#include "display_list_dialog.h"
+
+namespace {
+constexpr double kChannelRetryTimeoutSeconds = 1.0;
+}
+
 inline void setUtf8Encoding(QTextStream &stream)
 {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -1647,15 +1659,19 @@ protected:
     }
 
     if (event->button() == Qt::RightButton) {
-      if (auto state = state_.lock(); state && state->editMode) {
-  const QPoint globalPos =
+      if (auto state = state_.lock()) {
+        const QPoint globalPos =
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-      event->globalPosition().toPoint();
+            event->globalPosition().toPoint();
 #else
-      event->globalPos();
+            event->globalPos();
 #endif
-  lastContextMenuGlobalPos_ = globalPos;
-  showEditContextMenu(globalPos);
+        lastContextMenuGlobalPos_ = globalPos;
+        if (state->editMode) {
+          showEditContextMenu(globalPos);
+        } else {
+          showExecuteContextMenu(globalPos);
+        }
         event->accept();
         return;
       }
@@ -1925,6 +1941,13 @@ private:
   bool snapToGrid_ = kDefaultSnapToGrid;
   int gridSpacing_ = kDefaultGridSpacing;
   QPoint lastContextMenuGlobalPos_;
+  struct ExecuteMenuEntry {
+    QString label;
+    QString command;
+  };
+  bool executeContextMenuInitialized_ = false;
+  bool executeCascadeAvailable_ = false;
+  QVector<ExecuteMenuEntry> executeMenuEntries_;
   QList<TextElement *> textElements_;
   TextElement *selectedTextElement_ = nullptr;
   QHash<TextElement *, TextRuntime *> textRuntimes_;
@@ -11055,6 +11078,335 @@ private:
       rubberBand_->hide();
     }
     notifyMenus();
+  }
+
+  void ensureExecuteContextMenuEntriesLoaded()
+  {
+    if (executeContextMenuInitialized_) {
+      return;
+    }
+
+    executeContextMenuInitialized_ = true;
+    executeCascadeAvailable_ = false;
+    executeMenuEntries_.clear();
+
+    const QByteArray rawList = qgetenv("MEDM_EXEC_LIST");
+    if (rawList.isEmpty()) {
+      return;
+    }
+
+    const QString list = QString::fromLocal8Bit(rawList.constData());
+    QString currentItem;
+    QVector<QString> items;
+    items.reserve(list.count(QLatin1Char(':')) + 1);
+
+    for (int i = 0; i < list.size(); ++i) {
+      const QChar ch = list.at(i);
+      if (ch == QLatin1Char(':')) {
+        if ((i + 1) < list.size() && list.at(i + 1) == QLatin1Char('\\')) {
+          currentItem.append(ch);
+          continue;
+        }
+        if (!currentItem.isEmpty()) {
+          items.append(currentItem);
+          currentItem.clear();
+        } else {
+          currentItem.clear();
+        }
+        continue;
+      }
+      currentItem.append(ch);
+    }
+
+    if (!currentItem.isEmpty()) {
+      items.append(currentItem);
+    }
+
+    for (const QString &item : items) {
+      const int separator = item.indexOf(QLatin1Char(';'));
+      if (separator <= 0 || separator >= item.size() - 1) {
+        continue;
+      }
+      const QString label = item.left(separator).trimmed();
+      const QString command = item.mid(separator + 1).trimmed();
+      if (label.isEmpty() || command.isEmpty()) {
+        continue;
+      }
+      executeMenuEntries_.push_back({label, command});
+    }
+
+    executeCascadeAvailable_ = !executeMenuEntries_.isEmpty();
+  }
+
+  void showExecuteContextMenu(const QPoint &globalPos)
+  {
+    ensureExecuteContextMenuEntriesLoaded();
+
+    QMenu menu(this);
+    menu.setObjectName(QStringLiteral("executeModeContextMenu"));
+    menu.setSeparatorsCollapsible(false);
+
+    // Mirror MEDM execute popup menu; actions will be wired up later.
+    menu.addAction(QStringLiteral("Print"));
+    menu.addAction(QStringLiteral("Close"));
+    menu.addAction(QStringLiteral("PV Info"));
+    menu.addAction(QStringLiteral("PV Limits"));
+    QAction *mainWindowAction =
+      menu.addAction(QStringLiteral("QtEDM Main Window"));
+    QObject::connect(mainWindowAction, &QAction::triggered, this,
+        [this]() {
+          focusMainWindow();
+        });
+    QAction *displayListAction =
+      menu.addAction(QStringLiteral("Display List"));
+    QObject::connect(displayListAction, &QAction::triggered, this,
+        [this]() {
+          showDisplayListDialog();
+        });
+    menu.addAction(QStringLiteral("Toggle Hidden Button Markers"));
+    QAction *refreshAction =
+      menu.addAction(QStringLiteral("Refresh"));
+    QObject::connect(refreshAction, &QAction::triggered, this,
+        [this]() {
+          refreshDisplayView();
+        });
+    QAction *retryAction =
+      menu.addAction(QStringLiteral("Retry Connections"));
+    QObject::connect(retryAction, &QAction::triggered, this,
+        [this]() {
+          retryChannelConnections();
+        });
+
+    if (executeCascadeAvailable_) {
+      QMenu *executeMenu = menu.addMenu(QStringLiteral("Execute"));
+      for (const ExecuteMenuEntry &entry : executeMenuEntries_) {
+        QAction *action = executeMenu->addAction(entry.label);
+        action->setData(entry.command);
+      }
+    }
+
+    menu.exec(globalPos);
+  }
+
+  void focusMainWindow() const
+  {
+    if (auto state = state_.lock()) {
+      if (auto *window = state->mainWindow.data()) {
+        if (window->isMinimized()) {
+          window->showNormal();
+        } else {
+          window->show();
+        }
+        window->raise();
+        window->activateWindow();
+        window->setFocus(Qt::OtherFocusReason);
+      }
+    }
+  }
+
+  void showDisplayListDialog() const
+  {
+    if (auto state = state_.lock()) {
+      if (auto *dialog = state->displayListDialog.data()) {
+        dialog->showAndRaise();
+      }
+    }
+  }
+
+  bool attemptChannelRetry(const QString &channelName,
+      QString &retriedChannel) const
+  {
+    const QString trimmed = channelName.trimmed();
+    if (trimmed.isEmpty()) {
+      return false;
+    }
+
+    QByteArray channelBytes = trimmed.toLatin1();
+    if (channelBytes.isEmpty()) {
+      return false;
+    }
+
+    chid retryChid = nullptr;
+    int status = ca_search_and_connect(channelBytes.constData(), &retryChid,
+        nullptr, nullptr);
+    if (status != ECA_NORMAL) {
+      qWarning() << "Retry Connections: ca_search_and_connect failed for"
+                 << trimmed << ':' << ca_message(status);
+      return false;
+    }
+
+    int pendStatus = ca_pend_io(kChannelRetryTimeoutSeconds);
+    if (pendStatus != ECA_NORMAL) {
+      qWarning() << "Retry Connections: ca_pend_io timed out for"
+                 << trimmed << ':' << ca_message(pendStatus);
+    }
+
+    if (retryChid) {
+      int clearStatus = ca_clear_channel(retryChid);
+      if (clearStatus != ECA_NORMAL) {
+        qWarning() << "Retry Connections: ca_clear_channel failed for"
+                   << trimmed << ':' << ca_message(clearStatus);
+      }
+    }
+
+    retriedChannel = trimmed;
+    return true;
+  }
+
+  bool retryFirstUnconnectedChannel(QString &retriedChannel)
+  {
+    if (!executeModeActive_) {
+      return false;
+    }
+
+    auto attemptWithAccessor = [&](const QString &name, bool connected) {
+      if (name.trimmed().isEmpty() || connected) {
+        return false;
+      }
+      return attemptChannelRetry(name, retriedChannel);
+    };
+
+    auto attemptRuntimeChannels = [&](const auto &runtimeMap) {
+      for (auto it = runtimeMap.cbegin(); it != runtimeMap.cend(); ++it) {
+        auto *runtime = it.value();
+        if (!runtime || !runtime->started_) {
+          continue;
+        }
+        for (const auto &channel : runtime->channels_) {
+          if (attemptWithAccessor(channel.name, channel.connected)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    if (attemptRuntimeChannels(textRuntimes_) ||
+        attemptRuntimeChannels(rectangleRuntimes_) ||
+        attemptRuntimeChannels(imageRuntimes_) ||
+        attemptRuntimeChannels(ovalRuntimes_) ||
+        attemptRuntimeChannels(arcRuntimes_) ||
+        attemptRuntimeChannels(lineRuntimes_) ||
+        attemptRuntimeChannels(polylineRuntimes_) ||
+        attemptRuntimeChannels(polygonRuntimes_)) {
+      return true;
+    }
+
+    auto attemptSingleChannelRuntime = [&](const auto &runtimeMap) {
+      for (auto it = runtimeMap.cbegin(); it != runtimeMap.cend(); ++it) {
+        auto *runtime = it.value();
+        if (!runtime || !runtime->started_) {
+          continue;
+        }
+        if (attemptWithAccessor(runtime->channelName_, runtime->connected_)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (attemptSingleChannelRuntime(sliderRuntimes_) ||
+        attemptSingleChannelRuntime(wheelSwitchRuntimes_) ||
+        attemptSingleChannelRuntime(choiceButtonRuntimes_) ||
+        attemptSingleChannelRuntime(menuRuntimes_) ||
+        attemptSingleChannelRuntime(messageButtonRuntimes_) ||
+        attemptSingleChannelRuntime(textMonitorRuntimes_) ||
+        attemptSingleChannelRuntime(meterRuntimes_) ||
+        attemptSingleChannelRuntime(barMonitorRuntimes_) ||
+        attemptSingleChannelRuntime(scaleMonitorRuntimes_) ||
+        attemptSingleChannelRuntime(byteMonitorRuntimes_)) {
+      return true;
+    }
+
+    for (auto it = stripChartRuntimes_.cbegin();
+         it != stripChartRuntimes_.cend(); ++it) {
+      auto *runtime = it.value();
+      if (!runtime || !runtime->started_) {
+        continue;
+      }
+      for (const auto &pen : runtime->pens_) {
+        if (attemptWithAccessor(pen.channelName, pen.connected)) {
+          return true;
+        }
+      }
+    }
+
+    for (auto it = cartesianPlotRuntimes_.cbegin();
+         it != cartesianPlotRuntimes_.cend(); ++it) {
+      auto *runtime = it.value();
+      if (!runtime || !runtime->started_) {
+        continue;
+      }
+      for (const auto &trace : runtime->traces_) {
+        if (attemptWithAccessor(trace.x.name, trace.x.connected) ||
+            attemptWithAccessor(trace.y.name, trace.y.connected)) {
+          return true;
+        }
+      }
+      if (attemptWithAccessor(runtime->triggerChannel_.name,
+              runtime->triggerChannel_.connected) ||
+          attemptWithAccessor(runtime->eraseChannel_.name,
+              runtime->eraseChannel_.connected) ||
+          attemptWithAccessor(runtime->countChannel_.name,
+              runtime->countChannel_.connected)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  void retryChannelConnections()
+  {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitialized();
+    if (!context.isInitialized()) {
+      qWarning() << "Retry Connections: Channel Access context unavailable";
+      return;
+    }
+
+    const auto channelCounts = StatisticsTracker::instance().channelCounts();
+    const int totalChannels = channelCounts.first;
+    const int connectedChannels = channelCounts.second;
+
+    QString retriedChannel;
+    DisplayWindow *targetDisplay = nullptr;
+
+    if (retryFirstUnconnectedChannel(retriedChannel)) {
+      targetDisplay = this;
+    } else if (auto state = state_.lock()) {
+      const auto displays = state->displays;
+      for (const auto &displayPtr : displays) {
+        DisplayWindow *display = displayPtr.data();
+        if (!display || display == this || !display->executeModeActive_) {
+          continue;
+        }
+        if (display->retryFirstUnconnectedChannel(retriedChannel)) {
+          targetDisplay = display;
+          break;
+        }
+      }
+    }
+
+    if (!targetDisplay) {
+      if (totalChannels > 0 && totalChannels == connectedChannels) {
+        QApplication::beep();
+        qInfo() << "Retry Connections: all channels are connected";
+      } else if (totalChannels == 0) {
+        qInfo() << "Retry Connections: no active channels to retry";
+      } else {
+        qWarning() << "Retry Connections: no unresolved channels found for retry";
+      }
+      return;
+    }
+
+    qInfo() << "Retry Connections: retried search for" << retriedChannel;
+
+    if (targetDisplay == this) {
+      refreshDisplayView();
+    } else if (targetDisplay->displayArea_) {
+      targetDisplay->displayArea_->update();
+    }
   }
 
   void showEditContextMenu(const QPoint &globalPos)

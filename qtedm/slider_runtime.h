@@ -11,8 +11,11 @@
 
 class SliderElement;
 
+class DisplayWindow;
+
 class SliderRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit SliderRuntime(SliderElement *element);
   ~SliderRuntime() override;

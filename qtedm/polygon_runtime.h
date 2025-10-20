@@ -10,8 +10,11 @@
 
 class PolygonElement;
 
+class DisplayWindow;
+
 class PolygonRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit PolygonRuntime(PolygonElement *element);
   ~PolygonRuntime() override;

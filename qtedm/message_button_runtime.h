@@ -13,8 +13,11 @@
 
 class MessageButtonElement;
 
+class DisplayWindow;
+
 class MessageButtonRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit MessageButtonRuntime(MessageButtonElement *element);
   ~MessageButtonRuntime() override;

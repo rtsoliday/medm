@@ -12,8 +12,11 @@
 
 class ChoiceButtonElement;
 
+class DisplayWindow;
+
 class ChoiceButtonRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit ChoiceButtonRuntime(ChoiceButtonElement *element);
   ~ChoiceButtonRuntime() override;

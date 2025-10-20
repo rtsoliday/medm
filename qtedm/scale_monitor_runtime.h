@@ -11,8 +11,11 @@
 
 class ScaleMonitorElement;
 
+class DisplayWindow;
+
 class ScaleMonitorRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit ScaleMonitorRuntime(ScaleMonitorElement *element);
   ~ScaleMonitorRuntime() override;

@@ -11,8 +11,11 @@
 
 class WheelSwitchElement;
 
+class DisplayWindow;
+
 class WheelSwitchRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit WheelSwitchRuntime(WheelSwitchElement *element);
   ~WheelSwitchRuntime() override;

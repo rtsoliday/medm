@@ -470,26 +470,12 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     painter.fillRect(topRect, fg);
   }
 
-  QRect textRect = inner;
+  QRect textRect = inner.adjusted(4, 0, -4, 0);
   if (showIcon) {
     textRect.setLeft(iconRect.right() + 6);
-  } else {
-    textRect.setLeft(inner.left() + 4);
   }
-  textRect.setRight(inner.right() - 12);
   painter.setPen(fg);
-  painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, labelText);
-
-  QPoint arrow[3];
-  const int arrowWidth = 7;
-  const int arrowHeight = 5;
-  const int arrowX = inner.right() - arrowWidth - 3;
-  const int arrowY = inner.center().y() - arrowHeight / 2;
-  arrow[0] = QPoint(arrowX, arrowY);
-  arrow[1] = QPoint(arrowX + arrowWidth, arrowY);
-  arrow[2] = QPoint(arrowX + arrowWidth / 2, arrowY + arrowHeight);
-  painter.setBrush(fg);
-  painter.drawPolygon(arrow, 3);
+  painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignHCenter, labelText);
 
   painter.restore();
 }

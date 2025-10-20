@@ -2,34 +2,39 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QColor>
-#include <cstdio>
+#include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFrame>
-#include <QFileDialog>
-#include <QFileInfo>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QPalette>
 #include <QPointer>
+#include <QPoint>
 #include <QRadioButton>
-#include <QDir>
+#include <QRegularExpression>
+#include <QScreen>
 #include <QString>
 #include <QStringList>
 #include <QSizePolicy>
-#include <QMessageBox>
 #include <QStyleFactory>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <cstdio>
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "display_properties.h"
 #include "display_state.h"
@@ -46,6 +51,19 @@ namespace {
 constexpr char kVersionString[] =
     "QtEDM Version 1.0.0  (EPICS 7.0.9.1-DEV)";
 
+struct GeometrySpec {
+  bool hasWidth = false;
+  bool hasHeight = false;
+  bool hasX = false;
+  bool hasY = false;
+  int width = 0;
+  int height = 0;
+  int x = 0;
+  int y = 0;
+  bool xFromRight = false;
+  bool yFromBottom = false;
+};
+
 struct CommandLineOptions {
   bool startInExecuteMode = false;
   bool showHelp = false;
@@ -53,6 +71,7 @@ struct CommandLineOptions {
   bool raiseMessageWindow = true;
   QString invalidOption;
   QStringList displayFiles;
+  QString displayGeometry;
 };
 
 QString programName(const QStringList &args)
@@ -71,7 +90,8 @@ void printUsage(const QString &program)
       "  %s [X options]\n"
       "  [-help | -h | -?]\n"
       "  [-version]\n"
-      "  [-x | -e]\n"
+      "  [-x]\n"
+      "  [-dg geometry]\n"
       "  [-noMsg]\n"
       "  [display-files]\n"
       "  [&]\n"
@@ -87,8 +107,6 @@ CommandLineOptions parseCommandLine(const QStringList &args)
     const QString &arg = args.at(i);
     if (arg == QLatin1String("-x")) {
       options.startInExecuteMode = true;
-    } else if (arg == QLatin1String("-e")) {
-      options.startInExecuteMode = false;
     } else if (arg == QLatin1String("-help") ||
                arg == QLatin1String("-h") ||
                arg == QLatin1String("-?")) {
@@ -97,6 +115,11 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.showVersion = true;
     } else if (arg == QLatin1String("-noMsg")) {
       options.raiseMessageWindow = false;
+    } else if (arg == QLatin1String("-displayGeometry") ||
+               arg == QLatin1String("-dg")) {
+      if ((i + 1) < args.size()) {
+        options.displayGeometry = args.at(++i);
+      }
     } else if (arg.startsWith(QLatin1Char('-'))) {
       options.invalidOption = arg;
     } else {
@@ -145,6 +168,139 @@ QString resolveDisplayFile(const QString &fileArgument)
   return QString();
 }
 
+std::optional<GeometrySpec> geometrySpecFromString(const QString &geometry)
+{
+  const QString trimmed = geometry.trimmed();
+  if (trimmed.isEmpty()) {
+    return std::nullopt;
+  }
+  QString effective = trimmed;
+  if (effective.startsWith(QLatin1Char('='))) {
+    effective.remove(0, 1);
+  }
+  static const QRegularExpression kGeometryPattern(
+      QStringLiteral(R"(^\s*(?:(\d+))?(?:x(\d+))?([+-]\d+)?([+-]\d+)?\s*$)"));
+  const QRegularExpressionMatch match = kGeometryPattern.match(effective);
+  if (!match.hasMatch()) {
+    return std::nullopt;
+  }
+
+  GeometrySpec spec;
+  if (!match.captured(1).isEmpty()) {
+    spec.hasWidth = true;
+    spec.width = match.captured(1).toInt();
+  }
+  if (!match.captured(2).isEmpty()) {
+    spec.hasHeight = true;
+    spec.height = match.captured(2).toInt();
+  }
+  if (!match.captured(3).isEmpty()) {
+    spec.hasX = true;
+    const QString xStr = match.captured(3);
+    spec.xFromRight = xStr.startsWith(QLatin1Char('-'));
+    spec.x = xStr.mid(1).toInt();
+  }
+  if (!match.captured(4).isEmpty()) {
+    spec.hasY = true;
+    const QString yStr = match.captured(4);
+    spec.yFromBottom = yStr.startsWith(QLatin1Char('-'));
+    spec.y = yStr.mid(1).toInt();
+  }
+  return spec;
+}
+
+void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
+{
+  if (!window) {
+    return;
+  }
+
+  auto resolveScreen = [window]() -> QScreen * {
+    QScreen *screen = window->screen();
+    if (!screen) {
+      screen = QGuiApplication::primaryScreen();
+    }
+    return screen;
+  };
+
+  if (spec.hasWidth || spec.hasHeight) {
+    if (auto *displayArea =
+            window->findChild<QWidget *>(QStringLiteral("displayArea"))) {
+      const QSize previousWindowSize = window->size();
+      const QSize previousAreaSize = displayArea->size();
+      const int extraWidth =
+          previousWindowSize.width() - previousAreaSize.width();
+      const int extraHeight =
+          previousWindowSize.height() - previousAreaSize.height();
+      int targetWidth = previousAreaSize.width();
+      int targetHeight = previousAreaSize.height();
+      if (spec.hasWidth && spec.width > 0) {
+        targetWidth = spec.width;
+      }
+      if (spec.hasHeight && spec.height > 0) {
+        targetHeight = spec.height;
+      }
+      displayArea->setMinimumSize(targetWidth, targetHeight);
+      displayArea->resize(targetWidth, targetHeight);
+      window->resize(targetWidth + extraWidth, targetHeight + extraHeight);
+    } else {
+      QSize target = window->size();
+      if (spec.hasWidth && spec.width > 0) {
+        target.setWidth(spec.width);
+      }
+      if (spec.hasHeight && spec.height > 0) {
+        target.setHeight(spec.height);
+      }
+      window->resize(target);
+    }
+  }
+
+  if (spec.hasX || spec.hasY) {
+    auto computeTarget = [&](const QSize &frameSize, const QRect &screenGeometry) {
+      QPoint target = window->pos();
+      if (spec.hasX) {
+        if (spec.xFromRight) {
+          target.setX(screenGeometry.x() + screenGeometry.width() -
+                      frameSize.width() - spec.x);
+        } else {
+          target.setX(screenGeometry.x() + spec.x);
+        }
+      }
+      if (spec.hasY) {
+        if (spec.yFromBottom) {
+          target.setY(screenGeometry.y() + screenGeometry.height() -
+                      frameSize.height() - spec.y);
+        } else {
+          target.setY(screenGeometry.y() + spec.y);
+        }
+      }
+      return target;
+    };
+
+    if (QScreen *screen = resolveScreen(); screen && !spec.xFromRight &&
+        !spec.yFromBottom) {
+      const QRect screenGeometry = screen->geometry();
+      const QSize frameSize = window->frameGeometry().size();
+      window->move(computeTarget(frameSize, screenGeometry));
+    }
+
+    auto moveWindow = [window, spec, resolveScreen, computeTarget]() {
+      QScreen *screen = resolveScreen();
+      if (!screen) {
+        return;
+      }
+      const QRect screenGeometry = screen->geometry();
+      const QSize frameSize = window->frameGeometry().size();
+      window->move(computeTarget(frameSize, screenGeometry));
+    };
+    if (window->isVisible()) {
+      moveWindow();
+    } else {
+      QTimer::singleShot(0, window, moveWindow);
+    }
+  }
+}
+
 }  // namespace
 
 int main(int argc, char *argv[])
@@ -161,6 +317,8 @@ int main(int argc, char *argv[])
 
   const QStringList args = QCoreApplication::arguments();
   const CommandLineOptions options = parseCommandLine(args);
+  const std::optional<GeometrySpec> geometrySpec =
+      geometrySpecFromString(options.displayGeometry);
 
   if (!options.invalidOption.isEmpty()) {
     fprintf(stderr, "\nInvalid option: %s\n",
@@ -171,6 +329,15 @@ int main(int argc, char *argv[])
   if (options.showHelp) {
     printUsage(programName(args));
     return 0;
+  }
+
+  if (!options.displayGeometry.isEmpty() && !options.displayFiles.isEmpty() &&
+      !geometrySpec) {
+    fprintf(stderr, "\nInvalid geometry: %s\n",
+        options.displayGeometry.toLocal8Bit().constData());
+    fflush(stderr);
+    printUsage(programName(args));
+    return 1;
   }
 
   if (options.showVersion) {
@@ -962,6 +1129,8 @@ int main(int argc, char *argv[])
   editModeButton->setChecked(true);
   if (options.startInExecuteMode) {
     executeModeButton->setChecked(true);
+    editModeButton->setEnabled(false);
+    executeModeButton->setEnabled(false);
   }
 
   if (updateMenus && *updateMenus) {
@@ -975,6 +1144,8 @@ int main(int argc, char *argv[])
 
   central->setLayout(layout);
   win.setCentralWidget(central);
+
+  bool loadedAnyDisplay = false;
 
   if (!options.displayFiles.isEmpty()) {
     QStringList resolvedFiles;
@@ -1007,18 +1178,28 @@ int main(int argc, char *argv[])
         delete displayWin;
         continue;
       }
+      if (geometrySpec) {
+        applyCommandLineGeometry(displayWin, *geometrySpec);
+      }
       registerDisplayWindow(displayWin);
+      loadedAnyDisplay = true;
     }
   }
 
   win.adjustSize();
   win.setFixedSize(win.sizeHint());
-  win.show();
-  positionWindowTopRight(&win, kMainWindowRightMargin, kMainWindowTopMargin);
-  QTimer::singleShot(0, &win,
-      [&, rightMargin = kMainWindowRightMargin,
-          topMargin = kMainWindowTopMargin]() {
-        positionWindowTopRight(&win, rightMargin, topMargin);
-      });
+  const bool minimizeMainWindow =
+      options.startInExecuteMode && loadedAnyDisplay;
+  if (minimizeMainWindow) {
+    win.showMinimized();
+  } else {
+    win.show();
+    positionWindowTopRight(&win, kMainWindowRightMargin, kMainWindowTopMargin);
+    QTimer::singleShot(0, &win,
+        [&, rightMargin = kMainWindowRightMargin,
+            topMargin = kMainWindowTopMargin]() {
+          positionWindowTopRight(&win, rightMargin, topMargin);
+        });
+  }
   return app.exec();
 }

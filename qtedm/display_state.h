@@ -52,6 +52,7 @@ enum class CreateTool {
 
 struct DisplayState {
   bool editMode = true;
+  bool raiseMessageWindow = true;
   QList<QPointer<DisplayWindow>> displays;
   CreateTool createTool = CreateTool::kNone;
   QPointer<QMainWindow> mainWindow;
@@ -60,4 +61,3 @@ struct DisplayState {
   std::shared_ptr<std::function<void()>> updateMenus;
   std::shared_ptr<ClipboardContent> clipboard;
 };
-

@@ -1,12 +1,13 @@
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
-#include <QFileDialog>
-#include <QFileInfo>
 #include <QColor>
+#include <cstdio>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFrame>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QKeySequence>
@@ -17,6 +18,9 @@
 #include <QPalette>
 #include <QPointer>
 #include <QRadioButton>
+#include <QDir>
+#include <QString>
+#include <QStringList>
 #include <QSizePolicy>
 #include <QMessageBox>
 #include <QStyleFactory>
@@ -37,6 +41,112 @@
 #include "statistics_window.h"
 #include "window_utils.h"
 
+namespace {
+
+constexpr char kVersionString[] =
+    "QtEDM Version 1.0.0  (EPICS 7.0.9.1-DEV)";
+
+struct CommandLineOptions {
+  bool startInExecuteMode = false;
+  bool showHelp = false;
+  bool showVersion = false;
+  bool raiseMessageWindow = true;
+  QString invalidOption;
+  QStringList displayFiles;
+};
+
+QString programName(const QStringList &args)
+{
+  if (args.isEmpty()) {
+    return QStringLiteral("qtedm");
+  }
+  return QFileInfo(args.first()).fileName();
+}
+
+void printUsage(const QString &program)
+{
+  fprintf(stdout, "\n%s\n", kVersionString);
+  fprintf(stdout,
+      "Usage:\n"
+      "  %s [X options]\n"
+      "  [-help | -h | -?]\n"
+      "  [-version]\n"
+      "  [-x | -e]\n"
+      "  [-noMsg]\n"
+      "  [display-files]\n"
+      "  [&]\n"
+      "\n",
+      program.toLocal8Bit().constData());
+  fflush(stdout);
+}
+
+CommandLineOptions parseCommandLine(const QStringList &args)
+{
+  CommandLineOptions options;
+  for (int i = 1; i < args.size(); ++i) {
+    const QString &arg = args.at(i);
+    if (arg == QLatin1String("-x")) {
+      options.startInExecuteMode = true;
+    } else if (arg == QLatin1String("-e")) {
+      options.startInExecuteMode = false;
+    } else if (arg == QLatin1String("-help") ||
+               arg == QLatin1String("-h") ||
+               arg == QLatin1String("-?")) {
+      options.showHelp = true;
+    } else if (arg == QLatin1String("-version")) {
+      options.showVersion = true;
+    } else if (arg == QLatin1String("-noMsg")) {
+      options.raiseMessageWindow = false;
+    } else if (arg.startsWith(QLatin1Char('-'))) {
+      options.invalidOption = arg;
+    } else {
+      options.displayFiles.push_back(arg);
+    }
+  }
+  if (!options.invalidOption.isEmpty()) {
+    options.showHelp = true;
+  }
+  if (options.showHelp) {
+    options.showVersion = true;
+  }
+  return options;
+}
+
+QStringList displaySearchPaths()
+{
+  QStringList searchPaths;
+  const QByteArray env = qgetenv("EPICS_DISPLAY_PATH");
+  if (!env.isEmpty()) {
+    const QStringList parts = QString::fromLocal8Bit(env).split(
+        QLatin1Char(':'), Qt::SkipEmptyParts);
+    for (const QString &part : parts) {
+      const QString trimmed = part.trimmed();
+      if (!trimmed.isEmpty()) {
+        searchPaths.push_back(trimmed);
+      }
+    }
+  }
+  return searchPaths;
+}
+
+QString resolveDisplayFile(const QString &fileArgument)
+{
+  QFileInfo directInfo(fileArgument);
+  if (directInfo.exists() && directInfo.isFile()) {
+    return directInfo.absoluteFilePath();
+  }
+  const QStringList searchPaths = displaySearchPaths();
+  for (const QString &basePath : searchPaths) {
+    QFileInfo candidate(QDir(basePath), fileArgument);
+    if (candidate.exists() && candidate.isFile()) {
+      return candidate.absoluteFilePath();
+    }
+  }
+  return QString();
+}
+
+}  // namespace
+
 int main(int argc, char *argv[])
 {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -48,6 +158,26 @@ int main(int argc, char *argv[])
 #endif
 
   QApplication app(argc, argv);
+
+  const QStringList args = QCoreApplication::arguments();
+  const CommandLineOptions options = parseCommandLine(args);
+
+  if (!options.invalidOption.isEmpty()) {
+    fprintf(stderr, "\nInvalid option: %s\n",
+        options.invalidOption.toLocal8Bit().constData());
+    fflush(stderr);
+  }
+
+  if (options.showHelp) {
+    printUsage(programName(args));
+    return 0;
+  }
+
+  if (options.showVersion) {
+    fprintf(stdout, "\n%s\n\n", kVersionString);
+    fflush(stdout);
+    return 0;
+  }
 
   if (auto *fusionStyle =
           QStyleFactory::create(QStringLiteral("Fusion"))) {
@@ -265,7 +395,6 @@ int main(int argc, char *argv[])
   auto *executeModeButton = new QRadioButton("Execute");
   editModeButton->setFont(fixed13Font);
   executeModeButton->setFont(fixed13Font);
-  editModeButton->setChecked(true);
   modeLayout->addWidget(editModeButton);
   modeLayout->addWidget(executeModeButton);
   modeBox->setLayout(modeLayout);
@@ -287,6 +416,7 @@ int main(int argc, char *argv[])
 
   auto statisticsWindow = QPointer<StatisticsWindow>(
     new StatisticsWindow(palette, fixed13Font, fixed10Font, &win));
+  state->raiseMessageWindow = options.raiseMessageWindow;
 
   QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
       [displayListDialog]() {
@@ -829,6 +959,10 @@ int main(int argc, char *argv[])
           (*updateMenus)();
         }
       });
+  editModeButton->setChecked(true);
+  if (options.startInExecuteMode) {
+    executeModeButton->setChecked(true);
+  }
 
   if (updateMenus && *updateMenus) {
     (*updateMenus)();
@@ -841,6 +975,41 @@ int main(int argc, char *argv[])
 
   central->setLayout(layout);
   win.setCentralWidget(central);
+
+  if (!options.displayFiles.isEmpty()) {
+    QStringList resolvedFiles;
+    for (const QString &file : options.displayFiles) {
+      if (!file.endsWith(QStringLiteral(".adl"), Qt::CaseInsensitive)) {
+        fprintf(stderr, "\nFile has wrong suffix: %s\n",
+            file.toLocal8Bit().constData());
+        fflush(stderr);
+        continue;
+      }
+      const QString resolved = resolveDisplayFile(file);
+      if (resolved.isEmpty()) {
+        fprintf(stderr, "\nCannot access file: %s\n",
+            file.toLocal8Bit().constData());
+        fflush(stderr);
+        continue;
+      }
+      resolvedFiles.push_back(resolved);
+    }
+    for (const QString &resolved : resolvedFiles) {
+      auto *displayWin = new DisplayWindow(displayPalette, palette,
+          fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
+      QString errorMessage;
+      if (!displayWin->loadFromFile(resolved, &errorMessage)) {
+        const QString message = errorMessage.isEmpty()
+            ? QStringLiteral("Failed to open display:\n%1").arg(resolved)
+            : errorMessage;
+        QMessageBox::critical(&win, QStringLiteral("Open Display"),
+            message);
+        delete displayWin;
+        continue;
+      }
+      registerDisplayWindow(displayWin);
+    }
+  }
 
   win.adjustSize();
   win.setFixedSize(win.sizeHint());

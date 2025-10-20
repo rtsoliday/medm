@@ -412,9 +412,26 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   const QColor bg = effectiveBackground();
 
   painter.save();
-  painter.setPen(QPen(fg, 1));
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(content.adjusted(0, 0, -1, -1));
+
+  QRect bevelOuter = content.adjusted(-1, -1, 1, 1);
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(bg);
+  painter.drawRect(bevelOuter);
+
+  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+  painter.setPen(QPen(bg.darker(145), 1));
+  painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+  painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
+
+  QRect bevelInner = content;
+  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+  painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+  painter.setPen(QPen(bg.darker(170), 1));
+  painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+  painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
   bool showIcon = true;
   const QString labelText = displayLabel(showIcon);
@@ -430,14 +447,27 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
 
   if (showIcon && iconRect.width() > 6 && iconRect.height() > 6) {
     QRect frame = iconRect.adjusted(0, 0, -1, -1);
-    painter.fillRect(frame.adjusted(1, 1, -1, -1), bg.darker(108));
-    painter.drawRect(frame);
+    QRect iconOuter = frame.adjusted(-1, -1, 1, 1);
+    painter.setPen(QPen(bg.lighter(135), 1));
+    painter.drawLine(iconOuter.topLeft(), iconOuter.topRight());
+    painter.drawLine(iconOuter.topLeft(), iconOuter.bottomLeft());
+    painter.setPen(QPen(bg.darker(145), 1));
+    painter.drawLine(iconOuter.bottomLeft(), iconOuter.bottomRight());
+    painter.drawLine(iconOuter.topRight(), iconOuter.bottomRight());
+
+    QRect iconInner = frame;
+    painter.setPen(QPen(bg.lighter(150), 1));
+    painter.drawLine(iconInner.topLeft(), iconInner.topRight());
+    painter.drawLine(iconInner.topLeft(), iconInner.bottomLeft());
+    painter.setPen(QPen(bg.darker(170), 1));
+    painter.drawLine(iconInner.bottomLeft(), iconInner.bottomRight());
+    painter.drawLine(iconInner.topRight(), iconInner.bottomRight());
+
+    painter.fillRect(iconInner.adjusted(1, 1, -1, -1), bg);
     const int barHeight = std::max(2, frame.height() / 3);
     QRect topRect(frame.left() + 2, frame.top() + 2,
         frame.width() - 4, barHeight);
     painter.fillRect(topRect, fg);
-    painter.setPen(QPen(bg, 1));
-    painter.drawLine(topRect.bottomLeft(), topRect.bottomRight());
   }
 
   QRect textRect = inner;
@@ -471,8 +501,9 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   const QColor bg = effectiveBackground();
 
   painter.save();
-  painter.setPen(QPen(fg, 1));
-  painter.drawRect(content.adjusted(0, 0, -1, -1));
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(bg);
+  painter.drawRect(content.adjusted(-1, -1, 0, 0));
 
   const int activeCount = activeEntryCount();
   const int displayCount = activeCount > 0 ? activeCount : 2;
@@ -497,15 +528,25 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
           buttonWidth, buttonHeight);
       buttonRect = buttonRect.adjusted(2, 2, -2, -2);
 
-      painter.fillRect(buttonRect, bg);
-      painter.setPen(QPen(bg.lighter(130), 1));
-      painter.drawLine(buttonRect.topLeft(), buttonRect.topRight());
-      painter.drawLine(buttonRect.topLeft(), buttonRect.bottomLeft());
-      painter.setPen(QPen(bg.darker(130), 1));
-      painter.drawLine(buttonRect.bottomLeft(), buttonRect.bottomRight());
-      painter.drawLine(buttonRect.topRight(), buttonRect.bottomRight());
+      QRect buttonOuter = buttonRect.adjusted(-1, -1, 1, 1);
+      painter.setPen(QPen(bg.lighter(135), 1));
+      painter.drawLine(buttonOuter.topLeft(), buttonOuter.topRight());
+      painter.drawLine(buttonOuter.topLeft(), buttonOuter.bottomLeft());
+      painter.setPen(QPen(bg.darker(145), 1));
+      painter.drawLine(buttonOuter.bottomLeft(), buttonOuter.bottomRight());
+      painter.drawLine(buttonOuter.topRight(), buttonOuter.bottomRight());
 
+      QRect buttonInner = buttonRect;
+      painter.setPen(QPen(bg.lighter(150), 1));
+      painter.drawLine(buttonInner.topLeft(), buttonInner.topRight());
+      painter.drawLine(buttonInner.topLeft(), buttonInner.bottomLeft());
+      painter.setPen(QPen(bg.darker(170), 1));
+      painter.drawLine(buttonInner.bottomLeft(), buttonInner.bottomRight());
+      painter.drawLine(buttonInner.topRight(), buttonInner.bottomRight());
+
+      painter.fillRect(buttonInner.adjusted(1, 1, -1, -1), bg);
       painter.setPen(fg);
+
       QString text;
       if (index < activeCount) {
         text = entryDisplayLabel(entries_[index]);
@@ -529,13 +570,24 @@ void RelatedDisplayElement::paintHiddenVisual(QPainter &painter,
   const QColor bg = effectiveBackground();
 
   painter.save();
-  painter.setPen(QPen(fg, 1));
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(content.adjusted(0, 0, -1, -1));
+  QRect hiddenOuter = content.adjusted(-1, -1, 1, 1);
+  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.drawLine(hiddenOuter.topLeft(), hiddenOuter.topRight());
+  painter.drawLine(hiddenOuter.topLeft(), hiddenOuter.bottomLeft());
+  painter.setPen(QPen(bg.darker(145), 1));
+  painter.drawLine(hiddenOuter.bottomLeft(), hiddenOuter.bottomRight());
+  painter.drawLine(hiddenOuter.topRight(), hiddenOuter.bottomRight());
+
+  QRect hiddenInner = content;
+  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.drawLine(hiddenInner.topLeft(), hiddenInner.topRight());
+  painter.drawLine(hiddenInner.topLeft(), hiddenInner.bottomLeft());
+  painter.setPen(QPen(bg.darker(170), 1));
+  painter.drawLine(hiddenInner.bottomLeft(), hiddenInner.bottomRight());
+  painter.drawLine(hiddenInner.topRight(), hiddenInner.bottomRight());
 
   QRect inner = content.adjusted(1, 1, -1, -1);
-  painter.fillRect(inner, QBrush(fg, Qt::BDiagPattern));
-  painter.fillRect(inner.adjusted(2, 2, -2, -2), bg);
+  painter.fillRect(inner, bg);
 
   bool showIcon = false;
   const QString text = displayLabel(showIcon);

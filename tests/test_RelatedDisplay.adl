@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
+		x=158
+		y=733
 		width=969
 		height=539
 	}
@@ -222,7 +222,7 @@ display {
 		x=22
 		y=458
 		width=600
-		height=17
+		height=20
 	}
 	display[0] {
 		label="Nebula"
@@ -419,35 +419,23 @@ display {
 	object {
 		x=18
 		y=272
-		width=160
-		height=88
+		width=76
+		height=20
 	}
 	display[0] {
 		label="Midnight"
 		name="midnightRun.adl"
 	}
-	display[1] {
-		name="batchJob.adl"
-		args="JOB=nightly"
-	}
-	display[2] {
-		label="Beacon"
-		name="beaconLight.adl"
-		args="DUTY=50"
-	}
-	display[3] {
-		label="Null"
-	}
 	clr=13
-	bclr=40
-	label="thirdRow"
+	bclr=51
+	label="-BOOSTER"
 }
 "related display" {
 	object {
 		x=19
 		y=371
 		width=600
-		height=15
+		height=20
 	}
 	display[0] {
 		label="Sunrise"

@@ -72,6 +72,7 @@ struct CommandLineOptions {
   bool showHelp = false;
   bool showVersion = false;
   bool raiseMessageWindow = true;
+  bool usePrivateColormap = false;
   bool useBigMousePointer = false;
   QString invalidOption;
   QStringList displayFiles;
@@ -99,7 +100,6 @@ void printUsage(const QString &program)
       "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
       "  [-noMsg]\n"
-      "  [-bigMousePointer]\n"
       "  [display-files]\n"
       "  [&]\n"
       "\n",
@@ -124,6 +124,8 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.raiseMessageWindow = false;
     } else if (arg == QLatin1String("-bigMousePointer")) {
       options.useBigMousePointer = true;
+    } else if (arg == QLatin1String("-cmap")) {
+      options.usePrivateColormap = true;
     } else if (arg == QLatin1String("-macro")) {
       if ((i + 1) < args.size()) {
         QString tmp = args.at(++i);

@@ -120,6 +120,7 @@ ifeq ($(OS), Linux)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
     $(Z_LIB) -lreadline $(PROD_SYS_LIBS)
+  PROD_SYS_LIBS += -lX11
 endif
 
 ifeq ($(OS), Darwin)

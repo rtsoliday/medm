@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QColor>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFont>
@@ -33,10 +34,36 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <climits>
+#include <cstring>
 #include <cstdio>
 #include <functional>
 #include <memory>
 #include <optional>
+
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+#include <QAbstractNativeEventFilter>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+#include <xcb/xcb.h>
+#include "../medm/medmVersion.h"
+#ifdef Status
+#undef Status
+typedef int Status;
+#endif
+#ifdef Bool
+#undef Bool
+#endif
+#ifdef None
+#undef None
+#endif
+#ifdef FocusIn
+#undef FocusIn
+#endif
+#ifdef FocusOut
+#undef FocusOut
+#endif
+#endif
 
 #include "display_properties.h"
 #include "display_state.h"
@@ -67,6 +94,12 @@ struct GeometrySpec {
   bool yFromBottom = false;
 };
 
+enum class RemoteMode {
+  kLocal,
+  kAttach,
+  kCleanup,
+};
+
 struct CommandLineOptions {
   bool startInExecuteMode = false;
   bool showHelp = false;
@@ -78,6 +111,8 @@ struct CommandLineOptions {
   QStringList displayFiles;
   QString displayGeometry;
   QString macroString;
+  RemoteMode remoteMode = RemoteMode::kLocal;
+  QStringList resolvedDisplayFiles;
 };
 
 QString programName(const QStringList &args)
@@ -97,6 +132,7 @@ void printUsage(const QString &program)
       "  [-help | -h | -?]\n"
       "  [-version]\n"
       "  [-x]\n"
+      "  [-local | -attach | -cleanup]\n"
       "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
       "  [-noMsg]\n"
@@ -114,6 +150,12 @@ CommandLineOptions parseCommandLine(const QStringList &args)
     const QString &arg = args.at(i);
     if (arg == QLatin1String("-x")) {
       options.startInExecuteMode = true;
+    } else if (arg == QLatin1String("-local")) {
+      options.remoteMode = RemoteMode::kLocal;
+    } else if (arg == QLatin1String("-attach")) {
+      options.remoteMode = RemoteMode::kAttach;
+    } else if (arg == QLatin1String("-cleanup")) {
+      options.remoteMode = RemoteMode::kCleanup;
     } else if (arg == QLatin1String("-help") ||
                arg == QLatin1String("-h") ||
                arg == QLatin1String("-?")) {
@@ -188,6 +230,28 @@ QString resolveDisplayFile(const QString &fileArgument)
     }
   }
   return QString();
+}
+
+QStringList resolveDisplayArguments(const QStringList &files)
+{
+  QStringList resolved;
+  for (const QString &file : files) {
+    if (!file.endsWith(QStringLiteral(".adl"), Qt::CaseInsensitive)) {
+      fprintf(stderr, "\nFile has wrong suffix: %s\n",
+          file.toLocal8Bit().constData());
+      fflush(stderr);
+      continue;
+    }
+    const QString resolvedPath = resolveDisplayFile(file);
+    if (resolvedPath.isEmpty()) {
+      fprintf(stderr, "\nCannot access file: %s\n",
+          file.toLocal8Bit().constData());
+      fflush(stderr);
+      continue;
+    }
+    resolved.push_back(resolvedPath);
+  }
+  return resolved;
 }
 
 using MacroMap = QHash<QString, QString>;
@@ -355,6 +419,212 @@ void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
   }
 }
 
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+constexpr int kMaxCharsInClientMessage = 20;
+
+int ignoreXErrorHandler(Display *, XErrorEvent *)
+{
+  return 0;
+}
+
+QByteArray remotePropertyName(const CommandLineOptions &options)
+{
+  const char *suffix =
+      options.startInExecuteMode ? "_EXEC_FIXED" : "_EDIT_FIXED";
+#ifdef MEDM_VERSION_DIGITS
+  QByteArray base(MEDM_VERSION_DIGITS);
+#else
+  QByteArray base("QTEDM010000");
+#endif
+  base += suffix;
+  return base;
+}
+
+struct RemoteContext {
+  RemoteMode mode = RemoteMode::kLocal;
+  Display *display = nullptr;
+  Window rootWindow = 0;
+  Atom propertyAtom = 0;
+  Window existingWindow = 0;
+  Window hostWindow = 0;
+  bool active = false;
+  bool propertyRegistered = false;
+};
+
+void sendRemoteRequestMessages(Display *display, Window targetWindow, Atom atom,
+    const QString &fullPathName, const QString &macroString,
+    const QString &geometryString)
+{
+  if (!display || targetWindow == 0 || atom == 0) {
+    return;
+  }
+
+  XClientMessageEvent clientMessageEvent;
+  std::memset(&clientMessageEvent, 0, sizeof(clientMessageEvent));
+  clientMessageEvent.type = ClientMessage;
+  clientMessageEvent.serial = 0;
+  clientMessageEvent.send_event = True;
+  clientMessageEvent.display = display;
+  clientMessageEvent.window = targetWindow;
+  clientMessageEvent.message_type = atom;
+  clientMessageEvent.format = 8;
+
+  const QByteArray pathBytes = QFile::encodeName(fullPathName);
+  const QByteArray macroBytes =
+      macroString.isEmpty() ? QByteArray() : QByteArray(macroString.toLocal8Bit());
+  const QByteArray geometryBytes = geometryString.isEmpty()
+      ? QByteArray()
+      : QByteArray(geometryString.toLocal8Bit());
+
+  int index = 0;
+  auto flushEvent = [&]() {
+    XSendEvent(display, targetWindow, True, NoEventMask,
+        reinterpret_cast<XEvent *>(&clientMessageEvent));
+  };
+  auto appendChar = [&](char ch) {
+    if (index == kMaxCharsInClientMessage) {
+      flushEvent();
+      index = 0;
+    }
+    clientMessageEvent.data.b[index++] = ch;
+  };
+  auto appendString = [&](const QByteArray &bytes) {
+    for (char ch : bytes) {
+      appendChar(ch);
+    }
+  };
+
+  appendChar('(');
+  appendString(pathBytes);
+  appendChar(';');
+  appendString(macroBytes);
+  appendChar(';');
+  appendString(geometryBytes);
+  appendChar(')');
+  for (int i = index; i < kMaxCharsInClientMessage; ++i) {
+    clientMessageEvent.data.b[i] = ' ';
+  }
+  flushEvent();
+  XFlush(display);
+}
+
+class RemoteRequestFilter : public QAbstractNativeEventFilter {
+ public:
+  using RequestHandler =
+      std::function<void(const QString &, const QString &, const QString &)>;
+
+  RemoteRequestFilter(Atom propertyAtom, Window hostWindow,
+      RequestHandler handler)
+    : propertyAtom_(propertyAtom)
+    , hostWindow_(hostWindow)
+    , handler_(std::move(handler))
+  {}
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  bool nativeEventFilter(const QByteArray &eventType, void *message,
+      qintptr *result) override
+#else
+  bool nativeEventFilter(const QByteArray &eventType, void *message,
+      long *result) override
+#endif
+  {
+    Q_UNUSED(result);
+    if (eventType != QByteArrayLiteral("xcb_generic_event_t")) {
+      return false;
+    }
+    auto *genericEvent =
+        static_cast<xcb_generic_event_t *>(message);
+    const uint8_t responseType = genericEvent->response_type & ~0x80;
+    if (responseType != XCB_CLIENT_MESSAGE) {
+      return false;
+    }
+    auto *clientMessage =
+        reinterpret_cast<xcb_client_message_event_t *>(genericEvent);
+    if (clientMessage->type != propertyAtom_) {
+      return false;
+    }
+    if (clientMessage->window != hostWindow_) {
+      return false;
+    }
+    const char *data =
+        reinterpret_cast<const char *>(clientMessage->data.data8);
+    for (int i = 0; i < kMaxCharsInClientMessage; ++i) {
+      const char ch = data[i];
+      if (ch == '(') {
+        collecting_ = true;
+        messageClass_ = MessageClass::kFilename;
+        filenameBuffer_.clear();
+        macroBuffer_.clear();
+        geometryBuffer_.clear();
+        continue;
+      }
+      if (!collecting_) {
+        continue;
+      }
+      if (ch == ';') {
+        if (messageClass_ == MessageClass::kFilename) {
+          messageClass_ = MessageClass::kMacro;
+        } else {
+          messageClass_ = MessageClass::kGeometry;
+        }
+        continue;
+      }
+      if (ch == ')') {
+        collecting_ = false;
+        messageClass_ = MessageClass::kNone;
+        if (handler_) {
+          const QString filename =
+              QString::fromLocal8Bit(filenameBuffer_.constData(),
+                  filenameBuffer_.size());
+          const QString macro =
+              QString::fromLocal8Bit(macroBuffer_.constData(),
+                  macroBuffer_.size());
+          const QString geometry =
+              QString::fromLocal8Bit(geometryBuffer_.constData(),
+                  geometryBuffer_.size());
+          handler_(filename, macro, geometry);
+        }
+        continue;
+      }
+      if (ch == '\0') {
+        continue;
+      }
+      switch (messageClass_) {
+      case MessageClass::kFilename:
+        filenameBuffer_.append(ch);
+        break;
+      case MessageClass::kMacro:
+        macroBuffer_.append(ch);
+        break;
+      case MessageClass::kGeometry:
+        geometryBuffer_.append(ch);
+        break;
+      case MessageClass::kNone:
+        break;
+      }
+    }
+    return false;
+  }
+
+ private:
+  enum class MessageClass {
+    kNone,
+    kFilename,
+    kMacro,
+    kGeometry,
+  };
+
+  Atom propertyAtom_ = 0;
+  Window hostWindow_ = 0;
+  RequestHandler handler_;
+  bool collecting_ = false;
+  MessageClass messageClass_ = MessageClass::kNone;
+  QByteArray filenameBuffer_;
+  QByteArray macroBuffer_;
+  QByteArray geometryBuffer_;
+};
+#endif  // defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+
 }  // namespace
 
 int main(int argc, char *argv[])
@@ -371,8 +641,22 @@ int main(int argc, char *argv[])
 
   const QStringList args = QCoreApplication::arguments();
   CommandLineOptions options = parseCommandLine(args);
+  options.resolvedDisplayFiles = resolveDisplayArguments(options.displayFiles);
   const std::optional<GeometrySpec> geometrySpec =
       geometrySpecFromString(options.displayGeometry);
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+  RemoteContext remoteContext;
+  remoteContext.mode = options.remoteMode;
+  std::unique_ptr<RemoteRequestFilter> remoteFilter;
+#else
+  if (options.remoteMode != RemoteMode::kLocal) {
+    fprintf(stdout,
+        "\nRemote control options are only supported on X11 platforms."
+        " Proceeding in local mode.\n");
+    fflush(stdout);
+    options.remoteMode = RemoteMode::kLocal;
+  }
+#endif
 
   if (!options.invalidOption.isEmpty()) {
     fprintf(stderr, "\nInvalid option: %s\n",
@@ -401,6 +685,100 @@ int main(int argc, char *argv[])
     printUsage(programName(args));
     return 1;
   }
+
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+  if (!options.showVersion && remoteContext.mode != RemoteMode::kLocal) {
+    if (QGuiApplication::platformName() != QLatin1String("xcb")) {
+      fprintf(stdout,
+          "\nRemote control options require an X11 platform. Proceeding in local mode.\n");
+      fflush(stdout);
+      options.remoteMode = RemoteMode::kLocal;
+      remoteContext.mode = RemoteMode::kLocal;
+    } else {
+      remoteContext.display = XOpenDisplay(nullptr);
+      if (!remoteContext.display) {
+        fprintf(stdout,
+            "\nCannot access X11 display connection. Proceeding in local mode.\n");
+        fflush(stdout);
+        options.remoteMode = RemoteMode::kLocal;
+        remoteContext.mode = RemoteMode::kLocal;
+      } else {
+        remoteContext.active = true;
+        remoteContext.rootWindow = DefaultRootWindow(remoteContext.display);
+        const QByteArray propertyName = remotePropertyName(options);
+        remoteContext.propertyAtom = XInternAtom(remoteContext.display,
+            propertyName.constData(), False);
+        Atom type = 0;
+        int format = 0;
+        unsigned long nitems = 0;
+        unsigned long bytesAfter = 0;
+        unsigned char *propertyData = nullptr;
+        Status status = XGetWindowProperty(remoteContext.display,
+            remoteContext.rootWindow, remoteContext.propertyAtom, 0, PATH_MAX,
+            False, AnyPropertyType, &type, &format, &nitems, &bytesAfter,
+            &propertyData);
+        if (status == Success && type != 0 && propertyData &&
+            format == 32 && nitems > 0) {
+          remoteContext.existingWindow =
+              reinterpret_cast<Window *>(propertyData)[0];
+        }
+        if (propertyData) {
+          XFree(propertyData);
+        }
+
+        bool attachToExisting =
+            remoteContext.mode == RemoteMode::kAttach &&
+            remoteContext.existingWindow != 0;
+        if (attachToExisting) {
+          XWindowAttributes attributes;
+          auto previousHandler =
+              XSetErrorHandler(ignoreXErrorHandler);
+          Status attributeStatus = XGetWindowAttributes(remoteContext.display,
+              remoteContext.existingWindow, &attributes);
+          XSetErrorHandler(previousHandler);
+          if (!attributeStatus) {
+            fprintf(stdout,
+                "\nCannot connect to existing QtEDM because it is invalid\n"
+                "  (An accompanying Bad Window error can be ignored)\n"
+                "  Continuing with this one as if -cleanup were specified\n");
+            fprintf(stdout,
+                "(Use -local to not use existing QtEDM or be available as an existing QtEDM\n"
+                "  or -cleanup to set this QtEDM as the existing one)\n");
+            fflush(stdout);
+          } else {
+            if (options.resolvedDisplayFiles.isEmpty()) {
+              fprintf(stdout,
+                  "\nAborting: No valid display specified and already "
+                  "a remote QtEDM running.\n");
+              fprintf(stdout,
+                  "(Use -local to not use existing QtEDM or be available as an existing QtEDM\n"
+                  "  or -cleanup to set this QtEDM as the existing one)\n");
+              fflush(stdout);
+              return 0;
+            }
+            fprintf(stdout, "\nAttaching to existing QtEDM\n");
+            for (const QString &resolved : options.resolvedDisplayFiles) {
+              sendRemoteRequestMessages(remoteContext.display,
+                  remoteContext.existingWindow, remoteContext.propertyAtom,
+                  resolved, options.macroString, options.displayGeometry);
+              fprintf(stdout, "  Dispatched: %s\n",
+                  resolved.toLocal8Bit().constData());
+            }
+            fprintf(stdout,
+                "(Use -local to not use existing QtEDM or be available as an existing QtEDM\n"
+                "  or -cleanup to set this QtEDM as the existing one)\n");
+            fflush(stdout);
+            if (remoteContext.display) {
+              XCloseDisplay(remoteContext.display);
+              remoteContext.display = nullptr;
+            }
+            return 0;
+          }
+        }
+      }
+    }
+  }
+#endif
 
   if (options.showVersion) {
     fprintf(stdout, "\n%s\n\n", kVersionString);
@@ -1224,28 +1602,91 @@ int main(int argc, char *argv[])
   central->setLayout(layout);
   win.setCentralWidget(central);
 
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+  if (remoteContext.active) {
+    remoteContext.hostWindow = static_cast<Window>(win.winId());
+    XChangeProperty(remoteContext.display, remoteContext.rootWindow,
+        remoteContext.propertyAtom, XA_WINDOW, 32, PropModeReplace,
+        reinterpret_cast<const unsigned char *>(&remoteContext.hostWindow), 1);
+    XFlush(remoteContext.display);
+    remoteContext.propertyRegistered = true;
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &win,
+        [remote = &remoteContext]() {
+          if (remote->display && remote->propertyRegistered) {
+            XDeleteProperty(remote->display, remote->rootWindow,
+                remote->propertyAtom);
+            XFlush(remote->display);
+            remote->propertyRegistered = false;
+          }
+        });
+    auto remoteHandler =
+        [state, displayPalette, &palette, fixed10Font, fixed13Font, &win,
+            registerDisplayWindow](const QString &filename,
+                const QString &macroString, const QString &geometryString) {
+          fprintf(stdout, "\nFile Dispatch Request:\n");
+          if (!filename.isEmpty()) {
+            fprintf(stdout, "  filename = %s\n",
+                filename.toLocal8Bit().constData());
+          }
+          if (!macroString.isEmpty()) {
+            fprintf(stdout, "  macro = %s\n",
+                macroString.toLocal8Bit().constData());
+          }
+          if (!geometryString.isEmpty()) {
+            fprintf(stdout, "  geometry = %s\n",
+                geometryString.toLocal8Bit().constData());
+          }
+          fflush(stdout);
+
+          const QString resolved = resolveDisplayFile(filename);
+          if (resolved.isEmpty()) {
+            fprintf(stderr, "\nCannot access file: %s\n",
+                filename.toLocal8Bit().constData());
+            fflush(stderr);
+            return;
+          }
+
+          const MacroMap macros = parseMacroDefinitionString(macroString);
+          auto *displayWin = new DisplayWindow(displayPalette, palette,
+              fixed10Font, fixed13Font,
+              std::weak_ptr<DisplayState>(state));
+          QString errorMessage;
+          if (!displayWin->loadFromFile(resolved, &errorMessage, macros)) {
+            const QString message = errorMessage.isEmpty()
+                ? QStringLiteral("Failed to open display:\n%1").arg(resolved)
+                : errorMessage;
+            QMessageBox::critical(&win, QStringLiteral("Open Display"),
+                message);
+            delete displayWin;
+            return;
+          }
+
+          if (!geometryString.isEmpty()) {
+            const auto spec = geometrySpecFromString(geometryString);
+            if (spec) {
+              applyCommandLineGeometry(displayWin, *spec);
+            } else {
+              fprintf(stderr, "\nInvalid geometry: %s\n",
+                  geometryString.toLocal8Bit().constData());
+              fflush(stderr);
+            }
+          }
+
+          registerDisplayWindow(displayWin);
+        };
+    remoteFilter = std::make_unique<RemoteRequestFilter>(
+        remoteContext.propertyAtom, remoteContext.hostWindow, remoteHandler);
+    if (QCoreApplication *core = QCoreApplication::instance()) {
+      core->installNativeEventFilter(remoteFilter.get());
+    }
+  }
+#endif
+
   const MacroMap macroDefinitions = parseMacroDefinitionString(options.macroString);
   bool loadedAnyDisplay = false;
 
-  if (!options.displayFiles.isEmpty()) {
-    QStringList resolvedFiles;
-    for (const QString &file : options.displayFiles) {
-      if (!file.endsWith(QStringLiteral(".adl"), Qt::CaseInsensitive)) {
-        fprintf(stderr, "\nFile has wrong suffix: %s\n",
-            file.toLocal8Bit().constData());
-        fflush(stderr);
-        continue;
-      }
-      const QString resolved = resolveDisplayFile(file);
-      if (resolved.isEmpty()) {
-        fprintf(stderr, "\nCannot access file: %s\n",
-            file.toLocal8Bit().constData());
-        fflush(stderr);
-        continue;
-      }
-      resolvedFiles.push_back(resolved);
-    }
-    for (const QString &resolved : resolvedFiles) {
+  if (!options.resolvedDisplayFiles.isEmpty()) {
+    for (const QString &resolved : options.resolvedDisplayFiles) {
       auto *displayWin = new DisplayWindow(displayPalette, palette,
           fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
       QString errorMessage;
@@ -1281,5 +1722,24 @@ int main(int argc, char *argv[])
           positionWindowTopRight(&win, rightMargin, topMargin);
         });
   }
-  return app.exec();
+  const int exitCode = app.exec();
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+  if (remoteFilter) {
+    if (QCoreApplication *core = QCoreApplication::instance()) {
+      core->removeNativeEventFilter(remoteFilter.get());
+    }
+    remoteFilter.reset();
+  }
+  if (remoteContext.display) {
+    if (remoteContext.propertyRegistered) {
+      XDeleteProperty(remoteContext.display, remoteContext.rootWindow,
+          remoteContext.propertyAtom);
+      XFlush(remoteContext.display);
+      remoteContext.propertyRegistered = false;
+    }
+    XCloseDisplay(remoteContext.display);
+    remoteContext.display = nullptr;
+  }
+#endif
+  return exitCode;
 }

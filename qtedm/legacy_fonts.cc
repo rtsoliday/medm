@@ -27,6 +27,8 @@
 
 namespace {
 
+using LegacyFonts::WidgetDMAliasMode;
+
 #if defined(Q_OS_WIN) || defined(Q_OS_MAC)
 
 QFont loadSystemFont(const char *family, int pixelSize,
@@ -148,6 +150,58 @@ bool isBitstreamCharterXLFD(const QString &key, int *pixelSize)
   return true;
 }
 
+struct WidgetDMAliasEntry {
+  const char *alias;
+  const char *fixedKey;
+  int pixelSize;
+};
+
+const WidgetDMAliasEntry kWidgetDMAliasEntries[] = {
+    {"widgetDM_4", "miscFixed8", 4},
+    {"widgetDM_6", "miscFixed8", 6},
+    {"widgetDM_8", "miscFixed9", 8},
+    {"widgetDM_10", "miscFixed10", 10},
+    {"widgetDM_12", "miscFixed7x13", 12},
+    {"widgetDM_14", "miscFixed7x14", 14},
+    {"widgetDM_16", "miscFixed9x15", 16},
+    {"widgetDM_18", "sonyFixed8x16", 18},
+    {"widgetDM_20", "miscFixed10x20", 20},
+    {"widgetDM_22", "sonyFixed12x24", 22},
+    {"widgetDM_24", "sonyFixed12x24", 24},
+    {"widgetDM_30", "adobeTimes18", 30},
+    {"widgetDM_36", "adobeHelvetica24", 36},
+    {"widgetDM_40", "adobeHelveticaBold24", 40},
+    {"widgetDM_48", "adobeHelveticaBold24", 48},
+    {"widgetDM_60", "adobeHelveticaBold24", 60},
+};
+
+WidgetDMAliasMode gAliasMode = WidgetDMAliasMode::kFixed;
+
+void applyWidgetDMAliasMode(QHash<QString, QFont> &fonts,
+    WidgetDMAliasMode mode)
+{
+  for (const WidgetDMAliasEntry &entry : kWidgetDMAliasEntries) {
+    const QString aliasKey = QString::fromLatin1(entry.alias);
+    fonts.remove(aliasKey);
+
+    QFont font;
+    if (mode == WidgetDMAliasMode::kFixed) {
+      const QString baseKey = QString::fromLatin1(entry.fixedKey);
+      font = fonts.value(baseKey);
+    } else {
+      font = loadBitstreamCharterBold(entry.pixelSize);
+      if (font.family().isEmpty()) {
+        const QString baseKey = QString::fromLatin1(entry.fixedKey);
+        font = fonts.value(baseKey);
+      }
+    }
+
+    if (!font.family().isEmpty()) {
+      fonts.insert(aliasKey, font);
+    }
+  }
+}
+
 QHash<QString, QFont> &fontCache()
 {
   static QHash<QString, QFont> fonts = [] {
@@ -247,37 +301,7 @@ QHash<QString, QFont> &fontCache()
     }
 #endif
 
-    struct FontAlias {
-      const char *alias;
-      const char *key;
-    };
-
-    const FontAlias fontAliases[] = {
-        {"widgetDM_4", "miscFixed8"},
-        {"widgetDM_6", "miscFixed8"},
-        {"widgetDM_8", "miscFixed9"},
-        {"widgetDM_10", "miscFixed10"},
-        {"widgetDM_12", "miscFixed7x13"},
-        {"widgetDM_14", "miscFixed7x14"},
-        {"widgetDM_16", "miscFixed9x15"},
-        {"widgetDM_18", "sonyFixed8x16"},
-        {"widgetDM_20", "miscFixed10x20"},
-        {"widgetDM_22", "sonyFixed12x24"},
-        {"widgetDM_24", "sonyFixed12x24"},
-        {"widgetDM_30", "adobeTimes18"},
-        {"widgetDM_36", "adobeHelvetica24"},
-        {"widgetDM_40", "adobeHelveticaBold24"},
-        {"widgetDM_48", "adobeHelveticaBold24"},
-        {"widgetDM_60", "adobeHelveticaBold24"},
-    };
-
-    for (const FontAlias &alias : fontAliases) {
-      const QString key = QString::fromLatin1(alias.key);
-      const QFont font = fonts.value(key);
-      if (!font.family().isEmpty()) {
-        fonts.insert(QString::fromLatin1(alias.alias), font);
-      }
-    }
+    applyWidgetDMAliasMode(fonts, WidgetDMAliasMode::kFixed);
 
     return fonts;
   }();
@@ -321,6 +345,17 @@ QFont fontOrDefault(const QString &key, const QFont &fallback)
     return candidate;
   }
   return fallback;
+}
+
+void setWidgetDMAliasMode(WidgetDMAliasMode mode)
+{
+  if (gAliasMode == mode) {
+    return;
+  }
+
+  QHash<QString, QFont> &fonts = fontCache();
+  applyWidgetDMAliasMode(fonts, mode);
+  gAliasMode = mode;
 }
 
 } // namespace LegacyFonts

@@ -113,6 +113,7 @@ struct CommandLineOptions {
   QString macroString;
   RemoteMode remoteMode = RemoteMode::kLocal;
   QStringList resolvedDisplayFiles;
+  QString displayFont = QStringLiteral("alias");
 };
 
 QString programName(const QStringList &args)
@@ -135,6 +136,7 @@ void printUsage(const QString &program)
       "  [-local | -attach | -cleanup]\n"
       "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
+      "  [-displayFont alias|scalable]\n"
       "  [-noMsg]\n"
       "  [display-files]\n"
       "  [&]\n"
@@ -183,6 +185,12 @@ CommandLineOptions parseCommandLine(const QStringList &args)
                arg == QLatin1String("-dg")) {
       if ((i + 1) < args.size()) {
         options.displayGeometry = args.at(++i);
+      }
+    } else if (arg == QLatin1String("-displayFont")) {
+      if ((i + 1) < args.size()) {
+        options.displayFont = args.at(++i).trimmed();
+      } else {
+        options.invalidOption = arg;
       }
     } else if (arg.startsWith(QLatin1Char('-'))) {
       options.invalidOption = arg;
@@ -784,6 +792,19 @@ int main(int argc, char *argv[])
     fprintf(stdout, "\n%s\n\n", kVersionString);
     fflush(stdout);
     return 0;
+  }
+
+  if (options.displayFont.compare(QStringLiteral("scalable"), Qt::CaseInsensitive) == 0) {
+    LegacyFonts::setWidgetDMAliasMode(LegacyFonts::WidgetDMAliasMode::kScalable);
+  } else if (options.displayFont.isEmpty() ||
+             options.displayFont.compare(QStringLiteral("alias"), Qt::CaseInsensitive) == 0) {
+    LegacyFonts::setWidgetDMAliasMode(LegacyFonts::WidgetDMAliasMode::kFixed);
+  } else {
+    fprintf(stdout, "\nUnsupported display font specification: %s\n"
+                    "  Falling back to alias fonts.\n",
+        options.displayFont.toLocal8Bit().constData());
+    fflush(stdout);
+    LegacyFonts::setWidgetDMAliasMode(LegacyFonts::WidgetDMAliasMode::kFixed);
   }
 
   if (auto *fusionStyle =

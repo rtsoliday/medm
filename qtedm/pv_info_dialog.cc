@@ -55,7 +55,7 @@ PvInfoDialog::PvInfoDialog(const QPalette &basePalette,
                        "variables associated with the object under the cursor."));
   });
 
-  resize(540, 420);
+  resize(350, 420);
 }
 
 void PvInfoDialog::setContent(const QString &text)

@@ -10,6 +10,7 @@
 #include <QFrame>
 #include <QGroupBox>
 #include <QGuiApplication>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
@@ -73,6 +74,7 @@ struct CommandLineOptions {
   QString invalidOption;
   QStringList displayFiles;
   QString displayGeometry;
+  QString macroString;
 };
 
 QString programName(const QStringList &args)
@@ -92,6 +94,7 @@ void printUsage(const QString &program)
       "  [-help | -h | -?]\n"
       "  [-version]\n"
       "  [-x]\n"
+      "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
       "  [-noMsg]\n"
       "  [display-files]\n"
@@ -116,6 +119,17 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.showVersion = true;
     } else if (arg == QLatin1String("-noMsg")) {
       options.raiseMessageWindow = false;
+    } else if (arg == QLatin1String("-macro")) {
+      if ((i + 1) < args.size()) {
+        QString tmp = args.at(++i);
+        if (!tmp.isEmpty() && tmp.front() == QLatin1Char('"')) {
+          tmp.remove(0, 1);
+        }
+        if (!tmp.isEmpty() && tmp.back() == QLatin1Char('"')) {
+          tmp.chop(1);
+        }
+        options.macroString = tmp.trimmed();
+      }
     } else if (arg == QLatin1String("-displayGeometry") ||
                arg == QLatin1String("-dg")) {
       if ((i + 1) < args.size()) {
@@ -167,6 +181,38 @@ QString resolveDisplayFile(const QString &fileArgument)
     }
   }
   return QString();
+}
+
+using MacroMap = QHash<QString, QString>;
+
+MacroMap parseMacroDefinitionString(const QString &macroString)
+{
+  MacroMap macros;
+  if (macroString.isEmpty()) {
+    return macros;
+  }
+  const QStringList entries = macroString.split(QLatin1Char(','), Qt::KeepEmptyParts);
+  for (const QString &entry : entries) {
+    const QString trimmedEntry = entry.trimmed();
+    if (trimmedEntry.isEmpty()) {
+      continue;
+    }
+    const int equalsIndex = trimmedEntry.indexOf(QLatin1Char('='));
+    if (equalsIndex <= 0) {
+      fprintf(stderr, "\nInvalid macro definition: %s\n",
+          trimmedEntry.toLocal8Bit().constData());
+      continue;
+    }
+    const QString name = trimmedEntry.left(equalsIndex).trimmed();
+    const QString value = trimmedEntry.mid(equalsIndex + 1).trimmed();
+    if (name.isEmpty()) {
+      fprintf(stderr, "\nInvalid macro definition: %s\n",
+          trimmedEntry.toLocal8Bit().constData());
+      continue;
+    }
+    macros.insert(name, value);
+  }
+  return macros;
 }
 
 std::optional<GeometrySpec> geometrySpecFromString(const QString &geometry)
@@ -317,7 +363,7 @@ int main(int argc, char *argv[])
   QApplication app(argc, argv);
 
   const QStringList args = QCoreApplication::arguments();
-  const CommandLineOptions options = parseCommandLine(args);
+  CommandLineOptions options = parseCommandLine(args);
   const std::optional<GeometrySpec> geometrySpec =
       geometrySpecFromString(options.displayGeometry);
 
@@ -330,6 +376,13 @@ int main(int argc, char *argv[])
   if (options.showHelp) {
     printUsage(programName(args));
     return 0;
+  }
+
+  if (!options.macroString.isEmpty() && !options.startInExecuteMode) {
+    fprintf(stdout, "\nIgnored -macro command line option\n"
+                    "  (Only valid for Execute (-x) mode operation)\n");
+    fflush(stdout);
+    options.macroString.clear();
   }
 
   if (!options.displayGeometry.isEmpty() && !options.displayFiles.isEmpty() &&
@@ -1163,6 +1216,7 @@ int main(int argc, char *argv[])
   central->setLayout(layout);
   win.setCentralWidget(central);
 
+  const MacroMap macroDefinitions = parseMacroDefinitionString(options.macroString);
   bool loadedAnyDisplay = false;
 
   if (!options.displayFiles.isEmpty()) {
@@ -1187,7 +1241,7 @@ int main(int argc, char *argv[])
       auto *displayWin = new DisplayWindow(displayPalette, palette,
           fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
       QString errorMessage;
-      if (!displayWin->loadFromFile(resolved, &errorMessage)) {
+      if (!displayWin->loadFromFile(resolved, &errorMessage, macroDefinitions)) {
         const QString message = errorMessage.isEmpty()
             ? QStringLiteral("Failed to open display:\n%1").arg(resolved)
             : errorMessage;

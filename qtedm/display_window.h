@@ -39,6 +39,7 @@
 #include <QPolygon>
 #include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QRadioButton>
 #include <QRect>
 #include <QResizeEvent>

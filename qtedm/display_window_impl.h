@@ -1461,7 +1461,8 @@ public:
 
   bool save(QWidget *dialogParent = nullptr);
   bool saveAs(QWidget *dialogParent = nullptr);
-  bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr);
+  bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr,
+      const QHash<QString, QString> &macros = {});
   QString filePath() const
   {
     return filePath_;
@@ -1959,6 +1960,8 @@ private:
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
   void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
+  static QString applyMacroSubstitutions(const QString &input,
+      const QHash<QString, QString> &macros);
   void writeWidgetAdl(QTextStream &stream, QWidget *widget, int indent,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveForeground,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveBackground) const;
@@ -13122,7 +13125,7 @@ inline bool DisplayWindow::saveAs(QWidget *dialogParent)
 }
 
 inline bool DisplayWindow::loadFromFile(const QString &filePath,
-    QString *errorMessage)
+    QString *errorMessage, const QHash<QString, QString> &macros)
 {
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -13135,8 +13138,9 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   QTextStream stream(&file);
   setUtf8Encoding(stream);
   const QString contents = stream.readAll();
+  const QString processedContents = applyMacroSubstitutions(contents, macros);
 
-  std::optional<AdlNode> document = AdlParser::parse(contents, errorMessage);
+  std::optional<AdlNode> document = AdlParser::parse(processedContents, errorMessage);
   if (!document) {
     return false;
   }
@@ -13184,6 +13188,44 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   currentLoadDirectory_ = previousLoadDirectory;
   notifyMenus();
   return displayLoaded || elementLoaded;
+}
+
+inline QString DisplayWindow::applyMacroSubstitutions(const QString &input,
+    const QHash<QString, QString> &macros)
+{
+  if (macros.isEmpty()) {
+    return input;
+  }
+
+  static constexpr int kMaxIterations = 10;
+  QRegularExpression pattern(QStringLiteral(R"(\$\(([^)]+)\))"));
+  QString current = input;
+  for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
+    QString result;
+    result.reserve(current.size());
+    int lastIndex = 0;
+    QRegularExpressionMatchIterator it = pattern.globalMatch(current);
+    bool replaced = false;
+    while (it.hasNext()) {
+      const QRegularExpressionMatch match = it.next();
+      result.append(current.mid(lastIndex, match.capturedStart() - lastIndex));
+      const QString name = match.captured(1);
+      const auto macroIt = macros.constFind(name);
+      if (macroIt != macros.constEnd()) {
+        result.append(*macroIt);
+        replaced = true;
+      } else {
+        result.append(match.captured(0));
+      }
+      lastIndex = match.capturedEnd();
+    }
+    result.append(current.mid(lastIndex));
+    if (!replaced) {
+      return current;
+    }
+    current = result;
+  }
+  return current;
 }
 
 inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNameHint) const

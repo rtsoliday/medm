@@ -3,7 +3,9 @@
 #include <QByteArray>
 #include <QFontDatabase>
 #include <QFontInfo>
+#include <QHash>
 #include <QStringList>
+#include <QtGlobal>
 
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MAC)
 #include "resources/fonts/adobe_helvetica_24_otb.h"
@@ -20,6 +22,8 @@
 #include "resources/fonts/sony_fixed_12x24_otb.h"
 #include "resources/fonts/sony_fixed_8x16_otb.h"
 #endif
+
+#include "resources/fonts/bitstream_charter_bold_otf.h"
 
 namespace {
 
@@ -60,14 +64,26 @@ QFont loadSystemFont(const char *family, int pixelSize,
   return font;
 }
 
-#else
+#endif
 
 QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
     int pixelSize, QFont::StyleHint styleHint, bool fixedPitch,
-    QFont::Weight weight)
+    QFont::Weight weight, QFont::StyleStrategy strategy)
 {
-  const int fontId = QFontDatabase::addApplicationFontFromData(QByteArray(
-      reinterpret_cast<const char *>(data), static_cast<int>(size)));
+  using CacheKey = quintptr;
+  static QHash<CacheKey, int> fontIds;
+
+  const CacheKey key = reinterpret_cast<CacheKey>(data);
+  int fontId = -2;
+
+  if (fontIds.contains(key)) {
+    fontId = fontIds.value(key);
+  } else {
+    const QByteArray bytes(reinterpret_cast<const char *>(data),
+        static_cast<int>(size));
+    fontId = QFontDatabase::addApplicationFontFromData(bytes);
+    fontIds.insert(key, fontId);
+  }
 
   QFont font;
   if (fontId != -1) {
@@ -85,8 +101,8 @@ QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
     font = QFontDatabase::systemFont(fallback);
   }
 
-  font.setStyleHint(styleHint, QFont::PreferBitmap);
-  font.setStyleStrategy(QFont::PreferBitmap);
+  font.setStyleHint(styleHint, strategy);
+  font.setStyleStrategy(strategy);
   font.setFixedPitch(fixedPitch);
   font.setPixelSize(pixelSize);
   font.setWeight(weight);
@@ -94,109 +110,141 @@ QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
   return font;
 }
 
-#endif
-
-} // namespace
-
-namespace LegacyFonts {
-
-const QHash<QString, QFont> &all()
+QFont loadBitstreamCharterBold(int pixelSize)
 {
-  static const QHash<QString, QFont> fonts = [] {
+  return loadEmbeddedFont(kBitstreamCharterBoldFontData,
+      kBitstreamCharterBoldFontSize, pixelSize, QFont::Serif, false,
+      QFont::Bold, QFont::PreferDefault);
+}
+
+bool isBitstreamCharterXLFD(const QString &key, int *pixelSize)
+{
+  if (!key.startsWith(QStringLiteral("-bitstream-charter-bold-r-normal--"))) {
+    return false;
+  }
+
+  const QStringList parts = key.split('-', Qt::KeepEmptyParts);
+  if (parts.size() < 16) {
+    return false;
+  }
+
+  if (parts.at(1) != QLatin1String("bitstream") ||
+      parts.at(2) != QLatin1String("charter") ||
+      parts.at(3) != QLatin1String("bold") ||
+      parts.at(4) != QLatin1String("r") ||
+      parts.at(5) != QLatin1String("normal")) {
+    return false;
+  }
+
+  bool ok = false;
+  const int value = parts.at(7).toInt(&ok);
+  if (!ok || value <= 0) {
+    return false;
+  }
+
+  if (pixelSize) {
+    *pixelSize = value;
+  }
+  return true;
+}
+
+QHash<QString, QFont> &fontCache()
+{
+  static QHash<QString, QFont> fonts = [] {
     QHash<QString, QFont> fonts;
 
 #if defined(Q_OS_WIN) || defined(Q_OS_MAC)
-  struct FontSpec {
-    const char *key;
-    const char *family;
-    int pixelSize;
-    QFont::StyleHint styleHint;
-    bool fixedPitch;
-    QFont::Weight weight;
-    int stretch;
-  };
+    struct FontSpec {
+      const char *key;
+      const char *family;
+      int pixelSize;
+      QFont::StyleHint styleHint;
+      bool fixedPitch;
+      QFont::Weight weight;
+      int stretch;
+    };
 
-  const FontSpec fontSpecs[] = {
-    {"miscFixed8", "Courier New", 8, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"miscFixed9", "Courier New", 9, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"miscFixed10", "Courier New", 10, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"miscFixed13", "Courier New", 13, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"miscFixed7x13", "Courier New", 13, QFont::TypeWriter, true,
-      QFont::Normal, 90},
-    {"miscFixed7x14", "Courier New", 14, QFont::TypeWriter, true,
-      QFont::Normal, 90},
-    {"miscFixed9x15", "Courier New", 15, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"sonyFixed8x16", "Courier New", 16, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"miscFixed10x20", "Courier New", 20, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"sonyFixed12x24", "Courier New", 24, QFont::TypeWriter, true,
-      QFont::Normal, 100},
-    {"adobeTimes18", "Times New Roman", 25, QFont::Serif, false,
-      QFont::Normal, 100},
-    {"adobeHelvetica24", "Arial", 34, QFont::SansSerif, false,
-      QFont::Normal, 100},
-    {"adobeHelveticaBold24", "Arial", 34, QFont::SansSerif, false,
-      QFont::Bold, 100},
-  };
+    const FontSpec fontSpecs[] = {
+        {"miscFixed8", "Courier New", 8, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"miscFixed9", "Courier New", 9, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"miscFixed10", "Courier New", 10, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"miscFixed13", "Courier New", 13, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"miscFixed7x13", "Courier New", 13, QFont::TypeWriter, true,
+         QFont::Normal, 90},
+        {"miscFixed7x14", "Courier New", 14, QFont::TypeWriter, true,
+         QFont::Normal, 90},
+        {"miscFixed9x15", "Courier New", 15, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"sonyFixed8x16", "Courier New", 16, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"miscFixed10x20", "Courier New", 20, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"sonyFixed12x24", "Courier New", 24, QFont::TypeWriter, true,
+         QFont::Normal, 100},
+        {"adobeTimes18", "Times New Roman", 25, QFont::Serif, false,
+         QFont::Normal, 100},
+        {"adobeHelvetica24", "Arial", 34, QFont::SansSerif, false,
+         QFont::Normal, 100},
+        {"adobeHelveticaBold24", "Arial", 34, QFont::SansSerif, false,
+         QFont::Bold, 100},
+    };
 
-  for (const FontSpec &spec : fontSpecs) {
-    fonts.insert(QString::fromLatin1(spec.key), loadSystemFont(spec.family,
-      spec.pixelSize, spec.styleHint, spec.fixedPitch, spec.weight,
-      spec.stretch));
-  }
+    for (const FontSpec &spec : fontSpecs) {
+      fonts.insert(QString::fromLatin1(spec.key), loadSystemFont(spec.family,
+          spec.pixelSize, spec.styleHint, spec.fixedPitch, spec.weight,
+          spec.stretch));
+    }
 #else
-  struct FontSpec {
-    const char *key;
-    const unsigned char *data;
-    std::size_t size;
-    int pixelSize;
-    QFont::StyleHint styleHint;
-    bool fixedPitch;
-    QFont::Weight weight;
-  };
+    struct FontSpec {
+      const char *key;
+      const unsigned char *data;
+      std::size_t size;
+      int pixelSize;
+      QFont::StyleHint styleHint;
+      bool fixedPitch;
+      QFont::Weight weight;
+    };
 
-  const FontSpec fontSpecs[] = {
-    {"miscFixed8", kMiscFixed8FontData, kMiscFixed8FontSize, 8,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"miscFixed9", kMiscFixed9FontData, kMiscFixed9FontSize, 9,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"miscFixed10", kMiscFixed10FontData, kMiscFixed10FontSize, 10,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"miscFixed13", kMiscFixed13FontData, kMiscFixed13FontSize, 13,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"miscFixed7x13", kMiscFixed7x13FontData, kMiscFixed7x13FontSize, 13,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"miscFixed7x14", kMiscFixed7x14FontData, kMiscFixed7x14FontSize, 14,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"miscFixed9x15", kMiscFixed9x15FontData, kMiscFixed9x15FontSize, 15,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"sonyFixed8x16", kSonyFixed8x16FontData, kSonyFixed8x16FontSize, 16,
-      QFont::TypeWriter, true, QFont::Normal},
-    {"miscFixed10x20", kMiscFixed10x20FontData, kMiscFixed10x20FontSize,
-      20, QFont::TypeWriter, true, QFont::Normal},
-    {"sonyFixed12x24", kSonyFixed12x24FontData, kSonyFixed12x24FontSize,
-      24, QFont::TypeWriter, true, QFont::Normal},
-    {"adobeTimes18", kAdobeTimes18FontData, kAdobeTimes18FontSize, 25,
-      QFont::Serif, false, QFont::Normal},
-    {"adobeHelvetica24", kAdobeHelvetica24FontData,
-      kAdobeHelvetica24FontSize, 34, QFont::SansSerif, false,
-      QFont::Normal},
-    {"adobeHelveticaBold24", kAdobeHelveticaBold24FontData,
-      kAdobeHelveticaBold24FontSize, 34, QFont::SansSerif, false,
-      QFont::Bold},
-  };
+    const FontSpec fontSpecs[] = {
+        {"miscFixed8", kMiscFixed8FontData, kMiscFixed8FontSize, 8,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"miscFixed9", kMiscFixed9FontData, kMiscFixed9FontSize, 9,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"miscFixed10", kMiscFixed10FontData, kMiscFixed10FontSize, 10,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"miscFixed13", kMiscFixed13FontData, kMiscFixed13FontSize, 13,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"miscFixed7x13", kMiscFixed7x13FontData, kMiscFixed7x13FontSize, 13,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"miscFixed7x14", kMiscFixed7x14FontData, kMiscFixed7x14FontSize, 14,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"miscFixed9x15", kMiscFixed9x15FontData, kMiscFixed9x15FontSize, 15,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"sonyFixed8x16", kSonyFixed8x16FontData, kSonyFixed8x16FontSize, 16,
+         QFont::TypeWriter, true, QFont::Normal},
+        {"miscFixed10x20", kMiscFixed10x20FontData, kMiscFixed10x20FontSize,
+         20, QFont::TypeWriter, true, QFont::Normal},
+        {"sonyFixed12x24", kSonyFixed12x24FontData, kSonyFixed12x24FontSize,
+         24, QFont::TypeWriter, true, QFont::Normal},
+        {"adobeTimes18", kAdobeTimes18FontData, kAdobeTimes18FontSize, 25,
+         QFont::Serif, false, QFont::Normal},
+        {"adobeHelvetica24", kAdobeHelvetica24FontData,
+         kAdobeHelvetica24FontSize, 34, QFont::SansSerif, false,
+         QFont::Normal},
+        {"adobeHelveticaBold24", kAdobeHelveticaBold24FontData,
+         kAdobeHelveticaBold24FontSize, 34, QFont::SansSerif, false,
+         QFont::Bold},
+    };
 
-  for (const FontSpec &spec : fontSpecs) {
-    fonts.insert(QString::fromLatin1(spec.key), loadEmbeddedFont(spec.data,
-      spec.size, spec.pixelSize, spec.styleHint, spec.fixedPitch,
-      spec.weight));
-  }
+    for (const FontSpec &spec : fontSpecs) {
+      fonts.insert(QString::fromLatin1(spec.key), loadEmbeddedFont(spec.data,
+          spec.size, spec.pixelSize, spec.styleHint, spec.fixedPitch,
+          spec.weight, QFont::PreferBitmap));
+    }
 #endif
 
     struct FontAlias {
@@ -237,19 +285,42 @@ const QHash<QString, QFont> &all()
   return fonts;
 }
 
+} // namespace
+
+namespace LegacyFonts {
+
+const QHash<QString, QFont> &all()
+{
+  return fontCache();
+}
+
 QFont font(const QString &key)
 {
-  return all().value(key);
+  QHash<QString, QFont> &fonts = fontCache();
+  const auto it = fonts.constFind(key);
+  if (it != fonts.constEnd()) {
+    return it.value();
+  }
+
+  int pixelSize = 0;
+  if (isBitstreamCharterXLFD(key, &pixelSize)) {
+    const QFont charter = loadBitstreamCharterBold(pixelSize);
+    if (!charter.family().isEmpty()) {
+      fonts.insert(key, charter);
+      return charter;
+    }
+  }
+
+  return QFont();
 }
 
 QFont fontOrDefault(const QString &key, const QFont &fallback)
 {
-  const QHash<QString, QFont> &fonts = all();
-  if (fonts.contains(key)) {
-    return fonts.value(key);
+  const QFont candidate = font(key);
+  if (!candidate.family().isEmpty()) {
+    return candidate;
   }
   return fallback;
 }
 
 } // namespace LegacyFonts
-

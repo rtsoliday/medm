@@ -26,6 +26,11 @@ the X Logical Font Description (XLFD) that the data was taken from.  MEDM aliase
 | `adobeHelvetica24`       | `-adobe-helvetica-medium-r-normal--34-240-100-100-p-176-iso8859-1`      |
 | `adobeHelveticaBold24`   | `-adobe-helvetica-bold-r-normal--34-240-100-100-p-182-iso8859-1`        |
 
+In addition, the scalable Bitstream Charter Bold typeface (distributed under
+the SIL Open Font License 1.1) is embedded as `bitstream-charter-bold.otf`.
+QtEDM instantiates it at runtime when MEDM displays request the scalable
+`-bitstream-charter-bold-r-normal` XLFD family.
+
 ## Sources and regeneration
 
 The bitmaps originate from the X.Org `font-misc-misc`, `font-sony-misc`, and

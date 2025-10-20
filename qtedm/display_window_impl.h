@@ -11148,7 +11148,12 @@ private:
 
     // Mirror MEDM execute popup menu; actions will be wired up later.
     menu.addAction(QStringLiteral("Print"));
-    menu.addAction(QStringLiteral("Close"));
+    QAction *closeAction = menu.addAction(QStringLiteral("Close"));
+    QObject::connect(closeAction, &QAction::triggered, this,
+        [this]() {
+          setAsActiveDisplay();
+          close();
+        });
     menu.addAction(QStringLiteral("PV Info"));
     menu.addAction(QStringLiteral("PV Limits"));
     QAction *mainWindowAction =

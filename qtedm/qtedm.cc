@@ -26,6 +26,7 @@
 #include <QString>
 #include <QStringList>
 #include <QSizePolicy>
+#include <QStackedLayout>
 #include <QStyleFactory>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -564,7 +565,22 @@ int main(int argc, char *argv[])
   executeModeButton->setFont(fixed13Font);
   modeLayout->addWidget(editModeButton);
   modeLayout->addWidget(executeModeButton);
-  modeBox->setLayout(modeLayout);
+  auto *modeButtonsWidget = new QWidget;
+  modeButtonsWidget->setLayout(modeLayout);
+  auto *executeOnlyLabel = new QLabel(QStringLiteral("Execute-Only"));
+  executeOnlyLabel->setFont(fixed13Font);
+  executeOnlyLabel->setAlignment(Qt::AlignCenter);
+  auto *executeOnlyWidget = new QWidget;
+  auto *executeOnlyLayout = new QHBoxLayout(executeOnlyWidget);
+  executeOnlyLayout->setContentsMargins(12, 8, 12, 8);
+  executeOnlyLayout->addStretch();
+  executeOnlyLayout->addWidget(executeOnlyLabel, 0, Qt::AlignCenter);
+  executeOnlyLayout->addStretch();
+  auto *modeStack = new QStackedLayout;
+  modeStack->setContentsMargins(0, 0, 0, 0);
+  modeStack->addWidget(modeButtonsWidget);
+  modeStack->addWidget(executeOnlyWidget);
+  modeBox->setLayout(modeStack);
 
   auto state = std::make_shared<DisplayState>();
   state->mainWindow = &win;
@@ -1127,10 +1143,12 @@ int main(int argc, char *argv[])
         }
       });
   editModeButton->setChecked(true);
+  modeStack->setCurrentWidget(modeButtonsWidget);
   if (options.startInExecuteMode) {
     executeModeButton->setChecked(true);
     editModeButton->setEnabled(false);
     executeModeButton->setEnabled(false);
+    modeStack->setCurrentWidget(executeOnlyWidget);
   }
 
   if (updateMenus && *updateMenus) {

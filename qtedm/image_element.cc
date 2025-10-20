@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QPainter>
+#include <QStringList>
 #include <QPalette>
 #include <QPen>
 
@@ -359,85 +360,91 @@ void ImageElement::reloadImage()
 		return;
 	}
 
-	const QFileInfo directInfo(trimmedName);
+  const QFileInfo directInfo(trimmedName);
 
-	auto tryLoadMovie = [this](const QString &path) {
-		if (path.isEmpty()) {
-			return false;
-		}
-		auto *movie = new QMovie(path, QByteArray(), this);
-		if (!movie->isValid()) {
-			delete movie;
-			return false;
-		}
-		movie->setCacheMode(QMovie::CacheAll);
-		movie_ = movie;
-		movie_->jumpToFrame(kDefaultFrameIndex);
-		cachedFrameCount_ = movie_->frameCount();
-		if (cachedFrameCount_ <= 0) {
-			cachedFrameCount_ = 1;
-		}
-		QObject::connect(movie_, &QMovie::frameChanged, this,
-				[this](int frame) {
-					if (frame >= 0) {
-						runtimeFrameIndex_ = frame;
-					}
-					updateCurrentPixmap();
-				});
-		movie_->setPaused(true);
-		updateCurrentPixmap();
-		runtimeFrameValid_ = !pixmap_.isNull();
-		return true;
-	};
+  auto tryLoadMovie = [this](const QString &path) {
+    if (path.isEmpty()) {
+      return false;
+    }
+    auto *movie = new QMovie(path, QByteArray(), this);
+    if (!movie->isValid()) {
+      delete movie;
+      return false;
+    }
+    movie->setCacheMode(QMovie::CacheAll);
+    movie_ = movie;
+    movie_->jumpToFrame(kDefaultFrameIndex);
+    cachedFrameCount_ = movie_->frameCount();
+    if (cachedFrameCount_ <= 0) {
+      cachedFrameCount_ = 1;
+    }
+    QObject::connect(movie_, &QMovie::frameChanged, this,
+        [this](int frame) {
+          if (frame >= 0) {
+            runtimeFrameIndex_ = frame;
+          }
+          updateCurrentPixmap();
+        });
+    movie_->setPaused(true);
+    updateCurrentPixmap();
+    runtimeFrameValid_ = !pixmap_.isNull();
+    return true;
+  };
 
-	auto tryLoadPixmap = [this](const QString &path) {
-		if (path.isEmpty()) {
-			return false;
-		}
-		QPixmap pixmap(path);
-		if (pixmap.isNull()) {
-			return false;
-		}
-		pixmap_ = pixmap;
-		cachedFrameCount_ = 1;
-		runtimeFrameIndex_ = kDefaultFrameIndex;
-		runtimeFrameValid_ = true;
-		return true;
-	};
+  auto tryLoadPixmap = [this](const QString &path) {
+    if (path.isEmpty()) {
+      return false;
+    }
+    QPixmap pixmap(path);
+    if (pixmap.isNull()) {
+      return false;
+    }
+    pixmap_ = pixmap;
+    cachedFrameCount_ = 1;
+    runtimeFrameIndex_ = kDefaultFrameIndex;
+    runtimeFrameValid_ = true;
+    return true;
+  };
 
-	bool loaded = false;
-	if (directInfo.isAbsolute()) {
-		if (imageType_ == ImageType::kGif) {
-			loaded = tryLoadMovie(directInfo.filePath());
-			if (!loaded) {
-				loaded = tryLoadPixmap(directInfo.filePath());
-			}
-		} else {
-			loaded = tryLoadPixmap(directInfo.filePath());
-		}
-	} else {
-		if (!baseDirectory_.isEmpty()) {
-			const QString candidate = QDir(baseDirectory_).absoluteFilePath(trimmedName);
-			if (imageType_ == ImageType::kGif) {
-				loaded = tryLoadMovie(candidate);
-				if (!loaded) {
-					loaded = tryLoadPixmap(candidate);
-				}
-			} else {
-				loaded = tryLoadPixmap(candidate);
-			}
-		}
-		if (!loaded) {
-			if (imageType_ == ImageType::kGif) {
-				loaded = tryLoadMovie(trimmedName);
-				if (!loaded) {
-					loaded = tryLoadPixmap(trimmedName);
-				}
-			} else {
-				loaded = tryLoadPixmap(trimmedName);
-			}
-		}
-	}
+  QStringList candidatePaths;
+  if (directInfo.isAbsolute()) {
+    candidatePaths.push_back(directInfo.filePath());
+  } else {
+    candidatePaths.push_back(trimmedName);
+    if (!baseDirectory_.isEmpty()) {
+      candidatePaths.push_back(QDir(baseDirectory_).absoluteFilePath(trimmedName));
+    }
+    const QByteArray env = qgetenv("EPICS_DISPLAY_PATH");
+    if (!env.isEmpty()) {
+      const QChar separator = QDir::listSeparator();
+      const QStringList parts = QString::fromLocal8Bit(env).split(
+          separator, Qt::SkipEmptyParts);
+      for (const QString &part : parts) {
+        const QString trimmedDir = part.trimmed();
+        if (!trimmedDir.isEmpty()) {
+          candidatePaths.push_back(QDir(trimmedDir).absoluteFilePath(trimmedName));
+        }
+      }
+    }
+  }
+
+  bool loaded = false;
+  for (const QString &candidate : candidatePaths) {
+    if (candidate.isEmpty()) {
+      continue;
+    }
+    if (imageType_ == ImageType::kGif) {
+      loaded = tryLoadMovie(candidate);
+      if (!loaded) {
+        loaded = tryLoadPixmap(candidate);
+      }
+    } else {
+      loaded = tryLoadPixmap(candidate);
+    }
+    if (loaded) {
+      break;
+    }
+  }
 
 	if (!loaded) {
 		disposeMovie();

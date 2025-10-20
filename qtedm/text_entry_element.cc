@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPalette>
 #include <QResizeEvent>
@@ -43,6 +46,7 @@ TextEntryElement::TextEntryElement(QWidget *parent)
   lineEdit_->setContextMenuPolicy(Qt::NoContextMenu);
   lineEdit_->setAttribute(Qt::WA_TransparentForMouseEvents);
   lineEdit_->setAutoFillBackground(true);
+  lineEdit_->installEventFilter(this);
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();
   applyPaletteColors();
@@ -492,4 +496,60 @@ void TextEntryElement::applyRuntimeTextToLineEdit()
   }
   hasPendingRuntimeText_ = false;
   updateFontForGeometry();
+}
+
+bool TextEntryElement::eventFilter(QObject *watched, QEvent *event)
+{
+  if (watched == lineEdit_ && event && executeMode_) {
+    auto forwardMouseEvent = [&](QMouseEvent *mouseEvent) {
+      if (!mouseEvent) {
+        return false;
+      }
+      QWidget *target = window();
+      if (!target) {
+        return false;
+      }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+      const QPointF globalPosF = mouseEvent->globalPosition();
+      const QPoint globalPoint = globalPosF.toPoint();
+      const QPointF localPos = target->mapFromGlobal(globalPoint);
+      QMouseEvent forwarded(mouseEvent->type(), localPos, localPos, globalPosF,
+          mouseEvent->button(), mouseEvent->buttons(),
+          mouseEvent->modifiers());
+#else
+      const QPoint globalPoint = mouseEvent->globalPos();
+      const QPointF localPos = target->mapFromGlobal(globalPoint);
+      QMouseEvent forwarded(mouseEvent->type(), localPos, localPos,
+          QPointF(globalPoint), mouseEvent->button(),
+          mouseEvent->buttons(), mouseEvent->modifiers());
+#endif
+      QCoreApplication::sendEvent(target, &forwarded);
+      return true;
+    };
+
+    switch (event->type()) {
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseButtonRelease: {
+      auto *mouseEvent = static_cast<QMouseEvent *>(event);
+      if (mouseEvent->button() == Qt::MiddleButton) {
+        if (forwardMouseEvent(mouseEvent)) {
+          return true;
+        }
+      }
+      break;
+    }
+    case QEvent::MouseMove: {
+      auto *mouseEvent = static_cast<QMouseEvent *>(event);
+      if (mouseEvent->buttons().testFlag(Qt::MiddleButton)) {
+        if (forwardMouseEvent(mouseEvent)) {
+          return true;
+        }
+      }
+      break;
+    }
+    default:
+      break;
+    }
+  }
+  return QObject::eventFilter(watched, event);
 }

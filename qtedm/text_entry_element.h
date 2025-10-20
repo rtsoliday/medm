@@ -8,6 +8,7 @@
 #include "display_properties.h"
 
 class QLineEdit;
+class QEvent;
 class QPaintEvent;
 class QResizeEvent;
 
@@ -64,6 +65,7 @@ protected:
   void paintEvent(QPaintEvent *event) override;
 
 private:
+  bool eventFilter(QObject *watched, QEvent *event) override;
   void applyPaletteColors();
   void updateSelectionVisual();
   void updateFontForGeometry();

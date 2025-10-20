@@ -1986,6 +1986,13 @@ private:
     int baseChannelIndex, int letterStartIndex) const;
   RectangleFill parseRectangleFill(const QString &value) const;
   RectangleLineStyle parseRectangleLineStyle(const QString &value) const;
+  void connectRelatedDisplayElement(RelatedDisplayElement *element);
+  void handleRelatedDisplayActivation(RelatedDisplayElement *element,
+      int entryIndex, Qt::KeyboardModifiers modifiers);
+  QString resolveRelatedDisplayFile(const QString &fileName) const;
+  QStringList buildDisplaySearchPaths() const;
+  QHash<QString, QString> parseMacroDefinitionString(const QString &macroString) const;
+  void registerDisplayWindow(DisplayWindow *displayWin);
   ImageType parseImageType(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
@@ -2013,6 +2020,7 @@ private:
   bool suppressLoadRegistration_ = false;
   CompositeElement *currentCompositeOwner_ = nullptr;
   QString colormapName_;
+  QHash<QString, QString> macroDefinitions_;
   bool dirty_ = true;
   bool executeModeActive_ = false;
   bool displaySelected_ = false;
@@ -3549,14 +3557,15 @@ private:
         newElement->setLabel(label);
         newElement->setVisual(visual);
         for (int i = 0; i < static_cast<int>(entries.size()); ++i) {
-          newElement->setEntry(i, entries[static_cast<std::size_t>(i)]);
-        }
-        newElement->show();
-        target.ensureElementInStack(newElement);
-        target.relatedDisplayElements_.append(newElement);
-        target.selectRelatedDisplayElement(newElement);
-        target.markDirty();
-      });
+        newElement->setEntry(i, entries[static_cast<std::size_t>(i)]);
+      }
+      newElement->show();
+      target.ensureElementInStack(newElement);
+      target.relatedDisplayElements_.append(newElement);
+      target.connectRelatedDisplayElement(newElement);
+      target.selectRelatedDisplayElement(newElement);
+      target.markDirty();
+    });
       if (removeOriginal) {
         cutSelectedElement(relatedDisplayElements_,
             selectedRelatedDisplayElement_);
@@ -11550,15 +11559,16 @@ private:
       return;
     }
     auto *element = new RelatedDisplayElement(displayArea_);
-    element->setFont(font());
-    element->setGeometry(target);
-    element->show();
-    ensureElementInStack(element);
-    relatedDisplayElements_.append(element);
-    selectRelatedDisplayElement(element);
-    showResourcePaletteForRelatedDisplay(element);
-    deactivateCreateTool();
-    markDirty();
+   element->setFont(font());
+   element->setGeometry(target);
+   element->show();
+   ensureElementInStack(element);
+   relatedDisplayElements_.append(element);
+    connectRelatedDisplayElement(element);
+   selectRelatedDisplayElement(element);
+   showResourcePaletteForRelatedDisplay(element);
+   deactivateCreateTool();
+   markDirty();
   }
 
   void createMeterElement(const QRect &rect)
@@ -13167,6 +13177,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
   setWindowTitle(QFileInfo(filePath_).fileName());
+  macroDefinitions_ = macros;
 
   dirty_ = false;
   if (undoStack_) {
@@ -14950,6 +14961,9 @@ inline void DisplayWindow::clearAllElements()
   polylineCreationPoints_.clear();
   activePolylineElement_ = nullptr;
   colormapName_.clear();
+  if (!restoringState_) {
+    macroDefinitions_.clear();
+  }
   gridOn_ = kDefaultGridOn;
   snapToGrid_ = kDefaultSnapToGrid;
   gridSpacing_ = kDefaultGridSpacing;
@@ -15365,6 +15379,94 @@ inline RectangleLineStyle DisplayWindow::parseRectangleLineStyle(
     return RectangleLineStyle::kDash;
   }
   return RectangleLineStyle::kSolid;
+}
+
+inline QStringList DisplayWindow::buildDisplaySearchPaths() const
+{
+  QStringList searchPaths;
+  const QByteArray env = qgetenv("EPICS_DISPLAY_PATH");
+  if (!env.isEmpty()) {
+    const QStringList parts = QString::fromLocal8Bit(env).split(
+        QLatin1Char(':'), Qt::SkipEmptyParts);
+    for (const QString &part : parts) {
+      const QString trimmed = part.trimmed();
+      if (!trimmed.isEmpty()) {
+        searchPaths.push_back(trimmed);
+      }
+    }
+  }
+  return searchPaths;
+}
+
+inline QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
+    const QString &macroString) const
+{
+  QHash<QString, QString> macros;
+  if (macroString.trimmed().isEmpty()) {
+    return macros;
+  }
+  const QStringList entries = macroString.split(QLatin1Char(','),
+      Qt::KeepEmptyParts);
+  for (const QString &entry : entries) {
+    const QString trimmedEntry = entry.trimmed();
+    if (trimmedEntry.isEmpty()) {
+      continue;
+    }
+    const int equalsIndex = trimmedEntry.indexOf(QLatin1Char('='));
+    if (equalsIndex <= 0) {
+      continue;
+    }
+    const QString name = trimmedEntry.left(equalsIndex).trimmed();
+    const QString value = trimmedEntry.mid(equalsIndex + 1).trimmed();
+    if (name.isEmpty()) {
+      continue;
+    }
+    macros.insert(name, value);
+  }
+  return macros;
+}
+
+inline QString DisplayWindow::resolveRelatedDisplayFile(
+    const QString &fileName) const
+{
+  const QString trimmed = fileName.trimmed();
+  if (trimmed.isEmpty()) {
+    return QString();
+  }
+
+  QFileInfo directInfo(trimmed);
+  if (directInfo.exists() && directInfo.isFile()) {
+    return directInfo.absoluteFilePath();
+  }
+
+  if (!currentLoadDirectory_.isEmpty()) {
+    QFileInfo fromCurrent(QDir(currentLoadDirectory_), trimmed);
+    if (fromCurrent.exists() && fromCurrent.isFile()) {
+      return fromCurrent.absoluteFilePath();
+    }
+  }
+
+  if (!filePath_.isEmpty()) {
+    QFileInfo relative(QFileInfo(filePath_).absolutePath(), trimmed);
+    if (relative.exists() && relative.isFile()) {
+      return relative.absoluteFilePath();
+    }
+  }
+
+  QFileInfo cwdRelative(QDir::current(), trimmed);
+  if (cwdRelative.exists() && cwdRelative.isFile()) {
+    return cwdRelative.absoluteFilePath();
+  }
+
+  const QStringList searchPaths = buildDisplaySearchPaths();
+  for (const QString &base : searchPaths) {
+    QFileInfo candidate(QDir(base), trimmed);
+    if (candidate.exists() && candidate.isFile()) {
+      return candidate.absoluteFilePath();
+    }
+  }
+
+  return QString();
 }
 
 inline ImageType DisplayWindow::parseImageType(const QString &value) const
@@ -16761,7 +16863,139 @@ inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
   element->setSelected(false);
   relatedDisplayElements_.append(element);
   ensureElementInStack(element);
+  connectRelatedDisplayElement(element);
   return element;
+}
+
+inline void DisplayWindow::connectRelatedDisplayElement(
+    RelatedDisplayElement *element)
+{
+  if (!element) {
+    return;
+  }
+  element->setActivationCallback(
+      [this, element](int index, Qt::KeyboardModifiers modifiers) {
+        handleRelatedDisplayActivation(element, index, modifiers);
+      });
+  element->setExecuteMode(executeModeActive_);
+}
+
+inline void DisplayWindow::handleRelatedDisplayActivation(
+    RelatedDisplayElement *element, int entryIndex,
+    Qt::KeyboardModifiers modifiers)
+{
+  if (!element || !executeModeActive_) {
+    return;
+  }
+  if (entryIndex < 0 || entryIndex >= element->entryCount()) {
+    return;
+  }
+
+  RelatedDisplayEntry entry = element->entry(entryIndex);
+  const QString fileName = entry.name.trimmed();
+  if (fileName.isEmpty()) {
+    return;
+  }
+
+  const bool replaceRequested = modifiers.testFlag(Qt::ControlModifier);
+  const bool replace = replaceRequested
+      || entry.mode == RelatedDisplayMode::kReplace;
+
+  const QString resolved = resolveRelatedDisplayFile(fileName);
+  if (resolved.isEmpty()) {
+    const QString message = QStringLiteral("Cannot open related display:\n  %1\nCheck EPICS_DISPLAY_PATH")
+        .arg(fileName);
+    QMessageBox::critical(this, QStringLiteral("Related Display"), message);
+    return;
+  }
+
+  const QString substitutedArgs = applyMacroSubstitutions(entry.args,
+      macroDefinitions_);
+  QHash<QString, QString> macros =
+      parseMacroDefinitionString(substitutedArgs);
+
+  if (replace) {
+    QString errorMessage;
+    if (!loadFromFile(resolved, &errorMessage, macros)) {
+      const QString message = errorMessage.isEmpty()
+          ? QStringLiteral("Failed to open display:\n%1").arg(resolved)
+          : errorMessage;
+      QMessageBox::critical(this, QStringLiteral("Related Display"),
+          message);
+    }
+    return;
+  }
+
+  auto state = state_.lock();
+  if (!state) {
+    return;
+  }
+
+  auto *newWindow = new DisplayWindow(palette(), resourcePaletteBase_,
+      font(), labelFont_, state_);
+  QString errorMessage;
+  if (!newWindow->loadFromFile(resolved, &errorMessage, macros)) {
+    const QString message = errorMessage.isEmpty()
+        ? QStringLiteral("Failed to open display:\n%1").arg(resolved)
+        : errorMessage;
+    QMessageBox::critical(this, QStringLiteral("Related Display"),
+        message);
+    delete newWindow;
+    return;
+  }
+
+  registerDisplayWindow(newWindow);
+}
+
+inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin)
+{
+  if (!displayWin) {
+    return;
+  }
+  auto state = state_.lock();
+  if (!state) {
+    return;
+  }
+
+  state->displays.append(displayWin);
+  displayWin->syncCreateCursor();
+  displayWin->handleEditModeChanged(state->editMode);
+
+  QObject *context = state->mainWindow
+      ? static_cast<QObject *>(state->mainWindow.data())
+      : static_cast<QObject *>(this);
+  const auto updateMenus = state->updateMenus;
+  QPointer<DisplayWindow> displayPtr(displayWin);
+
+  QObject::connect(displayWin, &QObject::destroyed, context,
+      [stateWeak = state_, updateMenus, displayPtr]() {
+        if (auto locked = stateWeak.lock()) {
+          if (locked->activeDisplay == displayPtr) {
+            locked->activeDisplay.clear();
+          }
+          bool hasLiveDisplay = false;
+          for (auto &display : locked->displays) {
+            if (!display.isNull()) {
+              hasLiveDisplay = true;
+              break;
+            }
+          }
+          if (!hasLiveDisplay) {
+            locked->createTool = CreateTool::kNone;
+          }
+        }
+        if (updateMenus && *updateMenus) {
+          (*updateMenus)();
+        }
+      });
+
+  displayWin->show();
+  displayWin->raise();
+  displayWin->activateWindow();
+
+  if (updateMenus && *updateMenus) {
+    (*updateMenus)();
+  }
 }
 
 inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
@@ -19251,6 +19485,12 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (RelatedDisplayElement *element : relatedDisplayElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+  }
 }
 
 inline void DisplayWindow::leaveExecuteMode()
@@ -19515,6 +19755,11 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   messageButtonRuntimes_.clear();
   for (MessageButtonElement *element : messageButtonElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (RelatedDisplayElement *element : relatedDisplayElements_) {
     if (element) {
       element->setExecuteMode(false);
     }

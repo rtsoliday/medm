@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 
 #include <QColor>
 #include <QString>
@@ -10,6 +11,7 @@
 
 class QPaintEvent;
 class QPainter;
+class QMouseEvent;
 
 class RelatedDisplayElement : public QWidget
 {
@@ -47,8 +49,16 @@ public:
   RelatedDisplayMode entryMode(int index) const;
   void setEntryMode(int index, RelatedDisplayMode mode);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setActivationCallback(
+      const std::function<void(int, Qt::KeyboardModifiers)> &callback);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
   QColor effectiveForeground() const;
@@ -60,6 +70,10 @@ private:
       bool vertical) const;
   void paintHiddenVisual(QPainter &painter, const QRect &content) const;
   void paintSelectionOverlay(QPainter &painter) const;
+  bool entryHasTarget(int index) const;
+  int firstUsableEntryIndex() const;
+  int buttonEntryIndexAt(const QPoint &pos) const;
+  void showMenu(Qt::KeyboardModifiers modifiers);
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -67,4 +81,7 @@ private:
   QString label_;
   RelatedDisplayVisual visual_ = RelatedDisplayVisual::kMenu;
   std::array<RelatedDisplayEntry, kRelatedDisplayEntryCount> entries_{};
+  bool executeMode_ = false;
+  std::function<void(int, Qt::KeyboardModifiers)> activationCallback_;
+  int pressedEntryIndex_ = -1;
 };

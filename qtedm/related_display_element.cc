@@ -7,6 +7,8 @@
 #include <QFontInfo>
 #include <QFontMetrics>
 #include <QFontMetricsF>
+#include <QMenu>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -310,6 +312,27 @@ void RelatedDisplayElement::setEntryMode(int index, RelatedDisplayMode mode)
   update();
 }
 
+void RelatedDisplayElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  pressedEntryIndex_ = -1;
+  update();
+}
+
+bool RelatedDisplayElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void RelatedDisplayElement::setActivationCallback(
+    const std::function<void(int, Qt::KeyboardModifiers)> &callback)
+{
+  activationCallback_ = callback;
+}
+
 void RelatedDisplayElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
@@ -533,4 +556,165 @@ void RelatedDisplayElement::paintSelectionOverlay(QPainter &painter) const
   painter.setPen(pen);
   painter.setBrush(Qt::NoBrush);
   painter.drawRect(rect().adjusted(0, 0, -1, -1));
+}
+
+void RelatedDisplayElement::mousePressEvent(QMouseEvent *event)
+{
+  if (!event) {
+    return;
+  }
+
+  if (!executeMode_ || event->button() != Qt::LeftButton) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  if (visual_ == RelatedDisplayVisual::kMenu) {
+    pressedEntryIndex_ = -1;
+    event->accept();
+    showMenu(event->modifiers());
+    return;
+  }
+
+  if (visual_ == RelatedDisplayVisual::kRowOfButtons
+      || visual_ == RelatedDisplayVisual::kColumnOfButtons) {
+    pressedEntryIndex_ = buttonEntryIndexAt(event->pos());
+    event->accept();
+    return;
+  }
+
+  pressedEntryIndex_ = firstUsableEntryIndex();
+  event->accept();
+}
+
+void RelatedDisplayElement::mouseReleaseEvent(QMouseEvent *event)
+{
+  if (!event) {
+    return;
+  }
+
+  if (!executeMode_ || event->button() != Qt::LeftButton) {
+    QWidget::mouseReleaseEvent(event);
+    return;
+  }
+
+  int targetIndex = -1;
+  if (visual_ == RelatedDisplayVisual::kRowOfButtons
+      || visual_ == RelatedDisplayVisual::kColumnOfButtons) {
+    int hitIndex = buttonEntryIndexAt(event->pos());
+    if (hitIndex >= 0 && hitIndex == pressedEntryIndex_) {
+      targetIndex = hitIndex;
+    }
+  } else if (visual_ == RelatedDisplayVisual::kHiddenButton) {
+    const int candidate = firstUsableEntryIndex();
+    if (candidate >= 0 && pressedEntryIndex_ == candidate
+        && rect().contains(event->pos())) {
+      targetIndex = candidate;
+    }
+  }
+
+  pressedEntryIndex_ = -1;
+
+  if (targetIndex >= 0 && entryHasTarget(targetIndex)) {
+    if (activationCallback_) {
+      activationCallback_(targetIndex, event->modifiers());
+    }
+  }
+
+  event->accept();
+}
+
+bool RelatedDisplayElement::entryHasTarget(int index) const
+{
+  if (index < 0 || index >= entryCount()) {
+    return false;
+  }
+  return !entries_[index].name.trimmed().isEmpty();
+}
+
+int RelatedDisplayElement::firstUsableEntryIndex() const
+{
+  const int count = entryCount();
+  for (int i = 0; i < count; ++i) {
+    if (entryHasTarget(i)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int RelatedDisplayElement::buttonEntryIndexAt(const QPoint &pos) const
+{
+  QRect content = rect().adjusted(1, 1, -1, -1);
+  if (!content.contains(pos)) {
+    return -1;
+  }
+
+  const int activeCount = activeEntryCount();
+  const int displayCount = activeCount > 0 ? activeCount : 2;
+  if (displayCount <= 0) {
+    return -1;
+  }
+
+  const bool vertical = (visual_ == RelatedDisplayVisual::kColumnOfButtons);
+  const int columns = vertical ? 1 : std::max(1, displayCount);
+  const int rows = vertical ? std::max(1, displayCount) : 1;
+  const int buttonWidth = columns > 0 ? content.width() / columns : content.width();
+  const int buttonHeight = rows > 0 ? content.height() / rows : content.height();
+
+  int index = 0;
+  for (int row = 0; row < rows; ++row) {
+    for (int column = 0; column < columns; ++column) {
+      if (index >= displayCount) {
+        return -1;
+      }
+      QRect buttonRect(content.left() + column * buttonWidth,
+          content.top() + row * buttonHeight, buttonWidth, buttonHeight);
+      if (buttonRect.contains(pos)) {
+        if (index < entryCount() && entryHasTarget(index)) {
+          return index;
+        }
+        return -1;
+      }
+      ++index;
+    }
+  }
+
+  return -1;
+}
+
+void RelatedDisplayElement::showMenu(Qt::KeyboardModifiers modifiers)
+{
+  QMenu menu(this);
+  int labelIndex = 0;
+  for (int i = 0; i < entryCount(); ++i) {
+    if (!entryHasTarget(i)) {
+      continue;
+    }
+    QString label = entryDisplayLabel(entries_[i]);
+    if (label.isEmpty()) {
+      label = QStringLiteral("Display %1").arg(labelIndex + 1);
+    }
+    QAction *action = menu.addAction(label);
+    action->setData(i);
+    ++labelIndex;
+  }
+
+  if (menu.actions().isEmpty()) {
+    return;
+  }
+
+  const QPoint globalPos = mapToGlobal(QPoint(width() / 2, height()));
+  QAction *selected = menu.exec(globalPos);
+  if (!selected) {
+    return;
+  }
+  bool ok = false;
+  int index = selected->data().toInt(&ok);
+  if (!ok) {
+    return;
+  }
+  if (activationCallback_ && entryHasTarget(index)) {
+    activationCallback_(index, modifiers);
+  }
 }

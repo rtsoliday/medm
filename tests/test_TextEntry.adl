@@ -95,7 +95,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:input:9215"
+		chan="tm:compact:1"
 		clr=7
 		bclr=43
 	}
@@ -118,7 +118,7 @@ display {
 		height=28
 	}
 	control {
-		chan="te:calc:4087"
+		chan="tm:hex:count"
 		clr=52
 		bclr=9
 	}
@@ -135,7 +135,7 @@ display {
 		height=38
 	}
 	control {
-		chan="te:user:7139"
+		chan="tm:sexagesimal:az"
 		clr=2
 		bclr=50
 	}
@@ -151,7 +151,7 @@ display {
 		height=36
 	}
 	control {
-		chan="te:diagnostic:2741"
+		chan="tm:engr:mix"
 		clr=60
 		bclr=16
 	}
@@ -172,7 +172,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:sample:3810"
+		chan="tm:trunc:edge"
 		clr=33
 		bclr=57
 	}
@@ -190,7 +190,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:proto:5598"
+		chan="tm:octal:plc"
 		clr=14
 		bclr=4
 	}
@@ -208,7 +208,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:beta:9476"
+		chan="channelA_PV"
 		clr=28
 		bclr=61
 	}
@@ -227,7 +227,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:gamma:2043"
+		chan="tm:sexagesimal:hms"
 		clr=19
 		bclr=10
 	}
@@ -250,7 +250,7 @@ display {
 		height=30
 	}
 	control {
-		chan="te:delta:6731"
+		chan="tm:string:status"
 		clr=47
 		bclr=6
 	}
@@ -268,7 +268,7 @@ display {
 		height=36
 	}
 	control {
-		chan="te:epsilon:1584"
+		chan="tm:exp:fastA"
 		clr=5
 		bclr=48
 	}
@@ -285,7 +285,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:zeta:4462"
+		chan="tm:sexagesimal:dms"
 		clr=41
 		bclr=22
 	}
@@ -304,7 +304,7 @@ display {
 		height=30
 	}
 	control {
-		chan="te:theta:3155"
+		chan="tm:decimal:telemetry"
 		clr=9
 		bclr=34
 	}
@@ -323,7 +323,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:iota:7890"
+		chan="channelB_PV"
 		clr=24
 		bclr=13
 	}
@@ -339,7 +339,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:kappa:9284"
+		chan="tm:exp:fastA"
 		clr=55
 		bclr=20
 	}
@@ -357,7 +357,7 @@ display {
 		height=36
 	}
 	control {
-		chan="te:lambda:5172"
+		chan="tm:hex:count"
 		clr=12
 		bclr=45
 	}
@@ -377,7 +377,7 @@ display {
 		height=30
 	}
 	control {
-		chan="te:mu:6629"
+		chan="tm:engr:mix"
 		clr=38
 		bclr=25
 	}
@@ -394,7 +394,7 @@ display {
 		height=36
 	}
 	control {
-		chan="te:nu:2406"
+		chan="tm:trunc:edge"
 		clr=17
 		bclr=53
 	}
@@ -415,7 +415,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:xi:7051"
+		chan="tm:octal:plc"
 		clr=29
 		bclr=8
 	}
@@ -432,7 +432,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:omicron:5643"
+		chan="channelC_PV"
 		clr=6
 		bclr=58
 	}
@@ -448,7 +448,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:pi:3114"
+		chan="tm:sexagesimal:az"
 		clr=45
 		bclr=12
 	}
@@ -471,7 +471,7 @@ display {
 		height=36
 	}
 	control {
-		chan="te:rho:8702"
+		chan="tm:sexagesimal:hms"
 		clr=11
 		bclr=59
 	}
@@ -487,7 +487,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:sigma:4938"
+		chan="tm:decimal:slow"
 		clr=58
 		bclr=15
 	}
@@ -510,7 +510,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:tau:1287"
+		chan="tm:engr:mix"
 		clr=36
 		bclr=42
 	}
@@ -527,7 +527,7 @@ display {
 		height=30
 	}
 	control {
-		chan="te:upsilon:9901"
+		chan="tm:string:status"
 		clr=4
 		bclr=39
 	}
@@ -543,7 +543,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:phi:4720"
+		chan="channelD_PV"
 		clr=21
 		bclr=33
 	}
@@ -561,7 +561,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:chi:2609"
+		chan="tm:trunc:edge"
 		clr=13
 		bclr=46
 	}
@@ -581,7 +581,7 @@ display {
 		height=36
 	}
 	control {
-		chan="te:psi:1874"
+		chan="tm:hex:count"
 		clr=31
 		bclr=18
 	}
@@ -597,7 +597,7 @@ display {
 		height=60
 	}
 	control {
-		chan="te:omega:7735"
+		chan="tm:octal:plc"
 		clr=23
 		bclr=60
 	}
@@ -614,7 +614,7 @@ display {
 		height=34
 	}
 	control {
-		chan="te:quartz:1198"
+		chan="tm:compact:1"
 		clr=44
 		bclr=52
 	}
@@ -637,7 +637,7 @@ display {
 		height=32
 	}
 	control {
-		chan="te:rnd:6407"
+		chan="tm:exp:fastA"
 		clr=8
 		bclr=37
 	}
@@ -665,7 +665,7 @@ text {
 	}
 	monitor {
 		clr=14
-		bclr=4
+		bclr=30
 	}
 	format="compact"
 	limits {

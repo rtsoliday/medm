@@ -8,6 +8,14 @@
 #include <type_traits>
 
 #include <QDebug>
+#include <QClipboard>
+#include <QDrag>
+#include <QGuiApplication>
+#include <QFont>
+#include <QLabel>
+#include <QMimeData>
+#include <QPointer>
+#include <QStringList>
 
 #include <cadef.h>
 
@@ -223,6 +231,10 @@ public:
   {
     leaveExecuteMode();
     clearSelections();
+    if (executeDragTooltipLabel_) {
+      executeDragTooltipLabel_->deleteLater();
+      executeDragTooltipLabel_.clear();
+    }
     if (undoStack_) {
       undoStack_->disconnect(this);
     }
@@ -1478,81 +1490,88 @@ protected:
   {
     setAsActiveDisplay();
     if (event->button() == Qt::MiddleButton) {
-      const bool control = event->modifiers().testFlag(Qt::ControlModifier);
-      if (auto state = state_.lock(); state && state->editMode
-          && state->createTool == CreateTool::kNone) {
-        QWidget *hitWidget = elementAt(event->pos());
-        if (control) {
-          if (!multiSelection_.isEmpty()) {
-            if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
-              beginMiddleButtonResize(event->pos());
-              event->accept();
-              return;
-            }
-            if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
-              if (selectWidgetForEditing(hitWidget)) {
+      if (auto state = state_.lock()) {
+        if (!state->editMode) {
+          if (prepareExecuteChannelDrag(event->pos())) {
+            event->accept();
+            return;
+          }
+        } else if (state->createTool == CreateTool::kNone) {
+          const bool control =
+              event->modifiers().testFlag(Qt::ControlModifier);
+          QWidget *hitWidget = elementAt(event->pos());
+          if (control) {
+            if (!multiSelection_.isEmpty()) {
+              if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
                 beginMiddleButtonResize(event->pos());
                 event->accept();
                 return;
               }
-            }
-            event->accept();
-            return;
-          }
-          QWidget *selectedWidget = currentSelectedWidget();
-          if (!selectedWidget && hitWidget) {
-            if (selectWidgetForEditing(hitWidget)) {
-              selectedWidget = currentSelectedWidget();
-            }
-          } else if (hitWidget && hitWidget != selectedWidget) {
-            if (selectWidgetForEditing(hitWidget)) {
-              selectedWidget = currentSelectedWidget();
-            }
-          }
-          if (selectedWidget && hitWidget == selectedWidget) {
-            beginMiddleButtonResize(event->pos());
-            event->accept();
-            return;
-          }
-          if (!selectedWidget && !hitWidget) {
-            event->accept();
-            return;
-          }
-        } else {
-          if (!multiSelection_.isEmpty()) {
-            if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
-              beginMiddleButtonDrag(event->pos());
+              if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
+                if (selectWidgetForEditing(hitWidget)) {
+                  beginMiddleButtonResize(event->pos());
+                  event->accept();
+                  return;
+                }
+              }
               event->accept();
               return;
             }
-            if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
+            QWidget *selectedWidget = currentSelectedWidget();
+            if (!selectedWidget && hitWidget) {
               if (selectWidgetForEditing(hitWidget)) {
+                selectedWidget = currentSelectedWidget();
+              }
+            } else if (hitWidget && hitWidget != selectedWidget) {
+              if (selectWidgetForEditing(hitWidget)) {
+                selectedWidget = currentSelectedWidget();
+              }
+            }
+            if (selectedWidget && hitWidget == selectedWidget) {
+              beginMiddleButtonResize(event->pos());
+              event->accept();
+              return;
+            }
+            if (!selectedWidget && !hitWidget) {
+              event->accept();
+              return;
+            }
+          } else {
+            if (!multiSelection_.isEmpty()) {
+              if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
                 beginMiddleButtonDrag(event->pos());
                 event->accept();
                 return;
               }
+              if (hitWidget && !isWidgetInMultiSelection(hitWidget)) {
+                if (selectWidgetForEditing(hitWidget)) {
+                  beginMiddleButtonDrag(event->pos());
+                  event->accept();
+                  return;
+                }
+              }
+              event->accept();
+              return;
             }
-            event->accept();
-            return;
-          }
-          QWidget *selectedWidget = currentSelectedWidget();
-          if (!selectedWidget && hitWidget) {
-            if (selectWidgetForEditing(hitWidget)) {
-              selectedWidget = currentSelectedWidget();
+            QWidget *selectedWidget = currentSelectedWidget();
+            if (!selectedWidget && hitWidget) {
+              if (selectWidgetForEditing(hitWidget)) {
+                selectedWidget = currentSelectedWidget();
+              }
+            } else if (hitWidget && hitWidget != selectedWidget) {
+              if (selectWidgetForEditing(hitWidget)) {
+                selectedWidget = currentSelectedWidget();
+              }
             }
-          } else if (hitWidget && hitWidget != selectedWidget) {
-            if (selectWidgetForEditing(hitWidget)) {
-              selectedWidget = currentSelectedWidget();
+            if (selectedWidget && hitWidget == selectedWidget) {
+              beginMiddleButtonDrag(event->pos());
+              event->accept();
+              return;
             }
-          }
-          if (selectedWidget && hitWidget == selectedWidget) {
-            beginMiddleButtonDrag(event->pos());
-            event->accept();
-            return;
-          }
-          if (!selectedWidget && !hitWidget) {
-            event->accept();
-            return;
+            if (!selectedWidget && !hitWidget) {
+              event->accept();
+              return;
+            }
           }
         }
       }
@@ -1682,6 +1701,25 @@ protected:
 
   void mouseMoveEvent(QMouseEvent *event) override
   {
+    if (executeDragPending_) {
+      if (event->buttons() & Qt::MiddleButton) {
+        updateExecuteDragTooltip(event->pos());
+        if (!executeDragStarted_
+            && event->modifiers().testFlag(Qt::ControlModifier)) {
+          const QPoint delta =
+              event->pos() - executeDragStartWindowPos_;
+          if (delta.manhattanLength() >= QApplication::startDragDistance()) {
+            executeDragStarted_ = true;
+            startExecuteChannelDrag();
+            event->accept();
+            return;
+          }
+        }
+        event->accept();
+        return;
+      }
+      cancelExecuteChannelDrag();
+    }
     if (middleButtonResizeActive_ && (event->buttons() & Qt::MiddleButton)) {
       updateMiddleButtonResize(event->pos());
       event->accept();
@@ -1744,6 +1782,11 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override
   {
     if (event->button() == Qt::MiddleButton) {
+      if (executeDragPending_) {
+        cancelExecuteChannelDrag();
+        event->accept();
+        return;
+      }
       if (middleButtonResizeActive_) {
         finishMiddleButtonResize(true);
         event->accept();
@@ -2046,6 +2089,13 @@ private:
   bool middleButtonDragActive_ = false;
   bool middleButtonDragMoved_ = false;
   QPoint middleButtonDragStartAreaPos_;
+  QStringList executeDragChannels_;
+  bool executeDragPending_ = false;
+  bool executeDragStarted_ = false;
+  QPoint executeDragStartWindowPos_;
+  QString executeDragTooltipText_;
+  bool executeDragTooltipVisible_ = false;
+  QPointer<QLabel> executeDragTooltipLabel_;
   QList<QPointer<QWidget>> middleButtonResizeWidgets_;
   QList<QRect> middleButtonResizeInitialRects_;
   QPoint middleButtonResizeStartAreaPos_;
@@ -6621,6 +6671,200 @@ private:
       return widget;
     }
     return nullptr;
+  }
+
+  QStringList channelsForWidget(QWidget *widget) const
+  {
+    QStringList channels;
+    if (!widget) {
+      return channels;
+    }
+
+    auto appendChannel = [&](const QString &channel) {
+      const QString trimmed = channel.trimmed();
+      if (trimmed.isEmpty()) {
+        return;
+      }
+      if (!channels.contains(trimmed)) {
+        channels.append(trimmed);
+      }
+    };
+
+    auto appendChannelArray = [&](const auto &array) {
+      for (const QString &value : array) {
+        appendChannel(value);
+      }
+    };
+
+    if (auto *element = dynamic_cast<TextElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<ChoiceButtonElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<MenuElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<MessageButtonElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<MeterElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
+      appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<RectangleElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<ImageElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<ArcElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<LineElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<PolylineElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<PolygonElement *>(widget)) {
+      appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<CompositeElement *>(widget)) {
+      appendChannelArray(element->channels());
+    } else if (auto *element = dynamic_cast<StripChartElement *>(widget)) {
+      const int penCount = element->penCount();
+      for (int i = 0; i < penCount; ++i) {
+        appendChannel(element->channel(i));
+      }
+    } else if (auto *element = dynamic_cast<CartesianPlotElement *>(widget)) {
+      appendChannel(element->triggerChannel());
+      appendChannel(element->eraseChannel());
+      appendChannel(element->countChannel());
+      const int traceCount = element->traceCount();
+      for (int i = 0; i < traceCount; ++i) {
+        appendChannel(element->traceXChannel(i));
+        appendChannel(element->traceYChannel(i));
+      }
+    }
+
+    return channels;
+  }
+
+  bool prepareExecuteChannelDrag(const QPoint &windowPos)
+  {
+    if (!executeModeActive_) {
+      return false;
+    }
+
+    QWidget *widget = elementAt(windowPos);
+    if (!widget) {
+      return false;
+    }
+
+    const QStringList channels = channelsForWidget(widget);
+    if (channels.isEmpty()) {
+      return false;
+    }
+
+    const QString text = channels.join(QStringLiteral(" "));
+    if (QClipboard *clipboard = QGuiApplication::clipboard()) {
+      clipboard->setText(text, QClipboard::Clipboard);
+      clipboard->setText(text, QClipboard::Selection);
+    }
+
+    executeDragChannels_ = channels;
+    executeDragStartWindowPos_ = windowPos;
+    executeDragPending_ = true;
+    executeDragStarted_ = false;
+    executeDragTooltipText_ = text;
+    updateExecuteDragTooltip(windowPos);
+    return true;
+  }
+
+  void startExecuteChannelDrag()
+  {
+    hideExecuteDragTooltip();
+    if (executeDragChannels_.isEmpty()) {
+      return;
+    }
+
+    const QString text = executeDragChannels_.join(QStringLiteral(" "));
+    auto *mimeData = new QMimeData;
+    mimeData->setText(text);
+    QDrag drag(this);
+    drag.setMimeData(mimeData);
+    drag.exec(Qt::CopyAction);
+    cancelExecuteChannelDrag();
+  }
+
+  void cancelExecuteChannelDrag()
+  {
+    executeDragPending_ = false;
+    executeDragStarted_ = false;
+    executeDragChannels_.clear();
+    hideExecuteDragTooltip();
+  }
+
+  QLabel *ensureExecuteDragTooltipLabel()
+  {
+    if (!executeDragTooltipLabel_) {
+      auto *label = new QLabel(nullptr, Qt::ToolTip | Qt::FramelessWindowHint);
+      label->setWindowFlag(Qt::WindowStaysOnTopHint);
+      label->setAttribute(Qt::WA_ShowWithoutActivating);
+      label->setAttribute(Qt::WA_TransparentForMouseEvents);
+      label->setFocusPolicy(Qt::NoFocus);
+      label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+      label->setMargin(6);
+      label->setWordWrap(false);
+      label->setTextFormat(Qt::PlainText);
+      QFont font = label->font();
+      const qreal pointSizeF = font.pointSizeF();
+      if (pointSizeF > 0.0) {
+        font.setPointSizeF(pointSizeF + 2.0);
+      } else {
+        const int pointSize = font.pointSize();
+        font.setPointSize(pointSize > 0 ? pointSize + 2 : 12);
+      }
+      label->setFont(font);
+      executeDragTooltipLabel_ = label;
+    }
+    return executeDragTooltipLabel_;
+  }
+
+  void updateExecuteDragTooltip(const QPoint &windowPos)
+  {
+    if (executeDragTooltipText_.isEmpty()) {
+      hideExecuteDragTooltip();
+      return;
+    }
+    QLabel *tooltip = ensureExecuteDragTooltipLabel();
+    if (!tooltip) {
+      return;
+    }
+    tooltip->setText(executeDragTooltipText_);
+    tooltip->adjustSize();
+    const QPoint globalPos = mapToGlobal(windowPos + QPoint(16, 20));
+    tooltip->move(globalPos);
+    tooltip->raise();
+    if (!tooltip->isVisible()) {
+      tooltip->show();
+    }
+    executeDragTooltipVisible_ = true;
+  }
+
+  void hideExecuteDragTooltip()
+  {
+    if (executeDragTooltipLabel_) {
+      executeDragTooltipLabel_->hide();
+      executeDragTooltipLabel_->clear();
+    }
+    executeDragTooltipVisible_ = false;
+    executeDragTooltipText_.clear();
   }
 
   void bringElementToFront(QWidget *element)
@@ -18104,6 +18348,7 @@ inline void DisplayWindow::leaveExecuteMode()
     return;
   }
   executeModeActive_ = false;
+  cancelExecuteChannelDrag();
   for (auto it = textRuntimes_.begin(); it != textRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();

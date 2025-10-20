@@ -3311,7 +3311,7 @@ int main(int argc, char *argv[]) {
           "  medm [X options]\n"
           "  [-help | -h | -?]\n"
           "  [-version]\n"
-          "  [-x | -e]\n"
+          "  [-x]\n"
           "  [-local | -attach | -cleanup]\n"
           "  [-cmap]\n"
           "  [-bigMousePointer]\n"

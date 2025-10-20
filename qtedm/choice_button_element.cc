@@ -18,6 +18,7 @@
 #include <QToolButton>
 
 #include "legacy_fonts.h"
+#include "cursor_utils.h"
 
 namespace {
 
@@ -632,7 +633,8 @@ void ChoiceButtonElement::rebuildButtons()
     button->setText(runtimeLabels_.value(i).trimmed());
     button->setToolTip(channel_);
     button->setAutoExclusive(false);
-    button->setCursor(runtimeWriteAccess_ ? Qt::ArrowCursor : Qt::ForbiddenCursor);
+    button->setCursor(runtimeWriteAccess_ ? CursorUtils::arrowCursor()
+                                         : CursorUtils::forbiddenCursor());
     buttonGroup_->addButton(button, i);
     button->show();
     buttons_.append(button);
@@ -757,13 +759,14 @@ void ChoiceButtonElement::updateButtonPalettes()
 void ChoiceButtonElement::updateButtonEnabledState()
 {
   const bool enabled = runtimeConnected_;
-  const Qt::CursorShape cursorShape = runtimeWriteAccess_ ? Qt::ArrowCursor : Qt::ForbiddenCursor;
+  const QCursor &cursor = runtimeWriteAccess_ ? CursorUtils::arrowCursor()
+                                              : CursorUtils::forbiddenCursor();
   for (QAbstractButton *button : buttons_) {
     if (!button) {
       continue;
     }
     button->setEnabled(enabled);
-    button->setCursor(cursorShape);
+    button->setCursor(cursor);
   }
 }
 

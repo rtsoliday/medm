@@ -34,6 +34,7 @@
 #include "statistics_tracker.h"
 #include "display_list_dialog.h"
 #include "pv_info_dialog.h"
+#include "cursor_utils.h"
 
 namespace {
 constexpr double kChannelRetryTimeoutSeconds = 1.0;
@@ -12103,13 +12104,13 @@ private:
             || state->createTool == CreateTool::kRelatedDisplay);
     if (displayArea_) {
       if (crossCursorActive) {
-        displayArea_->setCursor(Qt::CrossCursor);
+        displayArea_->setCursor(CursorUtils::crossCursor());
       } else {
         displayArea_->unsetCursor();
       }
     }
     if (crossCursorActive) {
-      setCursor(Qt::CrossCursor);
+      setCursor(CursorUtils::crossCursor());
     } else {
       unsetCursor();
     }

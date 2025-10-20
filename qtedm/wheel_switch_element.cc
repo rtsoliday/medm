@@ -18,6 +18,7 @@
 
 #include "legacy_fonts.h"
 #include "medm_colors.h"
+#include "cursor_utils.h"
 
 namespace {
 
@@ -1249,9 +1250,9 @@ void WheelSwitchElement::updateCursor()
     return;
   }
   if (isInteractive()) {
-    setCursor(Qt::ArrowCursor);
+    setCursor(CursorUtils::arrowCursor());
   } else {
-    setCursor(Qt::ForbiddenCursor);
+    setCursor(CursorUtils::forbiddenCursor());
   }
 }
 

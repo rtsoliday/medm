@@ -47,6 +47,7 @@
 #include "object_palette_dialog.h"
 #include "statistics_window.h"
 #include "window_utils.h"
+#include "cursor_utils.h"
 
 namespace {
 
@@ -71,6 +72,7 @@ struct CommandLineOptions {
   bool showHelp = false;
   bool showVersion = false;
   bool raiseMessageWindow = true;
+  bool useBigMousePointer = false;
   QString invalidOption;
   QStringList displayFiles;
   QString displayGeometry;
@@ -97,6 +99,7 @@ void printUsage(const QString &program)
       "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
       "  [-noMsg]\n"
+      "  [-bigMousePointer]\n"
       "  [display-files]\n"
       "  [&]\n"
       "\n",
@@ -119,6 +122,8 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.showVersion = true;
     } else if (arg == QLatin1String("-noMsg")) {
       options.raiseMessageWindow = false;
+    } else if (arg == QLatin1String("-bigMousePointer")) {
+      options.useBigMousePointer = true;
     } else if (arg == QLatin1String("-macro")) {
       if ((i + 1) < args.size()) {
         QString tmp = args.at(++i);
@@ -384,6 +389,7 @@ int main(int argc, char *argv[])
     fflush(stdout);
     options.macroString.clear();
   }
+  CursorUtils::setUseBigCursor(options.useBigMousePointer);
 
   if (!options.displayGeometry.isEmpty() && !options.displayFiles.isEmpty() &&
       !geometrySpec) {

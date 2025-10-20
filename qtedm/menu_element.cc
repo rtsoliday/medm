@@ -14,6 +14,7 @@
 #include <QSignalBlocker>
 
 #include "legacy_fonts.h"
+#include "cursor_utils.h"
 
 namespace {
 
@@ -70,7 +71,7 @@ MenuElement::MenuElement(QWidget *parent)
   comboBox_->setContextMenuPolicy(Qt::NoContextMenu);
   comboBox_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   comboBox_->setAutoFillBackground(true);
-  comboBox_->setCursor(Qt::ArrowCursor);
+  comboBox_->setCursor(CursorUtils::arrowCursor());
 
   QObject::connect(comboBox_, QOverload<int>::of(&QComboBox::activated),
       this, [this](int index) {
@@ -396,9 +397,10 @@ void MenuElement::updateComboBoxCursor()
     return;
   }
   if (executeMode_) {
-    comboBox_->setCursor(runtimeWriteAccess_ ? Qt::ArrowCursor : Qt::ForbiddenCursor);
+    comboBox_->setCursor(runtimeWriteAccess_ ? CursorUtils::arrowCursor()
+                                             : CursorUtils::forbiddenCursor());
   } else {
-    comboBox_->setCursor(Qt::ArrowCursor);
+    comboBox_->setCursor(CursorUtils::arrowCursor());
   }
 }
 
@@ -420,4 +422,3 @@ void MenuElement::updateComboBoxFont()
     }
   }
 }
-

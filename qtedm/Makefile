@@ -91,6 +91,7 @@ qtedm_SRC = qtedm.cc \
             medm_colors.cc \
             statistics_tracker.cc \
             statistics_window.cc \
+            cursor_utils.cc \
             text_runtime_calc_bridge.c
 
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))

@@ -14,6 +14,8 @@
 #include <QPushButton>
 #include <QResizeEvent>
 
+#include "cursor_utils.h"
+
 namespace {
 
 QString defaultLabel()
@@ -83,7 +85,7 @@ MessageButtonElement::MessageButtonElement(QWidget *parent)
   button_->setAutoDefault(false);
   button_->setCheckable(false);
   button_->setContextMenuPolicy(Qt::NoContextMenu);
-  button_->setCursor(Qt::ArrowCursor);
+  button_->setCursor(CursorUtils::arrowCursor());
   button_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   button_->setText(defaultLabel());
 
@@ -460,16 +462,16 @@ void MessageButtonElement::updateButtonState()
   }
   if (!executeMode_) {
     button_->setEnabled(true);
-    button_->setCursor(Qt::ArrowCursor);
+    button_->setCursor(CursorUtils::arrowCursor());
     return;
   }
 
   const bool enable = runtimeConnected_;
   button_->setEnabled(enable);
   if (runtimeConnected_ && runtimeWriteAccess_) {
-    button_->setCursor(Qt::ArrowCursor);
+    button_->setCursor(CursorUtils::arrowCursor());
   } else {
-    button_->setCursor(Qt::ForbiddenCursor);
+    button_->setCursor(CursorUtils::forbiddenCursor());
   }
   if (!enable) {
     button_->setDown(false);

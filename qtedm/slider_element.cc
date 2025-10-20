@@ -12,6 +12,8 @@
 #include <QCursor>
 #include <QPointF>
 
+#include "cursor_utils.h"
+
 namespace {
 
 constexpr double kSampleValue = 0.6;
@@ -822,9 +824,9 @@ void SliderElement::updateCursor()
     return;
   }
   if (isInteractive()) {
-    setCursor(Qt::ArrowCursor);
+    setCursor(CursorUtils::arrowCursor());
   } else {
-    setCursor(Qt::ForbiddenCursor);
+    setCursor(CursorUtils::forbiddenCursor());
   }
 }
 

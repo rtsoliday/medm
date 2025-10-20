@@ -118,6 +118,7 @@
 #include "shell_command_element.h"
 #include "related_display_element.h"
 #include "text_entry_element.h"
+#include "text_entry_runtime.h"
 #include "text_monitor_element.h"
 #include "text_monitor_runtime.h"
 

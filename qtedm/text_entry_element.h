@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <QColor>
 #include <QWidget>
 
@@ -43,6 +45,20 @@ public:
   QString channel() const;
   void setChannel(const QString &value);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setRuntimeConnected(bool connected);
+  void setRuntimeWriteAccess(bool writeAccess);
+  void setRuntimeSeverity(short severity);
+  void setRuntimeText(const QString &text);
+  void setRuntimeLimits(double low, double high);
+  void setRuntimePrecision(int precision);
+  void clearRuntimeState();
+
+  void setActivationCallback(
+      const std::function<void(const QString &)> &callback);
+
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
@@ -53,6 +69,10 @@ private:
   void updateFontForGeometry();
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
+  QColor effectiveForegroundColor() const;
+  QColor effectiveBackgroundColor() const;
+  void updateLineEditState();
+  void applyRuntimeTextToLineEdit();
 
   bool selected_ = false;
   QLineEdit *lineEdit_ = nullptr;
@@ -62,5 +82,17 @@ private:
   TextMonitorFormat format_ = TextMonitorFormat::kDecimal;
   PvLimits limits_{};
   QString channel_;
+  bool executeMode_ = false;
+  bool runtimeConnected_ = false;
+  bool runtimeWriteAccess_ = false;
+  short runtimeSeverity_ = 0;
+  QString runtimeText_;
+  QString designModeText_;
+  bool updateAllowed_ = true;
+  bool hasPendingRuntimeText_ = false;
+  double runtimeLow_ = 0.0;
+  double runtimeHigh_ = 0.0;
+  bool runtimeLimitsValid_ = false;
+  int runtimePrecision_ = -1;
+  std::function<void(const QString &)> activationCallback_;
 };
-

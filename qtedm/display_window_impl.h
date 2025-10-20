@@ -1996,6 +1996,7 @@ private:
   QHash<TextElement *, TextRuntime *> textRuntimes_;
   QList<TextEntryElement *> textEntryElements_;
   TextEntryElement *selectedTextEntryElement_ = nullptr;
+  QHash<TextEntryElement *, TextEntryRuntime *> textEntryRuntimes_;
   QList<SliderElement *> sliderElements_;
   SliderElement *selectedSliderElement_ = nullptr;
   QHash<SliderElement *, SliderRuntime *> sliderRuntimes_;
@@ -3000,6 +3001,7 @@ private:
   void removeCartesianPlotRuntime(CartesianPlotElement *element);
   void removeByteMonitorRuntime(ByteMonitorElement *element);
   void removeWheelSwitchRuntime(WheelSwitchElement *element);
+  void removeTextEntryRuntime(TextEntryElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -3017,6 +3019,8 @@ private:
     removeElementFromStack(element);
     if constexpr (std::is_same_v<ElementType, TextElement>) {
       removeTextRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, TextEntryElement>) {
+      removeTextEntryRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, SliderElement>) {
       removeSliderRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, WheelSwitchElement>) {
@@ -11554,7 +11558,8 @@ private:
       return false;
     };
 
-    if (attemptSingleChannelRuntime(sliderRuntimes_) ||
+    if (attemptSingleChannelRuntime(textEntryRuntimes_) ||
+        attemptSingleChannelRuntime(sliderRuntimes_) ||
         attemptSingleChannelRuntime(wheelSwitchRuntimes_) ||
         attemptSingleChannelRuntime(choiceButtonRuntimes_) ||
         attemptSingleChannelRuntime(menuRuntimes_) ||
@@ -13975,6 +13980,8 @@ inline void DisplayWindow::clearAllElements()
       if (element) {
         if constexpr (std::is_same_v<ElementType, TextElement *>) {
           removeTextRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, TextEntryElement *>) {
+          removeTextEntryRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, SliderElement *>) {
           removeSliderRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, WheelSwitchElement *>) {
@@ -18131,6 +18138,17 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (TextEntryElement *element : textEntryElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!textEntryRuntimes_.contains(element)) {
+      auto *runtime = new TextEntryRuntime(element);
+      textEntryRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   for (RectangleElement *element : rectangleElements_) {
     if (!element) {
       continue;
@@ -18357,6 +18375,18 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   textRuntimes_.clear();
   for (TextElement *element : textElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (auto it = textEntryRuntimes_.begin(); it != textEntryRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  textEntryRuntimes_.clear();
+  for (TextEntryElement *element : textEntryElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
@@ -18600,6 +18630,17 @@ inline void DisplayWindow::removeTextRuntime(TextElement *element)
     return;
   }
   if (auto *runtime = textRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeTextEntryRuntime(TextEntryElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = textEntryRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

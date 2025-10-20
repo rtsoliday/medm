@@ -1,13 +1,35 @@
 #include "text_entry_element.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QLineEdit>
 #include <QPainter>
 #include <QPalette>
 #include <QResizeEvent>
+#include <QSignalBlocker>
 
 #include "text_font_utils.h"
+
+namespace {
+
+QColor alarmColorForSeverity(short severity)
+{
+  switch (severity) {
+  case 0:
+    return QColor(0, 205, 0);
+  case 1:
+    return QColor(255, 255, 0);
+  case 2:
+    return QColor(255, 0, 0);
+  case 3:
+    return QColor(255, 255, 255);
+  default:
+    return QColor(204, 204, 204);
+  }
+}
+
+} // namespace
 
 TextEntryElement::TextEntryElement(QWidget *parent)
   : QWidget(parent)
@@ -17,7 +39,7 @@ TextEntryElement::TextEntryElement(QWidget *parent)
   lineEdit_->setReadOnly(true);
   lineEdit_->setFrame(true);
   lineEdit_->setAlignment(Qt::AlignLeft);
-  lineEdit_->setFocusPolicy(Qt::NoFocus);
+  lineEdit_->setFocusPolicy(Qt::StrongFocus);
   lineEdit_->setContextMenuPolicy(Qt::NoContextMenu);
   lineEdit_->setAttribute(Qt::WA_TransparentForMouseEvents);
   lineEdit_->setAutoFillBackground(true);
@@ -25,6 +47,31 @@ TextEntryElement::TextEntryElement(QWidget *parent)
   backgroundColor_ = defaultBackgroundColor();
   applyPaletteColors();
   updateSelectionVisual();
+  updateLineEditState();
+
+  connect(lineEdit_, &QLineEdit::textEdited, this,
+      [this](const QString &) {
+        if (!executeMode_) {
+          return;
+        }
+        updateAllowed_ = false;
+        hasPendingRuntimeText_ = false;
+      });
+
+  connect(lineEdit_, &QLineEdit::editingFinished, this,
+      [this]() {
+        if (!executeMode_) {
+          return;
+        }
+        const bool hadEdits = !updateAllowed_;
+        updateAllowed_ = true;
+        if (hadEdits && activationCallback_) {
+          activationCallback_(lineEdit_->text());
+        }
+        if (hasPendingRuntimeText_) {
+          applyRuntimeTextToLineEdit();
+        }
+      });
 }
 
 void TextEntryElement::setSelected(bool selected)
@@ -82,6 +129,7 @@ TextColorMode TextEntryElement::colorMode() const
 void TextEntryElement::setColorMode(TextColorMode mode)
 {
   colorMode_ = mode;
+  applyPaletteColors();
 }
 
 TextMonitorFormat TextEntryElement::format() const
@@ -170,9 +218,161 @@ void TextEntryElement::setChannel(const QString &value)
     return;
   }
   channel_ = value;
-  if (lineEdit_) {
+  if (!executeMode_ && lineEdit_) {
+    QSignalBlocker blocker(lineEdit_);
     lineEdit_->setText(channel_);
+    updateFontForGeometry();
   }
+}
+
+void TextEntryElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  if (executeMode_) {
+    designModeText_ = lineEdit_ ? lineEdit_->text() : QString();
+    runtimeConnected_ = false;
+    runtimeWriteAccess_ = false;
+    runtimeSeverity_ = 0;
+    runtimeText_.clear();
+    updateAllowed_ = true;
+    hasPendingRuntimeText_ = false;
+    if (lineEdit_) {
+      QSignalBlocker blocker(lineEdit_);
+      lineEdit_->clear();
+    }
+  } else {
+    runtimeConnected_ = false;
+    runtimeWriteAccess_ = false;
+    runtimeSeverity_ = 0;
+    runtimeText_.clear();
+    updateAllowed_ = true;
+    hasPendingRuntimeText_ = false;
+    if (lineEdit_) {
+      QSignalBlocker blocker(lineEdit_);
+      lineEdit_->setText(channel_);
+    }
+  }
+  updateLineEditState();
+  applyPaletteColors();
+  updateFontForGeometry();
+  update();
+}
+
+bool TextEntryElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void TextEntryElement::setRuntimeConnected(bool connected)
+{
+  if (runtimeConnected_ == connected) {
+    return;
+  }
+  runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeWriteAccess_ = false;
+    runtimeSeverity_ = 0;
+    hasPendingRuntimeText_ = false;
+    updateAllowed_ = true;
+    if (lineEdit_) {
+      QSignalBlocker blocker(lineEdit_);
+      lineEdit_->clear();
+    }
+  }
+  updateLineEditState();
+  if (executeMode_) {
+    applyPaletteColors();
+    update();
+  }
+}
+
+void TextEntryElement::setRuntimeWriteAccess(bool writeAccess)
+{
+  if (runtimeWriteAccess_ == writeAccess) {
+    return;
+  }
+  runtimeWriteAccess_ = writeAccess;
+  updateLineEditState();
+}
+
+void TextEntryElement::setRuntimeSeverity(short severity)
+{
+  short clamped = std::clamp<short>(severity, 0, 3);
+  if (runtimeSeverity_ == clamped) {
+    return;
+  }
+  runtimeSeverity_ = clamped;
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    applyPaletteColors();
+    update();
+  }
+}
+
+void TextEntryElement::setRuntimeText(const QString &text)
+{
+  runtimeText_ = text;
+  if (!executeMode_ || !lineEdit_) {
+    return;
+  }
+  if (!updateAllowed_) {
+    hasPendingRuntimeText_ = true;
+    return;
+  }
+  applyRuntimeTextToLineEdit();
+}
+
+void TextEntryElement::setRuntimeLimits(double low, double high)
+{
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return;
+  }
+  if (std::abs(high - low) < 1e-12) {
+    high = low + 1.0;
+  }
+  runtimeLow_ = low;
+  runtimeHigh_ = high;
+  runtimeLimitsValid_ = true;
+}
+
+void TextEntryElement::setRuntimePrecision(int precision)
+{
+  int clamped = std::clamp(precision, 0, 17);
+  if (runtimePrecision_ == clamped) {
+    return;
+  }
+  runtimePrecision_ = clamped;
+}
+
+void TextEntryElement::clearRuntimeState()
+{
+  runtimeConnected_ = false;
+  runtimeWriteAccess_ = false;
+  runtimeSeverity_ = 0;
+  runtimeText_.clear();
+  updateAllowed_ = true;
+  hasPendingRuntimeText_ = false;
+  runtimeLow_ = limits_.lowDefault;
+  runtimeHigh_ = limits_.highDefault;
+  runtimeLimitsValid_ = false;
+  runtimePrecision_ = -1;
+  if (lineEdit_ && executeMode_) {
+    QSignalBlocker blocker(lineEdit_);
+    lineEdit_->clear();
+  }
+  updateLineEditState();
+  if (executeMode_) {
+    applyPaletteColors();
+    update();
+  }
+}
+
+void TextEntryElement::setActivationCallback(
+    const std::function<void(const QString &)> &callback)
+{
+  activationCallback_ = callback;
 }
 
 void TextEntryElement::resizeEvent(QResizeEvent *event)
@@ -208,33 +408,20 @@ void TextEntryElement::applyPaletteColors()
     return;
   }
   QPalette pal = lineEdit_->palette();
-  const QColor fg = foregroundColor_.isValid() ? foregroundColor_
-                                               : defaultForegroundColor();
-  const QColor bg = backgroundColor_.isValid() ? backgroundColor_
-                                               : defaultBackgroundColor();
+  QColor fg = selected_ ? QColor(Qt::blue) : effectiveForegroundColor();
+  QColor bg = effectiveBackgroundColor();
   pal.setColor(QPalette::Text, fg);
   pal.setColor(QPalette::WindowText, fg);
+  pal.setColor(QPalette::ButtonText, fg);
   pal.setColor(QPalette::Base, bg);
   pal.setColor(QPalette::Window, bg);
-  pal.setColor(QPalette::ButtonText, fg);
   lineEdit_->setPalette(pal);
   lineEdit_->update();
 }
 
 void TextEntryElement::updateSelectionVisual()
 {
-  if (!lineEdit_) {
-    return;
-  }
-  if (selected_) {
-    QPalette pal = lineEdit_->palette();
-    pal.setColor(QPalette::Text, QColor(Qt::blue));
-    pal.setColor(QPalette::WindowText, QColor(Qt::blue));
-    pal.setColor(QPalette::ButtonText, QColor(Qt::blue));
-    lineEdit_->setPalette(pal);
-  } else {
-    applyPaletteColors();
-  }
+  applyPaletteColors();
 }
 
 void TextEntryElement::updateFontForGeometry()
@@ -263,3 +450,46 @@ QColor TextEntryElement::defaultBackgroundColor() const
   return palette().color(QPalette::Base);
 }
 
+QColor TextEntryElement::effectiveForegroundColor() const
+{
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    return alarmColorForSeverity(runtimeSeverity_);
+  }
+  if (foregroundColor_.isValid()) {
+    return foregroundColor_;
+  }
+  return defaultForegroundColor();
+}
+
+QColor TextEntryElement::effectiveBackgroundColor() const
+{
+  if (backgroundColor_.isValid()) {
+    return backgroundColor_;
+  }
+  return defaultBackgroundColor();
+}
+
+void TextEntryElement::updateLineEditState()
+{
+  if (!lineEdit_) {
+    return;
+  }
+  const bool interactive = executeMode_ && runtimeConnected_
+      && runtimeWriteAccess_ && activationCallback_;
+  lineEdit_->setReadOnly(!interactive);
+  lineEdit_->setAttribute(Qt::WA_TransparentForMouseEvents, !interactive);
+  lineEdit_->setFocusPolicy(interactive ? Qt::StrongFocus : Qt::NoFocus);
+}
+
+void TextEntryElement::applyRuntimeTextToLineEdit()
+{
+  if (!lineEdit_) {
+    return;
+  }
+  QSignalBlocker blocker(lineEdit_);
+  if (lineEdit_->text() != runtimeText_) {
+    lineEdit_->setText(runtimeText_);
+  }
+  hasPendingRuntimeText_ = false;
+  updateFontForGeometry();
+}

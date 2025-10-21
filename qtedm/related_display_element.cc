@@ -471,7 +471,11 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
   bool showIcon = true;
-  const QString labelText = displayLabel(showIcon);
+  QString labelText = displayLabel(showIcon);
+  if (visual_ == RelatedDisplayVisual::kMenu && executeMode_
+      && label_.trimmed().isEmpty()) {
+    labelText.clear();
+  }
 
   const int fontLimit = messageButtonPixelLimit(height());
   const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
@@ -514,8 +518,10 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
       textRect.setLeft(textLeft);
     }
   }
-  painter.setPen(fg);
-  painter.drawText(textRect, Qt::AlignCenter, labelText);
+  if (!labelText.isEmpty()) {
+    painter.setPen(fg);
+    painter.drawText(textRect, Qt::AlignCenter, labelText);
+  }
 
   painter.restore();
 }

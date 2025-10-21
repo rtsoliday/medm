@@ -63,6 +63,8 @@ void OvalRuntime::start()
 
   resetState();
   started_ = true;
+  channelsNeeded_ = (element_->colorMode() != TextColorMode::kStatic)
+      || (element_->visibilityMode() != TextVisibilityMode::kStatic);
 
   if (element_->visibilityMode() == TextVisibilityMode::kCalc) {
     const QString calcExpr = element_->visibilityCalc().trimmed();
@@ -101,8 +103,10 @@ void OvalRuntime::resetState()
 {
   calcPostfix_.clear();
   calcValid_ = false;
+  channelsNeeded_ = true;
 
   for (auto &channel : channels_) {
+    channel.name.clear();
     channel.channelId = nullptr;
     channel.subscriptionId = nullptr;
     channel.subscriptionType = DBR_TIME_DOUBLE;
@@ -130,6 +134,12 @@ void OvalRuntime::resetState()
 void OvalRuntime::initializeChannels()
 {
   if (!element_) {
+    return;
+  }
+  if (!channelsNeeded_) {
+    for (auto &channel : channels_) {
+      channel.name.clear();
+    }
     return;
   }
 

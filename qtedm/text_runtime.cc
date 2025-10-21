@@ -65,6 +65,8 @@ void TextRuntime::start()
   resetState();
   started_ = true;
   StatisticsTracker::instance().registerDisplayObjectStarted();
+  channelsNeeded_ = (element_->colorMode() != TextColorMode::kStatic)
+      || (element_->visibilityMode() != TextVisibilityMode::kStatic);
 
   if (element_->visibilityMode() == TextVisibilityMode::kCalc) {
     const QString calcExpr = element_->visibilityCalc().trimmed();
@@ -104,8 +106,10 @@ void TextRuntime::resetState()
 {
   calcPostfix_.clear();
   calcValid_ = false;
+  channelsNeeded_ = true;
 
   for (auto &channel : channels_) {
+    channel.name.clear();
     channel.channelId = nullptr;
     channel.subscriptionId = nullptr;
     channel.subscriptionType = DBR_TIME_DOUBLE;
@@ -133,6 +137,12 @@ void TextRuntime::resetState()
 void TextRuntime::initializeChannels()
 {
   if (!element_) {
+    return;
+  }
+  if (!channelsNeeded_) {
+    for (auto &channel : channels_) {
+      channel.name.clear();
+    }
     return;
   }
 

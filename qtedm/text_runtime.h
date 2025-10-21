@@ -68,5 +68,6 @@ private:
   std::array<ChannelRuntime, 5> channels_{};
   QByteArray calcPostfix_;
   bool calcValid_ = false;
+  bool channelsNeeded_ = true;
   bool started_ = false;
 };

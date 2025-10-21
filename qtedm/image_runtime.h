@@ -74,5 +74,6 @@ private:
   bool imageCalcValid_ = false;
   bool hasImageCalcExpression_ = false;
   bool animate_ = false;
+  bool channelsNeeded_ = true;
   bool started_ = false;
 };

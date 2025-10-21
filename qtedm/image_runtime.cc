@@ -100,6 +100,10 @@ void ImageRuntime::start()
     }
   }
 
+  channelsNeeded_ = (element_->colorMode() != TextColorMode::kStatic)
+      || (element_->visibilityMode() != TextVisibilityMode::kStatic)
+      || hasImageCalcExpression_;
+
   initializeChannels();
   evaluateState();
 }
@@ -123,8 +127,10 @@ void ImageRuntime::resetState()
   imageCalcValid_ = false;
   hasImageCalcExpression_ = false;
   animate_ = false;
+  channelsNeeded_ = true;
 
   for (auto &channel : channels_) {
+    channel.name.clear();
     channel.channelId = nullptr;
     channel.subscriptionId = nullptr;
     channel.subscriptionType = DBR_TIME_DOUBLE;
@@ -154,6 +160,12 @@ void ImageRuntime::resetState()
 void ImageRuntime::initializeChannels()
 {
   if (!element_) {
+    return;
+  }
+  if (!channelsNeeded_) {
+    for (auto &channel : channels_) {
+      channel.name.clear();
+    }
     return;
   }
 

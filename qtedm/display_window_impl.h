@@ -1542,7 +1542,8 @@ protected:
         } else if (state->createTool == CreateTool::kNone) {
           const bool control =
               event->modifiers().testFlag(Qt::ControlModifier);
-          QWidget *hitWidget = elementAt(event->pos(), false);
+          QWidget *hitWidget =
+              elementAt(event->pos(), CompositeHitMode::kRejectChildren);
           if (control) {
             if (!multiSelection_.isEmpty()) {
               if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
@@ -1692,7 +1693,8 @@ protected:
         const bool insideDisplayArea = displayArea_
             && displayArea_->rect().contains(areaPos);
 
-        if (QWidget *widget = elementAt(event->pos(), false)) {
+        if (QWidget *widget =
+            elementAt(event->pos(), CompositeHitMode::kRejectChildren)) {
           const Qt::KeyboardModifiers mods = event->modifiers();
           if (mods.testFlag(Qt::ShiftModifier)
               || mods.testFlag(Qt::ControlModifier)) {
@@ -6746,8 +6748,15 @@ private:
         QStringLiteral("Polygon"), true);
   }
 
+  enum class CompositeHitMode
+  {
+    kAuto,
+    kRejectChildren,
+    kIncludeChildren,
+  };
+
   QWidget *elementAt(const QPoint &windowPos,
-      bool includeCompositeChildren = true) const
+      CompositeHitMode mode = CompositeHitMode::kAuto) const
   {
     if (!displayArea_) {
       return nullptr;
@@ -6755,6 +6764,19 @@ private:
     const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
     if (!displayArea_->rect().contains(areaPos)) {
       return nullptr;
+    }
+    bool includeCompositeChildren = true;
+    switch (mode) {
+    case CompositeHitMode::kRejectChildren:
+      includeCompositeChildren = false;
+      break;
+    case CompositeHitMode::kIncludeChildren:
+      includeCompositeChildren = true;
+      break;
+    case CompositeHitMode::kAuto:
+    default:
+      includeCompositeChildren = executeModeActive_;
+      break;
     }
     auto hitTest = [&](QWidget *candidate, const auto &self) -> QWidget * {
       if (!candidate) {

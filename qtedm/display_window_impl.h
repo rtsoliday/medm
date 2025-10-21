@@ -1542,7 +1542,7 @@ protected:
         } else if (state->createTool == CreateTool::kNone) {
           const bool control =
               event->modifiers().testFlag(Qt::ControlModifier);
-          QWidget *hitWidget = elementAt(event->pos());
+          QWidget *hitWidget = elementAt(event->pos(), false);
           if (control) {
             if (!multiSelection_.isEmpty()) {
               if (hitWidget && isWidgetInMultiSelection(hitWidget)) {
@@ -1692,7 +1692,7 @@ protected:
         const bool insideDisplayArea = displayArea_
             && displayArea_->rect().contains(areaPos);
 
-        if (QWidget *widget = elementAt(event->pos())) {
+        if (QWidget *widget = elementAt(event->pos(), false)) {
           const Qt::KeyboardModifiers mods = event->modifiers();
           if (mods.testFlag(Qt::ShiftModifier)
               || mods.testFlag(Qt::ControlModifier)) {
@@ -6746,7 +6746,8 @@ private:
         QStringLiteral("Polygon"), true);
   }
 
-  QWidget *elementAt(const QPoint &windowPos) const
+  QWidget *elementAt(const QPoint &windowPos,
+      bool includeCompositeChildren = true) const
   {
     if (!displayArea_) {
       return nullptr;
@@ -6766,18 +6767,20 @@ private:
         return nullptr;
       }
 
-      if (auto *composite = dynamic_cast<CompositeElement *>(candidate)) {
-        const QList<QWidget *> children = composite->childWidgets();
-        for (auto it = children.crbegin(); it != children.crend(); ++it) {
-          QWidget *child = *it;
-          if (!child) {
-            continue;
+      if (includeCompositeChildren) {
+        if (auto *composite = dynamic_cast<CompositeElement *>(candidate)) {
+          const QList<QWidget *> children = composite->childWidgets();
+          for (auto it = children.crbegin(); it != children.crend(); ++it) {
+            QWidget *child = *it;
+            if (!child) {
+              continue;
+            }
+            if (QWidget *hit = self(child, self)) {
+              return hit;
+            }
           }
-          if (QWidget *hit = self(child, self)) {
-            return hit;
-          }
+          return candidate;
         }
-        return candidate;
       }
 
       if (auto *polyline = dynamic_cast<PolylineElement *>(candidate)) {

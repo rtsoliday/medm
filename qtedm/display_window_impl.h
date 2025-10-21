@@ -6755,25 +6755,48 @@ private:
     if (!displayArea_->rect().contains(areaPos)) {
       return nullptr;
     }
+    auto hitTest = [&](QWidget *candidate, const auto &self) -> QWidget * {
+      if (!candidate) {
+        return nullptr;
+      }
+
+      const QPoint topLeft = candidate->mapTo(displayArea_, QPoint(0, 0));
+      const QRect globalRect(topLeft, candidate->size());
+      if (!globalRect.contains(areaPos)) {
+        return nullptr;
+      }
+
+      if (auto *composite = dynamic_cast<CompositeElement *>(candidate)) {
+        const QList<QWidget *> children = composite->childWidgets();
+        for (auto it = children.crbegin(); it != children.crend(); ++it) {
+          QWidget *child = *it;
+          if (!child) {
+            continue;
+          }
+          if (QWidget *hit = self(child, self)) {
+            return hit;
+          }
+        }
+        return candidate;
+      }
+
+      if (auto *polyline = dynamic_cast<PolylineElement *>(candidate)) {
+        if (!polyline->containsGlobalPoint(areaPos)) {
+          return nullptr;
+        }
+      } else if (auto *polygon = dynamic_cast<PolygonElement *>(candidate)) {
+        if (!polygon->containsGlobalPoint(areaPos)) {
+          return nullptr;
+        }
+      }
+      return candidate;
+    };
+
     for (auto it = elementStack_.crbegin(); it != elementStack_.crend(); ++it) {
       QWidget *widget = it->data();
-      if (!widget) {
-        continue;
+      if (QWidget *hit = hitTest(widget, hitTest)) {
+        return hit;
       }
-      if (!widget->geometry().contains(areaPos)) {
-        continue;
-      }
-      if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
-        if (!polyline->containsGlobalPoint(areaPos)) {
-          continue;
-        }
-      }
-      if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
-        if (!polygon->containsGlobalPoint(areaPos)) {
-          continue;
-        }
-      }
-      return widget;
     }
     return nullptr;
   }

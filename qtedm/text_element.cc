@@ -8,7 +8,11 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
+#include <QPen>
+#include <QHideEvent>
+#include <QMoveEvent>
 #include <QResizeEvent>
+#include <QShowEvent>
 
 #include "text_font_utils.h"
 
@@ -32,12 +36,106 @@ QColor alarmColorForSeverity(short severity)
   }
 }
 
+int textPixelWidth(const QFontMetrics &metrics, const QString &text)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+  return metrics.horizontalAdvance(text);
+#else
+  return metrics.width(text);
+#endif
+}
+
 } // namespace
+
+class TextOverflowWidget : public QWidget
+{
+public:
+  explicit TextOverflowWidget(TextElement *owner)
+    : QWidget(owner ? owner->parentWidget() : nullptr)
+    , owner_(owner)
+  {
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    setAttribute(Qt::WA_NoSystemBackground);
+    setFocusPolicy(Qt::NoFocus);
+    hide();
+  }
+
+  void syncParent()
+  {
+    if (!owner_) {
+      return;
+    }
+    QWidget *targetParent = owner_->parentWidget();
+    if (parentWidget() != targetParent) {
+      setParent(targetParent);
+    }
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    Q_UNUSED(event);
+    if (!owner_ || !owner_->isVisible()) {
+      return;
+    }
+    const QRect ownerRect = owner_->geometry();
+    if (!ownerRect.isValid()) {
+      return;
+    }
+
+    const QRect overlayRect = geometry();
+    const int ownerLeft = ownerRect.x() - overlayRect.x();
+    const int ownerTop = ownerRect.y() - overlayRect.y();
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    painter.setRenderHint(QPainter::TextAntialiasing, false);
+
+    const QString text = owner_->text();
+    if (!text.isEmpty()) {
+      const QFont font = owner_->font();
+      painter.setFont(font);
+      painter.setPen(owner_->effectiveForegroundColor());
+
+      const QFontMetrics metrics(font);
+      const int baseline = ownerTop + metrics.ascent();
+      int textX = ownerLeft;
+      const int textWidth = textPixelWidth(metrics, text);
+      const Qt::Alignment alignment = owner_->textAlignment();
+      switch (alignment & Qt::AlignHorizontal_Mask) {
+      case Qt::AlignHCenter:
+        textX = ownerLeft + (ownerRect.width() - textWidth) / 2;
+        break;
+      case Qt::AlignRight:
+        textX = ownerLeft + ownerRect.width() - textWidth;
+        break;
+      default:
+        break;
+      }
+      painter.drawText(textX, baseline, text);
+    }
+
+    if (owner_->isSelected()) {
+      QPen pen(Qt::black);
+      pen.setStyle(Qt::DashLine);
+      pen.setWidth(1);
+      painter.setPen(pen);
+      painter.setBrush(Qt::NoBrush);
+      QRect border(ownerLeft, ownerTop, ownerRect.width(), ownerRect.height());
+      border.adjust(0, 0, -1, -1);
+      painter.drawRect(border);
+    }
+  }
+
+private:
+  TextElement *owner_ = nullptr;
+};
 
 TextElement::TextElement(QWidget *parent)
   : QLabel(parent)
 {
   setAutoFillBackground(false);
+  setAttribute(Qt::WA_NoSystemBackground);
   setWordWrap(false);
   setContentsMargins(kTextMargin, kTextMargin, kTextMargin, kTextMargin);
   setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -47,6 +145,19 @@ TextElement::TextElement(QWidget *parent)
   setVisibilityMode(TextVisibilityMode::kStatic);
   updateSelectionVisual();
   designModeVisible_ = QLabel::isVisible();
+  updateOverflowGeometry();
+  updateOverflowVisibility();
+  updateOverflowStacking();
+}
+
+TextElement::~TextElement()
+{
+  if (overflowWidget_) {
+    overflowWidget_->hide();
+    overflowWidget_->setParent(nullptr);
+    delete overflowWidget_;
+    overflowWidget_ = nullptr;
+  }
 }
 
 void TextElement::setSelected(bool selected)
@@ -56,6 +167,7 @@ void TextElement::setSelected(bool selected)
   }
   selected_ = selected;
   updateSelectionVisual();
+  requestOverflowRepaint();
 }
 
 bool TextElement::isSelected() const
@@ -76,7 +188,7 @@ void TextElement::setForegroundColor(const QColor &color)
   }
   foregroundColor_ = effective;
   applyTextColor();
-  update();
+  requestOverflowRepaint();
 }
 
 void TextElement::setText(const QString &value)
@@ -110,6 +222,7 @@ void TextElement::setTextAlignment(Qt::Alignment alignment)
   }
   alignment_ = effective;
   QLabel::setAlignment(alignment_);
+  updateOverflowGeometry();
 }
 
 TextColorMode TextElement::colorMode() const
@@ -179,6 +292,8 @@ void TextElement::setExecuteMode(bool execute)
   runtimeVisible_ = true;
   runtimeSeverity_ = 0;
   updateExecuteState();
+  updateOverflowGeometry();
+  updateOverflowVisibility();
 }
 
 bool TextElement::isExecuteMode() const
@@ -197,7 +312,7 @@ void TextElement::setRuntimeConnected(bool connected)
       applyTextColor();
     }
     applyTextVisibility();
-    update();
+    requestOverflowRepaint();
   }
 }
 
@@ -209,7 +324,7 @@ void TextElement::setRuntimeVisible(bool visible)
   runtimeVisible_ = visible;
   if (executeMode_) {
     applyTextVisibility();
-    update();
+    requestOverflowRepaint();
   }
 }
 
@@ -225,7 +340,7 @@ void TextElement::setRuntimeSeverity(short severity)
   runtimeSeverity_ = severity;
   if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
     applyTextColor();
-    update();
+    requestOverflowRepaint();
   }
 }
 
@@ -235,6 +350,8 @@ void TextElement::setVisible(bool visible)
     designModeVisible_ = visible;
   }
   QLabel::setVisible(visible);
+  updateOverflowVisibility();
+  requestOverflowRepaint();
 }
 
 void TextElement::resizeEvent(QResizeEvent *event)
@@ -245,18 +362,48 @@ void TextElement::resizeEvent(QResizeEvent *event)
 
 void TextElement::paintEvent(QPaintEvent *event)
 {
-  QLabel::paintEvent(event);
-  if (!selected_) {
-    return;
-  }
+  Q_UNUSED(event);
+}
 
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing, false);
-  QPen pen(Qt::black);
-  pen.setStyle(Qt::DashLine);
-  pen.setWidth(1);
-  painter.setPen(pen);
-  painter.drawRect(rect().adjusted(0, 0, -1, -1));
+bool TextElement::event(QEvent *event)
+{
+  switch (event->type()) {
+  case QEvent::ParentAboutToChange:
+    if (overflowWidget_) {
+      overflowWidget_->hide();
+      overflowWidget_->setParent(nullptr);
+    }
+    break;
+  case QEvent::ParentChange:
+    updateOverflowParent();
+    updateOverflowGeometry();
+    break;
+  case QEvent::ZOrderChange:
+    updateOverflowStacking();
+    break;
+  default:
+    break;
+  }
+  return QLabel::event(event);
+}
+
+void TextElement::moveEvent(QMoveEvent *event)
+{
+  QLabel::moveEvent(event);
+  updateOverflowGeometry();
+}
+
+void TextElement::showEvent(QShowEvent *event)
+{
+  QLabel::showEvent(event);
+  updateOverflowVisibility();
+  requestOverflowRepaint();
+}
+
+void TextElement::hideEvent(QHideEvent *event)
+{
+  QLabel::hideEvent(event);
+  updateOverflowVisibility();
 }
 
 QColor TextElement::defaultForegroundColor() const
@@ -278,6 +425,7 @@ void TextElement::applyTextColor()
   pal.setColor(QPalette::Text, color);
   pal.setColor(QPalette::ButtonText, color);
   setPalette(pal);
+  requestOverflowRepaint();
 }
 
 void TextElement::applyTextVisibility()
@@ -288,14 +436,15 @@ void TextElement::applyTextVisibility()
   } else {
     QLabel::setVisible(designModeVisible_);
   }
+  updateOverflowVisibility();
 }
 
 void TextElement::updateSelectionVisual()
 {
-  // Keep the configured foreground color even when selected; the dashed border
-  // drawn in paintEvent() is sufficient to indicate selection.
+  // Keep the configured foreground color even when selected; the overflow
+  // widget handles the dashed selection border.
   applyTextColor();
-  update();
+  requestOverflowRepaint();
 }
 
 QColor TextElement::effectiveForegroundColor() const
@@ -322,23 +471,128 @@ void TextElement::updateExecuteState()
 {
   applyTextColor();
   applyTextVisibility();
-  update();
+  updateOverflowGeometry();
+  requestOverflowRepaint();
 }
 
 void TextElement::updateFontForGeometry()
 {
   const QSize available = contentsRect().size();
-  if (available.isEmpty()) {
-    return;
+  if (!available.isEmpty()) {
+    const QFont newFont = medmCompatibleTextFont(text(), available);
+    if (!newFont.family().isEmpty() && font() != newFont) {
+      QLabel::setFont(newFont);
+    }
   }
+  updateOverflowGeometry();
+}
 
-  const QFont newFont = medmCompatibleTextFont(text(), available);
-  if (newFont.family().isEmpty()) {
-    return;
+void TextElement::ensureOverflowWidget()
+{
+  if (!overflowWidget_) {
+    overflowWidget_ = new TextOverflowWidget(this);
   }
-
-  if (font() != newFont) {
-    QLabel::setFont(newFont);
+  if (overflowWidget_) {
+    overflowWidget_->syncParent();
   }
 }
 
+void TextElement::updateOverflowParent()
+{
+  if (!overflowWidget_) {
+    return;
+  }
+  overflowWidget_->syncParent();
+}
+
+void TextElement::updateOverflowGeometry()
+{
+  if (!parentWidget()) {
+    if (overflowWidget_) {
+      overflowWidget_->hide();
+    }
+    return;
+  }
+
+  ensureOverflowWidget();
+  if (!overflowWidget_ || overflowWidget_->parentWidget() != parentWidget()) {
+    return;
+  }
+
+  const QRect ownerRect = geometry();
+  const QFontMetrics metrics(font());
+  const QString currentText = text();
+  const int textWidth = textPixelWidth(metrics, currentText);
+  const int textHeight = metrics.ascent() + metrics.descent();
+
+  int textLeft = ownerRect.x();
+  switch (alignment_ & Qt::AlignHorizontal_Mask) {
+  case Qt::AlignHCenter:
+    textLeft = ownerRect.x() + (ownerRect.width() - textWidth) / 2;
+    break;
+  case Qt::AlignRight:
+    textLeft = ownerRect.x() + ownerRect.width() - textWidth;
+    break;
+  default:
+    break;
+  }
+
+  const int ownerLeft = ownerRect.x();
+  const int ownerRight = ownerRect.x() + ownerRect.width();
+  const int ownerTop = ownerRect.y();
+  const int ownerBottom = ownerRect.y() + ownerRect.height();
+  const int textRight = textLeft + textWidth;
+  const int textTop = ownerTop;
+  const int textBottom = textTop + textHeight;
+
+  const int overlayLeft = std::min(ownerLeft, textLeft);
+  const int overlayRight = std::max(ownerRight, textRight);
+  const int overlayTop = ownerTop;
+  const int overlayBottom = std::max(ownerBottom, textBottom);
+
+  const int overlayWidth = std::max(1, overlayRight - overlayLeft);
+  const int overlayHeight = std::max(1, overlayBottom - overlayTop);
+
+  overflowWidget_->setGeometry(overlayLeft, overlayTop, overlayWidth, overlayHeight);
+  updateOverflowStacking();
+  updateOverflowVisibility();
+  requestOverflowRepaint();
+}
+
+void TextElement::updateOverflowVisibility()
+{
+  ensureOverflowWidget();
+  if (!overflowWidget_) {
+    return;
+  }
+  QWidget *parent = overflowWidget_->parentWidget();
+  if (!parent) {
+    overflowWidget_->hide();
+    return;
+  }
+  const bool visible = isVisible();
+  if (overflowWidget_->isVisible() != visible) {
+    if (visible) {
+      overflowWidget_->show();
+    } else {
+      overflowWidget_->hide();
+    }
+  }
+}
+
+void TextElement::updateOverflowStacking()
+{
+  if (!overflowWidget_) {
+    return;
+  }
+  if (overflowWidget_->parentWidget() == parentWidget()) {
+    overflowWidget_->raise();
+  }
+}
+
+void TextElement::requestOverflowRepaint()
+{
+  if (overflowWidget_ && overflowWidget_->isVisible()) {
+    overflowWidget_->update();
+  }
+}

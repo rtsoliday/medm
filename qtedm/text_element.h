@@ -3,18 +3,25 @@
 #include <array>
 
 #include <QColor>
+#include <QEvent>
+#include <QHideEvent>
 #include <QLabel>
+#include <QMoveEvent>
 #include <QPaintEvent>
 #include <QRect>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QString>
 
 #include "display_properties.h"
+
+class TextOverflowWidget;
 
 class TextElement : public QLabel
 {
 public:
   explicit TextElement(QWidget *parent = nullptr);
+  ~TextElement() override;
 
   void setSelected(bool selected);
   bool isSelected() const;
@@ -51,10 +58,16 @@ public:
   void setVisible(bool visible) override;
 
 protected:
+  bool event(QEvent *event) override;
+  void moveEvent(QMoveEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
+  void showEvent(QShowEvent *event) override;
+  void hideEvent(QHideEvent *event) override;
 
 private:
+  friend class TextOverflowWidget;
+
   QColor defaultForegroundColor() const;
   QColor effectiveForegroundColor() const;
   void applyTextColor();
@@ -62,6 +75,12 @@ private:
   void updateSelectionVisual();
   void updateFontForGeometry();
   void updateExecuteState();
+  void ensureOverflowWidget();
+  void updateOverflowParent();
+  void updateOverflowGeometry();
+  void updateOverflowVisibility();
+  void updateOverflowStacking();
+  void requestOverflowRepaint();
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -75,5 +94,5 @@ private:
   bool runtimeConnected_ = false;
   bool runtimeVisible_ = true;
   short runtimeSeverity_ = 0;
+  TextOverflowWidget *overflowWidget_ = nullptr;
 };
-

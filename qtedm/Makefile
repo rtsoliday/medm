@@ -21,6 +21,13 @@ include ../Makefile.rules
 PROD_LIBS :=
 PROD_LIBS_SDDS :=
 
+QT_RCC_DIR := $(shell pkg-config --variable=host_bins Qt5Core 2>/dev/null)
+ifeq ($(QT_RCC_DIR),)
+  QT_RCC := rcc
+else
+  QT_RCC := $(QT_RCC_DIR)/rcc
+endif
+
 ifneq ($(OS), Windows)
   PROD_LIBS += -lANLwidgets -lPrintUtils
   PROD_LIBS_SDDS += -lmdbcommon -lmatlib -lSDDS1 -lnamelist -lrpnlib \
@@ -148,6 +155,12 @@ ifeq ($(OS), Windows)
 endif
 
 include ../Makefile.build
+
+qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
+
+$(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/related_display.xpm | $(OBJ_DIR)
+	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
+	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp -o $@
 
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
 	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_LIBS_SDDS) $(PROD_SYS_LIBS)

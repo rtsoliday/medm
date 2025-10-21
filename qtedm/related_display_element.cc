@@ -13,6 +13,8 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+#include <QPixmap>
+#include <QHash>
 
 namespace {
 
@@ -125,6 +127,41 @@ QFont scaledFontForHeight(const QFont &base, int pixelLimit)
   }
 
   return adjusted;
+}
+
+const QPixmap &baseRelatedDisplayIcon()
+{
+  static const QPixmap pixmap(QStringLiteral(":/icons/related_display.xpm"));
+  return pixmap;
+}
+
+QPixmap relatedDisplayIconForColor(const QColor &color)
+{
+  const QPixmap &base = baseRelatedDisplayIcon();
+  if (base.isNull()) {
+    return QPixmap();
+  }
+
+  static QHash<QRgb, QPixmap> cache;
+  const QRgb key = color.rgba();
+  const auto it = cache.constFind(key);
+  if (it != cache.constEnd()) {
+    return it.value();
+  }
+
+  QPixmap tinted(base.size());
+  tinted.fill(Qt::transparent);
+
+  QPainter painter(&tinted);
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  painter.setCompositionMode(QPainter::CompositionMode_Source);
+  painter.fillRect(tinted.rect(), color);
+  painter.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+  painter.drawPixmap(0, 0, base);
+  painter.end();
+
+  cache.insert(key, tinted);
+  return cache.value(key);
 }
 
 } // namespace
@@ -440,42 +477,45 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
   painter.setFont(labelFont);
 
-  QRect inner = content.adjusted(1, 1, -1, -1);
-  int iconWidth = std::min(inner.height(), 24);
+  QRect inner = content.adjusted(2, 2, -2, -2);
+
   QRect iconRect = inner;
-  iconRect.setWidth(iconWidth);
+  if (showIcon) {
+    int iconSize = std::min({inner.height(), inner.width(), 24});
+    iconRect.setWidth(iconSize);
+    iconRect.setHeight(iconSize);
+    iconRect.moveTop(inner.top() + (inner.height() - iconSize) / 2);
+    iconRect.moveLeft(inner.left() + 4);
 
-  if (showIcon && iconRect.width() > 6 && iconRect.height() > 6) {
-    QRect frame = iconRect.adjusted(0, 0, -1, -1);
-    QRect iconOuter = frame.adjusted(-1, -1, 1, 1);
-    painter.setPen(QPen(bg.lighter(135), 1));
-    painter.drawLine(iconOuter.topLeft(), iconOuter.topRight());
-    painter.drawLine(iconOuter.topLeft(), iconOuter.bottomLeft());
-    painter.setPen(QPen(bg.darker(145), 1));
-    painter.drawLine(iconOuter.bottomLeft(), iconOuter.bottomRight());
-    painter.drawLine(iconOuter.topRight(), iconOuter.bottomRight());
+    QRect iconCanvas = iconRect.adjusted(0, 0, -2, -2);
+    painter.fillRect(iconCanvas, bg);
 
-    QRect iconInner = frame;
-    painter.setPen(QPen(bg.lighter(150), 1));
-    painter.drawLine(iconInner.topLeft(), iconInner.topRight());
-    painter.drawLine(iconInner.topLeft(), iconInner.bottomLeft());
-    painter.setPen(QPen(bg.darker(170), 1));
-    painter.drawLine(iconInner.bottomLeft(), iconInner.bottomRight());
-    painter.drawLine(iconInner.topRight(), iconInner.bottomRight());
-
-    painter.fillRect(iconInner.adjusted(1, 1, -1, -1), bg);
-    const int barHeight = std::max(2, frame.height() / 3);
-    QRect topRect(frame.left() + 2, frame.top() + 2,
-        frame.width() - 4, barHeight);
-    painter.fillRect(topRect, fg);
+    const QPixmap iconPixmap = relatedDisplayIconForColor(fg);
+    if (!iconPixmap.isNull()) {
+      QPixmap scaled = iconPixmap.scaled(iconCanvas.size(),
+          Qt::KeepAspectRatio, Qt::SmoothTransformation);
+      QPoint topLeft(iconCanvas.left()
+              + (iconCanvas.width() - scaled.width()) / 2,
+          iconCanvas.top()
+              + (iconCanvas.height() - scaled.height()) / 2);
+      painter.drawPixmap(topLeft, scaled);
+    } else {
+      const int barHeight = std::max(2, iconCanvas.height() / 3);
+      QRect fallbackRect(iconCanvas.left(), iconCanvas.top(),
+          iconCanvas.width(), barHeight);
+      painter.fillRect(fallbackRect, fg);
+    }
   }
 
   QRect textRect = inner.adjusted(4, 0, -4, 0);
-  if (showIcon) {
-    textRect.setLeft(iconRect.right() + 6);
+  if (showIcon && iconRect.width() > 0) {
+    int textLeft = iconRect.right() + 6;
+    if (textLeft < textRect.right()) {
+      textRect.setLeft(textLeft);
+    }
   }
   painter.setPen(fg);
-  painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignHCenter, labelText);
+  painter.drawText(textRect, Qt::AlignCenter, labelText);
 
   painter.restore();
 }

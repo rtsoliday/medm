@@ -33,6 +33,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QResource>
 
 #include <climits>
 #include <cstring>
@@ -646,6 +647,7 @@ int main(int argc, char *argv[])
 #endif
 
   QApplication app(argc, argv);
+  Q_INIT_RESOURCE(icons);
 
   const QStringList args = QCoreApplication::arguments();
   CommandLineOptions options = parseCommandLine(args);

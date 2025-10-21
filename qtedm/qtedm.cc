@@ -1535,7 +1535,6 @@ int main(int argc, char *argv[])
       DisplayWindow *displayWin) {
     state->displays.append(displayWin);
     displayWin->syncCreateCursor();
-    displayWin->handleEditModeChanged(state->editMode);
 
     QObject::connect(displayWin, &QObject::destroyed, &win,
         [state, updateMenus,
@@ -1563,6 +1562,7 @@ int main(int argc, char *argv[])
     displayWin->show();
     displayWin->raise();
     displayWin->activateWindow();
+    displayWin->handleEditModeChanged(state->editMode);
 
     if (updateMenus && *updateMenus) {
       (*updateMenus)();

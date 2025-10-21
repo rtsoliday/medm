@@ -507,9 +507,9 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     }
   }
 
-  QRect textRect = inner.adjusted(4, 0, -4, 0);
+  QRect textRect = inner.adjusted(4, 0, 0, 0);
   if (showIcon && iconRect.width() > 0) {
-    int textLeft = iconRect.right() + 6;
+    int textLeft = iconRect.right() + 3;
     if (textLeft < textRect.right()) {
       textRect.setLeft(textLeft);
     }

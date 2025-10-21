@@ -1584,13 +1584,9 @@ int main(int argc, char *argv[])
   QObject::connect(openAct, &QAction::triggered, &win,
       [state, &win, displayPalette, &palette, fixed10Font, fixed13Font,
           registerDisplayWindow]() {
-        if (!state->editMode) {
-          return;
-        }
-
         static QString lastDirectory;
-        QFileDialog dialog(&win, QStringLiteral("Open Display"));
-        //dialog.setOption(QFileDialog::DontUseNativeDialog, true); // Disabled because it causes an unitialized value 
+  QFileDialog dialog(&win, QStringLiteral("Open Display"));
+  dialog.setOption(QFileDialog::DontUseNativeDialog, true);
         dialog.setAcceptMode(QFileDialog::AcceptOpen);
         dialog.setFileMode(QFileDialog::ExistingFile);
         dialog.setNameFilters({

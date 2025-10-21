@@ -482,12 +482,12 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   QRect iconRect = inner;
   if (showIcon) {
     int iconSize = std::min({inner.height(), inner.width(), 24});
-    iconRect.setWidth(iconSize);
+    iconRect.setWidth(iconSize - 2);
     iconRect.setHeight(iconSize);
     iconRect.moveTop(inner.top() + (inner.height() - iconSize) / 2);
-    iconRect.moveLeft(inner.left() + 4);
+    //iconRect.moveLeft(inner.left() + 0);
 
-    QRect iconCanvas = iconRect.adjusted(0, 0, -2, -2);
+    QRect iconCanvas = iconRect.adjusted(0, 0, 0, 0);
     painter.fillRect(iconCanvas, bg);
 
     const QPixmap iconPixmap = relatedDisplayIconForColor(fg);

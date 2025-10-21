@@ -511,6 +511,7 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     }
   }
 
+  const int activeLabels = activeEntryCount();
   QRect textRect = inner.adjusted(4, 0, 0, 0);
   if (showIcon && iconRect.width() > 0) {
     int textLeft = iconRect.right() + 3;
@@ -520,7 +521,11 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   }
   if (!labelText.isEmpty()) {
     painter.setPen(fg);
-    painter.drawText(textRect, Qt::AlignCenter, labelText);
+    Qt::Alignment align = Qt::AlignCenter;
+    if (visual_ == RelatedDisplayVisual::kMenu && activeLabels > 1) {
+      align = Qt::AlignVCenter | Qt::AlignLeft;
+    }
+    painter.drawText(textRect, align, labelText);
   }
 
   painter.restore();

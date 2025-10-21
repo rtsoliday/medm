@@ -261,15 +261,23 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
 
-  QRect frame = canvas.adjusted(0, 0, -1, -1);
-  painter.setPen(QPen(bg.lighter(130), 1));
-  painter.drawLine(frame.topLeft(), frame.topRight());
-  painter.drawLine(frame.topLeft(), frame.bottomLeft());
-  painter.setPen(QPen(bg.darker(130), 1));
-  painter.drawLine(frame.bottomLeft(), frame.bottomRight());
-  painter.drawLine(frame.topRight(), frame.bottomRight());
+  QRect bevelOuter = canvas.adjusted(0, 0, -1, -1);
+  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+  painter.setPen(QPen(bg.darker(145), 1));
+  painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+  painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
 
-  QRect content = canvas.adjusted(3, 3, -3, -3);
+  QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
+  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+  painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+  painter.setPen(QPen(bg.darker(170), 1));
+  painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+  painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
+
+  QRect content = bevelInner.adjusted(2, 2, -1, -1);
   bool showIcon = true;
   QString text = displayLabel(showIcon);
 

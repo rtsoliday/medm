@@ -19339,11 +19339,15 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
   composite->setSelected(false);
   ensureElementInStack(composite);
 
+  /* Children in ADL files keep absolute coordinates; translate them
+     into the composite's local space while parsing. */
+  const QPoint childOffset = currentElementOffset_ - geometry.topLeft();
+
   const QString trimmedFile = compositeFile.trimmed();
   if (trimmedFile.isEmpty()) {
     if (const AdlNode *childrenNode = ::findChild(compositeNode,
             QStringLiteral("children"))) {
-      ElementLoadContextGuard guard(*this, composite, QPoint(), true,
+      ElementLoadContextGuard guard(*this, composite, childOffset, true,
           composite);
       for (const auto &child : childrenNode->children) {
         loadElementNode(child);

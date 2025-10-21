@@ -282,13 +282,7 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   QString text = displayLabel(showIcon);
 
   const int activeCount = activeEntryCount();
-  const bool showArrow = activeCount > 1;
   const bool singleEntry = activeCount == 1;
-
-  QRect arrowRect = content;
-  if (showArrow) {
-    arrowRect.setLeft(content.right() - 10);
-  }
 
   const int fontLimit = messageButtonPixelLimit(height());
   const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
@@ -300,13 +294,10 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   const int spacing = (showIcon && !text.isEmpty()) ? 6 : 0;
 
   QRect textRect = content;
-  if (showArrow) {
-    textRect.setRight(arrowRect.left() - 4);
-  }
 
   QRect iconRect;
 
-  if (singleEntry && !showArrow) {
+  if (singleEntry) {
     int totalWidth = textWidth;
     if (showIcon && iconSize > 0) {
       totalWidth += iconSize + spacing;
@@ -345,20 +336,6 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
 
   painter.setPen(fg);
   painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
-
-  if (showArrow) {
-    painter.setBrush(fg);
-    painter.setPen(Qt::NoPen);
-    const int arrowWidth = 7;
-    const int arrowHeight = 5;
-    const int arrowX = arrowRect.right() - arrowWidth - 1;
-    const int arrowY = arrowRect.center().y() - arrowHeight / 2;
-    QPoint points[3] = {
-        QPoint(arrowX, arrowY),
-        QPoint(arrowX + arrowWidth, arrowY),
-        QPoint(arrowX + arrowWidth / 2, arrowY + arrowHeight)};
-    painter.drawPolygon(points, 3);
-  }
 
   if (selected_) {
     paintSelectionOverlay(painter);

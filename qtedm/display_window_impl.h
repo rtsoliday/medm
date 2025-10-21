@@ -7,6 +7,7 @@
 #include <cmath>
 #include <type_traits>
 #include <cstring>
+#include <cstdlib>
 
 #include <QDebug>
 #include <QClipboard>
@@ -23,7 +24,15 @@
 #include <QPointer>
 #include <QSet>
 #include <QStringList>
+#include <QEventLoop>
 #include <QTextStream>
+
+#ifdef KeyPress
+#  undef KeyPress
+#endif
+#ifdef KeyRelease
+#  undef KeyRelease
+#endif
 
 #include <cadef.h>
 #include <db_access.h>
@@ -1986,6 +1995,17 @@ private:
     int baseChannelIndex, int letterStartIndex) const;
   RectangleFill parseRectangleFill(const QString &value) const;
   RectangleLineStyle parseRectangleLineStyle(const QString &value) const;
+  void connectShellCommandElement(ShellCommandElement *element);
+  void handleShellCommandActivation(ShellCommandElement *element,
+      int entryIndex, Qt::KeyboardModifiers modifiers);
+  bool buildShellCommandString(const QString &templateString,
+      QString *result);
+  bool promptForShellCommandInput(const QString &defaultCommand,
+      QString *result);
+  QStringList promptForShellCommandPvNames();
+  QString shellCommandDisplayPath() const;
+  QString shellCommandDisplayTitle() const;
+  void runShellCommand(const QString &command);
   void connectRelatedDisplayElement(RelatedDisplayElement *element);
   void handleRelatedDisplayActivation(RelatedDisplayElement *element,
       int entryIndex, Qt::KeyboardModifiers modifiers);
@@ -3520,6 +3540,7 @@ private:
         newElement->show();
         target.ensureElementInStack(newElement);
         target.shellCommandElements_.append(newElement);
+        target.connectShellCommandElement(newElement);
         target.selectShellCommandElement(newElement);
         target.markDirty();
       });
@@ -11535,6 +11556,7 @@ private:
     element->show();
     ensureElementInStack(element);
     shellCommandElements_.append(element);
+    connectShellCommandElement(element);
     selectShellCommandElement(element);
     showResourcePaletteForShellCommand(element);
     deactivateCreateTool();
@@ -16753,7 +16775,303 @@ inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
   element->setSelected(false);
   shellCommandElements_.append(element);
   ensureElementInStack(element);
+  connectShellCommandElement(element);
   return element;
+}
+
+inline void DisplayWindow::connectShellCommandElement(
+    ShellCommandElement *element)
+{
+  if (!element) {
+    return;
+  }
+  element->setActivationCallback(
+      [this, element](int index, Qt::KeyboardModifiers modifiers) {
+        handleShellCommandActivation(element, index, modifiers);
+      });
+  element->setExecuteMode(executeModeActive_);
+}
+
+inline void DisplayWindow::handleShellCommandActivation(
+    ShellCommandElement *element, int entryIndex,
+    Qt::KeyboardModifiers modifiers)
+{
+  Q_UNUSED(modifiers);
+  if (!element || !executeModeActive_) {
+    return;
+  }
+  if (entryIndex < 0 || entryIndex >= element->entryCount()) {
+    return;
+  }
+
+  ShellCommandEntry entry = element->entry(entryIndex);
+  QString commandTemplate = entry.command.trimmed();
+  if (commandTemplate.isEmpty()) {
+    return;
+  }
+
+  const QString args = entry.args.trimmed();
+  if (!args.isEmpty()) {
+    commandTemplate.append(QLatin1Char(' '));
+    commandTemplate.append(args);
+  }
+
+  commandTemplate =
+      applyMacroSubstitutions(commandTemplate, macroDefinitions_);
+
+  QString resolved;
+  if (!buildShellCommandString(commandTemplate, &resolved)) {
+    return;
+  }
+
+  if (resolved.trimmed().isEmpty()) {
+    return;
+  }
+
+  runShellCommand(resolved);
+}
+
+inline bool DisplayWindow::buildShellCommandString(
+    const QString &templateString, QString *result)
+{
+  if (!result) {
+    return false;
+  }
+
+  QString current = templateString;
+  const int ampPromptIndex = current.indexOf(QStringLiteral("&?"));
+  if (ampPromptIndex >= 0) {
+    QString defaultCommand = current.left(ampPromptIndex);
+    if (!defaultCommand.endsWith(QLatin1Char('&'))) {
+      defaultCommand.append(QLatin1Char('&'));
+    }
+    QString userCommand;
+    if (!promptForShellCommandInput(defaultCommand, &userCommand)) {
+      return false;
+    }
+    current = userCommand;
+  } else {
+    const int promptIndex = current.indexOf(QLatin1Char('?'));
+    if (promptIndex >= 0) {
+      QString defaultCommand = current.left(promptIndex);
+      if (!defaultCommand.endsWith(QLatin1Char('&'))) {
+        defaultCommand.append(QLatin1Char('&'));
+      }
+      QString userCommand;
+      if (!promptForShellCommandInput(defaultCommand, &userCommand)) {
+        return false;
+      }
+      current = userCommand;
+    }
+  }
+
+  QString output;
+  output.reserve(current.size());
+
+  for (int i = 0; i < current.size(); ++i) {
+    const QChar ch = current.at(i);
+    if (ch != QLatin1Char('&')) {
+      output.append(ch);
+      continue;
+    }
+    if (i + 1 >= current.size()) {
+      output.append(ch);
+      continue;
+    }
+    const QChar token = current.at(i + 1);
+    if (token == QLatin1Char('P')) {
+      QStringList pvNames = promptForShellCommandPvNames();
+      if (pvNames.isEmpty()) {
+        return false;
+      }
+      output.append(pvNames.join(QStringLiteral(" ")));
+      ++i;
+      continue;
+    }
+    if (token == QLatin1Char('A')) {
+      output.append(shellCommandDisplayPath());
+      ++i;
+      continue;
+    }
+    if (token == QLatin1Char('T')) {
+      output.append(shellCommandDisplayTitle());
+      ++i;
+      continue;
+    }
+    if (token == QLatin1Char('X')) {
+      output.append(QString::number(static_cast<qulonglong>(winId())));
+      ++i;
+      continue;
+    }
+    if (token == QLatin1Char('?')) {
+      QString defaultCommand = output;
+      if (!defaultCommand.endsWith(QLatin1Char('&'))) {
+        defaultCommand.append(QLatin1Char('&'));
+      }
+      QString userCommand;
+      if (!promptForShellCommandInput(defaultCommand, &userCommand)) {
+        return false;
+      }
+      *result = userCommand;
+      return true;
+    }
+    output.append(ch);
+  }
+
+  *result = output;
+  return true;
+}
+
+inline bool DisplayWindow::promptForShellCommandInput(
+    const QString &defaultCommand, QString *result)
+{
+  bool ok = false;
+  const QString text = QInputDialog::getText(this,
+      QStringLiteral("Shell Command"), QStringLiteral("Command:"),
+      QLineEdit::Normal, defaultCommand, &ok);
+  if (!ok) {
+    return false;
+  }
+  if (result) {
+    *result = text;
+  }
+  return true;
+}
+
+inline QStringList DisplayWindow::promptForShellCommandPvNames()
+{
+  if (!displayArea_) {
+    return QStringList();
+  }
+
+  class ShellCommandPvPicker : public QObject
+  {
+  public:
+    ShellCommandPvPicker(DisplayWindow *window, QStringList &channels,
+        bool &cancelled, QEventLoop &loop)
+      : QObject(window)
+      , window_(window)
+      , channels_(channels)
+      , cancelled_(cancelled)
+      , loop_(loop)
+    {
+    }
+
+  protected:
+    bool eventFilter(QObject *object, QEvent *event) override
+    {
+      Q_UNUSED(object);
+      if (!window_) {
+        return QObject::eventFilter(object, event);
+      }
+      if (event->type() == QEvent::MouseButtonPress) {
+        auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        if (mouseEvent->button() == Qt::LeftButton) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+          const QPoint globalPos = mouseEvent->globalPosition().toPoint();
+#else
+          const QPoint globalPos = mouseEvent->globalPos();
+#endif
+          const QPoint windowPos = window_->mapFromGlobal(globalPos);
+          QWidget *target = window_->elementAt(windowPos);
+          channels_ = window_->channelsForWidget(target);
+          if (!target) {
+            cancelled_ = true;
+            QMessageBox::warning(window_, QStringLiteral("Shell Command"),
+                QStringLiteral("Not on an object with a process variable."));
+          } else if (channels_.isEmpty()) {
+            cancelled_ = true;
+            QMessageBox::warning(window_, QStringLiteral("Shell Command"),
+                QStringLiteral("No process variables associated with the selected object."));
+          } else {
+            cancelled_ = false;
+          }
+          loop_.quit();
+          mouseEvent->accept();
+          return true;
+        }
+        cancelled_ = true;
+        loop_.quit();
+        mouseEvent->accept();
+        return true;
+      }
+      if (event->type() == QEvent::KeyPress) {
+        auto *keyEvent = static_cast<QKeyEvent *>(event);
+        if (keyEvent->key() == Qt::Key_Escape) {
+          cancelled_ = true;
+          loop_.quit();
+          keyEvent->accept();
+          return true;
+        }
+      }
+      return QObject::eventFilter(object, event);
+    }
+
+  private:
+    DisplayWindow *window_ = nullptr;
+    QStringList &channels_;
+    bool &cancelled_;
+    QEventLoop &loop_;
+  };
+
+  QEventLoop loop;
+  QStringList channels;
+  bool cancelled = true;
+
+  ShellCommandPvPicker picker(this, channels, cancelled, loop);
+  displayArea_->installEventFilter(&picker);
+  QMetaObject::Connection destroyedConnection =
+      QObject::connect(displayArea_, &QObject::destroyed,
+          &loop, &QEventLoop::quit);
+
+  if (!pvInfoCursorInitialized_) {
+    pvInfoCursor_ = createPvInfoCursor();
+    pvInfoCursorInitialized_ = true;
+  }
+  QGuiApplication::setOverrideCursor(pvInfoCursor_);
+  loop.exec();
+  QGuiApplication::restoreOverrideCursor();
+
+  QObject::disconnect(destroyedConnection);
+  displayArea_->removeEventFilter(&picker);
+
+  if (cancelled || channels.isEmpty()) {
+    return QStringList();
+  }
+  return channels;
+}
+
+inline QString DisplayWindow::shellCommandDisplayPath() const
+{
+  if (!filePath_.isEmpty()) {
+    return filePath_;
+  }
+  return windowTitle();
+}
+
+inline QString DisplayWindow::shellCommandDisplayTitle() const
+{
+  if (!filePath_.isEmpty()) {
+    return QFileInfo(filePath_).fileName();
+  }
+  return windowTitle();
+}
+
+inline void DisplayWindow::runShellCommand(const QString &command)
+{
+  const QString trimmed = command.trimmed();
+  if (trimmed.isEmpty()) {
+    return;
+  }
+
+  const QByteArray encoded = trimmed.toLocal8Bit();
+  int status = std::system(encoded.constData());
+  if (status == -1) {
+    qWarning() << "Failed to start shell command:" << trimmed;
+  } else if (status != 0) {
+    qWarning() << "Shell command exited with status" << status
+               << ":" << trimmed;
+  }
 }
 
 inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
@@ -19485,6 +19803,12 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  for (ShellCommandElement *element : shellCommandElements_) {
+    if (!element) {
+      continue;
+    }
+    connectShellCommandElement(element);
+  }
   for (RelatedDisplayElement *element : relatedDisplayElements_) {
     if (!element) {
       continue;
@@ -19755,6 +20079,11 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   messageButtonRuntimes_.clear();
   for (MessageButtonElement *element : messageButtonElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (ShellCommandElement *element : shellCommandElements_) {
     if (element) {
       element->setExecuteMode(false);
     }

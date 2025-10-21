@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 
 #include <QColor>
 #include <QString>
@@ -10,6 +11,7 @@
 
 class QPaintEvent;
 class QPainter;
+class QMouseEvent;
 
 class ShellCommandElement : public QWidget
 {
@@ -42,18 +44,33 @@ public:
   QString entryArgs(int index) const;
   void setEntryArgs(int index, const QString &args);
 
+  void setExecuteMode(bool execute);
+  bool isExecuteMode() const;
+
+  void setActivationCallback(
+      const std::function<void(int, Qt::KeyboardModifiers)> &callback);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QString displayLabel(bool &showIcon) const;
   int activeEntryCount() const;
+  int activatableEntryCount() const;
+  bool entryHasCommand(int index) const;
+  int firstActivatableEntry() const;
+  void showMenu(Qt::KeyboardModifiers modifiers);
   void paintIcon(QPainter &painter, const QRect &rect) const;
   void paintSelectionOverlay(QPainter &painter) const;
 
   bool selected_ = false;
+  bool executeMode_ = false;
+  int pressedEntryIndex_ = -1;
+  std::function<void(int, Qt::KeyboardModifiers)> activationCallback_;
   QColor foregroundColor_;
   QColor backgroundColor_;
   QString label_;

@@ -6,6 +6,8 @@
 #include <QFont>
 #include <QFontInfo>
 #include <QFontMetricsF>
+#include <QMenu>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -248,6 +250,26 @@ void ShellCommandElement::setEntryArgs(int index, const QString &args)
   update();
 }
 
+void ShellCommandElement::setExecuteMode(bool execute)
+{
+  if (executeMode_ == execute) {
+    return;
+  }
+  executeMode_ = execute;
+  pressedEntryIndex_ = -1;
+}
+
+bool ShellCommandElement::isExecuteMode() const
+{
+  return executeMode_;
+}
+
+void ShellCommandElement::setActivationCallback(
+    const std::function<void(int, Qt::KeyboardModifiers)> &callback)
+{
+  activationCallback_ = callback;
+}
+
 void ShellCommandElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
@@ -382,6 +404,37 @@ int ShellCommandElement::activeEntryCount() const
   return count;
 }
 
+int ShellCommandElement::activatableEntryCount() const
+{
+  int count = 0;
+  const int total = entryCount();
+  for (int i = 0; i < total; ++i) {
+    if (entryHasCommand(i)) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+bool ShellCommandElement::entryHasCommand(int index) const
+{
+  if (index < 0 || index >= static_cast<int>(entries_.size())) {
+    return false;
+  }
+  return !entries_[index].command.trimmed().isEmpty();
+}
+
+int ShellCommandElement::firstActivatableEntry() const
+{
+  const int total = entryCount();
+  for (int i = 0; i < total; ++i) {
+    if (entryHasCommand(i)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 void ShellCommandElement::paintIcon(QPainter &painter, const QRect &rect) const
 {
   if (rect.width() <= 0 || rect.height() <= 0) {
@@ -428,4 +481,92 @@ void ShellCommandElement::paintSelectionOverlay(QPainter &painter) const
   painter.setBrush(Qt::NoBrush);
   painter.drawRect(rect().adjusted(0, 0, -1, -1));
   painter.restore();
+}
+
+void ShellCommandElement::mousePressEvent(QMouseEvent *event)
+{
+  if (!event) {
+    return;
+  }
+
+  if (!executeMode_ || event->button() != Qt::LeftButton) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  pressedEntryIndex_ = -1;
+  const int count = activatableEntryCount();
+  if (count <= 0) {
+    event->accept();
+    return;
+  }
+
+  if (count == 1) {
+    pressedEntryIndex_ = firstActivatableEntry();
+    event->accept();
+    return;
+  }
+
+  showMenu(event->modifiers());
+  event->accept();
+}
+
+void ShellCommandElement::mouseReleaseEvent(QMouseEvent *event)
+{
+  if (!event) {
+    return;
+  }
+
+  if (!executeMode_ || event->button() != Qt::LeftButton) {
+    QWidget::mouseReleaseEvent(event);
+    return;
+  }
+
+  int index = pressedEntryIndex_;
+  pressedEntryIndex_ = -1;
+  if (index >= 0 && entryHasCommand(index) && rect().contains(event->pos())) {
+    if (activationCallback_) {
+      activationCallback_(index, event->modifiers());
+    }
+  }
+
+  event->accept();
+}
+
+void ShellCommandElement::showMenu(Qt::KeyboardModifiers modifiers)
+{
+  QMenu menu(this);
+  int labelIndex = 0;
+  for (int i = 0; i < entryCount(); ++i) {
+    if (!entryHasCommand(i)) {
+      continue;
+    }
+    QString label = entryDisplayLabel(entries_[i]);
+    if (label.isEmpty()) {
+      label = QStringLiteral("Command %1").arg(labelIndex + 1);
+    }
+    QAction *action = menu.addAction(label);
+    action->setData(i);
+    ++labelIndex;
+  }
+
+  if (menu.actions().isEmpty()) {
+    return;
+  }
+
+  const QPoint globalPos = mapToGlobal(QPoint(width() / 2, height()));
+  QAction *selected = menu.exec(globalPos);
+  if (!selected) {
+    return;
+  }
+
+  bool ok = false;
+  int index = selected->data().toInt(&ok);
+  if (!ok || !entryHasCommand(index)) {
+    return;
+  }
+
+  if (activationCallback_) {
+    activationCallback_(index, modifiers);
+  }
 }

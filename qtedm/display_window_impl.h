@@ -19627,6 +19627,11 @@ inline void DisplayWindow::enterExecuteMode()
     return;
   }
   executeModeActive_ = true;
+  for (CompositeElement *element : compositeElements_) {
+    if (element) {
+      element->setExecuteMode(true);
+    }
+  }
   for (TextElement *element : textElements_) {
     if (!element) {
       continue;
@@ -19883,6 +19888,11 @@ inline void DisplayWindow::leaveExecuteMode()
     pvInfoDialog_->hide();
   }
   cancelExecuteChannelDrag();
+  for (CompositeElement *element : compositeElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = textRuntimes_.begin(); it != textRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();

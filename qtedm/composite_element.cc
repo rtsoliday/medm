@@ -8,9 +8,9 @@ CompositeElement::CompositeElement(QWidget *parent)
   : QWidget(parent)
 {
   setAutoFillBackground(false);
-  setAttribute(Qt::WA_TransparentForMouseEvents);
   setAttribute(Qt::WA_NoSystemBackground, true);
   setAttribute(Qt::WA_MouseNoMask, true);
+  setExecuteMode(false);
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();
 }
@@ -158,6 +158,12 @@ QList<QWidget *> CompositeElement::childWidgets() const
     }
   }
   return result;
+}
+
+void CompositeElement::setExecuteMode(bool execute)
+{
+  executeMode_ = execute;
+  setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
 }
 
 void CompositeElement::paintEvent(QPaintEvent *event)

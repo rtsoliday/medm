@@ -46,6 +46,8 @@ public:
   void adoptChild(QWidget *child);
   QList<QWidget *> childWidgets() const;
 
+  void setExecuteMode(bool execute);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
 
@@ -63,4 +65,5 @@ private:
   QString visibilityCalc_;
   std::array<QString, 5> channels_{};
   QList<QPointer<QWidget>> childWidgets_;
+  bool executeMode_ = false;
 };

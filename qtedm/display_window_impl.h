@@ -6802,7 +6802,10 @@ private:
     };
 
     if (auto *element = dynamic_cast<TextElement *>(widget)) {
-      appendChannelArray(AdlWriter::collectChannels(element));
+      if (element->colorMode() != TextColorMode::kStatic
+          || element->visibilityMode() != TextVisibilityMode::kStatic) {
+        appendChannelArray(AdlWriter::collectChannels(element));
+      }
     } else if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
       appendChannelArray(AdlWriter::collectChannels(element));
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {

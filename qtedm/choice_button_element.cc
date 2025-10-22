@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include <QAbstractButton>
+#include <QApplication>
 #include <QButtonGroup>
 #include <QCursor>
 #include <QFont>
@@ -701,6 +702,24 @@ void ChoiceButtonElement::ensureButtonGroup()
   buttonGroup_->setExclusive(true);
   QObject::connect(buttonGroup_, &QButtonGroup::idClicked,
       this, [this](int id) {
+        if (QAbstractButton *button = buttonGroup_->button(id)) {
+          if (!runtimeWriteAccess_) {
+            if (runtimeConnected_) {
+              QApplication::beep();
+            }
+            QSignalBlocker blocker(buttonGroup_);
+            if (runtimeValue_ >= 0) {
+              if (QAbstractButton *current = buttonGroup_->button(runtimeValue_)) {
+                current->setChecked(true);
+              } else {
+                button->setChecked(false);
+              }
+            } else {
+              button->setChecked(false);
+            }
+            return;
+          }
+        }
         if (!activationCallback_) {
           return;
         }

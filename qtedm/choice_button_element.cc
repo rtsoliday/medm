@@ -15,7 +15,6 @@
 #include <QPen>
 #include <QResizeEvent>
 #include <QSignalBlocker>
-#include <QToolButton>
 
 #include "legacy_fonts.h"
 #include "cursor_utils.h"
@@ -23,7 +22,7 @@
 namespace {
 
 constexpr int kSampleButtonCount = 2;
-constexpr int kButtonMargin = 2;
+constexpr int kButtonMargin = 0;
 constexpr int kChoiceButtonShadow = 4;
 
 const std::array<QString, 16> &choiceButtonFontAliases()
@@ -177,6 +176,137 @@ QColor alarmColorForSeverity(short severity)
     return QColor(204, 204, 204);
   }
 }
+
+QColor lightenForBevel(const QColor &base, double factor)
+{
+  return blendedColor(base, QColor(Qt::white), factor);
+}
+
+QColor darkenForBevel(const QColor &base, double factor)
+{
+  return blendedColor(base, QColor(Qt::black), factor);
+}
+
+void paintChoiceButton(QPainter &painter, const QRect &bounds, bool checked,
+    bool enabled, const QColor &textColor, const QColor &backgroundColor,
+    const QString &text, const QFont &font)
+{
+  if (!bounds.isValid()) {
+    return;
+  }
+
+  const QColor face =
+      backgroundColor.isValid() ? backgroundColor : QColor(Qt::white);
+
+  painter.save();
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(face);
+  painter.fillRect(bounds, face);
+
+  //QRect outer = bounds.adjusted(0, 0, -1, -1);
+  QRect outer = bounds.adjusted(0, 0, 0, 0);
+  if (!outer.isValid()) {
+    outer = bounds;
+  }
+
+  const QRect inner = outer.adjusted(1, 1, -1, -1);
+  //const QRect inner = outer.adjusted(0, 0, 0, 0);
+
+  const QColor highlightOuter = lightenForBevel(face, 0.6);
+  const QColor highlightInner = lightenForBevel(face, 0.35);
+  const QColor shadowOuter = darkenForBevel(face, 0.55);
+  const QColor shadowInner = darkenForBevel(face, 0.3);
+
+  const QColor topOuter = checked ? shadowOuter : highlightOuter;
+  const QColor topInner = checked ? shadowInner : highlightInner;
+  const QColor bottomOuter = checked ? highlightOuter : shadowOuter;
+  const QColor bottomInner = checked ? highlightInner : shadowInner;
+
+  painter.setBrush(Qt::NoBrush);
+
+  if (outer.isValid()) {
+    painter.setPen(topOuter);
+    painter.drawLine(outer.topLeft(), outer.topRight());
+    painter.drawLine(outer.topLeft(), outer.bottomLeft());
+
+    painter.setPen(bottomOuter);
+    painter.drawLine(outer.bottomLeft(), outer.bottomRight());
+    painter.drawLine(outer.topRight(), outer.bottomRight());
+  }
+
+  if (inner.isValid()) {
+    painter.setPen(topInner);
+    painter.drawLine(inner.topLeft(), inner.topRight());
+    painter.drawLine(inner.topLeft(), inner.bottomLeft());
+
+    painter.setPen(bottomInner);
+    painter.drawLine(inner.bottomLeft(), inner.bottomRight());
+    painter.drawLine(inner.topRight(), inner.bottomRight());
+  }
+
+  QRect textArea = bounds.adjusted(2, 2, -3, -2);
+  if (!textArea.isValid()) {
+    textArea = bounds;
+  }
+
+  painter.setFont(font);
+  QColor penColor =
+      textColor.isValid() ? textColor : QColor(Qt::black);
+  if (!enabled) {
+    penColor = blendedColor(penColor, face, 0.5);
+  }
+  painter.setPen(penColor);
+  painter.drawText(textArea, Qt::AlignCenter | Qt::TextWordWrap, text);
+  painter.restore();
+}
+
+class ChoiceButtonCell : public QAbstractButton
+{
+public:
+  explicit ChoiceButtonCell(QWidget *parent = nullptr)
+    : QAbstractButton(parent)
+  {
+    setCheckable(true);
+    setAutoExclusive(false);
+    setFocusPolicy(Qt::NoFocus);
+    setAttribute(Qt::WA_OpaquePaintEvent, true);
+    setAttribute(Qt::WA_NoSystemBackground, true);
+    foreground_ = palette().color(QPalette::ButtonText);
+    background_ = palette().color(QPalette::Button);
+  }
+
+  void setColors(const QColor &foreground, const QColor &background)
+  {
+    QColor effectiveForeground = foreground.isValid()
+        ? foreground
+        : palette().color(QPalette::ButtonText);
+    QColor effectiveBackground = background.isValid()
+        ? background
+        : palette().color(QPalette::Button);
+
+    if (foreground_ == effectiveForeground
+        && background_ == effectiveBackground) {
+      return;
+    }
+    foreground_ = effectiveForeground;
+    background_ = effectiveBackground;
+    update();
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    paintChoiceButton(painter, rect(), isChecked(), isEnabled(),
+        foreground_, background_, text(), font());
+  }
+
+private:
+  QColor foreground_;
+  QColor background_;
+};
 
 } // namespace
 
@@ -489,7 +619,7 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
     rows = std::max(1, rows);
     columns = std::max(1, columns);
 
-    const QRect content = canvas.adjusted(0, 0, -1, -1);
+    const QRect content = canvas.adjusted(0, 0, 0, 0);
     const int cellWidth = content.width() / columns;
     const int cellHeight = content.height() / rows;
     const int extraWidth = content.width() - cellWidth * columns;
@@ -497,9 +627,6 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
 
     QColor foreground = effectiveForeground();
     QColor background = effectiveBackground();
-    QColor pressedFill = blendedColor(background, foreground, 0.2);
-    QColor unpressedFill = blendedColor(background, QColor(Qt::white), 0.15);
-    QColor borderColor = blendedColor(foreground, QColor(Qt::black), 0.25);
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(Qt::NoBrush);
@@ -532,22 +659,15 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
           continue;
         }
 
-        painter.fillRect(interior,
-            sampleIndex == 0 ? pressedFill : unpressedFill);
-        painter.setPen(QPen(borderColor, 1));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(interior.adjusted(0, 0, -1, -1));
-
         QString label = QStringLiteral("%1...").arg(sampleIndex);
-        const QRect textBounds = interior.adjusted(2, 2, -2, -2);
+        const QRect textBounds = interior.adjusted(3, 2, -3, -2);
         QFont labelFont = medmChoiceButtonFont(height(), kSampleButtonCount,
-            stacking_, textBounds.height());
+            stacking_, std::max(1, textBounds.height()));
         if (labelFont.family().isEmpty()) {
           labelFont = shrinkFontToFit(label, textBounds, font());
         }
-        painter.setFont(labelFont);
-        painter.setPen(foreground);
-        painter.drawText(textBounds, Qt::AlignCenter, label);
+        paintChoiceButton(painter, interior,
+            sampleIndex == 0, true, foreground, background, label, labelFont);
 
         x += columnWidth;
         ++drawnCount;
@@ -626,10 +746,8 @@ void ChoiceButtonElement::rebuildButtons()
 
   buttons_.reserve(buttonCount);
   for (int i = 0; i < buttonCount; ++i) {
-    auto *button = new QToolButton(this);
+    auto *button = new ChoiceButtonCell(this);
     button->setCheckable(true);
-    button->setAutoRaise(false);
-    button->setFocusPolicy(Qt::NoFocus);
     button->setText(runtimeLabels_.value(i).trimmed());
     button->setToolTip(channel_);
     button->setAutoExclusive(false);
@@ -678,7 +796,7 @@ void ChoiceButtonElement::layoutButtons()
   rows = std::max(1, rows);
   columns = std::max(1, columns);
 
-  const QRect content = rect().adjusted(0, 0, -1, -1);
+  const QRect content = rect().adjusted(0, 0, 0, 0);
   const int cellWidth = columns > 0 ? content.width() / columns : content.width();
   const int cellHeight = rows > 0 ? content.height() / rows : content.height();
   const int extraWidth = content.width() - cellWidth * columns;
@@ -743,14 +861,18 @@ void ChoiceButtonElement::updateButtonPalettes()
     if (!button) {
       continue;
     }
-    QPalette pal = button->palette();
-    pal.setColor(QPalette::ButtonText, fg);
-    pal.setColor(QPalette::WindowText, fg);
-    pal.setColor(QPalette::Text, fg);
-    pal.setColor(QPalette::Button, bg);
-    pal.setColor(QPalette::Base, bg);
-    pal.setColor(QPalette::Window, bg);
-    button->setPalette(pal);
+    if (auto *cell = dynamic_cast<ChoiceButtonCell *>(button)) {
+      cell->setColors(fg, bg);
+    } else {
+      QPalette pal = button->palette();
+      pal.setColor(QPalette::ButtonText, fg);
+      pal.setColor(QPalette::WindowText, fg);
+      pal.setColor(QPalette::Text, fg);
+      pal.setColor(QPalette::Button, bg);
+      pal.setColor(QPalette::Base, bg);
+      pal.setColor(QPalette::Window, bg);
+      button->setPalette(pal);
+    }
     button->update();
   }
   update();
@@ -778,9 +900,9 @@ void ChoiceButtonElement::applyButtonFont(QAbstractButton *button,
   }
 
   const QString label = button->text();
-  const QRect textBounds = bounds.adjusted(2, 2, -2, -2);
+  const QRect textBounds = bounds.adjusted(3, 2, -3, -2);
   QFont buttonFont = medmChoiceButtonFont(height(), buttons_.size(),
-      stacking_, textBounds.height());
+      stacking_, std::max(1, textBounds.height()));
   if (buttonFont.family().isEmpty()) {
     buttonFont = shrinkFontToFit(label, textBounds, font());
   }

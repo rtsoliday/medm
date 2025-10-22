@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=14
-		y=468
+		x=2560
+		y=21
 		width=1343
 		height=503
 	}
@@ -91,15 +91,14 @@ display {
 	object {
 		x=32
 		y=24
-		width=300
-		height=78
+		width=21
+		height=27
 	}
 	control {
 		chan="cb:test:4193"
-		clr=12
-		bclr=48
+		clr=14
+		bclr=46
 	}
-	clrmod="alarm"
 }
 "choice button" {
 	object {

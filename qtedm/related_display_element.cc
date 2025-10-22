@@ -380,21 +380,26 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
   const QRect canvas = rect();
   painter.fillRect(canvas, effectiveBackground());
 
-  const QRect content = canvas.adjusted(1, 1, -1, -1);
-  switch (visual_) {
-  case RelatedDisplayVisual::kRowOfButtons:
-    paintButtonVisual(painter, content, false);
-    break;
-  case RelatedDisplayVisual::kColumnOfButtons:
-    paintButtonVisual(painter, content, true);
-    break;
-  case RelatedDisplayVisual::kHiddenButton:
-    paintHiddenVisual(painter, content);
-    break;
-  case RelatedDisplayVisual::kMenu:
-  default:
-    paintMenuVisual(painter, content);
-    break;
+  const bool suppressHiddenVisual =
+      visual_ == RelatedDisplayVisual::kHiddenButton && executeMode_;
+
+  if (!suppressHiddenVisual) {
+    const QRect content = canvas.adjusted(1, 1, -1, -1);
+    switch (visual_) {
+    case RelatedDisplayVisual::kRowOfButtons:
+      paintButtonVisual(painter, content, false);
+      break;
+    case RelatedDisplayVisual::kColumnOfButtons:
+      paintButtonVisual(painter, content, true);
+      break;
+    case RelatedDisplayVisual::kHiddenButton:
+      paintHiddenVisual(painter, content);
+      break;
+    case RelatedDisplayVisual::kMenu:
+    default:
+      paintMenuVisual(painter, content);
+      break;
+    }
   }
 
   if (selected_) {

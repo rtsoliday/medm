@@ -22,6 +22,7 @@
 #include <QLabel>
 #include <QMimeData>
 #include <QPointer>
+#include <QTimer>
 #include <QSet>
 #include <QStringList>
 #include <QEventLoop>
@@ -2014,7 +2015,8 @@ private:
   QString resolveRelatedDisplayFile(const QString &fileName) const;
   QStringList buildDisplaySearchPaths() const;
   QHash<QString, QString> parseMacroDefinitionString(const QString &macroString) const;
-  void registerDisplayWindow(DisplayWindow *displayWin);
+  void registerDisplayWindow(DisplayWindow *displayWin,
+      bool delayExecuteMode = false);
   ImageType parseImageType(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
@@ -17313,10 +17315,11 @@ inline void DisplayWindow::handleRelatedDisplayActivation(
     return;
   }
 
-  registerDisplayWindow(newWindow);
+  registerDisplayWindow(newWindow, true);
 }
 
-inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin)
+inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin,
+    bool delayExecuteMode)
 {
   if (!displayWin) {
     return;
@@ -17328,7 +17331,11 @@ inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin)
 
   state->displays.append(displayWin);
   displayWin->syncCreateCursor();
-  displayWin->handleEditModeChanged(state->editMode);
+
+  const bool postponeExecute = delayExecuteMode && !state->editMode;
+  if (!postponeExecute) {
+    displayWin->handleEditModeChanged(state->editMode);
+  }
 
   QObject *context = state->mainWindow
       ? static_cast<QObject *>(state->mainWindow.data())
@@ -17364,6 +17371,20 @@ inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin)
 
   if (updateMenus && *updateMenus) {
     (*updateMenus)();
+  }
+
+  if (postponeExecute) {
+    QPointer<DisplayWindow> delayed(displayWin);
+    QTimer::singleShot(0, displayWin,
+        [stateWeak = state_, delayed]() {
+          if (auto locked = stateWeak.lock()) {
+            if (!locked->editMode) {
+              if (DisplayWindow *window = delayed.data()) {
+                window->handleEditModeChanged(false);
+              }
+            }
+          }
+        });
   }
 }
 

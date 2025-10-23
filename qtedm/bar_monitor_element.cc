@@ -307,8 +307,8 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
-  const QRectF contentRect = rect().adjusted(kLayoutPadding, kLayoutPadding,
-      -kLayoutPadding, -kLayoutPadding);
+  const qreal padding = (label_ == MeterLabel::kNoDecorations) ? 0.0 : kLayoutPadding;
+  const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
   if (!contentRect.isValid() || contentRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);

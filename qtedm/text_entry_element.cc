@@ -483,6 +483,15 @@ void TextEntryElement::updateLineEditState()
   lineEdit_->setReadOnly(!interactive);
   lineEdit_->setAttribute(Qt::WA_TransparentForMouseEvents, !interactive);
   lineEdit_->setFocusPolicy(interactive ? Qt::StrongFocus : Qt::NoFocus);
+
+  /* Update cursor based on write access */
+  if (executeMode_ && runtimeConnected_ && !runtimeWriteAccess_) {
+    lineEdit_->setCursor(Qt::ForbiddenCursor);
+    setCursor(Qt::ForbiddenCursor);
+  } else if (executeMode_) {
+    lineEdit_->unsetCursor();
+    unsetCursor();
+  }
 }
 
 void TextEntryElement::applyRuntimeTextToLineEdit()

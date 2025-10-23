@@ -244,6 +244,12 @@ void RelatedDisplayElement::setVisual(RelatedDisplayVisual visual)
     return;
   }
   visual_ = visual;
+  
+  /* Update widget attributes based on execute mode and visual type */
+  const bool shouldBeTransparent =
+      visual_ == RelatedDisplayVisual::kHiddenButton && executeMode_;
+  setAttribute(Qt::WA_OpaquePaintEvent, !shouldBeTransparent);
+  
   update();
 }
 
@@ -356,6 +362,12 @@ void RelatedDisplayElement::setExecuteMode(bool execute)
   }
   executeMode_ = execute;
   pressedEntryIndex_ = -1;
+  
+  /* Update widget attributes based on execute mode and visual type */
+  const bool shouldBeTransparent =
+      visual_ == RelatedDisplayVisual::kHiddenButton && executeMode_;
+  setAttribute(Qt::WA_OpaquePaintEvent, !shouldBeTransparent);
+  
   update();
 }
 
@@ -378,12 +390,12 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QRect canvas = rect();
-  painter.fillRect(canvas, effectiveBackground());
 
   const bool suppressHiddenVisual =
       visual_ == RelatedDisplayVisual::kHiddenButton && executeMode_;
 
   if (!suppressHiddenVisual) {
+    painter.fillRect(canvas, effectiveBackground());
     const QRect content = canvas.adjusted(1, 1, -1, -1);
     switch (visual_) {
     case RelatedDisplayVisual::kRowOfButtons:

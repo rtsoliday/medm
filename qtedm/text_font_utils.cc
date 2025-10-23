@@ -130,3 +130,66 @@ QFont medmTextMonitorFont(const QString &text, const QSize &availableSize)
   return QFont();
 }
 
+
+QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &text,
+    int maxWidth)
+{
+  if (maxWidth <= 0 || text.isEmpty()) {
+    return baseFont;
+  }
+
+  /* This matches MEDM's medmTextUpdate.c textUpdateDraw (line 396-404):
+   *   if((int)dlTextUpdate->object.width  < textWidth) {
+   *     switch(dlTextUpdate->align) {
+   *     case HORIZ_CENTER:
+   *     case HORIZ_RIGHT:
+   *       while(i > 0) {
+   *         i--;
+   *         textWidth = XTextWidth(fontTable[i],textField,strLen);
+   *         if((int)dlTextUpdate->object.width > textWidth) break;
+   *       }
+   *     }
+   *   }
+   */
+
+  QFontMetrics metrics(baseFont);
+  int textWidth = metrics.horizontalAdvance(text);
+
+  /* If text fits, use the base font */
+  if (textWidth <= maxWidth) {
+    return baseFont;
+  }
+
+  /* Text is too wide - find the base font index in our alias list */
+  int baseIndex = -1;
+  const auto &aliases = textFontAliases();
+  for (int i = 0; i < static_cast<int>(aliases.size()); ++i) {
+    const QFont font = LegacyFonts::font(aliases[i]);
+    if (font == baseFont) {
+      baseIndex = i;
+      break;
+    }
+  }
+
+  if (baseIndex < 0) {
+    /* Base font not in our list, return it unchanged */
+    return baseFont;
+  }
+
+  /* Walk down through smaller fonts until text fits */
+  for (int i = baseIndex - 1; i >= 0; --i) {
+    const QFont smallerFont = LegacyFonts::font(aliases[i]);
+    if (smallerFont.family().isEmpty()) {
+      continue;
+    }
+
+    const QFontMetrics smallerMetrics(smallerFont);
+    textWidth = smallerMetrics.horizontalAdvance(text);
+    if (textWidth <= maxWidth) {
+      return smallerFont;
+    }
+  }
+
+  /* Even smallest font is too wide, return it anyway */
+  return LegacyFonts::font(aliases[0]);
+}

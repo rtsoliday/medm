@@ -14,3 +14,8 @@ QFont medmCompatibleTextFont(const QString &text, const QSize &availableSize);
 // The function chooses from the legacy MEDM font aliases used by QtEDM.
 QFont medmTextMonitorFont(const QString &text, const QSize &availableSize);
 
+// Shrinks a font to fit text within width constraint, starting from a base font.
+// Matches MEDM's medmTextUpdate.c behavior (line 396-404) where font is reduced
+// if text is too wide. Returns the original font if text fits, or a smaller font.
+QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &text,
+    int maxWidth);

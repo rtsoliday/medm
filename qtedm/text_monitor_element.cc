@@ -254,9 +254,19 @@ void TextMonitorElement::setRuntimeText(const QString &text)
     return;
   }
   QLabel::setText(text);
-  /* In Execute mode, font is sized based on DUMMY_TEXT_FIELD ("9.876543"),
-   * not the actual text, so we don't need to update font on text changes.
-   * Font only needs updating on geometry changes (handled by resizeEvent). */
+
+  /* MEDM's medmTextUpdate.c textUpdateDraw() (line 396-404) shrinks the font
+   * for HORIZ_CENTER and HORIZ_RIGHT alignment if text is too wide.
+   * Left-aligned text just gets clipped. */
+  if (alignment() & (Qt::AlignHCenter | Qt::AlignRight)) {
+    const QFont currentFont = font();
+    const QFont adjustedFont = medmTextMonitorFontWithWidthCheck(
+        currentFont, text, width());
+    if (adjustedFont != currentFont) {
+      QLabel::setFont(adjustedFont);
+    }
+  }
+
   update();
 }
 
@@ -338,15 +348,17 @@ void TextMonitorElement::updateFontForGeometry()
     return;
   }
 
-  /* In Execute mode, use DUMMY_TEXT_FIELD ("9.876543") as reference for font sizing,
-   * matching MEDM's medmTextUpdate.c behavior (line 118-121).
-   * In Edit mode, use the actual label text for sizing.
-   * This causes the font to shrink when transitioning from Edit to Execute mode
-   * if the Edit mode label is shorter than 8 characters. */
+  /* Text Monitor behavior matches MEDM's medmTextUpdate.c:
+   * 1. In Edit mode: use actual text for font sizing (line 154)
+   * 2. In Execute mode: use DUMMY_TEXT_FIELD ("9.876543") for initial sizing (line 118)
+   * 3. In Execute mode with runtime text: may shrink font if text is too wide
+   *    (handled in setRuntimeText for center/right alignment) (line 396-404) */
   QString sampleText;
-  if (executeMode_) {
+  if (executeMode_ && text().isEmpty()) {
+    /* Initial Execute mode sizing before PV value arrives */
     sampleText = QStringLiteral("9.876543");  /* DUMMY_TEXT_FIELD from medmWidget.h */
   } else {
+    /* Edit mode or Execute mode with runtime text */
     sampleText = text();
   }
 

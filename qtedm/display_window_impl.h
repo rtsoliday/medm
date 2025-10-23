@@ -19896,6 +19896,166 @@ inline void DisplayWindow::enterExecuteMode()
     }
     element->setExecuteMode(true);
   }
+
+  /* Mimic MEDM's behavior: raise dynamic widgets above static widgets
+   * MEDM draws static graphics to drawingAreaPixmap and dynamic widgets
+   * to updatePixmap (layered on top). In Qt, we achieve the same effect
+   * by calling raise() on widgets that need channels. */
+  for (auto it = rectangleRuntimes_.constBegin();
+      it != rectangleRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = imageRuntimes_.constBegin();
+      it != imageRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = ovalRuntimes_.constBegin();
+      it != ovalRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = arcRuntimes_.constBegin();
+      it != arcRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = lineRuntimes_.constBegin();
+      it != lineRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = polylineRuntimes_.constBegin();
+      it != polylineRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = polygonRuntimes_.constBegin();
+      it != polygonRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = textRuntimes_.constBegin();
+      it != textRuntimes_.constEnd(); ++it) {
+    if (auto *runtime = it.value()) {
+      if (runtime->channelsNeeded_) {
+        it.key()->raise();
+      }
+    }
+  }
+  for (auto it = textMonitorRuntimes_.constBegin();
+      it != textMonitorRuntimes_.constEnd(); ++it) {
+    /* TextMonitor always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = meterRuntimes_.constBegin();
+      it != meterRuntimes_.constEnd(); ++it) {
+    /* Meter always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = scaleMonitorRuntimes_.constBegin();
+      it != scaleMonitorRuntimes_.constEnd(); ++it) {
+    /* ScaleMonitor always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = barMonitorRuntimes_.constBegin();
+      it != barMonitorRuntimes_.constEnd(); ++it) {
+    /* BarMonitor always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = byteMonitorRuntimes_.constBegin();
+      it != byteMonitorRuntimes_.constEnd(); ++it) {
+    /* ByteMonitor always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = textEntryRuntimes_.constBegin();
+      it != textEntryRuntimes_.constEnd(); ++it) {
+    /* TextEntry always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = sliderRuntimes_.constBegin();
+      it != sliderRuntimes_.constEnd(); ++it) {
+    /* Slider always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = wheelSwitchRuntimes_.constBegin();
+      it != wheelSwitchRuntimes_.constEnd(); ++it) {
+    /* WheelSwitch always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = choiceButtonRuntimes_.constBegin();
+      it != choiceButtonRuntimes_.constEnd(); ++it) {
+    /* ChoiceButton always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = menuRuntimes_.constBegin();
+      it != menuRuntimes_.constEnd(); ++it) {
+    /* Menu always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = messageButtonRuntimes_.constBegin();
+      it != messageButtonRuntimes_.constEnd(); ++it) {
+    /* MessageButton always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = stripChartRuntimes_.constBegin();
+      it != stripChartRuntimes_.constEnd(); ++it) {
+    /* StripChart always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = cartesianPlotRuntimes_.constBegin();
+      it != cartesianPlotRuntimes_.constEnd(); ++it) {
+    /* CartesianPlot always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
 }
 
 inline void DisplayWindow::leaveExecuteMode()

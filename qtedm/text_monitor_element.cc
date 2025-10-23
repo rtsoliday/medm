@@ -34,8 +34,9 @@ TextMonitorElement::TextMonitorElement(QWidget *parent)
 {
   setAutoFillBackground(true);
   setWordWrap(false);
-  // Reduce top margin to match MEDM text positioning (was 2, 2, 2, 2)
-  setContentsMargins(2, 0, 2, 2);
+  // Reduce margins to match MEDM text positioning and maximize text space
+  // Top margin 0 for vertical alignment, left/right 1 for minimal padding
+  setContentsMargins(0, 0, 1, 2);
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setTextAlignment(Qt::AlignLeft | Qt::AlignTop);
   setForegroundColor(defaultForegroundColor());

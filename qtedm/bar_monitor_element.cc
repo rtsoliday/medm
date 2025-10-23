@@ -935,7 +935,7 @@ QColor BarMonitorElement::barTrackColor() const
   if (!color.isValid()) {
     color = QColor(Qt::white);
   }
-  return color.darker(110);
+  return color;
 }
 
 QColor BarMonitorElement::barFillColor() const

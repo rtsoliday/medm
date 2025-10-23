@@ -13349,13 +13349,20 @@ inline QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
 {
   /* Convert old format (< 20200) where attributes appear before objects
    * to new format where attributes are inside objects.
-   * Old format:
-   *   <<basic attribute>>
-   *   clr=14
+   * Old format (version < 20200):
+   *   "basic attribute" {
+   *     attr {
+   *       clr=14
+   *       style="solid"
+   *     }
+   *   }
    *   rectangle { ... }
-   * New format:
+   * New format (version >= 20200):
    *   rectangle {
-   *     "basic attribute" { clr=14 }
+   *     "basic attribute" {
+   *       clr=14
+   *       style="solid"
+   *     }
    *     ...
    *   }
    */
@@ -13365,97 +13372,128 @@ inline QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
 
   QStringList lines = adlText.split(QChar('\n'));
   QStringList result;
-  QString pendingBasicAttr;
-  QString pendingDynamicAttr;
-  bool inBasicAttr = false;
-  bool inDynamicAttr = false;
-  int braceDepth = 0;
+  QStringList pendingBasicAttr;
+  QStringList pendingDynamicAttr;
+  enum State { Normal, InBasicAttr, InBasicAttrInner, InDynamicAttr };
+  State state = Normal;
+  int attrBraceDepth = 0;
+  int innerBraceDepth = 0;
 
   for (const QString &line : lines) {
     QString trimmed = line.trimmed();
     
-    /* Track brace depth to know when we're inside attribute blocks */
-    if (inBasicAttr || inDynamicAttr) {
-      if (trimmed.contains(QChar('{'))) {
-        braceDepth++;
+    /* State machine to track where we are */
+    switch (state) {
+    case Normal:
+      /* Check for basic attribute marker */
+      if (trimmed.compare(QStringLiteral("\"basic attribute\""),
+              Qt::CaseInsensitive) == 0
+          || trimmed.compare(QStringLiteral("basic attribute"),
+              Qt::CaseInsensitive) == 0) {
+        state = InBasicAttr;
+        attrBraceDepth = 0;
+        pendingBasicAttr.clear();
+        continue;
       }
-      if (trimmed.contains(QChar('}'))) {
-        braceDepth--;
-        if (braceDepth == 0) {
-          if (inBasicAttr) {
-            pendingBasicAttr.append(line).append(QChar('\n'));
-            inBasicAttr = false;
-          } else {
-            pendingDynamicAttr.append(line).append(QChar('\n'));
-            inDynamicAttr = false;
+      /* Check for dynamic attribute marker */
+      if (trimmed.compare(QStringLiteral("\"dynamic attribute\""),
+              Qt::CaseInsensitive) == 0
+          || trimmed.compare(QStringLiteral("dynamic attribute"),
+              Qt::CaseInsensitive) == 0) {
+        state = InDynamicAttr;
+        attrBraceDepth = 0;
+        pendingDynamicAttr.clear();
+        continue;
+      }
+      /* Check if this is an object that should get pending attributes */
+      {
+        const bool isObject = trimmed.startsWith(QStringLiteral("rectangle"))
+            || trimmed.startsWith(QStringLiteral("oval"))
+            || trimmed.startsWith(QStringLiteral("arc"))
+            || trimmed.startsWith(QStringLiteral("text "))
+            || trimmed == QStringLiteral("text")
+            || trimmed.startsWith(QStringLiteral("polyline"))
+            || trimmed.startsWith(QStringLiteral("polygon"));
+
+        if (isObject && trimmed.endsWith(QChar('{'))) {
+          /* Insert the object line */
+          result.append(line);
+          /* Insert pending attributes inside the object */
+          if (!pendingBasicAttr.isEmpty()) {
+            result.append(QStringLiteral("\t\"basic attribute\" {"));
+            result.append(pendingBasicAttr);
+            result.append(QStringLiteral("\t}"));
+            pendingBasicAttr.clear();
+          }
+          if (!pendingDynamicAttr.isEmpty()) {
+            result.append(QStringLiteral("\t\"dynamic attribute\" {"));
+            result.append(pendingDynamicAttr);
+            result.append(QStringLiteral("\t}"));
+            pendingDynamicAttr.clear();
           }
           continue;
         }
       }
-      if (inBasicAttr) {
-        pendingBasicAttr.append(line).append(QChar('\n'));
-      } else {
-        pendingDynamicAttr.append(line).append(QChar('\n'));
-      }
-      continue;
-    }
-
-    /* Detect start of attribute blocks */
-    if (trimmed.compare(QStringLiteral("<<basic attribute>>"),
-            Qt::CaseInsensitive) == 0
-        || trimmed.compare(QStringLiteral("<<basic atribute>>"),
-            Qt::CaseInsensitive) == 0
-        || trimmed.compare(QStringLiteral("basic attribute"),
-            Qt::CaseInsensitive) == 0) {
-      pendingBasicAttr.clear();
-      pendingBasicAttr.append(QStringLiteral("\t\"basic attribute\" {\n"));
-      inBasicAttr = true;
-      braceDepth = 0;
-      if (trimmed.endsWith(QChar('{'))) {
-        braceDepth = 1;
-      }
-      continue;
-    }
-
-    if (trimmed.compare(QStringLiteral("<<dynamic attribute>>"),
-            Qt::CaseInsensitive) == 0
-        || trimmed.compare(QStringLiteral("dynamic attribute"),
-            Qt::CaseInsensitive) == 0) {
-      pendingDynamicAttr.clear();
-      pendingDynamicAttr.append(QStringLiteral("\t\"dynamic attribute\" {\n"));
-      inDynamicAttr = true;
-      braceDepth = 0;
-      if (trimmed.endsWith(QChar('{'))) {
-        braceDepth = 1;
-      }
-      continue;
-    }
-
-    /* Check if this is an object that should get the pending attributes */
-    const bool isObject = trimmed.startsWith(QStringLiteral("rectangle"))
-        || trimmed.startsWith(QStringLiteral("oval"))
-        || trimmed.startsWith(QStringLiteral("arc"))
-        || trimmed.startsWith(QStringLiteral("text"))
-        || trimmed.startsWith(QStringLiteral("polyline"))
-        || trimmed.startsWith(QStringLiteral("polygon"));
-
-    if (isObject && trimmed.endsWith(QChar('{'))) {
-      /* Insert the object line */
+      /* Normal line */
       result.append(line);
-      /* Insert pending attributes inside the object */
-      if (!pendingBasicAttr.isEmpty()) {
-        result.append(pendingBasicAttr.trimmed());
-        pendingBasicAttr.clear();
-      }
-      if (!pendingDynamicAttr.isEmpty()) {
-        result.append(pendingDynamicAttr.trimmed());
-        pendingDynamicAttr.clear();
-      }
-      continue;
-    }
+      break;
 
-    /* Normal line - just pass through */
-    result.append(line);
+    case InBasicAttr:
+      if (trimmed.contains(QChar('{'))) {
+        attrBraceDepth++;
+        /* Check if this is the "attr" block */
+        if (trimmed.startsWith(QStringLiteral("attr")) && trimmed.contains(QChar('{'))) {
+          state = InBasicAttrInner;
+          innerBraceDepth = 0;
+        }
+      }
+      if (trimmed.contains(QChar('}'))) {
+        attrBraceDepth--;
+        if (attrBraceDepth == 0) {
+          state = Normal;
+        }
+      }
+      break;
+
+    case InBasicAttrInner:
+      /* Count braces to know when attr block ends */
+      if (trimmed.contains(QChar('{'))) {
+        innerBraceDepth++;
+      }
+      if (trimmed.contains(QChar('}'))) {
+        if (innerBraceDepth == 0) {
+          /* End of attr block - back to basic attribute level */
+          state = InBasicAttr;
+          if (trimmed.contains(QChar('}'))) {
+            attrBraceDepth--;
+            if (attrBraceDepth == 0) {
+              state = Normal;
+            }
+          }
+        } else {
+          innerBraceDepth--;
+        }
+      } else {
+        /* Content inside attr block - save it */
+        pendingBasicAttr.append(line);
+      }
+      break;
+
+    case InDynamicAttr:
+      if (trimmed.contains(QChar('{'))) {
+        attrBraceDepth++;
+      }
+      if (trimmed.contains(QChar('}'))) {
+        attrBraceDepth--;
+        if (attrBraceDepth == 0) {
+          state = Normal;
+        }
+      } else if (attrBraceDepth > 0 && !trimmed.isEmpty()) {
+        /* Content inside dynamic attribute block - save it */
+        pendingDynamicAttr.append(line);
+      }
+      break;
+    }
   }
 
   return result.join(QChar('\n'));

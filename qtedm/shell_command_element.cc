@@ -12,6 +12,10 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+#include <QStyle>
+#include <QStyleOptionButton>
+
+#include "text_font_utils.h"
 
 namespace {
 
@@ -306,8 +310,11 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   const int activeCount = activeEntryCount();
   const bool singleEntry = activeCount == 1;
 
+  // Calculate constraint using (0.90 * height) - 4, then use MEDM font table
+  // Use medmTextMonitorFont which takes the constraint as-is (no additional formula)
   const int fontLimit = messageButtonPixelLimit(height());
-  const QFont labelFont = scaledFontForHeight(painter.font(), fontLimit);
+  const QSize available(std::max(1, content.width()), fontLimit);
+  const QFont labelFont = medmTextMonitorFont(text, available);
   painter.setFont(labelFont);
   QFontMetricsF labelMetrics(labelFont);
   const int textWidth = std::max(0, static_cast<int>(std::ceil(labelMetrics.horizontalAdvance(text))));

@@ -197,10 +197,23 @@ QString DisplayListDialog::labelForDisplay(DisplayWindow *display) const
   }
 
   const bool isDirty = title.endsWith(QLatin1Char('*'));
-  if (isDirty) {
-    return path + QLatin1Char('*');
+  QString result = isDirty ? (path + QLatin1Char('*')) : path;
+
+  /* Append macro values like medm does */
+  const QHash<QString, QString> &macros = display->macroDefinitions();
+  if (!macros.isEmpty()) {
+    QStringList macroList;
+    for (auto it = macros.constBegin(); it != macros.constEnd(); ++it) {
+      macroList.append(it.key() + QLatin1Char('=') + it.value());
+    }
+    /* Sort to ensure consistent display order */
+    macroList.sort();
+    for (const QString &macro : macroList) {
+      result += QLatin1Char(' ') + macro;
+    }
   }
-  return path;
+
+  return result;
 }
 
 void DisplayListDialog::handleRaiseRequested()

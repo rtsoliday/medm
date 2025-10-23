@@ -1480,6 +1480,11 @@ public:
     return filePath_;
   }
 
+  const QHash<QString, QString> &macroDefinitions() const
+  {
+    return macroDefinitions_;
+  }
+
   bool isDirty() const
   {
     return dirty_;

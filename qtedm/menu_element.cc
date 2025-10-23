@@ -4,6 +4,7 @@
 #include <array>
 
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QComboBox>
 #include <QFont>
 #include <QFontMetrics>
@@ -79,6 +80,9 @@ MenuElement::MenuElement(QWidget *parent)
           return;
         }
         if (!runtimeConnected_ || !runtimeWriteAccess_) {
+          if (runtimeConnected_) {
+            QApplication::beep();
+          }
           QSignalBlocker blocker(comboBox_);
           if (runtimeValue_ >= 0 && runtimeValue_ < comboBox_->count()) {
             comboBox_->setCurrentIndex(runtimeValue_);

@@ -34,7 +34,8 @@ TextMonitorElement::TextMonitorElement(QWidget *parent)
 {
   setAutoFillBackground(true);
   setWordWrap(false);
-  setContentsMargins(2, 2, 2, 2);
+  // Reduce top margin to match MEDM text positioning (was 2, 2, 2, 2)
+  setContentsMargins(2, 0, 2, 2);
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setTextAlignment(Qt::AlignLeft | Qt::AlignTop);
   setForegroundColor(defaultForegroundColor());
@@ -327,7 +328,9 @@ void TextMonitorElement::applyPaletteColors()
 
 void TextMonitorElement::updateFontForGeometry()
 {
-  const QSize available = contentsRect().size();
+  // Use full widget size, not contentsRect(), to match MEDM behavior
+  // MEDM uses dlTextUpdate->object.height directly in executeMonitors.c
+  const QSize available(width(), height());
   if (available.isEmpty()) {
     return;
   }

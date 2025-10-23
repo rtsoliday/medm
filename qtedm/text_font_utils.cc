@@ -32,6 +32,15 @@ QFont medmCompatibleTextFont(const QString &text, const QSize &availableSize)
     return QFont();
   }
 
+  /* Apply MEDM's text entry constraint formula:
+   * Don't allow height of font to exceed 90% - 4 pixels of text entry widget
+   * (includes nominal 2*shadowThickness=2 shadow)
+   */
+  const int heightConstraint = static_cast<int>(0.90 * availableSize.height()) - 4;
+  if (heightConstraint <= 0) {
+    return QFont();
+  }
+
   QString sample = text;
   if (sample.trimmed().isEmpty()) {
     sample = QStringLiteral("Ag");
@@ -48,7 +57,7 @@ QFont medmCompatibleTextFont(const QString &text, const QSize &availableSize)
 
     const QFontMetrics metrics(font);
     const int fontHeight = metrics.ascent() + metrics.descent();
-    if (fontHeight > availableSize.height()) {
+    if (fontHeight > heightConstraint) {
       continue;
     }
 

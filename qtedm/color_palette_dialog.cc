@@ -154,6 +154,14 @@ void ColorPaletteDialog::configureButtonColor(
   buttonPalette.setColor(
       QPalette::ButtonText, color.lightness() < 128 ? Qt::white : Qt::black);
   button->setPalette(buttonPalette);
+
+  /* Set stylesheet to prevent color changes when checked */
+  QString colorName = color.name(QColor::HexRgb);
+  QString stylesheet = QStringLiteral(
+      "QPushButton { background-color: %1; border: 2px solid #808080; }"
+      "QPushButton:checked { background-color: %1; border: 2px solid #000000; }")
+      .arg(colorName);
+  button->setStyleSheet(stylesheet);
 }
 
 void ColorPaletteDialog::handleColorClicked(int index)

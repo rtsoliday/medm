@@ -78,7 +78,7 @@ MenuElement::MenuElement(QWidget *parent)
         if (!executeMode_) {
           return;
         }
-        if (!runtimeConnected_) {
+        if (!runtimeConnected_ || !runtimeWriteAccess_) {
           QSignalBlocker blocker(comboBox_);
           if (runtimeValue_ >= 0 && runtimeValue_ < comboBox_->count()) {
             comboBox_->setCurrentIndex(runtimeValue_);

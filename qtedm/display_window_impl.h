@@ -13251,6 +13251,13 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   QString adlContent = contents;
   if (fileVersion < 20200) {
     adlContent = convertLegacyAdlFormat(contents, fileVersion);
+    /* Debug: write converted content to /tmp/qtedm_converted.adl */
+    QFile debugFile(QStringLiteral("/tmp/qtedm_converted.adl"));
+    if (debugFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      QTextStream debugStream(&debugFile);
+      debugStream << adlContent;
+      debugFile.close();
+    }
   }
 
   const QString processedContents = applyMacroSubstitutions(adlContent, macros);
@@ -13347,24 +13354,16 @@ inline QString DisplayWindow::applyMacroSubstitutions(const QString &input,
 inline QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
     int fileVersion) const
 {
-  /* Convert old format (< 20200) where attributes appear before objects
-   * to new format where attributes are inside objects.
-   * Old format (version < 20200):
-   *   "basic attribute" {
-   *     attr {
-   *       clr=14
-   *       style="solid"
-   *     }
-   *   }
-   *   rectangle { ... }
-   * New format (version >= 20200):
-   *   rectangle {
-   *     "basic attribute" {
-   *       clr=14
-   *       style="solid"
-   *     }
-   *     ...
-   *   }
+  /*
+   * Convert old format (< 20200) to new format.
+   * Old: "basic attribute" { attr { props } } THEN widget { object{...} }
+   * New: widget { object{...} "basic attribute" { props } }
+   *
+   * Strategy from studying tests/legacy.adl:
+   * 1. Standalone attribute blocks appear before widgets they apply to
+   * 2. Extract content from inside attr{} blocks
+   * 3. When we see a widget, buffer it entirely (tracking braces)
+   * 4. Inject pending attributes after the widget's object{} sub-block closes
    */
   if (fileVersion >= 20200) {
     return adlText;
@@ -13372,65 +13371,64 @@ inline QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
 
   QStringList lines = adlText.split(QChar('\n'));
   QStringList result;
-  QStringList pendingBasicAttr;
-  QStringList pendingDynamicAttr;
-  enum State { Normal, InBasicAttr, InBasicAttrInner, InDynamicAttr };
+  QStringList pendingBasicAttr;    /* Properties from attr{} in basic attribute */
+  QStringList pendingDynamicAttr;  /* Content from attr{} in dynamic attribute */
+  
+  enum State {
+    Normal,
+    InBasicAttr,         /* Inside "basic attribute" { ... } */
+    InBasicAttrInner,    /* Inside attr { ... } within basic attribute */
+    InDynamicAttr,       /* Inside "dynamic attribute" { ... } */
+    InDynamicAttrInner,  /* Inside attr { ... } within dynamic attribute */
+    InWidget,            /* Inside widget { ... } - buffering until we can inject */
+    InWidgetObject       /* Inside object { ... } within widget */
+  };
   State state = Normal;
-  int attrBraceDepth = 0;
-  int innerBraceDepth = 0;
+  int braceDepth = 0;
+  QStringList widgetBuffer;  /* Buffer lines of current widget */
+  int widgetBraceDepth = 0;
+  int objectBraceDepth = 0;
 
   for (const QString &line : lines) {
     QString trimmed = line.trimmed();
     
-    /* State machine to track where we are */
     switch (state) {
     case Normal:
-      /* Check for basic attribute marker */
-      if (trimmed.compare(QStringLiteral("\"basic attribute\""),
-              Qt::CaseInsensitive) == 0
-          || trimmed.compare(QStringLiteral("basic attribute"),
-              Qt::CaseInsensitive) == 0) {
+      /* Detect standalone basic attribute block */
+      if (trimmed.startsWith(QStringLiteral("\"basic attribute\""))) {
         state = InBasicAttr;
-        attrBraceDepth = 0;
+        braceDepth = 0;
         pendingBasicAttr.clear();
+        if (trimmed.contains(QChar('{'))) {
+          braceDepth++;
+        }
         continue;
       }
-      /* Check for dynamic attribute marker */
-      if (trimmed.compare(QStringLiteral("\"dynamic attribute\""),
-              Qt::CaseInsensitive) == 0
-          || trimmed.compare(QStringLiteral("dynamic attribute"),
-              Qt::CaseInsensitive) == 0) {
+      /* Detect standalone dynamic attribute block */
+      if (trimmed.startsWith(QStringLiteral("\"dynamic attribute\""))) {
         state = InDynamicAttr;
-        attrBraceDepth = 0;
+        braceDepth = 0;
         pendingDynamicAttr.clear();
+        if (trimmed.contains(QChar('{'))) {
+          braceDepth++;
+        }
         continue;
       }
-      /* Check if this is an object that should get pending attributes */
+      /* Detect widget that should receive pending attributes */
       {
-        const bool isObject = trimmed.startsWith(QStringLiteral("rectangle"))
+        const bool isWidget = trimmed.startsWith(QStringLiteral("rectangle"))
             || trimmed.startsWith(QStringLiteral("oval"))
             || trimmed.startsWith(QStringLiteral("arc"))
-            || trimmed.startsWith(QStringLiteral("text "))
-            || trimmed == QStringLiteral("text")
+            || trimmed.startsWith(QStringLiteral("polygon"))
             || trimmed.startsWith(QStringLiteral("polyline"))
-            || trimmed.startsWith(QStringLiteral("polygon"));
-
-        if (isObject && trimmed.endsWith(QChar('{'))) {
-          /* Insert the object line */
-          result.append(line);
-          /* Insert pending attributes inside the object */
-          if (!pendingBasicAttr.isEmpty()) {
-            result.append(QStringLiteral("\t\"basic attribute\" {"));
-            result.append(pendingBasicAttr);
-            result.append(QStringLiteral("\t}"));
-            pendingBasicAttr.clear();
-          }
-          if (!pendingDynamicAttr.isEmpty()) {
-            result.append(QStringLiteral("\t\"dynamic attribute\" {"));
-            result.append(pendingDynamicAttr);
-            result.append(QStringLiteral("\t}"));
-            pendingDynamicAttr.clear();
-          }
+            || (trimmed.startsWith(QStringLiteral("text")) && !trimmed.startsWith(QStringLiteral("textix")));
+        
+        if (isWidget && trimmed.endsWith(QChar('{'))) {
+          /* Start buffering this widget */
+          state = InWidget;
+          widgetBuffer.clear();
+          widgetBuffer.append(line);
+          widgetBraceDepth = 1;
           continue;
         }
       }
@@ -13439,64 +13437,139 @@ inline QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
       break;
 
     case InBasicAttr:
+      if (trimmed.startsWith(QStringLiteral("attr")) && trimmed.contains(QChar('{'))) {
+        /* Enter attr{} block */
+        state = InBasicAttrInner;
+        braceDepth = 1;  /* Reset to count attr{} braces */
+        continue;
+      }
+      /* Track other braces in basic attribute block */
       if (trimmed.contains(QChar('{'))) {
-        attrBraceDepth++;
-        /* Check if this is the "attr" block */
-        if (trimmed.startsWith(QStringLiteral("attr")) && trimmed.contains(QChar('{'))) {
-          state = InBasicAttrInner;
-          innerBraceDepth = 0;
-        }
+        braceDepth++;
       }
       if (trimmed.contains(QChar('}'))) {
-        attrBraceDepth--;
-        if (attrBraceDepth == 0) {
+        braceDepth--;
+        if (braceDepth == 0) {
           state = Normal;
         }
       }
       break;
 
     case InBasicAttrInner:
-      /* Count braces to know when attr block ends */
+      /* Count braces to detect end of attr{} */
       if (trimmed.contains(QChar('{'))) {
-        innerBraceDepth++;
+        braceDepth++;
       }
       if (trimmed.contains(QChar('}'))) {
-        if (innerBraceDepth == 0) {
-          /* End of attr block - back to basic attribute level */
+        braceDepth--;
+        if (braceDepth == 0) {
+          /* End of attr{} - back to basic attribute level */
           state = InBasicAttr;
-          if (trimmed.contains(QChar('}'))) {
-            attrBraceDepth--;
-            if (attrBraceDepth == 0) {
-              state = Normal;
-            }
-          }
-        } else {
-          innerBraceDepth--;
+          braceDepth = 1;  /* Reset for basic attribute brace counting */
+          continue;
         }
-      } else {
-        /* Content inside attr block - save it */
-        pendingBasicAttr.append(line);
+      }
+      /* Save property lines */
+      if (!trimmed.isEmpty() && braceDepth > 0) {
+        pendingBasicAttr.append(QStringLiteral("\t\t") + trimmed);
       }
       break;
 
     case InDynamicAttr:
+      if (trimmed.startsWith(QStringLiteral("attr")) && trimmed.contains(QChar('{'))) {
+        state = InDynamicAttrInner;
+        braceDepth = 1;
+        continue;
+      }
       if (trimmed.contains(QChar('{'))) {
-        attrBraceDepth++;
+        braceDepth++;
       }
       if (trimmed.contains(QChar('}'))) {
-        attrBraceDepth--;
-        if (attrBraceDepth == 0) {
+        braceDepth--;
+        if (braceDepth == 0) {
           state = Normal;
         }
-      } else if (attrBraceDepth > 0 && !trimmed.isEmpty()) {
-        /* Content inside dynamic attribute block - save it */
-        pendingDynamicAttr.append(line);
+      }
+      break;
+
+    case InDynamicAttrInner:
+      if (trimmed.contains(QChar('{'))) {
+        braceDepth++;
+      }
+      if (trimmed.contains(QChar('}'))) {
+        braceDepth--;
+        if (braceDepth == 0) {
+          state = InDynamicAttr;
+          braceDepth = 1;
+          continue;
+        }
+      }
+      if (!trimmed.isEmpty() && braceDepth > 0) {
+        pendingDynamicAttr.append(QStringLiteral("\t\t") + trimmed);
+      }
+      break;
+
+    case InWidget:
+      widgetBuffer.append(line);
+      /* Detect object{} sub-block */
+      if (trimmed.startsWith(QStringLiteral("object")) && trimmed.contains(QChar('{'))) {
+        state = InWidgetObject;
+        objectBraceDepth = 1;
+        continue;
+      }
+      /* Track widget braces */
+      if (trimmed.contains(QChar('{'))) {
+        widgetBraceDepth++;
+      }
+      if (trimmed.contains(QChar('}'))) {
+        widgetBraceDepth--;
+        if (widgetBraceDepth == 0) {
+          /* Widget complete - output with attributes injected */
+          result.append(widgetBuffer);
+          state = Normal;
+          pendingBasicAttr.clear();
+          pendingDynamicAttr.clear();
+        }
+      }
+      break;
+
+    case InWidgetObject:
+      widgetBuffer.append(line);
+      if (trimmed.contains(QChar('{'))) {
+        objectBraceDepth++;
+      }
+      if (trimmed.contains(QChar('}'))) {
+        objectBraceDepth--;
+        if (objectBraceDepth == 0) {
+          /* object{} closed - inject attributes now */
+          if (!pendingBasicAttr.isEmpty()) {
+            widgetBuffer.append(QStringLiteral("\t\"basic attribute\" {"));
+            widgetBuffer.append(pendingBasicAttr);
+            widgetBuffer.append(QStringLiteral("\t}"));
+          }
+          if (!pendingDynamicAttr.isEmpty()) {
+            widgetBuffer.append(QStringLiteral("\t\"dynamic attribute\" {"));
+            widgetBuffer.append(pendingDynamicAttr);
+            widgetBuffer.append(QStringLiteral("\t}"));
+          }
+          state = InWidget;  /* Back to widget level */
+        }
       }
       break;
     }
   }
 
-  return result.join(QChar('\n'));
+  QString converted = result.join(QChar('\n'));
+  
+  /* Debug: write converted text to file */
+  QFile debugFile(QStringLiteral("/tmp/qtedm_converted.adl"));
+  if (debugFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    QTextStream out(&debugFile);
+    out << converted;
+    debugFile.close();
+  }
+
+  return converted;
 }
 
 inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNameHint) const

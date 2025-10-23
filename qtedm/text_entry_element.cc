@@ -412,7 +412,7 @@ void TextEntryElement::applyPaletteColors()
     return;
   }
   QPalette pal = lineEdit_->palette();
-  QColor fg = selected_ ? QColor(Qt::blue) : effectiveForegroundColor();
+  QColor fg = effectiveForegroundColor();
   QColor bg = effectiveBackgroundColor();
   pal.setColor(QPalette::Text, fg);
   pal.setColor(QPalette::WindowText, fg);
@@ -420,6 +420,21 @@ void TextEntryElement::applyPaletteColors()
   pal.setColor(QPalette::Base, bg);
   pal.setColor(QPalette::Window, bg);
   lineEdit_->setPalette(pal);
+
+  /* Set stylesheet with 2-pixel lowered bevel matching Shell Command style */
+  QString fgName = fg.name(QColor::HexRgb);
+  QString bgName = bg.name(QColor::HexRgb);
+  /* Create lowered bevel: darker top/left, lighter bottom/right (opposite of raised) */
+  QString topColor = bg.darker(145).name(QColor::HexRgb);
+  QString bottomColor = bg.lighter(135).name(QColor::HexRgb);
+  QString stylesheet = QStringLiteral(
+      "QLineEdit { background-color: %1; color: %2; "
+      "border-width: 2px; border-style: solid; "
+      "border-top-color: %3; border-left-color: %3; "
+      "border-bottom-color: %4; border-right-color: %4; }")
+      .arg(bgName, fgName, topColor, bottomColor);
+  lineEdit_->setStyleSheet(stylesheet);
+
   lineEdit_->update();
 }
 

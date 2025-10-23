@@ -946,6 +946,9 @@ public:
       composite->adoptChild(widget);
     }
 
+    /* Expand composite bounds to encompass all child widgets */
+    composite->expandToFitChildren();
+
     elementStack_.insert(insertIndex, QPointer<QWidget>(composite));
     if (insertIndex == 0) {
       composite->lower();
@@ -19463,6 +19466,9 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
       }
     }
   }
+
+  /* Expand composite bounds to encompass all child widgets */
+  composite->expandToFitChildren();
 
   return composite;
 }

@@ -477,9 +477,12 @@ void TextElement::updateExecuteState()
 
 void TextElement::updateFontForGeometry()
 {
-  const QSize available = contentsRect().size();
+  // Use full widget size to match MEDM behavior
+  // MEDM uses dlText->object.height directly in medmText.c
+  const QSize available(width(), height());
   if (!available.isEmpty()) {
-    const QFont newFont = medmCompatibleTextFont(text(), available);
+    // Static Text widgets use full height like Text Monitor, not Text Entry constraint
+    const QFont newFont = medmTextMonitorFont(text(), available);
     if (!newFont.family().isEmpty() && font() != newFont) {
       QLabel::setFont(newFont);
     }

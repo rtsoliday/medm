@@ -457,7 +457,7 @@ QColor TextElement::effectiveForegroundColor() const
   switch (colorMode_) {
   case TextColorMode::kAlarm:
     if (!runtimeConnected_) {
-      return QColor(204, 204, 204);
+      return QColor(255, 255, 255);
     }
     return alarmColorForSeverity(runtimeSeverity_);
   case TextColorMode::kDiscrete:

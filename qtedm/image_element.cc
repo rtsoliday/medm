@@ -317,7 +317,10 @@ void ImageElement::paintEvent(QPaintEvent *event)
 	if (showImage) {
 		painter.drawPixmap(drawRect, pixmap_);
 	} else {
-		painter.fillRect(drawRect, backgroundColor());
+		const QColor bgColor = (executeMode_ && !runtimeConnected_)
+				? QColor(255, 255, 255)
+				: backgroundColor();
+		painter.fillRect(drawRect, bgColor);
 		painter.setPen(QPen(foregroundColor(), 1, Qt::DashLine));
 		painter.drawRect(drawRect);
 		painter.setPen(QPen(foregroundColor(), 1, Qt::SolidLine));

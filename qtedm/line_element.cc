@@ -281,12 +281,11 @@ QColor LineElement::effectiveForegroundColor() const
   }
 
   switch (colorMode_) {
-  case TextColorMode::kAlarm: {
-    const short severity = runtimeConnected_
-        ? runtimeSeverity_
-        : std::numeric_limits<short>::max();
-    return MedmColors::alarmColorForSeverity(severity);
-  }
+  case TextColorMode::kAlarm:
+    if (!runtimeConnected_) {
+      return QColor(255, 255, 255);
+    }
+    return MedmColors::alarmColorForSeverity(runtimeSeverity_);
   case TextColorMode::kDiscrete:
   case TextColorMode::kStatic:
   default:

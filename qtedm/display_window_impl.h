@@ -13376,8 +13376,10 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
   const int displayWidth = displayArea_ ? displayArea_->width() : width();
   const int displayHeight = displayArea_ ? displayArea_->height() : height();
-  const QRect displayRect(geometry().x(), geometry().y(), displayWidth,
-      displayHeight);
+  // Capture the decorated window position so the saved ADL restores accurately.
+  const QRect frameRect = frameGeometry();
+  const QRect displayRect(frameRect.x(), frameRect.y(), displayWidth,
+    displayHeight);
 
   AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("display {"));
   AdlWriter::writeObjectSection(stream, 1, displayRect);
@@ -15057,23 +15059,42 @@ inline void DisplayWindow::clearAllElements()
 inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
 {
   QRect geometry = parseObjectGeometry(displayNode);
+  const AdlNode *objectNode = ::findChild(displayNode, QStringLiteral("object"));
+  const bool hasWidthProperty = objectNode
+      && (::findProperty(*objectNode, QStringLiteral("width")) != nullptr);
+  const bool hasHeightProperty = objectNode
+      && (::findProperty(*objectNode, QStringLiteral("height")) != nullptr);
+  const bool hasXProperty = objectNode
+      && (::findProperty(*objectNode, QStringLiteral("x")) != nullptr);
+  const bool hasYProperty = objectNode
+      && (::findProperty(*objectNode, QStringLiteral("y")) != nullptr);
+
   if (displayArea_) {
     const QSize currentWindowSize = size();
     const QSize currentAreaSize = displayArea_->size();
     const int extraWidth = currentWindowSize.width() - currentAreaSize.width();
     const int extraHeight = currentWindowSize.height() - currentAreaSize.height();
-    const bool hasWidth = geometry.width() > 0;
-    const bool hasHeight = geometry.height() > 0;
-    const int targetWidth = std::max(hasWidth ? geometry.width()
-                                             : currentAreaSize.width(),
+    const int targetWidth = std::max(hasWidthProperty ? geometry.width()
+                                                     : currentAreaSize.width(),
         kMinimumDisplayWidth);
-    const int targetHeight = std::max(hasHeight ? geometry.height()
-                                               : currentAreaSize.height(),
+    const int targetHeight = std::max(hasHeightProperty ? geometry.height()
+                                                       : currentAreaSize.height(),
         kMinimumDisplayHeight);
     displayArea_->setMinimumSize(targetWidth, targetHeight);
     displayArea_->resize(targetWidth, targetHeight);
-    if (hasWidth || hasHeight) {
+    if (hasWidthProperty || hasHeightProperty) {
       resize(targetWidth + extraWidth, targetHeight + extraHeight);
+    }
+    QPoint targetPos = pos();
+    if (hasXProperty) {
+      targetPos.setX(geometry.x());
+    }
+    if (hasYProperty) {
+      targetPos.setY(geometry.y());
+    }
+    if (hasXProperty || hasYProperty) {
+      // Preserve unspecified axes so partial geometry in the ADL stays intact.
+      move(targetPos);
     }
     const QString clrStr = propertyValue(displayNode, QStringLiteral("clr"));
     const QString bclrStr = propertyValue(displayNode, QStringLiteral("bclr"));

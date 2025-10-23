@@ -345,12 +345,20 @@ void MessageButtonElement::applyPaletteColors()
   }
   button_->setPalette(pal);
 
-  /* Set stylesheet to prevent gradient rendering */
+  /* Set stylesheet to prevent gradient rendering with 2-pixel raised bevel matching Shell Command */
   QString fgName = fg.name(QColor::HexRgb);
   QString bgName = bg.name(QColor::HexRgb);
+  /* Create bevel colors matching ShellCommandElement: lighter top/left, darker bottom/right */
+  QString topColor = bg.lighter(135).name(QColor::HexRgb);
+  QString bottomColor = bg.darker(145).name(QColor::HexRgb);
+  QString innerTopColor = bg.lighter(150).name(QColor::HexRgb);
+  QString innerBottomColor = bg.darker(170).name(QColor::HexRgb);
   QString stylesheet = QStringLiteral(
-      "QPushButton { background-color: %1; color: %2; border: 1px solid #808080; }")
-      .arg(bgName, fgName);
+      "QPushButton { background-color: %1; color: %2; "
+      "border-width: 2px; border-style: solid; "
+      "border-top-color: %3; border-left-color: %3; "
+      "border-bottom-color: %4; border-right-color: %4; }")
+      .arg(bgName, fgName, topColor, bottomColor);
   button_->setStyleSheet(stylesheet);
 
   updateButtonState();

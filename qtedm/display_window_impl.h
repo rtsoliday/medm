@@ -41,6 +41,7 @@
 #include <epicsTime.h>
 
 #include "channel_access_context.h"
+#include "display_properties.h"
 #include "statistics_tracker.h"
 #include "display_list_dialog.h"
 #include "pv_info_dialog.h"
@@ -195,7 +196,7 @@ public:
     displayArea_->setPalette(displayPalette);
     displayArea_->setBackgroundRole(QPalette::Window);
     displayArea_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    displayArea_->setMinimumSize(kDefaultDisplayWidth, kDefaultDisplayHeight);
+  displayArea_->setMinimumSize(kMinimumDisplayWidth, kMinimumDisplayHeight);
     displayArea_->setGridSpacing(gridSpacing_);
     displayArea_->setGridOn(gridOn_);
     displayArea_->setGridColor(displayPalette.color(QPalette::WindowText));
@@ -15047,6 +15048,7 @@ inline void DisplayWindow::clearAllElements()
     displayArea_->setSelected(false);
     displayArea_->setGridOn(gridOn_);
     displayArea_->setGridSpacing(gridSpacing_);
+    displayArea_->setMinimumSize(kMinimumDisplayWidth, kMinimumDisplayHeight);
   }
   currentLoadDirectory_.clear();
   updateResourcePaletteDisplayControls();
@@ -15056,13 +15058,22 @@ inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
 {
   QRect geometry = parseObjectGeometry(displayNode);
   if (displayArea_) {
-    if (geometry.width() > 0 && geometry.height() > 0) {
-      displayArea_->setMinimumSize(geometry.width(), geometry.height());
-      displayArea_->resize(geometry.size());
-      const QSize current = size();
-      const int extraWidth = current.width() - displayArea_->width();
-      const int extraHeight = current.height() - displayArea_->height();
-      resize(geometry.width() + extraWidth, geometry.height() + extraHeight);
+    const QSize currentWindowSize = size();
+    const QSize currentAreaSize = displayArea_->size();
+    const int extraWidth = currentWindowSize.width() - currentAreaSize.width();
+    const int extraHeight = currentWindowSize.height() - currentAreaSize.height();
+    const bool hasWidth = geometry.width() > 0;
+    const bool hasHeight = geometry.height() > 0;
+    const int targetWidth = std::max(hasWidth ? geometry.width()
+                                             : currentAreaSize.width(),
+        kMinimumDisplayWidth);
+    const int targetHeight = std::max(hasHeight ? geometry.height()
+                                               : currentAreaSize.height(),
+        kMinimumDisplayHeight);
+    displayArea_->setMinimumSize(targetWidth, targetHeight);
+    displayArea_->resize(targetWidth, targetHeight);
+    if (hasWidth || hasHeight) {
+      resize(targetWidth + extraWidth, targetHeight + extraHeight);
     }
     const QString clrStr = propertyValue(displayNode, QStringLiteral("clr"));
     const QString bclrStr = propertyValue(displayNode, QStringLiteral("bclr"));

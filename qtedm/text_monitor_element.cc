@@ -332,7 +332,9 @@ void TextMonitorElement::updateFontForGeometry()
     return;
   }
 
-  const QFont newFont = medmCompatibleTextFont(text(), available);
+  /* Text Monitor uses full height with no constraint formula,
+   * matching MEDM's executeMonitors.c behavior */
+  const QFont newFont = medmTextMonitorFont(text(), available);
   if (newFont.family().isEmpty()) {
     return;
   }

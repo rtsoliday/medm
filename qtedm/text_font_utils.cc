@@ -79,3 +79,54 @@ QFont medmCompatibleTextFont(const QString &text, const QSize &availableSize)
   return QFont();
 }
 
+QFont medmTextMonitorFont(const QString &text, const QSize &availableSize)
+{
+  if (availableSize.width() <= 0 || availableSize.height() <= 0) {
+    return QFont();
+  }
+
+  /* Text Monitor widgets in MEDM use FULL HEIGHT with no constraint formula.
+   * This matches executeMonitors.c behavior:
+   *   dmGetBestFontWithInfo(fontTable, MAX_FONTS, DUMMY_TEXT_FIELD,
+   *       dlTextUpdate->object.height, dlTextUpdate->object.width, ...)
+   */
+  const int heightConstraint = availableSize.height();
+
+  QString sample = text;
+  if (sample.trimmed().isEmpty()) {
+    sample = QStringLiteral("Ag");
+  }
+
+  QFont chosen;
+  bool found = false;
+
+  for (const QString &alias : textFontAliases()) {
+    const QFont font = LegacyFonts::font(alias);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    const QFontMetrics metrics(font);
+    const int fontHeight = metrics.ascent() + metrics.descent();
+    if (fontHeight > heightConstraint) {
+      continue;
+    }
+
+    chosen = font;
+    found = true;
+  }
+
+  if (found) {
+    return chosen;
+  }
+
+  for (const QString &alias : textFontAliases()) {
+    const QFont fallback = LegacyFonts::font(alias);
+    if (!fallback.family().isEmpty()) {
+      return fallback;
+    }
+  }
+
+  return QFont();
+}
+

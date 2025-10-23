@@ -15,7 +15,10 @@
 #include <QGuiApplication>
 #include <QDateTime>
 #include <QCursor>
+#include <QDir>
 #include <QFont>
+#include <QFile>
+#include <QFileInfo>
 #include <QPen>
 #include <QPainter>
 #include <QPixmap>
@@ -2023,6 +2026,16 @@ private:
       int entryIndex, Qt::KeyboardModifiers modifiers);
   QString resolveRelatedDisplayFile(const QString &fileName) const;
   QStringList buildDisplaySearchPaths() const;
+  struct CompositeFileSpecification
+  {
+    QString filePath;
+    QHash<QString, QString> macros;
+  };
+  CompositeFileSpecification parseCompositeFileSpecification(
+      const QString &spec) const;
+  bool loadCompositeChildrenFromFile(CompositeElement *composite,
+      const QString &filePath, const QHash<QString, QString> &macros,
+      const QPoint &childOffset);
   QHash<QString, QString> parseMacroDefinitionString(const QString &macroString) const;
   void registerDisplayWindow(DisplayWindow *displayWin,
       bool delayExecuteMode = false);
@@ -15513,6 +15526,85 @@ inline QStringList DisplayWindow::buildDisplaySearchPaths() const
   return searchPaths;
 }
 
+inline DisplayWindow::CompositeFileSpecification
+DisplayWindow::parseCompositeFileSpecification(const QString &spec) const
+{
+  CompositeFileSpecification result;
+  const int separatorIndex = spec.indexOf(QLatin1Char(';'));
+  if (separatorIndex < 0) {
+    result.filePath = spec.trimmed();
+    return result;
+  }
+  result.filePath = spec.left(separatorIndex).trimmed();
+  const QString macroPart = spec.mid(separatorIndex + 1).trimmed();
+  if (!macroPart.isEmpty()) {
+    result.macros = parseMacroDefinitionString(macroPart);
+  }
+  return result;
+}
+
+inline bool DisplayWindow::loadCompositeChildrenFromFile(
+    CompositeElement *composite, const QString &filePath,
+    const QHash<QString, QString> &macros, const QPoint &childOffset)
+{
+  if (!composite) {
+    return false;
+  }
+  const QString resolved = resolveRelatedDisplayFile(filePath);
+  if (resolved.isEmpty()) {
+    qWarning() << "Composite file not found:" << filePath;
+    return false;
+  }
+
+  QFile file(resolved);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    qWarning() << "Failed to open composite file:" << resolved;
+    return false;
+  }
+
+  QTextStream stream(&file);
+  setUtf8Encoding(stream);
+  const QString contents = stream.readAll();
+
+  QHash<QString, QString> macroSet = macroDefinitions_;
+  for (auto it = macros.constBegin(); it != macros.constEnd(); ++it) {
+    macroSet.insert(it.key(), it.value());
+  }
+
+  const QString processed = applyMacroSubstitutions(contents, macroSet);
+  QString parseError;
+  std::optional<AdlNode> document = AdlParser::parse(processed, &parseError);
+  if (!document) {
+    if (parseError.isEmpty()) {
+      qWarning() << "Failed to parse composite file:" << resolved;
+    } else {
+      qWarning() << "Failed to parse composite file:" << resolved << '-'
+                 << parseError;
+    }
+    return false;
+  }
+
+  const QString previousDirectory = currentLoadDirectory_;
+  currentLoadDirectory_ = QFileInfo(resolved).absolutePath();
+  bool anyChild = false;
+  {
+    ElementLoadContextGuard guard(*this, composite, childOffset, true,
+        composite);
+    for (const auto &child : document->children) {
+      const QString name = child.name.trimmed().toLower();
+      if (name == QStringLiteral("file")
+          || name == QStringLiteral("display")
+          || name == QStringLiteral("color map")
+          || name == QStringLiteral("<<color map>>")) {
+        continue;
+      }
+      anyChild = loadElementNode(child) || anyChild;
+    }
+  }
+  currentLoadDirectory_ = previousDirectory;
+  return anyChild;
+}
+
 inline QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
     const QString &macroString) const
 {
@@ -19489,6 +19581,16 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
       for (const auto &child : childrenNode->children) {
         loadElementNode(child);
       }
+    }
+  } else {
+    const CompositeFileSpecification spec =
+        parseCompositeFileSpecification(trimmedFile);
+    if (spec.filePath.isEmpty()) {
+      qWarning() << "Composite file specification missing filename:"
+                 << trimmedFile;
+    } else {
+      loadCompositeChildrenFromFile(composite, spec.filePath, spec.macros,
+          childOffset);
     }
   }
 

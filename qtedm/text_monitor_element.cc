@@ -350,15 +350,15 @@ void TextMonitorElement::updateFontForGeometry()
 
   /* Text Monitor behavior matches MEDM's medmTextUpdate.c:
    * 1. In Edit mode: use actual text for font sizing (line 154)
-   * 2. In Execute mode: use DUMMY_TEXT_FIELD ("9.876543") for initial sizing (line 118)
-   * 3. In Execute mode with runtime text: may shrink font if text is too wide
+   * 2. In Execute mode: ALWAYS use DUMMY_TEXT_FIELD ("9.876543") for sizing (line 118)
+   * 3. In Execute mode at runtime: font may shrink if text is too wide
    *    (handled in setRuntimeText for center/right alignment) (line 396-404) */
   QString sampleText;
-  if (executeMode_ && text().isEmpty()) {
-    /* Initial Execute mode sizing before PV value arrives */
+  if (executeMode_) {
+    /* Execute mode always uses DUMMY_TEXT_FIELD for base font calculation */
     sampleText = QStringLiteral("9.876543");  /* DUMMY_TEXT_FIELD from medmWidget.h */
   } else {
-    /* Edit mode or Execute mode with runtime text */
+    /* Edit mode uses actual text */
     sampleText = text();
   }
 

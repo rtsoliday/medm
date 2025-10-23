@@ -100,9 +100,21 @@ void ImageRuntime::start()
     }
   }
 
-  channelsNeeded_ = (element_->colorMode() != TextColorMode::kStatic)
-      || (element_->visibilityMode() != TextVisibilityMode::kStatic)
-      || hasImageCalcExpression_;
+  /* Check if any channel is specified (mimic MEDM behavior) */
+  bool hasChannel = false;
+  for (int i = 0; i < static_cast<int>(channels_.size()); ++i) {
+    if (!element_->channel(i).trimmed().isEmpty()) {
+      hasChannel = true;
+      break;
+    }
+  }
+
+  /* Channels are needed only if a channel is specified AND
+   * (color mode is dynamic OR visibility mode is dynamic OR has image calc) */
+  channelsNeeded_ = hasChannel
+      && ((element_->colorMode() != TextColorMode::kStatic)
+          || (element_->visibilityMode() != TextVisibilityMode::kStatic)
+          || hasImageCalcExpression_);
 
   initializeChannels();
   evaluateState();

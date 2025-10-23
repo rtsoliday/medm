@@ -4,12 +4,10 @@
 #include <QStringConverter>
 #endif
 
-#include <algorithm>
 #include <cmath>
 #include <type_traits>
 #include <cstring>
 #include <cstdlib>
-#include <limits>
 
 #include <QDebug>
 #include <QClipboard>
@@ -17,10 +15,7 @@
 #include <QGuiApplication>
 #include <QDateTime>
 #include <QCursor>
-#include <QDir>
 #include <QFont>
-#include <QFile>
-#include <QFileInfo>
 #include <QPen>
 #include <QPainter>
 #include <QPixmap>
@@ -1918,6 +1913,7 @@ protected:
 private:
   bool writeAdlFile(const QString &filePath) const;
   void clearAllElements();
+  QString convertLegacyAdlFormat(const QString &adlText, int fileVersion) const;
   bool loadDisplaySection(const AdlNode &displayNode);
   TextElement *loadTextElement(const AdlNode &textNode);
   TextMonitorElement *loadTextMonitorElement(const AdlNode &textUpdateNode);
@@ -2028,16 +2024,6 @@ private:
       int entryIndex, Qt::KeyboardModifiers modifiers);
   QString resolveRelatedDisplayFile(const QString &fileName) const;
   QStringList buildDisplaySearchPaths() const;
-  struct CompositeFileSpecification
-  {
-    QString filePath;
-    QHash<QString, QString> macros;
-  };
-  CompositeFileSpecification parseCompositeFileSpecification(
-      const QString &spec) const;
-  bool loadCompositeChildrenFromFile(CompositeElement *composite,
-      const QString &filePath, const QHash<QString, QString> &macros,
-      const QPoint &childOffset);
   QHash<QString, QString> parseMacroDefinitionString(const QString &macroString) const;
   void registerDisplayWindow(DisplayWindow *displayWin,
       bool delayExecuteMode = false);
@@ -13248,7 +13234,26 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   QTextStream stream(&file);
   setUtf8Encoding(stream);
   const QString contents = stream.readAll();
-  const QString processedContents = applyMacroSubstitutions(contents, macros);
+
+  /* Detect file version */
+  int fileVersion = 30122; /* Default to current version */
+  QRegularExpression versionPattern(QStringLiteral(R"(version\s*=\s*(\d+))"));
+  QRegularExpressionMatch versionMatch = versionPattern.match(contents);
+  if (versionMatch.hasMatch()) {
+    bool ok = false;
+    int parsedVersion = versionMatch.captured(1).toInt(&ok);
+    if (ok) {
+      fileVersion = parsedVersion;
+    }
+  }
+
+  /* Convert legacy format if needed */
+  QString adlContent = contents;
+  if (fileVersion < 20200) {
+    adlContent = convertLegacyAdlFormat(contents, fileVersion);
+  }
+
+  const QString processedContents = applyMacroSubstitutions(adlContent, macros);
 
   std::optional<AdlNode> document = AdlParser::parse(processedContents, errorMessage);
   if (!document) {
@@ -13337,6 +13342,123 @@ inline QString DisplayWindow::applyMacroSubstitutions(const QString &input,
     current = result;
   }
   return current;
+}
+
+inline QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
+    int fileVersion) const
+{
+  /* Convert old format (< 20200) where attributes appear before objects
+   * to new format where attributes are inside objects.
+   * Old format:
+   *   <<basic attribute>>
+   *   clr=14
+   *   rectangle { ... }
+   * New format:
+   *   rectangle {
+   *     "basic attribute" { clr=14 }
+   *     ...
+   *   }
+   */
+  if (fileVersion >= 20200) {
+    return adlText;
+  }
+
+  QStringList lines = adlText.split(QChar('\n'));
+  QStringList result;
+  QString pendingBasicAttr;
+  QString pendingDynamicAttr;
+  bool inBasicAttr = false;
+  bool inDynamicAttr = false;
+  int braceDepth = 0;
+
+  for (const QString &line : lines) {
+    QString trimmed = line.trimmed();
+    
+    /* Track brace depth to know when we're inside attribute blocks */
+    if (inBasicAttr || inDynamicAttr) {
+      if (trimmed.contains(QChar('{'))) {
+        braceDepth++;
+      }
+      if (trimmed.contains(QChar('}'))) {
+        braceDepth--;
+        if (braceDepth == 0) {
+          if (inBasicAttr) {
+            pendingBasicAttr.append(line).append(QChar('\n'));
+            inBasicAttr = false;
+          } else {
+            pendingDynamicAttr.append(line).append(QChar('\n'));
+            inDynamicAttr = false;
+          }
+          continue;
+        }
+      }
+      if (inBasicAttr) {
+        pendingBasicAttr.append(line).append(QChar('\n'));
+      } else {
+        pendingDynamicAttr.append(line).append(QChar('\n'));
+      }
+      continue;
+    }
+
+    /* Detect start of attribute blocks */
+    if (trimmed.compare(QStringLiteral("<<basic attribute>>"),
+            Qt::CaseInsensitive) == 0
+        || trimmed.compare(QStringLiteral("<<basic atribute>>"),
+            Qt::CaseInsensitive) == 0
+        || trimmed.compare(QStringLiteral("basic attribute"),
+            Qt::CaseInsensitive) == 0) {
+      pendingBasicAttr.clear();
+      pendingBasicAttr.append(QStringLiteral("\t\"basic attribute\" {\n"));
+      inBasicAttr = true;
+      braceDepth = 0;
+      if (trimmed.endsWith(QChar('{'))) {
+        braceDepth = 1;
+      }
+      continue;
+    }
+
+    if (trimmed.compare(QStringLiteral("<<dynamic attribute>>"),
+            Qt::CaseInsensitive) == 0
+        || trimmed.compare(QStringLiteral("dynamic attribute"),
+            Qt::CaseInsensitive) == 0) {
+      pendingDynamicAttr.clear();
+      pendingDynamicAttr.append(QStringLiteral("\t\"dynamic attribute\" {\n"));
+      inDynamicAttr = true;
+      braceDepth = 0;
+      if (trimmed.endsWith(QChar('{'))) {
+        braceDepth = 1;
+      }
+      continue;
+    }
+
+    /* Check if this is an object that should get the pending attributes */
+    const bool isObject = trimmed.startsWith(QStringLiteral("rectangle"))
+        || trimmed.startsWith(QStringLiteral("oval"))
+        || trimmed.startsWith(QStringLiteral("arc"))
+        || trimmed.startsWith(QStringLiteral("text"))
+        || trimmed.startsWith(QStringLiteral("polyline"))
+        || trimmed.startsWith(QStringLiteral("polygon"));
+
+    if (isObject && trimmed.endsWith(QChar('{'))) {
+      /* Insert the object line */
+      result.append(line);
+      /* Insert pending attributes inside the object */
+      if (!pendingBasicAttr.isEmpty()) {
+        result.append(pendingBasicAttr.trimmed());
+        pendingBasicAttr.clear();
+      }
+      if (!pendingDynamicAttr.isEmpty()) {
+        result.append(pendingDynamicAttr.trimmed());
+        pendingDynamicAttr.clear();
+      }
+      continue;
+    }
+
+    /* Normal line - just pass through */
+    result.append(line);
+  }
+
+  return result.join(QChar('\n'));
 }
 
 inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNameHint) const
@@ -15526,120 +15648,6 @@ inline QStringList DisplayWindow::buildDisplaySearchPaths() const
     }
   }
   return searchPaths;
-}
-
-inline DisplayWindow::CompositeFileSpecification
-DisplayWindow::parseCompositeFileSpecification(const QString &spec) const
-{
-  CompositeFileSpecification result;
-  const int separatorIndex = spec.indexOf(QLatin1Char(';'));
-  if (separatorIndex < 0) {
-    result.filePath = spec.trimmed();
-    return result;
-  }
-  result.filePath = spec.left(separatorIndex).trimmed();
-  const QString macroPart = spec.mid(separatorIndex + 1).trimmed();
-  if (!macroPart.isEmpty()) {
-    result.macros = parseMacroDefinitionString(macroPart);
-  }
-  return result;
-}
-
-inline bool DisplayWindow::loadCompositeChildrenFromFile(
-    CompositeElement *composite, const QString &filePath,
-    const QHash<QString, QString> &macros, const QPoint &childOffset)
-{
-  if (!composite) {
-    return false;
-  }
-  const QString resolved = resolveRelatedDisplayFile(filePath);
-  if (resolved.isEmpty()) {
-    qWarning() << "Composite file not found:" << filePath;
-    return false;
-  }
-
-  QFile file(resolved);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    qWarning() << "Failed to open composite file:" << resolved;
-    return false;
-  }
-
-  QTextStream stream(&file);
-  setUtf8Encoding(stream);
-  const QString contents = stream.readAll();
-
-  QHash<QString, QString> macroSet = macroDefinitions_;
-  for (auto it = macros.constBegin(); it != macros.constEnd(); ++it) {
-    macroSet.insert(it.key(), it.value());
-  }
-
-  const QString processed = applyMacroSubstitutions(contents, macroSet);
-  QString parseError;
-  std::optional<AdlNode> document = AdlParser::parse(processed, &parseError);
-  if (!document) {
-    if (parseError.isEmpty()) {
-      qWarning() << "Failed to parse composite file:" << resolved;
-    } else {
-      qWarning() << "Failed to parse composite file:" << resolved << '-'
-                 << parseError;
-    }
-    return false;
-  }
-
-  const QString previousDirectory = currentLoadDirectory_;
-  currentLoadDirectory_ = QFileInfo(resolved).absolutePath();
-  bool anyChild = false;
-  QPoint effectiveOffset = childOffset;
-  {
-    int minX = std::numeric_limits<int>::max();
-    int minY = std::numeric_limits<int>::max();
-    bool haveBounds = false;
-
-    for (const auto &child : document->children) {
-      const QString name = child.name.trimmed().toLower();
-      if (name == QStringLiteral("file")
-          || name == QStringLiteral("display")
-          || name == QStringLiteral("color map")
-          || name == QStringLiteral("<<color map>>")) {
-        continue;
-      }
-
-      const QRect rect = parseObjectGeometry(child);
-      if (!rect.isValid()) {
-        continue;
-      }
-
-      if (!haveBounds) {
-        minX = rect.x();
-        minY = rect.y();
-        haveBounds = true;
-      } else {
-        minX = std::min(minX, rect.x());
-        minY = std::min(minY, rect.y());
-      }
-    }
-
-    if (haveBounds) {
-      effectiveOffset = QPoint(-minX, -minY);
-    }
-  }
-
-  {
-    ElementLoadContextGuard guard(*this, composite, effectiveOffset, true,
-        composite);
-    for (const auto &child : document->children) {
-      const QString name = child.name.trimmed().toLower();
-      if (name == QStringLiteral("file")
-          || name == QStringLiteral("display")
-          || name == QStringLiteral("color map")
-          || name == QStringLiteral("<<color map>>")) {
-        continue;
-      }
-      anyChild = loadElementNode(child) || anyChild;
-    }
-  }
-  currentLoadDirectory_ = previousDirectory;
-  return anyChild;
 }
 
 inline QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
@@ -19618,16 +19626,6 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
       for (const auto &child : childrenNode->children) {
         loadElementNode(child);
       }
-    }
-  } else {
-    const CompositeFileSpecification spec =
-        parseCompositeFileSpecification(trimmedFile);
-    if (spec.filePath.isEmpty()) {
-      qWarning() << "Composite file specification missing filename:"
-                 << trimmedFile;
-    } else {
-      loadCompositeChildrenFromFile(composite, spec.filePath, spec.macros,
-          childOffset);
     }
   }
 

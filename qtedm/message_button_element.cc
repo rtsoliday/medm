@@ -344,6 +344,15 @@ void MessageButtonElement::applyPaletteColors()
     }
   }
   button_->setPalette(pal);
+
+  /* Set stylesheet to prevent gradient rendering */
+  QString fgName = fg.name(QColor::HexRgb);
+  QString bgName = bg.name(QColor::HexRgb);
+  QString stylesheet = QStringLiteral(
+      "QPushButton { background-color: %1; color: %2; border: 1px solid #808080; }")
+      .arg(bgName, fgName);
+  button_->setStyleSheet(stylesheet);
+
   updateButtonState();
   button_->update();
 }

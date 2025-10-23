@@ -306,6 +306,11 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   QRect content = bevelInner.adjusted(2, 2, -1, -1);
   bool showIcon = true;
   QString text = displayLabel(showIcon);
+  
+  // Prepend "! " when icon would be shown
+  if (showIcon) {
+    text = QStringLiteral("!") + text;
+  }
 
   const int activeCount = activeEntryCount();
   const bool singleEntry = activeCount == 1;
@@ -319,27 +324,13 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   QFontMetricsF labelMetrics(labelFont);
   const int textWidth = std::max(0, static_cast<int>(std::ceil(labelMetrics.horizontalAdvance(text))));
 
-  const int iconSize = showIcon ? std::min(content.height(), 24) : 0;
-  const int spacing = (showIcon && !text.isEmpty()) ? 6 : 0;
-
   QRect textRect = content;
 
-  QRect iconRect;
-
   if (singleEntry) {
-    int totalWidth = textWidth;
-    if (showIcon && iconSize > 0) {
-      totalWidth += iconSize + spacing;
-    }
     int layoutLeft = content.left();
-    int extra = content.width() - totalWidth;
+    int extra = content.width() - textWidth;
     if (extra > 0) {
       layoutLeft += extra / 2;
-    }
-    if (showIcon && iconSize > 0) {
-      iconRect = QRect(layoutLeft, content.top(), iconSize, iconSize);
-      iconRect.moveTop(content.top() + (content.height() - iconSize) / 2);
-      layoutLeft = iconRect.right() + spacing;
     }
     textRect.setLeft(layoutLeft);
     textRect.setRight(layoutLeft + textWidth);
@@ -349,18 +340,8 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
     textRect.setTop(content.top());
     textRect.setBottom(content.bottom());
   } else {
-    if (showIcon && iconSize > 0) {
-      iconRect = QRect(content.left(), content.top(), iconSize, iconSize);
-      iconRect.moveTop(content.top() + (content.height() - iconSize) / 2);
-      textRect.setLeft(iconRect.right() + spacing);
-    } else {
-      textRect.setLeft(content.left() + 4);
-    }
+    textRect.setLeft(content.left() + 4);
     textRect = textRect.adjusted(0, 0, -2, 0);
-  }
-
-  if (showIcon && iconSize > 0 && iconRect.width() > 0 && iconRect.height() > 0) {
-    paintIcon(painter, iconRect);
   }
 
   painter.setPen(fg);

@@ -538,6 +538,7 @@ void TextEntryRuntime::handleControlInfo(const event_handler_args &args)
       element->setRuntimeLimits(low, high);
       element->setRuntimePrecision(precision);
     });
+    updateElementDisplay();
     break;
   }
   default:

@@ -1,5 +1,7 @@
 #include "composite_element.h"
 
+#include <climits>
+
 #include <QApplication>
 #include <QPainter>
 #include <QPalette>
@@ -10,14 +12,8 @@ CompositeElement::CompositeElement(QWidget *parent)
   setAutoFillBackground(false);
   setAttribute(Qt::WA_NoSystemBackground, true);
   setAttribute(Qt::WA_MouseNoMask, true);
-  /*
-   * Allow child widgets to extend beyond composite bounds.
-   * Qt normally clips children to parent geometry, but we disable this
-   * by ensuring no clip region is set and using transparent attributes.
-   */
+  /* Clear any clipping mask to allow children to extend beyond bounds */
   clearMask();
-  setAttribute(Qt::WA_TransparentForMouseEvents, false);
-  setAttribute(Qt::WA_OpaquePaintEvent, false);
   setExecuteMode(false);
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();
@@ -149,18 +145,82 @@ void CompositeElement::adoptChild(QWidget *child)
   if (!child) {
     return;
   }
-  /*
-   * To allow children to extend beyond composite bounds, we set their
-   * parent to be the composite's parent rather than the composite itself.
-   * This prevents Qt from clipping them to the composite's geometry.
-   * Children maintain their absolute positions.
-   */
-  QWidget *targetParent = parentWidget() ? parentWidget() : this;
-  if (child->parentWidget() != targetParent) {
-    child->setParent(targetParent);
+  if (child->parentWidget() != this) {
+    child->setParent(this);
   }
   if (!childWidgets_.contains(child)) {
     childWidgets_.append(QPointer<QWidget>(child));
+  }
+}
+
+void CompositeElement::expandToFitChildren()
+{
+  if (childWidgets_.isEmpty()) {
+    return;
+  }
+
+  /*
+   * Calculate the bounding box that encompasses all child widgets,
+   * similar to how MEDM handles composite bounds (medmComposite.c).
+   */
+  int minX = INT_MAX;
+  int minY = INT_MAX;
+  int maxX = INT_MIN;
+  int maxY = INT_MIN;
+
+  for (const auto &pointer : childWidgets_) {
+    QWidget *child = pointer.data();
+    if (!child) {
+      continue;
+    }
+
+    /* Get child geometry relative to this composite */
+    QRect childGeom = child->geometry();
+    int childX = childGeom.x();
+    int childY = childGeom.y();
+    int childRight = childX + childGeom.width();
+    int childBottom = childY + childGeom.height();
+
+    if (childX < minX) minX = childX;
+    if (childY < minY) minY = childY;
+    if (childRight > maxX) maxX = childRight;
+    if (childBottom > maxY) maxY = childBottom;
+  }
+
+  /* Nothing to do if no valid children found */
+  if (minX == INT_MAX || minY == INT_MAX) {
+    return;
+  }
+
+  /*
+   * Adjust composite geometry to encompass all children.
+   * Store current position to calculate offset.
+   */
+  QRect currentGeom = geometry();
+  int oldX = currentGeom.x();
+  int oldY = currentGeom.y();
+
+  /* New composite bounds based on children */
+  int newX = oldX + minX;
+  int newY = oldY + minY;
+  int newWidth = maxX - minX;
+  int newHeight = maxY - minY;
+
+  /* Update composite geometry */
+  setGeometry(newX, newY, newWidth, newHeight);
+
+  /*
+   * Adjust all child positions relative to new composite origin.
+   * Since composite moved by (minX, minY), shift children by (-minX, -minY).
+   */
+  for (const auto &pointer : childWidgets_) {
+    QWidget *child = pointer.data();
+    if (!child) {
+      continue;
+    }
+    QRect childGeom = child->geometry();
+    child->setGeometry(childGeom.x() - minX, childGeom.y() - minY,
+                      childGeom.width(), childGeom.height());
   }
 }
 

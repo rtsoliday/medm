@@ -47,6 +47,8 @@ public:
   QList<QWidget *> childWidgets() const;
 
   void setExecuteMode(bool execute);
+  
+  void expandToFitChildren();
 
 protected:
   void paintEvent(QPaintEvent *event) override;

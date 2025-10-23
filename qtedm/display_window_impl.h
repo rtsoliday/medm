@@ -4,10 +4,12 @@
 #include <QStringConverter>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <type_traits>
 #include <cstring>
 #include <cstdlib>
+#include <limits>
 
 #include <QDebug>
 #include <QClipboard>
@@ -15587,8 +15589,43 @@ inline bool DisplayWindow::loadCompositeChildrenFromFile(
   const QString previousDirectory = currentLoadDirectory_;
   currentLoadDirectory_ = QFileInfo(resolved).absolutePath();
   bool anyChild = false;
+  QPoint effectiveOffset = childOffset;
   {
-    ElementLoadContextGuard guard(*this, composite, childOffset, true,
+    int minX = std::numeric_limits<int>::max();
+    int minY = std::numeric_limits<int>::max();
+    bool haveBounds = false;
+
+    for (const auto &child : document->children) {
+      const QString name = child.name.trimmed().toLower();
+      if (name == QStringLiteral("file")
+          || name == QStringLiteral("display")
+          || name == QStringLiteral("color map")
+          || name == QStringLiteral("<<color map>>")) {
+        continue;
+      }
+
+      const QRect rect = parseObjectGeometry(child);
+      if (!rect.isValid()) {
+        continue;
+      }
+
+      if (!haveBounds) {
+        minX = rect.x();
+        minY = rect.y();
+        haveBounds = true;
+      } else {
+        minX = std::min(minX, rect.x());
+        minY = std::min(minY, rect.y());
+      }
+    }
+
+    if (haveBounds) {
+      effectiveOffset = QPoint(-minX, -minY);
+    }
+  }
+
+  {
+    ElementLoadContextGuard guard(*this, composite, effectiveOffset, true,
         composite);
     for (const auto &child : document->children) {
       const QString name = child.name.trimmed().toLower();

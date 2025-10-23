@@ -735,11 +735,13 @@ void BarMonitorElement::paintFill(QPainter &painter,
   painter.setBrush(barFillColor());
   painter.drawRect(fillRect);
 
-  QPen edgePen(barFillColor().darker(160));
-  edgePen.setWidth(1);
-  painter.setPen(edgePen);
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(fillRect.adjusted(0.5, 0.5, -0.5, -0.5));
+  if (label_ != MeterLabel::kNoDecorations) {
+    QPen edgePen(barFillColor().darker(160));
+    edgePen.setWidth(1);
+    painter.setPen(edgePen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(fillRect.adjusted(0.5, 0.5, -0.5, -0.5));
+  }
   painter.restore();
 }
 

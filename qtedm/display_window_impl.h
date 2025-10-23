@@ -13561,6 +13561,11 @@ inline QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
 
   QString converted = result.join(QChar('\n'));
   
+  /* In legacy format, monitor blocks used "rdbk" instead of "chan" */
+  /* Handle both tabs and spaces for indentation */
+  QRegularExpression rdbkPattern(QStringLiteral("\\n(\\s+)rdbk="));
+  converted.replace(rdbkPattern, QStringLiteral("\n\\1chan="));
+  
   /* Debug: write converted text to file */
   QFile debugFile(QStringLiteral("/tmp/qtedm_converted.adl"));
   if (debugFile.open(QIODevice::WriteOnly | QIODevice::Text)) {

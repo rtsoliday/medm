@@ -255,15 +255,23 @@ void TextMonitorElement::setRuntimeText(const QString &text)
   }
   QLabel::setText(text);
 
-  /* MEDM's medmTextUpdate.c textUpdateDraw() (line 396-404) shrinks the font
-   * for HORIZ_CENTER and HORIZ_RIGHT alignment if text is too wide.
-   * Left-aligned text just gets clipped. */
-  if (alignment() & (Qt::AlignHCenter | Qt::AlignRight)) {
-    const QFont currentFont = font();
-    const QFont adjustedFont = medmTextMonitorFontWithWidthCheck(
-        currentFont, text, width());
-    if (adjustedFont != currentFont) {
-      QLabel::setFont(adjustedFont);
+  /* MEDM's medmTextUpdate.c textUpdateDraw() (line 394-405):
+   * - Always starts with the stored base font (ptu->fontIndex from line 118-121)
+   * - Checks if actual runtime text fits in widget width
+   * - For HORIZ_CENTER and HORIZ_RIGHT: shrinks font until text fits
+   * - For HORIZ_LEFT: just clips the text */
+  
+  /* Start with the stored base font */
+  if (!baseFontForExecuteMode_.family().isEmpty()) {
+    QFont fontToUse = baseFontForExecuteMode_;
+    
+    /* For center/right alignment, shrink font if text is too wide */
+    if (alignment() & (Qt::AlignHCenter | Qt::AlignRight)) {
+      fontToUse = medmTextMonitorFontWithWidthCheck(baseFontForExecuteMode_, text, width());
+    }
+    
+    if (font() != fontToUse) {
+      QLabel::setFont(fontToUse);
     }
   }
 
@@ -350,25 +358,28 @@ void TextMonitorElement::updateFontForGeometry()
 
   /* Text Monitor behavior matches MEDM's medmTextUpdate.c:
    * 1. In Edit mode: use actual text for font sizing (line 154)
-   * 2. In Execute mode: ALWAYS use DUMMY_TEXT_FIELD ("9.876543") for sizing (line 118)
-   * 3. In Execute mode at runtime: font may shrink if text is too wide
-   *    (handled in setRuntimeText for center/right alignment) (line 396-404) */
+   * 2. In Execute mode: ALWAYS use DUMMY_TEXT_FIELD ("9.876543") for base font,
+   *    store it, and apply it (line 118-121)
+   * 3. Runtime text updates will use the stored base font and may shrink from there
+   *    (handled in setRuntimeText for center/right alignment) (line 394-405) */
   QString sampleText;
   if (executeMode_) {
-    /* Execute mode always uses DUMMY_TEXT_FIELD for base font calculation */
+    /* Execute mode: calculate and store base font from DUMMY_TEXT_FIELD */
     sampleText = QStringLiteral("9.876543");  /* DUMMY_TEXT_FIELD from medmWidget.h */
+    const QFont baseFont = medmTextMonitorFont(sampleText, available);
+    if (!baseFont.family().isEmpty()) {
+      baseFontForExecuteMode_ = baseFont;
+      if (font() != baseFont) {
+        QLabel::setFont(baseFont);
+      }
+    }
   } else {
     /* Edit mode uses actual text */
     sampleText = text();
-  }
-
-  const QFont newFont = medmTextMonitorFont(sampleText, available);
-  if (newFont.family().isEmpty()) {
-    return;
-  }
-
-  if (font() != newFont) {
-    QLabel::setFont(newFont);
+    const QFont newFont = medmTextMonitorFont(sampleText, available);
+    if (!newFont.family().isEmpty() && font() != newFont) {
+      QLabel::setFont(newFont);
+    }
   }
 }
 

@@ -79,5 +79,6 @@ private:
   bool runtimeConnected_ = false;
   short runtimeSeverity_ = 0;
   QString designModeText_;
+  QFont baseFontForExecuteMode_;  /* Stored base font calculated from "9.876543" */
 };
 

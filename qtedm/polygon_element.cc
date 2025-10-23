@@ -357,11 +357,12 @@ QColor PolygonElement::effectiveForegroundColor() const
     return baseColor;
   }
 
+  if (!runtimeConnected_) {
+    return QColor(255, 255, 255);
+  }
+
   switch (colorMode_) {
   case TextColorMode::kAlarm:
-    if (!runtimeConnected_) {
-      return QColor(255, 255, 255);
-    }
     return MedmColors::alarmColorForSeverity(runtimeSeverity_);
   case TextColorMode::kDiscrete:
   case TextColorMode::kStatic:

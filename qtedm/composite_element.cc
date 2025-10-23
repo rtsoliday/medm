@@ -10,6 +10,8 @@ CompositeElement::CompositeElement(QWidget *parent)
   setAutoFillBackground(false);
   setAttribute(Qt::WA_NoSystemBackground, true);
   setAttribute(Qt::WA_MouseNoMask, true);
+  /* Clear any clipping mask to allow children to extend beyond bounds */
+  clearMask();
   setExecuteMode(false);
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();

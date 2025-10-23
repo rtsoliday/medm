@@ -20,6 +20,7 @@ constexpr short kInvalidSeverity = 3;
 constexpr int kAxisTickCount = 5;
 constexpr qreal kAxisTickLength = 6.0;
 constexpr qreal kMinimumTrackExtent = 8.0;
+constexpr qreal kMinimumTrackExtentNoDecorations = 1.0;
 constexpr qreal kMinimumAxisExtent = 12.0;
 constexpr qreal kAxisSpacing = 4.0;
 constexpr qreal kLayoutPadding = 6.0;
@@ -490,6 +491,9 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
     layout.readbackText = formattedSampleValue();
   }
 
+  const qreal minTrackExtent = (label_ == MeterLabel::kNoDecorations)
+      ? kMinimumTrackExtentNoDecorations : kMinimumTrackExtent;
+
   qreal left = bounds.left();
   qreal right = bounds.right();
   qreal top = bounds.top();
@@ -507,7 +511,7 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
       bottom = readbackTop - spacing;
     }
 
-    if (bottom - top < kMinimumTrackExtent) {
+    if (bottom - top < minTrackExtent) {
       layout.trackRect = QRectF();
       layout.axisRect = QRectF();
       return layout;
@@ -521,7 +525,7 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
         axisWidth = std::max(axisWidth, lowWidth + 6.0);
         axisWidth = std::max(axisWidth, highWidth + 6.0);
       }
-      const qreal available = bounds.width() - spacing - kMinimumTrackExtent;
+      const qreal available = bounds.width() - spacing - minTrackExtent;
       axisWidth = std::min(axisWidth, std::max<qreal>(available, kMinimumAxisExtent));
       if (axisWidth < kMinimumAxisExtent || axisWidth >= bounds.width()) {
         layout.showAxis = false;
@@ -533,7 +537,7 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
     }
 
     const qreal trackWidth = right - left;
-    if (trackWidth < kMinimumTrackExtent) {
+    if (trackWidth < minTrackExtent) {
       layout.trackRect = QRectF();
       layout.axisRect = QRectF();
       return layout;
@@ -555,7 +559,7 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
       bottom = readbackTop - spacing;
     }
 
-    if (bottom - top < kMinimumTrackExtent) {
+    if (bottom - top < minTrackExtent) {
       layout.trackRect = QRectF();
       layout.axisRect = QRectF();
       return layout;
@@ -563,7 +567,7 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
 
     if (layout.showAxis) {
       qreal axisHeight = std::max(layout.lineHeight + 4.0, kMinimumAxisExtent);
-      const qreal available = (bottom - top) - kMinimumTrackExtent;
+      const qreal available = (bottom - top) - minTrackExtent;
       axisHeight = std::min(axisHeight, std::max<qreal>(available, kMinimumAxisExtent));
       if (axisHeight < kMinimumAxisExtent || axisHeight >= (bottom - top)) {
         layout.showAxis = false;
@@ -575,7 +579,7 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
     }
 
     const qreal trackHeight = bottom - top;
-    if (trackHeight < kMinimumTrackExtent) {
+    if (trackHeight < minTrackExtent) {
       layout.trackRect = QRectF();
       layout.axisRect = QRectF();
       return layout;

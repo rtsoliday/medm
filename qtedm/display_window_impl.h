@@ -17342,6 +17342,31 @@ inline void DisplayWindow::handleRelatedDisplayActivation(
     return;
   }
 
+  /* Check if a display with the same file path and macros is already open.
+   * If found, bring it forward instead of creating a duplicate. */
+  for (const auto &displayPtr : state->displays) {
+    if (displayPtr.isNull()) {
+      continue;
+    }
+    DisplayWindow *existingWindow = displayPtr.data();
+    if (!existingWindow || existingWindow == this) {
+      continue;
+    }
+    /* Compare file paths and macro definitions */
+    if (existingWindow->filePath() == resolved
+        && existingWindow->macroDefinitions() == macros) {
+      /* Found an exact match - bring it forward */
+      if (existingWindow->isMinimized()) {
+        existingWindow->showNormal();
+      } else {
+        existingWindow->show();
+      }
+      existingWindow->raise();
+      existingWindow->activateWindow();
+      return;
+    }
+  }
+
   auto *newWindow = new DisplayWindow(palette(), resourcePaletteBase_,
       font(), labelFont_, state_);
   QString errorMessage;

@@ -690,7 +690,25 @@ void RelatedDisplayElement::mousePressEvent(QMouseEvent *event)
   if (visual_ == RelatedDisplayVisual::kMenu) {
     pressedEntryIndex_ = -1;
     event->accept();
-    showMenu(event->modifiers());
+    /* If there is only one usable entry, open it directly instead of showing
+     * a menu with a single option. */
+    int usableCount = 0;
+    int singleIndex = -1;
+    for (int i = 0; i < entryCount(); ++i) {
+      if (entryHasTarget(i)) {
+        ++usableCount;
+        if (usableCount == 1) {
+          singleIndex = i;
+        }
+      }
+    }
+    if (usableCount == 1 && singleIndex >= 0) {
+      if (activationCallback_) {
+        activationCallback_(singleIndex, event->modifiers());
+      }
+    } else {
+      showMenu(event->modifiers());
+    }
     return;
   }
 

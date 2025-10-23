@@ -10,8 +10,14 @@ CompositeElement::CompositeElement(QWidget *parent)
   setAutoFillBackground(false);
   setAttribute(Qt::WA_NoSystemBackground, true);
   setAttribute(Qt::WA_MouseNoMask, true);
-  /* Clear any clipping mask to allow children to extend beyond bounds */
+  /*
+   * Allow child widgets to extend beyond composite bounds.
+   * Qt normally clips children to parent geometry, but we disable this
+   * by ensuring no clip region is set and using transparent attributes.
+   */
   clearMask();
+  setAttribute(Qt::WA_TransparentForMouseEvents, false);
+  setAttribute(Qt::WA_OpaquePaintEvent, false);
   setExecuteMode(false);
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();
@@ -143,8 +149,15 @@ void CompositeElement::adoptChild(QWidget *child)
   if (!child) {
     return;
   }
-  if (child->parentWidget() != this) {
-    child->setParent(this);
+  /*
+   * To allow children to extend beyond composite bounds, we set their
+   * parent to be the composite's parent rather than the composite itself.
+   * This prevents Qt from clipping them to the composite's geometry.
+   * Children maintain their absolute positions.
+   */
+  QWidget *targetParent = parentWidget() ? parentWidget() : this;
+  if (child->parentWidget() != targetParent) {
+    child->setParent(targetParent);
   }
   if (!childWidgets_.contains(child)) {
     childWidgets_.append(QPointer<QWidget>(child));

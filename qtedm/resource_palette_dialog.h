@@ -7331,6 +7331,16 @@ private:
         color.lightness() < 128 ? Qt::white : Qt::black);
     button->setPalette(buttonPalette);
     button->setText(color.name(QColor::HexRgb).toUpper());
+
+    /* Set stylesheet to prevent gradient rendering */
+    QString colorName = color.name(QColor::HexRgb);
+    QString textColor = color.lightness() < 128
+        ? QStringLiteral("#ffffff")
+        : QStringLiteral("#000000");
+    QString stylesheet = QStringLiteral(
+        "QPushButton { background-color: %1; color: %2; border: 1px solid #808080; }")
+        .arg(colorName, textColor);
+    button->setStyleSheet(stylesheet);
   }
 
   void resetLineEdit(QLineEdit *edit)
@@ -7350,6 +7360,7 @@ private:
     QPalette buttonPalette = palette();
     button->setPalette(buttonPalette);
     button->setText(QString());
+    button->setStyleSheet(QString());
   }
 
   void updateSectionVisibility(SelectionKind kind)

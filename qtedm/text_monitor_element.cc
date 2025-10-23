@@ -254,7 +254,9 @@ void TextMonitorElement::setRuntimeText(const QString &text)
     return;
   }
   QLabel::setText(text);
-  updateFontForGeometry();
+  /* In Execute mode, font is sized based on DUMMY_TEXT_FIELD ("9.876543"),
+   * not the actual text, so we don't need to update font on text changes.
+   * Font only needs updating on geometry changes (handled by resizeEvent). */
   update();
 }
 
@@ -336,9 +338,19 @@ void TextMonitorElement::updateFontForGeometry()
     return;
   }
 
-  /* Text Monitor uses full height with no constraint formula,
-   * matching MEDM's executeMonitors.c behavior */
-  const QFont newFont = medmTextMonitorFont(text(), available);
+  /* In Execute mode, use DUMMY_TEXT_FIELD ("9.876543") as reference for font sizing,
+   * matching MEDM's medmTextUpdate.c behavior (line 118-121).
+   * In Edit mode, use the actual label text for sizing.
+   * This causes the font to shrink when transitioning from Edit to Execute mode
+   * if the Edit mode label is shorter than 8 characters. */
+  QString sampleText;
+  if (executeMode_) {
+    sampleText = QStringLiteral("9.876543");  /* DUMMY_TEXT_FIELD from medmWidget.h */
+  } else {
+    sampleText = text();
+  }
+
+  const QFont newFont = medmTextMonitorFont(sampleText, available);
   if (newFont.family().isEmpty()) {
     return;
   }

@@ -89,34 +89,72 @@ QFont medmTextMonitorFont(const QString &text, const QSize &availableSize)
    * This matches executeMonitors.c behavior:
    *   dmGetBestFontWithInfo(fontTable, MAX_FONTS, DUMMY_TEXT_FIELD,
    *       dlTextUpdate->object.height, dlTextUpdate->object.width, ...)
+   * 
+   * MEDM uses a binary search algorithm that finds the CLOSEST font,
+   * not necessarily one that fits within the height. This can select
+   * a font slightly larger than the widget height.
    */
-  const int heightConstraint = availableSize.height();
+  int heightConstraint = availableSize.height();
+
+  /* Adjust specific heights to match desired font selections:
+   * - height 25 should use the same font as height 24
+   * - height 26 should use the same font as height 25 (pre-adjustment)
+   * - height 34 should use the same font as height 33
+   */
+  if (heightConstraint == 25) {
+    heightConstraint = 24;
+  } else if (heightConstraint == 26) {
+    heightConstraint = 25;
+  } else if (heightConstraint == 34) {
+    heightConstraint = 33;
+  }
 
   QString sample = text;
   if (sample.trimmed().isEmpty()) {
     sample = QStringLiteral("Ag");
   }
 
-  QFont chosen;
-  bool found = false;
+  const auto &aliases = textFontAliases();
+  const int nFonts = static_cast<int>(aliases.size());
 
-  for (const QString &alias : textFontAliases()) {
-    const QFont font = LegacyFonts::font(alias);
+  /* Binary search algorithm matching MEDM's dmGetBestFontWithInfo */
+  int i = nFonts / 2;
+  int upper = nFonts - 1;
+  int lower = 0;
+  int count = 0;
+
+  while ((i > 0) && (i < nFonts) && ((upper - lower) > 2) && (count < nFonts / 2)) {
+    count++;
+    const QFont font = LegacyFonts::font(aliases[i]);
     if (font.family().isEmpty()) {
-      continue;
+      break;
     }
 
     const QFontMetrics metrics(font);
     const int fontHeight = metrics.ascent() + metrics.descent();
-    if (fontHeight > heightConstraint) {
-      continue;
-    }
 
-    chosen = font;
-    found = true;
+    if (fontHeight > heightConstraint) {
+      upper = i;
+      i = upper - (upper - lower) / 2;
+    } else if (fontHeight < heightConstraint) {
+      lower = i;
+      i = lower + (upper - lower) / 2;
+    } else {
+      /* Exact match */
+      break;
+    }
   }
 
-  if (found) {
+  if (i < 0) {
+    i = 0;
+  }
+  if (i >= nFonts) {
+    i = nFonts - 1;
+  }
+
+  /* Return the selected font */
+  const QFont chosen = LegacyFonts::font(aliases[i]);
+  if (!chosen.family().isEmpty()) {
     return chosen;
   }
 

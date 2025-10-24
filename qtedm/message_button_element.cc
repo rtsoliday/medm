@@ -1,11 +1,13 @@
 #include "message_button_element.h"
 
 #include <algorithm>
+#include <array>
 
 #include <QApplication>
 #include <QEvent>
 #include <QFont>
 #include <QFontInfo>
+#include <QFontMetrics>
 #include <QFontMetricsF>
 #include <QPaintEvent>
 #include <QPainter>
@@ -15,8 +17,57 @@
 #include <QResizeEvent>
 
 #include "cursor_utils.h"
+#include "legacy_fonts.h"
 
 namespace {
+
+const std::array<QString, 16> &messageButtonFontAliases()
+{
+  static const std::array<QString, 16> kAliases = {
+      QStringLiteral("widgetDM_4"), QStringLiteral("widgetDM_6"),
+      QStringLiteral("widgetDM_8"), QStringLiteral("widgetDM_10"),
+      QStringLiteral("widgetDM_12"), QStringLiteral("widgetDM_14"),
+      QStringLiteral("widgetDM_16"), QStringLiteral("widgetDM_18"),
+      QStringLiteral("widgetDM_20"), QStringLiteral("widgetDM_22"),
+      QStringLiteral("widgetDM_24"), QStringLiteral("widgetDM_30"),
+      QStringLiteral("widgetDM_36"), QStringLiteral("widgetDM_40"),
+      QStringLiteral("widgetDM_48"), QStringLiteral("widgetDM_60"),
+  };
+  return kAliases;
+}
+
+QFont medmMessageButtonFont(int widgetHeight)
+{
+  if (widgetHeight <= 0) {
+    return QFont();
+  }
+
+  /* Calculate font limit using medm's formula:
+   * don't allow height of font to exceed 90% - 4 pixels of messageButton widget
+   * (includes nominal 2*shadowThickness=2 shadow) */
+  const int fontLimit = static_cast<int>(0.90 * static_cast<double>(widgetHeight)) - 4;
+  const int maxHeight = std::max(1, fontLimit);
+
+  const auto &aliases = messageButtonFontAliases();
+  QFont fallback;
+
+  /* Search from largest to smallest font, just like medm */
+  for (auto it = aliases.rbegin(); it != aliases.rend(); ++it) {
+    const QFont font = LegacyFonts::font(*it);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    fallback = font;
+    const QFontMetrics metrics(font);
+    if (metrics.ascent() + metrics.descent() <= maxHeight) {
+      return font;
+    }
+  }
+
+  return fallback;
+}
+
 
 QString defaultLabel()
 {
@@ -392,58 +443,8 @@ void MessageButtonElement::updateButtonFont()
     return;
   }
 
-  int fontLimit = static_cast<int>(0.90 * static_cast<double>(widgetHeight)) - 4;
-  if (fontLimit < 1) {
-    fontLimit = 1;
-  }
-
-  QFont adjusted = font();
-  if (fontLimit <= 0) {
-    button_->setFont(adjusted);
-    button_->update();
-    return;
-  }
-
-  if (adjusted.pixelSize() > 0) {
-    adjusted.setPixelSize(fontLimit);
-  } else {
-    qreal pointSize = adjusted.pointSizeF();
-    if (pointSize <= 0.0) {
-      pointSize = adjusted.pointSize();
-    }
-    if (pointSize <= 0.0) {
-      QFontInfo info(adjusted);
-      pointSize = info.pointSizeF();
-    }
-    if (pointSize <= 0.0) {
-      pointSize = 12.0;
-    }
-
-    QFontMetricsF baseMetrics(adjusted);
-    qreal textHeight = baseMetrics.ascent() + baseMetrics.descent();
-    if (textHeight <= 0.0) {
-      textHeight = static_cast<qreal>(fontLimit);
-    }
-
-    qreal scaledPoint = pointSize * static_cast<qreal>(fontLimit) / textHeight;
-    if (scaledPoint < 1.0) {
-      scaledPoint = 1.0;
-    }
-    adjusted.setPointSizeF(scaledPoint);
-
-    QFontMetricsF scaledMetrics(adjusted);
-    qreal scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
-    int iterations = 0;
-    while (scaledHeight > fontLimit && scaledPoint > 1.0 && iterations < 16) {
-      scaledPoint = std::max(1.0, scaledPoint - 0.5);
-      adjusted.setPointSizeF(scaledPoint);
-      scaledMetrics = QFontMetricsF(adjusted);
-      scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
-      ++iterations;
-    }
-  }
-
-  button_->setFont(adjusted);
+  const QFont selectedFont = medmMessageButtonFont(widgetHeight);
+  button_->setFont(selectedFont);
   button_->update();
 }
 

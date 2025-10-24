@@ -317,8 +317,9 @@ void TextMonitorRuntime::subscribe()
     elementCount_ = 1;
     break;
   case DBR_CHAR:
-    valueKind_ = (elementCount_ > 1)
-        ? ValueKind::kCharArray : ValueKind::kNumeric;
+    /* Always treat CHAR as CharArray, matching MEDM behavior.
+     * Format setting at display time determines string vs numeric display. */
+    valueKind_ = ValueKind::kCharArray;
     subscriptionType_ = DBR_TIME_CHAR;
     break;
   default:

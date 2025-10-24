@@ -6837,6 +6837,53 @@ private:
           return nullptr;
         }
       }
+
+      /* Skip purely decorative graphic elements (static rectangles, ovals,
+       * etc. with no dynamic channels) to allow hit testing to pass through
+       * to underlying widgets with EPICS channels. */
+      if (candidate->testAttribute(Qt::WA_TransparentForMouseEvents)) {
+        if (auto *rect = dynamic_cast<RectangleElement *>(candidate)) {
+          if (rect->colorMode() == TextColorMode::kStatic
+              && rect->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        } else if (auto *oval = dynamic_cast<OvalElement *>(candidate)) {
+          if (oval->colorMode() == TextColorMode::kStatic
+              && oval->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        } else if (auto *arc = dynamic_cast<ArcElement *>(candidate)) {
+          if (arc->colorMode() == TextColorMode::kStatic
+              && arc->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        } else if (auto *line = dynamic_cast<LineElement *>(candidate)) {
+          if (line->colorMode() == TextColorMode::kStatic
+              && line->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        } else if (auto *polyline = dynamic_cast<PolylineElement *>(candidate)) {
+          if (polyline->colorMode() == TextColorMode::kStatic
+              && polyline->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        } else if (auto *polygon = dynamic_cast<PolygonElement *>(candidate)) {
+          if (polygon->colorMode() == TextColorMode::kStatic
+              && polygon->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        } else if (auto *image = dynamic_cast<ImageElement *>(candidate)) {
+          if (image->colorMode() == TextColorMode::kStatic
+              && image->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        } else if (auto *text = dynamic_cast<TextElement *>(candidate)) {
+          if (text->colorMode() == TextColorMode::kStatic
+              && text->visibilityMode() == TextVisibilityMode::kStatic) {
+            return nullptr;
+          }
+        }
+      }
       return candidate;
     };
 

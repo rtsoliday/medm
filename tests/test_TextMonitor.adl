@@ -322,3 +322,15 @@ display {
 		precDefault=1
 	}
 }
+rectangle {
+	object {
+		x=422
+		y=80
+		width=425
+		height=73
+	}
+	"basic attribute" {
+		clr=14
+		fill="outline"
+	}
+}

@@ -228,24 +228,26 @@ void RectangleElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QColor currentColor = effectiveForegroundColor();
-  QRect drawRect = rect().adjusted(-1, 0, 0, 0);
+  QRect drawRect = rect();
 
   if (fill_ == RectangleFill::kSolid) {
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(currentColor);
-    painter.drawRect(drawRect);
+    // XFillRectangle draws from (x,y) to (x+w-1, y+h-1)
+    // Qt's fillRect does the same, so no adjustment needed
+    painter.fillRect(drawRect, currentColor);
   } else {
+    // X11 XDrawRectangle draws outline 1 pixel OUTSIDE the given rect
+    // For lineWidth=1 in MEDM: draws at (x+1,y+1,w-2,h-2) but X11 extends it
+    // to cover (x+1,y+1) to (x+w-1,y+h-1), using the full width/height
     painter.setBrush(Qt::NoBrush);
     QPen pen(currentColor);
     pen.setWidth(lineWidth_);
     pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
                                                          : Qt::SolidLine);
     painter.setPen(pen);
-    QRect outlineRect = drawRect;
-    if (lineWidth_ > 1) {
-      const int offset = lineWidth_ / 2;
-      outlineRect.adjust(offset, offset, -offset, -offset);
-    }
+    
+    const int halfWidth = (lineWidth_ + 1) / 2;
+    QRect outlineRect = drawRect.adjusted(halfWidth, halfWidth, 
+                                          -halfWidth, -halfWidth);
     if (outlineRect.width() > 0 && outlineRect.height() > 0) {
       painter.drawRect(outlineRect);
     }

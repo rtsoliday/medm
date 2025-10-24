@@ -19754,6 +19754,92 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
         loadElementNode(child);
       }
     }
+  } else {
+    /* Parse composite file string: "filename;macro1=value1,macro2=value2" */
+    QString fileName = trimmedFile;
+    QString macroString;
+    const int semicolonIndex = trimmedFile.indexOf(QLatin1Char(';'));
+    if (semicolonIndex >= 0) {
+      fileName = trimmedFile.left(semicolonIndex).trimmed();
+      macroString = trimmedFile.mid(semicolonIndex + 1).trimmed();
+    }
+
+    /* Resolve the composite file path */
+    const QString resolvedPath = resolveRelatedDisplayFile(fileName);
+    if (resolvedPath.isEmpty()) {
+      qWarning() << "CompositeElement: Cannot resolve composite file:"
+                 << fileName;
+    } else {
+      /* Parse macro definitions */
+      QHash<QString, QString> compositeMacros = parseMacroDefinitionString(macroString);
+
+      /* Merge with existing macros - composite macros take precedence */
+      QHash<QString, QString> mergedMacros = macroDefinitions_;
+      for (auto it = compositeMacros.constBegin(); it != compositeMacros.constEnd(); ++it) {
+        mergedMacros.insert(it.key(), it.value());
+      }
+
+      /* Load the composite file */
+      QFile file(resolvedPath);
+      if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "CompositeElement: Cannot open composite file:"
+                   << resolvedPath;
+      } else {
+        QTextStream stream(&file);
+        setUtf8Encoding(stream);
+        const QString contents = stream.readAll();
+
+        /* Detect file version */
+        int fileVersion = 30122;
+        QRegularExpression versionPattern(QStringLiteral(R"(version\s*=\s*(\d+))"));
+        QRegularExpressionMatch versionMatch = versionPattern.match(contents);
+        if (versionMatch.hasMatch()) {
+          bool ok = false;
+          int parsedVersion = versionMatch.captured(1).toInt(&ok);
+          if (ok) {
+            fileVersion = parsedVersion;
+          }
+        }
+
+        /* Convert legacy format if needed */
+        QString adlContent = contents;
+        if (fileVersion < 20200) {
+          adlContent = convertLegacyAdlFormat(contents, fileVersion);
+        }
+
+        /* Apply macro substitutions */
+        const QString processedContents = applyMacroSubstitutions(adlContent, mergedMacros);
+
+        QString errorMessage;
+        std::optional<AdlNode> document = AdlParser::parse(processedContents, &errorMessage);
+        if (!document) {
+          qWarning() << "CompositeElement: Failed to parse composite file:"
+                     << resolvedPath << "-" << errorMessage;
+        } else {
+          /* Save current load directory for nested composites */
+          const QString previousLoadDir = currentLoadDirectory_;
+          currentLoadDirectory_ = QFileInfo(resolvedPath).absolutePath();
+
+          /* Load child elements from the composite file */
+          ElementLoadContextGuard guard(*this, composite, childOffset, true,
+              composite);
+          for (const auto &child : document->children) {
+            /* Skip file, display, and color map blocks */
+            const QString childName = child.name.trimmed().toLower();
+            if (childName == QStringLiteral("file")
+                || childName == QStringLiteral("display")
+                || childName == QStringLiteral("color map")
+                || childName == QStringLiteral("<<color map>>")) {
+              continue;
+            }
+            loadElementNode(child);
+          }
+
+          /* Restore load directory */
+          currentLoadDirectory_ = previousLoadDir;
+        }
+      }
+    }
   }
 
   /* Expand composite bounds to encompass all child widgets */

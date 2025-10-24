@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QObject>
+#include <QPixmap>
 #include <QPushButton>
 #include <QScreen>
 #include <QTimer>
@@ -123,10 +124,18 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
     nameLayout->setContentsMargins(12, 8, 12, 8);
     nameLayout->setSpacing(0);
 
-    auto *nameLabel = new QLabel(QStringLiteral("QtEDM"), nameFrame);
-    QFont nameFont = titleFont;
-    nameFont.setPixelSize(nameFont.pixelSize() + 4);
-    nameLabel->setFont(nameFont);
+    auto *nameLabel = new QLabel(nameFrame);
+    QPixmap iconPixmap(QStringLiteral(":/icons/QtEDM.png"));
+    if (!iconPixmap.isNull()) {
+      nameLabel->setPixmap(iconPixmap);
+      nameLabel->setScaledContents(false);
+    } else {
+      /* Fallback to text if icon not found */
+      QFont nameFont = titleFont;
+      nameFont.setPixelSize(nameFont.pixelSize() + 4);
+      nameLabel->setFont(nameFont);
+      nameLabel->setText(QStringLiteral("QtEDM"));
+    }
     nameLabel->setAlignment(Qt::AlignCenter);
     nameLayout->addStretch(1);
     nameLayout->addWidget(nameLabel, 0, Qt::AlignCenter);

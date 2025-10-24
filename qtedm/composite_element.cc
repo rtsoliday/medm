@@ -239,6 +239,24 @@ void CompositeElement::setExecuteMode(bool execute)
 {
   executeMode_ = execute;
   setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
+  
+  /* When leaving execute mode, ensure all children are visible */
+  if (!execute) {
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(true);
+      }
+    }
+  }
+  /* When entering execute mode with non-static visibility and disconnected channel,
+   * hide children */
+  else if (visibilityMode_ != TextVisibilityMode::kStatic && !channelConnected_) {
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(false);
+      }
+    }
+  }
 }
 
 void CompositeElement::setChannelConnected(bool connected)
@@ -247,6 +265,17 @@ void CompositeElement::setChannelConnected(bool connected)
     return;
   }
   channelConnected_ = connected;
+  
+  /* Hide/show child widgets based on connection state in execute mode */
+  if (executeMode_ && visibilityMode_ != TextVisibilityMode::kStatic) {
+    bool shouldHideChildren = !connected;
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(!shouldHideChildren);
+      }
+    }
+  }
+  
   update();
 }
 

@@ -32,6 +32,19 @@ void appendNullTerminator(QByteArray &bytes)
   }
 }
 
+/* Normalize calc expression to MEDM calc engine syntax.
+ * MEDM calc uses single '=' for equality (not '==') and '#' for inequality (not '!=').
+ * This function converts modern C-style operators to MEDM syntax. */
+QString normalizeCalcExpression(const QString &expr)
+{
+  QString result = expr;
+  /* Replace != with # (must do this before replacing ==) */
+  result.replace("!=", "#");
+  /* Replace == with = */
+  result.replace("==", "=");
+  return result;
+}
+
 } // namespace
 
 TextRuntime::TextRuntime(TextElement *element)
@@ -84,7 +97,9 @@ void TextRuntime::start()
   if (element_->visibilityMode() == TextVisibilityMode::kCalc) {
     const QString calcExpr = element_->visibilityCalc().trimmed();
     if (!calcExpr.isEmpty()) {
-      QByteArray infix = calcExpr.toLatin1();
+      /* Normalize expression: convert == to = and != to # for MEDM calc engine */
+      QString normalized = normalizeCalcExpression(calcExpr);
+      QByteArray infix = normalized.toLatin1();
       calcPostfix_.resize(512);
       calcPostfix_.fill('\0');
       short error = 0;

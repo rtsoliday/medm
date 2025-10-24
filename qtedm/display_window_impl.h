@@ -19823,7 +19823,7 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
           /* Children in composite files have coordinates relative to the
              composite file's display origin. We need to load them at (0,0)
              offset, then the composite will be repositioned to fit contents. */
-          ElementLoadContextGuard guard(*this, composite, QPoint(0, 0), true,
+          ElementLoadContextGuard guard(*this, composite, QPoint(-2, -4), true,
               composite);
           for (const auto &child : document->children) {
             /* Skip file, display, and color map blocks */

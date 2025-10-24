@@ -123,12 +123,21 @@ public:
     }
   }
 
+  void setExecuteMode(bool executeMode)
+  {
+    if (executeModeActive_ == executeMode) {
+      return;
+    }
+    executeModeActive_ = executeMode;
+    update();
+  }
+
 protected:
   void paintEvent(QPaintEvent *event) override
   {
     QWidget::paintEvent(event);
 
-    if (gridOn_ && gridSpacing_ > 0) {
+    if (gridOn_ && gridSpacing_ > 0 && !executeModeActive_) {
       QPainter painter(this);
       painter.setRenderHint(QPainter::Antialiasing, false);
       QPen gridPen(gridColor_);
@@ -164,6 +173,7 @@ private:
   bool gridOn_ = kDefaultGridOn;
   int gridSpacing_ = kDefaultGridSpacing;
   QColor gridColor_ = Qt::black;
+  bool executeModeActive_ = false;
 };
 
 
@@ -19969,6 +19979,9 @@ inline void DisplayWindow::enterExecuteMode()
     return;
   }
   executeModeActive_ = true;
+  if (displayArea_) {
+    displayArea_->setExecuteMode(true);
+  }
   for (CompositeElement *element : compositeElements_) {
     if (element) {
       element->setExecuteMode(true);
@@ -20385,6 +20398,9 @@ inline void DisplayWindow::leaveExecuteMode()
     return;
   }
   executeModeActive_ = false;
+  if (displayArea_) {
+    displayArea_->setExecuteMode(false);
+  }
   cancelPvInfoPickMode();
   if (pvInfoDialog_) {
     pvInfoDialog_->hide();

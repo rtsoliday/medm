@@ -228,7 +228,7 @@ void RectangleElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QColor currentColor = effectiveForegroundColor();
-  QRect drawRect = rect().adjusted(0, 0, -1, -1);
+  QRect drawRect = rect().adjusted(-1, 0, 0, 0);
 
   if (fill_ == RectangleFill::kSolid) {
     painter.setPen(Qt::NoPen);

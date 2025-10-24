@@ -14,6 +14,8 @@ CompositeElement::CompositeElement(QWidget *parent)
   setAttribute(Qt::WA_MouseNoMask, true);
   /* Clear any clipping mask to allow children to extend beyond bounds */
   clearMask();
+  /* Ensure no content margins that might offset children */
+  setContentsMargins(0, 0, 0, 0);
   setExecuteMode(false);
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();

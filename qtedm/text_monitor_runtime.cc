@@ -436,7 +436,9 @@ void TextMonitorRuntime::handleValueEvent(const event_handler_args &args)
     const auto *raw = reinterpret_cast<const char *>(&data->value);
     QByteArray bytes(raw, static_cast<int>(args.count));
     lastStringValue_ = formatCharArray(bytes);
-    hasStringValue_ = !lastStringValue_.isEmpty();
+    /* Always mark as having string value for CHAR arrays, even if empty.
+     * This matches MEDM behavior: format=STRING shows empty string for all zeros. */
+    hasStringValue_ = true;
     lastNumericValue_ = static_cast<double>(data->value);
     hasNumericValue_ = true;
     lastSeverity_ = data->severity;

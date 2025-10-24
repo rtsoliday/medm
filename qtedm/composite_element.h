@@ -48,6 +48,9 @@ public:
 
   void setExecuteMode(bool execute);
   
+  void setChannelConnected(bool connected);
+  bool isChannelConnected() const;
+  
   void expandToFitChildren();
 
 protected:
@@ -68,4 +71,5 @@ private:
   std::array<QString, 5> channels_{};
   QList<QPointer<QWidget>> childWidgets_;
   bool executeMode_ = false;
+  bool channelConnected_ = true;
 };

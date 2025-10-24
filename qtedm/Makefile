@@ -89,6 +89,7 @@ qtedm_SRC = qtedm.cc \
             image_element.cc \
             image_runtime.cc \
             composite_element.cc \
+            composite_runtime.cc \
             cartesian_axis_dialog.cc \
             display_list_dialog.cc \
             object_palette_dialog.cc \

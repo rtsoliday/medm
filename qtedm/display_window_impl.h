@@ -2182,6 +2182,7 @@ private:
   QList<PolygonElement *> polygonElements_;
   PolygonElement *selectedPolygon_ = nullptr;
   QList<CompositeElement *> compositeElements_;
+  QHash<CompositeElement *, CompositeRuntime *> compositeRuntimes_;
   CompositeElement *selectedCompositeElement_ = nullptr;
   bool polygonCreationActive_ = false;
   PolygonElement *activePolygonElement_ = nullptr;
@@ -19983,8 +19984,14 @@ inline void DisplayWindow::enterExecuteMode()
     displayArea_->setExecuteMode(true);
   }
   for (CompositeElement *element : compositeElements_) {
-    if (element) {
-      element->setExecuteMode(true);
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!compositeRuntimes_.contains(element)) {
+      auto *runtime = new CompositeRuntime(element);
+      compositeRuntimes_.insert(element, runtime);
+      runtime->start();
     }
   }
   for (TextElement *element : textElements_) {
@@ -20406,6 +20413,13 @@ inline void DisplayWindow::leaveExecuteMode()
     pvInfoDialog_->hide();
   }
   cancelExecuteChannelDrag();
+  for (auto it = compositeRuntimes_.begin(); it != compositeRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  compositeRuntimes_.clear();
   for (CompositeElement *element : compositeElements_) {
     if (element) {
       element->setExecuteMode(false);

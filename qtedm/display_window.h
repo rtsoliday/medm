@@ -107,6 +107,7 @@
 #include "rectangle_element.h"
 #include "rectangle_runtime.h"
 #include "composite_element.h"
+#include "composite_runtime.h"
 #include "resource_palette_dialog.h"
 #include "text_element.h"
 #include "text_runtime.h"

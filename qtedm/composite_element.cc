@@ -241,9 +241,32 @@ void CompositeElement::setExecuteMode(bool execute)
   setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
 }
 
+void CompositeElement::setChannelConnected(bool connected)
+{
+  if (channelConnected_ == connected) {
+    return;
+  }
+  channelConnected_ = connected;
+  update();
+}
+
+bool CompositeElement::isChannelConnected() const
+{
+  return channelConnected_;
+}
+
 void CompositeElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
+
+  /* In execute mode, if visibility is not static and channel is disconnected,
+   * paint as solid white */
+  if (executeMode_ && visibilityMode_ != TextVisibilityMode::kStatic && 
+      !channelConnected_) {
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::white);
+    return;
+  }
 
   if (!selected_) {
     return;

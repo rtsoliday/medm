@@ -229,15 +229,15 @@ void RectangleElement::paintEvent(QPaintEvent *event)
 
   const QColor currentColor = effectiveForegroundColor();
   QRect drawRect = rect();
+  QRect deviceRect = rect().adjusted(0, 0, -1, -1);
 
   if (fill_ == RectangleFill::kSolid) {
     // XFillRectangle draws from (x,y) to (x+w-1, y+h-1)
     // Qt's fillRect does the same, so no adjustment needed
     painter.fillRect(drawRect, currentColor);
   } else {
-    // X11 XDrawRectangle draws outline 1 pixel OUTSIDE the given rect
-    // For lineWidth=1 in MEDM: draws at (x+1,y+1,w-2,h-2) but X11 extends it
-    // to cover (x+1,y+1) to (x+w-1,y+h-1), using the full width/height
+    // MEDM's X11 renderer extends outline mode one pixel past the widget
+    // bounds, so expand the Qt outline by a pixel on each side to match.
     painter.setBrush(Qt::NoBrush);
     QPen pen(currentColor);
     pen.setWidth(lineWidth_);
@@ -246,11 +246,15 @@ void RectangleElement::paintEvent(QPaintEvent *event)
     painter.setPen(pen);
     
     const int halfWidth = (lineWidth_ + 1) / 2;
-    QRect outlineRect = drawRect.adjusted(halfWidth, halfWidth, 
-                                          -halfWidth, -halfWidth);
-    if (outlineRect.width() > 0 && outlineRect.height() > 0) {
-      painter.drawRect(outlineRect);
+    const int outlineInset = std::max(0, halfWidth - 1);
+    QRect outlineRect = deviceRect.adjusted(-1, -1, 1, 1);
+    outlineRect = outlineRect.adjusted(outlineInset, outlineInset,
+                                       -outlineInset, -outlineInset);
+    outlineRect = outlineRect.intersected(deviceRect);
+    if (outlineRect.width() <= 0 || outlineRect.height() <= 0) {
+      outlineRect = deviceRect;
     }
+    painter.drawRect(outlineRect);
   }
 
   if (selected_) {
@@ -259,7 +263,7 @@ void RectangleElement::paintEvent(QPaintEvent *event)
     pen.setWidth(1);
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
-      painter.drawRect(drawRect);
+    painter.drawRect(deviceRect);
   }
 }
 

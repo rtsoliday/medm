@@ -143,7 +143,9 @@ QString formatHex(long value)
   char buffer[kMaxTextField];
   if (value == 0) {
     buffer[0] = '0';
-    buffer[1] = '\0';
+    buffer[1] = 'x';
+    buffer[2] = '0';
+    buffer[3] = '\0';
     return QString::fromLatin1(buffer);
   }
 
@@ -163,6 +165,8 @@ QString formatHex(long value)
   if (negative) {
     buffer[pos++] = '-';
   }
+  buffer[pos++] = '0';
+  buffer[pos++] = 'x';
   for (int i = index - 1; i >= 0; --i) {
     buffer[pos++] = digits[i];
   }

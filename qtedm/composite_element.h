@@ -71,5 +71,5 @@ private:
   std::array<QString, 5> channels_{};
   QList<QPointer<QWidget>> childWidgets_;
   bool executeMode_ = false;
-  bool channelConnected_ = true;
+  bool channelConnected_ = false;
 };

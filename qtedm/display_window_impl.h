@@ -16277,15 +16277,23 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
-    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
+     * Modern format has mode properties directly in dynamic attribute. */
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString colorMode = propertyValue(modeSource, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
       element->setColorMode(parseTextColorMode(colorMode));
     }
-    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    const QString visibility = propertyValue(modeSource, QStringLiteral("vis"));
     if (!visibility.isEmpty()) {
       element->setVisibilityMode(parseVisibilityMode(visibility));
     }
-    const QString calc = propertyValue(*dyn, QStringLiteral("calc"));
+    const QString calc = propertyValue(modeSource, QStringLiteral("calc"));
     if (!calc.isEmpty()) {
       element->setVisibilityCalc(calc);
     }
@@ -19049,17 +19057,25 @@ inline ImageElement *DisplayWindow::loadImageElement(
 
   if (const AdlNode *dyn = ::findChild(imageNode,
           QStringLiteral("dynamic attribute"))) {
-    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
+     * Modern format has mode properties directly in dynamic attribute. */
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString colorMode = propertyValue(modeSource, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
       element->setColorMode(parseTextColorMode(colorMode));
     }
 
-    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    const QString visibility = propertyValue(modeSource, QStringLiteral("vis"));
     if (!visibility.isEmpty()) {
       element->setVisibilityMode(parseVisibilityMode(visibility));
     }
 
-    const QString visCalc = propertyValue(*dyn, QStringLiteral("calc"));
+    const QString visCalc = propertyValue(modeSource, QStringLiteral("calc"));
     if (!visCalc.isEmpty()) {
       element->setVisibilityCalc(visCalc);
     }
@@ -19153,17 +19169,25 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
-    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
+     * Modern format has mode properties directly in dynamic attribute. */
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString colorMode = propertyValue(modeSource, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
       element->setColorMode(parseTextColorMode(colorMode));
     }
 
-    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    const QString visibility = propertyValue(modeSource, QStringLiteral("vis"));
     if (!visibility.isEmpty()) {
       element->setVisibilityMode(parseVisibilityMode(visibility));
     }
 
-    const QString calc = propertyValue(*dyn, QStringLiteral("calc"));
+    const QString calc = propertyValue(modeSource, QStringLiteral("calc"));
     if (!calc.isEmpty()) {
       element->setVisibilityCalc(calc);
     }
@@ -19254,17 +19278,25 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
-    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
+     * Modern format has mode properties directly in dynamic attribute. */
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString colorMode = propertyValue(modeSource, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
       element->setColorMode(parseTextColorMode(colorMode));
     }
 
-    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    const QString visibility = propertyValue(modeSource, QStringLiteral("vis"));
     if (!visibility.isEmpty()) {
       element->setVisibilityMode(parseVisibilityMode(visibility));
     }
 
-    const QString calc = propertyValue(*dyn, QStringLiteral("calc"));
+    const QString calc = propertyValue(modeSource, QStringLiteral("calc"));
     if (!calc.isEmpty()) {
       element->setVisibilityCalc(calc);
     }
@@ -19362,17 +19394,25 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
-    const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
+    /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
+     * Modern format has mode properties directly in dynamic attribute. */
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString colorMode = propertyValue(modeSource, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
       element->setColorMode(parseTextColorMode(colorMode));
     }
 
-    const QString visibility = propertyValue(*dyn, QStringLiteral("vis"));
+    const QString visibility = propertyValue(modeSource, QStringLiteral("vis"));
     if (!visibility.isEmpty()) {
       element->setVisibilityMode(parseVisibilityMode(visibility));
     }
 
-    const QString calc = propertyValue(*dyn, QStringLiteral("calc"));
+    const QString calc = propertyValue(modeSource, QStringLiteral("calc"));
     if (!calc.isEmpty()) {
       element->setVisibilityCalc(calc);
     }
@@ -19491,19 +19531,27 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
-    const QString colorModeValue = propertyValue(*dyn,
+    /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
+     * Modern format has mode properties directly in dynamic attribute. */
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString colorModeValue = propertyValue(modeSource,
         QStringLiteral("clr"));
     if (!colorModeValue.isEmpty()) {
       colorMode = parseTextColorMode(colorModeValue);
     }
 
-    const QString visibilityValue = propertyValue(*dyn,
+    const QString visibilityValue = propertyValue(modeSource,
         QStringLiteral("vis"));
     if (!visibilityValue.isEmpty()) {
       visibilityMode = parseVisibilityMode(visibilityValue);
     }
 
-    const QString calcValue = propertyValue(*dyn, QStringLiteral("calc"));
+    const QString calcValue = propertyValue(modeSource, QStringLiteral("calc"));
     if (!calcValue.isEmpty()) {
       visibilityCalc = calcValue.trimmed();
     }
@@ -19698,19 +19746,27 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
-    const QString colorModeValue = propertyValue(*dyn,
+    /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
+     * Modern format has mode properties directly in dynamic attribute. */
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString colorModeValue = propertyValue(modeSource,
         QStringLiteral("clr"));
     if (!colorModeValue.isEmpty()) {
       colorMode = parseTextColorMode(colorModeValue);
     }
 
-    const QString visibilityValue = propertyValue(*dyn,
+    const QString visibilityValue = propertyValue(modeSource,
         QStringLiteral("vis"));
     if (!visibilityValue.isEmpty()) {
       visibilityMode = parseVisibilityMode(visibilityValue);
     }
 
-    const QString calcValue = propertyValue(*dyn, QStringLiteral("calc"));
+    const QString calcValue = propertyValue(modeSource, QStringLiteral("calc"));
     if (!calcValue.isEmpty()) {
       visibilityCalc = calcValue.trimmed();
     }

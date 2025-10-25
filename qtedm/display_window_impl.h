@@ -6842,8 +6842,10 @@ private:
 
       /* Skip purely decorative graphic elements (static rectangles, ovals,
        * etc. with no dynamic channels) to allow hit testing to pass through
-       * to underlying widgets with EPICS channels. */
-      if (candidate->testAttribute(Qt::WA_TransparentForMouseEvents)) {
+       * to underlying widgets with EPICS channels in Execute mode. In Edit
+       * mode, all widgets must be selectable. */
+      if (executeModeActive_
+          && candidate->testAttribute(Qt::WA_TransparentForMouseEvents)) {
         if (auto *rect = dynamic_cast<RectangleElement *>(candidate)) {
           if (rect->colorMode() == TextColorMode::kStatic
               && rect->visibilityMode() == TextVisibilityMode::kStatic) {

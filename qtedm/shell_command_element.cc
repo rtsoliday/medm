@@ -315,11 +315,10 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   const int activeCount = activeEntryCount();
   const bool singleEntry = activeCount == 1;
 
-  // Calculate constraint using (0.90 * height) - 4, then use MEDM font table
-  // Use medmTextMonitorFont which takes the constraint as-is (no additional formula)
+  // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
+  // Search from largest to smallest font, return first that fits
   const int fontLimit = messageButtonPixelLimit(height());
-  const QSize available(std::max(1, content.width()), fontLimit);
-  const QFont labelFont = medmTextMonitorFont(text, available);
+  const QFont labelFont = medmMessageButtonFont(fontLimit);
   painter.setFont(labelFont);
   QFontMetricsF labelMetrics(labelFont);
   const int textWidth = std::max(0, static_cast<int>(std::ceil(labelMetrics.horizontalAdvance(text))));

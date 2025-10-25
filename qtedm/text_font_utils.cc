@@ -79,6 +79,49 @@ QFont medmCompatibleTextFont(const QString &text, const QSize &availableSize)
   return QFont();
 }
 
+QFont medmMessageButtonFont(int heightConstraint)
+{
+  /* Mimics MEDM's messageButtonFontListIndex() algorithm:
+   * Search from LARGEST font down to smallest, return first font
+   * where (ascent + descent) fits within heightConstraint.
+   * 
+   * This matches medmMessageButton.c:
+   *   for(i = MAX_FONTS-1; i >= 0; i--) {
+   *     if(heightConstraint >= (fontTable[i]->ascent + fontTable[i]->descent))
+   *       return(i);
+   *   }
+   */
+  if (heightConstraint <= 0) {
+    return QFont();
+  }
+
+  const auto &aliases = textFontAliases();
+  const int nFonts = static_cast<int>(aliases.size());
+
+  /* Search from largest (index 15) down to smallest (index 0) */
+  for (int i = nFonts - 1; i >= 0; --i) {
+    const QFont font = LegacyFonts::font(aliases[i]);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    const QFontMetrics metrics(font);
+    const int fontHeight = metrics.ascent() + metrics.descent();
+
+    if (heightConstraint >= fontHeight) {
+      return font;
+    }
+  }
+
+  /* Fallback to smallest font if nothing fits */
+  const QFont fallback = LegacyFonts::font(aliases[0]);
+  if (!fallback.family().isEmpty()) {
+    return fallback;
+  }
+
+  return QFont();
+}
+
 QFont medmTextMonitorFont(const QString &text, const QSize &availableSize)
 {
   if (availableSize.width() <= 0 || availableSize.height() <= 0) {

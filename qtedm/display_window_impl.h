@@ -2019,6 +2019,7 @@ private:
   RectangleFill parseRectangleFill(const QString &value) const;
   RectangleLineStyle parseRectangleLineStyle(const QString &value) const;
   AdlNode applyPendingBasicAttribute(const AdlNode &node) const;
+  AdlNode applyPendingDynamicAttribute(const AdlNode &node) const;
   void connectShellCommandElement(ShellCommandElement *element);
   void handleShellCommandActivation(ShellCommandElement *element,
       int entryIndex, Qt::KeyboardModifiers modifiers);
@@ -2067,6 +2068,7 @@ private:
   QString colormapName_;
   QHash<QString, QString> macroDefinitions_;
   std::optional<AdlNode> pendingBasicAttribute_;
+  std::optional<AdlNode> pendingDynamicAttribute_;
   bool dirty_ = true;
   bool executeModeActive_ = false;
   bool displaySelected_ = false;
@@ -13335,6 +13337,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   currentLoadDirectory_ = QFileInfo(filePath).absolutePath();
 
   pendingBasicAttribute_ = std::nullopt;
+  pendingDynamicAttribute_ = std::nullopt;
   bool displayLoaded = false;
   bool elementLoaded = false;
   for (const auto &child : document->children) {
@@ -13349,12 +13352,19 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       pendingBasicAttribute_ = child;
       continue;
     }
+    /* Check for standalone "dynamic attribute" node */
+    if (child.name.compare(QStringLiteral("dynamic attribute"),
+        Qt::CaseInsensitive) == 0) {
+      pendingDynamicAttribute_ = child;
+      continue;
+    }
     if (loadElementNode(child)) {
       elementLoaded = true;
       continue;
     }
   }
   pendingBasicAttribute_ = std::nullopt;
+  pendingDynamicAttribute_ = std::nullopt;
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
   setWindowTitle(QFileInfo(filePath_).fileName());
@@ -15860,6 +15870,22 @@ inline AdlNode DisplayWindow::applyPendingBasicAttribute(
   return merged;
 }
 
+inline AdlNode DisplayWindow::applyPendingDynamicAttribute(
+    const AdlNode &node) const
+{
+  if (!pendingDynamicAttribute_) {
+    return node;
+  }
+  /* Check if this node already has a "dynamic attribute" child */
+  if (::findChild(node, QStringLiteral("dynamic attribute"))) {
+    return node;
+  }
+  /* Create a copy and add the pending dynamic attribute as a child */
+  AdlNode merged = node;
+  merged.children.append(*pendingDynamicAttribute_);
+  return merged;
+}
+
 inline QStringList DisplayWindow::buildDisplaySearchPaths() const
 {
   QStringList searchPaths;
@@ -16243,7 +16269,8 @@ inline void DisplayWindow::ensureElementInStack(QWidget *element)
 
 inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
 {
-  const AdlNode effectiveNode = applyPendingBasicAttribute(textNode);
+  const AdlNode withBasic = applyPendingBasicAttribute(textNode);
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(withBasic);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
@@ -19111,7 +19138,8 @@ inline ImageElement *DisplayWindow::loadImageElement(
 inline RectangleElement *DisplayWindow::loadRectangleElement(
     const AdlNode &rectangleNode)
 {
-  const AdlNode effectiveNode = applyPendingBasicAttribute(rectangleNode);
+  const AdlNode withBasic = applyPendingBasicAttribute(rectangleNode);
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(withBasic);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
@@ -19225,7 +19253,8 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
 
 inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 {
-  const AdlNode effectiveNode = applyPendingBasicAttribute(ovalNode);
+  const AdlNode withBasic = applyPendingBasicAttribute(ovalNode);
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(withBasic);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
@@ -19335,7 +19364,8 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 
 inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 {
-  const AdlNode effectiveNode = applyPendingBasicAttribute(arcNode);
+  const AdlNode withBasic = applyPendingBasicAttribute(arcNode);
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(withBasic);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
@@ -19466,7 +19496,8 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 inline PolygonElement *DisplayWindow::loadPolygonElement(
     const AdlNode &polygonNode)
 {
-  const AdlNode effectiveNode = applyPendingBasicAttribute(polygonNode);
+  const AdlNode withBasic = applyPendingBasicAttribute(polygonNode);
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(withBasic);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
@@ -19687,7 +19718,8 @@ inline QVector<QPoint> DisplayWindow::parsePolylinePoints(
 inline PolylineElement *DisplayWindow::loadPolylineElement(
     const AdlNode &polylineNode)
 {
-  const AdlNode effectiveNode = applyPendingBasicAttribute(polylineNode);
+  const AdlNode withBasic = applyPendingBasicAttribute(polylineNode);
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(withBasic);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
@@ -20107,6 +20139,7 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
       || name == QStringLiteral("line")
       || name == QStringLiteral("polygon"))) {
     pendingBasicAttribute_ = std::nullopt;
+    pendingDynamicAttribute_ = std::nullopt;
   }
 
   return loaded;

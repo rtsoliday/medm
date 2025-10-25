@@ -17152,7 +17152,11 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
 
   if (const AdlNode *control = ::findChild(messageNode,
           QStringLiteral("control"))) {
-    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    QString channel = propertyValue(*control, QStringLiteral("chan"));
+    /* Old format uses "ctrl" instead of "chan" */
+    if (channel.isEmpty()) {
+      channel = propertyValue(*control, QStringLiteral("ctrl"));
+    }
     const QString trimmedChannel = channel.trimmed();
     if (!trimmedChannel.isEmpty()) {
       element->setChannel(trimmedChannel);
@@ -17892,8 +17896,11 @@ inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
 
   if (const AdlNode *control = ::findChild(choiceNode,
           QStringLiteral("control"))) {
-    const QString channel = propertyValue(*control,
-        QStringLiteral("chan"));
+    QString channel = propertyValue(*control, QStringLiteral("chan"));
+    /* Old format uses "ctrl" instead of "chan" */
+    if (channel.isEmpty()) {
+      channel = propertyValue(*control, QStringLiteral("ctrl"));
+    }
     if (!channel.trimmed().isEmpty()) {
       element->setChannel(channel.trimmed());
     }

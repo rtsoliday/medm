@@ -290,12 +290,11 @@ void CompositeElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
 
-  /* In execute mode, if visibility is not static and channel is disconnected,
-   * paint as solid white */
+  /* In execute mode with dynamic visibility, don't paint anything if invisible.
+   * The children are already hidden via setChannelConnected(). */
   if (executeMode_ && visibilityMode_ != TextVisibilityMode::kStatic && 
       !channelConnected_) {
-    QPainter painter(this);
-    painter.fillRect(rect(), Qt::white);
+    /* Do nothing - composite is invisible, don't paint white box */
     return;
   }
 

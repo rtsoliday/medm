@@ -15744,7 +15744,16 @@ inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const
 {
-  for (const auto &prop : node.properties) {
+  /* Old ADL format (pre-version 20200) nests channels in attr → param.
+   * Modern format has channels directly as properties.
+   * Check for old format first. */
+  const AdlNode *attrNode = ::findChild(node, QStringLiteral("attr"));
+  const AdlNode *paramNode = attrNode != nullptr
+      ? ::findChild(*attrNode, QStringLiteral("param"))
+      : nullptr;
+  const AdlNode &propSource = paramNode != nullptr ? *paramNode : node;
+
+  for (const auto &prop : propSource.properties) {
     const QString key = prop.key.trimmed();
     if (key.isEmpty()) {
       continue;

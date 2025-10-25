@@ -19063,8 +19063,17 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
     if (!ok || width <= 0) {
       width = 1;
     }
-    element->setAdlLineWidth(ok ? widthValue.toInt() : 0);
+    const int adlWidth = ok ? widthValue.toInt() : 0;
+    element->setAdlLineWidth(adlWidth);
     element->setLineWidth(width);
+    
+    /* Expand geometry by 1 pixel if adlLineWidth is 0 to prevent clipping */
+    if (adlWidth == 0) {
+      QRect expandedGeometry = element->geometry();
+      expandedGeometry.setWidth(expandedGeometry.width() + 1);
+      expandedGeometry.setHeight(expandedGeometry.height() + 1);
+      element->setGeometry(expandedGeometry);
+    }
   }
 
   if (const AdlNode *dyn = ::findChild(rectangleNode,

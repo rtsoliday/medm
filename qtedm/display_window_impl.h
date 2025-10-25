@@ -19063,6 +19063,7 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
     if (!ok || width <= 0) {
       width = 1;
     }
+    element->setAdlLineWidth(ok ? widthValue.toInt() : 0);
     element->setLineWidth(width);
   }
 

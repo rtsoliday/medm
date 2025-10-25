@@ -101,6 +101,16 @@ void RectangleElement::setLineWidth(int width)
   update();
 }
 
+int RectangleElement::adlLineWidth() const
+{
+  return adlLineWidth_;
+}
+
+void RectangleElement::setAdlLineWidth(int width)
+{
+  adlLineWidth_ = width;
+}
+
 TextColorMode RectangleElement::colorMode() const
 {
   return colorMode_;
@@ -231,7 +241,8 @@ void RectangleElement::paintEvent(QPaintEvent *event)
   QRect drawRect = rect();
   /* Mimic medm bug: outline rectangles are drawn at (+1,+1) with
      dimensions reduced by 1 pixel */
-  QRect deviceRect = rect().adjusted(1, 1, -1, -1);
+  QRect deviceRect = (adlLineWidth_ == 0) ? rect().adjusted(0, 0, 0, 0)
+                                          : rect().adjusted(1, 1, -1, -1);
 
   if (fill_ == RectangleFill::kSolid) {
     // XFillRectangle draws from (x,y) to (x+w-1, y+h-1)

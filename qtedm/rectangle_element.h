@@ -29,6 +29,9 @@ public:
   int lineWidth() const;
   void setLineWidth(int width);
 
+  int adlLineWidth() const;
+  void setAdlLineWidth(int width);
+
   TextColorMode colorMode() const;
   void setColorMode(TextColorMode mode);
 
@@ -64,6 +67,7 @@ private:
   RectangleFill fill_ = RectangleFill::kOutline;
   RectangleLineStyle lineStyle_ = RectangleLineStyle::kSolid;
   int lineWidth_ = 1;
+  int adlLineWidth_ = 0;
   TextColorMode colorMode_ = TextColorMode::kStatic;
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
   QString visibilityCalc_;

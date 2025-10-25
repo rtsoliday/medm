@@ -225,6 +225,8 @@ void TextEntryElement::setChannel(const QString &value)
   if (!executeMode_ && lineEdit_) {
     QSignalBlocker blocker(lineEdit_);
     lineEdit_->setText(channel_);
+    /* Mimic MEDM behavior: show beginning of text, not end */
+    lineEdit_->setCursorPosition(0);
     updateFontForGeometry();
   }
 }
@@ -257,6 +259,8 @@ void TextEntryElement::setExecuteMode(bool execute)
     if (lineEdit_) {
       QSignalBlocker blocker(lineEdit_);
       lineEdit_->setText(channel_);
+      /* Mimic MEDM behavior: show beginning of text, not end */
+      lineEdit_->setCursorPosition(0);
     }
   }
   updateLineEditState();
@@ -520,6 +524,8 @@ void TextEntryElement::applyRuntimeTextToLineEdit()
   QSignalBlocker blocker(lineEdit_);
   if (lineEdit_->text() != runtimeText_) {
     lineEdit_->setText(runtimeText_);
+    /* Mimic MEDM behavior: show beginning of text, not end */
+    lineEdit_->setCursorPosition(0);
   }
   hasPendingRuntimeText_ = false;
   updateFontForGeometry();

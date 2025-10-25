@@ -229,7 +229,9 @@ void RectangleElement::paintEvent(QPaintEvent *event)
 
   const QColor currentColor = effectiveForegroundColor();
   QRect drawRect = rect();
-  QRect deviceRect = rect().adjusted(0, 0, -1, -1);
+  /* Mimic medm bug: outline rectangles are drawn at (+1,+1) with
+     dimensions reduced by 1 pixel */
+  QRect deviceRect = rect().adjusted(1, 1, -1, -1);
 
   if (fill_ == RectangleFill::kSolid) {
     // XFillRectangle draws from (x,y) to (x+w-1, y+h-1)

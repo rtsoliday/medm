@@ -2018,6 +2018,7 @@ private:
     int baseChannelIndex, int letterStartIndex) const;
   RectangleFill parseRectangleFill(const QString &value) const;
   RectangleLineStyle parseRectangleLineStyle(const QString &value) const;
+  AdlNode applyPendingBasicAttribute(const AdlNode &node) const;
   void connectShellCommandElement(ShellCommandElement *element);
   void handleShellCommandActivation(ShellCommandElement *element,
       int entryIndex, Qt::KeyboardModifiers modifiers);
@@ -2065,6 +2066,7 @@ private:
   CompositeElement *currentCompositeOwner_ = nullptr;
   QString colormapName_;
   QHash<QString, QString> macroDefinitions_;
+  std::optional<AdlNode> pendingBasicAttribute_;
   bool dirty_ = true;
   bool executeModeActive_ = false;
   bool displaySelected_ = false;
@@ -13330,6 +13332,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   const QString previousLoadDirectory = currentLoadDirectory_;
   currentLoadDirectory_ = QFileInfo(filePath).absolutePath();
 
+  pendingBasicAttribute_ = std::nullopt;
   bool displayLoaded = false;
   bool elementLoaded = false;
   for (const auto &child : document->children) {
@@ -13338,11 +13341,18 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       displayLoaded = loadDisplaySection(child) || displayLoaded;
       continue;
     }
+    /* Check for standalone "basic attribute" node */
+    if (child.name.compare(QStringLiteral("basic attribute"),
+        Qt::CaseInsensitive) == 0) {
+      pendingBasicAttribute_ = child;
+      continue;
+    }
     if (loadElementNode(child)) {
       elementLoaded = true;
       continue;
     }
   }
+  pendingBasicAttribute_ = std::nullopt;
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
   setWindowTitle(QFileInfo(filePath_).fileName());
@@ -15807,6 +15817,38 @@ inline RectangleLineStyle DisplayWindow::parseRectangleLineStyle(
   return RectangleLineStyle::kSolid;
 }
 
+inline AdlNode DisplayWindow::applyPendingBasicAttribute(
+    const AdlNode &node) const
+{
+  if (!pendingBasicAttribute_) {
+    return node;
+  }
+  /* Check if this node already has a "basic attribute" child */
+  if (::findChild(node, QStringLiteral("basic attribute"))) {
+    return node;
+  }
+  /* Create a copy and add the pending basic attribute as a child */
+  AdlNode merged = node;
+  
+  /* In old-format ADL files, standalone "basic attribute" blocks have an 
+   * "attr" child containing the actual properties. We need to unwrap this
+   * and create a proper "basic attribute" node with direct properties. */
+  if (const AdlNode *attrChild = ::findChild(*pendingBasicAttribute_,
+          QStringLiteral("attr"))) {
+    /* Create a new basic attribute node with properties from attr child */
+    AdlNode basicAttr;
+    basicAttr.name = QStringLiteral("basic attribute");
+    basicAttr.properties = attrChild->properties;
+    basicAttr.children = attrChild->children;
+    merged.children.append(basicAttr);
+  } else {
+    /* No attr child, use the pending attribute as-is */
+    merged.children.append(*pendingBasicAttribute_);
+  }
+  
+  return merged;
+}
+
 inline QStringList DisplayWindow::buildDisplaySearchPaths() const
 {
   QStringList searchPaths;
@@ -16190,11 +16232,12 @@ inline void DisplayWindow::ensureElementInStack(QWidget *element)
 
 inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
 {
+  const AdlNode effectiveNode = applyPendingBasicAttribute(textNode);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
   }
-  QRect geometry = parseObjectGeometry(textNode);
+  QRect geometry = parseObjectGeometry(effectiveNode);
   geometry.translate(currentElementOffset_);
   if (geometry.height() < kMinimumTextElementHeight) {
     geometry.setHeight(kMinimumTextElementHeight);
@@ -16202,16 +16245,16 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
   auto *element = new TextElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
-  const QString content = propertyValue(textNode, QStringLiteral("textix"));
+  const QString content = propertyValue(effectiveNode, QStringLiteral("textix"));
   if (!content.isEmpty()) {
     element->setText(content);
   }
-  const QString alignValue = propertyValue(textNode, QStringLiteral("align"));
+  const QString alignValue = propertyValue(effectiveNode, QStringLiteral("align"));
   if (!alignValue.isEmpty()) {
     element->setTextAlignment(parseAlignment(alignValue));
   }
 
-  if (const AdlNode *basic = ::findChild(textNode,
+  if (const AdlNode *basic = ::findChild(effectiveNode,
           QStringLiteral("basic attribute"))) {
     bool ok = false;
     const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
@@ -16221,7 +16264,7 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
     }
   }
 
-  if (const AdlNode *dyn = ::findChild(textNode,
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
     const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
@@ -16242,7 +16285,7 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
         0, 1);
   }
 
-  applyChannelProperties(textNode,
+  applyChannelProperties(effectiveNode,
       [element](int index, const QString &value) {
         element->setChannel(index, value);
       },
@@ -16301,7 +16344,11 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
 
   if (const AdlNode *monitor = ::findChild(textUpdateNode,
           QStringLiteral("monitor"))) {
-    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    /* Try "chan" first (modern format), then "rdbk" (old format) */
+    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (channel.isEmpty()) {
+      channel = propertyValue(*monitor, QStringLiteral("rdbk"));
+    }
     if (!channel.isEmpty()) {
       element->setChannel(0, channel);
     }
@@ -17861,7 +17908,11 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
 
   if (const AdlNode *monitor = ::findChild(meterNode,
           QStringLiteral("monitor"))) {
-    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    /* Try "chan" first (modern format), then "rdbk" (old format) */
+    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (channel.isEmpty()) {
+      channel = propertyValue(*monitor, QStringLiteral("rdbk"));
+    }
     if (!channel.isEmpty()) {
       element->setChannel(channel);
     }
@@ -18014,7 +18065,11 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
 
   if (const AdlNode *monitor = ::findChild(barNode,
           QStringLiteral("monitor"))) {
-    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    /* Try "chan" first (modern format), then "rdbk" (old format) */
+    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (channel.isEmpty()) {
+      channel = propertyValue(*monitor, QStringLiteral("rdbk"));
+    }
     if (!channel.isEmpty()) {
       element->setChannel(channel);
     }
@@ -18177,7 +18232,11 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
 
   if (const AdlNode *monitor = ::findChild(indicatorNode,
           QStringLiteral("monitor"))) {
-    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    /* Try "chan" first (modern format), then "rdbk" (old format) */
+    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (channel.isEmpty()) {
+      channel = propertyValue(*monitor, QStringLiteral("rdbk"));
+    }
     if (!channel.isEmpty()) {
       element->setChannel(channel);
     }
@@ -18859,7 +18918,11 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
 
   if (const AdlNode *monitor = ::findChild(byteNode,
           QStringLiteral("monitor"))) {
-    const QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    /* Try "chan" first (modern format), then "rdbk" (old format) */
+    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    if (channel.isEmpty()) {
+      channel = propertyValue(*monitor, QStringLiteral("rdbk"));
+    }
     if (!channel.isEmpty()) {
       element->setChannel(channel);
     }
@@ -19021,12 +19084,13 @@ inline ImageElement *DisplayWindow::loadImageElement(
 inline RectangleElement *DisplayWindow::loadRectangleElement(
     const AdlNode &rectangleNode)
 {
+  const AdlNode effectiveNode = applyPendingBasicAttribute(rectangleNode);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
   }
 
-  QRect geometry = parseObjectGeometry(rectangleNode);
+  QRect geometry = parseObjectGeometry(effectiveNode);
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
   }
@@ -19039,7 +19103,7 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
   element->setFill(RectangleFill::kSolid);
   element->setGeometry(geometry);
 
-  if (const AdlNode *basic = ::findChild(rectangleNode,
+  if (const AdlNode *basic = ::findChild(effectiveNode,
           QStringLiteral("basic attribute"))) {
     bool ok = false;
     const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
@@ -19076,7 +19140,7 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
     }
   }
 
-  if (const AdlNode *dyn = ::findChild(rectangleNode,
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
     const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
@@ -19126,12 +19190,13 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
 
 inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 {
+  const AdlNode effectiveNode = applyPendingBasicAttribute(ovalNode);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
   }
 
-  QRect geometry = parseObjectGeometry(ovalNode);
+  QRect geometry = parseObjectGeometry(effectiveNode);
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
   }
@@ -19144,7 +19209,7 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
   element->setGeometry(geometry);
   element->setFill(RectangleFill::kSolid);
 
-  if (const AdlNode *basic = ::findChild(ovalNode,
+  if (const AdlNode *basic = ::findChild(effectiveNode,
           QStringLiteral("basic attribute"))) {
     bool ok = false;
     const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
@@ -19176,7 +19241,7 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
     }
   }
 
-  if (const AdlNode *dyn = ::findChild(ovalNode,
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
     const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
@@ -19200,7 +19265,7 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
         0, 0);
   }
 
-  applyChannelProperties(ovalNode,
+  applyChannelProperties(effectiveNode,
       [element](int index, const QString &value) {
         element->setChannel(index, value);
       },
@@ -19227,12 +19292,13 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 
 inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 {
+  const AdlNode effectiveNode = applyPendingBasicAttribute(arcNode);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
   }
 
-  QRect geometry = parseObjectGeometry(arcNode);
+  QRect geometry = parseObjectGeometry(effectiveNode);
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
   }
@@ -19246,7 +19312,7 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 
   bool fillSpecified = false;
 
-  if (const AdlNode *basic = ::findChild(arcNode,
+  if (const AdlNode *basic = ::findChild(effectiveNode,
     QStringLiteral("basic attribute"))) {
     bool ok = false;
     const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
@@ -19283,7 +19349,7 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
     element->setFill(RectangleFill::kSolid);
   }
 
-  if (const AdlNode *dyn = ::findChild(arcNode,
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
     const QString colorMode = propertyValue(*dyn, QStringLiteral("clr"));
     if (!colorMode.isEmpty()) {
@@ -19307,7 +19373,7 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
         0, 0);
   }
 
-  applyChannelProperties(arcNode,
+  applyChannelProperties(effectiveNode,
       [element](int index, const QString &value) {
         element->setChannel(index, value);
       },
@@ -19349,12 +19415,13 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 inline PolygonElement *DisplayWindow::loadPolygonElement(
     const AdlNode &polygonNode)
 {
+  const AdlNode effectiveNode = applyPendingBasicAttribute(polygonNode);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
   }
 
-  QVector<QPoint> points = parsePolylinePoints(polygonNode);
+  QVector<QPoint> points = parsePolylinePoints(effectiveNode);
   if (points.size() < 3) {
     return nullptr;
   }
@@ -19370,7 +19437,7 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
   RectangleFill fill = RectangleFill::kSolid;
   int lineWidth = 1;
 
-  if (const AdlNode *basic = ::findChild(polygonNode,
+  if (const AdlNode *basic = ::findChild(effectiveNode,
           QStringLiteral("basic attribute"))) {
     bool ok = false;
     const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
@@ -19411,7 +19478,7 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
     }
   };
 
-  if (const AdlNode *dyn = ::findChild(polygonNode,
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
     const QString colorModeValue = propertyValue(*dyn,
         QStringLiteral("clr"));
@@ -19433,7 +19500,7 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
     applyChannelProperties(*dyn, channelSetter, 0, 0);
   }
 
-  applyChannelProperties(polygonNode, channelSetter, 0, 0);
+  applyChannelProperties(effectiveNode, channelSetter, 0, 0);
 
   auto *element = new PolygonElement(parent);
   element->setForegroundColor(color);
@@ -19561,12 +19628,13 @@ inline QVector<QPoint> DisplayWindow::parsePolylinePoints(
 inline PolylineElement *DisplayWindow::loadPolylineElement(
     const AdlNode &polylineNode)
 {
+  const AdlNode effectiveNode = applyPendingBasicAttribute(polylineNode);
   QWidget *parent = effectiveElementParent();
   if (!parent) {
     return nullptr;
   }
 
-  QVector<QPoint> points = parsePolylinePoints(polylineNode);
+  QVector<QPoint> points = parsePolylinePoints(effectiveNode);
   if (points.size() < 2) {
     return nullptr;
   }
@@ -19581,7 +19649,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
   RectangleLineStyle lineStyle = RectangleLineStyle::kSolid;
   int lineWidth = 1;
 
-  if (const AdlNode *basic = ::findChild(polylineNode,
+  if (const AdlNode *basic = ::findChild(effectiveNode,
           QStringLiteral("basic attribute"))) {
     bool ok = false;
     const QString clrStr = propertyValue(*basic, QStringLiteral("clr"));
@@ -19617,7 +19685,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     }
   };
 
-  if (const AdlNode *dyn = ::findChild(polylineNode,
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
     const QString colorModeValue = propertyValue(*dyn,
         QStringLiteral("clr"));
@@ -19639,7 +19707,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     applyChannelProperties(*dyn, channelSetter, 0, 0);
   }
 
-  applyChannelProperties(polylineNode, channelSetter, 0, 0);
+  applyChannelProperties(effectiveNode, channelSetter, 0, 0);
 
   QPolygon polygon(points);
   QRect geometry = polygon.boundingRect();
@@ -19911,78 +19979,70 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
 {
   const QString name = node.name.trimmed().toLower();
 
+  bool loaded = false;
+
   if (name == QStringLiteral("text")) {
-    return loadTextElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("text update")
+    loaded = loadTextElement(node) != nullptr;
+  } else if (name == QStringLiteral("text update")
       || name == QStringLiteral("text monitor")) {
-    return loadTextMonitorElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("text entry")) {
-    return loadTextEntryElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("valuator")) {
-    return loadSliderElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("wheel switch")) {
-    return loadWheelSwitchElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("choice button")) {
-    return loadChoiceButtonElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("menu")) {
-    return loadMenuElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("message button")) {
-    return loadMessageButtonElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("shell command")) {
-    return loadShellCommandElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("related display")) {
-    return loadRelatedDisplayElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("meter")) {
-    return loadMeterElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("bar")) {
-    return loadBarMonitorElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("indicator")) {
-    return loadScaleMonitorElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("cartesian plot")) {
-    return loadCartesianPlotElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("strip chart")) {
-    return loadStripChartElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("byte")) {
-    return loadByteMonitorElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("image")) {
-    return loadImageElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("rectangle")) {
-    return loadRectangleElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("oval")) {
-    return loadOvalElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("arc")) {
-    return loadArcElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("polygon")) {
-    return loadPolygonElement(node) != nullptr;
-  }
-  if (name == QStringLiteral("polyline") || name == QStringLiteral("line")) {
+    loaded = loadTextMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("text entry")) {
+    loaded = loadTextEntryElement(node) != nullptr;
+  } else if (name == QStringLiteral("valuator")) {
+    loaded = loadSliderElement(node) != nullptr;
+  } else if (name == QStringLiteral("wheel switch")) {
+    loaded = loadWheelSwitchElement(node) != nullptr;
+  } else if (name == QStringLiteral("choice button")) {
+    loaded = loadChoiceButtonElement(node) != nullptr;
+  } else if (name == QStringLiteral("menu")) {
+    loaded = loadMenuElement(node) != nullptr;
+  } else if (name == QStringLiteral("message button")) {
+    loaded = loadMessageButtonElement(node) != nullptr;
+  } else if (name == QStringLiteral("shell command")) {
+    loaded = loadShellCommandElement(node) != nullptr;
+  } else if (name == QStringLiteral("related display")) {
+    loaded = loadRelatedDisplayElement(node) != nullptr;
+  } else if (name == QStringLiteral("meter")) {
+    loaded = loadMeterElement(node) != nullptr;
+  } else if (name == QStringLiteral("bar")) {
+    loaded = loadBarMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("indicator")) {
+    loaded = loadScaleMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("cartesian plot")) {
+    loaded = loadCartesianPlotElement(node) != nullptr;
+  } else if (name == QStringLiteral("strip chart")) {
+    loaded = loadStripChartElement(node) != nullptr;
+  } else if (name == QStringLiteral("byte")) {
+    loaded = loadByteMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("image")) {
+    loaded = loadImageElement(node) != nullptr;
+  } else if (name == QStringLiteral("rectangle")) {
+    loaded = loadRectangleElement(node) != nullptr;
+  } else if (name == QStringLiteral("oval")) {
+    loaded = loadOvalElement(node) != nullptr;
+  } else if (name == QStringLiteral("arc")) {
+    loaded = loadArcElement(node) != nullptr;
+  } else if (name == QStringLiteral("polygon")) {
+    loaded = loadPolygonElement(node) != nullptr;
+  } else if (name == QStringLiteral("polyline") || name == QStringLiteral("line")) {
     loadPolylineElement(node);
-    return true;
+    loaded = true;
+  } else if (name == QStringLiteral("composite")) {
+    loaded = loadCompositeElement(node) != nullptr;
   }
-  if (name == QStringLiteral("composite")) {
-    return loadCompositeElement(node) != nullptr;
+
+  /* Clear pending basic attribute after loading applicable widgets */
+  if (loaded && (name == QStringLiteral("rectangle")
+      || name == QStringLiteral("oval")
+      || name == QStringLiteral("arc")
+      || name == QStringLiteral("text")
+      || name == QStringLiteral("polyline")
+      || name == QStringLiteral("line")
+      || name == QStringLiteral("polygon"))) {
+    pendingBasicAttribute_ = std::nullopt;
   }
-  return false;
+
+  return loaded;
 }
 inline void DisplayWindow::setNextUndoLabel(const QString &label)
 {

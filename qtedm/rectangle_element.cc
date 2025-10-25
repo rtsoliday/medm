@@ -241,7 +241,7 @@ void RectangleElement::paintEvent(QPaintEvent *event)
   QRect drawRect = rect();
   /* Mimic medm bug: outline rectangles are drawn at (+1,+1) with
      dimensions reduced by 1 pixel */
-  QRect deviceRect = (adlLineWidth_ == 0) ? rect().adjusted(0, 0, -1, -1)
+  QRect deviceRect = ((adlLineWidth_ == 0) && (fill_ != RectangleFill::kSolid)) ? rect().adjusted(0, 0, -1, -1)
                                           : rect().adjusted(1, 1, -1, -1);
 
   if (fill_ == RectangleFill::kSolid) {

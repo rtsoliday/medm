@@ -496,11 +496,10 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     labelText.clear();
   }
 
-  // Calculate constraint using (0.90 * height) - 4, then use MEDM font table
-  // Use medmTextMonitorFont which takes the constraint as-is (no additional formula)
+  // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
+  // Search from largest to smallest font, return first that fits
   const int fontLimit = messageButtonPixelLimit(height());
-  const QSize available(std::max(1, content.width()), fontLimit);
-  const QFont labelFont = medmTextMonitorFont(labelText, available);
+  const QFont labelFont = medmMessageButtonFont(fontLimit);
   painter.setFont(labelFont);
 
   QRect inner = content.adjusted(2, 2, -2, -2);
@@ -572,11 +571,10 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   const int buttonWidth = columns > 0 ? content.width() / columns : content.width();
   const int buttonHeight = rows > 0 ? content.height() / rows : content.height();
 
-  // Calculate constraint and use MEDM font table
-  // Use medmTextMonitorFont which takes the constraint as-is (no additional formula)
+  // Calculate constraint and use MEDM font table, matching messageButtonFontListIndex
+  // Search from largest to smallest font, return first that fits
   const int fontLimit = relatedDisplayPixelLimit(visual_, height(), displayCount);
-  const QSize available(std::max(1, content.width()), fontLimit);
-  const QFont labelFont = medmTextMonitorFont(QStringLiteral("Display 1"), available);
+  const QFont labelFont = medmMessageButtonFont(fontLimit);
   painter.setFont(labelFont);
 
   int index = 0;
@@ -654,11 +652,10 @@ void RelatedDisplayElement::paintHiddenVisual(QPainter &painter,
   bool showIcon = false;
   const QString text = displayLabel(showIcon);
   
-  // Calculate constraint using (0.90 * height) - 4, then use MEDM font table
-  // Use medmTextMonitorFont which takes the constraint as-is (no additional formula)
+  // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
+  // Search from largest to smallest font, return first that fits
   const int fontLimit = messageButtonPixelLimit(height());
-  const QSize available(std::max(1, inner.width()), fontLimit);
-  const QFont labelFont = medmTextMonitorFont(text, available);
+  const QFont labelFont = medmMessageButtonFont(fontLimit);
   painter.setFont(labelFont);
   painter.setPen(fg);
   painter.drawText(inner.adjusted(4, 0, -4, 0), Qt::AlignCenter, text);

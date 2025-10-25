@@ -238,20 +238,18 @@ void RectangleElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QColor currentColor = effectiveForegroundColor();
-  QRect drawRect = rect();
   QRect deviceRect;
   /* Mimic medm bug: outline rectangles are drawn at (+1,+1) with
      dimensions reduced by 1 pixel */
   if (fill_ == RectangleFill::kSolid) {
-    deviceRect = rect().adjusted(-1, -1, -1, -1);
+    deviceRect = rect().adjusted(0, 0, -1, -1);
   } else {
     deviceRect = (adlLineWidth_ == 0) ? rect().adjusted(0, 0, -1, -1) : rect().adjusted(1, 1, -1, -1);
   }
 
   if (fill_ == RectangleFill::kSolid) {
-    // XFillRectangle draws from (x,y) to (x+w-1, y+h-1)
-    // Qt's fillRect does the same, so no adjustment needed
-    painter.fillRect(drawRect, currentColor);
+    // Draw solid fill with one less pixel on right and bottom
+    painter.fillRect(deviceRect, currentColor);
   } else {
     // MEDM's X11 renderer extends outline mode one pixel past the widget
     // bounds, so expand the Qt outline by a pixel on each side to match.

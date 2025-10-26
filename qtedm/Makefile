@@ -75,6 +75,7 @@ qtedm_SRC = qtedm.cc \
             cartesian_plot_element.cc \
             cartesian_plot_runtime.cc \
             graphic_element_runtime_base.cc \
+            single_channel_monitor_runtime_base.cc \
             rectangle_element.cc \
             rectangle_runtime.cc \
             oval_element.cc \

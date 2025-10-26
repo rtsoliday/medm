@@ -20,7 +20,7 @@ class DisplayWindow;
  * visibility and color through EPICS Channel Access.
  *
  * This class consolidates common runtime behavior shared across geometric
- * graphic elements (rectangle, oval, arc, line, polygon, polyline) to
+ * graphic elements (rectangle, oval, arc, line, polygon, polyline, image, text) to
  * eliminate code duplication while preserving type safety.
  *
  * Template Parameters:
@@ -96,6 +96,13 @@ protected:
   virtual void onStart() {}
   virtual void onStop() {}
   virtual void onStateEvaluated() {}
+  virtual void onChannelCreated(int channelIndex) { (void)channelIndex; }
+  virtual void onChannelConnected(int channelIndex) { (void)channelIndex; }
+  virtual void onChannelDisconnected(int channelIndex) { (void)channelIndex; }
+  virtual void onChannelDestroyed(int channelIndex) { (void)channelIndex; }
+
+  /* Virtual method for element type name (for warning messages) */
+  virtual const char *elementTypeName() const { return "graphic element"; }
 
   /* Access to visibility calc for derived classes */
   const QByteArray &calcPostfix() const { return calcPostfix_; }

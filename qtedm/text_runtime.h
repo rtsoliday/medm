@@ -1,73 +1,30 @@
 #pragma once
 
-#include <array>
-
-#include <QByteArray>
-#include <QObject>
-#include <QString>
-
-#include <cadef.h>
+#include "graphic_element_runtime_base.h"
 
 class TextElement;
 
-class DisplayWindow;
-
-class TextRuntime : public QObject
+/* Runtime controller for text elements with EPICS Channel Access support.
+ *
+ * Extends GraphicElementRuntimeBase to add statistics tracking for text elements.
+ */
+class TextRuntime : public GraphicElementRuntimeBase<TextElement>
 {
   friend class DisplayWindow;
+
 public:
   explicit TextRuntime(TextElement *element);
-  ~TextRuntime() override;
+  ~TextRuntime() override = default;
 
-  void start();
-  void stop();
+protected:
+  /* Override to add statistics tracking */
+  void onStart() override;
+  void onStop() override;
+  void onChannelCreated(int channelIndex) override;
+  void onChannelConnected(int channelIndex) override;
+  void onChannelDisconnected(int channelIndex) override;
+  void onChannelDestroyed(int channelIndex) override;
 
-private:
-  struct ChannelRuntime
-  {
-    TextRuntime *owner = nullptr;
-    int index = 0;
-    QString name;
-    chid channelId = nullptr;
-    evid subscriptionId = nullptr;
-    chtype subscriptionType = DBR_TIME_DOUBLE;
-    short fieldType = -1;
-    long elementCount = 1;
-    bool connected = false;
-    bool hasValue = false;
-    bool controlInfoRequested = false;
-    bool hasControlInfo = false;
-    double value = 0.0;
-    short severity = 0;
-    short status = 0;
-    double hopr = 0.0;
-    double lopr = 0.0;
-    short precision = -1;
-  };
-
-  void resetState();
-  void initializeChannels();
-  void cleanupChannels();
-  void subscribeChannel(ChannelRuntime &channel);
-  void unsubscribeChannel(ChannelRuntime &channel);
-  void requestControlInfo(ChannelRuntime &channel);
-  void handleChannelConnection(ChannelRuntime &channel,
-      const connection_handler_args &args);
-  void handleChannelValue(ChannelRuntime &channel,
-      const event_handler_args &args);
-  void handleChannelControlInfo(ChannelRuntime &channel,
-      const event_handler_args &args);
-  void evaluateState();
-  bool evaluateCalcExpression(double &result) const;
-
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-  static void controlInfoCallback(struct event_handler_args args);
-
-  TextElement *element_ = nullptr;
-  std::array<ChannelRuntime, 5> channels_{};
-  QByteArray calcPostfix_;
-  bool calcValid_ = false;
-  bool channelsNeeded_ = true;
-  bool started_ = false;
+  /* Override to provide element type name for warning messages */
+  const char *elementTypeName() const override { return "text element"; }
 };

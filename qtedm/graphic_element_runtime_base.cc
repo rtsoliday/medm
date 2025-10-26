@@ -10,6 +10,7 @@
 
 #include "channel_access_context.h"
 #include "runtime_utils.h"
+#include "statistics_tracker.h"
 
 /* External C functions for MEDM calc expression evaluation */
 extern "C" {
@@ -89,7 +90,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
         calcValid_ = true;
       } else {
         calcValid_ = false;
-        qWarning() << "Invalid visibility calc expression for graphic element:"
+        qWarning() << "Invalid visibility calc expression for" << elementTypeName() << ":"
                    << calcExpr << "(error" << error << ')';
       }
     }
@@ -176,6 +177,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::initializeChannels()
       continue;
     }
     ca_set_puser(channel.channelId, &channel);
+    onChannelCreated(channel.index);
   }
 
   if (ChannelAccessContext::instance().isInitialized()) {
@@ -192,6 +194,10 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::cleanupChannels()
       channel.subscriptionId = nullptr;
     }
     if (channel.channelId) {
+      if (channel.connected) {
+        onChannelDisconnected(channel.index);
+      }
+      onChannelDestroyed(channel.index);
       ca_set_puser(channel.channelId, nullptr);
       ca_clear_channel(channel.channelId);
       channel.channelId = nullptr;
@@ -326,6 +332,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::handleChannelConnecti
     channel.status = 0;
     subscribeChannel(channel);
     requestControlInfo(channel);
+    onChannelConnected(channel.index);
   } else if (args.op == CA_OP_CONN_DOWN) {
     channel.connected = false;
     channel.hasValue = false;
@@ -333,6 +340,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::handleChannelConnecti
     channel.severity = 0;
     channel.status = 0;
     unsubscribeChannel(channel);
+    onChannelDisconnected(channel.index);
   }
 
   evaluateState();
@@ -619,6 +627,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::controlInfoCallback(
 #include "polygon_element.h"
 #include "polyline_element.h"
 #include "image_element.h"
+#include "text_element.h"
 
 template class GraphicElementRuntimeBase<RectangleElement, 5>;
 template class GraphicElementRuntimeBase<OvalElement, 5>;
@@ -627,3 +636,4 @@ template class GraphicElementRuntimeBase<LineElement, 5>;
 template class GraphicElementRuntimeBase<PolygonElement, 5>;
 template class GraphicElementRuntimeBase<PolylineElement, 5>;
 template class GraphicElementRuntimeBase<ImageElement, 5>;
+template class GraphicElementRuntimeBase<TextElement, 5>;

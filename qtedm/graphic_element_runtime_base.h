@@ -92,6 +92,15 @@ protected:
     return channels_;
   }
 
+  /* Virtual hooks for derived classes to extend behavior */
+  virtual void onStart() {}
+  virtual void onStop() {}
+  virtual void onStateEvaluated() {}
+
+  /* Access to visibility calc for derived classes */
+  const QByteArray &calcPostfix() const { return calcPostfix_; }
+  bool isCalcValid() const { return calcValid_; }
+
 private:
 
   void resetState();

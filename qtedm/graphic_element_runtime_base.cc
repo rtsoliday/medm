@@ -97,6 +97,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
 
   initializeChannels();
   evaluateState();
+  onStart();
 }
 
 template <typename ElementType, size_t ChannelCount>
@@ -106,6 +107,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::stop()
     return;
   }
 
+  onStop();
   started_ = false;
   cleanupChannels();
   resetState();
@@ -533,6 +535,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::evaluateState()
   }
 
   element_->setRuntimeVisible(visible);
+  onStateEvaluated();
 }
 
 template <typename ElementType, size_t ChannelCount>
@@ -615,6 +618,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::controlInfoCallback(
 #include "line_element.h"
 #include "polygon_element.h"
 #include "polyline_element.h"
+#include "image_element.h"
 
 template class GraphicElementRuntimeBase<RectangleElement, 5>;
 template class GraphicElementRuntimeBase<OvalElement, 5>;
@@ -622,4 +626,4 @@ template class GraphicElementRuntimeBase<ArcElement, 5>;
 template class GraphicElementRuntimeBase<LineElement, 5>;
 template class GraphicElementRuntimeBase<PolygonElement, 5>;
 template class GraphicElementRuntimeBase<PolylineElement, 5>;
-
+template class GraphicElementRuntimeBase<ImageElement, 5>;

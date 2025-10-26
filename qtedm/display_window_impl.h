@@ -22,6 +22,7 @@
 #include <QLabel>
 #include <QMimeData>
 #include <QPointer>
+#include <QList>
 #include <QTimer>
 #include <QSet>
 #include <QStringList>
@@ -842,6 +843,7 @@ public:
     }
 
     if (reordered) {
+      refreshStackingOrder();
       markDirty();
       notifyMenus();
     }
@@ -880,6 +882,7 @@ public:
     }
 
     if (reordered) {
+      refreshStackingOrder();
       markDirty();
       notifyMenus();
     }
@@ -980,6 +983,7 @@ public:
 
     compositeElements_.append(composite);
 
+    refreshStackingOrder();
     clearSelections();
     selectCompositeElement(composite);
     showResourcePaletteForComposite(composite);
@@ -1050,6 +1054,7 @@ public:
     }
 
     clearSelections();
+    refreshStackingOrder();
     markDirty();
     refreshResourcePaletteGeometry();
     notifyMenus();
@@ -1990,6 +1995,8 @@ private:
   bool parseAdlPoint(const QString &text, QPoint *point) const;
   QVector<QPoint> parsePolylinePoints(const AdlNode &polylineNode) const;
   void ensureElementInStack(QWidget *element);
+  void refreshStackingOrder();
+  bool isStaticGraphicWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
   void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
@@ -7879,12 +7886,12 @@ private:
         QPointer<QWidget> pointer = *it;
         elementStack_.erase(it);
         elementStack_.append(pointer);
-        element->raise();
+        refreshStackingOrder();
         return;
       }
     }
     elementStack_.append(QPointer<QWidget>(element));
-    element->raise();
+    refreshStackingOrder();
   }
 
   void removeElementFromStack(QWidget *element)
@@ -7892,13 +7899,18 @@ private:
     if (!element) {
       return;
     }
+    bool removed = false;
     for (auto it = elementStack_.begin(); it != elementStack_.end();) {
       QWidget *current = it->data();
       if (!current || current == element) {
         it = elementStack_.erase(it);
+        removed = true;
       } else {
         ++it;
       }
+    }
+    if (removed) {
+      refreshStackingOrder();
     }
   }
 
@@ -16264,7 +16276,50 @@ inline void DisplayWindow::ensureElementInStack(QWidget *element)
     }
   }
   elementStack_.append(QPointer<QWidget>(element));
-  element->raise();
+  refreshStackingOrder();
+}
+
+inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
+{
+  if (!widget) {
+    return false;
+  }
+  return dynamic_cast<const RectangleElement *>(widget)
+    || dynamic_cast<const ImageElement *>(widget)
+    || dynamic_cast<const OvalElement *>(widget)
+    || dynamic_cast<const ArcElement *>(widget)
+    || dynamic_cast<const LineElement *>(widget)
+    || dynamic_cast<const PolylineElement *>(widget)
+    || dynamic_cast<const PolygonElement *>(widget)
+    || dynamic_cast<const TextElement *>(widget)
+    || dynamic_cast<const CompositeElement *>(widget);
+}
+
+inline void DisplayWindow::refreshStackingOrder()
+{
+  QList<QWidget *> staticWidgets;
+  QList<QWidget *> interactiveWidgets;
+
+  for (auto it = elementStack_.begin(); it != elementStack_.end();) {
+    QWidget *widget = it->data();
+    if (!widget) {
+      it = elementStack_.erase(it);
+      continue;
+    }
+    if (isStaticGraphicWidget(widget)) {
+      staticWidgets.append(widget);
+    } else {
+      interactiveWidgets.append(widget);
+    }
+    ++it;
+  }
+
+  for (QWidget *widget : staticWidgets) {
+    widget->raise();
+  }
+  for (QWidget *widget : interactiveWidgets) {
+    widget->raise();
+  }
 }
 
 inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
@@ -20707,6 +20762,21 @@ inline void DisplayWindow::enterExecuteMode()
     /* CartesianPlot always needs channels, so always raise */
     if (it.key()) {
       it.key()->raise();
+    }
+  }
+
+  /* ShellCommand and RelatedDisplay elements do not own runtimes, but in
+   * MEDM they are realized as widgets that sit above the static graphics.
+   * Explicitly raise them after all channel-driven widgets so they mimic the
+   * same layering semantics. */
+  for (ShellCommandElement *element : shellCommandElements_) {
+    if (element) {
+      element->raise();
+    }
+  }
+  for (RelatedDisplayElement *element : relatedDisplayElements_) {
+    if (element) {
+      element->raise();
     }
   }
 }

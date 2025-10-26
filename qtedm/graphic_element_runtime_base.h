@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <type_traits>
 
 #include <QByteArray>
 #include <QObject>
@@ -11,6 +12,7 @@
 #include <cadef.h>
 
 #include "display_properties.h"
+#include "element_runtime_traits.h"
 
 class DisplayWindow;
 
@@ -39,6 +41,17 @@ template <typename ElementType, size_t ChannelCount = 5>
 class GraphicElementRuntimeBase : public QObject
 {
   friend class DisplayWindow;
+
+  // Compile-time interface validation
+  // TODO: Re-enable after debugging trait detection
+  /*
+  static_assert(ElementTraits::HasVisibilityInterface<ElementType>::value,
+                "ElementType must provide RuntimeVisibilityInterface methods");
+  static_assert(ElementTraits::HasChannelInterface<ElementType>::value,
+                "ElementType must provide RuntimeChannelInterface methods");
+  static_assert(ElementTraits::HasColorInterface<ElementType>::value,
+                "ElementType must provide RuntimeColorInterface methods");
+  */
 
 public:
   explicit GraphicElementRuntimeBase(ElementType *element);

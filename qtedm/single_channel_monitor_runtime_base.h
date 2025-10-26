@@ -5,9 +5,12 @@
 #include <QMetaObject>
 #include <QString>
 
+#include <type_traits>
 #include <utility>
 
 #include <cadef.h>
+
+#include "element_runtime_traits.h"
 
 class DisplayWindow;
 
@@ -15,6 +18,18 @@ template <typename ElementType>
 class SingleChannelMonitorRuntimeBase : public QObject
 {
   friend class DisplayWindow;
+
+  // Compile-time interface validation
+  // TODO: Re-enable after debugging trait detection
+  /*
+  static_assert(ElementTraits::HasSingleChannelInterface<ElementType>::value,
+                "ElementType must provide RuntimeChannelInterface methods (single-channel variant)");
+  static_assert(ElementTraits::HasValueInterface<ElementType>::value,
+                "ElementType must provide RuntimeValueInterface methods");
+  static_assert(ElementTraits::HasLimitsInterface<ElementType>::value,
+                "ElementType must provide RuntimeLimitsInterface methods");
+  */
+
 public:
   explicit SingleChannelMonitorRuntimeBase(ElementType *element);
   virtual ~SingleChannelMonitorRuntimeBase();

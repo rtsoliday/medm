@@ -9,6 +9,7 @@
 #include <db_access.h>
 
 #include "channel_access_context.h"
+#include "runtime_utils.h"
 
 /* External C functions for MEDM calc expression evaluation */
 extern "C" {
@@ -17,29 +18,10 @@ long postfix(char *pinfix, char *ppostfix, short *perror);
 }
 
 namespace {
-constexpr short kInvalidSeverity = 3;
-constexpr double kVisibilityEpsilon = 1e-12;
-constexpr int kCalcInputCount = 12;
-
-void appendNullTerminator(QByteArray &bytes)
-{
-  if (bytes.isEmpty() || bytes.back() != '\0') {
-    bytes.append('\0');
-  }
-}
-
-/* Normalize calc expression to MEDM calc engine syntax.
- * MEDM calc uses single '=' for equality (not '==') and '#' for inequality (not '!=').
- * This function converts modern C-style operators to MEDM syntax. */
-QString normalizeCalcExpression(const QString &expr)
-{
-  QString result = expr;
-  /* Replace != with # (must do this before replacing ==) */
-  result.replace("!=", "#");
-  /* Replace == with = */
-  result.replace("==", "=");
-  return result;
-}
+using RuntimeUtils::kInvalidSeverity;
+using RuntimeUtils::kVisibilityEpsilon;
+using RuntimeUtils::kCalcInputCount;
+using RuntimeUtils::appendNullTerminator;
 
 } // namespace
 
@@ -97,7 +79,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
     const QString calcExpr = element_->visibilityCalc().trimmed();
     if (!calcExpr.isEmpty()) {
       /* Normalize expression: convert == to = and != to # for MEDM calc engine */
-      QString normalized = normalizeCalcExpression(calcExpr);
+      QString normalized = RuntimeUtils::normalizeCalcExpression(calcExpr);
       QByteArray infix = normalized.toLatin1();
       calcPostfix_.resize(512);
       calcPostfix_.fill('\0');

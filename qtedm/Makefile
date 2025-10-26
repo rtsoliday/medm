@@ -77,6 +77,7 @@ qtedm_SRC = qtedm.cc \
             graphic_element_runtime_base.cc \
             single_channel_monitor_runtime_base.cc \
             runtime_utils.cc \
+            text_format_utils.cc \
             rectangle_element.cc \
             rectangle_runtime.cc \
             oval_element.cc \

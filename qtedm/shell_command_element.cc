@@ -366,17 +366,7 @@ QColor ShellCommandElement::effectiveBackground() const
 QString ShellCommandElement::displayLabel(bool &showIcon) const
 {
   QString base = sanitizedLabel(label_, showIcon);
-  if (!base.isEmpty()) {
-    return base;
-  }
-  for (const auto &entry : entries_) {
-    QString candidate = entryDisplayLabel(entry);
-    if (!candidate.isEmpty()) {
-      return candidate;
-    }
-  }
-  showIcon = true;
-  return QStringLiteral("Shell Command");
+  return base;
 }
 
 int ShellCommandElement::activeEntryCount() const

@@ -449,24 +449,26 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
    * - LABEL_NONE/NO_DECORATIONS: divisor = 1 (100% of dimension)
    * - OUTLINE/LIMITS: divisor = 2 (50% of dimension)
    * - CHANNEL: divisor = 3 (33.3% of dimension)
+   * Track thickness is calculated from the FULL widget dimension (contentRect),
+   * not from workingRect which has already had label space removed.
    */
-  qreal trackThicknessFraction = 1.0;
+  int heightDivisor = 1;
   if (label_ == MeterLabel::kOutline || label_ == MeterLabel::kLimits) {
-    trackThicknessFraction = 0.5;
+    heightDivisor = 2;
   } else if (label_ == MeterLabel::kChannel) {
-    trackThicknessFraction = 0.333333;
+    heightDivisor = 3;
   }
 
   if (vertical) {
     const qreal trackWidth = std::max<qreal>(8.0,
-        workingRect.width() * trackThicknessFraction);
+        contentRect.width() / heightDivisor);
     const qreal centerX = workingRect.center().x();
     return QRectF(centerX - trackWidth / 2.0, workingRect.top(), trackWidth,
         workingRect.height());
   }
 
   const qreal trackHeight = std::max<qreal>(8.0,
-      workingRect.height() * trackThicknessFraction);
+      contentRect.height() / heightDivisor);
   const qreal centerY = workingRect.center().y();
   return QRectF(workingRect.left(), centerY - trackHeight / 2.0,
       workingRect.width(), trackHeight);

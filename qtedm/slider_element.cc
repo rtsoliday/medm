@@ -18,7 +18,6 @@ namespace {
 
 constexpr double kSampleValue = 0.6;
 constexpr int kTickCount = 11;
-constexpr double kTrackThicknessRatio = 0.25;
 constexpr short kInvalidSeverity = 3;
 constexpr double kValueEpsilonFactor = 1e-6;
 
@@ -378,7 +377,8 @@ void SliderElement::paintEvent(QPaintEvent *event)
   }
 
   paintTrack(painter, trackRect);
-  paintTicks(painter, trackRect);
+  /* Ticks removed per user request */
+  /* paintTicks(painter, trackRect); */
   paintThumb(painter, trackRect);
   paintLabels(painter, trackRect, limitRect, channelRect);
 
@@ -439,21 +439,34 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
     }
   }
 
-  workingRect = workingRect.adjusted(4.0, 4.0, -4.0, -4.0);
+  //workingRect = workingRect.adjusted(4.0, 4.0, -4.0, -4.0);
+  workingRect = workingRect.adjusted(0.0, 0.0, 0.0, 0.0);
   if (workingRect.width() < 2.0 || workingRect.height() < 2.0) {
     return QRectF();
   }
 
+  /* Track size matches MEDM's heightDivisor logic:
+   * - LABEL_NONE/NO_DECORATIONS: divisor = 1 (100% of dimension)
+   * - OUTLINE/LIMITS: divisor = 2 (50% of dimension)
+   * - CHANNEL: divisor = 3 (33.3% of dimension)
+   */
+  qreal trackThicknessFraction = 1.0;
+  if (label_ == MeterLabel::kOutline || label_ == MeterLabel::kLimits) {
+    trackThicknessFraction = 0.5;
+  } else if (label_ == MeterLabel::kChannel) {
+    trackThicknessFraction = 0.333333;
+  }
+
   if (vertical) {
     const qreal trackWidth = std::max<qreal>(8.0,
-        workingRect.width() * kTrackThicknessRatio);
+        workingRect.width() * trackThicknessFraction);
     const qreal centerX = workingRect.center().x();
     return QRectF(centerX - trackWidth / 2.0, workingRect.top(), trackWidth,
         workingRect.height());
   }
 
   const qreal trackHeight = std::max<qreal>(8.0,
-      workingRect.height() * kTrackThicknessRatio);
+      workingRect.height() * trackThicknessFraction);
   const qreal centerY = workingRect.center().y();
   return QRectF(workingRect.left(), centerY - trackHeight / 2.0,
       workingRect.width(), trackHeight);
@@ -463,37 +476,158 @@ void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const
 {
   painter.save();
   painter.setPen(Qt::NoPen);
-  painter.setBrush(effectiveBackground().darker(110));
-  painter.drawRoundedRect(trackRect.adjusted(-1.0, -1.0, 1.0, 1.0), 4.0, 4.0);
-  painter.setBrush(effectiveBackground().lighter(110));
+  
+  const QColor baseColor = effectiveBackground();
+  
+  /* Draw main track background */
+  painter.setBrush(baseColor.darker(120));
   painter.drawRoundedRect(trackRect, 3.0, 3.0);
+  
+  /* Draw lowered bevel (2 pixels) */
+  /* Dark shadow on top/left */
+  QPen bevelPen(baseColor.darker(150), 2.0);
+  painter.setPen(bevelPen);
+  painter.setBrush(Qt::NoBrush);
+  QRectF bevelRect = trackRect.adjusted(1.0, 1.0, -1.0, -1.0);
+  
+  if (isVertical()) {
+    /* Left edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.left(), bevelRect.bottom()));
+    /* Top edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.top()));
+  } else {
+    /* Top edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.top()));
+    /* Left edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.left(), bevelRect.bottom()));
+  }
+  
+  /* Light highlight on bottom/right */
+  bevelPen.setColor(baseColor.lighter(130));
+  painter.setPen(bevelPen);
+  
+  if (isVertical()) {
+    /* Right edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.right(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+    /* Bottom edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.bottom()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+  } else {
+    /* Bottom edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.bottom()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+    /* Right edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.right(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+  }
+  
   painter.restore();
 }
 
 void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
 {
   painter.save();
-  painter.setPen(Qt::NoPen);
-  painter.setBrush(effectiveForeground());
-
+  
+  const QColor thumbColor = effectiveForeground();
+  const QColor bgColor = effectiveBackground();
+  
+  /* Calculate thumb position, ensuring it stays within track bounds (minus bevel) */
   QRectF thumbRect = trackRect;
+  const qreal bevelSize = 2.0;
+  
   if (isVertical()) {
-    const qreal thumbHeight = std::max(trackRect.height() * 0.12, 10.0);
+    /* Reduce thumb height to 10% of track (was 12%), min 8 pixels */
+    const qreal thumbHeight = std::max(trackRect.height() * 0.10, 8.0);
     const qreal center = isDirectionInverted()
         ? trackRect.top() + normalizedValue() * trackRect.height()
         : trackRect.bottom() - normalizedValue() * trackRect.height();
     thumbRect.setTop(center - thumbHeight / 2.0);
     thumbRect.setBottom(center + thumbHeight / 2.0);
+    /* Inset by bevel size so thumb doesn't extend over track bevel */
+    thumbRect.setLeft(trackRect.left() + bevelSize);
+    thumbRect.setRight(trackRect.right() - bevelSize);
   } else {
-    const qreal thumbWidth = std::max(trackRect.width() * 0.12, 10.0);
+    /* Reduce thumb width to 10% of track (was 12%), min 8 pixels */
+    const qreal thumbWidth = std::max(trackRect.width() * 0.10, 8.0);
     const qreal center = isDirectionInverted()
         ? trackRect.right() - normalizedValue() * trackRect.width()
         : trackRect.left() + normalizedValue() * trackRect.width();
     thumbRect.setLeft(center - thumbWidth / 2.0);
     thumbRect.setRight(center + thumbWidth / 2.0);
+    /* Inset by bevel size so thumb doesn't extend over track bevel */
+    thumbRect.setTop(trackRect.top() + bevelSize);
+    thumbRect.setBottom(trackRect.bottom() - bevelSize);
   }
-  thumbRect = thumbRect.adjusted(-2.0, -2.0, 2.0, 2.0);
-  painter.drawRoundedRect(thumbRect, 4.0, 4.0);
+  
+  /* Draw main thumb body */
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(thumbColor);
+  painter.drawRoundedRect(thumbRect, 2.0, 2.0);
+  
+  /* Draw raised bevel (2 pixels) */
+  QPen bevelPen(thumbColor.lighter(140), 2.0);
+  painter.setPen(bevelPen);
+  painter.setBrush(Qt::NoBrush);
+  QRectF bevelRect = thumbRect.adjusted(1.0, 1.0, -1.0, -1.0);
+  
+  /* Light highlight on top/left */
+  if (isVertical()) {
+    /* Left edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.left(), bevelRect.bottom()));
+    /* Top edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.top()));
+  } else {
+    /* Top edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.top()));
+    /* Left edge - light highlight */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.top()),
+                     QPointF(bevelRect.left(), bevelRect.bottom()));
+  }
+  
+  /* Dark shadow on bottom/right */
+  bevelPen.setColor(thumbColor.darker(160));
+  painter.setPen(bevelPen);
+  
+  if (isVertical()) {
+    /* Right edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.right(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+    /* Bottom edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.bottom()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+  } else {
+    /* Bottom edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.left(), bevelRect.bottom()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+    /* Right edge - dark shadow */
+    painter.drawLine(QPointF(bevelRect.right(), bevelRect.top()),
+                     QPointF(bevelRect.right(), bevelRect.bottom()));
+  }
+  
+  /* Draw center line in background color (1 pixel) */
+  QPen centerPen(bgColor, 1.0);
+  painter.setPen(centerPen);
+  
+  if (isVertical()) {
+    /* Horizontal center line */
+    const qreal centerY = thumbRect.center().y();
+    painter.drawLine(QPointF(thumbRect.left() + 2.0, centerY),
+                     QPointF(thumbRect.right() - 2.0, centerY));
+  } else {
+    /* Vertical center line */
+    const qreal centerX = thumbRect.center().x();
+    painter.drawLine(QPointF(centerX, thumbRect.top() + 2.0),
+                     QPointF(centerX, thumbRect.bottom() - 2.0));
+  }
+  
   painter.restore();
 }
 
@@ -542,9 +676,34 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
     painter.setPen(penColor);
   }
 
+  /* Font size calculation matching MEDM's valuatorFontListIndex logic:
+   * Vertical (UP/DOWN):
+   *   - LABEL_NONE/NO_DECORATIONS: 30% of width
+   *   - OUTLINE/LIMITS: 20% of width
+   *   - CHANNEL: 10% of width
+   * Horizontal (LEFT/RIGHT):
+   *   - LABEL_NONE/NO_DECORATIONS/OUTLINE/LIMITS: 45% of height
+   *   - CHANNEL: 32% of height
+   */
   QFont labelFont = painter.font();
-  labelFont.setPointSizeF(std::max(8.0, std::min(trackRect.width(),
-      trackRect.height()) / 6.0));
+  qreal fontSizeFactor = 0.0;
+  if (isVertical()) {
+    if (label_ == MeterLabel::kNone || label_ == MeterLabel::kNoDecorations) {
+      fontSizeFactor = 0.30;
+    } else if (label_ == MeterLabel::kOutline || label_ == MeterLabel::kLimits) {
+      fontSizeFactor = 0.20;
+    } else if (label_ == MeterLabel::kChannel) {
+      fontSizeFactor = 0.10;
+    }
+    labelFont.setPointSizeF(std::max(6.0, trackRect.width() * fontSizeFactor));
+  } else {
+    if (label_ == MeterLabel::kChannel) {
+      fontSizeFactor = 0.32;
+    } else {
+      fontSizeFactor = 0.45;
+    }
+    labelFont.setPointSizeF(std::max(6.0, trackRect.height() * fontSizeFactor));
+  }
   painter.setFont(labelFont);
 
   if (label_ == MeterLabel::kChannel) {

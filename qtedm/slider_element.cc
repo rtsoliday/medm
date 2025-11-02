@@ -469,9 +469,11 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
 
   const qreal trackHeight = std::max<qreal>(8.0,
       contentRect.height() / heightDivisor);
+  /* Ensure track doesn't extend beyond workingRect to avoid overlapping labels */
+  const qreal clampedTrackHeight = std::min(trackHeight, workingRect.height());
   const qreal centerY = workingRect.center().y();
-  return QRectF(workingRect.left(), centerY - trackHeight / 2.0,
-      workingRect.width(), trackHeight);
+  return QRectF(workingRect.left(), centerY - clampedTrackHeight / 2.0,
+      workingRect.width(), clampedTrackHeight);
 }
 
 void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const

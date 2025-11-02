@@ -575,13 +575,19 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
     if (isVertical()) {
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, lowText);
       if (showValue) {
+        painter.save();
+        painter.setPen(effectiveForegroundForValueText());
         painter.drawText(bounds, Qt::AlignRight | Qt::AlignVCenter, valueText);
+        painter.restore();
       }
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignTop, highText);
     } else {
       painter.drawText(bounds, Qt::AlignLeft | Qt::AlignBottom, lowText);
       if (showValue) {
+        painter.save();
+        painter.setPen(effectiveForegroundForValueText());
         painter.drawText(bounds, Qt::AlignHCenter | Qt::AlignBottom, valueText);
+        painter.restore();
       }
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, highText);
     }
@@ -598,14 +604,6 @@ bool SliderElement::shouldShowLimitLabels() const
 
 QColor SliderElement::effectiveForeground() const
 {
-  if (executeMode_) {
-    if (colorMode_ == TextColorMode::kAlarm) {
-      if (!runtimeConnected_) {
-        return QColor(204, 204, 204);
-      }
-      return alarmColorForSeverity(runtimeSeverity_);
-    }
-  }
   if (foregroundColor_.isValid()) {
     return foregroundColor_;
   }
@@ -616,6 +614,19 @@ QColor SliderElement::effectiveForeground() const
     return qApp->palette().color(QPalette::WindowText);
   }
   return QColor(Qt::black);
+}
+
+QColor SliderElement::effectiveForegroundForValueText() const
+{
+  if (executeMode_) {
+    if (colorMode_ == TextColorMode::kAlarm) {
+      if (!runtimeConnected_) {
+        return QColor(204, 204, 204);
+      }
+      return alarmColorForSeverity(runtimeSeverity_);
+    }
+  }
+  return effectiveForeground();
 }
 
 QColor SliderElement::effectiveBackground() const

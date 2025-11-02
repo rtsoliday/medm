@@ -74,6 +74,7 @@ private:
       const QRectF &limitRect, const QRectF &channelRect) const;
   bool shouldShowLimitLabels() const;
   QColor effectiveForeground() const;
+  QColor effectiveForegroundForValueText() const;
   QColor effectiveBackground() const;
   void paintSelectionOverlay(QPainter &painter) const;
   bool isVertical() const;

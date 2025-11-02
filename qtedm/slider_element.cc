@@ -440,7 +440,7 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   }
 
   //workingRect = workingRect.adjusted(4.0, 4.0, -4.0, -4.0);
-  workingRect = workingRect.adjusted(0.0, 0.0, 0.0, 0.0);
+  workingRect = workingRect.adjusted(1.0, 1.0, -2.0, -2.0);
   if (workingRect.width() < 2.0 || workingRect.height() < 2.0) {
     return QRectF();
   }

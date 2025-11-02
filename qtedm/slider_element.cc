@@ -274,10 +274,9 @@ void SliderElement::setRuntimeValue(double value)
   if (!std::isfinite(value)) {
     return;
   }
-  double clamped = clampToLimits(value);
   bool firstValue = !hasRuntimeValue_;
-  bool changed = firstValue || std::abs(clamped - runtimeValue_) > sliderEpsilon();
-  runtimeValue_ = clamped;
+  bool changed = firstValue || std::abs(value - runtimeValue_) > sliderEpsilon();
+  runtimeValue_ = value;
   hasRuntimeValue_ = true;
   if (!dragging_ && changed) {
     update();

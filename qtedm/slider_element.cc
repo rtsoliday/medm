@@ -463,8 +463,11 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
     const qreal trackWidth = std::max<qreal>(8.0,
         contentRect.width() / heightDivisor);
     const qreal centerX = workingRect.center().x();
-    return QRectF(centerX - trackWidth / 2.0, workingRect.top(), trackWidth,
-        workingRect.height());
+    /* Reduce track height to prevent thumb from extending beyond edges */
+    const qreal thumbHeight = std::max(workingRect.height() * 0.10, 8.0);
+    const qreal reducedHeight = std::max(0.0, workingRect.height() - thumbHeight);
+    return QRectF(centerX - trackWidth / 2.0,
+        workingRect.top() + thumbHeight / 2.0, trackWidth, reducedHeight);
   }
 
   const qreal trackHeight = std::max<qreal>(8.0,
@@ -472,8 +475,11 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   /* Ensure track doesn't extend beyond workingRect to avoid overlapping labels */
   const qreal clampedTrackHeight = std::min(trackHeight, workingRect.height());
   const qreal centerY = workingRect.center().y();
-  return QRectF(workingRect.left(), centerY - clampedTrackHeight / 2.0,
-      workingRect.width(), clampedTrackHeight);
+  /* Reduce track width to prevent thumb from extending beyond edges */
+  const qreal thumbWidth = std::max(workingRect.width() * 0.10, 8.0);
+  const qreal reducedWidth = std::max(0.0, workingRect.width() - thumbWidth);
+  return QRectF(workingRect.left() + thumbWidth / 2.0,
+      centerY - clampedTrackHeight / 2.0, reducedWidth, clampedTrackHeight);
 }
 
 void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const

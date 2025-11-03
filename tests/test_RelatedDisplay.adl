@@ -95,9 +95,8 @@ display {
 		height=88
 	}
 	display[0] {
-		label="FizzBuzz"
-		name="fizzBuzz42.adl"
-		args="PV=RND:42"
+		label="Sliders"
+		name="test_Slider.adl"
 	}
 	display[1] {
 		name="shufflePanel.adl"

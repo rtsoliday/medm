@@ -480,7 +480,69 @@ void SliderElement::mousePressEvent(QMouseEvent *event)
   const QPointF pos = event->localPos();
 #endif
   setFocus(Qt::MouseFocusReason);
-  beginDrag(valueFromPosition(pos));
+
+  QRectF limitRect;
+  QRectF channelRect;
+  const QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0,
+      -2.0, -2.0), limitRect, channelRect);
+  if (!trackRect.isValid() || trackRect.isEmpty()) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  const QRectF thumbRect = thumbRectForTrack(trackRect).adjusted(-1.0, -1.0,
+      1.0, 1.0);
+
+  if (thumbRect.contains(pos)) {
+    beginDrag(currentDisplayedValue(), false);
+    event->accept();
+    return;
+  }
+
+  if (!trackRect.contains(pos)) {
+    QWidget::mousePressEvent(event);
+    return;
+  }
+
+  double step = keyboardStep(event->modifiers());
+  if (!std::isfinite(step) || step <= 0.0) {
+    step = 1.0;
+  }
+
+  const double currentValue = currentDisplayedValue();
+  const double requestedValue = valueFromPosition(pos);
+  const double epsilon = sliderEpsilon();
+
+  int direction = 0;
+  if (std::isfinite(currentValue) && std::isfinite(requestedValue)) {
+    if (requestedValue > currentValue + epsilon) {
+      direction = 1;
+    } else if (requestedValue < currentValue - epsilon) {
+      direction = -1;
+    }
+  }
+
+  if (direction == 0) {
+    const QPointF thumbCenter = thumbRect.center();
+    if (isVertical()) {
+      const double delta = pos.y() - thumbCenter.y();
+      if (std::abs(delta) > 0.5) {
+        direction = delta > 0.0 ? (isDirectionInverted() ? 1 : -1)
+                                : (isDirectionInverted() ? -1 : 1);
+      }
+    } else {
+      const double delta = pos.x() - thumbCenter.x();
+      if (std::abs(delta) > 0.5) {
+        direction = delta > 0.0 ? (isDirectionInverted() ? -1 : 1)
+                                : (isDirectionInverted() ? 1 : -1);
+      }
+    }
+  }
+
+  if (direction != 0) {
+    applyKeyboardDelta(direction * step);
+  }
+
   event->accept();
 }
 
@@ -510,7 +572,23 @@ void SliderElement::mouseReleaseEvent(QMouseEvent *event)
 #else
   const QPointF pos = event->localPos();
 #endif
-  endDrag(valueFromPosition(pos), true);
+  QRectF limitRect;
+  QRectF channelRect;
+  const QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0,
+      -2.0, -2.0), limitRect, channelRect);
+
+  bool releaseOnThumb = false;
+  if (trackRect.isValid() && !trackRect.isEmpty()) {
+    QRectF thumbRect = thumbRectForTrack(trackRect).adjusted(-1.0, -1.0,
+        1.0, 1.0);
+    releaseOnThumb = thumbRect.contains(pos);
+  }
+
+  if (releaseOnThumb) {
+    endDrag(currentDisplayedValue(), false);
+  } else {
+    endDrag(valueFromPosition(pos), true);
+  }
   event->accept();
 }
 
@@ -795,32 +873,7 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
   const QColor bgColor = effectiveBackground();
   
   /* Calculate thumb position, ensuring it stays within track bounds (minus bevel) */
-  QRectF thumbRect = trackRect;
-  const qreal bevelSize = 2.0;
-  
-  if (isVertical()) {
-    /* Reduce thumb height to 10% of track (was 12%), min 8 pixels */
-    const qreal thumbHeight = std::max(trackRect.height() * 0.10, 8.0);
-    const qreal center = isDirectionInverted()
-        ? trackRect.top() + normalizedValue() * trackRect.height()
-        : trackRect.bottom() - normalizedValue() * trackRect.height();
-    thumbRect.setTop(center - thumbHeight / 2.0);
-    thumbRect.setBottom(center + thumbHeight / 2.0);
-    /* Inset by bevel size so thumb doesn't extend over track bevel */
-    thumbRect.setLeft(trackRect.left() + bevelSize);
-    thumbRect.setRight(trackRect.right() - bevelSize);
-  } else {
-    /* Reduce thumb width to 10% of track (was 12%), min 8 pixels */
-    const qreal thumbWidth = std::max(trackRect.width() * 0.10, 8.0);
-    const qreal center = isDirectionInverted()
-        ? trackRect.right() - normalizedValue() * trackRect.width()
-        : trackRect.left() + normalizedValue() * trackRect.width();
-    thumbRect.setLeft(center - thumbWidth / 2.0);
-    thumbRect.setRight(center + thumbWidth / 2.0);
-    /* Inset by bevel size so thumb doesn't extend over track bevel */
-    thumbRect.setTop(trackRect.top() + bevelSize);
-    thumbRect.setBottom(trackRect.bottom() - bevelSize);
-  }
+  QRectF thumbRect = thumbRectForTrack(trackRect);
   
   /* Draw main thumb body */
   painter.setPen(Qt::NoPen);
@@ -1275,12 +1328,55 @@ double SliderElement::valueFromPosition(const QPointF &pos) const
   return low + normalized * span;
 }
 
-void SliderElement::beginDrag(double value)
+QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect) const
+{
+  if (!trackRect.isValid() || trackRect.isEmpty()) {
+    return QRectF();
+  }
+
+  QRectF thumbRect = trackRect;
+  const qreal bevelSize = 2.0;
+
+  if (isVertical()) {
+    const qreal thumbHeight = std::max(trackRect.height() * 0.10, 8.0);
+    const qreal center = isDirectionInverted()
+        ? trackRect.top() + normalizedValue() * trackRect.height()
+        : trackRect.bottom() - normalizedValue() * trackRect.height();
+    thumbRect.setTop(center - thumbHeight / 2.0);
+    thumbRect.setBottom(center + thumbHeight / 2.0);
+    thumbRect.setLeft(trackRect.left() + bevelSize);
+    thumbRect.setRight(trackRect.right() - bevelSize);
+  } else {
+    const qreal thumbWidth = std::max(trackRect.width() * 0.10, 8.0);
+    const qreal center = isDirectionInverted()
+        ? trackRect.right() - normalizedValue() * trackRect.width()
+        : trackRect.left() + normalizedValue() * trackRect.width();
+    thumbRect.setLeft(center - thumbWidth / 2.0);
+    thumbRect.setRight(center + thumbWidth / 2.0);
+    thumbRect.setTop(trackRect.top() + bevelSize);
+    thumbRect.setBottom(trackRect.bottom() - bevelSize);
+  }
+
+  return thumbRect;
+}
+
+void SliderElement::beginDrag(double value, bool sendInitial)
 {
   dragging_ = true;
   grabMouse();
-  hasLastSentValue_ = false;
-  updateDrag(value, true);
+  double clamped = clampToLimits(value);
+  double quantized = quantizeToIncrement(clamped);
+  dragValue_ = quantized;
+  runtimeValue_ = quantized;
+  hasRuntimeValue_ = true;
+  if (sendInitial) {
+    hasLastSentValue_ = false;
+    sendActivationValue(quantized, true);
+  } else {
+    lastSentValue_ = quantized;
+    hasLastSentValue_ = true;
+  }
+  update();
 }
 
 void SliderElement::updateDrag(double value, bool force)

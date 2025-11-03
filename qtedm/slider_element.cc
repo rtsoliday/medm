@@ -10,8 +10,9 @@
 #include <QPalette>
 #include <QMouseEvent>
 #include <QCursor>
-#include <QPointF>
 #include <QFontMetricsF>
+#include <QKeyEvent>
+#include <QPointF>
 #include <QStringList>
 
 #include "cursor_utils.h"
@@ -345,6 +346,10 @@ void SliderElement::setExecuteMode(bool execute)
     dragging_ = false;
   }
   executeMode_ = execute;
+  setFocusPolicy(executeMode_ ? Qt::StrongFocus : Qt::NoFocus);
+  if (!executeMode_ && hasFocus()) {
+    clearFocus();
+  }
   clearRuntimeState();
   updateCursor();
 }
@@ -474,6 +479,7 @@ void SliderElement::mousePressEvent(QMouseEvent *event)
 #else
   const QPointF pos = event->localPos();
 #endif
+  setFocus(Qt::MouseFocusReason);
   beginDrag(valueFromPosition(pos));
   event->accept();
 }
@@ -505,6 +511,52 @@ void SliderElement::mouseReleaseEvent(QMouseEvent *event)
   const QPointF pos = event->localPos();
 #endif
   endDrag(valueFromPosition(pos), true);
+  event->accept();
+}
+
+void SliderElement::keyPressEvent(QKeyEvent *event)
+{
+  if (!isInteractive()) {
+    QWidget::keyPressEvent(event);
+    return;
+  }
+
+  const double step = keyboardStep(event->modifiers());
+  double delta = 0.0;
+  bool handled = false;
+  switch (event->key()) {
+  case Qt::Key_Right:
+    delta = isDirectionInverted() ? -step : step;
+    handled = true;
+    break;
+  case Qt::Key_Left:
+    delta = isDirectionInverted() ? step : -step;
+    handled = true;
+    break;
+  case Qt::Key_Up:
+    if (isVertical()) {
+      delta = isDirectionInverted() ? -step : step;
+      handled = true;
+    }
+    break;
+  case Qt::Key_Down:
+    if (isVertical()) {
+      delta = isDirectionInverted() ? step : -step;
+      handled = true;
+    }
+    break;
+  default:
+    QWidget::keyPressEvent(event);
+    return;
+  }
+
+  if (!handled || !std::isfinite(step) || step <= 0.0
+      || delta == 0.0 || !std::isfinite(delta)) {
+    QWidget::keyPressEvent(event);
+    return;
+  }
+
+  applyKeyboardDelta(delta);
   event->accept();
 }
 
@@ -1353,4 +1405,55 @@ QString SliderElement::formatLimit(double value) const
   }
   const int digits = effectivePrecision();
   return QString::number(value, 'f', digits);
+}
+
+double SliderElement::keyboardStep(Qt::KeyboardModifiers modifiers) const
+{
+  double step = increment_;
+  if (!std::isfinite(step) || step <= 0.0) {
+    double span = effectiveHighLimit() - effectiveLowLimit();
+    if (!std::isfinite(span)) {
+      step = 1.0;
+    } else {
+      span = std::abs(span);
+      step = span > 0.0 ? span / 100.0 : 1.0;
+      if (!std::isfinite(step) || step <= 0.0) {
+        step = 1.0;
+      }
+    }
+  }
+  if (modifiers & Qt::ControlModifier) {
+    step *= 10.0;
+  }
+  return step;
+}
+
+bool SliderElement::applyKeyboardDelta(double delta)
+{
+  if (!std::isfinite(delta) || delta == 0.0) {
+    return false;
+  }
+
+  double baseValue = hasRuntimeValue_ ? runtimeValue_ : currentDisplayedValue();
+  if (!std::isfinite(baseValue)) {
+    baseValue = defaultSampleValue();
+  }
+
+  double candidate = baseValue + delta;
+  candidate = quantizeToIncrement(clampToLimits(candidate));
+
+  if (!std::isfinite(candidate)) {
+    return false;
+  }
+
+  if (hasRuntimeValue_ && std::abs(candidate - runtimeValue_) <= sliderEpsilon()) {
+    return false;
+  }
+
+  runtimeValue_ = candidate;
+  hasRuntimeValue_ = true;
+  dragValue_ = candidate;
+  sendActivationValue(candidate, false);
+  update();
+  return true;
 }

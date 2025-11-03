@@ -13,6 +13,8 @@ class QMouseEvent;
 class QPointF;
 class QPainter;
 
+class QKeyEvent;
+
 class SliderElement : public QWidget
 {
 public:
@@ -63,6 +65,7 @@ protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
 
 private:
   QRectF trackRectForPainting(QRectF contentRect, QRectF &limitRect,
@@ -96,6 +99,8 @@ private:
   double quantizeToIncrement(double value) const;
   double defaultSampleValue() const;
   QString formatLimit(double value) const;
+  double keyboardStep(Qt::KeyboardModifiers modifiers) const;
+  bool applyKeyboardDelta(double delta);
 
   bool selected_ = false;
   QColor foregroundColor_;

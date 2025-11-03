@@ -47,6 +47,7 @@ public:
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
 
 private:
   QColor effectiveForegroundColor() const;
@@ -57,6 +58,7 @@ private:
   void updateComboBoxEnabledState();
   void updateComboBoxCursor();
   void updateComboBoxFont();
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
 
   bool selected_ = false;
   QComboBox *comboBox_ = nullptr;

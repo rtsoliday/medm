@@ -5,6 +5,7 @@
 #include <limits>
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPalette>
@@ -470,6 +471,13 @@ void SliderElement::setActivationCallback(const std::function<void(double)> &cal
 
 void SliderElement::mousePressEvent(QMouseEvent *event)
 {
+  // Forward middle button and right-click events to parent window for PV info functionality
+  if (executeMode_ && (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)) {
+    if (forwardMouseEventToParent(event)) {
+      return;
+    }
+  }
+
   if (!isInteractive() || event->button() != Qt::LeftButton) {
     QWidget::mousePressEvent(event);
     return;
@@ -1607,5 +1615,31 @@ bool SliderElement::applyKeyboardDelta(double delta)
   dragValue_ = candidate;
   sendActivationValue(candidate, false);
   update();
+  return true;
+}
+
+bool SliderElement::forwardMouseEventToParent(QMouseEvent *event) const
+{
+  if (!event) {
+    return false;
+  }
+  QWidget *target = window();
+  if (!target) {
+    return false;
+  }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF globalPosF = event->globalPosition();
+  const QPoint globalPoint = globalPosF.toPoint();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
+      event->button(), event->buttons(), event->modifiers());
+#else
+  const QPoint globalPoint = event->globalPos();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos,
+      QPointF(globalPoint), event->button(), event->buttons(),
+      event->modifiers());
+#endif
+  QCoreApplication::sendEvent(target, &forwarded);
   return true;
 }

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QFontMetricsF>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -400,6 +401,13 @@ void WheelSwitchElement::mousePressEvent(QMouseEvent *event)
     updateHoverState(pos);
   } else {
     clearHoverState();
+  }
+
+  // Forward middle button and right-click events to parent window for PV info functionality
+  if (executeMode_ && (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)) {
+    if (forwardMouseEventToParent(event)) {
+      return;
+    }
   }
 
   if (event->button() != Qt::LeftButton || !isInteractive()) {
@@ -1274,4 +1282,30 @@ double WheelSwitchElement::valueEpsilon() const
     epsilon = 1e-9;
   }
   return epsilon;
+}
+
+bool WheelSwitchElement::forwardMouseEventToParent(QMouseEvent *event) const
+{
+  if (!event) {
+    return false;
+  }
+  QWidget *target = window();
+  if (!target) {
+    return false;
+  }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF globalPosF = event->globalPosition();
+  const QPoint globalPoint = globalPosF.toPoint();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
+      event->button(), event->buttons(), event->modifiers());
+#else
+  const QPoint globalPoint = event->globalPos();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos,
+      QPointF(globalPoint), event->button(), event->buttons(),
+      event->modifiers());
+#endif
+  QCoreApplication::sendEvent(target, &forwarded);
+  return true;
 }

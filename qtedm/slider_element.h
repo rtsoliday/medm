@@ -102,6 +102,7 @@ private:
   QString formatLimit(double value) const;
   double keyboardStep(Qt::KeyboardModifiers modifiers) const;
   bool applyKeyboardDelta(double delta);
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
 
   bool selected_ = false;
   QColor foregroundColor_;

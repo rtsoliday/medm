@@ -6,6 +6,7 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QCoreApplication>
 #include <QButtonGroup>
 #include <QCursor>
 #include <QFont>
@@ -772,6 +773,7 @@ void ChoiceButtonElement::rebuildButtons()
     button->setAutoExclusive(false);
     button->setCursor(runtimeWriteAccess_ ? CursorUtils::arrowCursor()
                                          : CursorUtils::forbiddenCursor());
+    button->installEventFilter(this);
     buttonGroup_->addButton(button, i);
     button->show();
     buttons_.append(button);
@@ -926,4 +928,43 @@ void ChoiceButtonElement::applyButtonFont(QAbstractButton *button,
     buttonFont = shrinkFontToFit(label, textBounds, font());
   }
   button->setFont(buttonFont);
+}
+
+bool ChoiceButtonElement::eventFilter(QObject *watched, QEvent *event)
+{
+  if (executeMode_ && event && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease)) {
+    auto *mouseEvent = static_cast<QMouseEvent *>(event);
+    if (mouseEvent->button() == Qt::MiddleButton || mouseEvent->button() == Qt::RightButton) {
+      if (forwardMouseEventToParent(mouseEvent)) {
+        return true;
+      }
+    }
+  }
+  return QWidget::eventFilter(watched, event);
+}
+
+bool ChoiceButtonElement::forwardMouseEventToParent(QMouseEvent *event) const
+{
+  if (!event) {
+    return false;
+  }
+  QWidget *target = window();
+  if (!target) {
+    return false;
+  }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF globalPosF = event->globalPosition();
+  const QPoint globalPoint = globalPosF.toPoint();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
+      event->button(), event->buttons(), event->modifiers());
+#else
+  const QPoint globalPoint = event->globalPos();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos,
+      QPointF(globalPoint), event->button(), event->buttons(),
+      event->modifiers());
+#endif
+  QCoreApplication::sendEvent(target, &forwarded);
+  return true;
 }

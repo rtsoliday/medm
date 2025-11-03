@@ -128,6 +128,7 @@ private:
   int defaultSlotIndex(const Layout &layout) const;
   void updateHoverState(const QPointF &pos);
   void clearHoverState();
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
 
   void handleRepeatTimeout();
 

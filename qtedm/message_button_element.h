@@ -56,6 +56,7 @@ protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
   void changeEvent(QEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
 
 private:
   void applyPaletteColors();
@@ -67,6 +68,7 @@ private:
   QString effectiveLabel() const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
 
   bool selected_ = false;
   QPushButton *button_ = nullptr;

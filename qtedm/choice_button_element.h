@@ -51,6 +51,7 @@ public:
 protected:
   void paintEvent(QPaintEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
   QColor effectiveForeground() const;
@@ -63,6 +64,7 @@ private:
   void updateButtonPalettes();
   void updateButtonEnabledState();
   void applyButtonFont(QAbstractButton *button, const QRect &bounds) const;
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
 
   bool selected_ = false;
   QColor foregroundColor_;

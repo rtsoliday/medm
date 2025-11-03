@@ -1026,8 +1026,11 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
   if (shouldShowLimitLabels() && limitRect.isValid() && !limitRect.isEmpty()) {
     const double lowValue = effectiveLowLimit();
     const double highValue = effectiveHighLimit();
-    const QString lowText = formatLimit(lowValue);
-    const QString highText = formatLimit(highValue);
+    QString lowText = formatLimit(lowValue);
+    QString highText = formatLimit(highValue);
+    if (isDirectionInverted()) {
+      std::swap(lowText, highText);
+    }
     const bool showValue = executeMode_
         && (label_ == MeterLabel::kChannel || label_ == MeterLabel::kLimits);
     QString valueText;

@@ -243,6 +243,17 @@ void CompositeElement::setExecuteMode(bool execute)
 {
   executeMode_ = execute;
   setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
+
+  /* Propagate the execute mode to nested composites so their mouse behaviour
+   * matches the current state even if they were loaded indirectly. */
+  for (const auto &pointer : childWidgets_) {
+    if (auto *childComposite = dynamic_cast<CompositeElement *>(pointer.data())) {
+      if (childComposite == this) {
+        continue;
+      }
+      childComposite->setExecuteMode(execute);
+    }
+  }
   
   /* When leaving execute mode, ensure all children are visible */
   if (!execute) {

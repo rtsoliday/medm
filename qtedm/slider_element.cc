@@ -709,7 +709,7 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
     }
   } else {
     if (showChannel) {
-      const qreal maxLabelHeight = std::min<qreal>(24.0,
+      const qreal maxLabelHeight = std::min<qreal>(30.0,
           workingRect.height() * 0.35);
       if (maxLabelHeight > 6.0) {
         channelRect = QRectF(widgetLeft, workingRect.top(),
@@ -726,7 +726,7 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
       }
     }
     if (showLimits) {
-      const qreal maxLabelHeight = std::min<qreal>(24.0,
+      const qreal maxLabelHeight = std::min<qreal>(30.0,
           workingRect.height() * 0.35);
       if (maxLabelHeight > 6.0) {
         limitRect = QRectF(workingRect.left(),

@@ -11,6 +11,8 @@
 #include <QMouseEvent>
 #include <QCursor>
 #include <QPointF>
+#include <QFontMetricsF>
+#include <QStringList>
 
 #include "cursor_utils.h"
 #include "text_font_utils.h"
@@ -36,6 +38,73 @@ QColor alarmColorForSeverity(short severity)
   default:
     return QColor(204, 204, 204);
   }
+}
+
+QFont shrinkFontToFit(const QFont &baseFont, const QStringList &texts,
+    const QSizeF &targetSize)
+{
+  if (texts.isEmpty() || targetSize.width() <= 0.0 || targetSize.height() <= 0.0) {
+    return baseFont;
+  }
+
+  QFont font(baseFont);
+  int pixelSize = font.pixelSize();
+  double size = pixelSize > 0 ? static_cast<double>(pixelSize)
+      : font.pointSizeF();
+  if (size <= 0.0) {
+    const int pointSize = font.pointSize();
+    size = pointSize > 0 ? static_cast<double>(pointSize) : 12.0;
+    font.setPointSizeF(size);
+    pixelSize = font.pixelSize();
+  }
+
+  auto applySize = [&](double newSize) {
+    const double clamped = std::max(1.0, newSize);
+    if (pixelSize > 0) {
+      font.setPixelSize(std::max(1, static_cast<int>(std::round(clamped))));
+    } else {
+      font.setPointSizeF(clamped);
+    }
+  };
+
+  auto fits = [&]() {
+    const QFontMetricsF metrics(font);
+    double lineHeight = metrics.height();
+    if (lineHeight <= 0.0) {
+      lineHeight = metrics.ascent() + metrics.descent();
+    }
+    if (lineHeight <= 0.0) {
+      return true;
+    }
+    const double totalHeight = lineHeight * texts.size();
+    if (totalHeight > targetSize.height() + 0.1) {
+      return false;
+    }
+    const double availableWidth = targetSize.width();
+    for (const QString &text : texts) {
+      if (text.isEmpty()) {
+        continue;
+      }
+      if (metrics.horizontalAdvance(text) > availableWidth + 0.1) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  constexpr double kMinSize = 6.0;
+  applySize(size);
+  int iterations = 0;
+  while (!fits() && size > kMinSize && iterations < 64) {
+    size -= 1.0;
+    if (size < kMinSize) {
+      size = kMinSize;
+    }
+    applySize(size);
+    ++iterations;
+  }
+
+  return font;
 }
 
 } // namespace
@@ -399,13 +468,16 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   const bool showChannel = label_ == MeterLabel::kChannel;
   const bool showLimits = shouldShowLimitLabels();
 
+  const qreal widgetLeft = 0.0;
+  const qreal widgetRight = static_cast<qreal>(width());
+
   if (vertical) {
     if (showChannel) {
       const qreal maxLabelHeight = std::min<qreal>(24.0,
           workingRect.height() * 0.35);
       if (maxLabelHeight > 6.0) {
-        channelRect = QRectF(workingRect.left(), workingRect.top(),
-            workingRect.width(), maxLabelHeight);
+        channelRect = QRectF(widgetLeft, workingRect.top(),
+            widgetRight - widgetLeft, maxLabelHeight);
         workingRect.setTop(channelRect.bottom() + 4.0);
       }
     }    
@@ -417,7 +489,9 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
             workingRect.height());
         workingRect.setLeft(limitRect.right() + 4.0);
         if (limitRect.isValid()) {
-          limitRect.setRight(workingRect.left());
+          const qreal trackBoundary = workingRect.left();
+          const qreal expandedRight = trackBoundary + 7.0;
+          limitRect.setRight(std::min(expandedRight, contentRect.right()));
         }
       }
     }
@@ -426,9 +500,17 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
       const qreal maxLabelHeight = std::min<qreal>(24.0,
           workingRect.height() * 0.35);
       if (maxLabelHeight > 6.0) {
-        channelRect = QRectF(workingRect.left(), workingRect.top(),
-            workingRect.width(), maxLabelHeight);
-        workingRect.setTop(channelRect.bottom() + 4.0);
+        channelRect = QRectF(widgetLeft, workingRect.top(),
+            widgetRight - widgetLeft, maxLabelHeight);
+        const qreal desiredFinalGap = 2.0;
+        const qreal preAdjustGap = std::max<qreal>(0.0, desiredFinalGap - 1.0);
+        const qreal availablePreGap = std::max<qreal>(0.0,
+            workingRect.bottom() - channelRect.bottom());
+        const qreal clampedPreGap = std::min(preAdjustGap, availablePreGap);
+        workingRect.setTop(channelRect.bottom() + clampedPreGap);
+        if (workingRect.top() > workingRect.bottom()) {
+          workingRect.setTop(workingRect.bottom());
+        }
       }
     }
     if (showLimits) {
@@ -441,6 +523,9 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
         workingRect.setBottom(limitRect.top() - 4.0);
         if (limitRect.isValid()) {
           limitRect.setTop(workingRect.bottom());
+          const qreal expandedBottom = std::min(limitRect.bottom() + 2.0,
+              contentRect.bottom());
+          limitRect.setBottom(expandedBottom);
         }
       }
     }
@@ -469,12 +554,26 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   if (vertical) {
     const qreal trackWidth = std::max<qreal>(8.0,
         contentRect.width() / heightDivisor);
-    const qreal centerX = workingRect.center().x();
+  const qreal trackRight = contentRect.right() + 1.0;
+  const qreal availableWidth = std::max<qreal>(0.0,
+    trackRight - workingRect.left());
+  if (availableWidth <= 0.0) {
+    return QRectF();
+  }
+  const qreal clampedTrackWidth = std::min(trackWidth, availableWidth);
+  const qreal trackLeft = trackRight - clampedTrackWidth;
+  if (showLimits && limitRect.isValid()) {
+    const qreal adjustedRight = trackLeft - 1.0;
+    limitRect.setRight(adjustedRight);
+    if (limitRect.right() < limitRect.left()) {
+      limitRect.setRight(limitRect.left());
+    }
+  }
     /* Reduce track height to prevent thumb from extending beyond edges */
     const qreal thumbHeight = std::max(workingRect.height() * 0.10, 8.0);
     const qreal reducedHeight = std::max(0.0, workingRect.height() - thumbHeight);
-    return QRectF(centerX - trackWidth / 2.0,
-        workingRect.top() + thumbHeight / 2.0, trackWidth, reducedHeight);
+  return QRectF(trackLeft,
+    workingRect.top() + thumbHeight / 2.0, clampedTrackWidth, reducedHeight);
   }
 
   const qreal trackHeight = std::max<qreal>(8.0,
@@ -543,6 +642,14 @@ void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const
                      QPointF(bevelRect.right(), bevelRect.bottom()));
   }
   
+  painter.restore();
+
+  painter.save();
+  QPen debugPen(Qt::red);
+  debugPen.setWidthF(1.0);
+  painter.setPen(debugPen);
+  painter.setBrush(Qt::NoBrush);
+  painter.drawRect(trackRect.adjusted(0.5, 0.5, -0.5, -0.5));
   painter.restore();
 }
 
@@ -685,6 +792,19 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
   painter.setPen(penColor);
   painter.setBrush(Qt::NoBrush);
 
+  const auto drawDebugRect = [&painter](const QRectF &rect) {
+    if (!rect.isValid() || rect.isEmpty()) {
+      return;
+    }
+    painter.save();
+    QPen pen(Qt::red);
+    pen.setWidthF(1.0);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(rect.adjusted(0.5, 0.5, -0.5, -0.5));
+    painter.restore();
+  };
+
   if (label_ == MeterLabel::kOutline) {
     QPen pen(penColor.darker(150));
     pen.setStyle(Qt::DotLine);
@@ -702,8 +822,19 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
   if (label_ == MeterLabel::kChannel) {
     const QString text = channel_.trimmed();
     if (!text.isEmpty() && channelRect.isValid() && !channelRect.isEmpty()) {
-      painter.drawText(channelRect.adjusted(2.0, 0.0, -2.0, -2.0),
-          Qt::AlignHCenter | Qt::AlignBottom, text);
+      const QRectF channelBounds = channelRect.adjusted(2.0, 0.0, -2.0, -2.0);
+      const Qt::Alignment channelAlignment = isVertical()
+          ? (Qt::AlignHCenter | Qt::AlignBottom)
+          : (Qt::AlignHCenter | Qt::AlignVCenter);
+      painter.save();
+      if (isVertical()) {
+        const QFont fitted = shrinkFontToFit(painter.font(), QStringList{text},
+            channelBounds.size());
+        painter.setFont(fitted);
+      }
+      painter.drawText(channelBounds, channelAlignment, text);
+      painter.restore();
+      drawDebugRect(channelRect);
     }
   }
 
@@ -722,8 +853,19 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
         valueText = QStringLiteral("--");
       }
     }
-    //const QRectF bounds = limitRect.adjusted(2.0, 2.0, -2.0, -2.0);
-    const QRectF bounds = limitRect.adjusted(0.0, 0.0, 0.0, 0.0);
+    QRectF bounds = limitRect.adjusted(2.0,
+        isVertical() ? 2.0 : -2.0, -2.0, -2.0);
+    if (isVertical()) {
+      bounds.setRight(std::min(bounds.right(), trackRect.left() - 1.0));
+      if (bounds.right() < bounds.left()) {
+        bounds.setRight(bounds.left());
+      }
+    } else {
+      const qreal availableShift = std::max<qreal>(0.0,
+          limitRect.bottom() - bounds.bottom());
+      const qreal shift = std::min<qreal>(2.0, availableShift);
+      bounds.translate(0.0, shift);
+    }
     //painter.save();
     //QPen highlightPen(Qt::red);
     //highlightPen.setWidth(1);
@@ -731,6 +873,15 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
     //painter.drawRect(limitRect.adjusted(1.0, 1.0, -1.0, -1.0));
     //painter.restore();
     if (isVertical()) {
+      QStringList limitSamples;
+      limitSamples << highText << lowText;
+      if (showValue) {
+        limitSamples << valueText;
+      }
+      painter.save();
+      const QFont fitted = shrinkFontToFit(painter.font(), limitSamples,
+          bounds.size());
+      painter.setFont(fitted);
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, lowText);
       if (showValue) {
         painter.save();
@@ -739,16 +890,18 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
         painter.restore();
       }
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignTop, highText);
+      painter.restore();
     } else {
-      painter.drawText(bounds, Qt::AlignLeft | Qt::AlignBottom, lowText);
+      painter.drawText(bounds, Qt::AlignLeft | Qt::AlignVCenter, lowText);
       if (showValue) {
         painter.save();
         painter.setPen(effectiveForegroundForValueText());
-        painter.drawText(bounds, Qt::AlignHCenter | Qt::AlignBottom, valueText);
+        painter.drawText(bounds, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
         painter.restore();
       }
-      painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, highText);
+      painter.drawText(bounds, Qt::AlignRight | Qt::AlignVCenter, highText);
     }
+    drawDebugRect(limitRect);
   }
 
   painter.restore();

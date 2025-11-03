@@ -416,6 +416,9 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
         limitRect = QRectF(workingRect.left(), workingRect.top(), maxLabelWidth,
             workingRect.height());
         workingRect.setLeft(limitRect.right() + 4.0);
+        if (limitRect.isValid()) {
+          limitRect.setRight(workingRect.left());
+        }
       }
     }
   } else {
@@ -436,6 +439,9 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
             workingRect.bottom() - maxLabelHeight, workingRect.width(),
             maxLabelHeight);
         workingRect.setBottom(limitRect.top() - 4.0);
+        if (limitRect.isValid()) {
+          limitRect.setTop(workingRect.bottom());
+        }
       }
     }
   }
@@ -716,7 +722,14 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
         valueText = QStringLiteral("--");
       }
     }
-    const QRectF bounds = limitRect.adjusted(2.0, 2.0, -2.0, -2.0);
+    //const QRectF bounds = limitRect.adjusted(2.0, 2.0, -2.0, -2.0);
+    const QRectF bounds = limitRect.adjusted(0.0, 0.0, 0.0, 0.0);
+    //painter.save();
+    //QPen highlightPen(Qt::red);
+    //highlightPen.setWidth(1);
+    //painter.setPen(highlightPen);
+    //painter.drawRect(limitRect.adjusted(1.0, 1.0, -1.0, -1.0));
+    //painter.restore();
     if (isVertical()) {
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, lowText);
       if (showValue) {

@@ -1368,15 +1368,14 @@ void SliderElement::beginDrag(double value, bool sendInitial)
   dragging_ = true;
   grabMouse();
   double clamped = clampToLimits(value);
-  double quantized = quantizeToIncrement(clamped);
-  dragValue_ = quantized;
-  runtimeValue_ = quantized;
+  dragValue_ = clamped;
+  runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (sendInitial) {
     hasLastSentValue_ = false;
-    sendActivationValue(quantized, true);
+    sendActivationValue(clamped, true);
   } else {
-    lastSentValue_ = quantized;
+    lastSentValue_ = clamped;
     hasLastSentValue_ = true;
   }
   update();
@@ -1385,11 +1384,10 @@ void SliderElement::beginDrag(double value, bool sendInitial)
 void SliderElement::updateDrag(double value, bool force)
 {
   const double clamped = clampToLimits(value);
-  const double quantized = quantizeToIncrement(clamped);
-  dragValue_ = quantized;
-  runtimeValue_ = quantized;
+  dragValue_ = clamped;
+  runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
-  sendActivationValue(quantized, force);
+  sendActivationValue(clamped, force);
   update();
 }
 
@@ -1412,13 +1410,14 @@ void SliderElement::sendActivationValue(double value, bool force)
   if (!std::isfinite(value)) {
     return;
   }
-  const double clamped = quantizeToIncrement(clampToLimits(value));
+  const double clamped = clampToLimits(value);
+  const double toSend = dragging_ ? clamped : quantizeToIncrement(clamped);
   if (!force && hasLastSentValue_
-      && std::abs(clamped - lastSentValue_) <= sliderEpsilon()) {
+      && std::abs(toSend - lastSentValue_) <= sliderEpsilon()) {
     return;
   }
-  activationCallback_(clamped);
-  lastSentValue_ = clamped;
+  activationCallback_(toSend);
+  lastSentValue_ = toSend;
   hasLastSentValue_ = true;
 }
 

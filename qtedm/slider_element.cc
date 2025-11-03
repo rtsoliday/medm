@@ -23,6 +23,7 @@ constexpr double kSampleValue = 0.6;
 constexpr int kTickCount = 11;
 constexpr short kInvalidSeverity = 3;
 constexpr double kValueEpsilonFactor = 1e-6;
+constexpr double kHorizontalLabelSpacing = 4.0;
 
 QColor alarmColorForSeverity(short severity)
 {
@@ -86,6 +87,83 @@ QFont shrinkFontToFit(const QFont &baseFont, const QStringList &texts,
         continue;
       }
       if (metrics.horizontalAdvance(text) > availableWidth + 0.1) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  constexpr double kMinSize = 6.0;
+  applySize(size);
+  int iterations = 0;
+  while (!fits() && size > kMinSize && iterations < 64) {
+    size -= 1.0;
+    if (size < kMinSize) {
+      size = kMinSize;
+    }
+    applySize(size);
+    ++iterations;
+  }
+
+  return font;
+}
+
+QFont shrinkFontToFitHorizontal(const QFont &baseFont, const QString &leftText,
+    const QString &centerText, const QString &rightText, const QSizeF &targetSize,
+    bool showCenter)
+{
+  if (targetSize.width() <= 0.0 || targetSize.height() <= 0.0) {
+    return baseFont;
+  }
+
+  QFont font(baseFont);
+  int pixelSize = font.pixelSize();
+  double size = pixelSize > 0 ? static_cast<double>(pixelSize)
+      : font.pointSizeF();
+  if (size <= 0.0) {
+    const int pointSize = font.pointSize();
+    size = pointSize > 0 ? static_cast<double>(pointSize) : 12.0;
+    font.setPointSizeF(size);
+    pixelSize = font.pixelSize();
+  }
+
+  auto applySize = [&](double newSize) {
+    const double clamped = std::max(1.0, newSize);
+    if (pixelSize > 0) {
+      font.setPixelSize(std::max(1, static_cast<int>(std::round(clamped))));
+    } else {
+      font.setPointSizeF(clamped);
+    }
+  };
+
+  auto fits = [&]() {
+    const QFontMetricsF metrics(font);
+    double lineHeight = metrics.height();
+    if (lineHeight <= 0.0) {
+      lineHeight = metrics.ascent() + metrics.descent();
+    }
+    if (lineHeight > targetSize.height() + 0.1) {
+      return false;
+    }
+    const double availableWidth = targetSize.width();
+    const double leftWidth = leftText.isEmpty()
+        ? 0.0 : metrics.horizontalAdvance(leftText);
+    const double rightWidth = rightText.isEmpty()
+        ? 0.0 : metrics.horizontalAdvance(rightText);
+    const double centerWidth = showCenter && !centerText.isEmpty()
+        ? metrics.horizontalAdvance(centerText) : 0.0;
+    if (leftWidth > availableWidth + 0.1
+        || rightWidth > availableWidth + 0.1
+        || centerWidth > availableWidth + 0.1) {
+      return false;
+    }
+    const double spacing = kHorizontalLabelSpacing;
+    if (leftWidth + rightWidth > availableWidth - (showCenter ? spacing : 0.0)) {
+      return false;
+    }
+    if (showCenter) {
+      const double remaining = availableWidth - leftWidth - rightWidth;
+      if (remaining < centerWidth + spacing) {
         return false;
       }
     }
@@ -827,11 +905,9 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
           ? (Qt::AlignHCenter | Qt::AlignBottom)
           : (Qt::AlignHCenter | Qt::AlignVCenter);
       painter.save();
-      if (isVertical()) {
-        const QFont fitted = shrinkFontToFit(painter.font(), QStringList{text},
-            channelBounds.size());
-        painter.setFont(fitted);
-      }
+      const QFont fitted = shrinkFontToFit(painter.font(), QStringList{text},
+          channelBounds.size());
+      painter.setFont(fitted);
       painter.drawText(channelBounds, channelAlignment, text);
       painter.restore();
       drawDebugRect(channelRect);
@@ -892,14 +968,63 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
       painter.drawText(bounds, Qt::AlignRight | Qt::AlignTop, highText);
       painter.restore();
     } else {
-      painter.drawText(bounds, Qt::AlignLeft | Qt::AlignVCenter, lowText);
-      if (showValue) {
-        painter.save();
-        painter.setPen(effectiveForegroundForValueText());
-        painter.drawText(bounds, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
-        painter.restore();
+      painter.save();
+      const QFont fitted = shrinkFontToFitHorizontal(painter.font(), lowText,
+          valueText, highText, bounds.size(), showValue);
+      painter.setFont(fitted);
+
+      const QFontMetricsF metrics(painter.font());
+      qreal leftWidth = lowText.isEmpty()
+          ? 0.0 : metrics.horizontalAdvance(lowText);
+      qreal rightWidth = highText.isEmpty()
+          ? 0.0 : metrics.horizontalAdvance(highText);
+      const qreal availableWidth = bounds.width();
+      leftWidth = std::min(leftWidth, availableWidth);
+      rightWidth = std::min(rightWidth, availableWidth);
+
+      qreal leftEnd = bounds.left() + leftWidth;
+      qreal rightStart = bounds.right() - rightWidth;
+      if (rightStart < leftEnd) {
+        const qreal midpoint = 0.5 * (leftEnd + rightStart);
+        leftEnd = midpoint;
+        rightStart = midpoint;
       }
-      painter.drawText(bounds, Qt::AlignRight | Qt::AlignVCenter, highText);
+
+      const QRectF leftBounds(bounds.left(), bounds.top(),
+          std::max<qreal>(0.0, leftEnd - bounds.left()), bounds.height());
+      if (!lowText.isEmpty()) {
+        painter.drawText(leftBounds, Qt::AlignLeft | Qt::AlignVCenter, lowText);
+      }
+
+      const qreal rightRectLeft = std::max<qreal>(bounds.left(), rightStart);
+      const QRectF rightBounds(rightRectLeft, bounds.top(),
+          std::max<qreal>(0.0, bounds.right() - rightRectLeft),
+          bounds.height());
+      if (!highText.isEmpty()) {
+        painter.drawText(rightBounds, Qt::AlignRight | Qt::AlignVCenter,
+            highText);
+      }
+
+      if (showValue) {
+        const qreal spacing = kHorizontalLabelSpacing;
+        qreal centerLeft = leftEnd + spacing * 0.5;
+        qreal centerRight = rightStart - spacing * 0.5;
+        if (centerRight < centerLeft) {
+          centerLeft = leftEnd;
+          centerRight = rightStart;
+        }
+        if (centerRight > centerLeft) {
+          painter.save();
+          painter.setPen(effectiveForegroundForValueText());
+          const QRectF centerBounds(centerLeft, bounds.top(),
+              centerRight - centerLeft, bounds.height());
+          painter.drawText(centerBounds, Qt::AlignHCenter | Qt::AlignVCenter,
+              valueText);
+          painter.restore();
+        }
+      }
+
+      painter.restore();
     }
     drawDebugRect(limitRect);
   }

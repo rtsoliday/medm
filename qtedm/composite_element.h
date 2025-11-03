@@ -55,10 +55,12 @@ public:
 
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
 
 private:
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
 
   bool selected_ = false;
   QString compositeName_;

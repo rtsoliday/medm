@@ -649,7 +649,7 @@ void SliderElement::paintEvent(QPaintEvent *event)
 
   QRectF limitRect;
   QRectF channelRect;
-  QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0, -2.0, -2.0),
+  QRectF trackRect = trackRectForPainting(rect().adjusted(0.0, 0.0, 0.0, 0.0),
       limitRect, channelRect);
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     if (selected_) {
@@ -764,7 +764,7 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   }
 
   if (vertical) {
-    const qreal trackWidth = std::max<qreal>(8.0,
+    const qreal trackWidth = std::max<qreal>(9.0,
         contentRect.width() / heightDivisor);
   const qreal trackRight = contentRect.right() + 1.0;
   const qreal availableWidth = std::max<qreal>(0.0,
@@ -788,10 +788,10 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
     workingRect.top() + thumbHeight / 2.0, clampedTrackWidth, reducedHeight);
   }
 
-  const qreal trackHeight = std::max<qreal>(8.0,
+  const qreal trackHeight = std::max<qreal>(9.0,
       contentRect.height() / heightDivisor);
   /* Ensure track doesn't extend beyond workingRect to avoid overlapping labels */
-  const qreal clampedTrackHeight = std::min(trackHeight, workingRect.height());
+  const qreal clampedTrackHeight = std::max(9.0, std::min(trackHeight, workingRect.height()));
   const qreal centerY = workingRect.center().y();
   /* Reduce track width to prevent thumb from extending beyond edges */
   const qreal thumbWidth = std::max(workingRect.width() * 0.10, 30.0);
@@ -807,13 +807,37 @@ void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const
   
   const QColor baseColor = effectiveBackground();
   
+  /* Check if background is very dark using perceived luminance */
+  const int r = baseColor.red();
+  const int g = baseColor.green();
+  const int b = baseColor.blue();
+  const double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  const bool isVeryDark = luminance < 40.0;
+  
   /* Draw main track background */
-  painter.setBrush(baseColor.darker(120));
+  QColor trackBg;
+  if (isVeryDark) {
+    /* For very dark backgrounds, brighten by 20% instead of darkening */
+    const int brightenAmount = 52; /* 20% of 255 ≈ 26 */
+    trackBg = QColor(std::min(255, r + brightenAmount), 
+                     std::min(255, g + brightenAmount), 
+                     std::min(255, b + brightenAmount));
+  } else {
+    trackBg = baseColor.darker(120);
+  }
+  painter.setBrush(trackBg);
   painter.drawRoundedRect(trackRect, 3.0, 3.0);
   
   /* Draw lowered bevel (2 pixels) */
   /* Dark shadow on top/left */
-  QPen bevelPen(baseColor.darker(150), 2.0);
+  QColor shadowColor;
+  if (isVeryDark) {
+    /* For very dark backgrounds, ensure shadow is darker but visible */
+    shadowColor = QColor(std::max(0, r - 30), std::max(0, g - 30), std::max(0, b - 30));
+  } else {
+    shadowColor = baseColor.darker(150);
+  }
+  QPen bevelPen(shadowColor, 2.0);
   painter.setPen(bevelPen);
   painter.setBrush(Qt::NoBrush);
   QRectF bevelRect = trackRect.adjusted(1.0, 1.0, -1.0, -1.0);
@@ -835,7 +859,14 @@ void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const
   }
   
   /* Light highlight on bottom/right */
-  bevelPen.setColor(baseColor.lighter(130));
+  QColor highlightColor;
+  if (isVeryDark) {
+    /* For very dark backgrounds, add absolute lightening to ensure visibility */
+    highlightColor = QColor(std::min(255, r + 40), std::min(255, g + 40), std::min(255, b + 40));
+  } else {
+    highlightColor = baseColor.lighter(130);
+  }
+  bevelPen.setColor(highlightColor);
   painter.setPen(bevelPen);
   
   if (isVertical()) {
@@ -856,13 +887,13 @@ void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const
   
   painter.restore();
 
-  painter.save();
-  QPen debugPen(Qt::red);
-  debugPen.setWidthF(1.0);
-  painter.setPen(debugPen);
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(trackRect.adjusted(0.5, 0.5, -0.5, -0.5));
-  painter.restore();
+  //painter.save();
+  //QPen debugPen(Qt::red);
+  //debugPen.setWidthF(1.0);
+  //painter.setPen(debugPen);
+  //painter.setBrush(Qt::NoBrush);
+  //painter.drawRect(trackRect.adjusted(0.5, 0.5, -0.5, -0.5));
+  //painter.restore();
 }
 
 void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
@@ -871,6 +902,13 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
   
   const QColor bgColor = effectiveBackground();
   const QColor thumbColor = bgColor;
+  
+  /* Check if background is very dark using perceived luminance */
+  const int r = bgColor.red();
+  const int g = bgColor.green();
+  const int b = bgColor.blue();
+  const double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  const bool isVeryDark = luminance < 40.0;
   
   /* Calculate thumb position, ensuring it stays within track bounds (minus bevel) */
   QRectF thumbRect = thumbRectForTrack(trackRect);
@@ -881,7 +919,14 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
   painter.drawRoundedRect(thumbRect, 2.0, 2.0);
   
   /* Draw raised bevel (2 pixels) */
-  QPen bevelPen(thumbColor.lighter(140), 2.0);
+  QColor highlightColor;
+  if (isVeryDark) {
+    /* For very dark backgrounds, add absolute lightening to ensure visibility */
+    highlightColor = QColor(std::min(255, r + 50), std::min(255, g + 50), std::min(255, b + 50));
+  } else {
+    highlightColor = thumbColor.lighter(140);
+  }
+  QPen bevelPen(highlightColor, 2.0);
   painter.setPen(bevelPen);
   painter.setBrush(Qt::NoBrush);
   QRectF bevelRect = thumbRect.adjusted(1.0, 1.0, -1.0, -1.0);
@@ -904,7 +949,14 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
   }
   
   /* Dark shadow on bottom/right */
-  bevelPen.setColor(thumbColor.darker(160));
+  QColor shadowColor;
+  if (isVeryDark) {
+    /* For very dark backgrounds, use subtle darkening */
+    shadowColor = QColor(std::max(0, r - 15), std::max(0, g - 15), std::max(0, b - 15));
+  } else {
+    shadowColor = thumbColor.darker(160);
+  }
+  bevelPen.setColor(shadowColor);
   painter.setPen(bevelPen);
   
   if (isVertical()) {
@@ -923,14 +975,8 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
                      QPointF(bevelRect.right(), bevelRect.bottom()));
   }
   
-  /* Determine if background is light or dark using perceived luminance */
-  const int r = bgColor.red();
-  const int g = bgColor.green();
-  const int b = bgColor.blue();
-  const double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-  const bool isLightBackground = luminance > 127.5;
-  
   /* Draw center line: black for light backgrounds, white for dark backgrounds */
+  const bool isLightBackground = luminance > 127.5;
   const QColor centerLineColor = isLightBackground ? Qt::black : Qt::white;
   QPen centerPen(centerLineColor, 1.0);
   painter.setPen(centerPen);
@@ -1027,7 +1073,7 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
       painter.setFont(fitted);
       painter.drawText(channelBounds, channelAlignment, text);
       painter.restore();
-      drawDebugRect(channelRect);
+      //drawDebugRect(channelRect);
     }
   }
 
@@ -1146,7 +1192,7 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
 
       painter.restore();
     }
-    drawDebugRect(limitRect);
+    //drawDebugRect(limitRect);
   }
 
   painter.restore();

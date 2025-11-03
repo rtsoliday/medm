@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
+		x=16
+		y=338
 		width=1094
 		height=965
 	}
@@ -972,5 +972,26 @@ valuator {
 	direction="up"
 	dPrecision=0.980000
 	limits {
+	}
+}
+valuator {
+	object {
+		x=509
+		y=686
+		width=500
+		height=250
+	}
+	control {
+		chan="slider:test:alpha"
+		clr=33
+		bclr=12
+	}
+	label="channel"
+	clrmod="alarm"
+	dPrecision=0.250000
+	limits {
+		loprDefault=-12.5
+		hoprDefault=84.3
+		precDefault=2
 	}
 }

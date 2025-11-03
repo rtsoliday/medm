@@ -782,7 +782,7 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
     }
   }
     /* Reduce track height to prevent thumb from extending beyond edges */
-    const qreal thumbHeight = std::max(workingRect.height() * 0.10, 8.0);
+    const qreal thumbHeight = std::max(workingRect.height() * 0.10, 30.0);
     const qreal reducedHeight = std::max(0.0, workingRect.height() - thumbHeight);
   return QRectF(trackLeft,
     workingRect.top() + thumbHeight / 2.0, clampedTrackWidth, reducedHeight);
@@ -794,7 +794,7 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   const qreal clampedTrackHeight = std::min(trackHeight, workingRect.height());
   const qreal centerY = workingRect.center().y();
   /* Reduce track width to prevent thumb from extending beyond edges */
-  const qreal thumbWidth = std::max(workingRect.width() * 0.10, 8.0);
+  const qreal thumbWidth = std::max(workingRect.width() * 0.10, 30.0);
   const qreal reducedWidth = std::max(0.0, workingRect.width() - thumbWidth);
   return QRectF(workingRect.left() + thumbWidth / 2.0,
       centerY - clampedTrackHeight / 2.0, reducedWidth, clampedTrackHeight);
@@ -869,8 +869,8 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
 {
   painter.save();
   
-  const QColor thumbColor = effectiveForeground();
   const QColor bgColor = effectiveBackground();
+  const QColor thumbColor = bgColor;
   
   /* Calculate thumb position, ensuring it stays within track bounds (minus bevel) */
   QRectF thumbRect = thumbRectForTrack(trackRect);
@@ -923,8 +923,16 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
                      QPointF(bevelRect.right(), bevelRect.bottom()));
   }
   
-  /* Draw center line in background color (1 pixel) */
-  QPen centerPen(bgColor, 1.0);
+  /* Determine if background is light or dark using perceived luminance */
+  const int r = bgColor.red();
+  const int g = bgColor.green();
+  const int b = bgColor.blue();
+  const double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  const bool isLightBackground = luminance > 127.5;
+  
+  /* Draw center line: black for light backgrounds, white for dark backgrounds */
+  const QColor centerLineColor = isLightBackground ? Qt::black : Qt::white;
+  QPen centerPen(centerLineColor, 1.0);
   painter.setPen(centerPen);
   
   if (isVertical()) {
@@ -1341,7 +1349,7 @@ QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect) const
   const qreal bevelSize = 2.0;
 
   if (isVertical()) {
-    const qreal thumbHeight = std::max(trackRect.height() * 0.10, 8.0);
+    const qreal thumbHeight = std::max(trackRect.height() * 0.10, 30.0);
     const qreal center = isDirectionInverted()
         ? trackRect.top() + normalizedValue() * trackRect.height()
         : trackRect.bottom() - normalizedValue() * trackRect.height();
@@ -1350,7 +1358,7 @@ QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect) const
     thumbRect.setLeft(trackRect.left() + bevelSize);
     thumbRect.setRight(trackRect.right() - bevelSize);
   } else {
-    const qreal thumbWidth = std::max(trackRect.width() * 0.10, 8.0);
+    const qreal thumbWidth = std::max(trackRect.width() * 0.10, 30.0);
     const qreal center = isDirectionInverted()
         ? trackRect.right() - normalizedValue() * trackRect.width()
         : trackRect.left() + normalizedValue() * trackRect.width();

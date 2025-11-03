@@ -13,6 +13,7 @@
 #include <QPointF>
 
 #include "cursor_utils.h"
+#include "text_font_utils.h"
 
 namespace {
 
@@ -686,33 +687,9 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
     painter.setPen(penColor);
   }
 
-  /* Font size calculation matching MEDM's valuatorFontListIndex logic:
-   * Vertical (UP/DOWN):
-   *   - LABEL_NONE/NO_DECORATIONS: 30% of width
-   *   - OUTLINE/LIMITS: 20% of width
-   *   - CHANNEL: 10% of width
-   * Horizontal (LEFT/RIGHT):
-   *   - LABEL_NONE/NO_DECORATIONS/OUTLINE/LIMITS: 45% of height
-   *   - CHANNEL: 32% of height
-   */
-  QFont labelFont = painter.font();
-  qreal fontSizeFactor = 0.0;
-  if (isVertical()) {
-    if (label_ == MeterLabel::kNone || label_ == MeterLabel::kNoDecorations) {
-      fontSizeFactor = 0.30;
-    } else if (label_ == MeterLabel::kOutline || label_ == MeterLabel::kLimits) {
-      fontSizeFactor = 0.20;
-    } else if (label_ == MeterLabel::kChannel) {
-      fontSizeFactor = 0.10;
-    }
-    labelFont.setPointSizeF(std::max(6.0, trackRect.width() * fontSizeFactor));
-  } else {
-    if (label_ == MeterLabel::kChannel) {
-      fontSizeFactor = 0.32;
-    } else {
-      fontSizeFactor = 0.45;
-    }
-    labelFont.setPointSizeF(std::max(6.0, trackRect.height() * fontSizeFactor));
+  QFont labelFont = medmSliderLabelFont(label_, direction_, size());
+  if (labelFont.family().isEmpty()) {
+    labelFont = painter.font();
   }
   painter.setFont(labelFont);
 

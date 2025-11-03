@@ -7,8 +7,8 @@ display {
 	object {
 		x=0
 		y=53
-		width=953
-		height=504
+		width=1094
+		height=965
 	}
 	clr=14
 	bclr=4
@@ -507,6 +507,469 @@ valuator {
 	}
 	label="channel"
 	clrmod="alarm"
+	dPrecision=0.980000
+	limits {
+	}
+}
+valuator {
+	object {
+		x=20
+		y=500
+		width=140
+		height=35
+	}
+	control {
+		chan="slider:test:alpha"
+		clr=33
+		bclr=12
+	}
+	label="channel"
+	clrmod="alarm"
+	dPrecision=0.250000
+	limits {
+		loprDefault=-12.5
+		hoprDefault=84.3
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=170
+		y=500
+		width=130
+		height=35
+	}
+	control {
+		chan="slider:test:beta"
+		clr=7
+		bclr=45
+	}
+	label="limits"
+	clrmod="discrete"
+	direction="left"
+	dPrecision=1.750000
+	limits {
+		loprSrc="default"
+		loprDefault=-95
+		hoprSrc="default"
+		hoprDefault=5
+		precSrc="default"
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=310
+		y=500
+		width=50
+		height=150
+	}
+	control {
+		chan="slider:test:gamma"
+		clr=28
+		bclr=6
+	}
+	label="channel"
+	direction="up"
+	dPrecision=0.100000
+	limits {
+		hoprDefault=360
+		precDefault=3
+	}
+}
+valuator {
+	object {
+		x=370
+		y=500
+		width=45
+		height=150
+	}
+	control {
+		chan="slider:test:delta"
+		clr=52
+		bclr=18
+	}
+	label="limits"
+	clrmod="alarm"
+	direction="down"
+	dPrecision=2.500000
+	limits {
+		loprDefault=-240.8
+		hoprDefault=240.8
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=20
+		y=545
+		width=145
+		height=40
+	}
+	control {
+		chan="slider:test:epsilon"
+		clr=41
+		bclr=9
+	}
+	label="outline"
+	clrmod="discrete"
+	dPrecision=0.625000
+	limits {
+		loprDefault=-6.2
+		hoprDefault=6.2
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=175
+		y=545
+		width=135
+		height=40
+	}
+	control {
+		chan="slider:test:zeta"
+		clr=14
+		bclr=53
+	}
+	label="limits"
+	clrmod="alarm"
+	dPrecision=3.000000
+	limits {
+		loprSrc="default"
+		loprDefault=10.5
+		hoprSrc="default"
+		hoprDefault=310.5
+		precSrc="default"
+	}
+}
+valuator {
+	object {
+		x=425
+		y=500
+		width=55
+		height=155
+	}
+	control {
+		chan="slider:test:eta"
+		clr=3
+		bclr=27
+	}
+	label="outline"
+	direction="up"
+	dPrecision=0.050000
+	limits {
+		loprDefault=-1.2
+		hoprDefault=1.2
+		precDefault=4
+	}
+}
+valuator {
+	object {
+		x=490
+		y=500
+		width=50
+		height=160
+	}
+	control {
+		chan="slider:test:theta"
+		clr=24
+		bclr=36
+	}
+	label="channel"
+	clrmod="discrete"
+	direction="down"
+	dPrecision=1.125000
+	limits {
+		loprSrc="default"
+		loprDefault=-42.7
+		hoprSrc="default"
+		hoprDefault=142.7
+		precSrc="default"
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=20
+		y=595
+		width=150
+		height=35
+	}
+	control {
+		chan="slider:test:iota"
+		clr=56
+		bclr=22
+	}
+	label="outline"
+	clrmod="alarm"
+	dPrecision=0.875000
+	limits {
+		loprDefault=-52.7
+		hoprDefault=52.7
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=180
+		y=595
+		width=125
+		height=40
+	}
+	control {
+		chan="slider:test:kappa"
+		clr=9
+		bclr=31
+	}
+	label="limits"
+	direction="left"
+	dPrecision=4.500000
+	limits {
+		loprSrc="default"
+		loprDefault=10
+		hoprSrc="default"
+		hoprDefault=510
+		precSrc="default"
+	}
+}
+valuator {
+	object {
+		x=550
+		y=500
+		width=45
+		height=145
+	}
+	control {
+		chan="slider:test:lambda"
+		clr=20
+		bclr=40
+	}
+	direction="up"
+	dPrecision=0.375000
+	limits {
+		precSrc="default"
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=20
+		y=645
+		width=140
+		height=35
+	}
+	control {
+		chan="slider:test:mu"
+		clr=48
+		bclr=16
+	}
+	label="channel"
+	clrmod="alarm"
+	dPrecision=2.250000
+	limits {
+		loprSrc="default"
+		loprDefault=-220.5
+		hoprDefault=420.5
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=605
+		y=500
+		width=50
+		height=150
+	}
+	control {
+		chan="slider:test:nu"
+		clr=6
+		bclr=30
+	}
+	label="outline"
+	clrmod="discrete"
+	direction="down"
+	dPrecision=0.420000
+	limits {
+		loprDefault=-54.2
+		hoprDefault=154.2
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=170
+		y=645
+		width=130
+		height=40
+	}
+	control {
+		chan="slider:test:xi"
+		clr=11
+		bclr=47
+	}
+	label="limits"
+	direction="left"
+	dPrecision=1.333000
+	limits {
+		loprDefault=-17.5
+		hoprDefault=17.5
+	}
+}
+valuator {
+	object {
+		x=20
+		y=695
+		width=145
+		height=35
+	}
+	control {
+		chan="slider:test:omicron"
+		clr=35
+		bclr=5
+	}
+	label="channel"
+	clrmod="discrete"
+	dPrecision=0.720000
+	limits {
+		loprDefault=-8.9
+		hoprDefault=58.9
+		precDefault=3
+	}
+}
+valuator {
+	object {
+		x=665
+		y=500
+		width=55
+		height=155
+	}
+	control {
+		chan="slider:test:pi"
+		clr=17
+		bclr=38
+	}
+	clrmod="alarm"
+	direction="up"
+	dPrecision=5.000000
+	limits {
+		loprSrc="default"
+		hoprDefault=500
+		precSrc="default"
+	}
+}
+valuator {
+	object {
+		x=175
+		y=695
+		width=135
+		height=40
+	}
+	control {
+		chan="slider:test:rho"
+		clr=26
+		bclr=50
+	}
+	dPrecision=0.850000
+	limits {
+		hoprDefault=42
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=730
+		y=500
+		width=45
+		height=160
+	}
+	control {
+		chan="slider:test:sigma"
+		clr=52
+		bclr=8
+	}
+	label="outline"
+	direction="down"
+	dPrecision=0.240000
+	limits {
+		loprDefault=-2.4
+		precDefault=3
+	}
+}
+valuator {
+	object {
+		x=20
+		y=745
+		width=150
+		height=35
+	}
+	control {
+		chan="slider:test:tau"
+		clr=4
+		bclr=28
+	}
+	label="limits"
+	clrmod="discrete"
+	dPrecision=1.600000
+	limits {
+		loprDefault=-160
+		hoprDefault=160
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=785
+		y=500
+		width=50
+		height=145
+	}
+	control {
+		chan="slider:test:upsilon"
+		clr=44
+		bclr=14
+	}
+	label="channel"
+	clrmod="alarm"
+	direction="up"
+	dPrecision=0.980000
+	limits {
+	}
+}
+valuator {
+	object {
+		x=335
+		y=695
+		width=145
+		height=20
+	}
+	control {
+		chan="slider:test:omicron"
+		clr=35
+		bclr=20
+	}
+	clrmod="discrete"
+	dPrecision=0.720000
+	limits {
+		loprDefault=-8.9
+		hoprDefault=58.9
+		precDefault=3
+	}
+}
+valuator {
+	object {
+		x=871
+		y=520
+		width=20
+		height=145
+	}
+	control {
+		chan="slider:test:upsilon"
+		clr=44
+		bclr=14
+	}
+	clrmod="alarm"
+	direction="up"
 	dPrecision=0.980000
 	limits {
 	}

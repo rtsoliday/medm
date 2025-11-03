@@ -4,6 +4,8 @@
 #include <QSize>
 #include <QString>
 
+#include "display_properties.h"
+
 // Returns a font compatible with MEDM sizing rules for Text Entry widgets.
 // Uses the (0.90 * height) - 4 constraint formula from medmTextEntry.c.
 // The function chooses from the legacy MEDM font aliases used by QtEDM.
@@ -24,3 +26,10 @@ QFont medmMessageButtonFont(int heightConstraint);
 // if text is too wide. Returns the original font if text fits, or a smaller font.
 QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &text,
     int maxWidth);
+
+// Returns a font compatible with MEDM sizing rules for Slider widgets.
+// Mirrors valuatorFontListIndex() logic from medmValuator.c by searching the
+// legacy MEDM font aliases from largest to smallest until the width/height
+// constraint for the requested orientation and label style is met.
+QFont medmSliderLabelFont(MeterLabel label, BarDirection direction,
+    const QSize &widgetSize);

@@ -122,6 +122,91 @@ QFont medmMessageButtonFont(int heightConstraint)
   return QFont();
 }
 
+QFont medmSliderLabelFont(MeterLabel label, BarDirection direction,
+    const QSize &widgetSize)
+{
+  const int width = widgetSize.width();
+  const int height = widgetSize.height();
+  if (width <= 0 || height <= 0) {
+    return QFont();
+  }
+
+  const bool vertical = direction == BarDirection::kUp
+      || direction == BarDirection::kDown;
+
+  double constraintFactor = 0.0;
+  if (vertical) {
+    switch (label) {
+    case MeterLabel::kNone:
+    case MeterLabel::kNoDecorations:
+      constraintFactor = 0.30;
+      break;
+    case MeterLabel::kOutline:
+    case MeterLabel::kLimits:
+      constraintFactor = 0.20;
+      break;
+    case MeterLabel::kChannel:
+      constraintFactor = 0.10;
+      break;
+    }
+  } else {
+    switch (label) {
+    case MeterLabel::kChannel:
+      constraintFactor = 0.32;
+      break;
+    case MeterLabel::kNone:
+    case MeterLabel::kNoDecorations:
+    case MeterLabel::kOutline:
+    case MeterLabel::kLimits:
+      constraintFactor = 0.45;
+      break;
+    }
+  }
+
+  if (constraintFactor <= 0.0) {
+    return QFont();
+  }
+
+  const int measurement = vertical ? width : height;
+  const int constraint = static_cast<int>(constraintFactor * measurement);
+  if (constraint <= 0) {
+    return QFont();
+  }
+
+  const auto &aliases = textFontAliases();
+  for (int i = static_cast<int>(aliases.size()) - 1; i >= 0; --i) {
+    const QFont font = LegacyFonts::font(aliases[static_cast<std::size_t>(i)]);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    const QFontMetrics metrics(font);
+    if (vertical) {
+      int widthMetric = metrics.maxWidth();
+      if (widthMetric <= 0) {
+        widthMetric = metrics.horizontalAdvance(QStringLiteral("8"));
+      }
+      if (widthMetric <= constraint) {
+        return font;
+      }
+    } else {
+      const int heightMetric = metrics.ascent() + metrics.descent();
+      if (heightMetric <= constraint) {
+        return font;
+      }
+    }
+  }
+
+  for (const QString &alias : aliases) {
+    const QFont fallback = LegacyFonts::font(alias);
+    if (!fallback.family().isEmpty()) {
+      return fallback;
+    }
+  }
+
+  return QFont();
+}
+
 QFont medmTextMonitorFont(const QString &text, const QSize &availableSize)
 {
   if (availableSize.width() <= 0 || availableSize.height() <= 0) {

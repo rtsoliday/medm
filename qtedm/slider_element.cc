@@ -199,7 +199,7 @@ SliderElement::SliderElement(QWidget *parent)
   limits_.precisionSource = PvLimitSource::kDefault;
   limits_.lowDefault = 0.0;
   limits_.highDefault = 100.0;
-  limits_.precisionDefault = 1;
+  limits_.precisionDefault = 0;
   runtimeLow_ = limits_.lowDefault;
   runtimeHigh_ = limits_.highDefault;
 }

@@ -36,8 +36,8 @@ public:
   BarDirection direction() const;
   void setDirection(BarDirection direction);
 
-  double precision() const;
-  void setPrecision(double precision);
+  double increment() const;
+  void setIncrement(double increment);
 
   const PvLimits &limits() const;
   void setLimits(const PvLimits &limits);
@@ -93,6 +93,7 @@ private:
   void updateCursor();
   bool isInteractive() const;
   double sliderEpsilon() const;
+  double quantizeToIncrement(double value) const;
   double defaultSampleValue() const;
   QString formatLimit(double value) const;
 
@@ -102,7 +103,7 @@ private:
   TextColorMode colorMode_ = TextColorMode::kStatic;
   MeterLabel label_ = MeterLabel::kOutline;
   BarDirection direction_ = BarDirection::kRight;
-  double precision_ = 1.0;
+  double increment_ = 1.0;
   PvLimits limits_{};
   QString channel_;
   bool executeMode_ = false;

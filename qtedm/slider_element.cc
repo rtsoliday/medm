@@ -287,17 +287,21 @@ void SliderElement::setDirection(BarDirection direction)
   update();
 }
 
-double SliderElement::precision() const
+double SliderElement::increment() const
 {
-  return precision_;
+  return increment_;
 }
 
-void SliderElement::setPrecision(double precision)
+void SliderElement::setIncrement(double increment)
 {
-  if (std::abs(precision_ - precision) < 1e-9) {
+  double sanitized = std::isfinite(increment) ? increment : 0.0;
+  if (sanitized < 0.0) {
+    sanitized = -sanitized;
+  }
+  if (std::abs(increment_ - sanitized) < 1e-9) {
     return;
   }
-  precision_ = precision;
+  increment_ = sanitized;
   update();
 }
 
@@ -1150,13 +1154,14 @@ double SliderElement::effectiveHighLimit() const
 
 int SliderElement::effectivePrecision() const
 {
+  const int defaultPrecision = std::clamp(limits_.precisionDefault, 0, 17);
   if (limits_.precisionSource == PvLimitSource::kChannel) {
     if (runtimePrecision_ >= 0) {
       return std::clamp(runtimePrecision_, 0, 17);
     }
-    return std::clamp(limits_.precisionDefault, 0, 17);
+    return defaultPrecision;
   }
-  return std::clamp(static_cast<int>(std::round(precision_)), 0, 17);
+  return defaultPrecision;
 }
 
 double SliderElement::clampToLimits(double value) const
@@ -1229,10 +1234,11 @@ void SliderElement::beginDrag(double value)
 void SliderElement::updateDrag(double value, bool force)
 {
   const double clamped = clampToLimits(value);
-  dragValue_ = clamped;
-  runtimeValue_ = clamped;
+  const double quantized = quantizeToIncrement(clamped);
+  dragValue_ = quantized;
+  runtimeValue_ = quantized;
   hasRuntimeValue_ = true;
-  sendActivationValue(clamped, force);
+  sendActivationValue(quantized, force);
   update();
 }
 
@@ -1255,12 +1261,13 @@ void SliderElement::sendActivationValue(double value, bool force)
   if (!std::isfinite(value)) {
     return;
   }
+  const double clamped = quantizeToIncrement(clampToLimits(value));
   if (!force && hasLastSentValue_
-      && std::abs(value - lastSentValue_) <= sliderEpsilon()) {
+      && std::abs(clamped - lastSentValue_) <= sliderEpsilon()) {
     return;
   }
-  activationCallback_(value);
-  lastSentValue_ = value;
+  activationCallback_(clamped);
+  lastSentValue_ = clamped;
   hasLastSentValue_ = true;
 }
 
@@ -1295,6 +1302,33 @@ double SliderElement::sliderEpsilon() const
     epsilon = 1e-9;
   }
   return epsilon;
+}
+
+double SliderElement::quantizeToIncrement(double value) const
+{
+  double increment = increment_;
+  if (!std::isfinite(increment) || increment <= 0.0) {
+    return value;
+  }
+  double low = effectiveLowLimit();
+  double high = effectiveHighLimit();
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return value;
+  }
+  if (low > high) {
+    std::swap(low, high);
+  }
+  if (std::abs(high - low) < 1e-12) {
+    return low;
+  }
+  const double steps = std::round((value - low) / increment);
+  double quantized = low + steps * increment;
+  if (quantized < low) {
+    quantized = low;
+  } else if (quantized > high) {
+    quantized = high;
+  }
+  return quantized;
 }
 
 double SliderElement::defaultSampleValue() const

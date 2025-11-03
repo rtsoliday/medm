@@ -1033,16 +1033,16 @@ public:
           }
         });
 
-    sliderPrecisionEdit_ = createLineEdit();
-    sliderPrecisionEdit_->setValidator(new QDoubleValidator(
+    sliderIncrementEdit_ = createLineEdit();
+    sliderIncrementEdit_->setValidator(new QDoubleValidator(
         std::numeric_limits<double>::lowest(),
-        std::numeric_limits<double>::max(), 6, sliderPrecisionEdit_));
-    committedTexts_.insert(sliderPrecisionEdit_, sliderPrecisionEdit_->text());
-    sliderPrecisionEdit_->installEventFilter(this);
-    QObject::connect(sliderPrecisionEdit_, &QLineEdit::returnPressed, this,
-        [this]() { commitSliderPrecision(); });
-    QObject::connect(sliderPrecisionEdit_, &QLineEdit::editingFinished, this,
-        [this]() { commitSliderPrecision(); });
+        std::numeric_limits<double>::max(), 6, sliderIncrementEdit_));
+    committedTexts_.insert(sliderIncrementEdit_, sliderIncrementEdit_->text());
+    sliderIncrementEdit_->installEventFilter(this);
+    QObject::connect(sliderIncrementEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitSliderIncrement(); });
+    QObject::connect(sliderIncrementEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitSliderIncrement(); });
 
     sliderChannelEdit_ = createLineEdit();
     committedTexts_.insert(sliderChannelEdit_, sliderChannelEdit_->text());
@@ -1063,7 +1063,7 @@ public:
     addRow(sliderLayout, 2, QStringLiteral("Label"), sliderLabelCombo_);
     addRow(sliderLayout, 3, QStringLiteral("Color Mode"), sliderColorModeCombo_);
     addRow(sliderLayout, 4, QStringLiteral("Direction"), sliderDirectionCombo_);
-    addRow(sliderLayout, 5, QStringLiteral("Precision"), sliderPrecisionEdit_);
+    addRow(sliderLayout, 5, QStringLiteral("Increment"), sliderIncrementEdit_);
     addRow(sliderLayout, 6, QStringLiteral("Channel"), sliderChannelEdit_);
     addRow(sliderLayout, 7, QStringLiteral("Channel Limits"), sliderPvLimitsButton_);
     sliderLayout->setRowStretch(8, 1);
@@ -2899,8 +2899,8 @@ public:
       std::function<void(TextColorMode)> colorModeSetter,
       std::function<BarDirection()> directionGetter,
       std::function<void(BarDirection)> directionSetter,
-      std::function<double()> precisionGetter,
-      std::function<void(double)> precisionSetter,
+      std::function<double()> incrementGetter,
+      std::function<void(double)> incrementSetter,
       std::function<QString()> channelGetter,
       std::function<void(const QString &)> channelSetter,
       std::function<PvLimits()> limitsGetter,
@@ -2986,8 +2986,8 @@ public:
     sliderColorModeSetter_ = std::move(colorModeSetter);
     sliderDirectionGetter_ = std::move(directionGetter);
     sliderDirectionSetter_ = std::move(directionSetter);
-    sliderPrecisionGetter_ = std::move(precisionGetter);
-    sliderPrecisionSetter_ = std::move(precisionSetter);
+    sliderIncrementGetter_ = std::move(incrementGetter);
+    sliderIncrementSetter_ = std::move(incrementSetter);
     sliderChannelGetter_ = std::move(channelGetter);
     sliderChannelSetter_ = std::move(channelSetter);
     sliderLimitsGetter_ = std::move(limitsGetter);
@@ -3039,7 +3039,7 @@ public:
       sliderDirectionCombo_->setCurrentIndex(barDirectionToIndex(direction));
     }
 
-    updateSliderPrecisionEdit();
+    updateSliderIncrementEdit();
 
     if (sliderChannelEdit_) {
       const QString channel = sliderChannelGetter_ ? sliderChannelGetter_()
@@ -3123,8 +3123,8 @@ public:
     sliderColorModeSetter_ = {};
     sliderDirectionGetter_ = {};
     sliderDirectionSetter_ = {};
-    sliderPrecisionGetter_ = {};
-    sliderPrecisionSetter_ = {};
+    sliderIncrementGetter_ = {};
+    sliderIncrementSetter_ = {};
     sliderChannelGetter_ = {};
     sliderChannelSetter_ = {};
     sliderLimitsGetter_ = {};
@@ -6372,8 +6372,8 @@ public:
     sliderColorModeSetter_ = {};
     sliderDirectionGetter_ = {};
     sliderDirectionSetter_ = {};
-    sliderPrecisionGetter_ = {};
-    sliderPrecisionSetter_ = {};
+    sliderIncrementGetter_ = {};
+    sliderIncrementSetter_ = {};
     sliderChannelGetter_ = {};
     sliderChannelSetter_ = {};
     sliderLimitsGetter_ = {};
@@ -7311,7 +7311,7 @@ private:
           revertLineEdit(edit);
         }
         if (edit == textMonitorChannelEdit_
-            || edit == meterChannelEdit_ || edit == sliderPrecisionEdit_
+            || edit == meterChannelEdit_ || edit == sliderIncrementEdit_
             || edit == sliderChannelEdit_) {
           revertLineEdit(edit);
         }
@@ -7694,23 +7694,23 @@ private:
     committedTexts_[textEntryChannelEdit_] = value;
   }
 
-  void commitSliderPrecision()
+  void commitSliderIncrement()
   {
-    if (!sliderPrecisionEdit_) {
+    if (!sliderIncrementEdit_) {
       return;
     }
-    if (!sliderPrecisionSetter_) {
-      revertLineEdit(sliderPrecisionEdit_);
+    if (!sliderIncrementSetter_) {
+      revertLineEdit(sliderIncrementEdit_);
       return;
     }
     bool ok = false;
-    const double value = sliderPrecisionEdit_->text().toDouble(&ok);
+    const double value = sliderIncrementEdit_->text().toDouble(&ok);
     if (!ok) {
-      revertLineEdit(sliderPrecisionEdit_);
+      revertLineEdit(sliderIncrementEdit_);
       return;
     }
-    sliderPrecisionSetter_(value);
-    committedTexts_[sliderPrecisionEdit_] = sliderPrecisionEdit_->text();
+    sliderIncrementSetter_(value);
+    committedTexts_[sliderIncrementEdit_] = sliderIncrementEdit_->text();
     updateSliderLimitsFromDialog();
   }
 
@@ -8540,19 +8540,19 @@ private:
     }
   }
 
-  void updateSliderPrecisionEdit()
+  void updateSliderIncrementEdit()
   {
-    if (!sliderPrecisionEdit_) {
+    if (!sliderIncrementEdit_) {
       return;
     }
-    const QSignalBlocker blocker(sliderPrecisionEdit_);
-    if (!sliderPrecisionGetter_) {
-      sliderPrecisionEdit_->clear();
+    const QSignalBlocker blocker(sliderIncrementEdit_);
+    if (!sliderIncrementGetter_) {
+      sliderIncrementEdit_->clear();
     } else {
-      const double precision = sliderPrecisionGetter_();
-      sliderPrecisionEdit_->setText(QString::number(precision, 'g', 6));
+      const double increment = sliderIncrementGetter_();
+      sliderIncrementEdit_->setText(QString::number(increment, 'g', 6));
     }
-    committedTexts_[sliderPrecisionEdit_] = sliderPrecisionEdit_->text();
+    committedTexts_[sliderIncrementEdit_] = sliderIncrementEdit_->text();
   }
 
   void updateWheelSwitchPrecisionEdit()
@@ -8596,7 +8596,7 @@ private:
 
   void updateSliderLimitsFromDialog()
   {
-    updateSliderPrecisionEdit();
+    updateSliderIncrementEdit();
     if (!pvLimitsDialog_) {
       return;
     }
@@ -9570,7 +9570,7 @@ private:
   QComboBox *sliderLabelCombo_ = nullptr;
   QComboBox *sliderColorModeCombo_ = nullptr;
   QComboBox *sliderDirectionCombo_ = nullptr;
-  QLineEdit *sliderPrecisionEdit_ = nullptr;
+  QLineEdit *sliderIncrementEdit_ = nullptr;
   QLineEdit *sliderChannelEdit_ = nullptr;
   QPushButton *sliderPvLimitsButton_ = nullptr;
   QWidget *wheelSwitchSection_ = nullptr;
@@ -9847,8 +9847,8 @@ private:
     if (textEntryChannelEdit_) {
       committedTexts_[textEntryChannelEdit_] = textEntryChannelEdit_->text();
     }
-    if (sliderPrecisionEdit_) {
-      committedTexts_[sliderPrecisionEdit_] = sliderPrecisionEdit_->text();
+    if (sliderIncrementEdit_) {
+      committedTexts_[sliderIncrementEdit_] = sliderIncrementEdit_->text();
     }
     if (sliderChannelEdit_) {
       committedTexts_[sliderChannelEdit_] = sliderChannelEdit_->text();
@@ -10124,8 +10124,8 @@ private:
   std::function<void(TextColorMode)> sliderColorModeSetter_;
   std::function<BarDirection()> sliderDirectionGetter_;
   std::function<void(BarDirection)> sliderDirectionSetter_;
-  std::function<double()> sliderPrecisionGetter_;
-  std::function<void(double)> sliderPrecisionSetter_;
+  std::function<double()> sliderIncrementGetter_;
+  std::function<void(double)> sliderIncrementSetter_;
   std::function<QString()> sliderChannelGetter_;
   std::function<void(const QString &)> sliderChannelSetter_;
   std::function<PvLimits()> sliderLimitsGetter_;

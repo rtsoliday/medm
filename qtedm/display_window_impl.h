@@ -3369,11 +3369,11 @@ private:
       const TextColorMode colorMode = element->colorMode();
       const MeterLabel label = element->label();
       const BarDirection direction = element->direction();
-      const double precision = element->precision();
+      const double increment = element->increment();
       const PvLimits limits = element->limits();
       const QString channel = element->channel();
       prepareClipboard([geometry, foreground, background, colorMode, label,
-                           direction, precision, limits, channel](
+                           direction, increment, limits, channel](
                            DisplayWindow &target, const QPoint &offset) {
         if (!target.displayArea_) {
           return;
@@ -3386,7 +3386,7 @@ private:
         newElement->setColorMode(colorMode);
         newElement->setLabel(label);
         newElement->setDirection(direction);
-        newElement->setPrecision(precision);
+        newElement->setIncrement(increment);
         newElement->setLimits(limits);
         newElement->setChannel(channel);
         newElement->show();
@@ -4858,10 +4858,10 @@ private:
           markDirty();
         },
         [element]() {
-          return element->precision();
+          return element->increment();
         },
-        [this, element](double precision) {
-          element->setPrecision(precision);
+        [this, element](double increment) {
+          element->setIncrement(increment);
           markDirty();
         },
         [element]() {
@@ -13899,10 +13899,10 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
             QStringLiteral("direction=\"%1\"")
                 .arg(AdlWriter::barDirectionString(slider->direction())));
       }
-      if (std::abs(slider->precision() - 1.0) > 1e-9) {
+      if (std::abs(slider->increment() - 1.0) > 1e-9) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("dPrecision=%1")
-                .arg(QString::number(slider->precision(), 'g', 6)));
+                .arg(QString::number(slider->increment(), 'g', 6)));
       }
       AdlWriter::writeLimitsSection(stream, 1, slider->limits(), true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
@@ -14682,10 +14682,10 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
           QStringLiteral("direction=\"%1\"")
               .arg(AdlWriter::barDirectionString(slider->direction())));
     }
-    if (std::abs(slider->precision() - 1.0) > 1e-9) {
+    if (std::abs(slider->increment() - 1.0) > 1e-9) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("dPrecision=%1")
-              .arg(QString::number(slider->precision(), 'g', 6)));
+              .arg(QString::number(slider->increment(), 'g', 6)));
     }
     AdlWriter::writeLimitsSection(stream, next, slider->limits(), true);
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
@@ -16788,13 +16788,13 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
     element->setDirection(parseBarDirection(directionValue));
   }
 
-  const QString precisionValue = propertyValue(valuatorNode,
+  const QString incrementValue = propertyValue(valuatorNode,
       QStringLiteral("dPrecision"));
-  if (!precisionValue.isEmpty()) {
+  if (!incrementValue.isEmpty()) {
     bool ok = false;
-    const double precision = precisionValue.toDouble(&ok);
+    const double increment = incrementValue.toDouble(&ok);
     if (ok) {
-      element->setPrecision(precision);
+      element->setIncrement(increment);
     }
   }
 

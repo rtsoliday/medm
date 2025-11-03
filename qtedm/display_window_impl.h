@@ -13345,12 +13345,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
 
   const QString processedContents = applyMacroSubstitutions(adlContent, macros);
 
-  qWarning() << "Parsing ADL file with" << processedContents.size() << "characters...";
+  //qWarning() << "Parsing ADL file with" << processedContents.size() << "characters...";
   std::optional<AdlNode> document = AdlParser::parse(processedContents, errorMessage);
   if (!document) {
     return false;
   }
-  qWarning() << "ADL parsing complete, loading" << document->children.size() << "top-level nodes...";
+  //qWarning() << "ADL parsing complete, loading" << document->children.size() << "top-level nodes...";
 
   clearAllElements();
 
@@ -13387,12 +13387,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       elementCount++;
       if (elementCount % 1000 == 0) {
-        qWarning() << "Loaded" << elementCount << "elements...";
+        //qWarning() << "Loaded" << elementCount << "elements...";
       }
       continue;
     }
   }
-  qWarning() << "Finished loading" << elementCount << "elements";
+  //qWarning() << "Finished loading" << elementCount << "elements";
   pendingBasicAttribute_ = std::nullopt;
   pendingDynamicAttribute_ = std::nullopt;
 
@@ -13423,8 +13423,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
     QTimer::singleShot(0, this, [this, filePath]() {
       cleanStateSnapshot_ = serializeStateForUndo(filePath);
       lastCommittedState_ = cleanStateSnapshot_;
-      qWarning() << "Created deferred undo snapshot for file with"
-                 << elementStack_.size() << "elements";
+      //qWarning() << "Created deferred undo snapshot for file with" << elementStack_.size() << "elements";
     });
   }
   updateDirtyFromUndoStack();

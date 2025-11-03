@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=16
-		y=338
+		x=9
+		y=377
 		width=1094
 		height=965
 	}
@@ -338,7 +338,7 @@ valuator {
 	control {
 		chan="slider:test:mu"
 		clr=48
-		bclr=16
+		bclr=31
 	}
 	label="channel"
 	clrmod="alarm"
@@ -825,8 +825,8 @@ valuator {
 	}
 	control {
 		chan="slider:test:omicron"
-		clr=35
-		bclr=5
+		clr=14
+		bclr=2
 	}
 	label="channel"
 	clrmod="discrete"
@@ -900,7 +900,7 @@ valuator {
 	object {
 		x=20
 		y=745
-		width=150
+		width=80
 		height=35
 	}
 	control {

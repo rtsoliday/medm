@@ -13410,8 +13410,10 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   pendingBasicAttribute_ = std::nullopt;
   pendingDynamicAttribute_ = std::nullopt;
 
-  /* Re-enable stacking order updates (no need to refresh - elements are already in order) */
+  /* Re-enable stacking order updates and refresh to ensure static graphics
+   * are below interactive widgets regardless of ADL file ordering */
   restoringState_ = false;
+  refreshStackingOrder();
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
   setWindowTitle(QFileInfo(filePath_).fileName());
@@ -16348,6 +16350,8 @@ inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
   if (!widget) {
     return false;
   }
+  /* CompositeElement excluded: its children (e.g. TextEntry) should always
+   * appear above static graphics even when the composite itself is static */
   return dynamic_cast<const RectangleElement *>(widget)
     || dynamic_cast<const ImageElement *>(widget)
     || dynamic_cast<const OvalElement *>(widget)
@@ -16355,8 +16359,7 @@ inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
     || dynamic_cast<const LineElement *>(widget)
     || dynamic_cast<const PolylineElement *>(widget)
     || dynamic_cast<const PolygonElement *>(widget)
-    || dynamic_cast<const TextElement *>(widget)
-    || dynamic_cast<const CompositeElement *>(widget);
+    || dynamic_cast<const TextElement *>(widget);
 }
 
 inline void DisplayWindow::refreshStackingOrder()
@@ -16379,9 +16382,11 @@ inline void DisplayWindow::refreshStackingOrder()
     ++it;
   }
 
+  /* Raise static widgets first (rectangles, ovals, etc. with no PVs) */
   for (QWidget *widget : staticWidgets) {
     widget->raise();
   }
+  /* Then raise interactive widgets (composites, monitors, controls) on top */
   for (QWidget *widget : interactiveWidgets) {
     widget->raise();
   }

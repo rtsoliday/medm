@@ -156,7 +156,6 @@ void CompositeElement::adoptChild(QWidget *child)
   if (!childWidgets_.contains(child)) {
     childWidgets_.append(QPointer<QWidget>(child));
   }
-  updateMouseTransparency();
 }
 
 void CompositeElement::expandToFitChildren()
@@ -349,18 +348,7 @@ QColor CompositeElement::defaultBackgroundColor() const
   return QColor(Qt::white);
 }
 
-void CompositeElement::updateMouseTransparency()
-{
-  if (!executeMode_) {
-    setAttribute(Qt::WA_TransparentForMouseEvents, false);
-    return;
-  }
-
-  const bool transparent = !hasAnyChannel() && !hasInteractiveChildren();
-  setAttribute(Qt::WA_TransparentForMouseEvents, transparent);
-}
-
-bool CompositeElement::hasAnyChannel() const
+bool CompositeElement::hasActiveChannel() const
 {
   for (const auto &channel : channels_) {
     if (!channel.trimmed().isEmpty()) {
@@ -370,18 +358,10 @@ bool CompositeElement::hasAnyChannel() const
   return false;
 }
 
-bool CompositeElement::hasInteractiveChildren() const
+void CompositeElement::updateMouseTransparency()
 {
-  for (const auto &pointer : childWidgets_) {
-    QWidget *child = pointer.data();
-    if (!child) {
-      continue;
-    }
-    if (!child->testAttribute(Qt::WA_TransparentForMouseEvents)) {
-      return true;
-    }
-  }
-  return false;
+  const bool interceptMouse = executeMode_ && hasActiveChannel();
+  setAttribute(Qt::WA_TransparentForMouseEvents, !interceptMouse);
 }
 
 void CompositeElement::mousePressEvent(QMouseEvent *event)

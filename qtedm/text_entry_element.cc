@@ -12,6 +12,7 @@
 #include <QResizeEvent>
 #include <QSignalBlocker>
 
+#include "cursor_utils.h"
 #include "text_font_utils.h"
 
 namespace {
@@ -508,8 +509,8 @@ void TextEntryElement::updateLineEditState()
 
   /* Update cursor based on write access */
   if (executeMode_ && runtimeConnected_ && !runtimeWriteAccess_) {
-    lineEdit_->setCursor(Qt::ForbiddenCursor);
-    setCursor(Qt::ForbiddenCursor);
+    lineEdit_->setCursor(CursorUtils::forbiddenCursor());
+    setCursor(CursorUtils::forbiddenCursor());
   } else if (executeMode_) {
     lineEdit_->unsetCursor();
     unsetCursor();

@@ -360,8 +360,10 @@ bool CompositeElement::hasActiveChannel() const
 
 void CompositeElement::updateMouseTransparency()
 {
-  const bool interceptMouse = executeMode_ && hasActiveChannel();
-  setAttribute(Qt::WA_TransparentForMouseEvents, !interceptMouse);
+  /* In execute mode, always allow mouse events so child widgets can receive
+   * them (for cursors, tooltips, interaction). In edit mode, be transparent
+   * so clicks select/manipulate the composite itself rather than children. */
+  setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
 }
 
 void CompositeElement::mousePressEvent(QMouseEvent *event)

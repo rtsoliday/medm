@@ -137,6 +137,7 @@ void CompositeElement::setChannel(int index, const QString &value)
     return;
   }
   channels_[static_cast<std::size_t>(index)] = value;
+  updateMouseTransparency();
 }
 
 std::array<QString, 5> CompositeElement::channels() const
@@ -155,6 +156,7 @@ void CompositeElement::adoptChild(QWidget *child)
   if (!childWidgets_.contains(child)) {
     childWidgets_.append(QPointer<QWidget>(child));
   }
+  updateMouseTransparency();
 }
 
 void CompositeElement::expandToFitChildren()
@@ -242,7 +244,7 @@ QList<QWidget *> CompositeElement::childWidgets() const
 void CompositeElement::setExecuteMode(bool execute)
 {
   executeMode_ = execute;
-  setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
+  updateMouseTransparency();
 
   /* Propagate the execute mode to nested composites so their mouse behaviour
    * matches the current state even if they were loaded indirectly. */
@@ -345,6 +347,41 @@ QColor CompositeElement::defaultBackgroundColor() const
     return qApp->palette().color(QPalette::Window);
   }
   return QColor(Qt::white);
+}
+
+void CompositeElement::updateMouseTransparency()
+{
+  if (!executeMode_) {
+    setAttribute(Qt::WA_TransparentForMouseEvents, false);
+    return;
+  }
+
+  const bool transparent = !hasAnyChannel() && !hasInteractiveChildren();
+  setAttribute(Qt::WA_TransparentForMouseEvents, transparent);
+}
+
+bool CompositeElement::hasAnyChannel() const
+{
+  for (const auto &channel : channels_) {
+    if (!channel.trimmed().isEmpty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CompositeElement::hasInteractiveChildren() const
+{
+  for (const auto &pointer : childWidgets_) {
+    QWidget *child = pointer.data();
+    if (!child) {
+      continue;
+    }
+    if (!child->testAttribute(Qt::WA_TransparentForMouseEvents)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void CompositeElement::mousePressEvent(QMouseEvent *event)

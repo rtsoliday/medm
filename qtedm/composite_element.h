@@ -61,6 +61,9 @@ private:
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
   bool forwardMouseEventToParent(QMouseEvent *event) const;
+  void updateMouseTransparency();
+  bool hasAnyChannel() const;
+  bool hasInteractiveChildren() const;
 
   bool selected_ = false;
   QString compositeName_;

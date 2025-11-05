@@ -426,61 +426,6 @@ display {
 }
 "text entry" {
 	object {
-		x=32
-		y=242
-		width=180
-		height=34
-	}
-	control {
-		chan="channelC_PV"
-		clr=6
-		bclr=58
-	}
-	clrmod="alarm"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=226
-		y=242
-		width=170
-		height=32
-	}
-	control {
-		chan="tm:sexagesimal:az"
-		clr=45
-		bclr=12
-	}
-	clrmod="discrete"
-	format="sexagesimal"
-	limits {
-		loprSrc="default"
-		loprDefault=-90
-		hoprSrc="default"
-		hoprDefault=90
-		precSrc="default"
-		precDefault=1
-	}
-}
-"text entry" {
-	object {
-		x=420
-		y=240
-		width=162
-		height=36
-	}
-	control {
-		chan="tm:sexagesimal:hms"
-		clr=11
-		bclr=59
-	}
-	format="sexagesimal-hms"
-	limits {
-	}
-}
-"text entry" {
-	object {
 		x=612
 		y=240
 		width=178
@@ -532,60 +477,6 @@ display {
 		bclr=39
 	}
 	format="string"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=34
-		y=314
-		width=154
-		height=34
-	}
-	control {
-		chan="channelD_PV"
-		clr=21
-		bclr=33
-	}
-	clrmod="alarm"
-	limits {
-		loprSrc="default"
-		loprDefault=-45.5
-	}
-}
-"text entry" {
-	object {
-		x=228
-		y=316
-		width=182
-		height=32
-	}
-	control {
-		chan="tm:trunc:edge"
-		clr=13
-		bclr=46
-	}
-	clrmod="discrete"
-	format="truncated"
-	limits {
-		hoprSrc="default"
-		hoprDefault=9999
-		precSrc="default"
-	}
-}
-"text entry" {
-	object {
-		x=424
-		y=312
-		width=168
-		height=36
-	}
-	control {
-		chan="tm:hex:count"
-		clr=31
-		bclr=18
-	}
-	format="hexadecimal"
 	limits {
 	}
 }
@@ -675,5 +566,158 @@ text {
 		hoprDefault=18.6
 		precSrc="default"
 		precDefault=3
+	}
+}
+composite {
+	object {
+		x=32
+		y=242
+		width=180
+		height=106
+	}
+	"composite name"=""
+	children {
+		"text entry" {
+			object {
+				x=32
+				y=242
+				width=180
+				height=34
+			}
+			control {
+				chan="channelC_PV"
+				clr=6
+				bclr=58
+			}
+			clrmod="alarm"
+			limits {
+			}
+		}
+		"text entry" {
+			object {
+				x=34
+				y=314
+				width=154
+				height=34
+			}
+			control {
+				chan="channelD_PV"
+				clr=21
+				bclr=33
+			}
+			clrmod="alarm"
+			limits {
+				loprSrc="default"
+				loprDefault=-45.5
+			}
+		}
+	}
+}
+composite {
+	object {
+		x=226
+		y=240
+		width=366
+		height=108
+	}
+	"composite name"=""
+	children {
+		composite {
+			object {
+				x=226
+				y=242
+				width=184
+				height=106
+			}
+			"composite name"=""
+			children {
+				"text entry" {
+					object {
+						x=226
+						y=242
+						width=170
+						height=32
+					}
+					control {
+						chan="tm:sexagesimal:az"
+						clr=45
+						bclr=12
+					}
+					clrmod="discrete"
+					format="sexagesimal"
+					limits {
+						loprSrc="default"
+						loprDefault=-90
+						hoprSrc="default"
+						hoprDefault=90
+						precSrc="default"
+						precDefault=1
+					}
+				}
+				"text entry" {
+					object {
+						x=228
+						y=316
+						width=182
+						height=32
+					}
+					control {
+						chan="tm:trunc:edge"
+						clr=13
+						bclr=46
+					}
+					clrmod="discrete"
+					format="truncated"
+					limits {
+						hoprSrc="default"
+						hoprDefault=9999
+						precSrc="default"
+					}
+				}
+			}
+		}
+		composite {
+			object {
+				x=420
+				y=240
+				width=172
+				height=108
+			}
+			"composite name"=""
+			children {
+				"text entry" {
+					object {
+						x=420
+						y=240
+						width=162
+						height=36
+					}
+					control {
+						chan="tm:sexagesimal:hms"
+						clr=11
+						bclr=59
+					}
+					format="sexagesimal-hms"
+					limits {
+					}
+				}
+				"text entry" {
+					object {
+						x=424
+						y=312
+						width=168
+						height=36
+					}
+					control {
+						chan="tm:hex:count"
+						clr=31
+						bclr=18
+					}
+					format="hexadecimal"
+					limits {
+					}
+				}
+			}
+		}
 	}
 }

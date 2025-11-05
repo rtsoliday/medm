@@ -16350,8 +16350,24 @@ inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
   if (!widget) {
     return false;
   }
-  /* CompositeElement excluded: its children (e.g. TextEntry) should always
-   * appear above static graphics even when the composite itself is static */
+  
+  /* Check if this is a CompositeElement with only static children */
+  if (const auto *composite = dynamic_cast<const CompositeElement *>(widget)) {
+    QList<QWidget *> children = composite->childWidgets();
+    if (children.isEmpty()) {
+      /* Empty composite is treated as static */
+      return true;
+    }
+    /* Composite is static only if ALL children are static graphics */
+    for (QWidget *child : children) {
+      if (!isStaticGraphicWidget(child)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  /* Regular static graphics (rectangles, ovals, text, etc.) */
   return dynamic_cast<const RectangleElement *>(widget)
     || dynamic_cast<const ImageElement *>(widget)
     || dynamic_cast<const OvalElement *>(widget)

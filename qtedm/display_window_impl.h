@@ -6838,6 +6838,20 @@ private:
               return hit;
             }
           }
+          if (executeModeActive_) {
+            const bool compositeHasChannels =
+                !channelsForWidget(composite).isEmpty();
+            const bool compositeHasDynamicVisibility =
+                composite->visibilityMode() != TextVisibilityMode::kStatic
+                || !composite->visibilityCalc().isEmpty();
+            const bool compositeHasDynamicColor =
+                composite->colorMode() != TextColorMode::kStatic;
+            if (!compositeHasChannels
+                && !compositeHasDynamicVisibility
+                && !compositeHasDynamicColor) {
+              return nullptr;
+            }
+          }
           return candidate;
         }
       }

@@ -909,7 +909,8 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
 
       // Use uniform button width based on '0' character width (like MEDM)
       // This ensures all buttons have the same width regardless of character
-      const double uniformButtonWidth = zeroWidth;
+      // Make buttons 50% wider (1.5x) for better visibility
+      const double uniformButtonWidth = zeroWidth * 1.5;
       const double inset = std::min(3.0, uniformButtonWidth * 0.2);
       const double buttonWidth = std::max(4.0, uniformButtonWidth - 2.0 * inset);
       const double buttonX = startX + (width - buttonWidth) / 2.0;
@@ -1035,7 +1036,11 @@ void WheelSwitchElement::paintButton(QPainter &painter, const QRectF &rect,
   if (hovered) {
     painter.setPen(QPen(QColor(0, 0, 0, 100)));
     painter.setBrush(Qt::NoBrush);
-    painter.drawRoundedRect(rect, 3.0, 3.0);
+    if (rect.width() >= 20) {
+      painter.drawRoundedRect(rect.adjusted(2.0, 1.0, -3.0, -1.0), 3.0, 3.0);
+    } else {
+      painter.drawRoundedRect(rect, 3.0, 3.0);
+    }
   }
 
   const QPointF center = rect.center();

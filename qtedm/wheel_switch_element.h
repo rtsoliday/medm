@@ -87,6 +87,8 @@ private:
       double step = 0.0;
       int exponent = 0;
       bool hasButtons = false;
+      bool showUpButton = true;
+      bool showDownButton = true;
     };
 
     QRectF outer;

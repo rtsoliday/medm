@@ -4930,13 +4930,6 @@ private:
           markDirty();
         },
         [element]() {
-          return element->precision();
-        },
-        [this, element](double precision) {
-          element->setPrecision(precision);
-          markDirty();
-        },
-        [element]() {
           return element->format();
         },
         [this, element](const QString &format) {

@@ -720,6 +720,7 @@ void PvLimitsDialog::updatePrecisionControls()
 {
   const bool hasPrecision = (mode_ == Mode::kTextMonitor
       || mode_ == Mode::kMeter || mode_ == Mode::kSlider
+      || mode_ == Mode::kWheelSwitch
       || mode_ == Mode::kBarMonitor
       || mode_ == Mode::kScaleMonitor)
       && static_cast<bool>(precisionSourceGetter_);

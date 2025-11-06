@@ -3071,8 +3071,6 @@ public:
       std::function<void(const QColor &)> backgroundSetter,
       std::function<TextColorMode()> colorModeGetter,
       std::function<void(TextColorMode)> colorModeSetter,
-      std::function<double()> precisionGetter,
-      std::function<void(double)> precisionSetter,
       std::function<QString()> formatGetter,
       std::function<void(const QString &)> formatSetter,
       std::function<QString()> channelGetter,
@@ -3150,8 +3148,6 @@ public:
     wheelSwitchBackgroundSetter_ = std::move(backgroundSetter);
     wheelSwitchColorModeGetter_ = std::move(colorModeGetter);
     wheelSwitchColorModeSetter_ = std::move(colorModeSetter);
-    wheelSwitchPrecisionGetter_ = std::move(precisionGetter);
-    wheelSwitchPrecisionSetter_ = std::move(precisionSetter);
     wheelSwitchFormatGetter_ = std::move(formatGetter);
     wheelSwitchFormatSetter_ = std::move(formatSetter);
     wheelSwitchChannelGetter_ = std::move(channelGetter);
@@ -3191,8 +3187,6 @@ public:
               : colorModeToIndex(TextColorMode::kStatic);
       wheelSwitchColorModeCombo_->setCurrentIndex(index);
     }
-
-    updateWheelSwitchPrecisionEdit();
 
     if (wheelSwitchFormatEdit_) {
       const QString format = wheelSwitchFormatGetter_ ? wheelSwitchFormatGetter_()
@@ -7436,6 +7430,14 @@ private:
       const bool wheelVisible = kind == SelectionKind::kWheelSwitch;
       wheelSwitchSection_->setVisible(wheelVisible);
       wheelSwitchSection_->setEnabled(wheelVisible);
+    }
+    // Hide precision row for wheel switch - it should use PV Limits precision
+    if (wheelSwitchPrecisionEdit_) {
+      const bool showPrecision = false;  // Never show for wheel switch
+      wheelSwitchPrecisionEdit_->setVisible(showPrecision);
+      if (fieldLabels_.contains(wheelSwitchPrecisionEdit_)) {
+        fieldLabels_[wheelSwitchPrecisionEdit_]->setVisible(showPrecision);
+      }
     }
     if (choiceButtonSection_) {
       const bool choiceVisible = kind == SelectionKind::kChoiceButton;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <vector>
 
@@ -114,7 +115,7 @@ WheelSwitchElement::WheelSwitchElement(QWidget *parent)
   limits_.lowDefault = 0.0;
 
   limits_.highDefault = 100.0;
-  limits_.precisionDefault = 1;
+  limits_.precisionDefault = 0;
   runtimeLow_ = limits_.lowDefault;
   runtimeHigh_ = limits_.highDefault;
   runtimeValue_ = defaultSampleValue();
@@ -430,13 +431,13 @@ void WheelSwitchElement::mousePressEvent(QMouseEvent *event)
     if (!std::isfinite(baseStep) || baseStep <= 0.0) {
       continue;
     }
-    if (column.upButton.contains(pos)) {
+    if (column.showUpButton && column.upButton.contains(pos)) {
       const double step = applyModifiersToStep(baseStep, event->modifiers());
       startRepeating(RepeatDirection::kUp, step, i);
       handled = true;
       break;
     }
-    if (column.downButton.contains(pos)) {
+    if (column.showDownButton && column.downButton.contains(pos)) {
       const double step = applyModifiersToStep(baseStep, event->modifiers());
       startRepeating(RepeatDirection::kDown, step, i);
       handled = true;
@@ -641,9 +642,13 @@ void WheelSwitchElement::paintEvent(QPaintEvent *event)
   const bool downHovered = (hoveredSlotIndex_ == i
     && hoveredDirection_ == RepeatDirection::kDown);
 
-  paintButton(painter, column.upButton, true, upPressed, enabled, upHovered);
-  paintButton(painter, column.downButton, false, downPressed, enabled,
-    downHovered);
+  if (column.showUpButton) {
+    paintButton(painter, column.upButton, true, upPressed, enabled, upHovered);
+  }
+  if (column.showDownButton) {
+    paintButton(painter, column.downButton, false, downPressed, enabled,
+      downHovered);
+  }
   }
 
   if (selected_) {
@@ -700,7 +705,58 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   Layout layout{};
   layout.outer = bounds;
 
+  // Use the maximum absolute value from limits to determine format structure.
+  // This ensures we see ALL potential digit positions that could be used.
+  const double low = effectiveLowLimit();
+  const double high = effectiveHighLimit();
+  const double maxAbsValue = std::max(std::abs(low), std::abs(high));
+  
+  QString templateText;
+  const QString trimmed = format_.trimmed();
+  if (!trimmed.isEmpty()) {
+    char buffer[256];
+    // Format the max absolute value to reveal all digit positions
+    snprintf(buffer, sizeof(buffer), trimmed.toStdString().c_str(), maxAbsValue);
+    templateText = QString::fromLatin1(buffer);
+  } else {
+    // No format string - use Qt's number formatting with effective precision
+    int digits = effectivePrecision();
+    templateText = QString::number(maxAbsValue, 'f', digits);
+  }
+
+  // Now format the actual display value
   layout.text = displayText();
+
+  // Calculate digit_number following medm's logic:
+  // digit_number = formatted_zero_size - 1 (sign/space) - 1 (decimal if present)
+  int digitNumber = templateText.size();
+  bool templateHasDecimal = templateText.contains('.');
+  if (templateHasDecimal) {
+    digitNumber--;  // Subtract 1 for decimal point
+  }
+  if (digitNumber > 0) {
+    digitNumber--;  // Subtract 1 for sign/space (first character)
+  }
+
+  // Find decimal positions in both template and current text
+  int templateDecimalIndex = templateText.indexOf('.');
+  if (templateDecimalIndex < 0) {
+    templateDecimalIndex = templateText.size();
+  }
+  
+  int currentDecimalIndex = layout.text.indexOf('.');
+  if (currentDecimalIndex < 0) {
+    currentDecimalIndex = layout.text.size();
+  }
+
+  // Count digits after decimal in template to determine how many go left vs right
+  int digitsAfterDecimal = 0;
+  for (int i = templateDecimalIndex + 1; i < templateText.size(); ++i) {
+    if (templateText.at(i).isDigit()) {
+      digitsAfterDecimal++;
+    }
+  }
+  int digitsBeforeDecimal = digitNumber - digitsAfterDecimal;
 
   layout.font = wheelSwitchFontForHeight(height());
   if (layout.font.family().isEmpty()) {
@@ -777,20 +833,18 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
     startX += (layout.valueRect.width() - totalWidth) / 2.0;
   }
 
-  int decimalIndex = layout.text.indexOf(QLatin1Char('.'));
-  if (decimalIndex < 0) {
-    decimalIndex = layout.text.size();
-  }
-
-  int digitsLeft = 0;
-  for (int i = 0; i < decimalIndex; ++i) {
-    if (layout.text.at(i).isDigit()) {
-      ++digitsLeft;
+  // Track which character positions in the TEMPLATE are digit positions.
+  // Following MEDM's logic: all positions except position 0 (sign) and decimal point
+  std::vector<bool> templateIsDigit(templateText.size(), false);
+  for (int i = 0; i < templateText.size(); ++i) {
+    // A position is a digit position if it's not the first character (sign/space)
+    // and not the decimal point
+    if (i > 0 && i != templateDecimalIndex) {
+      templateIsDigit[i] = true;
     }
   }
-  int leftCounter = digitsLeft;
-  int rightCounter = 0;
 
+  // Create slots for each character in the CURRENT text
   for (int i = 0; i < layout.text.size(); ++i) {
     const QChar ch = layout.text.at(i);
     const double width = charWidths.at(i);
@@ -799,23 +853,65 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
     slot.charRect = QRectF(startX, layout.valueRect.top(), width,
         layout.valueRect.height());
 
-    if (ch.isDigit()) {
-      slot.hasButtons = true;
-      int exponent = 0;
-      if (i < decimalIndex) {
-        --leftCounter;
-        exponent = leftCounter;
-      } else if (i > decimalIndex) {
-        ++rightCounter;
-        exponent = -rightCounter;
+    // Determine if this position in current text corresponds to a digit position in template.
+    // We align both strings by their decimal points.
+    bool canHaveButtons = false;
+    int exponent = 0;
+    
+    int templatePos = -1;
+    if (i < currentDecimalIndex) {
+      // Before decimal in current text
+      int offsetFromDecimal = currentDecimalIndex - i;
+      templatePos = templateDecimalIndex - offsetFromDecimal;
+    } else if (i == currentDecimalIndex) {
+      // This is the decimal point
+      templatePos = templateDecimalIndex;
+    } else {
+      // After decimal in current text
+      int offsetFromDecimal = i - currentDecimalIndex;
+      templatePos = templateDecimalIndex + offsetFromDecimal;
+    }
+    
+    // Check if this template position exists and is a digit
+    if (templatePos >= 0 && templatePos < templateText.size() && templateIsDigit[templatePos]) {
+      // This position should have buttons
+      canHaveButtons = true;
+      
+      // Calculate exponent based on distance from decimal in template
+      if (templatePos < templateDecimalIndex) {
+        // Before decimal - count digit positions to the right
+        int digitsToRight = 0;
+        for (int j = templatePos + 1; j < templateDecimalIndex; ++j) {
+          if (templateIsDigit[j]) {
+            digitsToRight++;
+          }
+        }
+        exponent = digitsToRight;
+      } else if (templatePos > templateDecimalIndex) {
+        // After decimal - count digit position from decimal
+        int digitsFromDecimal = 0;
+        for (int j = templateDecimalIndex + 1; j <= templatePos; ++j) {
+          if (templateIsDigit[j]) {
+            digitsFromDecimal++;
+          }
+        }
+        exponent = -digitsFromDecimal;
       } else {
-        exponent = 0;
+        // This shouldn't happen (decimal point itself)
+        canHaveButtons = false;
       }
+    }
+
+    if (canHaveButtons) {
+      slot.hasButtons = true;
       slot.exponent = exponent;
       slot.step = std::pow(10.0, exponent);
 
-      const double inset = std::min(3.0, width * 0.2);
-      const double buttonWidth = std::max(4.0, width - 2.0 * inset);
+      // Use uniform button width based on '0' character width (like MEDM)
+      // This ensures all buttons have the same width regardless of character
+      const double uniformButtonWidth = zeroWidth;
+      const double inset = std::min(3.0, uniformButtonWidth * 0.2);
+      const double buttonWidth = std::max(4.0, uniformButtonWidth - 2.0 * inset);
       const double buttonX = startX + (width - buttonWidth) / 2.0;
       const double buttonHeightAdjusted = std::max(0.0, buttonHeight - 2.0);
       slot.upButton = QRectF(buttonX, bounds.top() + 1.0,
@@ -826,6 +922,42 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
 
     layout.columns.push_back(slot);
     startX += width;
+  }
+
+  // Apply button visibility logic similar to medm's set_button_visibility
+  // Hide buttons that would cause values to exceed limits
+  const double value = displayedValue();
+  const double lowLimit = effectiveLowLimit();
+  const double highLimit = effectiveHighLimit();
+  
+  // Calculate roundoff as 0.1 times the smallest increment (rightmost digit)
+  double roundoff = 0.0;
+  for (const auto &slot : layout.columns) {
+    if (slot.hasButtons && std::abs(slot.step) > 0.0) {
+      if (roundoff == 0.0 || std::abs(slot.step) < roundoff) {
+        roundoff = std::abs(slot.step);
+      }
+    }
+  }
+  roundoff *= 0.1;
+
+  // Check each digit from left to right (largest to smallest increment).
+  // Check each digit independently.
+
+  for (auto &slot : layout.columns) {
+    if (!slot.hasButtons) {
+      continue;
+    }
+
+    // Check if incrementing THIS specific digit would exceed the high limit
+    bool hideUp = (value + slot.step > highLimit + roundoff);
+    
+    // Check if decrementing THIS specific digit would exceed the low limit
+    bool hideDown = (value - slot.step < lowLimit - roundoff);
+
+    // Apply visibility flags
+    slot.showUpButton = !hideUp;
+    slot.showDownButton = !hideDown;
   }
 
   return layout;
@@ -844,12 +976,12 @@ void WheelSwitchElement::updateHoverState(const QPointF &pos)
     if (!column.hasButtons) {
       continue;
     }
-    if (column.upButton.contains(pos)) {
+    if (column.showUpButton && column.upButton.contains(pos)) {
       newIndex = i;
       newDirection = RepeatDirection::kUp;
       break;
     }
-    if (column.downButton.contains(pos)) {
+    if (column.showDownButton && column.downButton.contains(pos)) {
       newIndex = i;
       newDirection = RepeatDirection::kDown;
       break;
@@ -974,18 +1106,16 @@ QString WheelSwitchElement::displayText() const
 
   const double value = displayedValue();
   const QString trimmed = format_.trimmed();
+  
   if (!trimmed.isEmpty()) {
-    int dotIndex = trimmed.indexOf(QLatin1Char('.'));
-    int decimals = 0;
-    if (dotIndex >= 0) {
-      decimals = trimmed.size() - dotIndex - 1;
-    }
-    decimals = std::clamp(decimals, 0, 17);
-    QString formatted = QString::number(value, 'f', decimals);
-    if (trimmed.size() > formatted.size()) {
-      formatted = formatted.rightJustified(trimmed.size(), QLatin1Char(' '));
-    }
-    return formatted;
+    // Parse the format string to determine width and precision
+    // For now, use Qt's formatting capabilities but we need to handle printf-style formats
+    // The format is expected to be something like "%+6.2f"
+    
+    // Try to use the format string with sprintf to get the actual formatted width
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer), trimmed.toStdString().c_str(), value);
+    return QString::fromLatin1(buffer);
   }
 
   int digits = effectivePrecision();
@@ -1034,17 +1164,14 @@ double WheelSwitchElement::effectiveHighLimit() const
 
 int WheelSwitchElement::effectivePrecision() const
 {
+  // Always use precision from PV Limits, not the separate precision_ field
   if (limits_.precisionSource == PvLimitSource::kChannel) {
     if (runtimePrecision_ >= 0) {
       return std::clamp(runtimePrecision_, 0, 17);
     }
-    return std::clamp(limits_.precisionDefault, 0, 17);
   }
-  int decimals = formatDecimals();
-  if (decimals >= 0) {
-    return decimals;
-  }
-  return std::clamp(static_cast<int>(std::round(precision_)), 0, 17);
+  // Use precisionDefault from limits regardless of source
+  return std::clamp(limits_.precisionDefault, 0, 17);
 }
 
 double WheelSwitchElement::sampleValue() const

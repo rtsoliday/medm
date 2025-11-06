@@ -705,23 +705,41 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   Layout layout{};
   layout.outer = bounds;
 
-  // Use the maximum absolute value from limits to determine format structure.
-  // This ensures we see ALL potential digit positions that could be used.
-  const double low = effectiveLowLimit();
-  const double high = effectiveHighLimit();
-  const double maxAbsValue = std::max(std::abs(low), std::abs(high));
-  
+  // Format zero to determine the structure, just like MEDM does.
+  // This gives us the baseline format structure with all positions.
   QString templateText;
-  const QString trimmed = format_.trimmed();
+  QString trimmed = format_.trimmed();
+  
+  // If no format specified, calculate one like MEDM does
+  if (trimmed.isEmpty()) {
+    const double low = effectiveLowLimit();
+    const double high = effectiveHighLimit();
+    const double maxAbsHoprLopr = std::max(std::abs(low), std::abs(high));
+    int precision = effectivePrecision();
+    if (precision < 0) precision = 0;
+    
+    int width;
+    if (maxAbsHoprLopr > 1.0) {
+      width = static_cast<int>(std::log10(maxAbsHoprLopr)) + 3 + precision;
+    } else {
+      width = 2 + precision;
+    }
+    
+    // Create format string with space for sign like MEDM: "% <width>.<precision>f"
+    char formatBuf[64];
+    snprintf(formatBuf, sizeof(formatBuf), "%% %d.%df", width, precision);
+    trimmed = QString::fromLatin1(formatBuf);
+  }
+  
   if (!trimmed.isEmpty()) {
     char buffer[256];
-    // Format the max absolute value to reveal all digit positions
-    snprintf(buffer, sizeof(buffer), trimmed.toStdString().c_str(), maxAbsValue);
+    // Format zero to reveal the format structure (matching MEDM)
+    snprintf(buffer, sizeof(buffer), trimmed.toStdString().c_str(), 0.0);
     templateText = QString::fromLatin1(buffer);
   } else {
-    // No format string - use Qt's number formatting with effective precision
+    // Fallback - use Qt's number formatting with effective precision
     int digits = effectivePrecision();
-    templateText = QString::number(maxAbsValue, 'f', digits);
+    templateText = QString::number(0.0, 'f', digits);
   }
 
   // Now format the actual display value
@@ -729,13 +747,14 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
 
   // Calculate digit_number following medm's logic:
   // digit_number = formatted_zero_size - 1 (sign/space) - 1 (decimal if present)
+  // This matches MEDM's compute_format_size() function
   int digitNumber = templateText.size();
   bool templateHasDecimal = templateText.contains('.');
   if (templateHasDecimal) {
-    digitNumber--;  // Subtract 1 for decimal point
+    digitNumber--;  // Do not count the decimal point
   }
   if (digitNumber > 0) {
-    digitNumber--;  // Subtract 1 for sign/space (first character)
+    digitNumber--;  // Do not count the sign/space (first character)
   }
 
   // Find decimal positions in both template and current text
@@ -1110,19 +1129,129 @@ QString WheelSwitchElement::displayText() const
   }
 
   const double value = displayedValue();
-  const QString trimmed = format_.trimmed();
+  QString trimmed = format_.trimmed();
+  
+  // If no format specified, calculate one like MEDM does
+  if (trimmed.isEmpty()) {
+    const double low = effectiveLowLimit();
+    const double high = effectiveHighLimit();
+    const double maxAbsHoprLopr = std::max(std::abs(low), std::abs(high));
+    int precision = effectivePrecision();
+    if (precision < 0) precision = 0;
+    
+    int width;
+    if (maxAbsHoprLopr > 1.0) {
+      width = static_cast<int>(std::log10(maxAbsHoprLopr)) + 3 + precision;
+    } else {
+      width = 2 + precision;
+    }
+    
+    // Create format string with space for sign like MEDM: "% <width>.<precision>f"
+    char formatBuf[64];
+    snprintf(formatBuf, sizeof(formatBuf), "%% %d.%df", width, precision);
+    trimmed = QString::fromLatin1(formatBuf);
+  }
   
   if (!trimmed.isEmpty()) {
-    // Parse the format string to determine width and precision
-    // For now, use Qt's formatting capabilities but we need to handle printf-style formats
-    // The format is expected to be something like "%+6.2f"
+    // Calculate format range (like medm's compute_format_min_max)
+    // Format zero to get the structure and determine digit positions
+    char zeroBuffer[256];
+    snprintf(zeroBuffer, sizeof(zeroBuffer), trimmed.toStdString().c_str(), 0.0);
+    QString zeroString = QString::fromLatin1(zeroBuffer);
     
-    // Try to use the format string with sprintf to get the actual formatted width
-    char buffer[256];
-    snprintf(buffer, sizeof(buffer), trimmed.toStdString().c_str(), value);
-    return QString::fromLatin1(buffer);
+    // Count digit positions and calculate increments
+    double minmin = 0.0;
+    double maxmax = 0.0;
+    int decimalPos = zeroString.indexOf('.');
+    int digitCount = 0;
+    
+    for (int i = 0; i < zeroString.size(); ++i) {
+      QChar ch = zeroString.at(i);
+      if (ch.isDigit()) {
+        int exponent;
+        if (decimalPos < 0) {
+          // No decimal point - count from right
+          exponent = zeroString.size() - i - 1;
+        } else if (i < decimalPos) {
+          // Before decimal
+          exponent = decimalPos - i - 1;
+        } else {
+          // After decimal
+          exponent = decimalPos - i;
+        }
+        double increment = std::pow(10.0, exponent);
+        minmin -= increment * 9.0;
+        maxmax += increment * 9.0;
+        digitCount++;
+      }
+    }
+    
+    // Constrain to user-defined limits
+    const double lowLimit = effectiveLowLimit();
+    const double highLimit = effectiveHighLimit();
+    double formatMin = std::max(lowLimit, minmin);
+    double formatMax = std::min(highLimit, maxmax);
+    
+    // Calculate roundoff as 0.1 times the smallest increment
+    double roff = 0.0;
+    if (digitCount > 0) {
+      // Find the smallest increment (rightmost digit)
+      for (int i = zeroString.size() - 1; i >= 0; --i) {
+        if (zeroString.at(i).isDigit()) {
+          int exponent;
+          if (decimalPos < 0) {
+            exponent = zeroString.size() - i - 1;
+          } else if (i < decimalPos) {
+            exponent = decimalPos - i - 1;
+          } else {
+            exponent = decimalPos - i;
+          }
+          roff = 0.1 * std::pow(10.0, exponent);
+          break;
+        }
+      }
+    }
+    
+    // Check if value is within format range
+    if (value < formatMax + roff && value > formatMin - roff) {
+      // Value is in range - format normally
+      char buffer[256];
+      snprintf(buffer, sizeof(buffer), trimmed.toStdString().c_str(), value);
+      return QString::fromLatin1(buffer);
+    } else {
+      // Value is out of format range - use stars like MEDM
+      // Start with zero string as template
+      QString result = zeroString;
+      
+      // Place minus sign if value is negative
+      bool isNegative = (value < 0.0);
+      
+      // Find the prefix size (typically 1 for sign/space)
+      int prefixSize = 0;
+      for (int i = 0; i < result.size(); ++i) {
+        if (result.at(i).isDigit()) {
+          prefixSize = i;
+          break;
+        }
+      }
+      
+      // Replace all digits with asterisks, preserve sign and decimal
+      for (int i = prefixSize; i < result.size(); ++i) {
+        if (result.at(i).isDigit()) {
+          result[i] = '*';
+        }
+      }
+      
+      // Set the sign character
+      if (isNegative && prefixSize > 0) {
+        result[prefixSize] = '-';
+      }
+      
+      return result;
+    }
   }
 
+  // Fallback
   int digits = effectivePrecision();
   return QString::number(value, 'f', digits);
 }

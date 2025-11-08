@@ -7,11 +7,13 @@
 
 #include <QApplication>
 #include <QFont>
+#include <QFontInfo>
 #include <QFontMetricsF>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPalette>
 #include <QPen>
+#include <QDebug>
 
 namespace {
 
@@ -326,125 +328,50 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
   }
 
   const QFont baseFont = painter.font();
-  const bool vertical = (direction_ == BarDirection::kUp
-      || direction_ == BarDirection::kDown);
 
-  qreal referenceExtent = vertical ? contentRect.width()
-      : contentRect.height();
-  if (referenceExtent <= 0.0) {
-    const qreal secondaryExtent = vertical ? contentRect.height()
-        : contentRect.width();
-    referenceExtent = (secondaryExtent > 0.0)
-        ? secondaryExtent : std::max(contentRect.width(), contentRect.height());
-  }
-  if (referenceExtent <= 0.0) {
-    referenceExtent = 32.0;
-  }
-
-  qreal candidatePoint = std::max(kMinimumLabelPointSize,
-      referenceExtent / 5.0);
-  qreal chosenPoint = -1.0;
-
-  auto fitsWithPointSize = [&](qreal pointSize) -> bool {
-    if (pointSize <= 0.0) {
-      return false;
-    }
-    QFont testFont = baseFont;
-    testFont.setPointSizeF(pointSize);
-    const QFontMetricsF testMetrics(testFont);
-    const Layout testLayout = calculateLayout(contentRect, testMetrics);
-    if (!testLayout.trackRect.isValid() || testLayout.trackRect.isEmpty()) {
-      return false;
-    }
-
-    auto fitsSpan = [&](const QString &text, const QRectF &rect) {
-      if (text.isEmpty() || !rect.isValid() || rect.isEmpty()) {
-        return true;
-      }
-      const qreal available = std::max<qreal>(rect.width() - kLabelTextPadding,
-          0.0);
-      return testMetrics.horizontalAdvance(text) <= available;
-    };
-
-    if (testLayout.showChannel
-        && !fitsSpan(testLayout.channelText, testLayout.channelRect)) {
-      return false;
-    }
-    if (testLayout.showReadback
-        && !fitsSpan(testLayout.readbackText, testLayout.readbackRect)) {
-      return false;
-    }
-    if (testLayout.showAxis && testLayout.showLimits && testLayout.vertical) {
-      const qreal tickLength = std::max<qreal>(3.0,
-          std::min<qreal>(kAxisTickLength, testLayout.axisRect.width() * 0.6));
-      const qreal available = std::max<qreal>(
-          testLayout.axisRect.width() - tickLength - 2.0, 0.0);
-      if ((!testLayout.lowLabel.isEmpty()
-              && testMetrics.horizontalAdvance(testLayout.lowLabel) > available)
-          || (!testLayout.highLabel.isEmpty()
-              && testMetrics.horizontalAdvance(testLayout.highLabel) > available)) {
-        return false;
-      }
-    }
-    if (testLayout.showAxis && testLayout.showLimits && !testLayout.vertical) {
-      const qreal tickLength = std::max<qreal>(3.0,
-          std::min<qreal>(kAxisTickLength, testLayout.axisRect.height() * 0.6));
-      const qreal textHeight = std::max<qreal>(
-          testLayout.axisRect.height() - tickLength - 2.0,
-          testMetrics.height());
-      if (testMetrics.height() > textHeight) {
-        return false;
-      }
-      auto fitsHorizontalLabel = [&](const QString &label) {
-        if (label.isEmpty()) {
-          return true;
-        }
-        const qreal width = testMetrics.horizontalAdvance(label) + 6.0;
-        return width <= std::max<qreal>(testLayout.axisRect.width() - 2.0, 0.0);
-      };
-      if (!fitsHorizontalLabel(testLayout.lowLabel)
-          || !fitsHorizontalLabel(testLayout.highLabel)) {
-        return false;
-      }
-    }
-    return true;
+  // Font setup for scale labels - match MEDM's algorithm:
+  // 1. preferredHeight = widget_height / INDICATOR_FONT_DIVISOR (8)
+  // 2. Find closest match from MEDM's fixed font table using binary search
+  // MEDM's fontSizeTable from siteSpecific.h:
+  static constexpr int kFontSizeTable[] = {
+    4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34
   };
+  static constexpr int kNumFonts = sizeof(kFontSizeTable) / sizeof(kFontSizeTable[0]);
+  
+  const qreal widgetHeight = rect().height();
+  constexpr qreal kIndicatorFontDivisor = 8.0;
+  const int preferredPixelHeight = static_cast<int>(
+      std::max(1.0, widgetHeight / kIndicatorFontDivisor));
 
-  for (int i = 0; i < kMaxFontSizeIterations; ++i) {
-    if (fitsWithPointSize(candidatePoint)) {
-      chosenPoint = candidatePoint;
-      break;
-    }
-    if (candidatePoint <= kMinimumLabelPointSize) {
-      break;
-    }
-    candidatePoint = std::max(kMinimumLabelPointSize,
-        candidatePoint * kFontShrinkFactor);
-  }
-
-  if (chosenPoint < 0.0) {
-    const qreal fallback = std::max(kMinimumLabelPointSize,
-        referenceExtent / 10.0);
-    chosenPoint = fitsWithPointSize(fallback) ? fallback : kMinimumLabelPointSize;
-  }
-
-  if (chosenPoint > 0.0) {
-    for (int i = 0; i < kMaxFontSizeIterations; ++i) {
-      const qreal nextPoint = chosenPoint * kFontGrowFactor;
-      if (nextPoint <= chosenPoint) {
-        break;
-      }
-      if (!fitsWithPointSize(nextPoint)) {
-        break;
-      }
-      chosenPoint = nextPoint;
+  // Binary search to find best font (matches dmGetBestFontWithInfo)
+  int upper = kNumFonts - 1;
+  int lower = 0;
+  int i = kNumFonts / 2;
+  int count = 0;
+  
+  while ((i > 0) && (i < kNumFonts) && ((upper - lower) > 2) && (count < kNumFonts / 2)) {
+    count++;
+    if (kFontSizeTable[i] > preferredPixelHeight) {
+      upper = i;
+      i = upper - (upper - lower) / 2;
+    } else if (kFontSizeTable[i] < preferredPixelHeight) {
+      lower = i;
+      i = lower + (upper - lower) / 2;
+    } else {
+      break;  // exact match
     }
   }
+  
+  if (i < 0) i = 0;
+  if (i >= kNumFonts) i = kNumFonts - 1;
+  
+  const int chosenPixelSize = kFontSizeTable[i];
 
   QFont labelFont = baseFont;
-  labelFont.setPointSizeF(chosenPoint);
+  labelFont.setPixelSize(chosenPixelSize);
   painter.setFont(labelFont);
   const QFontMetricsF metrics(labelFont);
+
 
   const Layout layout = calculateLayout(contentRect, metrics);
   if (!layout.trackRect.isValid() || layout.trackRect.isEmpty()) {
@@ -998,10 +925,9 @@ double BarMonitorElement::effectiveHighLimit() const
 
 int BarMonitorElement::effectivePrecision() const
 {
-  if (limits_.precisionSource == PvLimitSource::kChannel) {
-    if (runtimePrecision_ >= 0) {
-      return std::clamp(runtimePrecision_, 0, 17);
-    }
+  if (executeMode_ && limits_.precisionSource == PvLimitSource::kChannel
+      && runtimePrecision_ >= 0) {
+    return std::clamp(runtimePrecision_, 0, 17);
   }
   return std::clamp(limits_.precisionDefault, 0, 17);
 }
@@ -1064,7 +990,7 @@ QString BarMonitorElement::formatValue(double value, char format, int precision)
 
 QString BarMonitorElement::axisLabelText(double value) const
 {
-  return formatValue(value, 'g', 5);
+  return formatValue(value, 'f', -1);
 }
 
 double BarMonitorElement::valueEpsilon() const

@@ -735,7 +735,8 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   if (!trimmed.isEmpty()) {
     char buffer[256];
     // Format zero to reveal the format structure (matching MEDM)
-    snprintf(buffer, sizeof(buffer), trimmed.toStdString().c_str(), 0.0);
+    const QByteArray formatBytes = trimmed.toLatin1();
+    snprintf(buffer, sizeof(buffer), formatBytes.constData(), 0.0);
     templateText = QString::fromLatin1(buffer);
   } else {
     // Fallback - use Qt's number formatting with effective precision

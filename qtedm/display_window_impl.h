@@ -63,6 +63,15 @@ inline void setUtf8Encoding(QTextStream &stream)
 #endif
 }
 
+inline void setLatin1Encoding(QTextStream &stream)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  stream.setEncoding(QStringConverter::Latin1);
+#else
+  stream.setCodec("ISO-8859-1");
+#endif
+}
+
 class DisplayAreaWidget : public QWidget
 {
 public:
@@ -13322,7 +13331,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   }
 
   QTextStream stream(&file);
-  setUtf8Encoding(stream);
+  setLatin1Encoding(stream);
   const QString contents = stream.readAll();
 
   /* Detect file version */
@@ -14582,7 +14591,7 @@ inline bool DisplayWindow::writeAdlFile(const QString &filePath) const
 
   {
     QTextStream stream(&file);
-    setUtf8Encoding(stream);
+    setLatin1Encoding(stream);
     writeAdlToStream(stream, filePath);
     stream.flush();
   }
@@ -20156,7 +20165,7 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
                    << resolvedPath;
       } else {
         QTextStream stream(&file);
-        setUtf8Encoding(stream);
+        setLatin1Encoding(stream);
         const QString contents = stream.readAll();
 
         /* Detect file version */
@@ -20320,7 +20329,7 @@ inline bool DisplayWindow::restoreSerializedState(const QByteArray &data)
   suppressUndoCapture_ = true;
   restoringState_ = true;
 
-  const QString textData = QString::fromUtf8(data);
+  const QString textData = QString::fromLatin1(data);
   std::optional<AdlNode> document = AdlParser::parse(textData, nullptr);
   if (!document) {
     restoringState_ = false;

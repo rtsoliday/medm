@@ -776,7 +776,6 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
       digitsAfterDecimal++;
     }
   }
-  int digitsBeforeDecimal = digitNumber - digitsAfterDecimal;
 
   layout.font = wheelSwitchFontForHeight(height());
   if (layout.font.family().isEmpty()) {
@@ -864,8 +863,6 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   
   // Total content width is text width plus button extensions on both sides
   const double totalContentWidth = totalWidth + 2.0 * maxButtonExtension;
-  
-  const double maxAvailableWidth = std::max(0.0, bounds.width() - 4.0);
   
   // Center the entire content (text + buttons) within the widget
   const double widgetCenterX = bounds.center().x();

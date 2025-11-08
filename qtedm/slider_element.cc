@@ -1041,19 +1041,6 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
   painter.setPen(penColor);
   painter.setBrush(Qt::NoBrush);
 
-  const auto drawDebugRect = [&painter](const QRectF &rect) {
-    if (!rect.isValid() || rect.isEmpty()) {
-      return;
-    }
-    painter.save();
-    QPen pen(Qt::red);
-    pen.setWidthF(1.0);
-    painter.setPen(pen);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRect(rect.adjusted(0.5, 0.5, -0.5, -0.5));
-    painter.restore();
-  };
-
   if (label_ == MeterLabel::kOutline) {
     QPen pen(penColor.darker(150));
     pen.setStyle(Qt::DotLine);

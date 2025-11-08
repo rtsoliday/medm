@@ -53,56 +53,6 @@ int messageButtonPixelLimit(int height)
   return std::max(1, limit);
 }
 
-QFont scaledFontForHeight(const QFont &base, int pixelLimit)
-{
-  if (pixelLimit <= 0) {
-    return base;
-  }
-
-  QFont adjusted(base);
-  if (adjusted.pixelSize() > 0) {
-    adjusted.setPixelSize(pixelLimit);
-    return adjusted;
-  }
-
-  qreal pointSize = adjusted.pointSizeF();
-  if (pointSize <= 0.0) {
-    pointSize = adjusted.pointSize();
-  }
-  if (pointSize <= 0.0) {
-    QFontInfo info(adjusted);
-    pointSize = info.pointSizeF();
-  }
-  if (pointSize <= 0.0) {
-    pointSize = 12.0;
-  }
-
-  QFontMetricsF metrics(adjusted);
-  qreal textHeight = metrics.ascent() + metrics.descent();
-  if (textHeight <= 0.0) {
-    textHeight = static_cast<qreal>(pixelLimit);
-  }
-
-  qreal scaledPoint = pointSize * static_cast<qreal>(pixelLimit) / textHeight;
-  if (scaledPoint < 1.0) {
-    scaledPoint = 1.0;
-  }
-  adjusted.setPointSizeF(scaledPoint);
-
-  QFontMetricsF scaledMetrics(adjusted);
-  qreal scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
-  int iterations = 0;
-  while (scaledHeight > pixelLimit && scaledPoint > 1.0 && iterations < 16) {
-    scaledPoint = std::max<qreal>(1.0, scaledPoint - 0.5);
-    adjusted.setPointSizeF(scaledPoint);
-    scaledMetrics = QFontMetricsF(adjusted);
-    scaledHeight = scaledMetrics.ascent() + scaledMetrics.descent();
-    ++iterations;
-  }
-
-  return adjusted;
-}
-
 } // namespace
 
 ShellCommandElement::ShellCommandElement(QWidget *parent)

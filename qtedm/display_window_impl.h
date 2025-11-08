@@ -19951,11 +19951,16 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
 
   QPolygon polygon(points);
   QRect geometry = polygon.boundingRect();
+  
+  /* Expand geometry to accommodate line width, matching MEDM behavior */
+  const int halfWidth = lineWidth / 2;
+  geometry.adjust(-halfWidth, -halfWidth, halfWidth, halfWidth);
+  
   if (geometry.width() <= 0) {
-    geometry.setWidth(1);
+    geometry.setWidth(std::max(1, lineWidth));
   }
   if (geometry.height() <= 0) {
-    geometry.setHeight(1);
+    geometry.setHeight(std::max(1, lineWidth));
   }
 
   if (points.size() == 2) {

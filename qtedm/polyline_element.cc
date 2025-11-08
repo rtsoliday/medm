@@ -214,11 +214,16 @@ void PolylineElement::setAbsolutePoints(const QVector<QPoint> &points)
 
   QPolygon polygon(points);
   QRect bounding = polygon.boundingRect();
+  
+  /* Expand geometry to accommodate line width, matching MEDM behavior */
+  const int halfWidth = lineWidth_ / 2;
+  bounding.adjust(-halfWidth, -halfWidth, halfWidth, halfWidth);
+  
   if (bounding.width() <= 0) {
-    bounding.setWidth(1);
+    bounding.setWidth(std::max(1, lineWidth_));
   }
   if (bounding.height() <= 0) {
-    bounding.setHeight(1);
+    bounding.setHeight(std::max(1, lineWidth_));
   }
 
   const int widthSpan = std::max(1, bounding.width() - 1);

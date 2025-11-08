@@ -69,8 +69,19 @@ void PolygonElement::setFill(RectangleFill fill)
   if (fill_ == fill) {
     return;
   }
+  const RectangleFill oldFill = fill_;
   fill_ = fill;
-  update();
+  
+  /* Recalculate geometry if fill mode changes between solid and outline,
+   * as outline polygons need extra space for line width */
+  const bool oldNeedsPadding = (oldFill != RectangleFill::kSolid);
+  const bool newNeedsPadding = (fill_ != RectangleFill::kSolid);
+  if (oldNeedsPadding != newNeedsPadding && !normalizedPoints_.isEmpty()) {
+    const QVector<QPoint> points = absolutePoints();
+    setAbsolutePoints(points);
+  } else {
+    update();
+  }
 }
 
 RectangleLineStyle PolygonElement::lineStyle() const
@@ -99,7 +110,15 @@ void PolygonElement::setLineWidth(int width)
     return;
   }
   lineWidth_ = clamped;
-  update();
+  
+  /* Recalculate geometry for outline polygons when line width changes,
+   * as the bounding box needs to expand to accommodate the new width */
+  if (fill_ != RectangleFill::kSolid && !normalizedPoints_.isEmpty()) {
+    const QVector<QPoint> points = absolutePoints();
+    setAbsolutePoints(points);
+  } else {
+    update();
+  }
 }
 
 TextColorMode PolygonElement::colorMode() const
@@ -226,11 +245,19 @@ void PolygonElement::setAbsolutePoints(const QVector<QPoint> &points)
 
   QPolygon polygon(effectivePoints);
   QRect bounding = polygon.boundingRect();
+  
+  /* Expand geometry to accommodate line width when outline fill, matching MEDM behavior.
+   * For solid fill, line width doesn't affect bounding box since interior is filled. */
+  if (fill_ != RectangleFill::kSolid) {
+    const int halfWidth = lineWidth_ / 2;
+    bounding.adjust(-halfWidth, -halfWidth, halfWidth, halfWidth);
+  }
+  
   if (bounding.width() <= 0) {
-    bounding.setWidth(1);
+    bounding.setWidth(std::max(1, lineWidth_));
   }
   if (bounding.height() <= 0) {
-    bounding.setHeight(1);
+    bounding.setHeight(std::max(1, lineWidth_));
   }
 
   const int widthSpan = std::max(1, bounding.width() - 1);

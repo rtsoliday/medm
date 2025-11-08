@@ -13,7 +13,6 @@
 #include <QPaintEvent>
 #include <QPalette>
 #include <QPen>
-#include <QDebug>
 
 namespace {
 
@@ -25,6 +24,7 @@ constexpr qreal kMinimumTrackExtent = 8.0;
 constexpr qreal kMinimumTrackExtentNoDecorations = 1.0;
 constexpr qreal kMinimumAxisExtent = 12.0;
 constexpr qreal kAxisSpacing = 4.0;
+constexpr qreal kBevelWidth = 2.0;
 constexpr qreal kLayoutPadding = 6.0;
 constexpr qreal kMinimumLabelPointSize = 10.0;
 constexpr qreal kFontShrinkFactor = 0.9;
@@ -310,6 +310,24 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
+  // Paint 2-pixel raised bevel around outer edge (matching MEDM appearance)
+  const QColor bg = effectiveBackground();
+  QRect bevelOuter = rect().adjusted(0, 0, -1, -1);
+  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+  painter.setPen(QPen(bg.darker(145), 1));
+  painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+  painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
+
+  QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
+  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+  painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+  painter.setPen(QPen(bg.darker(170), 1));
+  painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+  painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
+
   if (executeMode_ && !runtimeConnected_) {
     painter.fillRect(rect(), Qt::white);
     if (selected_) {
@@ -318,7 +336,9 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
     return;
   }
 
-  const qreal padding = (label_ == MeterLabel::kNoDecorations) ? 0.0 : kLayoutPadding;
+  const qreal padding = (label_ == MeterLabel::kNoDecorations) 
+      ? 0.0 
+      : (kLayoutPadding + kBevelWidth);
   const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
   if (!contentRect.isValid() || contentRect.isEmpty()) {
     if (selected_) {
@@ -372,7 +392,6 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
   painter.setFont(labelFont);
   const QFontMetricsF metrics(labelFont);
 
-
   const Layout layout = calculateLayout(contentRect, metrics);
   if (!layout.trackRect.isValid() || layout.trackRect.isEmpty()) {
     if (selected_) {
@@ -411,8 +430,8 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
   layout.showLimits = (label_ == MeterLabel::kOutline
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
-  layout.showReadback = (label_ == MeterLabel::kOutline
-      || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
+  layout.showReadback = (label_ == MeterLabel::kLimits
+      || label_ == MeterLabel::kChannel);
   layout.channelText = (label_ == MeterLabel::kChannel)
       ? channel_.trimmed() : QString();
   layout.showChannel = !layout.channelText.isEmpty();
@@ -443,7 +462,8 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
 
     if (layout.showReadback) {
       readbackTop = bottom - layout.lineHeight;
-      bottom = readbackTop - spacing;
+      // Reserve space for readback plus half line height for lower limit text to sit above
+      bottom = readbackTop - spacing - (layout.lineHeight * 0.5);
     }
 
     if (bottom - top < minTrackExtent) {
@@ -477,11 +497,23 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
       layout.axisRect = QRectF();
       return layout;
     }
-    layout.trackRect = QRectF(left, top, trackWidth, bottom - top);
+    
+    // For vertical bars, extend track to the left by tick length since we removed tick marks
+    qreal trackLeft = left;
+    qreal trackWidthAdjusted = trackWidth;
+    if (layout.showAxis) {
+      const qreal tickLength = std::max<qreal>(3.0,
+          std::min<qreal>(kAxisTickLength, layout.axisRect.width() * 0.6));
+      trackLeft = left - tickLength;
+      trackWidthAdjusted = trackWidth + tickLength;
+    }
+    
+    layout.trackRect = QRectF(trackLeft, top, trackWidthAdjusted, bottom - top);
 
     if (layout.showReadback) {
-      layout.readbackRect = QRectF(layout.trackRect.left(), readbackTop,
-          layout.trackRect.width(), layout.lineHeight);
+      // Center readback text across entire widget width
+      layout.readbackRect = QRectF(bounds.left(), readbackTop,
+          bounds.width(), layout.lineHeight);
     }
   } else {
     if (layout.showChannel) {
@@ -522,8 +554,9 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
     layout.trackRect = QRectF(left, top, bounds.width(), trackHeight);
 
     if (layout.showReadback) {
-      layout.readbackRect = QRectF(layout.trackRect.left(), readbackTop,
-          layout.trackRect.width(), layout.lineHeight);
+      // Center readback text across entire widget width
+      layout.readbackRect = QRectF(bounds.left(), readbackTop,
+          bounds.width(), layout.lineHeight);
     }
   }
 
@@ -543,11 +576,25 @@ void BarMonitorElement::paintTrack(QPainter &painter,
   painter.drawRect(trackRect);
 
   if (label_ != MeterLabel::kNoDecorations) {
-    QPen framePen(Qt::black);
-    framePen.setWidth(1);
-    painter.setPen(framePen);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRect(trackRect.adjusted(0.5, 0.5, -0.5, -0.5));
+    // Paint 2-pixel sunken bevel around track using absolute colors for visibility on dark backgrounds
+    QRectF bevelOuter = trackRect.adjusted(0.5, 0.5, -0.5, -0.5);
+    
+    // Outer bevel - dark on top/left for sunken effect
+    painter.setPen(QPen(QColor(0, 0, 0, 180), 1));  // Semi-transparent black
+    painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+    painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+    painter.setPen(QPen(QColor(255, 255, 255, 120), 1));  // Semi-transparent white
+    painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+    painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
+    
+    // Inner bevel - slightly less contrast
+    QRectF bevelInner = bevelOuter.adjusted(1.0, 1.0, -1.0, -1.0);
+    painter.setPen(QPen(QColor(0, 0, 0, 120), 1));  // Lighter black
+    painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+    painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+    painter.setPen(QPen(QColor(255, 255, 255, 80), 1));  // More transparent white
+    painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+    painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
   }
   painter.restore();
 }
@@ -657,17 +704,68 @@ void BarMonitorElement::paintFill(QPainter &painter,
     return;
   }
 
+  // Inset fill by 2 pixels to avoid overlapping the track's sunken bevel
+  const qreal bevelInset = (label_ != MeterLabel::kNoDecorations) ? 2.0 : 0.0;
+  fillRect = fillRect.adjusted(bevelInset, bevelInset, -bevelInset, -bevelInset);
+  
+  if (!fillRect.isValid() || fillRect.isEmpty()) {
+    return;
+  }
+
   painter.save();
   painter.setPen(Qt::NoPen);
   painter.setBrush(barFillColor());
   painter.drawRect(fillRect);
 
   if (label_ != MeterLabel::kNoDecorations) {
-    QPen edgePen(barFillColor().darker(160));
-    edgePen.setWidth(1);
-    painter.setPen(edgePen);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRect(fillRect.adjusted(0.5, 0.5, -0.5, -0.5));
+    // Add sunken bevel around the fill
+    const QColor fillColor = barFillColor();
+    const bool isFull = (normalized >= 0.999); // Consider 99.9% as "full" to handle floating point
+    
+    // Determine which edges to draw based on direction and fill amount
+    bool drawTop = false, drawBottom = false, drawLeft = false, drawRight = false;
+    
+    if (direction_ == BarDirection::kUp) {
+      drawTop = true;
+      drawLeft = true;
+      drawRight = true;
+      drawBottom = isFull; // Only draw bottom if completely filled
+    } else if (direction_ == BarDirection::kDown) {
+      drawBottom = true;
+      drawLeft = true;
+      drawRight = true;
+      drawTop = isFull;
+    } else if (direction_ == BarDirection::kRight) {
+      drawTop = true;
+      drawBottom = true;
+      drawRight = true;
+      drawLeft = isFull;
+    } else { // Left
+      drawTop = true;
+      drawBottom = true;
+      drawLeft = true;
+      drawRight = isFull;
+    }
+    
+    QRectF bevelRect = fillRect.adjusted(0.5, 0.5, -0.5, -0.5);
+    
+    // Draw sunken bevel (darker on top/left, lighter on bottom/right)
+    if (drawTop) {
+      painter.setPen(QPen(fillColor.darker(160), 1));
+      painter.drawLine(bevelRect.topLeft(), bevelRect.topRight());
+    }
+    if (drawLeft) {
+      painter.setPen(QPen(fillColor.darker(160), 1));
+      painter.drawLine(bevelRect.topLeft(), bevelRect.bottomLeft());
+    }
+    if (drawBottom) {
+      painter.setPen(QPen(fillColor.lighter(140), 1));
+      painter.drawLine(bevelRect.bottomLeft(), bevelRect.bottomRight());
+    }
+    if (drawRight) {
+      painter.setPen(QPen(fillColor.lighter(140), 1));
+      painter.drawLine(bevelRect.topRight(), bevelRect.bottomRight());
+    }
   }
   painter.restore();
 }
@@ -693,8 +791,10 @@ void BarMonitorElement::paintAxis(QPainter &painter, const Layout &layout) const
     const qreal tickLength = std::max<qreal>(3.0,
         std::min<qreal>(kAxisTickLength, layout.axisRect.width() * 0.6));
 
-    painter.drawLine(QPointF(axisX, layout.axisRect.top()),
-        QPointF(axisX, layout.axisRect.bottom()));
+    // Shift axis line left by tickLength to align with tick marks
+    const qreal axisLineX = axisX - tickLength;
+    painter.drawLine(QPointF(axisLineX, layout.axisRect.top()),
+        QPointF(axisLineX, layout.axisRect.bottom()));
 
     auto positionForNormalized = [&](double normalized) {
       if (direction_ == BarDirection::kUp) {
@@ -704,9 +804,15 @@ void BarMonitorElement::paintAxis(QPainter &painter, const Layout &layout) const
     };
 
     for (int i = 0; i <= kAxisTickCount; ++i) {
+      // Skip top and bottom tick marks for vertical bars
+      if (i == 0 || i == kAxisTickCount) {
+        continue;
+      }
       const double normalized = static_cast<double>(i) / kAxisTickCount;
       const qreal y = positionForNormalized(normalized);
-      painter.drawLine(QPointF(axisX - tickLength, y), QPointF(axisX, y));
+      // Shift tick marks left by tickLength to align with widened track
+      painter.drawLine(QPointF(axisX - tickLength * 2.0, y), 
+          QPointF(axisX - tickLength, y));
     }
 
     if (layout.showLimits) {
@@ -810,6 +916,20 @@ void BarMonitorElement::paintLabels(QPainter &painter, const Layout &layout) con
 
   if (layout.showReadback && layout.readbackRect.isValid()
       && !layout.readbackRect.isEmpty()) {
+    // Calculate tight bounding box for readback text
+    QFontMetricsF fm(painter.font());
+    const qreal textWidth = fm.boundingRect(layout.readbackText).width();
+    const qreal padding = 4.0;  // 2 pixels on each side
+    const qreal bgWidth = textWidth + padding;
+    
+    // Center the white background around the text
+    const qreal centerX = layout.readbackRect.center().x();
+    const qreal bgLeft = centerX - bgWidth * 0.5;
+    QRectF bgRect(bgLeft, layout.readbackRect.top(), 
+        bgWidth, layout.readbackRect.height());
+    
+    // Paint white background for readback text
+    painter.fillRect(bgRect, Qt::white);
     painter.drawText(layout.readbackRect.adjusted(2.0, 0.0, -2.0, 0.0),
         Qt::AlignHCenter | Qt::AlignVCenter, layout.readbackText);
   }

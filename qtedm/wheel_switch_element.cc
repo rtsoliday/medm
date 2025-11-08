@@ -746,6 +746,49 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   // Now format the actual display value
   layout.text = displayText();
 
+  // Calculate prefix_size, format_size, and postfix_size like MEDM does
+  // This allows us to identify which characters are part of the actual number vs postfix units
+  int prefixSize = 0;
+  int formatSize = 0;
+  int postfixSize = 0;
+  
+  QString formatStr = format_.trimmed();
+  if (formatStr.isEmpty()) {
+    // Use the calculated format
+    const double low = effectiveLowLimit();
+    const double high = effectiveHighLimit();
+    const double maxAbsHoprLopr = std::max(std::abs(low), std::abs(high));
+    int precision = effectivePrecision();
+    if (precision < 0) precision = 0;
+    
+    int width;
+    if (maxAbsHoprLopr > 1.0) {
+      width = static_cast<int>(std::log10(maxAbsHoprLopr)) + 3 + precision;
+    } else {
+      width = 2 + precision;
+    }
+    
+    char formatBuf[64];
+    snprintf(formatBuf, sizeof(formatBuf), "%% %d.%df", width, precision);
+    formatStr = QString::fromLatin1(formatBuf);
+  }
+  
+  // Find prefix size (characters before '%')
+  int percentPos = formatStr.indexOf('%');
+  if (percentPos >= 0) {
+    prefixSize = percentPos;
+    
+    // Find format size (from '%' to 'f' inclusive)
+    int fPos = formatStr.indexOf('f', percentPos);
+    if (fPos >= 0) {
+      formatSize = fPos - percentPos + 1;
+      postfixSize = formatStr.length() - prefixSize - formatSize;
+    }
+  }
+  
+  // digit_size is the number of characters in the formatted number (excluding prefix and postfix)
+  int digitSize = templateText.size() - prefixSize - postfixSize;
+
   // Calculate digit_number following medm's logic:
   // digit_number = formatted_zero_size - 1 (sign/space) - 1 (decimal if present)
   // This matches MEDM's compute_format_size() function
@@ -759,9 +802,16 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   }
 
   // Find decimal positions in both template and current text
-  int templateDecimalIndex = templateText.indexOf('.');
+  // The decimal is within the digit area (excluding prefix and postfix)
+  int templateDecimalIndex = -1;
+  for (int i = prefixSize; i < prefixSize + digitSize; ++i) {
+    if (i < templateText.size() && templateText.at(i) == '.') {
+      templateDecimalIndex = i;
+      break;
+    }
+  }
   if (templateDecimalIndex < 0) {
-    templateDecimalIndex = templateText.size();
+    templateDecimalIndex = prefixSize + digitSize;
   }
   
   int currentDecimalIndex = layout.text.indexOf('.');
@@ -832,12 +882,30 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   // Buttons extend beyond character width by 1.5x zero width (uniformButtonWidth formula below)
   const double uniformButtonWidth = zeroWidth * 1.5;
   
-  // First pass: determine which characters will have buttons to calculate total content width
+  // Mark which positions in templateText should have buttons
+  // Following MEDM's logic: exclude sign (first in digit area), decimal point, and postfix characters
+  // (prefixSize, formatSize, postfixSize, and digitSize were calculated earlier)
+  
   std::vector<bool> templateIsDigit(templateText.size(), false);
   for (int i = 0; i < templateText.size(); ++i) {
-    if (i > 0 && i != templateDecimalIndex) {
-      templateIsDigit[i] = true;
+    // Skip prefix characters
+    if (i < prefixSize) {
+      continue;
     }
+    // Skip postfix characters
+    if (i >= prefixSize + digitSize) {
+      continue;
+    }
+    // Skip sign (first character in digit area)
+    if (i == prefixSize) {
+      continue;
+    }
+    // Skip decimal point
+    if (i == templateDecimalIndex) {
+      continue;
+    }
+    // This position gets buttons
+    templateIsDigit[i] = true;
   }
   
   // Calculate how much extra width buttons add beyond text

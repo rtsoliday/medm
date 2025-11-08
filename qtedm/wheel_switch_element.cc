@@ -829,40 +829,125 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
     totalWidth += width;
   }
 
-  const double maxAvailableWidth = std::max(0.0, bounds.width() - 4.0);
-  const double desiredValueWidth = std::min(maxAvailableWidth,
-      std::max(layout.valueRect.width(), totalWidth + 8.0));
-  const double valueCenterX = bounds.center().x();
-  double valueLeft = valueCenterX - desiredValueWidth / 2.0;
-  const double minValueLeft = bounds.left() + 2.0;
-  if (valueLeft < minValueLeft) {
-    valueLeft = minValueLeft;
-  }
-  double valueRight = valueLeft + desiredValueWidth;
-  const double maxValueRight = bounds.right() - 2.0;
-  if (valueRight > maxValueRight) {
-    const double shift = valueRight - maxValueRight;
-    valueLeft = std::max(minValueLeft, valueLeft - shift);
-    valueRight = valueLeft + desiredValueWidth;
-  }
-  layout.valueRect.setLeft(valueLeft);
-  layout.valueRect.setRight(valueRight);
-
-  double startX = layout.valueRect.left();
-  if (totalWidth < layout.valueRect.width()) {
-    startX += (layout.valueRect.width() - totalWidth) / 2.0;
-  }
-
-  // Track which character positions in the TEMPLATE are digit positions.
-  // Following MEDM's logic: all positions except position 0 (sign) and decimal point
+  // Calculate total width needed including button extensions
+  // Buttons extend beyond character width by 1.5x zero width (uniformButtonWidth formula below)
+  const double uniformButtonWidth = zeroWidth * 1.5;
+  
+  // First pass: determine which characters will have buttons to calculate total content width
   std::vector<bool> templateIsDigit(templateText.size(), false);
   for (int i = 0; i < templateText.size(); ++i) {
-    // A position is a digit position if it's not the first character (sign/space)
-    // and not the decimal point
     if (i > 0 && i != templateDecimalIndex) {
       templateIsDigit[i] = true;
     }
   }
+  
+  // Calculate how much extra width buttons add beyond text
+  double maxButtonExtension = 0.0;
+  for (int i = 0; i < layout.text.size(); ++i) {
+    int templatePos = -1;
+    if (i < currentDecimalIndex) {
+      int offsetFromDecimal = currentDecimalIndex - i;
+      templatePos = templateDecimalIndex - offsetFromDecimal;
+    } else if (i > currentDecimalIndex) {
+      int offsetFromDecimal = i - currentDecimalIndex;
+      templatePos = templateDecimalIndex + offsetFromDecimal;
+    }
+    
+    if (templatePos >= 0 && templatePos < templateText.size() && templateIsDigit[templatePos]) {
+      // This character will have buttons
+      const double charWidth = (static_cast<size_t>(i) < charWidths.size()) ? charWidths[i] : minimalWidth;
+      // Button extends beyond character on both sides
+      const double buttonExtension = std::max(0.0, (uniformButtonWidth - charWidth) / 2.0);
+      maxButtonExtension = std::max(maxButtonExtension, buttonExtension);
+    }
+  }
+  
+  // Total content width is text width plus button extensions on both sides
+  const double totalContentWidth = totalWidth + 2.0 * maxButtonExtension;
+  
+  const double maxAvailableWidth = std::max(0.0, bounds.width() - 4.0);
+  
+  // Center the entire content (text + buttons) within the widget
+  const double widgetCenterX = bounds.center().x();
+  const double minContentLeft = bounds.left() + 2.0;
+  const double maxContentRight = bounds.right() - 2.0;
+  const double availableWidth = maxContentRight - minContentLeft;
+  
+  double contentLeft;
+  double actualButtonExtension = maxButtonExtension;
+  
+  // Check if just the TEXT alone (without any button extensions) fits
+  if (totalWidth > availableWidth) {
+    // Text alone doesn't fit - no room for button extensions
+    actualButtonExtension = 0.0;
+    
+    // Count leading spaces that we can clip without visual impact
+    int leadingSpaces = 0;
+    double leadingSpaceWidth = 0.0;
+    for (int i = 0; i < layout.text.size(); ++i) {
+      if (layout.text.at(i) == QLatin1Char(' ')) {
+        leadingSpaces++;
+        if (static_cast<size_t>(i) < charWidths.size()) {
+          leadingSpaceWidth += charWidths[i];
+        }
+      } else {
+        break;
+      }
+    }
+    
+    if (leadingSpaces > 0 && leadingSpaceWidth > 0.0) {
+      // We have leading spaces - shift left to clip them instead of visible content
+      double overflow = totalWidth - availableWidth;
+      double shiftLeft = std::min(leadingSpaceWidth, overflow);
+      
+      // Position to clip the leading spaces
+      contentLeft = minContentLeft - shiftLeft;
+    } else {
+      // No leading spaces - center the text as best we can
+      contentLeft = widgetCenterX - totalWidth / 2.0;
+      
+      // Clamp so we don't go too far left
+      if (contentLeft < minContentLeft) {
+        contentLeft = minContentLeft;
+      }
+    }
+  } else if (totalContentWidth > availableWidth) {
+    // Text fits, but buttons extend beyond - reduce button extensions
+    
+    // Calculate how much we need to shrink button extensions
+    // Available width = totalWidth + 2 * newButtonExtension
+    // newButtonExtension = (availableWidth - totalWidth) / 2
+    actualButtonExtension = std::max(0.0, (availableWidth - totalWidth) / 2.0);
+    
+    // Position at left edge
+    contentLeft = minContentLeft;
+  } else {
+    // Everything fits - center the content
+    contentLeft = widgetCenterX - totalContentWidth / 2.0;
+    
+    // Clamp to widget bounds
+    if (contentLeft < minContentLeft) {
+      contentLeft = minContentLeft;
+    }
+    if (contentLeft + totalContentWidth > maxContentRight) {
+      contentLeft = std::max(minContentLeft, maxContentRight - totalContentWidth);
+    }
+  }
+  
+  // Position text within content area, accounting for actual button extension
+  double textLeft = contentLeft + actualButtonExtension;
+  
+  layout.valueRect.setLeft(textLeft);
+  layout.valueRect.setRight(textLeft + totalWidth);
+
+  double startX = textLeft;
+  
+  // Store actualButtonExtension for use in button placement
+  const double constrainedButtonExtension = actualButtonExtension;
+
+  // Track which character positions in the TEMPLATE are digit positions.
+  // Following MEDM's logic: all positions except position 0 (sign) and decimal point
+  // (Already calculated above, reuse templateIsDigit)
 
   // Create slots for each character in the CURRENT text
   for (int i = 0; i < layout.text.size(); ++i) {
@@ -927,12 +1012,18 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
       slot.exponent = exponent;
       slot.step = std::pow(10.0, exponent);
 
-      // Use uniform button width based on '0' character width (like MEDM)
-      // This ensures all buttons have the same width regardless of character
-      // Make buttons 50% wider (1.5x) for better visibility
-      const double uniformButtonWidth = zeroWidth * 1.5;
-      const double inset = std::min(3.0, uniformButtonWidth * 0.2);
-      const double buttonWidth = std::max(4.0, uniformButtonWidth - 2.0 * inset);
+      // Calculate button width accounting for the constrained extension
+      // Button can extend up to constrainedButtonExtension on each side of the character
+      const double maxAllowedButtonWidth = width + 2.0 * constrainedButtonExtension;
+      
+      // Start with the ideal uniform button width
+      const double idealUniformButtonWidth = zeroWidth * 1.5;
+      const double inset = std::min(3.0, idealUniformButtonWidth * 0.2);
+      const double idealButtonWidth = std::max(4.0, idealUniformButtonWidth - 2.0 * inset);
+      
+      // Constrain to what we can actually fit
+      const double buttonWidth = std::min(idealButtonWidth, maxAllowedButtonWidth);
+      
       const double buttonX = startX + (width - buttonWidth) / 2.0;
       const double buttonHeightAdjusted = std::max(0.0, buttonHeight - 2.0);
       slot.upButton = QRectF(buttonX, bounds.top() + 1.0,

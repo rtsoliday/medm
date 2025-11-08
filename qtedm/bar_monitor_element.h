@@ -83,7 +83,7 @@ private:
   QColor foregroundColor_;
   QColor backgroundColor_;
   TextColorMode colorMode_ = TextColorMode::kStatic;
-  MeterLabel label_ = MeterLabel::kOutline;
+  MeterLabel label_ = MeterLabel::kNone;
   BarDirection direction_ = BarDirection::kRight;
   BarFill fillMode_ = BarFill::kFromEdge;
   PvLimits limits_{};

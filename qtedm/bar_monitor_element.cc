@@ -25,7 +25,7 @@ constexpr qreal kMinimumTrackExtentNoDecorations = 1.0;
 constexpr qreal kMinimumAxisExtent = 12.0;
 constexpr qreal kAxisSpacing = 4.0;
 constexpr qreal kBevelWidth = 2.0;
-constexpr qreal kLayoutPadding = 6.0;
+constexpr qreal kLayoutPadding = 3.0;
 constexpr qreal kMinimumLabelPointSize = 10.0;
 constexpr qreal kFontShrinkFactor = 0.9;
 constexpr qreal kFontGrowFactor = 1.05;
@@ -460,10 +460,20 @@ BarMonitorElement::Layout BarMonitorElement::calculateLayout(
       top += layout.lineHeight + spacing;
     }
 
+    // When showing limits (Outline or Limits mode), reserve space for upper limit text
+    // The text is centered at the top position, so it extends lineHeight*0.5 above
+    if (layout.showLimits && !layout.showChannel) {
+      top += layout.lineHeight * 0.5;
+    }
+
     if (layout.showReadback) {
       readbackTop = bottom - layout.lineHeight;
       // Reserve space for readback plus half line height for lower limit text to sit above
       bottom = readbackTop - spacing - (layout.lineHeight * 0.5);
+    } else if (layout.showLimits) {
+      // When showing limits without readback (Outline mode), reserve space for lower limit text
+      // The text is centered at the bottom position, so it extends lineHeight*0.5 below
+      bottom -= layout.lineHeight * 0.5;
     }
 
     if (bottom - top < minTrackExtent) {

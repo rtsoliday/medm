@@ -539,7 +539,7 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
     }
 
     const qreal chartHeight = bottom - top;
-    if (chartHeight < kMinimumChartExtent) {
+    if (chartHeight < 4.0) {
       layout.chartRect = QRectF();
       layout.axisRect = QRectF();
       layout.showAxis = false;
@@ -555,7 +555,25 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
             metrics.horizontalAdvance(layout.highLabel) + 6.0);
       }
       const qreal availableWidth = (right - left) - axisWidth - kAxisSpacing;
-      if (availableWidth < kMinimumChartExtent) {
+      const qreal minimumTotal = kMinimumAxisExtent + kAxisSpacing
+          + kMinimumChartExtent;
+      if ((right - left) < minimumTotal) {
+        const qreal reducedSpacing = std::min<qreal>(kAxisSpacing, 2.0);
+        const qreal reducedAxisWidth = std::max<qreal>(8.0, axisWidth * 0.6);
+        const qreal reducedChartWidth = std::max<qreal>(8.0,
+            (right - left) - reducedAxisWidth - reducedSpacing);
+        if (reducedAxisWidth + reducedSpacing + reducedChartWidth
+            <= (right - left)) {
+          layout.axisRect = QRectF(left, top, reducedAxisWidth, chartHeight);
+          const qreal chartLeft = layout.axisRect.right() + reducedSpacing;
+          layout.chartRect = QRectF(chartLeft, top, reducedChartWidth,
+              chartHeight);
+        } else {
+          layout.showAxis = false;
+          layout.axisRect = QRectF();
+          layout.chartRect = QRectF(left, top, right - left, chartHeight);
+        }
+      } else if (availableWidth < kMinimumChartExtent) {
         layout.showAxis = false;
         layout.axisRect = QRectF();
         layout.chartRect = QRectF(left, top, right - left, chartHeight);
@@ -593,9 +611,23 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
     if (layout.showAxis) {
       qreal axisHeight = std::max<qreal>(kMinimumAxisExtent,
           layout.lineHeight + 4.0);
-      if (axisHeight + kAxisSpacing >= availableHeight) {
-        layout.showAxis = false;
-        layout.axisRect = QRectF();
+      const qreal minimumTotal = kMinimumAxisExtent + kAxisSpacing
+          + kMinimumChartExtent;
+      if (availableHeight < minimumTotal) {
+        const qreal reducedSpacing = std::min<qreal>(kAxisSpacing, 2.0);
+        const qreal reducedAxisHeight = std::max<qreal>(8.0, axisHeight * 0.6);
+        const qreal reducedChartHeight = std::max<qreal>(8.0,
+            availableHeight - reducedAxisHeight - reducedSpacing);
+        if (reducedAxisHeight + reducedSpacing + reducedChartHeight
+            <= availableHeight) {
+          layout.axisRect = QRectF(left, top, bounds.width(),
+              reducedAxisHeight);
+          top += reducedAxisHeight + reducedSpacing;
+          availableHeight = bottom - top;
+        } else {
+          layout.showAxis = false;
+          layout.axisRect = QRectF();
+        }
       } else {
         layout.axisRect = QRectF(left, top, bounds.width(), axisHeight);
         top += axisHeight + kAxisSpacing;
@@ -603,7 +635,7 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
       }
     }
 
-    if (availableHeight < kMinimumChartExtent) {
+    if (availableHeight < 4.0) {
       layout.chartRect = QRectF();
       return layout;
     }

@@ -707,7 +707,8 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
   } else {
     const qreal axisY = layout.axisRect.bottom();
     const qreal axisWidth = layout.axisRect.width();
-    const qreal tickLength = std::min<qreal>(layout.axisRect.height(), 10.0);
+    const qreal tickLength = (height() < 50) ? 2.0 
+        : std::min<qreal>(layout.axisRect.height(), 10.0);
 
     painter.drawLine(QPointF(layout.axisRect.left(), axisY),
         QPointF(layout.axisRect.right(), axisY));
@@ -771,9 +772,14 @@ void ScaleMonitorElement::paintInternalTicks(
   painter.setPen(tickPen);
 
   const bool vertical = isVertical();
-  const qreal majorLength = vertical ? chartRect.width() * 0.45
-                                     : chartRect.height() * 0.45;
-  const qreal tickLength = std::min<qreal>(majorLength, 10.0);
+  qreal tickLength;
+  if (!vertical && height() < 50) {
+    tickLength = 2.0;
+  } else {
+    const qreal majorLength = vertical ? chartRect.width() * 0.45
+                                       : chartRect.height() * 0.45;
+    tickLength = std::min<qreal>(majorLength, 10.0);
+  }
 
   for (int i = 0; i <= kTickCount; ++i) {
     const double ratio = static_cast<double>(i) / kTickCount;

@@ -822,6 +822,12 @@ void ScaleMonitorElement::paintPointer(QPainter &painter,
     ? std::min<qreal>(layout.chartRect.width() * 0.8, 16.0)
     : std::min<qreal>(layout.chartRect.height() * 0.8, 16.0);
 
+  // Set clipping to the chart rect inset by bevel to prevent diamond from extending into bevel
+  painter.save();
+  const QRectF clipRect = layout.chartRect.adjusted(bevelInset, bevelInset, 
+      -bevelInset, -bevelInset);
+  painter.setClipRect(clipRect);
+
   if (vertical) {
     const qreal y = layout.chartRect.bottom() - ratio * layout.chartRect.height();
     
@@ -869,6 +875,8 @@ void ScaleMonitorElement::paintPointer(QPainter &painter,
             << QPointF(x, layout.chartRect.bottom() - bevelInset);       // bottom corner
     painter.drawPolygon(diamond);
   }
+  
+  painter.restore();
 }
 
 void ScaleMonitorElement::paintLabels(
@@ -903,6 +911,19 @@ void ScaleMonitorElement::paintLabels(
 
   if (layout.showReadback && layout.readbackRect.isValid()
       && !layout.readbackRect.isEmpty()) {
+    QFontMetricsF fm(painter.font());
+    const qreal textWidth = fm.boundingRect(layout.readbackText).width();
+    const qreal padding = 4.0;  // 2 pixels on each side
+    const qreal bgWidth = textWidth + padding;
+    
+    // Center the white background around the text
+    const qreal centerX = layout.readbackRect.center().x();
+    const qreal bgLeft = centerX - bgWidth * 0.5;
+    QRectF bgRect(bgLeft, layout.readbackRect.top(), 
+        bgWidth, layout.readbackRect.height());
+    
+    // Paint white background for readback text
+    painter.fillRect(bgRect, Qt::white);
     painter.drawText(layout.readbackRect, Qt::AlignCenter | Qt::AlignVCenter,
         layout.readbackText);
   }

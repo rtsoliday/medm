@@ -801,58 +801,60 @@ void ScaleMonitorElement::paintPointer(QPainter &painter,
   painter.setPen(Qt::NoPen);
   painter.setBrush(effectiveForeground());
 
+  // Inset for bevel (2 pixels when decorations are on)
+  const qreal bevelInset = (label_ != MeterLabel::kNoDecorations) ? 2.0 : 0.0;
+  
+  // Calculate indicator_size (diamond size) based on chart dimensions
+  const qreal indicator_size = vertical
+    ? std::min<qreal>(layout.chartRect.width() * 0.8, 16.0)
+    : std::min<qreal>(layout.chartRect.height() * 0.8, 16.0);
+
   if (vertical) {
     const qreal y = layout.chartRect.bottom() - ratio * layout.chartRect.height();
-    const qreal arrowWidth = std::min<qreal>(layout.chartRect.width() * 0.8, 14.0);
-    const qreal arrowHeight = std::min<qreal>(layout.chartRect.height() * 0.16, 16.0);
-
+    
+    // Draw horizontal line across chart (inset from bevel edges)
     QPen linePen(effectiveForeground());
     linePen.setWidth(2);
     painter.setPen(linePen);
     painter.setBrush(Qt::NoBrush);
-    painter.drawLine(QPointF(layout.chartRect.left(), y),
-        QPointF(layout.chartRect.right(), y));
+    painter.drawLine(QPointF(layout.chartRect.left() + bevelInset, y),
+        QPointF(layout.chartRect.right() - bevelInset, y));
 
+    // Draw filled diamond marker (like MEDM Indicator widget)
     painter.setPen(Qt::NoPen);
     painter.setBrush(effectiveForeground());
-    const qreal baseX = layout.chartRect.left();
-    qreal tipX = baseX - arrowWidth;
-    if (layout.showAxis && layout.axisRect.isValid()) {
-      tipX = std::max(layout.axisRect.left(), tipX);
-    }
-    QPolygonF arrow;
-    arrow << QPointF(tipX, y)
-          << QPointF(baseX, y - arrowHeight / 2.0)
-          << QPointF(baseX, y + arrowHeight / 2.0);
-    painter.drawPolygon(arrow);
+    
+    // Diamond with 4 points: left, top, right, bottom (inset from bevel)
+    const qreal chartCenterX = layout.chartRect.left() + layout.chartRect.width() / 2.0;
+    QPolygonF diamond;
+    diamond << QPointF(layout.chartRect.left() + bevelInset, y)  // left corner at value
+            << QPointF(chartCenterX, y - indicator_size / 2.0)    // top corner
+            << QPointF(layout.chartRect.right() - bevelInset, y)  // right corner
+            << QPointF(chartCenterX, y + indicator_size / 2.0);   // bottom corner
+    painter.drawPolygon(diamond);
   } else {
     const qreal x = layout.chartRect.left() + ratio * layout.chartRect.width();
-    const qreal arrowHeight = std::min<qreal>(layout.chartRect.height() * 0.8, 16.0);
-    const qreal arrowWidth = std::min<qreal>(layout.chartRect.width() * 0.16, 16.0);
-
+    
+    // Draw vertical line across chart (inset from bevel edges)
     QPen linePen(effectiveForeground());
     linePen.setWidth(2);
     painter.setPen(linePen);
     painter.setBrush(Qt::NoBrush);
-    painter.drawLine(QPointF(x, layout.chartRect.top()),
-        QPointF(x, layout.chartRect.bottom()));
+    painter.drawLine(QPointF(x, layout.chartRect.top() + bevelInset),
+        QPointF(x, layout.chartRect.bottom() - bevelInset));
 
+    // Draw filled diamond marker (like MEDM Indicator widget)
     painter.setPen(Qt::NoPen);
     painter.setBrush(effectiveForeground());
-    QPolygonF arrow;
-    if (layout.showAxis && layout.axisRect.isValid()) {
-      qreal tipY = layout.chartRect.top() - arrowWidth;
-      tipY = std::max(layout.axisRect.top(), tipY);
-      arrow << QPointF(x, tipY)
-            << QPointF(x - arrowHeight / 2.0, layout.chartRect.top())
-            << QPointF(x + arrowHeight / 2.0, layout.chartRect.top());
-    } else {
-      const qreal tipY = layout.chartRect.bottom() + arrowWidth;
-      arrow << QPointF(x, tipY)
-            << QPointF(x - arrowHeight / 2.0, layout.chartRect.bottom())
-            << QPointF(x + arrowHeight / 2.0, layout.chartRect.bottom());
-    }
-    painter.drawPolygon(arrow);
+    
+    // Diamond with 4 points: top, right, bottom, left (inset from bevel)
+    const qreal chartCenterY = layout.chartRect.top() + layout.chartRect.height() / 2.0;
+    QPolygonF diamond;
+    diamond << QPointF(x - indicator_size / 2.0, chartCenterY)           // left corner
+            << QPointF(x, layout.chartRect.top() + bevelInset)           // top corner
+            << QPointF(x + indicator_size / 2.0, chartCenterY)           // right corner
+            << QPointF(x, layout.chartRect.bottom() - bevelInset);       // bottom corner
+    painter.drawPolygon(diamond);
   }
 }
 

@@ -137,7 +137,7 @@ QFont shrinkFontToFit(const QString &text, const QRect &bounds, QFont font)
 
   QFontMetrics metrics(font);
   while (!text.isEmpty()
-      && (metrics.horizontalAdvance(text) > bounds.width()
+      && (metrics.boundingRect(text).width() > bounds.width()
           || metrics.height() > bounds.height())
       && font.pointSize() > 4) {
     font.setPointSize(font.pointSize() - 1);
@@ -246,7 +246,7 @@ void paintChoiceButton(QPainter &painter, const QRect &bounds, bool checked,
     painter.drawLine(inner.topRight(), inner.bottomRight());
   }
 
-  QRect textArea = bounds.adjusted(2, 2, -3, -2);
+  QRect textArea = bounds.adjusted(3, 2, -3, -2);
   if (!textArea.isValid()) {
     textArea = bounds;
   }
@@ -258,7 +258,7 @@ void paintChoiceButton(QPainter &painter, const QRect &bounds, bool checked,
     penColor = blendedColor(penColor, face, 0.5);
   }
   painter.setPen(penColor);
-  painter.drawText(textArea, Qt::AlignCenter | Qt::TextWordWrap, text);
+  painter.drawText(textArea, Qt::AlignCenter | Qt::TextDontClip, text);
   painter.restore();
 }
 

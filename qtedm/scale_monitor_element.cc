@@ -1017,7 +1017,7 @@ double ScaleMonitorElement::effectiveHighLimit() const
 
 int ScaleMonitorElement::effectivePrecision() const
 {
-  if (limits_.precisionSource == PvLimitSource::kChannel) {
+  if (executeMode_ && limits_.precisionSource == PvLimitSource::kChannel) {
     if (runtimePrecision_ >= 0) {
       return std::clamp(runtimePrecision_, 0, 17);
     }
@@ -1064,7 +1064,7 @@ QString ScaleMonitorElement::formatValue(double value, char format, int precisio
 
 QString ScaleMonitorElement::axisLabelText(double value) const
 {
-  return formatValue(value, 'g', 5);
+  return formatValue(value, 'f', -1);
 }
 
 double ScaleMonitorElement::clampToLimits(double value) const

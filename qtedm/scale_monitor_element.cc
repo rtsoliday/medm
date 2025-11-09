@@ -18,12 +18,13 @@ namespace {
 
 constexpr int kTickCount = 10;
 constexpr double kSampleNormalizedValue = 0.65;
-constexpr qreal kOuterPadding = 4.0;
 constexpr qreal kAxisSpacing = 4.0;
 constexpr qreal kMinimumChartExtent = 16.0;
 constexpr qreal kMinimumAxisExtent = 14.0;
 constexpr qreal kOutlineMargin = 4.0;
 constexpr qreal kLabelTextPadding = 2.0;
+constexpr qreal kBevelWidth = 2.0;
+constexpr qreal kLayoutPadding = 3.0;
 constexpr short kInvalidSeverity = 3;
 constexpr short kDisconnectedSeverity = kInvalidSeverity + 1;
 
@@ -315,8 +316,36 @@ void ScaleMonitorElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
-  const QRectF contentRect = rect().adjusted(
-      kOuterPadding, kOuterPadding, -kOuterPadding, -kOuterPadding);
+  // Paint 2-pixel raised bevel around outer edge (matching MEDM appearance)
+  const QColor bg = effectiveBackground();
+  QRect bevelOuter = rect().adjusted(0, 0, -1, -1);
+  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+  painter.setPen(QPen(bg.darker(145), 1));
+  painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+  painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
+
+  QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
+  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+  painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+  painter.setPen(QPen(bg.darker(170), 1));
+  painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+  painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
+
+  if (executeMode_ && !runtimeConnected_) {
+    painter.fillRect(rect(), Qt::white);
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
+
+  const qreal padding = (label_ == MeterLabel::kNoDecorations) 
+      ? 0.0 
+      : (kLayoutPadding + kBevelWidth);
+  const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
   if (!contentRect.isValid() || contentRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);
@@ -563,14 +592,36 @@ void ScaleMonitorElement::paintScale(
     return;
   }
 
-  QColor frameColor = effectiveForeground().darker(140);
+  painter.save();
+  painter.setPen(Qt::NoPen);
+  
+  // Fill the chart area with a slightly lighter background
   QColor fillColor = effectiveBackground().lighter(108);
-
-  QPen framePen(frameColor);
-  framePen.setWidth(1);
-  painter.setPen(framePen);
   painter.setBrush(fillColor);
   painter.drawRect(chartRect);
+
+  if (label_ != MeterLabel::kNoDecorations) {
+    // Paint 2-pixel sunken bevel around chart using absolute colors for visibility on dark backgrounds
+    QRectF bevelOuter = chartRect.adjusted(0.5, 0.5, -0.5, -0.5);
+    
+    // Outer bevel - dark on top/left for sunken effect
+    painter.setPen(QPen(QColor(0, 0, 0, 180), 1));  // Semi-transparent black
+    painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+    painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+    painter.setPen(QPen(QColor(255, 255, 255, 120), 1));  // Semi-transparent white
+    painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+    painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
+    
+    // Inner bevel - slightly less contrast
+    QRectF bevelInner = bevelOuter.adjusted(1.0, 1.0, -1.0, -1.0);
+    painter.setPen(QPen(QColor(0, 0, 0, 120), 1));  // Lighter black
+    painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+    painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+    painter.setPen(QPen(QColor(255, 255, 255, 80), 1));  // More transparent white
+    painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+    painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
+  }
+  painter.restore();
 }
 
 void ScaleMonitorElement::paintAxis(QPainter &painter,

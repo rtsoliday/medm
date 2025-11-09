@@ -431,6 +431,8 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
   }
 
   layout.lineHeight = std::max<qreal>(metrics.height(), 8.0);
+  const qreal spacing = std::max<qreal>(layout.lineHeight * 0.25, kAxisSpacing);
+  
   layout.showAxis = (label_ == MeterLabel::kOutline
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
   layout.showLimits = (label_ == MeterLabel::kLimits
@@ -458,7 +460,13 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
   if (layout.vertical) {
     if (layout.showChannel) {
       layout.channelRect = QRectF(left, top, bounds.width(), layout.lineHeight);
-      top += layout.lineHeight + kAxisSpacing;
+      top += layout.lineHeight + spacing;
+    }
+
+    // When showing limits (Outline or Limits mode), reserve space for upper limit text
+    // The text is centered at the top position, so it extends lineHeight*0.5 above
+    if (layout.showLimits && !layout.showChannel) {
+      top += layout.lineHeight * 0.25;
     }
 
     if (layout.showReadback) {
@@ -466,11 +474,16 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
       if (readbackTop > top) {
         layout.readbackRect = QRectF(left, readbackTop, bounds.width(),
             layout.lineHeight);
-        bottom = readbackTop - kAxisSpacing;
+        // Reserve space for readback plus half line height for lower limit text to sit above
+        bottom = readbackTop - spacing - (layout.lineHeight * 0.25);
       } else {
         layout.showReadback = false;
         layout.readbackRect = QRectF();
       }
+    } else if (layout.showLimits) {
+      // When showing limits without readback (Outline mode), reserve space for lower limit text
+      // The text is centered at the bottom position, so it extends lineHeight*0.5 below
+      bottom -= layout.lineHeight * 0.25;
     }
 
     if (bottom <= top) {
@@ -493,11 +506,11 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
         axisWidth = std::max(axisWidth,
             metrics.horizontalAdvance(layout.highLabel) + 6.0);
       }
-      const qreal availableWidth = (right - left) - axisWidth - kAxisSpacing;
-      const qreal minimumTotal = kMinimumAxisExtent + kAxisSpacing
+      const qreal availableWidth = (right - left) - axisWidth - spacing;
+      const qreal minimumTotal = kMinimumAxisExtent + spacing
           + kMinimumChartExtent;
       if ((right - left) < minimumTotal) {
-        const qreal reducedSpacing = std::min<qreal>(kAxisSpacing, 2.0);
+        const qreal reducedSpacing = std::min<qreal>(spacing, 2.0);
         const qreal reducedAxisWidth = std::max<qreal>(8.0, axisWidth * 0.6);
         const qreal reducedChartWidth = std::max<qreal>(8.0,
             (right - left) - reducedAxisWidth - reducedSpacing);
@@ -518,7 +531,7 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
         layout.chartRect = QRectF(left, top, right - left, chartHeight);
       } else {
         layout.axisRect = QRectF(left, top, axisWidth, chartHeight);
-        const qreal chartLeft = layout.axisRect.right() + kAxisSpacing;
+        const qreal chartLeft = layout.axisRect.right() + spacing;
         layout.chartRect = QRectF(chartLeft, top, availableWidth, chartHeight);
       }
     } else {
@@ -527,7 +540,7 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
   } else {
     if (layout.showChannel) {
       layout.channelRect = QRectF(left, top, bounds.width(), layout.lineHeight);
-      top += layout.lineHeight + kAxisSpacing;
+      top += layout.lineHeight + spacing;
     }
 
     if (layout.showReadback) {
@@ -535,7 +548,7 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
       if (readbackTop > top) {
         layout.readbackRect = QRectF(left, readbackTop, bounds.width(),
             layout.lineHeight);
-        bottom = readbackTop - kAxisSpacing;
+        bottom = readbackTop - spacing;
       } else {
         layout.showReadback = false;
         layout.readbackRect = QRectF();
@@ -550,10 +563,10 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
     if (layout.showAxis) {
       qreal axisHeight = std::max<qreal>(kMinimumAxisExtent,
           layout.lineHeight + 4.0);
-      const qreal minimumTotal = kMinimumAxisExtent + kAxisSpacing
+      const qreal minimumTotal = kMinimumAxisExtent + spacing
           + kMinimumChartExtent;
       if (availableHeight < minimumTotal) {
-        const qreal reducedSpacing = std::min<qreal>(kAxisSpacing, 2.0);
+        const qreal reducedSpacing = std::min<qreal>(spacing, 2.0);
         const qreal reducedAxisHeight = std::max<qreal>(8.0, axisHeight * 0.6);
         const qreal reducedChartHeight = std::max<qreal>(8.0,
             availableHeight - reducedAxisHeight - reducedSpacing);
@@ -569,7 +582,7 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
         }
       } else {
         layout.axisRect = QRectF(left, top, bounds.width(), axisHeight);
-        top += axisHeight + kAxisSpacing;
+        top += axisHeight + spacing;
         availableHeight = bottom - top;
       }
     }

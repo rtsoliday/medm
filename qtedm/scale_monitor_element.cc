@@ -674,10 +674,43 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
     }
 
     if (layout.showLimits) {
-      const QFontMetricsF metrics(painter.font());
+      QFont limitFont = painter.font();
+      QFontMetricsF metrics(limitFont);
       const qreal textRight = axisX - tickLength - 2.0;
       const qreal maxWidth = std::max<qreal>(
           textRight - layout.axisRect.left(), 0.0);
+      
+      // Check if labels need to be resized to fit
+      if (!layout.lowLabel.isEmpty() && !layout.highLabel.isEmpty()) {
+        const qreal yLow = positionForNormalized(0.0);
+        const qreal yHigh = positionForNormalized(1.0);
+        const qreal lowWidth = metrics.horizontalAdvance(layout.lowLabel);
+        const qreal highWidth = metrics.horizontalAdvance(layout.highLabel);
+        const qreal maxLabelWidth = std::max(lowWidth, highWidth);
+        
+        // Check overlap and boundary constraints
+        const qreal verticalGap = std::abs(yHigh - yLow);
+        const qreal minVerticalSpace = layout.lineHeight;
+        const bool wouldOverlap = verticalGap < minVerticalSpace;
+        const bool exceedsBounds = maxLabelWidth > maxWidth;
+        
+        if (wouldOverlap || exceedsBounds) {
+          // Reduce font size to fit
+          qreal scaleFactor = 1.0;
+          if (exceedsBounds) {
+            scaleFactor = std::min(scaleFactor, maxWidth / maxLabelWidth);
+          }
+          if (wouldOverlap) {
+            scaleFactor = std::min(scaleFactor, verticalGap / minVerticalSpace);
+          }
+          const int newSize = std::max(4, static_cast<int>(
+              limitFont.pixelSize() * scaleFactor * 0.95));
+          limitFont.setPixelSize(newSize);
+          painter.setFont(limitFont);
+          metrics = QFontMetricsF(limitFont);
+        }
+      }
+      
       auto labelRectForWidth = [&](const QString &label, qreal centerY) {
         const qreal textWidth = metrics.horizontalAdvance(label);
         const qreal paddedWidth = std::clamp(
@@ -686,8 +719,8 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
             std::max(maxWidth, metrics.averageCharWidth()));
         const qreal rectWidth = std::min(paddedWidth, maxWidth);
         const qreal left = textRight - rectWidth;
-        return QRectF(left, centerY - layout.lineHeight * 0.5,
-            rectWidth, layout.lineHeight);
+        return QRectF(left, centerY - metrics.height() * 0.5,
+            rectWidth, metrics.height());
       };
 
       if (!layout.lowLabel.isEmpty()) {
@@ -703,6 +736,9 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
         painter.drawText(highRect, Qt::AlignRight | Qt::AlignVCenter,
             layout.highLabel);
       }
+      
+      // Restore original font
+      painter.setFont(painter.font());
     }
   } else {
     const qreal axisY = layout.axisRect.bottom();
@@ -727,10 +763,62 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
     }
 
     if (layout.showLimits) {
-      const QFontMetricsF metrics(painter.font());
+      QFont limitFont = painter.font();
+      QFontMetricsF metrics(limitFont);
       const qreal textHeight = std::max<qreal>(
           layout.axisRect.height() - tickLength - 2.0, metrics.height());
       const qreal textTop = axisY - tickLength - textHeight;
+      
+      // Check if labels need to be resized to fit
+      if (!layout.lowLabel.isEmpty() && !layout.highLabel.isEmpty()) {
+        const qreal xLow = positionForNormalized(0.0);
+        const qreal xHigh = positionForNormalized(1.0);
+        const qreal lowWidth = metrics.horizontalAdvance(layout.lowLabel) + 6.0;
+        const qreal highWidth = metrics.horizontalAdvance(layout.highLabel) + 6.0;
+        
+        // Check overlap
+        qreal lowLeft, lowRight, highLeft, highRight;
+        if (direction_ == BarDirection::kRight) {
+          lowLeft = xLow;
+          lowRight = lowLeft + lowWidth;
+          highLeft = xHigh - highWidth;
+          highRight = xHigh;
+        } else {
+          lowLeft = xLow - lowWidth;
+          lowRight = xLow;
+          highLeft = xHigh;
+          highRight = highLeft + highWidth;
+        }
+        
+        const bool wouldOverlap = (lowRight > highLeft);
+        const bool lowExceedsBounds = lowLeft < layout.axisRect.left() 
+            || lowRight > layout.axisRect.right();
+        const bool highExceedsBounds = highLeft < layout.axisRect.left() 
+            || highRight > layout.axisRect.right();
+        
+        if (wouldOverlap || lowExceedsBounds || highExceedsBounds) {
+          // Calculate scale factor needed
+          qreal scaleFactor = 1.0;
+          
+          if (wouldOverlap) {
+            const qreal availableWidth = std::abs(xHigh - xLow);
+            const qreal neededWidth = lowWidth + highWidth;
+            scaleFactor = std::min(scaleFactor, availableWidth / neededWidth);
+          }
+          
+          if (lowExceedsBounds || highExceedsBounds) {
+            const qreal maxLabelWidth = std::max(lowWidth, highWidth);
+            const qreal availWidth = layout.axisRect.width() * 0.45;
+            scaleFactor = std::min(scaleFactor, availWidth / maxLabelWidth);
+          }
+          
+          const int newSize = std::max(4, static_cast<int>(
+              limitFont.pixelSize() * scaleFactor * 0.95));
+          limitFont.setPixelSize(newSize);
+          painter.setFont(limitFont);
+          metrics = QFontMetricsF(limitFont);
+        }
+      }
 
       if (!layout.lowLabel.isEmpty()) {
         const qreal width = metrics.horizontalAdvance(layout.lowLabel) + 6.0;
@@ -911,8 +999,26 @@ void ScaleMonitorElement::paintLabels(
 
   if (layout.showChannel && layout.channelRect.isValid()
       && !layout.channelRect.isEmpty()) {
+    const QFont originalFont = painter.font();
+    QFont channelFont = originalFont;
+    QFontMetricsF metrics(channelFont);
+    const qreal textWidth = metrics.horizontalAdvance(layout.channelText);
+    const qreal availableWidth = layout.channelRect.width();
+    
+    // Check if text needs to be resized to fit
+    if (textWidth > availableWidth) {
+      const qreal scaleFactor = availableWidth / textWidth;
+      const int newSize = std::max(4, static_cast<int>(
+          channelFont.pixelSize() * scaleFactor * 0.95));
+      channelFont.setPixelSize(newSize);
+      painter.setFont(channelFont);
+    }
+    
     painter.drawText(layout.channelRect, Qt::AlignCenter | Qt::AlignVCenter,
         layout.channelText);
+    
+    // Restore original font
+    painter.setFont(originalFont);
   }
 
   if (layout.showReadback && layout.readbackRect.isValid()

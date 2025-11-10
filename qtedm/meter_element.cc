@@ -416,11 +416,38 @@ void MeterElement::paintEvent(QPaintEvent *event)
   }
 
   QFont labelFont = painter.font();
-  labelFont.setPointSizeF(std::max(8.0, height() / 8.0));
+  qreal fontSize = std::max(8.0, height() / 8.0);
+  labelFont.setPointSizeF(fontSize);
   painter.setFont(labelFont);
-  const QFontMetricsF metrics(labelFont);
+  QFontMetricsF metrics(labelFont);
 
-  const MeterLayout layout = calculateLayout(bounds, label_, metrics);
+  MeterLayout layout = calculateLayout(bounds, label_, metrics);
+
+  // If dial doesn't have enough width (needs width >= 2*height for semicircle),
+  // iteratively shrink font to give dial more vertical room
+  const qreal minFontSize = 6.0;
+  while (fontSize > minFontSize && layout.dialRect.isValid() && 
+         !layout.dialRect.isEmpty()) {
+    const qreal dialWidth = layout.dialRect.width();
+    // Check if dial width (plus margin) fits within widget width
+    if (dialWidth + 12.0 >= width()) {
+      break;  // Dial fits properly
+    }
+    // Shrink font and recalculate layout
+    fontSize -= 0.5;
+    if (fontSize < minFontSize) {
+      fontSize = minFontSize;
+      labelFont.setPointSizeF(fontSize);
+      metrics = QFontMetricsF(labelFont);
+      layout = calculateLayout(bounds, label_, metrics);
+      break;
+    }
+    labelFont.setPointSizeF(fontSize);
+    metrics = QFontMetricsF(labelFont);
+    layout = calculateLayout(bounds, label_, metrics);
+  }
+
+  painter.setFont(labelFont);
 
   if (layout.dialRect.isValid() && !layout.dialRect.isEmpty()) {
     paintDial(painter, layout.dialRect);
@@ -584,28 +611,30 @@ void MeterElement::paintDial(QPainter &painter, const QRectF &dialRect) const
     return;
   }
 
-  QColor rimColor = effectiveForeground().darker(140);
-  QColor faceColor = effectiveBackground().lighter(110);
+  const QColor baseColor = effectiveBackground();
+  const QColor faceColor = effectiveBackground().lighter(110);
 
   painter.save();
   painter.setRenderHint(QPainter::Antialiasing, true);
 
-  const qreal radius = dialRect.width() / 2.0;
-  const QRectF bevelRect(dialRect.left(), dialRect.top(),
-      dialRect.width(), radius);
-
-  drawDepressedBevel(painter, bevelRect, effectiveBackground(), kBevelDepth);
-
-  QPen rimPen(rimColor);
-  rimPen.setWidth(2);
-  painter.setPen(rimPen);
-  painter.setBrush(faceColor);
-
-  QPainterPath outer;
-  outer.moveTo(dialRect.left(), dialRect.center().y());
-  outer.arcTo(dialRect, 180.0, -kSpanAngleDegrees);
-  outer.closeSubpath();
-  painter.drawPath(outer);
+  const QColor darkShade = baseColor.darker(150);
+  
+  for (int i = 0; i < kBevelDepth; ++i) {
+    const qreal offset = static_cast<qreal>(i);
+    const QRectF arcRect = dialRect.adjusted(-offset, -offset, offset, 0);
+    
+    QPen bevelPen;
+    bevelPen.setWidth(1);
+    
+    bevelPen.setColor(darkShade);
+    painter.setPen(bevelPen);
+    painter.setBrush(Qt::NoBrush);
+    
+    QPainterPath arcPath;
+    arcPath.moveTo(arcRect.left(), arcRect.center().y());
+    arcPath.arcTo(arcRect, 180.0, -kSpanAngleDegrees);
+    painter.drawPath(arcPath);
+  }
 
   QRectF inner = dialRect.adjusted(dialRect.width() * kDialInsetRatio,
       dialRect.width() * kDialInsetRatio, -dialRect.width() * kDialInsetRatio,

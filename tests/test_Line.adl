@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
+		x=1184
+		y=874
 		width=792
 		height=534
 	}
@@ -201,15 +201,15 @@ polyline {
 }
 polyline {
 	object {
-		x=119
-		y=319
-		width=202
-		height=92
+		x=115
+		y=315
+		width=210
+		height=100
 	}
 	"basic attribute" {
 		clr=52
 		style="dash"
-		width=2
+		width=10
 	}
 	"dynamic attribute" {
 		clr="discrete"
@@ -294,5 +294,25 @@ polyline {
 		(301,500)
 		(400,481)
 		(459,519)
+	}
+}
+polyline {
+	object {
+		x=53
+		y=380
+		width=124
+		height=4
+	}
+	"basic attribute" {
+		clr=9
+		width=4
+	}
+	"dynamic attribute" {
+		vis="if zero"
+		chan="channelA_PV"
+	}
+	points {
+		(55,382)
+		(175,382)
 	}
 }

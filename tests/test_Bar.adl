@@ -364,3 +364,24 @@ bar {
 		precDefault=1
 	}
 }
+bar {
+	object {
+		x=40
+		y=427
+		width=112
+		height=168
+	}
+	monitor {
+		chan="bar:test:alphaa"
+		clr=21
+		bclr=48
+	}
+	label="channel"
+	clrmod="alarm"
+	direction="up"
+	limits {
+		loprDefault=-58.4
+		hoprDefault=139.7
+		precDefault=1
+	}
+}

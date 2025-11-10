@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=130
-		y=609
+		x=120
+		y=601
 		width=840
 		height=380
 	}
@@ -100,7 +100,7 @@ display {
 		bclr=45
 	}
 	clrmod="alarm"
-	format="%+6.2f"
+	format="%+6.2fKv"
 	limits {
 		loprDefault=-17.25
 		hoprSrc="default"
@@ -396,5 +396,26 @@ display {
 		hoprSrc="default"
 		hoprDefault=999.99
 		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=224
+		y=110
+		width=170
+		height=80
+	}
+	control {
+		chan="wheel:test:delta"
+		clr=44
+		bclr=7
+	}
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		hoprDefault=10000
+		precSrc="default"
+		precDefault=3
 	}
 }

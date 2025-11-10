@@ -5,7 +5,7 @@ file {
 }
 display {
 	object {
-		x=10
+		x=15
 		y=53
 		width=1104
 		height=707
@@ -307,8 +307,8 @@ indicator {
 }
 indicator {
 	object {
-		x=508
-		y=402
+		x=376
+		y=392
 		width=300
 		height=300
 	}
@@ -326,5 +326,93 @@ indicator {
 		hoprDefault=78.2
 		precSrc="default"
 		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=41
+		y=437
+		width=198
+		height=32
+	}
+	monitor {
+		chan="scale:test:gamma"
+		clr=30
+		bclr=52
+	}
+	label="outline"
+	limits {
+		loprDefault=-5.4
+		hoprDefault=97.3
+		precSrc="default"
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=927
+		y=232
+		width=130
+		height=162
+	}
+	monitor {
+		chan="scale:test:kappa"
+		clr=24
+		bclr=47
+	}
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprSrc="default"
+		loprDefault=-250
+		hoprSrc="default"
+		hoprDefault=250
+		precSrc="default"
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=708
+		y=440
+		width=130
+		height=100
+	}
+	monitor {
+		chan="scale:test:kappa"
+		clr=24
+		bclr=47
+	}
+	label="no decorations"
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-250
+		hoprSrc="default"
+		hoprDefault=250
+		precSrc="default"
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=874
+		y=443
+		width=130
+		height=100
+	}
+	monitor {
+		chan="scale:test:kappa"
+		clr=24
+		bclr=47
+	}
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-250
+		hoprSrc="default"
+		hoprDefault=250
+		precSrc="default"
+		precDefault=2
 	}
 }

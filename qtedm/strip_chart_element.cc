@@ -623,7 +623,7 @@ StripChartElement::Layout StripChartElement::calculateLayout(
     const QFontMetrics titleMetrics(titleFont());
     const int height = titleMetrics.height();
     layout.titleRect = QRect(left, top, layout.innerRect.width(), height);
-    top += height + kInnerMargin;
+    top += height + 2;  // Reduced margin between title and Y-axis label
   }
 
   // Reserve space for Y-axis label (horizontal, like medm) if present
@@ -631,14 +631,14 @@ StripChartElement::Layout StripChartElement::calculateLayout(
   if (!layout.yLabelText.isEmpty()) {
     const int height = metrics.height();
     yLabelTop = top;
-    top += height + kInnerMargin;
+    top += height + 2;  // Reduced margin between Y-axis label and chart
   }
 
   if (!layout.xLabelText.isEmpty()) {
     const int height = metrics.height();
     layout.xLabelRect = QRect(left, bottom - height + 1,
         layout.innerRect.width(), height);
-    bottom -= height + kInnerMargin;
+    bottom -= height + 0;  // Reduced margin between X-axis label and X-axis tick labels
   }
 
   // Calculate space needed for Y-axis labels and tick marks

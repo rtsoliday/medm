@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
+		x=96
+		y=69
 		width=1235
-		height=537
+		height=900
 	}
 	clr=14
 	bclr=4
@@ -433,6 +433,51 @@ display {
 			loprDefault=2
 			hoprSrc="default"
 			hoprDefault=39
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=48
+		y=483
+		width=500
+		height=400
+	}
+	plotcom {
+		title="Orbit Tuner 411"
+		xlabel="Sweep"
+		ylabel="Delta"
+		clr=21
+		bclr=50
+	}
+	pen[0] {
+		chan="ORB:TUNE:X411"
+		clr=34
+		limits {
+			loprSrc="default"
+			loprDefault=-3
+			hoprSrc="default"
+			hoprDefault=3
+		}
+	}
+	pen[1] {
+		chan="ORB:TUNE:Y901"
+		clr=17
+		limits {
+			loprSrc="default"
+			loprDefault=-2
+			hoprSrc="default"
+			hoprDefault=2
+		}
+	}
+	pen[2] {
+		chan="ORB:TUNE:ENERGY42"
+		clr=8
+		limits {
+			loprSrc="default"
+			loprDefault=-0.5
+			hoprSrc="default"
+			hoprDefault=0.5
 		}
 	}
 }

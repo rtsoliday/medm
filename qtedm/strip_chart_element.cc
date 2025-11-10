@@ -1065,7 +1065,7 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
         const QString text = formatNumber(value, fmt.format, fmt.decimal);
         const int textWidth = metrics.horizontalAdvance(text);
         
-        const int tickY = chartRect.top() + i * chartRect.height() / nDivY;
+        const int tickY = chartRect.top() + i * (chartRect.height() - 1) / nDivY;
         
         // Calculate vertical offset for this range label
         const int labelHeight = metrics.height();

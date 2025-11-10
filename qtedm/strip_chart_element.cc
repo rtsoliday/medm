@@ -1191,7 +1191,7 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
       normalized = std::clamp(normalized, 0.0, 1.0);
       const double x = content.left()
           + (static_cast<double>(offsetColumns + s) / denominator) * width;
-      const double y = content.bottom() - normalized * height;
+      const double y = content.top() + (height - 1.0) * (1.0 - normalized);
 
       if (!segmentStarted) {
         path.moveTo(x, y);

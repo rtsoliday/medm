@@ -24,12 +24,55 @@ constexpr int kInnerMargin = 6;
 constexpr int kGridLines = 5;
 constexpr int kMaxTickMarks = 10;
 constexpr double kPenSampleCount = 24.0;
-constexpr int kMinimumLabelPointSize = 10;
 constexpr int kRefreshIntervalMs = 100;
 constexpr double kMinimumRangeEpsilon = 1e-9;
 constexpr int kMaxSampleBurst = 32;
 
 constexpr int kDefaultPenColorIndex = 14;
+
+// Calculate axis label font size based on widget dimensions (mimics MEDM)
+int calculateLabelFontSize(int widgetWidth, int widgetHeight)
+{
+  const int minDim = std::min(widgetWidth, widgetHeight);
+  if (minDim > 1000) {
+    return 18;
+  } else if (minDim > 900) {
+    return 16;
+  } else if (minDim > 750) {
+    return 14;
+  } else if (minDim > 600) {
+    return 12;
+  } else if (minDim > 400) {
+    return 10;
+  }
+  return 8;
+}
+
+// Calculate title font size based on widget dimensions (mimics MEDM)
+int calculateTitleFontSize(int widgetWidth, int widgetHeight)
+{
+  const int minDim = std::min(widgetWidth, widgetHeight);
+  if (minDim > 1000) {
+    return 26;
+  } else if (minDim > 900) {
+    return 24;
+  } else if (minDim > 750) {
+    return 22;
+  } else if (minDim > 600) {
+    return 20;
+  } else if (minDim > 500) {
+    return 18;
+  } else if (minDim > 400) {
+    return 16;
+  } else if (minDim > 300) {
+    return 14;
+  } else if (minDim > 250) {
+    return 12;
+  } else if (minDim > 200) {
+    return 10;
+  }
+  return 8;
+}
 
 int calculateMarkerHeight(int widgetWidth, int widgetHeight)
 {
@@ -576,7 +619,9 @@ StripChartElement::Layout StripChartElement::calculateLayout(
   int bottom = layout.innerRect.bottom();
 
   if (!layout.titleText.isEmpty()) {
-    const int height = metrics.height();
+    // Use title font metrics for title (like MEDM)
+    const QFontMetrics titleMetrics(titleFont());
+    const int height = titleMetrics.height();
     layout.titleRect = QRect(left, top, layout.innerRect.width(), height);
     top += height + kInnerMargin;
   }
@@ -770,15 +815,19 @@ QRect StripChartElement::chartRect() const
 
 QFont StripChartElement::labelFont() const
 {
+  // Calculate font size based on widget dimensions (like MEDM)
+  const int pointSize = calculateLabelFontSize(width(), height());
   QFont adjusted = font();
-  if (adjusted.pointSizeF() > 0.0) {
-    adjusted.setPointSizeF(std::max(adjusted.pointSizeF(),
-        static_cast<qreal>(kMinimumLabelPointSize)));
-  } else if (adjusted.pointSize() > 0) {
-    adjusted.setPointSize(std::max(adjusted.pointSize(), kMinimumLabelPointSize));
-  } else {
-    adjusted.setPointSize(kMinimumLabelPointSize);
-  }
+  adjusted.setPointSize(pointSize);
+  return adjusted;
+}
+
+QFont StripChartElement::titleFont() const
+{
+  // Calculate title font size based on widget dimensions (like MEDM)
+  const int pointSize = calculateTitleFontSize(width(), height());
+  QFont adjusted = font();
+  adjusted.setPointSize(pointSize);
   return adjusted;
 }
 
@@ -1125,8 +1174,12 @@ void StripChartElement::paintLabels(QPainter &painter, const Layout &layout,
 
   if (!layout.titleText.isEmpty() && layout.titleRect.isValid()
       && !layout.titleRect.isEmpty()) {
+    // Use larger title font (like MEDM)
+    painter.setFont(titleFont());
     painter.drawText(layout.titleRect, Qt::AlignHCenter | Qt::AlignTop,
         layout.titleText);
+    // Restore to label font
+    painter.setFont(labelFont());
   }
 
   if (!layout.xLabelText.isEmpty() && layout.xLabelRect.isValid()

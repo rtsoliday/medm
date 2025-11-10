@@ -99,6 +99,7 @@ private:
   QColor effectiveBackground() const;
   QColor effectivePenColor(int index) const;
   QFont labelFont() const;
+  QFont titleFont() const;
   QRect chartRect() const;
   Layout calculateLayout(const QFontMetrics &metrics) const;
   int calculateYAxisLabelWidth(const QFontMetrics &metrics) const;

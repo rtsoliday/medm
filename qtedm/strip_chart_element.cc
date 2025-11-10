@@ -581,6 +581,14 @@ StripChartElement::Layout StripChartElement::calculateLayout(
     top += height + kInnerMargin;
   }
 
+  // Reserve space for Y-axis label (horizontal, like medm) if present
+  int yLabelTop = -1;  // Track where to place y-label
+  if (!layout.yLabelText.isEmpty()) {
+    const int height = metrics.height();
+    yLabelTop = top;
+    top += height + kInnerMargin;
+  }
+
   if (!layout.xLabelText.isEmpty()) {
     const int height = metrics.height();
     layout.xLabelRect = QRect(left, bottom - height + 1,
@@ -588,26 +596,129 @@ StripChartElement::Layout StripChartElement::calculateLayout(
     bottom -= height + kInnerMargin;
   }
 
-  const int verticalExtent = std::max(0, bottom - top + 1);
+  // Calculate space needed for Y-axis labels and tick marks
+  const int markerHeight = calculateMarkerHeight(width(), height());
+  const int yAxisLabelWidth = calculateYAxisLabelWidth(metrics);
+  const int yAxisSpace = yAxisLabelWidth + markerHeight + 2 + kInnerMargin;
+  left += yAxisSpace;
 
-  if (!layout.yLabelText.isEmpty() && verticalExtent > 0) {
-    int textWidth = 0;
-    for (const QChar &ch : layout.yLabelText) {
-      const int charWidth = metrics.horizontalAdvance(QString(ch));
-      textWidth = std::max(textWidth, charWidth);
-    }
-    if (textWidth > 0) {
-      layout.yLabelRect = QRect(left, top, textWidth, verticalExtent);
-      left += textWidth + kInnerMargin;
-    }
+  // Use symmetric margins (like medm): right margin mirrors left margin
+  // This creates visual balance in the widget
+  int rightMargin = yAxisSpace;
+  
+  // Calculate space needed for X-axis labels and tick marks
+  const int xAxisSpace = metrics.height() + markerHeight + 2 + kInnerMargin;
+  bottom -= xAxisSpace;
+  
+  // Apply symmetric right margin, but use the smaller of left or top margin
+  // if the top margin is less (for visual consistency)
+  const int topMargin = top - layout.innerRect.top();
+  if (topMargin < yAxisSpace) {
+    // Shrink right margin to match top margin for better proportions
+    rightMargin = topMargin;
   }
+  
+  // Also ensure right margin is at least as large as bottom margin
+  const int bottomMargin = layout.innerRect.bottom() - bottom;
+  if (bottomMargin > rightMargin) {
+    rightMargin = bottomMargin;
+  }
+  
+  // Apply the calculated right margin
+  const int adjustedRight = right - rightMargin;
 
-  if (right >= left && bottom >= top) {
-    layout.chartRect = QRect(left, top, right - left + 1,
+  if (adjustedRight >= left && bottom >= top) {
+    layout.chartRect = QRect(left, top, adjustedRight - left + 1,
         bottom - top + 1);
   }
 
+  // Position Y-axis label at the left edge of the chart area (like medm)
+  if (yLabelTop >= 0 && !layout.yLabelText.isEmpty()) {
+    const int yLabelWidth = layout.chartRect.isValid() ? layout.chartRect.width() : 0;
+    const int yLabelHeight = metrics.height();
+    const int yLabelLeft = layout.chartRect.isValid() ? layout.chartRect.left() : left;
+    layout.yLabelRect = QRect(yLabelLeft, yLabelTop, yLabelWidth, yLabelHeight);
+  }
+
   return layout;
+}
+
+int StripChartElement::calculateYAxisLabelWidth(const QFontMetrics &metrics) const
+{
+  // Build list of unique ranges (like medm's calcYAxisLabelWidth)
+  struct YAxisRange {
+    double low;
+    double high;
+    int numPens;
+  };
+  std::vector<YAxisRange> ranges;
+  
+  for (int p = 0; p < penCount(); ++p) {
+    if (pens_[p].channel.trimmed().isEmpty()) {
+      continue;
+    }
+    
+    const double low = effectivePenLow(p);
+    const double high = effectivePenHigh(p);
+    
+    if (!std::isfinite(low) || !std::isfinite(high)) {
+      continue;
+    }
+    
+    // Check if this range already exists
+    bool found = false;
+    for (auto &range : ranges) {
+      if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
+        range.numPens++;
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      YAxisRange newRange;
+      newRange.low = low;
+      newRange.high = high;
+      newRange.numPens = 1;
+      ranges.push_back(newRange);
+    }
+  }
+  
+  // If no ranges found, use default
+  if (ranges.empty()) {
+    YAxisRange defaultRange;
+    defaultRange.low = 0.0;
+    defaultRange.high = 100.0;
+    defaultRange.numPens = 0;
+    ranges.push_back(defaultRange);
+  }
+  
+  // Find the maximum text width needed for all ranges
+  int maxWidth = 0;
+  int maxDots = 0;
+  
+  for (const auto &yRange : ranges) {
+    const NumberFormat fmt = calculateNumberFormat(
+        std::max(std::abs(yRange.high), std::abs(yRange.low)));
+    
+    // Check width for both high and low values
+    const QString highText = formatNumber(yRange.high, fmt.format, fmt.decimal);
+    const QString lowText = formatNumber(yRange.low, fmt.format, fmt.decimal);
+    
+    const int highWidth = metrics.horizontalAdvance(highText);
+    const int lowWidth = metrics.horizontalAdvance(lowText);
+    
+    maxWidth = std::max(maxWidth, std::max(highWidth, lowWidth));
+    
+    // Count color indicators (only if multiple ranges)
+    if (ranges.size() > 1) {
+      maxDots = std::max(maxDots, yRange.numPens);
+    }
+  }
+  
+  // Total width = text width + space for color indicators
+  constexpr int kLineSpace = 3;
+  return maxWidth + (maxDots * kLineSpace);
 }
 
 QColor StripChartElement::effectiveForeground() const
@@ -782,42 +893,109 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
     }
   }
 
-  // Draw Y-axis scale numbers (left side)
+  // Draw Y-axis scale numbers (left side) - mimicking medm's multi-range approach
   {
-    // Determine the range for Y-axis
-    double yLow = 0.0;
-    double yHigh = 100.0;
-
-    // Try to get range from first connected pen
-    bool foundRange = false;
+    // Build list of unique ranges (like medm's range array)
+    struct YAxisRange {
+      double low;
+      double high;
+      int penMask;  // Bitmask of which pens use this range
+      int numPens;
+    };
+    std::vector<YAxisRange> ranges;
+    
     for (int p = 0; p < penCount(); ++p) {
-      if (!pens_[p].channel.trimmed().isEmpty()) {
-        yLow = effectivePenLow(p);
-        yHigh = effectivePenHigh(p);
-        foundRange = true;
-        break;
+      if (pens_[p].channel.trimmed().isEmpty()) {
+        continue;
+      }
+      
+      const double low = effectivePenLow(p);
+      const double high = effectivePenHigh(p);
+      
+      if (!std::isfinite(low) || !std::isfinite(high)) {
+        continue;
+      }
+      
+      // Check if this range already exists
+      bool found = false;
+      for (auto &range : ranges) {
+        if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
+          range.penMask |= (1 << p);
+          range.numPens++;
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) {
+        YAxisRange newRange;
+        newRange.low = low;
+        newRange.high = high;
+        newRange.penMask = (1 << p);
+        newRange.numPens = 1;
+        ranges.push_back(newRange);
       }
     }
-
-    if (!foundRange || !std::isfinite(yLow) || !std::isfinite(yHigh)) {
-      yLow = 0.0;
-      yHigh = 100.0;
+    
+    // If no ranges found, use default
+    if (ranges.empty()) {
+      YAxisRange defaultRange;
+      defaultRange.low = 0.0;
+      defaultRange.high = 100.0;
+      defaultRange.penMask = 0;
+      defaultRange.numPens = 0;
+      ranges.push_back(defaultRange);
     }
-
-    const double range = yHigh - yLow;
-    const double step = range / nDivY;
-    const NumberFormat fmt = calculateNumberFormat(std::max(std::abs(yHigh), std::abs(yLow)));
-
-    for (int i = 0; i <= nDivY; ++i) {
-      const double value = yHigh - step * i;  // Count down from high to low
-      const QString text = formatNumber(value, fmt.format, fmt.decimal);
-      const int textWidth = metrics.horizontalAdvance(text);
+    
+    // If only one range, don't show pen color indicators (like medm)
+    const bool showPenIndicators = ranges.size() > 1;
+    
+    // Draw scale for each range
+    constexpr int kLineSpace = 3;  // Space for pen color indicators
+    const int indicatorWidth = 2;  // Width of color indicator rectangle
+    
+    for (std::size_t rangeIdx = 0; rangeIdx < ranges.size(); ++rangeIdx) {
+      const YAxisRange &yRange = ranges[rangeIdx];
+      const double range = yRange.high - yRange.low;
+      const double step = range / nDivY;
+      const NumberFormat fmt = calculateNumberFormat(std::max(std::abs(yRange.high), std::abs(yRange.low)));
       
-      const int tickY = chartRect.top() + i * chartRect.height() / nDivY;
-      const int textX = chartRect.left() - 2 - markerHeight - 1 - textWidth;
-      const int textY = tickY + metrics.ascent() / 2;
-      
-      painter.drawText(textX, textY, text);
+      for (int i = 0; i <= nDivY; ++i) {
+        const double value = yRange.high - step * i;  // Count down from high to low
+        const QString text = formatNumber(value, fmt.format, fmt.decimal);
+        const int textWidth = metrics.horizontalAdvance(text);
+        
+        const int tickY = chartRect.top() + i * chartRect.height() / nDivY;
+        
+        // Calculate vertical offset for this range label
+        const int labelHeight = metrics.height();
+        const int totalLabelsHeight = static_cast<int>(ranges.size()) * labelHeight;
+        const int startOffset = -totalLabelsHeight / 2;
+        const int labelY = tickY + startOffset + static_cast<int>(rangeIdx) * labelHeight 
+                         + metrics.ascent();
+        
+        // Draw text
+        painter.setPen(effectiveForeground());
+        const int textX = chartRect.left() - 2 - markerHeight - 1 - textWidth;
+        painter.drawText(textX, labelY, text);
+        
+        // Draw pen color indicators if multiple ranges
+        if (showPenIndicators) {
+          int indicatorCount = 0;
+          for (int p = penCount() - 1; p >= 0; --p) {
+            if (yRange.penMask & (1 << p)) {
+              const QColor penColor = effectivePenColor(p);
+              const int indicatorX = chartRect.left() - 2 - markerHeight - 1 
+                                   - (indicatorCount + 1) * kLineSpace;
+              const int indicatorY = labelY - metrics.ascent();
+              const int indicatorHeight = metrics.ascent();
+              
+              painter.fillRect(indicatorX, indicatorY, indicatorWidth, indicatorHeight, penColor);
+              indicatorCount++;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -959,23 +1137,10 @@ void StripChartElement::paintLabels(QPainter &painter, const Layout &layout,
 
   if (!layout.yLabelText.isEmpty() && layout.yLabelRect.isValid()
       && !layout.yLabelRect.isEmpty()) {
-    painter.save();
-    const int charHeight = metrics.height();
-    const int charCount = layout.yLabelText.size();
-    if (charHeight > 0 && charCount > 0) {
-      const int totalHeight = charHeight * charCount;
-      int startY = layout.yLabelRect.top();
-      if (layout.yLabelRect.height() > totalHeight) {
-        startY += (layout.yLabelRect.height() - totalHeight) / 2;
-      }
-      for (int i = 0; i < charCount; ++i) {
-        const QString ch(layout.yLabelText.mid(i, 1));
-        QRect cell(layout.yLabelRect.left(), startY + i * charHeight,
-            layout.yLabelRect.width(), charHeight);
-        painter.drawText(cell, Qt::AlignCenter | Qt::AlignVCenter, ch);
-      }
-    }
-    painter.restore();
+    // Draw Y-axis label horizontally (like medm), aligned to the left
+    // Position it at the left edge of the chart area
+    painter.drawText(layout.yLabelRect, Qt::AlignLeft | Qt::AlignTop,
+        layout.yLabelText);
   }
 
   painter.restore();

@@ -101,6 +101,7 @@ private:
   QFont labelFont() const;
   QRect chartRect() const;
   Layout calculateLayout(const QFontMetrics &metrics) const;
+  int calculateYAxisLabelWidth(const QFontMetrics &metrics) const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRect &content) const;
   void paintTickMarks(QPainter &painter, const QRect &chartRect) const;

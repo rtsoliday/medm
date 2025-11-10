@@ -23,6 +23,7 @@ constexpr double kDialInsetRatio = 0.14;
 constexpr double kMinimumDialHeight = 24.0;
 constexpr short kInvalidSeverity = 3;
 constexpr double kValueEpsilonFactor = 1e-6;
+constexpr int kBevelDepth = 2;
 
 inline double degreesToRadians(double degrees)
 {
@@ -108,6 +109,70 @@ QColor alarmColorForSeverity(short severity)
   default:
     return QColor(204, 204, 204);
   }
+}
+
+void drawRaisedBevel(QPainter &painter, const QRectF &rect,
+    const QColor &baseColor, int depth)
+{
+  if (!rect.isValid() || depth <= 0) {
+    return;
+  }
+
+  const QColor lightShade = baseColor.lighter(150);
+  const QColor darkShade = baseColor.darker(150);
+
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, false);
+
+  for (int i = 0; i < depth; ++i) {
+    const qreal offset = static_cast<qreal>(i);
+    const qreal x = rect.x() + offset;
+    const qreal y = rect.y() + offset;
+    const qreal w = rect.width() - 1.0 - 2.0 * offset;
+    const qreal h = rect.height() - 1.0 - 2.0 * offset;
+
+    painter.setPen(lightShade);
+    painter.drawLine(QPointF(x, y), QPointF(x + w, y));
+    painter.drawLine(QPointF(x, y), QPointF(x, y + h));
+
+    painter.setPen(darkShade);
+    painter.drawLine(QPointF(x, y + h), QPointF(x + w, y + h));
+    painter.drawLine(QPointF(x + w, y), QPointF(x + w, y + h));
+  }
+
+  painter.restore();
+}
+
+void drawDepressedBevel(QPainter &painter, const QRectF &rect,
+    const QColor &baseColor, int depth)
+{
+  if (!rect.isValid() || depth <= 0) {
+    return;
+  }
+
+  const QColor lightShade = baseColor.lighter(150);
+  const QColor darkShade = baseColor.darker(150);
+
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, false);
+
+  for (int i = 0; i < depth; ++i) {
+    const qreal offset = static_cast<qreal>(i);
+    const qreal x = rect.x() + offset;
+    const qreal y = rect.y() + offset;
+    const qreal w = rect.width() - 1.0 - 2.0 * offset;
+    const qreal h = rect.height() - 1.0 - 2.0 * offset;
+
+    painter.setPen(darkShade);
+    painter.drawLine(QPointF(x, y), QPointF(x + w, y));
+    painter.drawLine(QPointF(x, y), QPointF(x, y + h));
+
+    painter.setPen(lightShade);
+    painter.drawLine(QPointF(x, y + h), QPointF(x + w, y + h));
+    painter.drawLine(QPointF(x + w, y), QPointF(x + w, y + h));
+  }
+
+  painter.restore();
 }
 
 } // namespace
@@ -337,7 +402,10 @@ void MeterElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, true);
 
-  painter.fillRect(rect(), effectiveBackground());
+  const QColor bgColor = effectiveBackground();
+  painter.fillRect(rect(), bgColor);
+
+  drawRaisedBevel(painter, rect(), bgColor, kBevelDepth);
 
   const QRectF bounds = rect().adjusted(6.0, 6.0, -6.0, -6.0);
   if (bounds.width() <= 0.0 || bounds.height() <= 0.0) {
@@ -348,7 +416,7 @@ void MeterElement::paintEvent(QPaintEvent *event)
   }
 
   QFont labelFont = painter.font();
-  labelFont.setPointSizeF(std::max(8.0, bounds.height() / 8.0));
+  labelFont.setPointSizeF(std::max(8.0, height() / 8.0));
   painter.setFont(labelFont);
   const QFontMetricsF metrics(labelFont);
 
@@ -519,9 +587,17 @@ void MeterElement::paintDial(QPainter &painter, const QRectF &dialRect) const
   QColor rimColor = effectiveForeground().darker(140);
   QColor faceColor = effectiveBackground().lighter(110);
 
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, true);
+
+  const qreal radius = dialRect.width() / 2.0;
+  const QRectF bevelRect(dialRect.left(), dialRect.top(),
+      dialRect.width(), radius);
+
+  drawDepressedBevel(painter, bevelRect, effectiveBackground(), kBevelDepth);
+
   QPen rimPen(rimColor);
   rimPen.setWidth(2);
-  painter.save();
   painter.setPen(rimPen);
   painter.setBrush(faceColor);
 
@@ -630,9 +706,10 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
     const QRectF &channelRect) const
 {
   const QColor foreground = effectiveForeground();
+  const QColor background = effectiveBackground();
   painter.save();
   painter.setBrush(Qt::NoBrush);
-  painter.setPen(foreground);
+  painter.setPen(Qt::black);
 
   if (label_ == MeterLabel::kOutline && dialRect.isValid() && !dialRect.isEmpty()) {
     QPen outlinePen(foreground.darker(150));
@@ -650,7 +727,7 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
       outlinePath.closeSubpath();
       painter.drawPath(outlinePath);
     }
-    painter.setPen(foreground);
+    painter.setPen(Qt::black);
   }
 
   if (label_ == MeterLabel::kChannel) {
@@ -661,7 +738,28 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
         textRect = QRectF(rect().left() + 6.0, rect().top() + 4.0,
             rect().width() - 12.0, painter.fontMetrics().height());
       }
+
+      const QFont channelOriginalFont = painter.font();
+      QFont channelFont = channelOriginalFont;
+      QFontMetricsF channelFm(channelFont);
+      qreal textWidth = channelFm.horizontalAdvance(text);
+      const qreal availableWidth = rect().width() - 4.0;
+
+      if (textWidth > availableWidth && channelFont.pointSizeF() > 6.0) {
+        qreal newSize = channelFont.pointSizeF();
+        
+        while (textWidth > availableWidth && newSize > 6.0) {
+          newSize = std::max(6.0, newSize - 0.5);
+          channelFont.setPointSizeF(newSize);
+          channelFm = QFontMetricsF(channelFont);
+          textWidth = channelFm.horizontalAdvance(text);
+        }
+        
+        painter.setFont(channelFont);
+      }
+
       painter.drawText(textRect, Qt::AlignHCenter | Qt::AlignVCenter, text);
+      painter.setFont(channelOriginalFont);
     }
   }
 
@@ -675,8 +773,36 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
   const double highLimit = effectiveHighLimit();
   const QString lowText = formatValue(lowLimit);
   const QString highText = formatValue(highLimit);
+
+  const QFont originalFont = painter.font();
+  QFont limitsFont = originalFont;
+  QFontMetricsF limitsFm(limitsFont);
+  qreal lowWidth = limitsFm.horizontalAdvance(lowText);
+  qreal highWidth = limitsFm.horizontalAdvance(highText);
+  qreal totalWidth = lowWidth + highWidth;
+  const qreal availableWidth = limitsArea.width();
+  const qreal minGap = 4.0;
+
+  if (totalWidth + minGap > availableWidth && limitsFont.pointSizeF() > 6.0) {
+    const qreal requiredWidth = availableWidth - minGap;
+    qreal newSize = limitsFont.pointSizeF();
+    
+    while (totalWidth > requiredWidth && newSize > 6.0) {
+      newSize = std::max(6.0, newSize - 0.5);
+      limitsFont.setPointSizeF(newSize);
+      limitsFm = QFontMetricsF(limitsFont);
+      lowWidth = limitsFm.horizontalAdvance(lowText);
+      highWidth = limitsFm.horizontalAdvance(highText);
+      totalWidth = lowWidth + highWidth;
+    }
+    
+    painter.setFont(limitsFont);
+  }
+
   painter.drawText(limitsArea, Qt::AlignLeft | Qt::AlignVCenter, lowText);
   painter.drawText(limitsArea, Qt::AlignRight | Qt::AlignVCenter, highText);
+
+  painter.setFont(originalFont);
 
   if (label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel) {
     QRectF valueArea = valueRect;
@@ -684,8 +810,29 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
       valueArea = QRectF(limitsArea.left(), limitsArea.bottom() + 2.0,
           limitsArea.width(), limitsArea.height());
     }
+
     const QString valueText = formattedSampleValue();
-    painter.drawText(valueArea, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
+    const QFontMetricsF fm(painter.font());
+    const qreal textWidth = fm.horizontalAdvance(valueText);
+    const qreal textHeight = fm.height();
+    const qreal hPadding = 4.0;
+    const qreal vPadding = 0.0;
+
+    const qreal boxWidth = textWidth + 2.0 * hPadding;
+    const qreal boxHeight = textHeight + 2.0 * vPadding;
+    const qreal boxX = valueArea.center().x() - boxWidth / 2.0;
+    const qreal boxY = valueArea.center().y() - boxHeight / 2.0;
+    const QRectF textBox(boxX, boxY, boxWidth, boxHeight);
+
+    const QRectF bevelRect = textBox.adjusted(-kBevelDepth, -kBevelDepth,
+        kBevelDepth, kBevelDepth);
+    if (bevelRect.isValid()) {
+      painter.fillRect(bevelRect, Qt::white);
+      drawDepressedBevel(painter, bevelRect, background, kBevelDepth);
+    }
+
+    painter.setPen(Qt::black);
+    painter.drawText(textBox, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
   }
 
   painter.restore();

@@ -18,9 +18,11 @@
 
 namespace {
 
+constexpr int kShadowThickness = 3;
 constexpr int kOuterMargin = 3;
 constexpr int kInnerMargin = 6;
 constexpr int kGridLines = 5;
+constexpr int kMaxTickMarks = 10;
 constexpr double kPenSampleCount = 24.0;
 constexpr int kMinimumLabelPointSize = 10;
 constexpr int kRefreshIntervalMs = 100;
@@ -28,6 +30,23 @@ constexpr double kMinimumRangeEpsilon = 1e-9;
 constexpr int kMaxSampleBurst = 32;
 
 constexpr int kDefaultPenColorIndex = 14;
+
+int calculateMarkerHeight(int widgetWidth, int widgetHeight)
+{
+  const int minDimension = std::min(widgetWidth, widgetHeight);
+  if (minDimension > 1000) {
+    return 6;
+  } else if (minDimension > 800) {
+    return 5;
+  } else if (minDimension > 600) {
+    return 4;
+  } else if (minDimension > 400) {
+    return 3;
+  } else if (minDimension > 300) {
+    return 2;
+  }
+  return 1;
+}
 
 QColor defaultPenColor(int index)
 {
@@ -40,6 +59,101 @@ QColor defaultPenColor(int index)
     return palette.back();
   }
   return QColor(Qt::black);
+}
+
+void drawRaisedBevel(QPainter &painter, const QRect &rect,
+    const QColor &baseColor, int depth)
+{
+  if (!rect.isValid() || depth <= 0) {
+    return;
+  }
+
+  const QColor lightShade = baseColor.lighter(150);
+  const QColor darkShade = baseColor.darker(150);
+
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, false);
+
+  for (int i = 0; i < depth; ++i) {
+    const int offset = i;
+    const int x = rect.x() + offset;
+    const int y = rect.y() + offset;
+    const int w = rect.width() - 1 - 2 * offset;
+    const int h = rect.height() - 1 - 2 * offset;
+
+    painter.setPen(lightShade);
+    painter.drawLine(QPoint(x, y), QPoint(x + w, y));
+    painter.drawLine(QPoint(x, y), QPoint(x, y + h));
+
+    painter.setPen(darkShade);
+    painter.drawLine(QPoint(x, y + h), QPoint(x + w, y + h));
+    painter.drawLine(QPoint(x + w, y), QPoint(x + w, y + h));
+  }
+
+  painter.restore();
+}
+
+struct NumberFormat
+{
+  char format;     // 'f' for fixed, 'e' for scientific
+  int decimal;     // decimal places
+  int width;       // field width
+};
+
+NumberFormat calculateNumberFormat(double value)
+{
+  NumberFormat fmt;
+  if (value == 0.0) {
+    fmt.format = 'f';
+    fmt.decimal = 1;
+    fmt.width = 3;
+    return fmt;
+  }
+
+  const double order = std::log10(std::abs(value));
+
+  if (order > 5.0 || order < -4.0) {
+    fmt.format = 'e';
+    fmt.decimal = 1;
+  } else {
+    fmt.format = 'f';
+    if (order < 0.0) {
+      fmt.decimal = static_cast<int>(order) * -1 + 2;
+    } else {
+      fmt.decimal = 1;
+    }
+  }
+
+  if (order >= 4.0) {
+    fmt.width = 7;
+  } else if (order >= 3.0) {
+    fmt.width = 6;
+  } else if (order >= 2.0) {
+    fmt.width = 5;
+  } else if (order >= 1.0) {
+    fmt.width = 4;
+  } else if (order >= 0.0) {
+    fmt.width = 3;
+  } else if (order >= -1.0) {
+    fmt.width = 4;
+  } else if (order >= -2.0) {
+    fmt.width = 5;
+  } else if (order >= -3.0) {
+    fmt.width = 6;
+  } else {
+    fmt.width = 7;
+  }
+
+  return fmt;
+}
+
+QString formatNumber(double value, char format, int decimal)
+{
+  if (format == 'e') {
+    return QString::asprintf("%.1e", value);
+  } else {
+    return QString::asprintf("%.*f", decimal, value);
+  }
 }
 
 } // namespace
@@ -415,9 +529,11 @@ void StripChartElement::paintEvent(QPaintEvent *event)
 
   if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
     painter.fillRect(layout.chartRect, effectiveBackground());
+    paintTickMarks(painter, layout.chartRect);
+    paintAxisScales(painter, layout.chartRect, metrics);
     if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
+      paintGrid(painter, layout.chartRect);
       const QRect plotArea = layout.chartRect.adjusted(1, 1, -1, -1);
-      paintGrid(painter, plotArea);
       paintPens(painter, plotArea);
     }
   }
@@ -557,12 +673,9 @@ QFont StripChartElement::labelFont() const
 
 void StripChartElement::paintFrame(QPainter &painter) const
 {
-  const QRect frameRect = rect().adjusted(0, 0, -1, -1);
-  QPen pen(effectiveForeground());
-  pen.setWidth(1);
-  painter.setPen(pen);
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(frameRect);
+  const QColor bgColor = effectiveBackground();
+  painter.fillRect(rect(), bgColor);
+  drawRaisedBevel(painter, rect(), bgColor, kShadowThickness);
 }
 
 void StripChartElement::paintGrid(QPainter &painter, const QRect &content) const
@@ -570,23 +683,145 @@ void StripChartElement::paintGrid(QPainter &painter, const QRect &content) const
   if (content.width() <= 0 || content.height() <= 0) {
     return;
   }
-  QColor gridColor = effectiveForeground();
-  gridColor.setAlpha(80);
-  QPen pen(gridColor);
-  pen.setStyle(Qt::DotLine);
+
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  
+  // Draw solid rectangle border around the chart area (like medm)
+  QPen pen(effectiveForeground());
+  pen.setWidth(1);
+  pen.setStyle(Qt::SolidLine);
   painter.setPen(pen);
   painter.setBrush(Qt::NoBrush);
+  
+  // Draw the border at the edge of the content area
+  // medm draws: XDrawRectangle at (dataX0-1, dataY0-1, dataWidth+1, dataHeight+1)
+  // which creates a border just outside the data area
+  const QRect borderRect = content.adjusted(-1, -1, 1, 1);
+  painter.drawRect(borderRect);
 
-  const int verticalLines = kGridLines;
-  const int horizontalLines = kGridLines;
-  for (int i = 1; i < verticalLines; ++i) {
-    const int x = content.left() + i * content.width() / verticalLines;
-    painter.drawLine(x, content.top(), x, content.bottom());
+  painter.restore();
+}
+
+void StripChartElement::paintTickMarks(QPainter &painter, const QRect &chartRect) const
+{
+  if (chartRect.width() <= 0 || chartRect.height() <= 0) {
+    return;
   }
-  for (int j = 1; j < horizontalLines; ++j) {
-    const int y = content.top() + j * content.height() / horizontalLines;
-    painter.drawLine(content.left(), y, content.right(), y);
+
+  const int markerHeight = calculateMarkerHeight(width(), height());
+  if (markerHeight <= 0) {
+    return;
   }
+
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  QPen pen(effectiveForeground());
+  pen.setWidth(1);
+  pen.setStyle(Qt::SolidLine);
+  painter.setPen(pen);
+
+  // Calculate number of divisions (limit to reasonable range)
+  int nDivX = std::min(kMaxTickMarks, kGridLines);
+  int nDivY = std::min(kMaxTickMarks, kGridLines);
+
+  // Draw Y-axis tick marks (left side of chart)
+  for (int i = 0; i <= nDivY; ++i) {
+    const int tickY = chartRect.top() + i * chartRect.height() / nDivY;
+    const int x1 = chartRect.left() - 2 - (markerHeight - 1);
+    const int x2 = chartRect.left() - 2;
+    painter.drawLine(x1, tickY, x2, tickY);
+  }
+
+  // Draw X-axis tick marks (bottom of chart)
+  for (int i = 0; i <= nDivX; ++i) {
+    const int tickX = chartRect.right() - i * chartRect.width() / nDivX;
+    const int y1 = chartRect.bottom() + 2;
+    const int y2 = chartRect.bottom() + 2 + markerHeight;
+    painter.drawLine(tickX, y1, tickX, y2);
+  }
+
+  painter.restore();
+}
+
+void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRect,
+    const QFontMetrics &metrics) const
+{
+  if (chartRect.width() <= 0 || chartRect.height() <= 0) {
+    return;
+  }
+
+  const int markerHeight = calculateMarkerHeight(width(), height());
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  QPen pen(effectiveForeground());
+  pen.setWidth(1);
+  pen.setStyle(Qt::SolidLine);
+  painter.setPen(pen);
+
+  const int nDivX = std::min(kMaxTickMarks, kGridLines);
+  const int nDivY = std::min(kMaxTickMarks, kGridLines);
+
+  // Draw X-axis scale numbers (bottom, counting backward from 0)
+  {
+    const double periodValue = period_;
+    const NumberFormat fmt = calculateNumberFormat(periodValue);
+    const double step = periodValue / nDivX;
+
+    const int textY = chartRect.bottom() + 2 + markerHeight + metrics.ascent() + 1;
+
+    for (int i = 0; i <= nDivX; ++i) {
+      const double value = -step * i;  // Count backward from 0
+      const QString text = formatNumber(value, fmt.format, fmt.decimal);
+      const int textWidth = metrics.horizontalAdvance(text);
+      
+      const int tickX = chartRect.right() - i * chartRect.width() / nDivX;
+      const int textX = tickX - textWidth / 2;
+      
+      painter.drawText(textX, textY, text);
+    }
+  }
+
+  // Draw Y-axis scale numbers (left side)
+  {
+    // Determine the range for Y-axis
+    double yLow = 0.0;
+    double yHigh = 100.0;
+
+    // Try to get range from first connected pen
+    bool foundRange = false;
+    for (int p = 0; p < penCount(); ++p) {
+      if (!pens_[p].channel.trimmed().isEmpty()) {
+        yLow = effectivePenLow(p);
+        yHigh = effectivePenHigh(p);
+        foundRange = true;
+        break;
+      }
+    }
+
+    if (!foundRange || !std::isfinite(yLow) || !std::isfinite(yHigh)) {
+      yLow = 0.0;
+      yHigh = 100.0;
+    }
+
+    const double range = yHigh - yLow;
+    const double step = range / nDivY;
+    const NumberFormat fmt = calculateNumberFormat(std::max(std::abs(yHigh), std::abs(yLow)));
+
+    for (int i = 0; i <= nDivY; ++i) {
+      const double value = yHigh - step * i;  // Count down from high to low
+      const QString text = formatNumber(value, fmt.format, fmt.decimal);
+      const int textWidth = metrics.horizontalAdvance(text);
+      
+      const int tickY = chartRect.top() + i * chartRect.height() / nDivY;
+      const int textX = chartRect.left() - 2 - markerHeight - 1 - textWidth;
+      const int textY = tickY + metrics.ascent() / 2;
+      
+      painter.drawText(textX, textY, text);
+    }
+  }
+
+  painter.restore();
 }
 
 void StripChartElement::paintPens(QPainter &painter, const QRect &content) const

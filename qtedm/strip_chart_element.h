@@ -103,6 +103,9 @@ private:
   Layout calculateLayout(const QFontMetrics &metrics) const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRect &content) const;
+  void paintTickMarks(QPainter &painter, const QRect &chartRect) const;
+  void paintAxisScales(QPainter &painter, const QRect &chartRect,
+      const QFontMetrics &metrics) const;
   void paintPens(QPainter &painter, const QRect &content) const;
   void paintDesignPens(QPainter &painter, const QRect &content) const;
   void paintRuntimePens(QPainter &painter, const QRect &content) const;

@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=10
+		x=0
 		y=53
 		width=853
-		height=539
+		height=700
 	}
 	clr=14
 	bclr=4
@@ -379,5 +379,142 @@ meter {
 		loprDefault=-0.75
 		hoprDefault=8.35
 		precDefault=3
+	}
+}
+meter {
+	object {
+		x=43
+		y=440
+		width=100
+		height=100
+	}
+	monitor {
+		chan="meter:random:omicron"
+		clr=44
+		bclr=18
+	}
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-11
+		hoprSrc="default"
+		hoprDefault=8.35
+		precSrc="default"
+		precDefault=5
+	}
+}
+meter {
+	object {
+		x=176
+		y=441
+		width=100
+		height=100
+	}
+	monitor {
+		chan="meter:random:omicron"
+		clr=44
+		bclr=18
+	}
+	label="no decorations"
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-11
+		hoprSrc="default"
+		hoprDefault=8.35
+		precSrc="default"
+		precDefault=5
+	}
+}
+meter {
+	object {
+		x=321
+		y=443
+		width=100
+		height=100
+	}
+	monitor {
+		chan="meter:random:omicron"
+		clr=44
+		bclr=18
+	}
+	label="outline"
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-11
+		hoprSrc="default"
+		hoprDefault=8.35
+		precSrc="default"
+		precDefault=5
+	}
+}
+meter {
+	object {
+		x=43
+		y=561
+		width=100
+		height=100
+	}
+	monitor {
+		chan="meter:random:omicron"
+		clr=44
+		bclr=18
+	}
+	label="limits"
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-11
+		hoprSrc="default"
+		hoprDefault=8.35
+		precSrc="default"
+		precDefault=5
+	}
+}
+meter {
+	object {
+		x=174
+		y=561
+		width=100
+		height=100
+	}
+	monitor {
+		chan="meter:random:omicron"
+		clr=44
+		bclr=18
+	}
+	label="channel"
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-11
+		hoprSrc="default"
+		hoprDefault=8.35
+		precSrc="default"
+		precDefault=5
+	}
+}
+meter {
+	object {
+		x=459
+		y=426
+		width=250
+		height=250
+	}
+	monitor {
+		chan="meter:random:omicron"
+		clr=44
+		bclr=18
+	}
+	label="channel"
+	clrmod="discrete"
+	limits {
+		loprSrc="default"
+		loprDefault=-11
+		hoprSrc="default"
+		hoprDefault=8.35
+		precSrc="default"
+		precDefault=5
 	}
 }

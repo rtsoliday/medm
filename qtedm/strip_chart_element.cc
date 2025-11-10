@@ -45,7 +45,7 @@ int calculateLabelFontSize(int widgetWidth, int widgetHeight)
   } else if (minDim > 400) {
     return 10;
   }
-  return 8;
+  return 8;  // Target pixel height, not point size
 }
 
 // Calculate title font size based on widget dimensions (mimics MEDM)
@@ -573,7 +573,7 @@ void StripChartElement::paintEvent(QPaintEvent *event)
   if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
     painter.fillRect(layout.chartRect, effectiveBackground());
     paintTickMarks(painter, layout.chartRect);
-    paintAxisScales(painter, layout.chartRect, metrics);
+    paintAxisScales(painter, layout.chartRect, metrics, layout.yAxisLabelOffset);
     if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
       paintGrid(painter, layout.chartRect);
       const QRect plotArea = layout.chartRect.adjusted(1, 1, -1, -1);
@@ -675,6 +675,39 @@ StripChartElement::Layout StripChartElement::calculateLayout(
   if (adjustedRight >= left && bottom >= top) {
     layout.chartRect = QRect(left, top, adjustedRight - left + 1,
         bottom - top + 1);
+  }
+
+  // Check for overlap between leftmost X-axis label and Y-axis labels (like MEDM)
+  // This prevents the X-axis and Y-axis labels from overlapping
+  if (layout.chartRect.isValid()) {
+    const int nDivX = std::min(kMaxTickMarks, kGridLines);
+    const double periodValue = period_;
+    const NumberFormat xFmt = calculateNumberFormat(periodValue);
+    const double xStep = periodValue / std::max(nDivX, 1);
+    const double leftmostValue = -xStep * nDivX;  // Leftmost X tick value
+    const QString leftmostText = formatNumber(leftmostValue, xFmt.format, xFmt.decimal);
+    const int leftmostTextWidth = metrics.horizontalAdvance(leftmostText);
+    
+    // The leftmost X-axis label is centered on chartRect.left()
+    // So it extends from (chartRect.left() - leftmostTextWidth/2) to (chartRect.left() + leftmostTextWidth/2)
+    const int xLabelLeftEdge = layout.chartRect.left() - leftmostTextWidth / 2;
+    
+    // The Y-axis labels extend from the left edge to (chartRect.left() - 2 - markerHeight - 1)
+    const int yLabelRightEdge = layout.chartRect.left() - 2 - markerHeight - 1;
+    
+    // Check if they overlap (with a small gap for safety)
+    const int overlapAmount = yLabelRightEdge - xLabelLeftEdge + 3;  // +3 for small gap
+    
+    if (overlapAmount > 0) {
+      // Store the offset and shrink the chart from the left (like MEDM)
+      // This moves Y-axis labels left by the offset amount
+      layout.yAxisLabelOffset = overlapAmount;
+      left += overlapAmount;
+      if (left < adjustedRight) {
+        layout.chartRect = QRect(left, top, adjustedRight - left + 1,
+            bottom - top + 1);
+      }
+    }
   }
 
   // Position Y-axis label at the left edge of the chart area (like medm)
@@ -816,18 +849,20 @@ QRect StripChartElement::chartRect() const
 QFont StripChartElement::labelFont() const
 {
   // Calculate font size based on widget dimensions (like MEDM)
-  const int pointSize = calculateLabelFontSize(width(), height());
+  // MEDM uses pixel height, not point size
+  const int pixelHeight = calculateLabelFontSize(width(), height());
   QFont adjusted = font();
-  adjusted.setPointSize(pointSize);
+  adjusted.setPixelSize(pixelHeight);
   return adjusted;
 }
 
 QFont StripChartElement::titleFont() const
 {
   // Calculate title font size based on widget dimensions (like MEDM)
-  const int pointSize = calculateTitleFontSize(width(), height());
+  // MEDM uses pixel height, not point size
+  const int pixelHeight = calculateTitleFontSize(width(), height());
   QFont adjusted = font();
-  adjusted.setPointSize(pointSize);
+  adjusted.setPixelSize(pixelHeight);
   return adjusted;
 }
 
@@ -905,7 +940,7 @@ void StripChartElement::paintTickMarks(QPainter &painter, const QRect &chartRect
 }
 
 void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRect,
-    const QFontMetrics &metrics) const
+    const QFontMetrics &metrics, int yAxisLabelOffset) const
 {
   if (chartRect.width() <= 0 || chartRect.height() <= 0) {
     return;
@@ -1003,6 +1038,22 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
     constexpr int kLineSpace = 3;  // Space for pen color indicators
     const int indicatorWidth = 2;  // Width of color indicator rectangle
     
+    // Find maximum text width for left-aligning indicators (like MEDM)
+    int maxTextWidth = 0;
+    for (std::size_t rangeIdx = 0; rangeIdx < ranges.size(); ++rangeIdx) {
+      const YAxisRange &yRange = ranges[rangeIdx];
+      const double range = yRange.high - yRange.low;
+      const double step = range / nDivY;
+      const NumberFormat fmt = calculateNumberFormat(std::max(std::abs(yRange.high), std::abs(yRange.low)));
+      
+      for (int i = 0; i <= nDivY; ++i) {
+        const double value = yRange.high - step * i;
+        const QString text = formatNumber(value, fmt.format, fmt.decimal);
+        const int textWidth = metrics.horizontalAdvance(text);
+        maxTextWidth = std::max(maxTextWidth, textWidth);
+      }
+    }
+    
     for (std::size_t rangeIdx = 0; rangeIdx < ranges.size(); ++rangeIdx) {
       const YAxisRange &yRange = ranges[rangeIdx];
       const double range = yRange.high - yRange.low;
@@ -1023,19 +1074,21 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
         const int labelY = tickY + startOffset + static_cast<int>(rangeIdx) * labelHeight 
                          + metrics.ascent();
         
-        // Draw text
+        // Draw text (right-aligned - each text uses its own width)
         painter.setPen(effectiveForeground());
-        const int textX = chartRect.left() - 2 - markerHeight - 1 - textWidth;
+        const int textX = chartRect.left() - 2 - markerHeight - 1 - yAxisLabelOffset - textWidth;
         painter.drawText(textX, labelY, text);
         
         // Draw pen color indicators if multiple ranges
         if (showPenIndicators) {
+          // Indicators are left-aligned using maxTextWidth (like MEDM)
+          const int indicatorBaseX = chartRect.left() - 2 - markerHeight - 1 - yAxisLabelOffset - maxTextWidth;
+          
           int indicatorCount = 0;
           for (int p = penCount() - 1; p >= 0; --p) {
             if (yRange.penMask & (1 << p)) {
               const QColor penColor = effectivePenColor(p);
-              const int indicatorX = chartRect.left() - 2 - markerHeight - 1 
-                                   - (indicatorCount + 1) * kLineSpace;
+              const int indicatorX = indicatorBaseX - (indicatorCount + 1) * kLineSpace;
               const int indicatorY = labelY - metrics.ascent();
               const int indicatorHeight = metrics.ascent();
               

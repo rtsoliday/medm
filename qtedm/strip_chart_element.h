@@ -79,6 +79,7 @@ private:
     QString titleText;
     QString xLabelText;
     QString yLabelText;
+    int yAxisLabelOffset = 0;  // Extra offset for Y-axis labels when avoiding overlap
   };
 
   struct Pen
@@ -107,7 +108,7 @@ private:
   void paintGrid(QPainter &painter, const QRect &content) const;
   void paintTickMarks(QPainter &painter, const QRect &chartRect) const;
   void paintAxisScales(QPainter &painter, const QRect &chartRect,
-      const QFontMetrics &metrics) const;
+      const QFontMetrics &metrics, int yAxisLabelOffset = 0) const;
   void paintPens(QPainter &painter, const QRect &content) const;
   void paintDesignPens(QPainter &painter, const QRect &content) const;
   void paintRuntimePens(QPainter &painter, const QRect &content) const;

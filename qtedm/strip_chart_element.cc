@@ -206,9 +206,11 @@ StripChartElement::StripChartElement(QWidget *parent)
 {
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
-  title_ = QStringLiteral("Strip Chart");
-  xLabel_ = QStringLiteral("Time");
-  yLabel_ = QStringLiteral("Value");
+  // Start with empty labels (like MEDM) - they get set from ADL file if defined
+  // X-axis label will auto-generate based on time units if left empty
+  title_ = QString();
+  xLabel_ = QString();
+  yLabel_ = QString();
   for (int i = 0; i < static_cast<int>(pens_.size()); ++i) {
     pens_[i].limits.lowSource = PvLimitSource::kDefault;
     pens_[i].limits.highSource = PvLimitSource::kDefault;
@@ -606,8 +608,26 @@ StripChartElement::Layout StripChartElement::calculateLayout(
   layout.innerRect = rect().adjusted(kOuterMargin, kOuterMargin,
       -kOuterMargin, -kOuterMargin);
   layout.titleText = title_.trimmed();
-  layout.xLabelText = xLabel_.trimmed();
   layout.yLabelText = yLabel_.trimmed();
+  
+  // X-axis label: auto-generate based on time units if empty (like MEDM)
+  layout.xLabelText = xLabel_.trimmed();
+  if (layout.xLabelText.isEmpty()) {
+    switch (units_) {
+      case TimeUnits::kMilliseconds:
+        layout.xLabelText = "time (ms)";
+        break;
+      case TimeUnits::kSeconds:
+        layout.xLabelText = "time (sec)";
+        break;
+      case TimeUnits::kMinutes:
+        layout.xLabelText = "time (min)";
+        break;
+      default:
+        layout.xLabelText = "time (sec)";
+        break;
+    }
+  }
 
   if (!layout.innerRect.isValid() || layout.innerRect.isEmpty()) {
     return layout;

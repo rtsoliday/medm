@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <utility>
+#include <vector>
 
 #include <QColor>
 #include <QVector>
@@ -128,6 +130,13 @@ private:
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRectF &rect) const;
   void paintAxes(QPainter &painter, const QRectF &rect) const;
+  void paintYAxis(QPainter &painter, const QRectF &rect, int yAxisIndex,
+      qreal axisX, bool onLeft) const;
+  struct YAxisPositions {
+    std::vector<std::pair<int, qreal>> leftAxes;  // (axisIndex, xPosition)
+    std::vector<std::pair<int, qreal>> rightAxes; // (axisIndex, xPosition)
+  };
+  YAxisPositions calculateYAxisPositions(const QRectF &widgetBounds) const;
   void paintLabels(QPainter &painter, const QRectF &rect) const;
   void paintTraces(QPainter &painter, const QRectF &rect) const;
   void paintSelectionOverlay(QPainter &painter) const;
@@ -148,6 +157,8 @@ private:
   bool mapPointToChart(const QPointF &value, const AxisRange &xRange,
       const AxisRange &yRange, const QRectF &rect, QPointF *mapped) const;
   int axisIndexForTrace(int traceIndex) const;
+  bool isYAxisOnRight(int yAxisIndex) const;
+  bool isYAxisVisible(int yAxisIndex) const;
   void ensureRuntimeArraySizes();
 
   bool selected_ = false;

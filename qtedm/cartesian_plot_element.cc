@@ -19,7 +19,7 @@
 namespace {
 
 constexpr int kOuterMargin = 4;
-constexpr int kInnerMargin = 8;
+constexpr int kInnerMargin = 12;
 constexpr int kGridLines = 5;
 constexpr double kTwoPi = 6.28318530717958647692;
 constexpr int kMinimumSampleCount = 8;
@@ -695,10 +695,6 @@ QRectF CartesianPlotElement::chartRect() const
   const QFontMetrics axisMetrics(axisFont);
   
   qreal topMargin = kInnerMargin;
-  // Y3 and Y4 labels appear above the chart
-  if (!yLabels_[2].trimmed().isEmpty() || !yLabels_[3].trimmed().isEmpty()) {
-    topMargin += labelMetrics.height() + kInnerMargin;
-  }
 
   qreal bottomMargin = kInnerMargin;
   // Title appears at bottom in medm
@@ -715,24 +711,74 @@ QRectF CartesianPlotElement::chartRect() const
   }
 
   qreal leftMargin = kInnerMargin;
-  // Y label on the left
-  if (!yLabels_[0].trimmed().isEmpty()) {
-    leftMargin += labelMetrics.height() + kInnerMargin;
-  }
-  // Add space for Y-axis numbers (tick marks + max number width + spacing)
-  const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
-  leftMargin += 4 + axisnumberwidth + kInnerMargin;
-
   qreal rightMargin = kInnerMargin;
-  // Y2 label on the right
-  if (!yLabels_[1].trimmed().isEmpty()) {
-    rightMargin += labelMetrics.height() + kInnerMargin;
+  
+  // Calculate Y-axis positions to determine actual margins needed
+  const YAxisPositions axisPos = calculateYAxisPositions(frame);
+  
+  // Expand the chart area to the innermost Y-axis position on each side
+  if (!axisPos.leftAxes.empty()) {
+    const qreal innermostAxis = axisPos.leftAxes.back().second;
+    leftMargin = innermostAxis - frame.left();
   }
-  // Add space for Y2-axis tick marks
-  rightMargin += 4 + kInnerMargin;
+  
+  if (!axisPos.rightAxes.empty()) {
+    const qreal innermostAxis = axisPos.rightAxes.back().second;
+    rightMargin = frame.right() - innermostAxis;
+  }
 
   frame.adjust(leftMargin, topMargin, -rightMargin, -bottomMargin);
   return frame;
+}
+
+CartesianPlotElement::YAxisPositions 
+CartesianPlotElement::calculateYAxisPositions(const QRectF &widgetBounds) const
+{
+  YAxisPositions positions;
+  
+  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFontMetrics axisMetrics(axisFont);
+  const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
+  const QFontMetrics labelMetrics(labelFont);
+  
+  const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
+  const qreal axisSpacing = axisnumberwidth + kInnerMargin;
+  const qreal labelGap = 1.0;  // Gap between axis numbers and labels
+  
+  // Start from the widget edges (after outer margin) and work inward
+  // Reserve space at edges for the outermost labels
+  // Add extra space for the outermost label to prevent crowding
+  qreal leftX = widgetBounds.left() + kInnerMargin * 1.5;
+  qreal rightX = widgetBounds.right() - kInnerMargin * 1.5;
+  
+  // Process axes in reverse order (Y4, Y3, Y2, Y1) like MEDM
+  for (int i = 3; i >= 0; --i) {
+    if (!isYAxisVisible(i)) {
+      continue;
+    }
+    
+    if (isYAxisOnRight(i)) {
+      // Add space for the label if present (positioned outside the axis)
+      if (!yLabels_[i].trimmed().isEmpty()) {
+        rightX -= labelMetrics.height() + labelGap;
+      }
+      // Position the axis line itself
+      positions.rightAxes.push_back({i, rightX});
+      // Reserve space for this axis's numbers and move inward
+      rightX -= axisSpacing;
+    } else {
+      // Add space for the label if present (positioned outside the axis)
+      if (!yLabels_[i].trimmed().isEmpty()) {
+        leftX += labelMetrics.height() + labelGap;
+      }
+      // Position the axis line itself
+      positions.leftAxes.push_back({i, leftX});
+      // Reserve space for this axis's numbers and move inward
+      leftX += axisSpacing;
+    }
+  }
+  
+  return positions;
 }
 
 void CartesianPlotElement::paintFrame(QPainter &painter) const
@@ -844,25 +890,50 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   painter.setPen(pen);
   painter.setBrush(Qt::NoBrush);
 
-  // Draw axis lines
-  painter.drawLine(QPointF(rect.left(), rect.bottom()),
-      QPointF(rect.right(), rect.bottom()));
-  painter.drawLine(QPointF(rect.left(), rect.top()),
-      QPointF(rect.left(), rect.bottom()));
-  painter.drawLine(QPointF(rect.right(), rect.top()),
-      QPointF(rect.right(), rect.bottom()));
+  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFontMetrics axisMetrics(axisFont);
+  
+  // Get pre-calculated axis positions (working from widget edges inward)
+  const QRectF widgetBounds = this->rect().adjusted(kOuterMargin, kOuterMargin,
+      -kOuterMargin, -kOuterMargin);
+  const YAxisPositions axisPos = calculateYAxisPositions(widgetBounds);
+  
+  // Draw all left-side Y-axes
+  for (const auto &[axisIndex, xPosition] : axisPos.leftAxes) {
+    paintYAxis(painter, rect, axisIndex, xPosition, true);
+  }
+  
+  // Draw all right-side Y-axes
+  for (const auto &[axisIndex, xPosition] : axisPos.rightAxes) {
+    paintYAxis(painter, rect, axisIndex, xPosition, false);
+  }
 
-  // Draw tick marks and axis numbers
+  // Draw X-axis (bottom)
+  painter.setFont(axisFont);
   const int majorTickSize = 4;
   const int minorTickSize = 2;
   const int numMajorTicks = 5;
   const int numMinorTicks = 4;
   
-  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
-  const QFontMetrics metrics(axisFont);
-  painter.setFont(axisFont);
+  // Determine X-axis extent: extend to innermost Y-axis on each side if present
+  qreal xAxisLeft = rect.left();
+  qreal xAxisRight = rect.right();
   
-  // X-axis ticks and numbers (bottom)
+  // Extend to innermost (last) left Y-axis if present
+  if (!axisPos.leftAxes.empty()) {
+    xAxisLeft = axisPos.leftAxes.back().second;
+  }
+  
+  // Extend to innermost (last) right Y-axis if present
+  if (!axisPos.rightAxes.empty()) {
+    xAxisRight = axisPos.rightAxes.back().second;
+  }
+  
+  // Bottom horizontal line - extends to innermost Y-axes
+  painter.drawLine(QPointF(xAxisLeft, rect.bottom()),
+      QPointF(xAxisRight, rect.bottom()));
+  
+  // X-axis ticks and numbers - only within chart area
   for (int i = 0; i <= numMajorTicks; ++i) {
     const qreal x = rect.left() + i * rect.width() / numMajorTicks;
     // Major tick
@@ -870,14 +941,14 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
                      QPointF(x, rect.bottom() + majorTickSize));
     
     // Axis number
-    const double value = i * 1.0 / numMajorTicks; // Normalized 0-1
+    const double value = i * 1.0 / numMajorTicks;
     QString label = QString::number(value, 'g', 3);
-    const qreal textWidth = metrics.horizontalAdvance(label);
+    const qreal textWidth = axisMetrics.horizontalAdvance(label);
     const qreal textX = x - textWidth / 2.0;
-    const qreal textY = rect.bottom() + majorTickSize + metrics.ascent() + 2.0;
+    const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
     painter.drawText(QPointF(textX, textY), label);
     
-    // Minor ticks between major ticks
+    // Minor ticks
     if (i < numMajorTicks) {
       for (int j = 1; j <= numMinorTicks; ++j) {
         const qreal minorX = x + j * rect.width() / (numMajorTicks * (numMinorTicks + 1));
@@ -886,45 +957,58 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       }
     }
   }
+}
+
+void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
+    int yAxisIndex, qreal axisX, bool onLeft) const
+{
+  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFontMetrics metrics(axisFont);
+  painter.setFont(axisFont);
   
-  // Y-axis ticks and numbers (left)
+  const int majorTickSize = 4;
+  const int minorTickSize = 2;
+  const int numMajorTicks = 5;
+  const int numMinorTicks = 4;
+  
+  // Draw the vertical axis line
+  painter.drawLine(QPointF(axisX, rect.top()),
+                   QPointF(axisX, rect.bottom()));
+  
+  // Draw ticks and numbers
   for (int i = 0; i <= numMajorTicks; ++i) {
     const qreal y = rect.bottom() - i * rect.height() / numMajorTicks;
+    
     // Major tick
-    painter.drawLine(QPointF(rect.left() - majorTickSize, y),
-                     QPointF(rect.left() + majorTickSize, y));
+    if (onLeft) {
+      painter.drawLine(QPointF(axisX - majorTickSize, y),
+                       QPointF(axisX + majorTickSize, y));
+    } else {
+      painter.drawLine(QPointF(axisX - majorTickSize, y),
+                       QPointF(axisX + majorTickSize, y));
+    }
     
     // Axis number
-    const double value = i * 1.0 / numMajorTicks; // Normalized 0-1
+    const double value = i * 1.0 / numMajorTicks;
     QString label = QString::number(value, 'g', 3);
     const qreal textWidth = metrics.horizontalAdvance(label);
-    const qreal textX = rect.left() - majorTickSize - textWidth - 2.0;
-    const qreal textY = y + metrics.ascent() / 2.0;
-    painter.drawText(QPointF(textX, textY), label);
     
-    // Minor ticks between major ticks
-    if (i < numMajorTicks) {
-      for (int j = 1; j <= numMinorTicks; ++j) {
-        const qreal minorY = y - j * rect.height() / (numMajorTicks * (numMinorTicks + 1));
-        painter.drawLine(QPointF(rect.left() - minorTickSize, minorY),
-                         QPointF(rect.left() + minorTickSize, minorY));
-      }
+    if (onLeft) {
+      const qreal textX = axisX - majorTickSize - textWidth - 2.0;
+      const qreal textY = y + metrics.ascent() / 2.0;
+      painter.drawText(QPointF(textX, textY), label);
+    } else {
+      const qreal textX = axisX + majorTickSize + 2.0;
+      const qreal textY = y + metrics.ascent() / 2.0;
+      painter.drawText(QPointF(textX, textY), label);
     }
-  }
-  
-  // Y2-axis ticks and numbers (right)
-  for (int i = 0; i <= numMajorTicks; ++i) {
-    const qreal y = rect.bottom() - i * rect.height() / numMajorTicks;
-    // Major tick
-    painter.drawLine(QPointF(rect.right() - majorTickSize, y),
-                     QPointF(rect.right() + majorTickSize, y));
     
-    // Minor ticks between major ticks
+    // Minor ticks
     if (i < numMajorTicks) {
       for (int j = 1; j <= numMinorTicks; ++j) {
         const qreal minorY = y - j * rect.height() / (numMajorTicks * (numMinorTicks + 1));
-        painter.drawLine(QPointF(rect.right() - minorTickSize, minorY),
-                         QPointF(rect.right() + minorTickSize, minorY));
+        painter.drawLine(QPointF(axisX - minorTickSize, minorY),
+                         QPointF(axisX + minorTickSize, minorY));
       }
     }
   }
@@ -964,20 +1048,28 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     painter.drawText(QPointF(labelX - textWidth / 2.0, labelY), xLabel_.trimmed());
   }
 
-  // Y label (left): medm uses VTextCenter at (x.LabelPos, y.Origin + y.Size / 2.0)
-  if (!yLabels_[0].trimmed().isEmpty()) {
-    painter.save();
-    const qreal centerY = rect.top() + rect.height() / 2.0;
-    // Position to the left of the axis numbers
-    const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
-    const qreal labelX = rect.left() - 4 - axisnumberwidth - kInnerMargin - labelMetrics.height() / 2.0;
+  // Y axis labels: positioned dynamically based on calculated axis positions
+  const QRectF widgetBounds = this->rect().adjusted(kOuterMargin, kOuterMargin,
+      -kOuterMargin, -kOuterMargin);
+  const YAxisPositions axisPos = calculateYAxisPositions(widgetBounds);
+  
+  const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
+  const qreal labelGap = 1.0;  // Gap between axis numbers and labels
+  const qreal centerY = rect.top() + rect.height() / 2.0;
+  
+  // Draw labels for left-side axes
+  for (const auto &[axisIndex, xPosition] : axisPos.leftAxes) {
+    if (yLabels_[axisIndex].trimmed().isEmpty()) {
+      continue;
+    }
     
-    // Draw text to a pixmap, then rotate the pixmap (like MEDM's XDrawVString)
-    const QString text = yLabels_[0].trimmed();
+    painter.save();
+    const QString text = yLabels_[axisIndex].trimmed();
     const qreal textWidth = labelMetrics.horizontalAdvance(text);
     const int pixWidth = static_cast<int>(std::ceil(textWidth));
     const int pixHeight = static_cast<int>(std::ceil(labelMetrics.height()));
     
+    // Create rotated text image
     QImage textImage(pixWidth, pixHeight, QImage::Format_ARGB32_Premultiplied);
     textImage.fill(Qt::transparent);
     
@@ -987,31 +1079,37 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     textPainter.drawText(QPointF(0, labelMetrics.ascent()), text);
     textPainter.end();
     
-    // Rotate the image 90 degrees counter-clockwise
     QTransform transform;
     transform.rotate(-90.0);
     QImage rotatedImage = textImage.transformed(transform);
     
-    // Draw the rotated image
+    // Position label to the left of the axis line with reduced gap
+    const qreal labelX = xPosition - axisnumberwidth - 4 - labelGap - labelMetrics.height() / 2.0;
     const qreal drawX = labelX - rotatedImage.width() / 2.0;
     const qreal drawY = centerY - rotatedImage.height() / 2.0;
-    painter.drawImage(QPointF(drawX, drawY), rotatedImage);
+    
+    // Ensure label stays within visible bounds
+    const qreal minX = kOuterMargin;
+    const qreal clippedDrawX = std::max(drawX, minX);
+    
+    painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
     
     painter.restore();
   }
-
-  // Y2 label (right): rotate same direction as Y1
-  if (!yLabels_[1].trimmed().isEmpty()) {
-    painter.save();
-    const qreal centerY = rect.top() + rect.height() / 2.0;
-    const qreal labelX = rect.right() + 4 + kInnerMargin + labelMetrics.height() / 2.0;
+  
+  // Draw labels for right-side axes
+  for (const auto &[axisIndex, xPosition] : axisPos.rightAxes) {
+    if (yLabels_[axisIndex].trimmed().isEmpty()) {
+      continue;
+    }
     
-    // Draw text to a pixmap, then rotate the pixmap (like MEDM's XDrawVString)
-    const QString text = yLabels_[1].trimmed();
+    painter.save();
+    const QString text = yLabels_[axisIndex].trimmed();
     const qreal textWidth = labelMetrics.horizontalAdvance(text);
     const int pixWidth = static_cast<int>(std::ceil(textWidth));
     const int pixHeight = static_cast<int>(std::ceil(labelMetrics.height()));
     
+    // Create rotated text image
     QImage textImage(pixWidth, pixHeight, QImage::Format_ARGB32_Premultiplied);
     textImage.fill(Qt::transparent);
     
@@ -1021,35 +1119,22 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     textPainter.drawText(QPointF(0, labelMetrics.ascent()), text);
     textPainter.end();
     
-    // Rotate the image 90 degrees counter-clockwise (same as Y1)
     QTransform transform;
     transform.rotate(-90.0);
     QImage rotatedImage = textImage.transformed(transform);
     
-    // Draw the rotated image
+    // Position label to the right of the axis line with reduced gap
+    const qreal labelX = xPosition + axisnumberwidth + 4 + labelGap + labelMetrics.height() / 2.0;
     const qreal drawX = labelX - rotatedImage.width() / 2.0;
     const qreal drawY = centerY - rotatedImage.height() / 2.0;
-    painter.drawImage(QPointF(drawX, drawY), rotatedImage);
+    
+    // Ensure label stays within visible bounds
+    const qreal maxX = this->rect().width() - kOuterMargin - rotatedImage.width();
+    const qreal clippedDrawX = std::min(drawX, maxX);
+    
+    painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
     
     painter.restore();
-  }
-
-  // Y3 and Y4 labels: these appear above the chart in medm, horizontally
-  const bool hasY3 = !yLabels_[2].trimmed().isEmpty();
-  const bool hasY4 = !yLabels_[3].trimmed().isEmpty();
-  if (hasY3 || hasY4) {
-    const qreal labelY = rect.top() - kInnerMargin;
-    if (hasY3) {
-      // Left-aligned in left half
-      const qreal textX = rect.left();
-      painter.drawText(QPointF(textX, labelY), yLabels_[2].trimmed());
-    }
-    if (hasY4) {
-      // Right-aligned in right half
-      const qreal textWidth = labelMetrics.horizontalAdvance(yLabels_[3].trimmed());
-      const qreal textX = rect.right() - textWidth;
-      painter.drawText(QPointF(textX, labelY), yLabels_[3].trimmed());
-    }
   }
 
   painter.restore();
@@ -1439,3 +1524,48 @@ int CartesianPlotElement::axisIndexForTrace(int traceIndex) const
   }
   return 1;
 }
+
+bool CartesianPlotElement::isYAxisOnRight(int yAxisIndex) const
+{
+  // Check if any trace using this Y-axis is set to use the right side
+  CartesianPlotYAxis targetAxis;
+  switch (yAxisIndex) {
+  case 0: targetAxis = CartesianPlotYAxis::kY1; break;
+  case 1: targetAxis = CartesianPlotYAxis::kY2; break;
+  case 2: targetAxis = CartesianPlotYAxis::kY3; break;
+  case 3: targetAxis = CartesianPlotYAxis::kY4; break;
+  default: return false;
+  }
+  
+  for (const auto &trace : traces_) {
+    if (trace.yAxis == targetAxis && trace.usesRightAxis) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CartesianPlotElement::isYAxisVisible(int yAxisIndex) const
+{
+  // An axis is visible if any trace uses it or if it has a label
+  if (!yLabels_[yAxisIndex].trimmed().isEmpty()) {
+    return true;
+  }
+  
+  CartesianPlotYAxis targetAxis;
+  switch (yAxisIndex) {
+  case 0: targetAxis = CartesianPlotYAxis::kY1; break;
+  case 1: targetAxis = CartesianPlotYAxis::kY2; break;
+  case 2: targetAxis = CartesianPlotYAxis::kY3; break;
+  case 3: targetAxis = CartesianPlotYAxis::kY4; break;
+  default: return false;
+  }
+  
+  for (const auto &trace : traces_) {
+    if (trace.yAxis == targetAxis) {
+      return true;
+    }
+  }
+  return false;
+}
+

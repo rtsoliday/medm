@@ -122,6 +122,51 @@ QFont medmMessageButtonFont(int heightConstraint)
   return QFont();
 }
 
+QFont medmTextFieldFont(int height)
+{
+  /* Mimics MEDM's textFieldFontListIndex() algorithm:
+   * Don't allow height of font to exceed 90% - 4 pixels of textField widget
+   * (includes nominal 2*shadowThickness=2 shadow).
+   * 
+   * This matches medmTextEntry.c:
+   *   for(i = MAX_FONTS-1; i >= 0; i--) {
+   *     if( ((int)(.90*height) - 4) >=
+   *       (fontTable[i]->ascent + fontTable[i]->descent))
+   *       return(i);
+   *   }
+   */
+  const int heightConstraint = static_cast<int>(0.90 * height) - 4;
+  if (heightConstraint <= 0) {
+    return QFont();
+  }
+
+  const auto &aliases = textFontAliases();
+  const int nFonts = static_cast<int>(aliases.size());
+
+  /* Search from largest (index 15) down to smallest (index 0) */
+  for (int i = nFonts - 1; i >= 0; --i) {
+    const QFont font = LegacyFonts::font(aliases[i]);
+    if (font.family().isEmpty()) {
+      continue;
+    }
+
+    const QFontMetrics metrics(font);
+    const int fontHeight = metrics.ascent() + metrics.descent();
+
+    if (heightConstraint >= fontHeight) {
+      return font;
+    }
+  }
+
+  /* Fallback to smallest font if nothing fits */
+  const QFont fallback = LegacyFonts::font(aliases[0]);
+  if (!fallback.family().isEmpty()) {
+    return fallback;
+  }
+
+  return QFont();
+}
+
 QFont medmSliderLabelFont(MeterLabel label, BarDirection direction,
     const QSize &widgetSize)
 {

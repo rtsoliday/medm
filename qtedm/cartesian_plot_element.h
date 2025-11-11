@@ -87,6 +87,12 @@ public:
   CartesianPlotTimeFormat axisTimeFormat(int axisIndex) const;
   void setAxisTimeFormat(int axisIndex, CartesianPlotTimeFormat format);
 
+  bool drawMajorGrid() const;
+  void setDrawMajorGrid(bool draw);
+
+  bool drawMinorGrid() const;
+  void setDrawMinorGrid(bool draw);
+
   void setExecuteMode(bool execute);
   bool isExecuteMode() const;
   void setTraceRuntimeMode(int index, CartesianPlotTraceMode mode);
@@ -163,6 +169,8 @@ private:
   std::array<double, kCartesianAxisCount> axisMinimums_{};
   std::array<double, kCartesianAxisCount> axisMaximums_{};
   std::array<CartesianPlotTimeFormat, kCartesianAxisCount> axisTimeFormats_{};
+  bool drawMajorGrid_ = true;
+  bool drawMinorGrid_ = false;
   bool executeMode_ = false;
   int runtimeCount_ = 0;
   bool runtimeCountValid_ = false;

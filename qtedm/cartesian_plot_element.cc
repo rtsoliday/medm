@@ -14,6 +14,7 @@
 #include <QPen>
 
 #include "medm_colors.h"
+#include "text_font_utils.h"
 
 namespace {
 
@@ -25,6 +26,12 @@ constexpr int kMinimumSampleCount = 8;
 constexpr int kMaximumSampleCount = kCartesianPlotMaximumSampleCount;
 
 constexpr int kDefaultTraceColorIndex = 14;
+
+// Font size constants matching medm's SciPlot defaults
+// (XtNtitleFont = XtFONT_HELVETICA | 24, XtNlabelFont = XtFONT_TIMES | 18, XtNaxisFont = XtFONT_TIMES | 10)
+constexpr int kTitleFontHeight = 24;    // For title text
+constexpr int kLabelFontHeight = 18;    // For axis labels (X, Y1, Y2, Y3, Y4)
+constexpr int kAxisNumberFontHeight = 10;  // For axis tick numbers
 
 QColor defaultTraceColor(int index)
 {
@@ -594,6 +601,34 @@ void CartesianPlotElement::setAxisRuntimeLimits(int axisIndex,
   update();
 }
 
+bool CartesianPlotElement::drawMajorGrid() const
+{
+  return drawMajorGrid_;
+}
+
+void CartesianPlotElement::setDrawMajorGrid(bool draw)
+{
+  if (drawMajorGrid_ == draw) {
+    return;
+  }
+  drawMajorGrid_ = draw;
+  update();
+}
+
+bool CartesianPlotElement::drawMinorGrid() const
+{
+  return drawMinorGrid_;
+}
+
+void CartesianPlotElement::setDrawMinorGrid(bool draw)
+{
+  if (drawMinorGrid_ == draw) {
+    return;
+  }
+  drawMinorGrid_ = draw;
+  update();
+}
+
 void CartesianPlotElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -651,29 +686,43 @@ QRectF CartesianPlotElement::chartRect() const
     return frame;
   }
 
-  const QFontMetrics metrics(font());
+  const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
+  const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
+  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  
+  const QFontMetrics titleMetrics(titleFont);
+  const QFontMetrics labelMetrics(labelFont);
+  const QFontMetrics axisMetrics(axisFont);
+  
   qreal topMargin = kInnerMargin;
   if (!title_.trimmed().isEmpty()) {
-    topMargin += metrics.height();
+    topMargin += titleMetrics.height();
   }
   if (!yLabels_[2].trimmed().isEmpty() || !yLabels_[3].trimmed().isEmpty()) {
-    topMargin += metrics.height();
+    topMargin += labelMetrics.height();
   }
 
   qreal bottomMargin = kInnerMargin;
   if (!xLabel_.trimmed().isEmpty()) {
-    bottomMargin += metrics.height();
+    bottomMargin += labelMetrics.height();
   }
+  // Add space for X-axis numbers (tick marks + number height + spacing)
+  bottomMargin += 4 + axisMetrics.height() + 2;
 
   qreal leftMargin = kInnerMargin;
   if (!yLabels_[0].trimmed().isEmpty()) {
-    leftMargin += metrics.height();
+    leftMargin += labelMetrics.height();
   }
+  // Add space for Y-axis numbers (tick marks + max number width + spacing)
+  // Estimate max width for numbers like "0.8" or "1.0"
+  leftMargin += 4 + axisMetrics.horizontalAdvance(QStringLiteral("0.88")) + 2;
 
   qreal rightMargin = kInnerMargin;
   if (!yLabels_[1].trimmed().isEmpty()) {
-    rightMargin += metrics.height();
+    rightMargin += labelMetrics.height();
   }
+  // Add space for Y2-axis tick marks
+  rightMargin += 4 + 2;
 
   frame.adjust(leftMargin, topMargin, -rightMargin, -bottomMargin);
   return frame;
@@ -681,12 +730,36 @@ QRectF CartesianPlotElement::chartRect() const
 
 void CartesianPlotElement::paintFrame(QPainter &painter) const
 {
-  const QRect frameRect = rect().adjusted(0, 0, -1, -1);
-  QPen pen(effectiveForeground());
-  pen.setWidth(1);
-  painter.setPen(pen);
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(frameRect);
+  const QRect outerRect = rect();
+  
+  // Draw 3D raised shadow border (mimicking medm's XmSHADOW_OUT)
+  const int shadowThickness = 2;
+  
+  // Get light and dark shadow colors from the background
+  const QColor bg = effectiveBackground();
+  const QColor lightShadow = bg.lighter(150);
+  const QColor darkShadow = bg.darker(150);
+  
+  // Draw shadow lines (top and left are light, bottom and right are dark)
+  for (int i = 0; i < shadowThickness; ++i) {
+    // Light shadow on top and left (raised effect)
+    painter.setPen(QPen(lightShadow, 1));
+    // Top edge
+    painter.drawLine(outerRect.left() + i, outerRect.top() + i,
+                     outerRect.right() - i, outerRect.top() + i);
+    // Left edge
+    painter.drawLine(outerRect.left() + i, outerRect.top() + i,
+                     outerRect.left() + i, outerRect.bottom() - i);
+    
+    // Dark shadow on bottom and right
+    painter.setPen(QPen(darkShadow, 1));
+    // Bottom edge
+    painter.drawLine(outerRect.left() + i, outerRect.bottom() - i,
+                     outerRect.right() - i, outerRect.bottom() - i);
+    // Right edge
+    painter.drawLine(outerRect.right() - i, outerRect.top() + i,
+                     outerRect.right() - i, outerRect.bottom() - i);
+  }
 }
 
 void CartesianPlotElement::paintGrid(QPainter &painter, const QRectF &rect) const
@@ -694,20 +767,63 @@ void CartesianPlotElement::paintGrid(QPainter &painter, const QRectF &rect) cons
   if (rect.width() <= 0.0 || rect.height() <= 0.0) {
     return;
   }
-  QColor gridColor = effectiveForeground();
-  gridColor.setAlpha(80);
-  QPen pen(gridColor);
-  pen.setStyle(Qt::DotLine);
-  painter.setPen(pen);
-  painter.setBrush(Qt::NoBrush);
-
-  for (int i = 1; i < kGridLines; ++i) {
-    const qreal x = rect.left() + i * rect.width() / kGridLines;
-    painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+  
+  // Only draw grid if at least one option is enabled
+  if (!drawMajorGrid_ && !drawMinorGrid_) {
+    return;
   }
-  for (int j = 1; j < kGridLines; ++j) {
-    const qreal y = rect.top() + j * rect.height() / kGridLines;
-    painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+  
+  const int numMajorDivisions = 5;
+  const int numMinorDivisions = 4; // minor divisions between each major division
+  
+  // Draw minor grid lines if enabled
+  if (drawMinorGrid_) {
+    QColor minorGridColor = effectiveForeground();
+    minorGridColor.setAlpha(40); // More subtle than major grid
+    QPen minorPen(minorGridColor);
+    minorPen.setStyle(Qt::DotLine);
+    minorPen.setWidth(1);
+    painter.setPen(minorPen);
+    
+    // Vertical minor grid lines
+    for (int i = 0; i < numMajorDivisions; ++i) {
+      for (int j = 1; j <= numMinorDivisions; ++j) {
+        const qreal x = rect.left() + (i + j / static_cast<qreal>(numMinorDivisions + 1)) 
+                        * rect.width() / numMajorDivisions;
+        painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+      }
+    }
+    
+    // Horizontal minor grid lines
+    for (int i = 0; i < numMajorDivisions; ++i) {
+      for (int j = 1; j <= numMinorDivisions; ++j) {
+        const qreal y = rect.top() + (i + j / static_cast<qreal>(numMinorDivisions + 1)) 
+                        * rect.height() / numMajorDivisions;
+        painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+      }
+    }
+  }
+  
+  // Draw major grid lines if enabled
+  if (drawMajorGrid_) {
+    QColor majorGridColor = effectiveForeground();
+    majorGridColor.setAlpha(80);
+    QPen majorPen(majorGridColor);
+    majorPen.setStyle(Qt::DotLine);
+    majorPen.setWidth(1);
+    painter.setPen(majorPen);
+    
+    // Vertical major grid lines (skip first and last as they're on the axes)
+    for (int i = 1; i < numMajorDivisions; ++i) {
+      const qreal x = rect.left() + i * rect.width() / numMajorDivisions;
+      painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+    }
+    
+    // Horizontal major grid lines (skip first and last as they're on the axes)
+    for (int j = 1; j < numMajorDivisions; ++j) {
+      const qreal y = rect.top() + j * rect.height() / numMajorDivisions;
+      painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+    }
   }
 }
 
@@ -721,52 +837,137 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   painter.setPen(pen);
   painter.setBrush(Qt::NoBrush);
 
+  // Draw axis lines
   painter.drawLine(QPointF(rect.left(), rect.bottom()),
       QPointF(rect.right(), rect.bottom()));
   painter.drawLine(QPointF(rect.left(), rect.top()),
       QPointF(rect.left(), rect.bottom()));
   painter.drawLine(QPointF(rect.right(), rect.top()),
       QPointF(rect.right(), rect.bottom()));
+
+  // Draw tick marks and axis numbers
+  const int majorTickSize = 4;
+  const int minorTickSize = 2;
+  const int numMajorTicks = 5;
+  const int numMinorTicks = 4;
+  
+  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFontMetrics metrics(axisFont);
+  painter.setFont(axisFont);
+  
+  // X-axis ticks and numbers (bottom)
+  for (int i = 0; i <= numMajorTicks; ++i) {
+    const qreal x = rect.left() + i * rect.width() / numMajorTicks;
+    // Major tick
+    painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
+                     QPointF(x, rect.bottom() + majorTickSize));
+    
+    // Axis number
+    const double value = i * 1.0 / numMajorTicks; // Normalized 0-1
+    QString label = QString::number(value, 'g', 3);
+    const qreal textWidth = metrics.horizontalAdvance(label);
+    const qreal textX = x - textWidth / 2.0;
+    const qreal textY = rect.bottom() + majorTickSize + metrics.ascent() + 2.0;
+    painter.drawText(QPointF(textX, textY), label);
+    
+    // Minor ticks between major ticks
+    if (i < numMajorTicks) {
+      for (int j = 1; j <= numMinorTicks; ++j) {
+        const qreal minorX = x + j * rect.width() / (numMajorTicks * (numMinorTicks + 1));
+        painter.drawLine(QPointF(minorX, rect.bottom() - minorTickSize),
+                         QPointF(minorX, rect.bottom() + minorTickSize));
+      }
+    }
+  }
+  
+  // Y-axis ticks and numbers (left)
+  for (int i = 0; i <= numMajorTicks; ++i) {
+    const qreal y = rect.bottom() - i * rect.height() / numMajorTicks;
+    // Major tick
+    painter.drawLine(QPointF(rect.left() - majorTickSize, y),
+                     QPointF(rect.left() + majorTickSize, y));
+    
+    // Axis number
+    const double value = i * 1.0 / numMajorTicks; // Normalized 0-1
+    QString label = QString::number(value, 'g', 3);
+    const qreal textWidth = metrics.horizontalAdvance(label);
+    const qreal textX = rect.left() - majorTickSize - textWidth - 2.0;
+    const qreal textY = y + metrics.ascent() / 2.0;
+    painter.drawText(QPointF(textX, textY), label);
+    
+    // Minor ticks between major ticks
+    if (i < numMajorTicks) {
+      for (int j = 1; j <= numMinorTicks; ++j) {
+        const qreal minorY = y - j * rect.height() / (numMajorTicks * (numMinorTicks + 1));
+        painter.drawLine(QPointF(rect.left() - minorTickSize, minorY),
+                         QPointF(rect.left() + minorTickSize, minorY));
+      }
+    }
+  }
+  
+  // Y2-axis ticks and numbers (right)
+  for (int i = 0; i <= numMajorTicks; ++i) {
+    const qreal y = rect.bottom() - i * rect.height() / numMajorTicks;
+    // Major tick
+    painter.drawLine(QPointF(rect.right() - majorTickSize, y),
+                     QPointF(rect.right() + majorTickSize, y));
+    
+    // Minor ticks between major ticks
+    if (i < numMajorTicks) {
+      for (int j = 1; j <= numMinorTicks; ++j) {
+        const qreal minorY = y - j * rect.height() / (numMajorTicks * (numMinorTicks + 1));
+        painter.drawLine(QPointF(rect.right() - minorTickSize, minorY),
+                         QPointF(rect.right() + minorTickSize, minorY));
+      }
+    }
+  }
 }
 
 void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) const
 {
   painter.save();
   painter.setPen(effectiveForeground());
-  QFontMetrics metrics(font());
+  
+  const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
+  const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
+  const QFontMetrics titleMetrics(titleFont);
+  const QFontMetrics labelMetrics(labelFont);
 
   if (!title_.trimmed().isEmpty()) {
-    QRectF titleRect(rect.left(), rect.top() - metrics.height() - 2.0,
-        rect.width(), metrics.height());
+    painter.setFont(titleFont);
+    QRectF titleRect(rect.left(), rect.top() - titleMetrics.height() - 2.0,
+        rect.width(), titleMetrics.height());
     painter.drawText(titleRect, Qt::AlignHCenter | Qt::AlignTop,
         title_.trimmed());
   }
 
+  painter.setFont(labelFont);
+  
   if (!xLabel_.trimmed().isEmpty()) {
     QRectF xRect(rect.left(), rect.bottom() + 2.0,
-        rect.width(), metrics.height());
+        rect.width(), labelMetrics.height());
     painter.drawText(xRect, Qt::AlignHCenter | Qt::AlignTop,
         xLabel_.trimmed());
   }
 
   if (!yLabels_[0].trimmed().isEmpty()) {
     painter.save();
-    painter.translate(rect.left() - metrics.height() / 2.0 - 2.0,
+    painter.translate(rect.left() - labelMetrics.height() / 2.0 - 2.0,
         rect.center().y());
     painter.rotate(-90.0);
-    painter.drawText(QRectF(-rect.height() / 2.0, -metrics.height() / 2.0,
-                         rect.height(), metrics.height()),
+    painter.drawText(QRectF(-rect.height() / 2.0, -labelMetrics.height() / 2.0,
+                         rect.height(), labelMetrics.height()),
         Qt::AlignCenter, yLabels_[0].trimmed());
     painter.restore();
   }
 
   if (!yLabels_[1].trimmed().isEmpty()) {
     painter.save();
-    painter.translate(rect.right() + metrics.height() / 2.0 + 2.0,
+    painter.translate(rect.right() + labelMetrics.height() / 2.0 + 2.0,
         rect.center().y());
     painter.rotate(90.0);
-    painter.drawText(QRectF(-rect.height() / 2.0, -metrics.height() / 2.0,
-                         rect.height(), metrics.height()),
+    painter.drawText(QRectF(-rect.height() / 2.0, -labelMetrics.height() / 2.0,
+                         rect.height(), labelMetrics.height()),
         Qt::AlignCenter, yLabels_[1].trimmed());
     painter.restore();
   }
@@ -774,15 +975,15 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   const bool hasY3 = !yLabels_[2].trimmed().isEmpty();
   const bool hasY4 = !yLabels_[3].trimmed().isEmpty();
   if (hasY3 || hasY4) {
-    const qreal top = rect.top() - metrics.height() - 2.0;
+    const qreal top = rect.top() - labelMetrics.height() - 2.0;
     if (hasY3) {
-      QRectF y3Rect(rect.left(), top, rect.width() / 2.0, metrics.height());
+      QRectF y3Rect(rect.left(), top, rect.width() / 2.0, labelMetrics.height());
       painter.drawText(y3Rect, Qt::AlignLeft | Qt::AlignBottom,
           yLabels_[2].trimmed());
     }
     if (hasY4) {
       QRectF y4Rect(rect.left() + rect.width() / 2.0, top, rect.width() / 2.0,
-          metrics.height());
+          labelMetrics.height());
       painter.drawText(y4Rect, Qt::AlignRight | Qt::AlignBottom,
           yLabels_[3].trimmed());
     }

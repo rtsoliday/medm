@@ -33,3 +33,8 @@ QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &te
 // constraint for the requested orientation and label style is met.
 QFont medmSliderLabelFont(MeterLabel label, BarDirection direction,
     const QSize &widgetSize);
+
+// Returns a font using MEDM's textFieldFontListIndex() logic.
+// Applies the (0.90 * height) - 4 constraint formula, then searches from largest
+// to smallest font that fits. This matches medmTextEntry.c's textFieldFontListIndex().
+QFont medmTextFieldFont(int height);

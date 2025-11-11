@@ -700,7 +700,7 @@ StripChartElement::Layout StripChartElement::calculateLayout(
   // Check for overlap between leftmost X-axis label and Y-axis labels (like MEDM)
   // This prevents the X-axis and Y-axis labels from overlapping
   if (layout.chartRect.isValid()) {
-    const int nDivX = std::min(kMaxTickMarks, kGridLines);
+    const int nDivX = calculateXAxisTickCount(layout.chartRect.width(), metrics);
     const double periodValue = period_;
     const NumberFormat xFmt = calculateNumberFormat(periodValue);
     const double xStep = periodValue / std::max(nDivX, 1);
@@ -817,6 +817,57 @@ int StripChartElement::calculateYAxisLabelWidth(const QFontMetrics &metrics) con
   // Total width = text width + space for color indicators
   constexpr int kLineSpace = 3;
   return maxWidth + (maxDots * kLineSpace);
+}
+
+// Calculate the optimal number of X-axis tick divisions based on available width.
+// This function ensures tick labels don't overlap by reducing the number of ticks
+// when space is constrained. The algorithm:
+// 1. Finds the widest label that would appear for any tick count
+// 2. Calculates minimum spacing (label width + small gap)
+// 3. Tests divisor counts from max down to 2, returning the first that fits
+// 4. Guarantees at least 2 ticks (min and max) are always shown
+int StripChartElement::calculateXAxisTickCount(int chartWidth,
+    const QFontMetrics &metrics) const
+{
+  if (chartWidth <= 0) {
+    return kGridLines;
+  }
+
+  // Start with the maximum tick count
+  int maxTicks = std::min(kMaxTickMarks, kGridLines);
+  
+  // Calculate the number format for our period value
+  const double periodValue = period_;
+  const NumberFormat fmt = calculateNumberFormat(periodValue);
+  
+  // Find the widest label we'll display by checking all potential tick values
+  int maxLabelWidth = 0;
+  for (int nDiv = 2; nDiv <= maxTicks; ++nDiv) {
+    const double step = periodValue / nDiv;
+    for (int i = 0; i <= nDiv; ++i) {
+      const double value = -step * i;
+      const QString text = formatNumber(value, fmt.format, fmt.decimal);
+      const int textWidth = metrics.horizontalAdvance(text);
+      maxLabelWidth = std::max(maxLabelWidth, textWidth);
+    }
+  }
+  
+  // Add small spacing between labels (2-3 pixels minimum gap)
+  constexpr int kMinLabelGap = 3;
+  const int minLabelSpacing = maxLabelWidth + kMinLabelGap;
+  
+  // Calculate how many divisions we can fit
+  // Each division takes up (chartWidth / nDiv) pixels
+  // We need that to be >= minLabelSpacing
+  for (int nDiv = maxTicks; nDiv >= 2; --nDiv) {
+    const int spacingPerLabel = chartWidth / nDiv;
+    if (spacingPerLabel >= minLabelSpacing) {
+      return nDiv;
+    }
+  }
+  
+  // Minimum is 2 (show min and max only)
+  return 2;
 }
 
 QColor StripChartElement::effectiveForeground() const
@@ -937,7 +988,7 @@ void StripChartElement::paintTickMarks(QPainter &painter, const QRect &chartRect
   painter.setPen(pen);
 
   // Calculate number of divisions (limit to reasonable range)
-  int nDivX = std::min(kMaxTickMarks, kGridLines);
+  const int nDivX = calculateXAxisTickCount(chartRect.width(), QFontMetrics(labelFont()));
   int nDivY = std::min(kMaxTickMarks, kGridLines);
 
   // Draw Y-axis tick marks (left side of chart)
@@ -974,7 +1025,7 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
   pen.setStyle(Qt::SolidLine);
   painter.setPen(pen);
 
-  const int nDivX = std::min(kMaxTickMarks, kGridLines);
+  const int nDivX = calculateXAxisTickCount(chartRect.width(), metrics);
   const int nDivY = std::min(kMaxTickMarks, kGridLines);
 
   // Draw X-axis scale numbers (bottom, counting backward from 0)

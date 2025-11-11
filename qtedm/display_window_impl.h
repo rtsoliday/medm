@@ -18928,9 +18928,19 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
   if (ok) {
     element->setPeriod(periodValue);
   } else {
+    // Handle legacy "delay" format - medm converts delay to period based on units.
+    // For SECONDS: period = delay * 60
+    // For MINUTES: period = delay
+    // For MILLISECONDS: period = delay
     const QString delayStr = propertyValue(stripNode, QStringLiteral("delay"));
+    const QString unitsStr = propertyValue(stripNode, QStringLiteral("units"));
     periodValue = delayStr.toDouble(&ok);
     if (ok) {
+      // Apply medm's delay-to-period conversion based on units
+      const TimeUnits units = parseTimeUnits(unitsStr);
+      if (units == TimeUnits::kSeconds) {
+        periodValue *= 60.0;  // medm multiplies by 60 for seconds
+      }
       element->setPeriod(periodValue);
     }
   }

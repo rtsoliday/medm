@@ -695,34 +695,41 @@ QRectF CartesianPlotElement::chartRect() const
   const QFontMetrics axisMetrics(axisFont);
   
   qreal topMargin = kInnerMargin;
-  if (!title_.trimmed().isEmpty()) {
-    topMargin += titleMetrics.height();
-  }
+  // Y3 and Y4 labels appear above the chart
   if (!yLabels_[2].trimmed().isEmpty() || !yLabels_[3].trimmed().isEmpty()) {
-    topMargin += labelMetrics.height();
+    topMargin += labelMetrics.height() + kInnerMargin;
   }
 
   qreal bottomMargin = kInnerMargin;
-  if (!xLabel_.trimmed().isEmpty()) {
-    bottomMargin += labelMetrics.height();
+  // Title appears at bottom in medm
+  if (!title_.trimmed().isEmpty()) {
+    bottomMargin += titleMetrics.height();
   }
-  // Add space for X-axis numbers (tick marks + number height + spacing)
-  bottomMargin += 4 + axisMetrics.height() + 2;
+  // X label below the axis numbers
+  if (!xLabel_.trimmed().isEmpty()) {
+    const qreal axisnumbersize = kInnerMargin + axisMetrics.height();
+    bottomMargin += axisnumbersize + labelMetrics.height();
+  } else {
+    // Just the axis numbers
+    bottomMargin += kInnerMargin + axisMetrics.height();
+  }
 
   qreal leftMargin = kInnerMargin;
+  // Y label on the left
   if (!yLabels_[0].trimmed().isEmpty()) {
-    leftMargin += labelMetrics.height();
+    leftMargin += labelMetrics.height() + kInnerMargin;
   }
   // Add space for Y-axis numbers (tick marks + max number width + spacing)
-  // Estimate max width for numbers like "0.8" or "1.0"
-  leftMargin += 4 + axisMetrics.horizontalAdvance(QStringLiteral("0.88")) + 2;
+  const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
+  leftMargin += 4 + axisnumberwidth + kInnerMargin;
 
   qreal rightMargin = kInnerMargin;
+  // Y2 label on the right
   if (!yLabels_[1].trimmed().isEmpty()) {
-    rightMargin += labelMetrics.height();
+    rightMargin += labelMetrics.height() + kInnerMargin;
   }
   // Add space for Y2-axis tick marks
-  rightMargin += 4 + 2;
+  rightMargin += 4 + kInnerMargin;
 
   frame.adjust(leftMargin, topMargin, -rightMargin, -bottomMargin);
   return frame;
@@ -930,62 +937,76 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   
   const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
   const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
+  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
   const QFontMetrics titleMetrics(titleFont);
   const QFontMetrics labelMetrics(labelFont);
+  const QFontMetrics axisMetrics(axisFont);
 
+  // Title positioning: medm places title at bottom-left corner
+  // y.TitlePos = height - ymargin, x.TitlePos = xmargin
   if (!title_.trimmed().isEmpty()) {
     painter.setFont(titleFont);
-    QRectF titleRect(rect.left(), rect.top() - titleMetrics.height() - 2.0,
-        rect.width(), titleMetrics.height());
-    painter.drawText(titleRect, Qt::AlignHCenter | Qt::AlignTop,
-        title_.trimmed());
+    const qreal titleX = kOuterMargin + kInnerMargin;
+    const qreal titleY = this->rect().height() - kInnerMargin;
+    painter.drawText(QPointF(titleX, titleY), title_.trimmed());
   }
 
   painter.setFont(labelFont);
   
+  // X label positioning: medm centers it below the chart area
+  // TextCenter at (x.Origin + x.Size / 2.0, y.LabelPos)
+  // where y.LabelPos = y.Origin + y.Size + ymargin + axisnumbersize
   if (!xLabel_.trimmed().isEmpty()) {
-    QRectF xRect(rect.left(), rect.bottom() + 2.0,
-        rect.width(), labelMetrics.height());
-    painter.drawText(xRect, Qt::AlignHCenter | Qt::AlignTop,
-        xLabel_.trimmed());
+    const qreal axisnumbersize = kInnerMargin + axisMetrics.height();
+    const qreal labelY = rect.bottom() + axisnumbersize + labelMetrics.ascent();
+    const qreal labelX = rect.left() + rect.width() / 2.0;
+    const qreal textWidth = labelMetrics.horizontalAdvance(xLabel_.trimmed());
+    painter.drawText(QPointF(labelX - textWidth / 2.0, labelY), xLabel_.trimmed());
   }
 
+  // Y label (left): medm uses VTextCenter at (x.LabelPos, y.Origin + y.Size / 2.0)
   if (!yLabels_[0].trimmed().isEmpty()) {
     painter.save();
-    painter.translate(rect.left() - labelMetrics.height() / 2.0 - 2.0,
-        rect.center().y());
+    const qreal centerY = rect.top() + rect.height() / 2.0;
+    // Position to the left of the axis numbers
+    const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
+    const qreal labelX = rect.left() - 4 - axisnumberwidth - kInnerMargin - labelMetrics.height() / 2.0;
+    painter.translate(labelX, centerY);
     painter.rotate(-90.0);
-    painter.drawText(QRectF(-rect.height() / 2.0, -labelMetrics.height() / 2.0,
-                         rect.height(), labelMetrics.height()),
-        Qt::AlignCenter, yLabels_[0].trimmed());
+    const qreal textWidth = labelMetrics.horizontalAdvance(yLabels_[0].trimmed());
+    painter.drawText(QPointF(-textWidth / 2.0, labelMetrics.height() / 2.0),
+        yLabels_[0].trimmed());
     painter.restore();
   }
 
+  // Y2 label (right): medm uses VTextCenter rotated the other direction
   if (!yLabels_[1].trimmed().isEmpty()) {
     painter.save();
-    painter.translate(rect.right() + labelMetrics.height() / 2.0 + 2.0,
-        rect.center().y());
+    const qreal centerY = rect.top() + rect.height() / 2.0;
+    const qreal labelX = rect.right() + 4 + kInnerMargin + labelMetrics.height() / 2.0;
+    painter.translate(labelX, centerY);
     painter.rotate(90.0);
-    painter.drawText(QRectF(-rect.height() / 2.0, -labelMetrics.height() / 2.0,
-                         rect.height(), labelMetrics.height()),
-        Qt::AlignCenter, yLabels_[1].trimmed());
+    const qreal textWidth = labelMetrics.horizontalAdvance(yLabels_[1].trimmed());
+    painter.drawText(QPointF(-textWidth / 2.0, labelMetrics.height() / 2.0),
+        yLabels_[1].trimmed());
     painter.restore();
   }
 
+  // Y3 and Y4 labels: these appear above the chart in medm, horizontally
   const bool hasY3 = !yLabels_[2].trimmed().isEmpty();
   const bool hasY4 = !yLabels_[3].trimmed().isEmpty();
   if (hasY3 || hasY4) {
-    const qreal top = rect.top() - labelMetrics.height() - 2.0;
+    const qreal labelY = rect.top() - kInnerMargin;
     if (hasY3) {
-      QRectF y3Rect(rect.left(), top, rect.width() / 2.0, labelMetrics.height());
-      painter.drawText(y3Rect, Qt::AlignLeft | Qt::AlignBottom,
-          yLabels_[2].trimmed());
+      // Left-aligned in left half
+      const qreal textX = rect.left();
+      painter.drawText(QPointF(textX, labelY), yLabels_[2].trimmed());
     }
     if (hasY4) {
-      QRectF y4Rect(rect.left() + rect.width() / 2.0, top, rect.width() / 2.0,
-          labelMetrics.height());
-      painter.drawText(y4Rect, Qt::AlignRight | Qt::AlignBottom,
-          yLabels_[3].trimmed());
+      // Right-aligned in right half
+      const qreal textWidth = labelMetrics.horizontalAdvance(yLabels_[3].trimmed());
+      const qreal textX = rect.right() - textWidth;
+      painter.drawText(QPointF(textX, labelY), yLabels_[3].trimmed());
     }
   }
 

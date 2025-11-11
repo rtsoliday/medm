@@ -971,24 +971,66 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     // Position to the left of the axis numbers
     const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
     const qreal labelX = rect.left() - 4 - axisnumberwidth - kInnerMargin - labelMetrics.height() / 2.0;
-    painter.translate(labelX, centerY);
-    painter.rotate(-90.0);
-    const qreal textWidth = labelMetrics.horizontalAdvance(yLabels_[0].trimmed());
-    painter.drawText(QPointF(-textWidth / 2.0, labelMetrics.height() / 2.0),
-        yLabels_[0].trimmed());
+    
+    // Draw text to a pixmap, then rotate the pixmap (like MEDM's XDrawVString)
+    const QString text = yLabels_[0].trimmed();
+    const qreal textWidth = labelMetrics.horizontalAdvance(text);
+    const int pixWidth = static_cast<int>(std::ceil(textWidth));
+    const int pixHeight = static_cast<int>(std::ceil(labelMetrics.height()));
+    
+    QImage textImage(pixWidth, pixHeight, QImage::Format_ARGB32_Premultiplied);
+    textImage.fill(Qt::transparent);
+    
+    QPainter textPainter(&textImage);
+    textPainter.setFont(labelFont);
+    textPainter.setPen(effectiveForeground());
+    textPainter.drawText(QPointF(0, labelMetrics.ascent()), text);
+    textPainter.end();
+    
+    // Rotate the image 90 degrees counter-clockwise
+    QTransform transform;
+    transform.rotate(-90.0);
+    QImage rotatedImage = textImage.transformed(transform);
+    
+    // Draw the rotated image
+    const qreal drawX = labelX - rotatedImage.width() / 2.0;
+    const qreal drawY = centerY - rotatedImage.height() / 2.0;
+    painter.drawImage(QPointF(drawX, drawY), rotatedImage);
+    
     painter.restore();
   }
 
-  // Y2 label (right): medm uses VTextCenter rotated the other direction
+  // Y2 label (right): rotate same direction as Y1
   if (!yLabels_[1].trimmed().isEmpty()) {
     painter.save();
     const qreal centerY = rect.top() + rect.height() / 2.0;
     const qreal labelX = rect.right() + 4 + kInnerMargin + labelMetrics.height() / 2.0;
-    painter.translate(labelX, centerY);
-    painter.rotate(90.0);
-    const qreal textWidth = labelMetrics.horizontalAdvance(yLabels_[1].trimmed());
-    painter.drawText(QPointF(-textWidth / 2.0, labelMetrics.height() / 2.0),
-        yLabels_[1].trimmed());
+    
+    // Draw text to a pixmap, then rotate the pixmap (like MEDM's XDrawVString)
+    const QString text = yLabels_[1].trimmed();
+    const qreal textWidth = labelMetrics.horizontalAdvance(text);
+    const int pixWidth = static_cast<int>(std::ceil(textWidth));
+    const int pixHeight = static_cast<int>(std::ceil(labelMetrics.height()));
+    
+    QImage textImage(pixWidth, pixHeight, QImage::Format_ARGB32_Premultiplied);
+    textImage.fill(Qt::transparent);
+    
+    QPainter textPainter(&textImage);
+    textPainter.setFont(labelFont);
+    textPainter.setPen(effectiveForeground());
+    textPainter.drawText(QPointF(0, labelMetrics.ascent()), text);
+    textPainter.end();
+    
+    // Rotate the image 90 degrees counter-clockwise (same as Y1)
+    QTransform transform;
+    transform.rotate(-90.0);
+    QImage rotatedImage = textImage.transformed(transform);
+    
+    // Draw the rotated image
+    const qreal drawX = labelX - rotatedImage.width() / 2.0;
+    const qreal drawY = centerY - rotatedImage.height() / 2.0;
+    painter.drawImage(QPointF(drawX, drawY), rotatedImage);
+    
     painter.restore();
   }
 

@@ -51,6 +51,67 @@ QColor defaultTraceColor(int index)
 
 } // namespace
 
+// Nice axis range computation matching MEDM's SciPlot ComputeAxis algorithm
+CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
+    double min, double max, bool isLog)
+{
+  NiceAxisRange result;
+  
+  // Delta values for nice tick intervals (from MEDM's CAdeltas)
+  static const double deltas[] = {0.2, 0.5, 1.0, 2.0, 5.0};
+  static const int minors[] = {4, 5, 4, 4, 5};
+  static const int maxMajor = 8;
+  
+  if (isLog && min > 0 && max > 0) {
+    // Logarithmic axis
+    const double logMin = std::log10(min);
+    const double logMax = std::log10(max);
+    
+    // Round to powers of 10
+    result.drawMin = std::pow(10.0, std::floor(logMin));
+    result.drawMax = std::pow(10.0, std::ceil(logMax));
+    result.majorInc = 10.0;
+    result.numMajor = static_cast<int>(std::log10(result.drawMax / result.drawMin) + 0.0001);
+    result.numMinor = 10;
+  } else {
+    // Linear axis
+    const double range = max - min;
+    
+    // Handle degenerate case
+    if (range < std::numeric_limits<double>::epsilon() * std::max(std::fabs(min), std::fabs(max))) {
+      const double halfRange = std::max(std::fabs(min) * 0.02, 0.5);
+      min -= halfRange;
+      max += halfRange;
+    }
+    
+    // Normalize the range to determine nice delta
+    const int exponent = static_cast<int>(std::floor(std::log10(max - min)));
+    const double normalizedRange = (max - min) / std::pow(10.0, exponent);
+    
+    // Find appropriate delta from the deltas array
+    double delta = deltas[0];
+    int minorNum = minors[0];
+    for (size_t i = 0; i < sizeof(deltas) / sizeof(deltas[0]); ++i) {
+      const int majorNum = static_cast<int>(std::ceil(normalizedRange / deltas[i]));
+      if (majorNum <= maxMajor) {
+        delta = deltas[i];
+        minorNum = minors[i];
+        break;
+      }
+    }
+    delta *= std::pow(10.0, exponent);
+    
+    // Round min down and max up to nearest delta
+    result.drawMin = std::floor(min / delta) * delta;
+    result.drawMax = std::ceil(max / delta) * delta;
+    result.majorInc = delta;
+    result.numMajor = static_cast<int>(std::floor((result.drawMax - result.drawMin) / delta + 0.5));
+    result.numMinor = minorNum;
+  }
+  
+  return result;
+}
+
 CartesianPlotElement::CartesianPlotElement(QWidget *parent)
   : QWidget(parent)
 {
@@ -1016,20 +1077,21 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   
   const int majorTickSize = 4;
   const int minorTickSize = 2;
-  const int numMajorTicks = 5;
-  const int numMinorTicks = 4;
+  
+  // Convert yAxisIndex (0=Y1, 1=Y2, 2=Y3, 3=Y4) to array index (1=Y1, 2=Y2, 3=Y3, 4=Y4)
+  const int arrayIndex = yAxisIndex + 1;
   
   // Determine axis range for value labels
   double axisMin = 0.0;
   double axisMax = 1.0;
-  if (axisRangeStyles_[yAxisIndex] == CartesianPlotRangeStyle::kUserSpecified) {
+  if (axisRangeStyles_[arrayIndex] == CartesianPlotRangeStyle::kUserSpecified) {
     // Use user-specified limits (regardless of execute mode)
-    axisMin = axisMinimums_[yAxisIndex];
-    axisMax = axisMaximums_[yAxisIndex];
-  } else if (executeMode_ && axisRuntimeValid_[yAxisIndex]) {
+    axisMin = axisMinimums_[arrayIndex];
+    axisMax = axisMaximums_[arrayIndex];
+  } else if (executeMode_ && axisRuntimeValid_[arrayIndex]) {
     // Use runtime limits from autoscaling in execute mode
-    axisMin = axisRuntimeMinimums_[yAxisIndex];
-    axisMax = axisRuntimeMaximums_[yAxisIndex];
+    axisMin = axisRuntimeMinimums_[arrayIndex];
+    axisMax = axisRuntimeMaximums_[arrayIndex];
   }
   
   // Draw the vertical axis line
@@ -1037,17 +1099,20 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
                    QPointF(axisX, rect.bottom()));
   
   // Check if this is a Log10 axis
-  const bool isLog10 = (axisStyles_[yAxisIndex] == CartesianPlotAxisStyle::kLog10);
+  const bool isLog10 = (axisStyles_[arrayIndex] == CartesianPlotAxisStyle::kLog10);
+  
+  // Compute "nice" axis range matching MEDM's behavior
+  const NiceAxisRange nice = computeNiceAxisRange(axisMin, axisMax, isLog10);
   
   // Draw ticks and numbers
-  if (isLog10 && axisMin > 0 && axisMax > 0) {
+  if (isLog10 && nice.drawMin > 0 && nice.drawMax > 0) {
     // Logarithmic axis
-    const double logMin = std::log10(axisMin);
-    const double logMax = std::log10(axisMax);
+    const double logMin = std::log10(nice.drawMin);
+    const double logMax = std::log10(nice.drawMax);
     
     // Draw major ticks at powers of 10
-    for (int i = 0; i <= numMajorTicks; ++i) {
-      const double logValue = logMin + (logMax - logMin) * i / numMajorTicks;
+    for (int i = 0; i <= nice.numMajor; ++i) {
+      const double logValue = logMin + (logMax - logMin) * i / nice.numMajor;
       const double value = std::pow(10.0, logValue);
       
       // Position in chart (logarithmic scale)
@@ -1073,10 +1138,10 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       }
       
       // Minor ticks (logarithmic spacing)
-      if (i < numMajorTicks) {
-        const double nextLogValue = logMin + (logMax - logMin) * (i + 1) / numMajorTicks;
-        for (int j = 1; j <= numMinorTicks; ++j) {
-          const double minorLogValue = logValue + (nextLogValue - logValue) * j / (numMinorTicks + 1);
+      if (i < nice.numMajor) {
+        const double nextLogValue = logMin + (logMax - logMin) * (i + 1) / nice.numMajor;
+        for (int j = 1; j <= nice.numMinor; ++j) {
+          const double minorLogValue = logValue + (nextLogValue - logValue) * j / (nice.numMinor + 1);
           const double minorNormalizedLog = (minorLogValue - logMin) / (logMax - logMin);
           const qreal minorY = rect.bottom() - minorNormalizedLog * rect.height();
           painter.drawLine(QPointF(axisX - minorTickSize, minorY),
@@ -1085,17 +1150,19 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       }
     }
   } else {
-    // Linear axis
-    for (int i = 0; i <= numMajorTicks; ++i) {
-      const qreal y = rect.bottom() - i * rect.height() / numMajorTicks;
+    // Linear axis - use nice axis values for tick labels
+    for (int i = 0; i <= nice.numMajor; ++i) {
+      const double value = nice.drawMin + i * nice.majorInc;
+      
+      // Position based on nice range
+      const double normalized = (value - nice.drawMin) / (nice.drawMax - nice.drawMin);
+      const qreal y = rect.bottom() - normalized * rect.height();
       
       // Major tick
       painter.drawLine(QPointF(axisX - majorTickSize, y),
                        QPointF(axisX + majorTickSize, y));
       
-      // Axis number - map from normalized position to actual value
-      const double normalizedValue = static_cast<double>(i) / numMajorTicks;
-      const double value = axisMin + normalizedValue * (axisMax - axisMin);
+      // Axis number
       QString label = QString::number(value, 'g', 3);
       const qreal textWidth = metrics.horizontalAdvance(label);
       
@@ -1110,9 +1177,11 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       }
       
       // Minor ticks
-      if (i < numMajorTicks) {
-        for (int j = 1; j <= numMinorTicks; ++j) {
-          const qreal minorY = y - j * rect.height() / (numMajorTicks * (numMinorTicks + 1));
+      if (i < nice.numMajor) {
+        for (int j = 1; j <= nice.numMinor; ++j) {
+          const double minorValue = value + j * nice.majorInc / (nice.numMinor + 1);
+          const double minorNormalized = (minorValue - nice.drawMin) / (nice.drawMax - nice.drawMin);
+          const qreal minorY = rect.bottom() - minorNormalized * rect.height();
           painter.drawLine(QPointF(axisX - minorTickSize, minorY),
                            QPointF(axisX + minorTickSize, minorY));
         }
@@ -1565,8 +1634,12 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
     maximum = minimum + 1.0;
   }
 
-  range.minimum = minimum;
-  range.maximum = maximum;
+  // Apply "nice" axis rounding matching MEDM's SciPlot behavior
+  const NiceAxisRange nice = computeNiceAxisRange(
+      minimum, maximum, range.style == CartesianPlotAxisStyle::kLog10);
+  
+  range.minimum = nice.drawMin;
+  range.maximum = nice.drawMax;
   range.valid = true;
   return range;
 }
@@ -1654,11 +1727,7 @@ bool CartesianPlotElement::isYAxisOnRight(int yAxisIndex) const
 
 bool CartesianPlotElement::isYAxisVisible(int yAxisIndex) const
 {
-  // An axis is visible if any trace uses it or if it has a label
-  if (!yLabels_[yAxisIndex].trimmed().isEmpty()) {
-    return true;
-  }
-  
+  // An axis is visible only if any trace uses it (matching MEDM behavior)
   CartesianPlotYAxis targetAxis;
   switch (yAxisIndex) {
   case 0: targetAxis = CartesianPlotYAxis::kY1; break;

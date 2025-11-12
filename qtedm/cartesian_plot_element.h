@@ -169,6 +169,16 @@ private:
   bool isYAxisOnRight(int yAxisIndex) const;
   bool isYAxisVisible(int yAxisIndex) const;
   void ensureRuntimeArraySizes();
+  
+  struct NiceAxisRange
+  {
+    double drawMin;
+    double drawMax;
+    double majorInc;
+    int numMajor;
+    int numMinor;
+  };
+  static NiceAxisRange computeNiceAxisRange(double min, double max, bool isLog);
 
   bool selected_ = false;
   QColor foregroundColor_;

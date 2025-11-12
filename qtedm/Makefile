@@ -120,19 +120,31 @@ endif
 
 
 ifeq ($(OS), Linux)
-  CFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
-  CCFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
-  LDFLAGS := -L$(SDDS_REPO)/lib/$(OS)-$(ARCH) -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) -fopenmp $(LDFLAGS)
-  PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libnt.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccessCA.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccess.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvData.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
-    $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
-    $(Z_LIB) -lreadline $(PROD_SYS_LIBS)
-  PROD_SYS_LIBS += -lX11
+  MOC = $(firstword $(wildcard \
+          /usr/lib64/qt6/libexec/moc \
+          /usr/lib/qt6/libexec/moc \
+          /bin/moc \
+          /usr/bin/moc \
+          /bin/moc-qt5 \
+          /usr/bin/moc-qt5))
+  ifeq ($(strip $(MOC)),)
+    $(warning Qt ‘moc’ not found – please install your Qt development packages; disabling qtedm build)
+    PROD :=
+  else
+    CFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
+    CCFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
+    LDFLAGS := -L$(SDDS_REPO)/lib/$(OS)-$(ARCH) -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) -fopenmp $(LDFLAGS)
+    PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \
+      $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libnt.a \
+      $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccessCA.a \
+      $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccess.a \
+      $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvData.a \
+      $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
+      $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
+      $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
+      $(Z_LIB) -lreadline $(PROD_SYS_LIBS)
+    PROD_SYS_LIBS += -lX11
+  endif
 endif
 
 ifeq ($(OS), Darwin)
@@ -147,6 +159,10 @@ ifeq ($(OS), Darwin)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) $(Z_LIB) $(PROD_SYS_LIBS)
+  MOC = $(wildcard /opt/local/libexec/qt5/bin/moc)
+  ifeq ($(MOC),)
+    MOC = moc-qt5
+  endif
 endif
 
 ifeq ($(OS), Windows)
@@ -157,6 +173,7 @@ ifeq ($(OS), Windows)
   PROD_LIBS_SDDS := mdbcommon.lib matlib.lib SDDS1.lib namelist.lib rpnlib.lib mdbmth.lib mdblib.lib lzma.lib z.lib \
                   pvaClient.lib nt.lib pvAccessCA.lib pvAccess.lib pvData.lib pvDatabase.lib ca.lib Com.lib
   LIB_LINK_DIRS += -LIBPATH:$(SDDS_REPO)/lib/$(OS)-$(ARCH) -LIBPATH:$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)
+  MOC = moc.exe
 endif
 
 include ../Makefile.build
@@ -168,7 +185,7 @@ $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/related_disp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp -o $@
 
 $(OBJ_DIR)/moc_cartesian_plot_element.cpp: cartesian_plot_element.h | $(OBJ_DIR)
-	moc $(shell pkg-config --cflags Qt5Widgets) $< -o $@
+	$(MOC) $(shell pkg-config --cflags Qt5Widgets) $< -o $@
 
 $(OBJ_DIR)/cartesian_plot_element.$(OBJEXT): $(OBJ_DIR)/moc_cartesian_plot_element.cpp
 

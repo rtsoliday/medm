@@ -1106,25 +1106,20 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   
   // Draw ticks and numbers
   if (isLog10 && nice.drawMin > 0 && nice.drawMax > 0) {
-    // Logarithmic axis
+    // Logarithmic axis - match MEDM's tick drawing behavior
     const double logMin = std::log10(nice.drawMin);
     const double logMax = std::log10(nice.drawMax);
     
-    // Draw major ticks at powers of 10
-    for (int i = 0; i <= nice.numMajor; ++i) {
-      const double logValue = logMin + (logMax - logMin) * i / nice.numMajor;
-      const double value = std::pow(10.0, logValue);
-      
-      // Position in chart (logarithmic scale)
-      const double normalizedLog = (logValue - logMin) / (logMax - logMin);
-      const qreal y = rect.bottom() - normalizedLog * rect.height();
+    // Draw first major tick at drawMin
+    {
+      const qreal y = rect.bottom();  // At the bottom (min value)
       
       // Major tick
       painter.drawLine(QPointF(axisX - majorTickSize, y),
                        QPointF(axisX + majorTickSize, y));
       
       // Axis number
-      QString label = QString::number(value, 'g', 3);
+      QString label = QString::number(nice.drawMin, 'g', 3);
       const qreal textWidth = metrics.horizontalAdvance(label);
       
       if (onLeft) {
@@ -1136,16 +1131,51 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
         const qreal textY = y + metrics.ascent() / 2.0;
         painter.drawText(QPointF(textX, textY), label);
       }
-      
-      // Minor ticks (logarithmic spacing)
-      if (i < nice.numMajor) {
-        const double nextLogValue = logMin + (logMax - logMin) * (i + 1) / nice.numMajor;
-        for (int j = 1; j <= nice.numMinor; ++j) {
-          const double minorLogValue = logValue + (nextLogValue - logValue) * j / (nice.numMinor + 1);
+    }
+    
+    // Start with the first major value (drawMin)
+    double majorValue = nice.drawMin;
+    
+    // Draw ticks for each decade
+    for (int i = 0; i < nice.numMajor; ++i) {
+      // Draw minor ticks at 2x, 3x, 4x, 5x, 6x, 7x, 8x, 9x within this decade
+      // (matching MEDM's: for (j = 2; j < num_y_minor; j++))
+      for (int j = 2; j < nice.numMinor; ++j) {
+        const double minorValue = majorValue * j;
+        if (minorValue <= nice.drawMax) {
+          const double minorLogValue = std::log10(minorValue);
           const double minorNormalizedLog = (minorLogValue - logMin) / (logMax - logMin);
           const qreal minorY = rect.bottom() - minorNormalizedLog * rect.height();
           painter.drawLine(QPointF(axisX - minorTickSize, minorY),
                            QPointF(axisX + minorTickSize, minorY));
+        }
+      }
+      
+      // Advance to next major value (multiply by 10)
+      majorValue *= nice.majorInc;
+      
+      // Draw major tick and label at this position
+      if (majorValue <= nice.drawMax * 1.0001) {  // Small tolerance for floating point
+        const double logValue = std::log10(majorValue);
+        const double normalizedLog = (logValue - logMin) / (logMax - logMin);
+        const qreal y = rect.bottom() - normalizedLog * rect.height();
+        
+        // Major tick
+        painter.drawLine(QPointF(axisX - majorTickSize, y),
+                         QPointF(axisX + majorTickSize, y));
+        
+        // Axis number
+        QString label = QString::number(majorValue, 'g', 3);
+        const qreal textWidth = metrics.horizontalAdvance(label);
+        
+        if (onLeft) {
+          const qreal textX = axisX - majorTickSize - textWidth - 2.0;
+          const qreal textY = y + metrics.ascent() / 2.0;
+          painter.drawText(QPointF(textX, textY), label);
+        } else {
+          const qreal textX = axisX + majorTickSize + 2.0;
+          const qreal textY = y + metrics.ascent() / 2.0;
+          painter.drawText(QPointF(textX, textY), label);
         }
       }
     }

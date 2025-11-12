@@ -8,6 +8,8 @@
 #include <QPainter>
 #include <QPalette>
 
+#include "text_element.h"
+
 CompositeElement::CompositeElement(QWidget *parent)
   : QWidget(parent)
 {
@@ -181,6 +183,12 @@ void CompositeElement::expandToFitChildren()
 
     /* Get child geometry relative to this composite */
     QRect childGeom = child->geometry();
+    if (auto *textChild = dynamic_cast<TextElement *>(child)) {
+      const QRect textBounds = textChild->visualBoundsRelativeToParent();
+      if (textBounds.isValid()) {
+        childGeom = textBounds;
+      }
+    }
     int childX = childGeom.x();
     int childY = childGeom.y();
     int childRight = childX + childGeom.width();

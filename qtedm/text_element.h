@@ -27,6 +27,7 @@ public:
   bool isSelected() const;
 
   QRect boundingRect() const;
+  QRect visualBoundsRelativeToParent() const;
 
   QColor foregroundColor() const;
   void setForegroundColor(const QColor &color);

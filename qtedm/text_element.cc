@@ -204,6 +204,53 @@ QRect TextElement::boundingRect() const
   return bounds;
 }
 
+QRect TextElement::visualBoundsRelativeToParent() const
+{
+  if (!parentWidget()) {
+    return QRect();
+  }
+
+  const QRect ownerRect = geometry();
+  if (!ownerRect.isValid()) {
+    return ownerRect;
+  }
+
+  const QFontMetrics metrics(font());
+  const QString currentText = text();
+  const int textWidth = textPixelWidth(metrics, currentText);
+  const int textHeight = metrics.ascent() + metrics.descent();
+
+  int textLeft = ownerRect.x();
+  switch (alignment_ & Qt::AlignHorizontal_Mask) {
+  case Qt::AlignHCenter:
+    textLeft = ownerRect.x() + (ownerRect.width() - textWidth) / 2;
+    break;
+  case Qt::AlignRight:
+    textLeft = ownerRect.x() + ownerRect.width() - textWidth;
+    break;
+  default:
+    break;
+  }
+
+  const int ownerLeft = ownerRect.x();
+  const int ownerRight = ownerRect.x() + ownerRect.width();
+  const int ownerTop = ownerRect.y();
+  const int ownerBottom = ownerRect.y() + ownerRect.height();
+  const int textRight = textLeft + textWidth;
+  const int textTop = ownerTop;
+  const int textBottom = textTop + textHeight;
+
+  const int overlayLeft = std::min(ownerLeft, textLeft);
+  const int overlayRight = std::max(ownerRight, textRight);
+  const int overlayTop = ownerTop;
+  const int overlayBottom = std::max(ownerBottom, textBottom);
+
+  const int overlayWidth = std::max(1, overlayRight - overlayLeft);
+  const int overlayHeight = std::max(1, overlayBottom - overlayTop);
+
+  return QRect(overlayLeft, overlayTop, overlayWidth, overlayHeight);
+}
+
 Qt::Alignment TextElement::textAlignment() const
 {
   return alignment_;
@@ -523,41 +570,13 @@ void TextElement::updateOverflowGeometry()
     return;
   }
 
-  const QRect ownerRect = geometry();
-  const QFontMetrics metrics(font());
-  const QString currentText = text();
-  const int textWidth = textPixelWidth(metrics, currentText);
-  const int textHeight = metrics.ascent() + metrics.descent();
-
-  int textLeft = ownerRect.x();
-  switch (alignment_ & Qt::AlignHorizontal_Mask) {
-  case Qt::AlignHCenter:
-    textLeft = ownerRect.x() + (ownerRect.width() - textWidth) / 2;
-    break;
-  case Qt::AlignRight:
-    textLeft = ownerRect.x() + ownerRect.width() - textWidth;
-    break;
-  default:
-    break;
+  const QRect overlayRect = visualBoundsRelativeToParent();
+  if (!overlayRect.isValid()) {
+    overflowWidget_->hide();
+    return;
   }
 
-  const int ownerLeft = ownerRect.x();
-  const int ownerRight = ownerRect.x() + ownerRect.width();
-  const int ownerTop = ownerRect.y();
-  const int ownerBottom = ownerRect.y() + ownerRect.height();
-  const int textRight = textLeft + textWidth;
-  const int textTop = ownerTop;
-  const int textBottom = textTop + textHeight;
-
-  const int overlayLeft = std::min(ownerLeft, textLeft);
-  const int overlayRight = std::max(ownerRight, textRight);
-  const int overlayTop = ownerTop;
-  const int overlayBottom = std::max(ownerBottom, textBottom);
-
-  const int overlayWidth = std::max(1, overlayRight - overlayLeft);
-  const int overlayHeight = std::max(1, overlayBottom - overlayTop);
-
-  overflowWidget_->setGeometry(overlayLeft, overlayTop, overlayWidth, overlayHeight);
+  overflowWidget_->setGeometry(overlayRect);
   updateOverflowStacking();
   updateOverflowVisibility();
   requestOverflowRepaint();

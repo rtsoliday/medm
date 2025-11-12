@@ -718,6 +718,31 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
+  // In execute mode, if any PV is not connected or no PVs are defined, fill with solid white
+  if (executeMode_) {
+    bool anyChannelsDefined = false;
+    bool anyDisconnected = false;
+    
+    for (const auto &trace : traces_) {
+      // Check if this trace has any channels configured
+      const bool hasChannels = !trace.xChannel.trimmed().isEmpty() || 
+                               !trace.yChannel.trimmed().isEmpty();
+      if (hasChannels) {
+        anyChannelsDefined = true;
+        if (!trace.runtimeConnected) {
+          anyDisconnected = true;
+          break;
+        }
+      }
+    }
+    
+    // Draw white if no channels defined or any are disconnected
+    if (!anyChannelsDefined || anyDisconnected) {
+      painter.fillRect(rect(), Qt::white);
+      return;  // Don't draw anything else
+    }
+  }
+
   const QRectF chart = chartRect();
   paintFrame(painter);
   paintGrid(painter, chart);

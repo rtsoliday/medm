@@ -119,12 +119,12 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
   setContextMenuPolicy(Qt::NoContextMenu);  // Handle right-clicks in mousePressEvent
-  title_ = QStringLiteral("Cartesian Plot");
-  xLabel_ = QStringLiteral("X");
-  yLabels_[0] = QStringLiteral("Y1");
-  yLabels_[1] = QStringLiteral("Y2");
-  yLabels_[2] = QStringLiteral("Y3");
-  yLabels_[3] = QStringLiteral("Y4");
+  title_ = QString();  // Empty by default - only shown if specified in ADL
+  xLabel_ = QString();  // Empty by default - only shown if specified in ADL
+  yLabels_[0] = QString();  // Empty by default
+  yLabels_[1] = QString();  // Empty by default
+  yLabels_[2] = QString();  // Empty by default
+  yLabels_[3] = QString();  // Empty by default
   for (int i = 0; i < traceCount(); ++i) {
     traces_[i].color = defaultTraceColor(i);
   }

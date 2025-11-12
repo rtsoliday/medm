@@ -166,55 +166,9 @@ private:
 
       }
 
-      if (ch == QChar('\\')) {
+      /* ADL files do not use escape sequences; all characters within quotes
 
-        if (atEnd()) {
-
-          break;
-
-        }
-
-        const QChar escaped = get();
-
-        switch (escaped.unicode()) {
-
-        case 'n':
-
-          result.append(QChar('\n'));
-
-          break;
-
-        case 't':
-
-          result.append(QChar('\t'));
-
-          break;
-
-        case 'r':
-
-          result.append(QChar('\r'));
-
-          break;
-
-        case '\\':
-
-        case '"':
-
-          result.append(escaped);
-
-          break;
-
-        default:
-
-          result.append(escaped);
-
-          break;
-
-        }
-
-        continue;
-
-      }
+       * are treated literally, matching medm's getToken() behavior. */
 
       result.append(ch);
 

@@ -1042,27 +1042,71 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   }
   
   // X-axis ticks and numbers - only within chart area
-  for (int i = 0; i <= numMajorTicks; ++i) {
-    const qreal x = rect.left() + i * rect.width() / numMajorTicks;
-    // Major tick
-    painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
-                     QPointF(x, rect.bottom() + majorTickSize));
+  if (axisStyles_[xAxisIndex] == CartesianPlotAxisStyle::kLog10 && xAxisMin > 0.0 && xAxisMax > 0.0) {
+    // Logarithmic X-axis tick marks
+    const NiceAxisRange nice = computeNiceAxisRange(xAxisMin, xAxisMax, true);
     
-    // Axis number - map from normalized position to actual value
-    const double normalizedValue = static_cast<double>(i) / numMajorTicks;
-    const double value = xAxisMin + normalizedValue * (xAxisMax - xAxisMin);
-    QString label = QString::number(value, 'g', 3);
-    const qreal textWidth = axisMetrics.horizontalAdvance(label);
-    const qreal textX = x - textWidth / 2.0;
-    const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
-    painter.drawText(QPointF(textX, textY), label);
-    
-    // Minor ticks
-    if (i < numMajorTicks) {
-      for (int j = 1; j <= numMinorTicks; ++j) {
-        const qreal minorX = x + j * rect.width() / (numMajorTicks * (numMinorTicks + 1));
-        painter.drawLine(QPointF(minorX, rect.bottom() - minorTickSize),
-                         QPointF(minorX, rect.bottom() + minorTickSize));
+    double majorValue = nice.drawMin;
+    for (int i = 0; i <= nice.numMajor; ++i) {
+      // Calculate screen position from log scale
+      const double logMin = std::log10(nice.drawMin);
+      const double logMax = std::log10(nice.drawMax);
+      const double logValue = std::log10(majorValue);
+      const double normalizedPos = (logValue - logMin) / (logMax - logMin);
+      const qreal x = rect.left() + normalizedPos * rect.width();
+      
+      // Major tick
+      painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
+                       QPointF(x, rect.bottom() + majorTickSize));
+      
+      // Major tick label
+      QString label = QString::number(majorValue, 'g', 3);
+      const qreal textWidth = axisMetrics.horizontalAdvance(label);
+      const qreal textX = x - textWidth / 2.0;
+      const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
+      painter.drawText(QPointF(textX, textY), label);
+      
+      // Minor ticks (2x, 3x, 4x, 5x, 6x, 7x, 8x, 9x within this decade)
+      if (i < nice.numMajor && nice.numMinor > 0) {
+        for (int j = 2; j < nice.numMinor + 1; ++j) {
+          const double minorValue = majorValue * j;
+          if (minorValue < nice.drawMax) {
+            const double logMinor = std::log10(minorValue);
+            const double minorNormPos = (logMinor - logMin) / (logMax - logMin);
+            const qreal minorX = rect.left() + minorNormPos * rect.width();
+            painter.drawLine(QPointF(minorX, rect.bottom() - minorTickSize),
+                             QPointF(minorX, rect.bottom() + minorTickSize));
+          }
+        }
+      }
+      
+      // Advance to next decade
+      majorValue *= 10.0;
+    }
+  } else {
+    // Linear X-axis tick marks
+    for (int i = 0; i <= numMajorTicks; ++i) {
+      const qreal x = rect.left() + i * rect.width() / numMajorTicks;
+      // Major tick
+      painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
+                       QPointF(x, rect.bottom() + majorTickSize));
+      
+      // Axis number - map from normalized position to actual value
+      const double normalizedValue = static_cast<double>(i) / numMajorTicks;
+      const double value = xAxisMin + normalizedValue * (xAxisMax - xAxisMin);
+      QString label = QString::number(value, 'g', 3);
+      const qreal textWidth = axisMetrics.horizontalAdvance(label);
+      const qreal textX = x - textWidth / 2.0;
+      const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
+      painter.drawText(QPointF(textX, textY), label);
+      
+      // Minor ticks
+      if (i < numMajorTicks) {
+        for (int j = 1; j <= numMinorTicks; ++j) {
+          const qreal minorX = x + j * rect.width() / (numMajorTicks * (numMinorTicks + 1));
+          painter.drawLine(QPointF(minorX, rect.bottom() - minorTickSize),
+                           QPointF(minorX, rect.bottom() + minorTickSize));
+        }
       }
     }
   }

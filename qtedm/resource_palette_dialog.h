@@ -7162,6 +7162,64 @@ public:
     updateSectionVisibility(selectionKind_);
   }
 
+  void openCartesianAxisDialogForElement(CartesianPlotElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    CartesianAxisDialog *dialog = ensureCartesianAxisDialog();
+    if (!dialog) {
+      return;
+    }
+    
+    // Set up getters and setters for this specific element
+    std::array<std::function<CartesianPlotAxisStyle()>, kCartesianAxisCount> styleGetters;
+    std::array<std::function<void(CartesianPlotAxisStyle)>, kCartesianAxisCount> styleSetters;
+    std::array<std::function<CartesianPlotRangeStyle()>, kCartesianAxisCount> rangeGetters;
+    std::array<std::function<void(CartesianPlotRangeStyle)>, kCartesianAxisCount> rangeSetters;
+    std::array<std::function<double()>, kCartesianAxisCount> minimumGetters;
+    std::array<std::function<void(double)>, kCartesianAxisCount> minimumSetters;
+    std::array<std::function<double()>, kCartesianAxisCount> maximumGetters;
+    std::array<std::function<void(double)>, kCartesianAxisCount> maximumSetters;
+    std::array<std::function<CartesianPlotTimeFormat()>, kCartesianAxisCount> timeFormatGetters;
+    std::array<std::function<void(CartesianPlotTimeFormat)>, kCartesianAxisCount> timeFormatSetters;
+    
+    for (int i = 0; i < kCartesianAxisCount; ++i) {
+      styleGetters[i] = [element, i]() { return element->axisStyle(i); };
+      styleSetters[i] = [element, i](CartesianPlotAxisStyle style) {
+        element->setAxisStyle(i, style);
+        element->update();
+      };
+      rangeGetters[i] = [element, i]() { return element->axisRangeStyle(i); };
+      rangeSetters[i] = [element, i](CartesianPlotRangeStyle style) {
+        element->setAxisRangeStyle(i, style);
+        element->update();
+      };
+      minimumGetters[i] = [element, i]() { return element->axisMinimum(i); };
+      minimumSetters[i] = [element, i](double value) {
+        element->setAxisMinimum(i, value);
+        element->update();
+      };
+      maximumGetters[i] = [element, i]() { return element->axisMaximum(i); };
+      maximumSetters[i] = [element, i](double value) {
+        element->setAxisMaximum(i, value);
+        element->update();
+      };
+      timeFormatGetters[i] = [element, i]() { return element->axisTimeFormat(i); };
+      timeFormatSetters[i] = [element, i](CartesianPlotTimeFormat format) {
+        element->setAxisTimeFormat(i, format);
+        element->update();
+      };
+    }
+    
+    dialog->setCartesianCallbacks(styleGetters, styleSetters, rangeGetters,
+        rangeSetters, minimumGetters, minimumSetters, maximumGetters,
+        maximumSetters, timeFormatGetters, timeFormatSetters,
+        [element]() { element->update(); });
+    positionCartesianAxisDialog(dialog);
+    dialog->showDialog();
+  }
+
 protected:
   void closeEvent(QCloseEvent *event) override
   {

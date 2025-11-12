@@ -15,8 +15,15 @@ class QPainter;
 
 class CartesianPlotElement : public QWidget
 {
+  Q_OBJECT
+
 public:
   explicit CartesianPlotElement(QWidget *parent = nullptr);
+
+signals:
+  void axisDialogRequested();
+
+public:
 
   void setSelected(bool selected);
   bool isSelected() const;
@@ -109,6 +116,8 @@ public:
 
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
+  bool event(QEvent *event) override;
 
 private:
   struct Trace

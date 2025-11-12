@@ -36,6 +36,9 @@ public:
 
   void showDialog();
 
+protected:
+  void keyPressEvent(QKeyEvent *event) override;
+
 private:
   void handleAxisChanged(int index);
   void handleAxisStyleChanged(int index);

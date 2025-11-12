@@ -7,6 +7,9 @@
 
 #include <QtGlobal>
 
+#include <QDebug>
+#include <QEvent>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -53,6 +56,7 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
 {
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
+  setContextMenuPolicy(Qt::NoContextMenu);  // Handle right-clicks in mousePressEvent
   title_ = QStringLiteral("Cartesian Plot");
   xLabel_ = QStringLiteral("X");
   yLabels_[0] = QStringLiteral("Y1");
@@ -427,6 +431,13 @@ void CartesianPlotElement::setAxisMinimum(int axisIndex, double value)
     return;
   }
   axisMinimums_[axisIndex] = value;
+  
+  // Also update runtime minimum if in execute mode
+  if (executeMode_) {
+    axisRuntimeMinimums_[axisIndex] = value;
+    axisRuntimeValid_[axisIndex] = true;
+  }
+  
   update();
 }
 
@@ -447,6 +458,13 @@ void CartesianPlotElement::setAxisMaximum(int axisIndex, double value)
     return;
   }
   axisMaximums_[axisIndex] = value;
+  
+  // Also update runtime maximum if in execute mode
+  if (executeMode_) {
+    axisRuntimeMaximums_[axisIndex] = value;
+    axisRuntimeValid_[axisIndex] = true;
+  }
+  
   update();
 }
 
@@ -648,6 +666,21 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
   if (selected_) {
     paintSelectionOverlay(painter);
   }
+}
+
+void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
+{
+  if (executeMode_ && event->button() == Qt::RightButton) {
+    emit axisDialogRequested();
+    event->accept();
+  } else {
+    QWidget::mousePressEvent(event);
+  }
+}
+
+bool CartesianPlotElement::event(QEvent *event)
+{
+  return QWidget::event(event);
 }
 
 QColor CartesianPlotElement::effectiveForeground() const
@@ -933,6 +966,20 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   painter.drawLine(QPointF(xAxisLeft, rect.bottom()),
       QPointF(xAxisRight, rect.bottom()));
   
+  // Determine X-axis range for value labels
+  double xAxisMin = 0.0;
+  double xAxisMax = 1.0;
+  const int xAxisIndex = 0; // X-axis is index 0
+  if (axisRangeStyles_[xAxisIndex] == CartesianPlotRangeStyle::kUserSpecified) {
+    // Use user-specified limits (regardless of execute mode)
+    xAxisMin = axisMinimums_[xAxisIndex];
+    xAxisMax = axisMaximums_[xAxisIndex];
+  } else if (executeMode_ && axisRuntimeValid_[xAxisIndex]) {
+    // Use runtime limits from autoscaling in execute mode
+    xAxisMin = axisRuntimeMinimums_[xAxisIndex];
+    xAxisMax = axisRuntimeMaximums_[xAxisIndex];
+  }
+  
   // X-axis ticks and numbers - only within chart area
   for (int i = 0; i <= numMajorTicks; ++i) {
     const qreal x = rect.left() + i * rect.width() / numMajorTicks;
@@ -940,8 +987,9 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
     painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
                      QPointF(x, rect.bottom() + majorTickSize));
     
-    // Axis number
-    const double value = i * 1.0 / numMajorTicks;
+    // Axis number - map from normalized position to actual value
+    const double normalizedValue = static_cast<double>(i) / numMajorTicks;
+    const double value = xAxisMin + normalizedValue * (xAxisMax - xAxisMin);
     QString label = QString::number(value, 'g', 3);
     const qreal textWidth = axisMetrics.horizontalAdvance(label);
     const qreal textX = x - textWidth / 2.0;
@@ -971,6 +1019,19 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   const int numMajorTicks = 5;
   const int numMinorTicks = 4;
   
+  // Determine axis range for value labels
+  double axisMin = 0.0;
+  double axisMax = 1.0;
+  if (axisRangeStyles_[yAxisIndex] == CartesianPlotRangeStyle::kUserSpecified) {
+    // Use user-specified limits (regardless of execute mode)
+    axisMin = axisMinimums_[yAxisIndex];
+    axisMax = axisMaximums_[yAxisIndex];
+  } else if (executeMode_ && axisRuntimeValid_[yAxisIndex]) {
+    // Use runtime limits from autoscaling in execute mode
+    axisMin = axisRuntimeMinimums_[yAxisIndex];
+    axisMax = axisRuntimeMaximums_[yAxisIndex];
+  }
+  
   // Draw the vertical axis line
   painter.drawLine(QPointF(axisX, rect.top()),
                    QPointF(axisX, rect.bottom()));
@@ -988,8 +1049,9 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
                        QPointF(axisX + majorTickSize, y));
     }
     
-    // Axis number
-    const double value = i * 1.0 / numMajorTicks;
+    // Axis number - map from normalized position to actual value
+    const double normalizedValue = static_cast<double>(i) / numMajorTicks;
+    const double value = axisMin + normalizedValue * (axisMax - axisMin);
     QString label = QString::number(value, 'g', 3);
     const qreal textWidth = metrics.horizontalAdvance(label);
     
@@ -1569,3 +1631,5 @@ bool CartesianPlotElement::isYAxisVisible(int yAxisIndex) const
   return false;
 }
 
+// Include moc output for Q_OBJECT macro
+#include "moc_cartesian_plot_element.cpp"

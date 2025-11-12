@@ -7,6 +7,7 @@
 #include <QDoubleValidator>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -368,6 +369,25 @@ void CartesianAxisDialog::showDialog()
   show();
   raise();
   activateWindow();
+}
+
+void CartesianAxisDialog::keyPressEvent(QKeyEvent *event)
+{
+  // Handle Enter/Return key to commit changes without closing dialog
+  if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+    // Check which field has focus and commit that value
+    if (minEdit_ && minEdit_->hasFocus()) {
+      commitMinimum();
+    } else if (maxEdit_ && maxEdit_->hasFocus()) {
+      commitMaximum();
+    }
+    // Accept the event to prevent it from triggering dialog close
+    event->accept();
+    return;
+  }
+  
+  // For all other keys, use default behavior
+  QDialog::keyPressEvent(event);
 }
 
 void CartesianAxisDialog::handleAxisChanged(int index)

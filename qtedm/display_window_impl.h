@@ -18864,6 +18864,15 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     currentCompositeOwner_->adoptChild(element);
   }
 
+  // Connect signal for right-click axis dialog in execute mode
+  connect(element, &CartesianPlotElement::axisDialogRequested,
+          this, [this, element]() {
+    if (executeModeActive_) {
+      ensureResourcePalette();
+      resourcePalette_->openCartesianAxisDialogForElement(element);
+    }
+  });
+
   element->show();
   element->setSelected(false);
   cartesianPlotElements_.append(element);

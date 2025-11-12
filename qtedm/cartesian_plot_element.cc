@@ -22,7 +22,8 @@
 namespace {
 
 constexpr int kOuterMargin = 4;
-constexpr int kInnerMargin = 12;
+constexpr int kInnerMargin = 4;
+constexpr int kHorizontalMargin = 12;
 constexpr int kGridLines = 5;
 constexpr double kTwoPi = 6.28318530717958647692;
 constexpr int kMinimumSampleCount = 8;
@@ -804,8 +805,8 @@ QRectF CartesianPlotElement::chartRect() const
     bottomMargin += kInnerMargin + axisMetrics.height();
   }
 
-  qreal leftMargin = kInnerMargin;
-  qreal rightMargin = kInnerMargin;
+  qreal leftMargin = kHorizontalMargin;
+  qreal rightMargin = kHorizontalMargin;
   
   // Calculate Y-axis positions to determine actual margins needed
   const YAxisPositions axisPos = calculateYAxisPositions(frame);
@@ -836,14 +837,14 @@ CartesianPlotElement::calculateYAxisPositions(const QRectF &widgetBounds) const
   const QFontMetrics labelMetrics(labelFont);
   
   const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
-  const qreal axisSpacing = axisnumberwidth + kInnerMargin;
+  const qreal axisSpacing = axisnumberwidth + kHorizontalMargin;
   const qreal labelGap = 1.0;  // Gap between axis numbers and labels
   
   // Start from the widget edges (after outer margin) and work inward
   // Reserve space at edges for the outermost labels
   // Add extra space for the outermost label to prevent crowding
-  qreal leftX = widgetBounds.left() + kInnerMargin * 1.5;
-  qreal rightX = widgetBounds.right() - kInnerMargin * 1.5;
+  qreal leftX = widgetBounds.left() + kHorizontalMargin * 1.5;
+  qreal rightX = widgetBounds.right() - kHorizontalMargin * 1.5;
   
   // Process axes in reverse order (Y4, Y3, Y2, Y1) like MEDM
   for (int i = 3; i >= 0; --i) {
@@ -1280,7 +1281,7 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   // y.TitlePos = height - ymargin, x.TitlePos = xmargin
   if (!title_.trimmed().isEmpty()) {
     painter.setFont(titleFont);
-    const qreal titleX = kOuterMargin + kInnerMargin;
+    const qreal titleX = kOuterMargin + kHorizontalMargin;
     const qreal titleY = this->rect().height() - kInnerMargin;
     painter.drawText(QPointF(titleX, titleY), title_.trimmed());
   }

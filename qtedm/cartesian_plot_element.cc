@@ -1036,41 +1036,86 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   painter.drawLine(QPointF(axisX, rect.top()),
                    QPointF(axisX, rect.bottom()));
   
+  // Check if this is a Log10 axis
+  const bool isLog10 = (axisStyles_[yAxisIndex] == CartesianPlotAxisStyle::kLog10);
+  
   // Draw ticks and numbers
-  for (int i = 0; i <= numMajorTicks; ++i) {
-    const qreal y = rect.bottom() - i * rect.height() / numMajorTicks;
+  if (isLog10 && axisMin > 0 && axisMax > 0) {
+    // Logarithmic axis
+    const double logMin = std::log10(axisMin);
+    const double logMax = std::log10(axisMax);
     
-    // Major tick
-    if (onLeft) {
+    // Draw major ticks at powers of 10
+    for (int i = 0; i <= numMajorTicks; ++i) {
+      const double logValue = logMin + (logMax - logMin) * i / numMajorTicks;
+      const double value = std::pow(10.0, logValue);
+      
+      // Position in chart (logarithmic scale)
+      const double normalizedLog = (logValue - logMin) / (logMax - logMin);
+      const qreal y = rect.bottom() - normalizedLog * rect.height();
+      
+      // Major tick
       painter.drawLine(QPointF(axisX - majorTickSize, y),
                        QPointF(axisX + majorTickSize, y));
-    } else {
+      
+      // Axis number
+      QString label = QString::number(value, 'g', 3);
+      const qreal textWidth = metrics.horizontalAdvance(label);
+      
+      if (onLeft) {
+        const qreal textX = axisX - majorTickSize - textWidth - 2.0;
+        const qreal textY = y + metrics.ascent() / 2.0;
+        painter.drawText(QPointF(textX, textY), label);
+      } else {
+        const qreal textX = axisX + majorTickSize + 2.0;
+        const qreal textY = y + metrics.ascent() / 2.0;
+        painter.drawText(QPointF(textX, textY), label);
+      }
+      
+      // Minor ticks (logarithmic spacing)
+      if (i < numMajorTicks) {
+        const double nextLogValue = logMin + (logMax - logMin) * (i + 1) / numMajorTicks;
+        for (int j = 1; j <= numMinorTicks; ++j) {
+          const double minorLogValue = logValue + (nextLogValue - logValue) * j / (numMinorTicks + 1);
+          const double minorNormalizedLog = (minorLogValue - logMin) / (logMax - logMin);
+          const qreal minorY = rect.bottom() - minorNormalizedLog * rect.height();
+          painter.drawLine(QPointF(axisX - minorTickSize, minorY),
+                           QPointF(axisX + minorTickSize, minorY));
+        }
+      }
+    }
+  } else {
+    // Linear axis
+    for (int i = 0; i <= numMajorTicks; ++i) {
+      const qreal y = rect.bottom() - i * rect.height() / numMajorTicks;
+      
+      // Major tick
       painter.drawLine(QPointF(axisX - majorTickSize, y),
                        QPointF(axisX + majorTickSize, y));
-    }
-    
-    // Axis number - map from normalized position to actual value
-    const double normalizedValue = static_cast<double>(i) / numMajorTicks;
-    const double value = axisMin + normalizedValue * (axisMax - axisMin);
-    QString label = QString::number(value, 'g', 3);
-    const qreal textWidth = metrics.horizontalAdvance(label);
-    
-    if (onLeft) {
-      const qreal textX = axisX - majorTickSize - textWidth - 2.0;
-      const qreal textY = y + metrics.ascent() / 2.0;
-      painter.drawText(QPointF(textX, textY), label);
-    } else {
-      const qreal textX = axisX + majorTickSize + 2.0;
-      const qreal textY = y + metrics.ascent() / 2.0;
-      painter.drawText(QPointF(textX, textY), label);
-    }
-    
-    // Minor ticks
-    if (i < numMajorTicks) {
-      for (int j = 1; j <= numMinorTicks; ++j) {
-        const qreal minorY = y - j * rect.height() / (numMajorTicks * (numMinorTicks + 1));
-        painter.drawLine(QPointF(axisX - minorTickSize, minorY),
-                         QPointF(axisX + minorTickSize, minorY));
+      
+      // Axis number - map from normalized position to actual value
+      const double normalizedValue = static_cast<double>(i) / numMajorTicks;
+      const double value = axisMin + normalizedValue * (axisMax - axisMin);
+      QString label = QString::number(value, 'g', 3);
+      const qreal textWidth = metrics.horizontalAdvance(label);
+      
+      if (onLeft) {
+        const qreal textX = axisX - majorTickSize - textWidth - 2.0;
+        const qreal textY = y + metrics.ascent() / 2.0;
+        painter.drawText(QPointF(textX, textY), label);
+      } else {
+        const qreal textX = axisX + majorTickSize + 2.0;
+        const qreal textY = y + metrics.ascent() / 2.0;
+        painter.drawText(QPointF(textX, textY), label);
+      }
+      
+      // Minor ticks
+      if (i < numMajorTicks) {
+        for (int j = 1; j <= numMinorTicks; ++j) {
+          const qreal minorY = y - j * rect.height() / (numMajorTicks * (numMinorTicks + 1));
+          painter.drawLine(QPointF(axisX - minorTickSize, minorY),
+                           QPointF(axisX + minorTickSize, minorY));
+        }
       }
     }
   }

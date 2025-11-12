@@ -195,9 +195,10 @@ CartesianAxisDialog::CartesianAxisDialog(const QPalette &basePalette,
     axisStyleCombo_ = new QComboBox;
     axisStyleCombo_->setFont(valueFont_);
     axisStyleCombo_->setAutoFillBackground(true);
+    // Initially populate with Linear and Log10 only
+    // Time will be added dynamically for X axis only in refreshForAxis()
     axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kLinear));
     axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kLog10));
-    axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kTime));
     formLayout->addWidget(axisStyleCombo_, row, 1);
     QObject::connect(axisStyleCombo_,
         static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -528,16 +529,35 @@ void CartesianAxisDialog::refreshForAxis(int axisIndex)
     axisCombo_->setCurrentIndex(currentAxisIndex_);
   }
 
-  const bool hasStyleGetter = static_cast<bool>(styleGetters_[currentAxisIndex_]);
-  const bool hasStyleSetter = static_cast<bool>(styleSetters_[currentAxisIndex_]);
-  if (hasStyleGetter) {
+  // Update axis style combo box items based on which axis is selected
+  // Time is only valid for X axis (index 0)
+  const bool isXAxis = (currentAxisIndex_ == 0);
+  {
     const QSignalBlocker blocker(axisStyleCombo_);
-    axisStyleCombo_->setCurrentIndex(
-        axisStyleToIndex(styleGetters_[currentAxisIndex_]()));
-  } else {
-    const QSignalBlocker blocker(axisStyleCombo_);
-    axisStyleCombo_->setCurrentIndex(0);
+    
+    // Save current style before clearing
+    CartesianPlotAxisStyle currentStyle = CartesianPlotAxisStyle::kLinear;
+    if (styleGetters_[currentAxisIndex_]) {
+      currentStyle = styleGetters_[currentAxisIndex_]();
+      // If a Y axis somehow has Time style, treat it as Linear
+      if (!isXAxis && currentStyle == CartesianPlotAxisStyle::kTime) {
+        currentStyle = CartesianPlotAxisStyle::kLinear;
+      }
+    }
+    
+    // Rebuild combo box items
+    axisStyleCombo_->clear();
+    axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kLinear));
+    axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kLog10));
+    if (isXAxis) {
+      axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kTime));
+    }
+    
+    // Restore selection
+    axisStyleCombo_->setCurrentIndex(axisStyleToIndex(currentStyle));
   }
+
+  const bool hasStyleSetter = static_cast<bool>(styleSetters_[currentAxisIndex_]);
   axisStyleCombo_->setEnabled(hasStyleSetter);
 
   const bool hasRangeGetter = static_cast<bool>(rangeGetters_[currentAxisIndex_]);

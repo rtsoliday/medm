@@ -469,6 +469,22 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     if (!iconPixmap.isNull()) {
       QPixmap scaled = iconPixmap.scaled(iconCanvas.size(),
           Qt::KeepAspectRatio, Qt::SmoothTransformation);
+      
+      // Convert grey pixels to black to maintain crisp appearance
+      QImage img = scaled.toImage();
+      if (!img.isNull()) {
+        for (int y = 0; y < img.height(); ++y) {
+          for (int x = 0; x < img.width(); ++x) {
+            QColor pixel = img.pixelColor(x, y);
+            // If pixel has any opacity and any color, make it fully opaque with the foreground color
+            if (pixel.alpha() > 0) {
+              img.setPixelColor(x, y, QColor(fg.red(), fg.green(), fg.blue(), 255));
+            }
+          }
+        }
+        scaled = QPixmap::fromImage(img);
+      }
+      
       QPoint topLeft(iconCanvas.left()
               + (iconCanvas.width() - scaled.width()) / 2,
           iconCanvas.top()

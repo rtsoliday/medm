@@ -10,25 +10,13 @@
 #include <db_access.h>
 
 #include "channel_access_context.h"
+#include "runtime_utils.h"
 #include "slider_element.h"
 #include "statistics_tracker.h"
 
 namespace {
-constexpr short kInvalidSeverity = 3;
-
-bool isNumericFieldType(chtype fieldType)
-{
-  switch (fieldType) {
-  case DBR_CHAR:
-  case DBR_SHORT:
-  case DBR_LONG:
-  case DBR_FLOAT:
-  case DBR_DOUBLE:
-    return true;
-  default:
-    return false;
-  }
-}
+using RuntimeUtils::isNumericFieldType;
+using RuntimeUtils::kInvalidSeverity;
 
 } // namespace
 

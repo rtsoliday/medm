@@ -12,6 +12,7 @@
 
 #include "cartesian_plot_element.h"
 #include "channel_access_context.h"
+#include "runtime_utils.h"
 
 namespace {
 
@@ -329,7 +330,7 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
 
     if ((context.kind == ChannelKind::kTraceX
             || context.kind == ChannelKind::kTraceY)
-        && !isNumericFieldType(state->fieldType)) {
+        && !RuntimeUtils::isNumericFieldType(state->fieldType)) {
       qWarning() << "Cartesian Plot channel" << state->name
                  << "is not numeric";
       return;
@@ -347,7 +348,7 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
     }
     subscribeChannel(*state, *subscriptionContext);
 
-    if (isNumericFieldType(state->fieldType)) {
+    if (RuntimeUtils::isNumericFieldType(state->fieldType)) {
       ChannelContext *controlContext = subscriptionContext;
       int status = ca_array_get_callback(DBR_CTRL_DOUBLE, 1, state->channelId,
           &CartesianPlotRuntime::controlInfoCallback, controlContext);
@@ -830,18 +831,4 @@ QVector<double> CartesianPlotRuntime::extractValues(
     values[i] = data[i];
   }
   return values;
-}
-
-bool CartesianPlotRuntime::isNumericFieldType(chtype fieldType)
-{
-  switch (fieldType) {
-  case DBR_CHAR:
-  case DBR_SHORT:
-  case DBR_LONG:
-  case DBR_FLOAT:
-  case DBR_DOUBLE:
-    return true;
-  default:
-    return false;
-  }
 }

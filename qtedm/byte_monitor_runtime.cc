@@ -9,24 +9,16 @@
 
 #include "byte_monitor_element.h"
 #include "channel_access_context.h"
+#include "runtime_utils.h"
 #include "statistics_tracker.h"
 
 namespace {
-constexpr short kInvalidSeverity = 3;
+using RuntimeUtils::isNumericFieldType;
+using RuntimeUtils::kInvalidSeverity;
 
-bool isNumericFieldType(chtype fieldType)
+bool isSupportedFieldType(chtype fieldType)
 {
-  switch (fieldType) {
-  case DBR_CHAR:
-  case DBR_SHORT:
-  case DBR_LONG:
-  case DBR_FLOAT:
-  case DBR_DOUBLE:
-  case DBR_ENUM:
-    return true;
-  default:
-    return false;
-  }
+  return isNumericFieldType(fieldType) || fieldType == DBR_ENUM;
 }
 
 } // namespace
@@ -172,7 +164,7 @@ void ByteMonitorRuntime::handleConnectionEvent(const connection_handler_args &ar
     lastValue_ = 0u;
     lastSeverity_ = kInvalidSeverity;
 
-    if (!isNumericFieldType(fieldType_)) {
+    if (!isSupportedFieldType(fieldType_)) {
       qWarning() << "Byte channel" << channelName_ << "is not numeric";
       invokeOnElement([](ByteMonitorElement *element) {
         element->setRuntimeConnected(false);

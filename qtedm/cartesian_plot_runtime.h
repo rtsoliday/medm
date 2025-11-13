@@ -119,7 +119,6 @@ private:
   template <typename Func>
   void invokeOnElement(Func &&func);
 
-  static bool isNumericFieldType(chtype fieldType);
   static QVector<double> extractValues(const event_handler_args &args);
 
   static void channelConnectionCallback(struct connection_handler_args args);

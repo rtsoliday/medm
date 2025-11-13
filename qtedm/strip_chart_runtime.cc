@@ -8,23 +8,12 @@
 
 #include "strip_chart_element.h"
 #include "channel_access_context.h"
+#include "runtime_utils.h"
 
 namespace {
 constexpr qint64 kUnixEpicsEpochOffsetSeconds = 631152000LL;
 
-bool isNumericFieldType(chtype fieldType)
-{
-  switch (fieldType) {
-  case DBR_CHAR:
-  case DBR_SHORT:
-  case DBR_LONG:
-  case DBR_FLOAT:
-  case DBR_DOUBLE:
-    return true;
-  default:
-    return false;
-  }
-}
+using RuntimeUtils::isNumericFieldType;
 
 qint64 epicsTimestampToMs(const epicsTimeStamp &stamp)
 {

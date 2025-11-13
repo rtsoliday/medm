@@ -75,6 +75,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
   channelsNeeded_ = hasChannel
       && ((element_->colorMode() != TextColorMode::kStatic)
           || (element_->visibilityMode() != TextVisibilityMode::kStatic));
+  layeringNeeded_ = channelsNeeded_;
 
   if (element_->visibilityMode() == TextVisibilityMode::kCalc) {
     const QString calcExpr = element_->visibilityCalc().trimmed();
@@ -120,6 +121,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::resetState()
   calcPostfix_.clear();
   calcValid_ = false;
   channelsNeeded_ = true;
+  layeringNeeded_ = true;
 
   for (auto &channel : channels_) {
     channel.name.clear();

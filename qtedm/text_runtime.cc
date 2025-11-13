@@ -10,6 +10,16 @@ TextRuntime::TextRuntime(TextElement *element)
 
 void TextRuntime::onStart()
 {
+  if (!channelsNeeded() && element()) {
+    const int channelCount = static_cast<int>(channels().size());
+    for (int i = 0; i < channelCount; ++i) {
+      if (!element()->channel(i).trimmed().isEmpty()) {
+        setLayeringNeeded(true);
+        break;
+      }
+    }
+  }
+
   /* Register with statistics tracker */
   StatisticsTracker::instance().registerDisplayObjectStarted();
 }

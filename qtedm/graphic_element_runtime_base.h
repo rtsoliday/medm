@@ -59,6 +59,7 @@ public:
 
   void start();
   void stop();
+  bool needsLayering() const { return layeringNeeded_; }
 
 protected:
   /* Channel runtime structure - tracks state for each EPICS channel */
@@ -91,6 +92,9 @@ protected:
   {
     return channels_;
   }
+
+  bool channelsNeeded() const { return channelsNeeded_; }
+  void setLayeringNeeded(bool needed) { layeringNeeded_ = needed; }
 
   /* Virtual hooks for derived classes to extend behavior */
   virtual void onStart() {}
@@ -134,6 +138,6 @@ private:
   QByteArray calcPostfix_;
   bool calcValid_ = false;
   bool channelsNeeded_ = true;
+  bool layeringNeeded_ = true;
   bool started_ = false;
 };
-

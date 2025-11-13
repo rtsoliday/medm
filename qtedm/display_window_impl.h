@@ -20724,7 +20724,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = rectangleRuntimes_.constBegin();
       it != rectangleRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }
@@ -20732,7 +20732,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = imageRuntimes_.constBegin();
       it != imageRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }
@@ -20740,7 +20740,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = ovalRuntimes_.constBegin();
       it != ovalRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }
@@ -20748,7 +20748,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = arcRuntimes_.constBegin();
       it != arcRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }
@@ -20756,7 +20756,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = lineRuntimes_.constBegin();
       it != lineRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }
@@ -20764,7 +20764,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = polylineRuntimes_.constBegin();
       it != polylineRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }
@@ -20772,7 +20772,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = polygonRuntimes_.constBegin();
       it != polygonRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }
@@ -20780,7 +20780,7 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = textRuntimes_.constBegin();
       it != textRuntimes_.constEnd(); ++it) {
     if (auto *runtime = it.value()) {
-      if (runtime->channelsNeeded_) {
+      if (runtime->needsLayering()) {
         it.key()->raise();
       }
     }

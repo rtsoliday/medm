@@ -19,6 +19,7 @@ int clampPrecision(int precision)
   return precision;
 }
 
+/* Format value with engineering notation (powers of 10 in multiples of 3). */
 void localCvtDoubleToExpNotationString(double value, char *textField,
     unsigned short precision)
 {
@@ -76,6 +77,9 @@ void localCvtDoubleToExpNotationString(double value, char *textField,
   textField[index] = '\0';
 }
 
+/* Convert a scalar value into a colon-separated sexagesimal string.
+ * The integer portion of `value` is treated as the base unit (hours, degrees, etc.)
+ * and fractional portions are expanded into minutes and seconds. */
 QString makeSexagesimal(double value, unsigned short precision)
 {
   constexpr unsigned short kMaxPrecision = 8;

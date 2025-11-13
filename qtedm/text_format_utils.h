@@ -17,13 +17,14 @@ constexpr double kPi = 3.14159265358979323846;
  * Returns 0 if negative, kMaxPrecision if too large. */
 int clampPrecision(int precision);
 
-/* Convert a double to exponential notation string.
- * Uses custom formatting with e+NN or e-NN exponent style.
+/* Convert a double to engineering-style exponential notation.
+ * Exponents are emitted in multiples of three using e+NN / e-NN.
  * textField must be at least kMaxTextField bytes. */
 void localCvtDoubleToExpNotationString(double value, char *textField,
     unsigned short precision);
 
-/* Format a double as sexagesimal (degrees:minutes:seconds).
+/* Format a double as a generic sexagesimal string (units:minutes:seconds).
+ * Callers can scale the input value beforehand to express hours, degrees, etc.
  * precision controls decimal places: 0-8 allowed.
  * Returns formatted string like "12:34:56.78". */
 QString makeSexagesimal(double value, unsigned short precision);

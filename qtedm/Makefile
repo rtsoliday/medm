@@ -180,7 +180,7 @@ include ../Makefile.build
 
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
 
-$(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/related_display.xpm | $(OBJ_DIR)
+$(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | $(OBJ_DIR)
 	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp -o $@
 

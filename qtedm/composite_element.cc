@@ -7,8 +7,18 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPalette>
+#include <QDebug>
+#include <QTimer>
 
 #include "text_element.h"
+#include "choice_button_element.h"
+#include "slider_element.h"
+#include "rectangle_element.h"
+#include "oval_element.h"
+#include "arc_element.h"
+#include "line_element.h"
+#include "polyline_element.h"
+#include "polygon_element.h"
 
 CompositeElement::CompositeElement(QWidget *parent)
   : QWidget(parent)
@@ -253,34 +263,83 @@ void CompositeElement::setExecuteMode(bool execute)
   executeMode_ = execute;
   updateMouseTransparency();
 
-  /* Propagate the execute mode to nested composites so their mouse behaviour
-   * matches the current state even if they were loaded indirectly. */
+  /* Propagate the execute mode to ALL children FIRST
+   * so they update their internal state before we modify visibility.
+   * Handle all known element types that have setExecuteMode. */
   for (const auto &pointer : childWidgets_) {
-    if (auto *childComposite = dynamic_cast<CompositeElement *>(pointer.data())) {
-      if (childComposite == this) {
-        continue;
-      }
-      childComposite->setExecuteMode(execute);
+    QWidget *child = pointer.data();
+    if (!child || child == this) {
+      continue;
+    }
+    
+    /* Try each known element type */
+    if (auto *elem = dynamic_cast<TextElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<CompositeElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<ChoiceButtonElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<SliderElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<RectangleElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<OvalElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<ArcElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<LineElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<PolylineElement *>(child)) {
+      elem->setExecuteMode(execute);
+    } else if (auto *elem = dynamic_cast<PolygonElement *>(child)) {
+      elem->setExecuteMode(execute);
     }
   }
+
+  /* Apply visibility rules based on composite's execute mode and connection state.
+   * This must happen AFTER calling setExecuteMode on children, since children
+   * may have their own visibility logic that needs to be overridden by the parent. */
   
-  /* When leaving execute mode, ensure all children are visible */
+  /* When leaving execute mode (entering edit mode), ensure all children are visible */
   if (!execute) {
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(true);
+        child->show();
+      }
+    }
+  }
+  /* When entering execute mode with a channel defined and disconnected,
+   * hide children (use both setVisible and hide to ensure they stay hidden).
+   * Use QTimer to reapply hiding after event loop processes child visibility changes. */
+  else if (hasActiveChannel() && !channelConnected_) {
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(false);
+        child->hide();
+      }
+    }
+    /* Reapply hiding after event loop to override any child visibility logic */
+    QTimer::singleShot(0, this, [this]() {
+      if (executeMode_ && hasActiveChannel() && !channelConnected_) {
+        for (const auto &pointer : childWidgets_) {
+          if (QWidget *child = pointer.data()) {
+            child->hide();
+          }
+        }
+      }
+    });
+  }
+  /* When entering execute mode with no channel or connected, show children */
+  else {
     for (const auto &pointer : childWidgets_) {
       if (QWidget *child = pointer.data()) {
         child->setVisible(true);
       }
     }
   }
-  /* When entering execute mode with non-static visibility and disconnected channel,
-   * hide children */
-  else if (visibilityMode_ != TextVisibilityMode::kStatic && !channelConnected_) {
-    for (const auto &pointer : childWidgets_) {
-      if (QWidget *child = pointer.data()) {
-        child->setVisible(false);
-      }
-    }
-  }
+  
+  update();
 }
 
 void CompositeElement::setChannelConnected(bool connected)
@@ -290,8 +349,8 @@ void CompositeElement::setChannelConnected(bool connected)
   }
   channelConnected_ = connected;
   
-  /* Hide/show child widgets based on connection state in execute mode */
-  if (executeMode_ && visibilityMode_ != TextVisibilityMode::kStatic) {
+  /* Hide/show child widgets based on connection state in execute mode when a channel is defined */
+  if (executeMode_ && hasActiveChannel()) {
     bool shouldHideChildren = !connected;
     for (const auto &pointer : childWidgets_) {
       if (QWidget *child = pointer.data()) {
@@ -312,26 +371,32 @@ void CompositeElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
 
-  /* In execute mode with dynamic visibility, don't paint anything if invisible.
-   * The children are already hidden via setChannelConnected(). */
-  if (executeMode_ && visibilityMode_ != TextVisibilityMode::kStatic && 
-      !channelConnected_) {
-    /* Do nothing - composite is invisible, don't paint white box */
-    return;
-  }
-
-  if (!selected_) {
-    return;
-  }
-
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
-  QPen pen(foregroundColor());
-  pen.setStyle(Qt::DashLine);
-  pen.setWidth(1);
-  painter.setPen(pen);
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(rect().adjusted(0, 0, -1, -1));
+
+  /* In execute mode with a channel defined but not connected, fill with white */
+  if (executeMode_ && hasActiveChannel() && !channelConnected_) {
+    painter.fillRect(rect(), Qt::white);
+    if (selected_) {
+      QPen pen(Qt::black);
+      pen.setStyle(Qt::DashLine);
+      pen.setWidth(1);
+      painter.setPen(pen);
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
+    return;
+  }
+
+  /* Draw selection border if selected */
+  if (selected_) {
+    QPen pen(foregroundColor());
+    pen.setStyle(Qt::DashLine);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  }
 }
 
 QColor CompositeElement::defaultForegroundColor() const

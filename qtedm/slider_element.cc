@@ -655,6 +655,14 @@ void SliderElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
+  // In execute mode, don't draw slider elements if disconnected or no channel
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
+
   QRectF limitRect;
   QRectF channelRect;
   QRectF trackRect = trackRectForPainting(rect().adjusted(0.0, 0.0, 0.0, 0.0),
@@ -1201,6 +1209,9 @@ bool SliderElement::shouldShowLimitLabels() const
 
 QColor SliderElement::effectiveForeground() const
 {
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
+    return QColor(204, 204, 204);
+  }
   if (foregroundColor_.isValid()) {
     return foregroundColor_;
   }
@@ -1216,10 +1227,10 @@ QColor SliderElement::effectiveForeground() const
 QColor SliderElement::effectiveForegroundForValueText() const
 {
   if (executeMode_) {
+    if (!runtimeConnected_ || channel_.trimmed().isEmpty()) {
+      return QColor(204, 204, 204);
+    }
     if (colorMode_ == TextColorMode::kAlarm) {
-      if (!runtimeConnected_) {
-        return QColor(204, 204, 204);
-      }
       return alarmColorForSeverity(runtimeSeverity_);
     }
   }
@@ -1228,7 +1239,7 @@ QColor SliderElement::effectiveForegroundForValueText() const
 
 QColor SliderElement::effectiveBackground() const
 {
-  if (executeMode_ && !runtimeConnected_) {
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     return QColor(Qt::white);
   }
   if (backgroundColor_.isValid()) {

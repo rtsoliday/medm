@@ -471,6 +471,30 @@ void TextElement::applyTextColor()
   pal.setColor(QPalette::WindowText, color);
   pal.setColor(QPalette::Text, color);
   pal.setColor(QPalette::ButtonText, color);
+  
+  // Set background to white if in execute mode with a channel defined but not connected
+  if (executeMode_ && !runtimeConnected_) {
+    bool hasChannel = false;
+    for (const QString &ch : channels_) {
+      if (!ch.trimmed().isEmpty()) {
+        hasChannel = true;
+        break;
+      }
+    }
+    if (hasChannel) {
+      setAttribute(Qt::WA_NoSystemBackground, false);
+      setAutoFillBackground(true);
+      pal.setColor(QPalette::Window, Qt::white);
+      pal.setColor(QPalette::Base, Qt::white);
+    } else {
+      setAttribute(Qt::WA_NoSystemBackground, true);
+      setAutoFillBackground(false);
+    }
+  } else {
+    setAttribute(Qt::WA_NoSystemBackground, true);
+    setAutoFillBackground(false);
+  }
+  
   setPalette(pal);
   requestOverflowRepaint();
 }
@@ -478,7 +502,17 @@ void TextElement::applyTextColor()
 void TextElement::applyTextVisibility()
 {
   if (executeMode_) {
-    const bool visible = designModeVisible_ && runtimeVisible_ && runtimeConnected_;
+    // Check if any channel is defined
+    bool hasChannel = false;
+    for (const QString &ch : channels_) {
+      if (!ch.trimmed().isEmpty()) {
+        hasChannel = true;
+        break;
+      }
+    }
+    // Show if visible and either connected OR (not connected but has a channel defined)
+    const bool visible = designModeVisible_ && runtimeVisible_ && 
+                        (runtimeConnected_ || hasChannel);
     QLabel::setVisible(visible);
   } else {
     QLabel::setVisible(designModeVisible_);
@@ -570,13 +604,41 @@ void TextElement::updateOverflowGeometry()
     return;
   }
 
-  const QRect overlayRect = visualBoundsRelativeToParent();
-  if (!overlayRect.isValid()) {
-    overflowWidget_->hide();
-    return;
+  const QRect ownerRect = geometry();
+  const QFontMetrics metrics(font());
+  const QString currentText = text();
+  const int textWidth = textPixelWidth(metrics, currentText);
+  const int textHeight = metrics.ascent() + metrics.descent();
+
+  int textLeft = ownerRect.x();
+  switch (alignment_ & Qt::AlignHorizontal_Mask) {
+  case Qt::AlignHCenter:
+    textLeft = ownerRect.x() + (ownerRect.width() - textWidth) / 2;
+    break;
+  case Qt::AlignRight:
+    textLeft = ownerRect.x() + ownerRect.width() - textWidth;
+    break;
+  default:
+    break;
   }
 
-  overflowWidget_->setGeometry(overlayRect);
+  const int ownerLeft = ownerRect.x();
+  const int ownerRight = ownerRect.x() + ownerRect.width();
+  const int ownerTop = ownerRect.y();
+  const int ownerBottom = ownerRect.y() + ownerRect.height();
+  const int textRight = textLeft + textWidth;
+  const int textTop = ownerTop;
+  const int textBottom = textTop + textHeight;
+
+  const int overlayLeft = std::min(ownerLeft, textLeft);
+  const int overlayRight = std::max(ownerRight, textRight);
+  const int overlayTop = ownerTop;
+  const int overlayBottom = std::max(ownerBottom, textBottom);
+
+  const int overlayWidth = std::max(1, overlayRight - overlayLeft);
+  const int overlayHeight = std::max(1, overlayBottom - overlayTop);
+
+  overflowWidget_->setGeometry(overlayLeft, overlayTop, overlayWidth, overlayHeight);
   updateOverflowStacking();
   updateOverflowVisibility();
   requestOverflowRepaint();

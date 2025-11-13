@@ -373,6 +373,12 @@ void MessageButtonElement::changeEvent(QEvent *event)
 void MessageButtonElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
+  
+  /* Paint solid white background when disconnected or no PV defined in execute mode */
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::white);
+  }
 }
 
 void MessageButtonElement::applyPaletteColors()
@@ -380,6 +386,15 @@ void MessageButtonElement::applyPaletteColors()
   if (!button_) {
     return;
   }
+  
+  /* Hide button when disconnected or no PV defined in execute mode */
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
+    button_->hide();
+    return;
+  } else {
+    button_->show();
+  }
+  
   QPalette pal = button_->palette();
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
@@ -452,7 +467,7 @@ void MessageButtonElement::updateButtonFont()
 
 QColor MessageButtonElement::effectiveForeground() const
 {
-  if (executeMode_ && !runtimeConnected_) {
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     return QColor(Qt::white);
   }
   if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
@@ -466,7 +481,7 @@ QColor MessageButtonElement::effectiveForeground() const
 
 QColor MessageButtonElement::effectiveBackground() const
 {
-  if (executeMode_ && !runtimeConnected_) {
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     return QColor(Qt::white);
   }
   if (backgroundColor_.isValid()) {

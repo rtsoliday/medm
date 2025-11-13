@@ -544,7 +544,7 @@ void ChoiceButtonElement::setActivationCallback(
 QColor ChoiceButtonElement::effectiveForeground() const
 {
   if (executeMode_) {
-    if (!runtimeConnected_) {
+    if (!runtimeConnected_ || channel_.trimmed().isEmpty()) {
       return QColor(204, 204, 204);
     }
     switch (colorMode_) {
@@ -562,7 +562,7 @@ QColor ChoiceButtonElement::effectiveForeground() const
 
 QColor ChoiceButtonElement::effectiveBackground() const
 {
-  if (executeMode_ && !runtimeConnected_) {
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     return QColor(Qt::white);
   }
   return backgroundColor_.isValid() ? backgroundColor_
@@ -597,7 +597,11 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
     return;
   }
 
-  if (!executeMode_ || buttons_.isEmpty()) {
+  // In execute mode, skip painting sample buttons if disconnected or no channel
+  const bool shouldShowButtons = !executeMode_ || 
+      (buttons_.isEmpty() && runtimeConnected_ && !channel_.trimmed().isEmpty());
+  
+  if (shouldShowButtons && (!executeMode_ || buttons_.isEmpty())) {
     int rows = 1;
     int columns = kSampleButtonCount;
     switch (stacking_) {
@@ -878,23 +882,33 @@ void ChoiceButtonElement::updateButtonPalettes()
 
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
+  
+  // Hide buttons when disconnected or no channel defined
+  const bool shouldHideButtons = !runtimeConnected_ || channel_.trimmed().isEmpty();
+  
   for (QAbstractButton *button : buttons_) {
     if (!button) {
       continue;
     }
-    if (auto *cell = dynamic_cast<ChoiceButtonCell *>(button)) {
-      cell->setColors(fg, bg);
+    
+    if (shouldHideButtons) {
+      button->hide();
     } else {
-      QPalette pal = button->palette();
-      pal.setColor(QPalette::ButtonText, fg);
-      pal.setColor(QPalette::WindowText, fg);
-      pal.setColor(QPalette::Text, fg);
-      pal.setColor(QPalette::Button, bg);
-      pal.setColor(QPalette::Base, bg);
-      pal.setColor(QPalette::Window, bg);
-      button->setPalette(pal);
+      button->show();
+      if (auto *cell = dynamic_cast<ChoiceButtonCell *>(button)) {
+        cell->setColors(fg, bg);
+      } else {
+        QPalette pal = button->palette();
+        pal.setColor(QPalette::ButtonText, fg);
+        pal.setColor(QPalette::WindowText, fg);
+        pal.setColor(QPalette::Text, fg);
+        pal.setColor(QPalette::Button, bg);
+        pal.setColor(QPalette::Base, bg);
+        pal.setColor(QPalette::Window, bg);
+        button->setPalette(pal);
+      }
+      button->update();
     }
-    button->update();
   }
   update();
 }

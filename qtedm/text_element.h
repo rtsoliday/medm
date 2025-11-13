@@ -12,6 +12,7 @@
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QString>
+#include <QTimer>
 
 #include "display_properties.h"
 
@@ -93,7 +94,10 @@ private:
   bool executeMode_ = false;
   bool designModeVisible_ = true;
   bool runtimeConnected_ = false;
+  bool runtimeEverConnected_ = false;
+  bool allowDisconnectIndication_ = false;
   bool runtimeVisible_ = true;
   short runtimeSeverity_ = 0;
   TextOverflowWidget *overflowWidget_ = nullptr;
+  QTimer *disconnectIndicationTimer_ = nullptr;
 };

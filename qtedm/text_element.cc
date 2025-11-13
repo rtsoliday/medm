@@ -152,6 +152,11 @@ TextElement::TextElement(QWidget *parent)
 
 TextElement::~TextElement()
 {
+  if (disconnectIndicationTimer_) {
+    disconnectIndicationTimer_->stop();
+    delete disconnectIndicationTimer_;
+    disconnectIndicationTimer_ = nullptr;
+  }
   if (overflowWidget_) {
     overflowWidget_->hide();
     overflowWidget_->setParent(nullptr);
@@ -332,10 +337,27 @@ void TextElement::setExecuteMode(bool execute)
 
   if (execute) {
     designModeVisible_ = QLabel::isVisible();
+    // Start timer to allow disconnect indication after brief connecting period
+    allowDisconnectIndication_ = false;
+    if (!disconnectIndicationTimer_) {
+      disconnectIndicationTimer_ = new QTimer(this);
+      disconnectIndicationTimer_->setSingleShot(true);
+      connect(disconnectIndicationTimer_, &QTimer::timeout, this, [this]() {
+        allowDisconnectIndication_ = true;
+        applyTextColor();  // Re-evaluate background color
+      });
+    }
+    disconnectIndicationTimer_->start(150);  // 150ms delay
+  } else {
+    if (disconnectIndicationTimer_) {
+      disconnectIndicationTimer_->stop();
+    }
+    allowDisconnectIndication_ = false;
   }
 
   executeMode_ = execute;
   runtimeConnected_ = false;
+  runtimeEverConnected_ = false;
   runtimeVisible_ = true;
   runtimeSeverity_ = 0;
   updateExecuteState();
@@ -354,6 +376,9 @@ void TextElement::setRuntimeConnected(bool connected)
     return;
   }
   runtimeConnected_ = connected;
+  if (connected) {
+    runtimeEverConnected_ = true;
+  }
   if (executeMode_) {
     if (colorMode_ == TextColorMode::kAlarm) {
       applyTextColor();
@@ -472,8 +497,9 @@ void TextElement::applyTextColor()
   pal.setColor(QPalette::Text, color);
   pal.setColor(QPalette::ButtonText, color);
   
-  // Set background to white if in execute mode with a channel defined but not connected
-  if (executeMode_ && !runtimeConnected_) {
+  // Set background to white if in execute mode, has a channel defined, 
+  // is disconnected, and past the initial connecting period
+  if (executeMode_ && !runtimeConnected_ && allowDisconnectIndication_) {
     bool hasChannel = false;
     for (const QString &ch : channels_) {
       if (!ch.trimmed().isEmpty()) {

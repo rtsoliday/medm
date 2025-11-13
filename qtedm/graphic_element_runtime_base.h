@@ -14,6 +14,21 @@
 #include "display_properties.h"
 #include "element_runtime_traits.h"
 
+class RectangleElement;
+class ImageElement;
+class OvalElement;
+class ArcElement;
+class LineElement;
+class PolylineElement;
+class PolygonElement;
+class TextElement;
+
+template <typename ElementType>
+struct ElementLayeringTraits
+{
+  static constexpr bool kLayerOnAnyChannel = false;
+};
+
 class DisplayWindow;
 
 /* Base class template for graphic element runtimes that support dynamic
@@ -140,4 +155,46 @@ private:
   bool channelsNeeded_ = true;
   bool layeringNeeded_ = true;
   bool started_ = false;
+};
+
+template <>
+struct ElementLayeringTraits<RectangleElement>
+{
+  static constexpr bool kLayerOnAnyChannel = true;
+};
+
+template <>
+struct ElementLayeringTraits<ImageElement>
+{
+  static constexpr bool kLayerOnAnyChannel = true;
+};
+
+template <>
+struct ElementLayeringTraits<OvalElement>
+{
+  static constexpr bool kLayerOnAnyChannel = true;
+};
+
+template <>
+struct ElementLayeringTraits<ArcElement>
+{
+  static constexpr bool kLayerOnAnyChannel = true;
+};
+
+template <>
+struct ElementLayeringTraits<LineElement>
+{
+  static constexpr bool kLayerOnAnyChannel = true;
+};
+
+template <>
+struct ElementLayeringTraits<PolylineElement>
+{
+  static constexpr bool kLayerOnAnyChannel = true;
+};
+
+template <>
+struct ElementLayeringTraits<PolygonElement>
+{
+  static constexpr bool kLayerOnAnyChannel = true;
 };

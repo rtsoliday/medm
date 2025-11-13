@@ -50,6 +50,7 @@ public:
   
   void setChannelConnected(bool connected);
   bool isChannelConnected() const;
+  void setRuntimeVisible(bool visible);
   
   void expandToFitChildren();
 
@@ -63,6 +64,7 @@ private:
   bool forwardMouseEventToParent(QMouseEvent *event) const;
   bool hasActiveChannel() const;
   void updateMouseTransparency();
+  void applyRuntimeVisibility();
 
   bool selected_ = false;
   QString compositeName_;
@@ -76,4 +78,6 @@ private:
   QList<QPointer<QWidget>> childWidgets_;
   bool executeMode_ = false;
   bool channelConnected_ = false;
+  bool runtimeVisible_ = true;
+  bool designModeVisible_ = true;
 };

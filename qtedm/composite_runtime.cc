@@ -115,6 +115,7 @@ void CompositeRuntime::initializeChannels()
   if (visibilityMode == TextVisibilityMode::kStatic) {
     /* Static mode - always visible and connected */
     element_->setChannelConnected(true);
+    element_->setRuntimeVisible(true);
     return;
   }
 
@@ -353,32 +354,34 @@ void CompositeRuntime::evaluateVisibility()
     return;
   }
 
-  const TextVisibilityMode visibilityMode = element_->visibilityMode();
-
-  /* Static mode - always visible and connected */
-  if (visibilityMode == TextVisibilityMode::kStatic) {
-    element_->setChannelConnected(true);
-    return;
-  }
-
-  /* Check if any channel with a name is disconnected */
+  bool anyChannels = false;
   bool allConnected = true;
   for (const auto &channel : channels_) {
-    if (!channel.name.isEmpty() && !channel.connected) {
+    if (channel.name.isEmpty()) {
+      continue;
+    }
+    anyChannels = true;
+    if (!channel.connected) {
       allConnected = false;
       break;
     }
   }
 
-  /* If disconnected, hide the composite */
-  if (!allConnected) {
-    element_->setChannelConnected(false);
+  if (!anyChannels) {
+    element_->setChannelConnected(true);
+    element_->setRuntimeVisible(true);
     return;
   }
 
-  /* All channels are connected - now evaluate visibility based on values */
+  if (!allConnected) {
+    element_->setChannelConnected(false);
+    element_->setRuntimeVisible(true);
+    return;
+  }
+
+  const TextVisibilityMode visibilityMode = element_->visibilityMode();
   const ChannelRuntime &primary = channels_[0];
-  
+
   bool visible = true;
   switch (visibilityMode) {
   case TextVisibilityMode::kStatic:
@@ -401,8 +404,8 @@ void CompositeRuntime::evaluateVisibility()
   }
   }
 
-  /* Update element - show if connected AND visible */
-  element_->setChannelConnected(allConnected && visible);
+  element_->setChannelConnected(true);
+  element_->setRuntimeVisible(visible);
 }
 
 bool CompositeRuntime::evaluateCalcExpression(double &result) const

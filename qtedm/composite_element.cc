@@ -30,7 +30,10 @@ CompositeElement::CompositeElement(QWidget *parent)
   clearMask();
   /* Ensure no content margins that might offset children */
   setContentsMargins(0, 0, 0, 0);
+  designModeVisible_ = QWidget::isVisible();
+  runtimeVisible_ = true;
   setExecuteMode(false);
+  updateMouseTransparency();
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();
 }
@@ -260,19 +263,27 @@ QList<QWidget *> CompositeElement::childWidgets() const
 
 void CompositeElement::setExecuteMode(bool execute)
 {
+  if (executeMode_ == execute) {
+    return;
+  }
+
+  if (execute) {
+    designModeVisible_ = QWidget::isVisible();
+  } else {
+    QWidget::setVisible(designModeVisible_);
+  }
+
   executeMode_ = execute;
   updateMouseTransparency();
 
   /* Propagate the execute mode to ALL children FIRST
-   * so they update their internal state before we modify visibility.
-   * Handle all known element types that have setExecuteMode. */
+   * so they update their internal state before we modify visibility. */
   for (const auto &pointer : childWidgets_) {
     QWidget *child = pointer.data();
     if (!child || child == this) {
       continue;
     }
-    
-    /* Try each known element type */
+
     if (auto *elem = dynamic_cast<TextElement *>(child)) {
       elem->setExecuteMode(execute);
     } else if (auto *elem = dynamic_cast<CompositeElement *>(child)) {
@@ -296,49 +307,7 @@ void CompositeElement::setExecuteMode(bool execute)
     }
   }
 
-  /* Apply visibility rules based on composite's execute mode and connection state.
-   * This must happen AFTER calling setExecuteMode on children, since children
-   * may have their own visibility logic that needs to be overridden by the parent. */
-  
-  /* When leaving execute mode (entering edit mode), ensure all children are visible */
-  if (!execute) {
-    for (const auto &pointer : childWidgets_) {
-      if (QWidget *child = pointer.data()) {
-        child->setVisible(true);
-        child->show();
-      }
-    }
-  }
-  /* When entering execute mode with a channel defined and disconnected,
-   * hide children (use both setVisible and hide to ensure they stay hidden).
-   * Use QTimer to reapply hiding after event loop processes child visibility changes. */
-  else if (hasActiveChannel() && !channelConnected_) {
-    for (const auto &pointer : childWidgets_) {
-      if (QWidget *child = pointer.data()) {
-        child->setVisible(false);
-        child->hide();
-      }
-    }
-    /* Reapply hiding after event loop to override any child visibility logic */
-    QTimer::singleShot(0, this, [this]() {
-      if (executeMode_ && hasActiveChannel() && !channelConnected_) {
-        for (const auto &pointer : childWidgets_) {
-          if (QWidget *child = pointer.data()) {
-            child->hide();
-          }
-        }
-      }
-    });
-  }
-  /* When entering execute mode with no channel or connected, show children */
-  else {
-    for (const auto &pointer : childWidgets_) {
-      if (QWidget *child = pointer.data()) {
-        child->setVisible(true);
-      }
-    }
-  }
-  
+  applyRuntimeVisibility();
   update();
 }
 
@@ -348,23 +317,23 @@ void CompositeElement::setChannelConnected(bool connected)
     return;
   }
   channelConnected_ = connected;
-  
-  /* Hide/show child widgets based on connection state in execute mode when a channel is defined */
-  if (executeMode_ && hasActiveChannel()) {
-    bool shouldHideChildren = !connected;
-    for (const auto &pointer : childWidgets_) {
-      if (QWidget *child = pointer.data()) {
-        child->setVisible(!shouldHideChildren);
-      }
-    }
-  }
-  
+  applyRuntimeVisibility();
   update();
 }
 
 bool CompositeElement::isChannelConnected() const
 {
   return channelConnected_;
+}
+
+void CompositeElement::setRuntimeVisible(bool visible)
+{
+  if (runtimeVisible_ == visible) {
+    return;
+  }
+  runtimeVisible_ = visible;
+  applyRuntimeVisibility();
+  update();
 }
 
 void CompositeElement::paintEvent(QPaintEvent *event)
@@ -474,4 +443,64 @@ bool CompositeElement::forwardMouseEventToParent(QMouseEvent *event) const
 #endif
   QCoreApplication::sendEvent(target, &forwarded);
   return true;
+}
+
+void CompositeElement::applyRuntimeVisibility()
+{
+  if (!executeMode_) {
+    QWidget::setVisible(designModeVisible_);
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(true);
+        child->show();
+      }
+    }
+    return;
+  }
+
+  const bool hasChannel = hasActiveChannel();
+  if (!hasChannel) {
+    QWidget::setVisible(designModeVisible_);
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(designModeVisible_);
+        if (!designModeVisible_) {
+          child->hide();
+        }
+      }
+    }
+    return;
+  }
+
+  if (!channelConnected_) {
+    QWidget::setVisible(designModeVisible_);
+    for (const auto &pointer : childWidgets_) {
+      if (QWidget *child = pointer.data()) {
+        child->setVisible(false);
+        child->hide();
+      }
+    }
+    QTimer::singleShot(0, this, [this]() {
+      if (!executeMode_ || channelConnected_ || !hasActiveChannel()) {
+        return;
+      }
+      for (const auto &pointer : childWidgets_) {
+        if (QWidget *child = pointer.data()) {
+          child->hide();
+        }
+      }
+    });
+    return;
+  }
+
+  const bool show = designModeVisible_ && runtimeVisible_;
+  QWidget::setVisible(show);
+  for (const auto &pointer : childWidgets_) {
+    if (QWidget *child = pointer.data()) {
+      child->setVisible(show);
+      if (!show) {
+        child->hide();
+      }
+    }
+  }
 }

@@ -81,39 +81,57 @@ int relatedDisplayPixelLimit(RelatedDisplayVisual visual, int height,
   return messageButtonPixelLimit(height);
 }
 
-const QPixmap &baseRelatedDisplayIcon()
+QPixmap createRelatedDisplayIcon(const QSize &size, const QColor &color)
 {
-  static const QPixmap pixmap(QStringLiteral(":/icons/related_display.xpm"));
-  return pixmap;
-}
-
-QPixmap relatedDisplayIconForColor(const QColor &color)
-{
-  const QPixmap &base = baseRelatedDisplayIcon();
-  if (base.isNull()) {
+  if (size.width() <= 0 || size.height() <= 0) {
     return QPixmap();
   }
-
-  static QHash<QRgb, QPixmap> cache;
-  const QRgb key = color.rgba();
-  const auto it = cache.constFind(key);
-  if (it != cache.constEnd()) {
-    return it.value();
-  }
-
-  QPixmap tinted(base.size());
-  tinted.fill(Qt::transparent);
-
-  QPainter painter(&tinted);
+  
+  /* Create icon at exact size with layered rectangles using single-pixel lines */
+  QPixmap pixmap(size);
+  pixmap.fill(Qt::transparent);
+  
+  QPainter painter(&pixmap);
   painter.setRenderHint(QPainter::Antialiasing, false);
-  painter.setCompositionMode(QPainter::CompositionMode_Source);
-  painter.fillRect(tinted.rect(), color);
-  painter.setCompositionMode(QPainter::CompositionMode_DestinationIn);
-  painter.drawPixmap(0, 0, base);
+  painter.setPen(QPen(color, 1));
+  painter.setBrush(Qt::NoBrush);
+  
+  /* Calculate rectangle positions proportional to the icon size.
+   * Draw second rectangle as line segments to show it's partially hidden.
+   */
+  
+  const int w = size.width();
+  const int h = size.height();
+  
+  /* First rectangle - back layer (complete outline) */
+  const int x1 = w * 3 / 25;
+  const int y1 = h * 3 / 25;
+  const int w1 = w * 14 / 25;
+  const int h1 = h * 12 / 25;
+  painter.drawRect(x1, y1, w1, h1);
+  
+  /* Second rectangle - front layer (visible segments only)
+   * Draw as 4 line segments instead of a complete rectangle to show
+   * it's partially obscured by the first rectangle */
+  const int x2 = w * 8 / 25;
+  const int y2 = h * 7 / 25;
+  const int w2 = w * 14 / 25;
+  const int h2 = h * 13 / 25;
+  
+  /* Top edge of second rectangle */
+  painter.drawLine(x2 + (w2 - (x2 - x1)), y2, x2 + w2, y2);
+  
+  /* Right edge of second rectangle */
+  painter.drawLine(x2 + w2, y2, x2 + w2, y2 + h2);
+  
+  /* Bottom edge of second rectangle */
+  painter.drawLine(x2 + w2, y2 + h2, x2, y2 + h2);
+  
+  /* Left edge of second rectangle */
+  painter.drawLine(x2, y2 + h2, x2, y2 + (h2 - (y2 - y1)));
+  
   painter.end();
-
-  cache.insert(key, tinted);
-  return cache.value(key);
+  return pixmap;
 }
 
 } // namespace
@@ -465,31 +483,14 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     QRect iconCanvas = iconRect.adjusted(0, 0, 0, 0);
     painter.fillRect(iconCanvas, bg);
 
-    const QPixmap iconPixmap = relatedDisplayIconForColor(fg);
+    /* Create icon at exact size needed - no scaling required */
+    const QPixmap iconPixmap = createRelatedDisplayIcon(iconCanvas.size(), fg);
     if (!iconPixmap.isNull()) {
-      QPixmap scaled = iconPixmap.scaled(iconCanvas.size(),
-          Qt::KeepAspectRatio, Qt::SmoothTransformation);
-      
-      // Convert grey pixels to black to maintain crisp appearance
-      QImage img = scaled.toImage();
-      if (!img.isNull()) {
-        for (int y = 0; y < img.height(); ++y) {
-          for (int x = 0; x < img.width(); ++x) {
-            QColor pixel = img.pixelColor(x, y);
-            // If pixel has any opacity and any color, make it fully opaque with the foreground color
-            if (pixel.alpha() > 0) {
-              img.setPixelColor(x, y, QColor(fg.red(), fg.green(), fg.blue(), 255));
-            }
-          }
-        }
-        scaled = QPixmap::fromImage(img);
-      }
-      
       QPoint topLeft(iconCanvas.left()
-              + (iconCanvas.width() - scaled.width()) / 2,
+              + (iconCanvas.width() - iconPixmap.width()) / 2,
           iconCanvas.top()
-              + (iconCanvas.height() - scaled.height()) / 2);
-      painter.drawPixmap(topLeft, scaled);
+              + (iconCanvas.height() - iconPixmap.height()) / 2);
+      painter.drawPixmap(topLeft, iconPixmap);
     } else {
       const int barHeight = std::max(2, iconCanvas.height() / 3);
       QRect fallbackRect(iconCanvas.left(), iconCanvas.top(),

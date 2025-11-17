@@ -16471,14 +16471,14 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
         [element](int index, const QString &value) {
           element->setChannel(index, value);
         },
-        0, 1);
+        0, 0);
   }
 
   applyChannelProperties(effectiveNode,
       [element](int index, const QString &value) {
         element->setChannel(index, value);
       },
-      0, 1);
+      0, 0);
 
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);

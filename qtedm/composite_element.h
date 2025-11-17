@@ -65,6 +65,7 @@ private:
   bool hasActiveChannel() const;
   void updateMouseTransparency();
   void applyRuntimeVisibility();
+  void raiseCompositeHierarchy();
 
   bool selected_ = false;
   QString compositeName_;

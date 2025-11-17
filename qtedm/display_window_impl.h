@@ -16400,11 +16400,12 @@ inline void DisplayWindow::refreshStackingOrder()
     ++it;
   }
 
-  /* Raise static widgets first (rectangles, ovals, etc. with no PVs) */
+  /* Raise static widgets first so that interactive controls can sit on top
+   * just like MEDM draws static graphics onto the background pixmap. */
   for (QWidget *widget : staticWidgets) {
     widget->raise();
   }
-  /* Then raise interactive widgets (composites, monitors, controls) on top */
+  /* Then raise interactive widgets (monitors, controls, composites, etc.). */
   for (QWidget *widget : interactiveWidgets) {
     widget->raise();
   }

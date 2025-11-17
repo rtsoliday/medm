@@ -316,9 +316,16 @@ void CompositeElement::setChannelConnected(bool connected)
   if (channelConnected_ == connected) {
     return;
   }
+  const bool wasVisible = executeMode_ && designModeVisible_ && runtimeVisible_
+      && (channelConnected_ || !hasActiveChannel());
   channelConnected_ = connected;
   applyRuntimeVisibility();
   update();
+  const bool nowVisible = executeMode_ && designModeVisible_ && runtimeVisible_
+      && (channelConnected_ || !hasActiveChannel());
+  if (!wasVisible && nowVisible) {
+    raiseCompositeHierarchy();
+  }
 }
 
 bool CompositeElement::isChannelConnected() const
@@ -331,9 +338,16 @@ void CompositeElement::setRuntimeVisible(bool visible)
   if (runtimeVisible_ == visible) {
     return;
   }
+  const bool wasVisible = executeMode_ && designModeVisible_ && runtimeVisible_
+      && (channelConnected_ || !hasActiveChannel());
   runtimeVisible_ = visible;
   applyRuntimeVisibility();
   update();
+  const bool nowVisible = executeMode_ && designModeVisible_ && runtimeVisible_
+      && (channelConnected_ || !hasActiveChannel());
+  if (!wasVisible && nowVisible) {
+    raiseCompositeHierarchy();
+  }
 }
 
 void CompositeElement::paintEvent(QPaintEvent *event)
@@ -501,6 +515,16 @@ void CompositeElement::applyRuntimeVisibility()
       if (!show) {
         child->hide();
       }
+    }
+  }
+}
+
+void CompositeElement::raiseCompositeHierarchy()
+{
+  raise();
+  for (const auto &pointer : childWidgets_) {
+    if (QWidget *child = pointer.data()) {
+      child->raise();
     }
   }
 }

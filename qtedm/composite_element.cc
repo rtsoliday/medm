@@ -575,10 +575,14 @@ void CompositeElement::refreshChildStackingOrder()
     }
   }
 
-  for (QWidget *widget : staticWidgets) {
-    widget->raise();
+  for (int i = staticWidgets.size() - 1; i >= 0; --i) {
+    if (QWidget *widget = staticWidgets.at(i)) {
+      widget->raise();
+    }
   }
-  for (QWidget *widget : interactiveWidgets) {
-    widget->raise();
+  for (int i = interactiveWidgets.size() - 1; i >= 0; --i) {
+    if (QWidget *widget = interactiveWidgets.at(i)) {
+      widget->raise();
+    }
   }
 }

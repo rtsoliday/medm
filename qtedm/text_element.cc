@@ -380,9 +380,7 @@ void TextElement::setRuntimeConnected(bool connected)
     runtimeEverConnected_ = true;
   }
   if (executeMode_) {
-    if (colorMode_ == TextColorMode::kAlarm) {
-      applyTextColor();
-    }
+    applyTextColor();
     applyTextVisibility();
     requestOverflowRepaint();
   }

@@ -19,6 +19,7 @@
 #include "line_element.h"
 #include "polyline_element.h"
 #include "polygon_element.h"
+#include "image_element.h"
 
 CompositeElement::CompositeElement(QWidget *parent)
   : QWidget(parent)
@@ -171,6 +172,7 @@ void CompositeElement::adoptChild(QWidget *child)
   if (!childWidgets_.contains(child)) {
     childWidgets_.append(QPointer<QWidget>(child));
   }
+  refreshChildStackingOrder();
 }
 
 void CompositeElement::expandToFitChildren()
@@ -309,6 +311,8 @@ void CompositeElement::setExecuteMode(bool execute)
 
   applyRuntimeVisibility();
   update();
+
+  refreshChildStackingOrder();
 }
 
 void CompositeElement::setChannelConnected(bool connected)
@@ -522,9 +526,59 @@ void CompositeElement::applyRuntimeVisibility()
 void CompositeElement::raiseCompositeHierarchy()
 {
   raise();
-  for (const auto &pointer : childWidgets_) {
-    if (QWidget *child = pointer.data()) {
-      child->raise();
+  refreshChildStackingOrder();
+}
+
+bool CompositeElement::isStaticChildWidget(const QWidget *child) const
+{
+  if (!child) {
+    return false;
+  }
+
+  if (const auto *composite = dynamic_cast<const CompositeElement *>(child)) {
+    const QList<QWidget *> children = composite->childWidgets();
+    if (children.isEmpty()) {
+      return true;
     }
+    for (QWidget *grandChild : children) {
+      if (!composite->isStaticChildWidget(grandChild)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return dynamic_cast<const RectangleElement *>(child)
+      || dynamic_cast<const ImageElement *>(child)
+      || dynamic_cast<const OvalElement *>(child)
+      || dynamic_cast<const ArcElement *>(child)
+      || dynamic_cast<const LineElement *>(child)
+      || dynamic_cast<const PolylineElement *>(child)
+      || dynamic_cast<const PolygonElement *>(child)
+      || dynamic_cast<const TextElement *>(child);
+}
+
+void CompositeElement::refreshChildStackingOrder()
+{
+  QList<QWidget *> staticWidgets;
+  QList<QWidget *> interactiveWidgets;
+
+  for (const auto &pointer : childWidgets_) {
+    QWidget *child = pointer.data();
+    if (!child) {
+      continue;
+    }
+    if (isStaticChildWidget(child)) {
+      staticWidgets.append(child);
+    } else {
+      interactiveWidgets.append(child);
+    }
+  }
+
+  for (QWidget *widget : staticWidgets) {
+    widget->raise();
+  }
+  for (QWidget *widget : interactiveWidgets) {
+    widget->raise();
   }
 }

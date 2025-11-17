@@ -66,6 +66,8 @@ private:
   void updateMouseTransparency();
   void applyRuntimeVisibility();
   void raiseCompositeHierarchy();
+  bool isStaticChildWidget(const QWidget *child) const;
+  void refreshChildStackingOrder();
 
   bool selected_ = false;
   QString compositeName_;

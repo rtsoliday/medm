@@ -62,53 +62,66 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
   static const double deltas[] = {0.2, 0.5, 1.0, 2.0, 5.0};
   static const int minors[] = {4, 5, 4, 4, 5};
   static const int maxMajor = 8;
+
+  const double minMag = std::fabs(min);
+  const double maxMag = std::fabs(max);
+  double mag = std::max(minMag, maxMag);
+  double range = max - min;
+  double relRange = (mag > 0.0) ? range / mag : range;
   
   if (isLog && min > 0 && max > 0) {
     // Logarithmic axis
-    const double logMin = std::log10(min);
-    const double logMax = std::log10(max);
-    
-    // Round to powers of 10
-    result.drawMin = std::pow(10.0, std::floor(logMin));
-    result.drawMax = std::pow(10.0, std::ceil(logMax));
+    double drawMin = 0.0;
+    double drawMax = 0.0;
+    if (relRange < std::numeric_limits<double>::epsilon()) {
+      drawMin = (min > 0.0) ? std::pow(10.0, std::floor(std::log10(min))) : 1.0;
+      drawMax = drawMin * 10.0;
+    } else {
+      const double logMin = std::log10(min);
+      const double logMax = std::log10(max);
+      drawMin = std::pow(10.0, std::floor(logMin));
+      drawMax = std::pow(10.0, std::ceil(logMax));
+    }
+    result.drawMin = drawMin;
+    result.drawMax = drawMax;
     result.majorInc = 10.0;
     result.numMajor = static_cast<int>(std::log10(result.drawMax / result.drawMin) + 0.0001);
     result.numMinor = 10;
-  } else {
-    // Linear axis
-    const double range = max - min;
-    
-    // Handle degenerate case
-    if (range < std::numeric_limits<double>::epsilon() * std::max(std::fabs(min), std::fabs(max))) {
-      const double halfRange = std::max(std::fabs(min) * 0.02, 0.5);
-      min -= halfRange;
-      max += halfRange;
-    }
-    
-    // Normalize the range to determine nice delta
-    const int exponent = static_cast<int>(std::floor(std::log10(max - min)));
-    const double normalizedRange = (max - min) / std::pow(10.0, exponent);
-    
-    // Find appropriate delta from the deltas array
-    double delta = deltas[0];
-    int minorNum = minors[0];
-    for (size_t i = 0; i < sizeof(deltas) / sizeof(deltas[0]); ++i) {
-      const int majorNum = static_cast<int>(std::ceil(normalizedRange / deltas[i]));
-      if (majorNum <= maxMajor) {
-        delta = deltas[i];
-        minorNum = minors[i];
-        break;
-      }
-    }
-    delta *= std::pow(10.0, exponent);
-    
-    // Round min down and max up to nearest delta
-    result.drawMin = std::floor(min / delta) * delta;
-    result.drawMax = std::ceil(max / delta) * delta;
-    result.majorInc = delta;
-    result.numMajor = static_cast<int>(std::floor((result.drawMax - result.drawMin) / delta + 0.5));
-    result.numMinor = minorNum;
+    return result;
   }
+
+  // Linear axis, match SciPlot's degenerate handling
+  if (relRange < std::numeric_limits<double>::epsilon()) {
+    const double halfRange = (mag > 0.0) ? mag * 0.02 : 0.5;
+    min -= halfRange;
+    max += halfRange;
+    range = max - min;
+    mag = std::max(std::fabs(min), std::fabs(max));
+  }
+  
+  // Normalize the range to determine nice delta
+  const int exponent = static_cast<int>(std::floor(std::log10(range)));
+  const double normalizedRange = range / std::pow(10.0, exponent);
+  
+  // Find appropriate delta from the deltas array
+  double delta = deltas[0];
+  int minorNum = minors[0];
+  for (size_t i = 0; i < sizeof(deltas) / sizeof(deltas[0]); ++i) {
+    const int majorNum = static_cast<int>(std::ceil(normalizedRange / deltas[i]));
+    if (majorNum <= maxMajor) {
+      delta = deltas[i];
+      minorNum = minors[i];
+      break;
+    }
+  }
+  delta *= std::pow(10.0, exponent);
+  
+  // Round min down and max up to nearest delta
+  result.drawMin = std::floor(min / delta) * delta;
+  result.drawMax = std::ceil(max / delta) * delta;
+  result.majorInc = delta;
+  result.numMajor = static_cast<int>(std::floor((result.drawMax - result.drawMin) / delta + 0.5));
+  result.numMinor = minorNum;
   
   return result;
 }
@@ -662,7 +675,7 @@ void CartesianPlotElement::setAxisRuntimeLimits(int axisIndex,
     return;
   }
   if (!valid || !std::isfinite(minimum) || !std::isfinite(maximum)
-      || maximum <= minimum) {
+      || maximum < minimum) {
     if (!axisRuntimeValid_[axisIndex]) {
       return;
     }
@@ -1688,7 +1701,7 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
   switch (rangeStyle) {
   case CartesianPlotRangeStyle::kUserSpecified:
     valid = std::isfinite(minimum) && std::isfinite(maximum)
-        && maximum > minimum;
+        && maximum >= minimum;
     break;
   case CartesianPlotRangeStyle::kChannel:
     if (axisRuntimeValid_[axisIndex]) {
@@ -1730,8 +1743,6 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
     if (maximum <= minimum) {
       maximum = minimum * 10.0;
     }
-  } else if (maximum <= minimum) {
-    maximum = minimum + 1.0;
   }
 
   // Apply "nice" axis rounding matching MEDM's SciPlot behavior

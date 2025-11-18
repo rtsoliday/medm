@@ -420,7 +420,7 @@ void CartesianPlotRuntime::handleControlInfo(const ChannelContext &context,
   const auto *info = static_cast<const dbr_ctrl_double *>(args.dbr);
   const double low = info->lower_disp_limit;
   const double high = info->upper_disp_limit;
-  bool valid = std::isfinite(low) && std::isfinite(high) && high > low;
+  bool valid = std::isfinite(low) && std::isfinite(high) && high >= low;
 
   if (context.kind == ChannelKind::kTraceX && context.traceIndex >= 0
       && context.traceIndex < kCartesianPlotTraceCount) {

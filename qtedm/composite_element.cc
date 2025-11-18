@@ -21,6 +21,36 @@
 #include "polygon_element.h"
 #include "image_element.h"
 
+namespace {
+
+constexpr int kCompositeGraphicChannelCount = 5;
+
+template <typename ElementType>
+bool hasDynamicGraphicAttributes(const ElementType *element)
+{
+  if (!element) {
+    return false;
+  }
+  if (element->colorMode() != TextColorMode::kStatic) {
+    return true;
+  }
+  const TextVisibilityMode visibilityMode = element->visibilityMode();
+  if (visibilityMode != TextVisibilityMode::kStatic) {
+    if (visibilityMode != TextVisibilityMode::kCalc
+        || !element->visibilityCalc().trimmed().isEmpty()) {
+      return true;
+    }
+  }
+  for (int i = 0; i < kCompositeGraphicChannelCount; ++i) {
+    if (!element->channel(i).trimmed().isEmpty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+} // namespace
+
 CompositeElement::CompositeElement(QWidget *parent)
   : QWidget(parent)
 {
@@ -542,7 +572,8 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
       return true;
     }
     for (QWidget *grandChild : children) {
-      if (!composite->isStaticChildWidget(grandChild)) {
+      if (composite->isDynamicGraphicChildWidget(grandChild)
+          || !composite->isStaticChildWidget(grandChild)) {
         return false;
       }
     }
@@ -559,6 +590,38 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
       || dynamic_cast<const TextElement *>(child);
 }
 
+bool CompositeElement::isDynamicGraphicChildWidget(const QWidget *child) const
+{
+  if (!child) {
+    return false;
+  }
+  if (const auto *rectangle = dynamic_cast<const RectangleElement *>(child)) {
+    return hasDynamicGraphicAttributes(rectangle);
+  }
+  if (const auto *image = dynamic_cast<const ImageElement *>(child)) {
+    return hasDynamicGraphicAttributes(image);
+  }
+  if (const auto *oval = dynamic_cast<const OvalElement *>(child)) {
+    return hasDynamicGraphicAttributes(oval);
+  }
+  if (const auto *arc = dynamic_cast<const ArcElement *>(child)) {
+    return hasDynamicGraphicAttributes(arc);
+  }
+  if (const auto *line = dynamic_cast<const LineElement *>(child)) {
+    return hasDynamicGraphicAttributes(line);
+  }
+  if (const auto *polyline = dynamic_cast<const PolylineElement *>(child)) {
+    return hasDynamicGraphicAttributes(polyline);
+  }
+  if (const auto *polygon = dynamic_cast<const PolygonElement *>(child)) {
+    return hasDynamicGraphicAttributes(polygon);
+  }
+  if (const auto *text = dynamic_cast<const TextElement *>(child)) {
+    return hasDynamicGraphicAttributes(text);
+  }
+  return false;
+}
+
 void CompositeElement::refreshChildStackingOrder()
 {
   if (childStackingOrderInternallyUpdating_) {
@@ -566,6 +629,7 @@ void CompositeElement::refreshChildStackingOrder()
   }
   childStackingOrderInternallyUpdating_ = true;
   QList<QWidget *> staticWidgets;
+  QList<QWidget *> dynamicWidgets;
   QList<QWidget *> interactiveWidgets;
 
   for (const auto &pointer : childWidgets_) {
@@ -573,7 +637,9 @@ void CompositeElement::refreshChildStackingOrder()
     if (!child) {
       continue;
     }
-    if (isStaticChildWidget(child)) {
+    if (isDynamicGraphicChildWidget(child)) {
+      dynamicWidgets.append(child);
+    } else if (isStaticChildWidget(child)) {
       staticWidgets.append(child);
     } else {
       interactiveWidgets.append(child);
@@ -581,11 +647,18 @@ void CompositeElement::refreshChildStackingOrder()
   }
 
   /* Maintain MEDM semantics:
-   *   1) Raise all static children in the order they appear in the ADL file.
-   *      Later siblings end up on top of earlier ones.
-   *   2) Raise interactive children after the static pass, still preserving
-   *      their declaration order so buttons/sliders overlay correctly. */
+   *   1) Raise purely static children in ADL order so later siblings land on
+   *      top of earlier ones.
+   *   2) Raise graphic widgets with dynamic attributes next so they stay above
+   *      static art but below interactive controls.
+   *   3) Raise interactive children last, still in declaration order, so
+   *      operators can always access them. */
   for (QWidget *widget : staticWidgets) {
+    if (widget) {
+      widget->raise();
+    }
+  }
+  for (QWidget *widget : dynamicWidgets) {
     if (widget) {
       widget->raise();
     }

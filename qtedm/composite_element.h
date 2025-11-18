@@ -70,6 +70,7 @@ private:
   void raiseCompositeHierarchy();
   void scheduleChildStackingRefresh();
   bool isStaticChildWidget(const QWidget *child) const;
+  bool isDynamicGraphicChildWidget(const QWidget *child) const;
   void refreshChildStackingOrder();
 
   bool selected_ = false;

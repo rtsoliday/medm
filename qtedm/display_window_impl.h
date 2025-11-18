@@ -194,7 +194,39 @@ private:
 
 class DisplayWindow : public QMainWindow
 {
+  friend class DisplayStackingEventFilter;
 public:
+  class DisplayStackingEventFilter : public QObject
+  {
+  public:
+    explicit DisplayStackingEventFilter(DisplayWindow *owner)
+      : QObject(owner)
+      , owner_(owner)
+    {
+    }
+
+  protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+      if (!owner_) {
+        return QObject::eventFilter(watched, event);
+      }
+      switch (event->type()) {
+      case QEvent::ShowToParent:
+      case QEvent::HideToParent:
+      case QEvent::ParentChange:
+      case QEvent::ZOrderChange:
+        owner_->requestStackingOrderRefresh();
+        break;
+      default:
+        break;
+      }
+      return QObject::eventFilter(watched, event);
+    }
+
+  private:
+    DisplayWindow *owner_ = nullptr;
+  };
   DisplayWindow(const QPalette &displayPalette, const QPalette &uiPalette,
       const QFont &font, const QFont &labelFont,
       std::weak_ptr<DisplayState> state, QWidget *parent = nullptr)
@@ -221,6 +253,8 @@ public:
     displayArea_->setGridOn(gridOn_);
     displayArea_->setGridColor(displayPalette.color(QPalette::WindowText));
     setCentralWidget(displayArea_);
+
+    stackingEventFilter_ = new DisplayStackingEventFilter(this);
 
     undoStack_ = new QUndoStack(this);
     cleanStateSnapshot_ = serializeStateForUndo(filePath_);
@@ -2007,6 +2041,7 @@ private:
   QVector<QPoint> parsePolylinePoints(const AdlNode &polylineNode) const;
   void ensureElementInStack(QWidget *element);
   void refreshStackingOrder();
+  void requestStackingOrderRefresh();
   bool isStaticGraphicWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
@@ -2215,6 +2250,9 @@ private:
   QList<QPointer<QWidget>> multiSelection_;
   QList<QPointer<QWidget>> elementStack_;
   QSet<QWidget *> elementStackSet_;  /* Fast O(1) duplicate checking for elementStack_ */
+  bool stackingRefreshPending_ = false;
+  bool stackingOrderInternallyUpdating_ = false;
+  DisplayStackingEventFilter *stackingEventFilter_ = nullptr;
   struct CompositeResizeChildInfo {
     QWidget *widget;
     QRect initialRect;
@@ -2258,6 +2296,7 @@ private:
   QVector<QPoint> vertexEditInitialPoints_;
   QVector<QPoint> vertexEditCurrentPoints_;
   bool vertexEditMoved_ = false;
+
 
   void setDisplaySelected(bool selected)
   {
@@ -16340,6 +16379,9 @@ inline void DisplayWindow::ensureElementInStack(QWidget *element)
   }
   elementStack_.append(QPointer<QWidget>(element));
   elementStackSet_.insert(element);
+  if (stackingEventFilter_) {
+    element->installEventFilter(stackingEventFilter_);
+  }
   /* Defer stacking order refresh during bulk loading to avoid O(n²) behavior.
    * refreshStackingOrder() will be called once after load completes. */
   if (!restoringState_) {
@@ -16382,6 +16424,7 @@ inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
 
 inline void DisplayWindow::refreshStackingOrder()
 {
+  stackingOrderInternallyUpdating_ = true;
   QList<QWidget *> staticWidgets;
   QList<QWidget *> interactiveWidgets;
 
@@ -16409,6 +16452,22 @@ inline void DisplayWindow::refreshStackingOrder()
   for (QWidget *widget : interactiveWidgets) {
     widget->raise();
   }
+  stackingOrderInternallyUpdating_ = false;
+}
+
+inline void DisplayWindow::requestStackingOrderRefresh()
+{
+  if (stackingOrderInternallyUpdating_) {
+    return;
+  }
+  if (stackingRefreshPending_) {
+    return;
+  }
+  stackingRefreshPending_ = true;
+  QTimer::singleShot(0, this, [this]() {
+    stackingRefreshPending_ = false;
+    refreshStackingOrder();
+  });
 }
 
 inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)

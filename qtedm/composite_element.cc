@@ -171,6 +171,7 @@ void CompositeElement::adoptChild(QWidget *child)
   }
   if (!childWidgets_.contains(child)) {
     childWidgets_.append(QPointer<QWidget>(child));
+    child->installEventFilter(this);
   }
   refreshChildStackingOrder();
 }
@@ -583,4 +584,36 @@ void CompositeElement::refreshChildStackingOrder()
   for (QWidget *widget : interactiveWidgets) {
     widget->raise();
   }
+}
+
+void CompositeElement::scheduleChildStackingRefresh()
+{
+  if (childStackingRefreshPending_) {
+    return;
+  }
+  childStackingRefreshPending_ = true;
+  QTimer::singleShot(0, this, [this]() {
+    childStackingRefreshPending_ = false;
+    refreshChildStackingOrder();
+  });
+}
+
+bool CompositeElement::eventFilter(QObject *watched, QEvent *event)
+{
+  if (!watched || !event) {
+    return QWidget::eventFilter(watched, event);
+  }
+
+  switch (event->type()) {
+  case QEvent::ShowToParent:
+  case QEvent::HideToParent:
+  case QEvent::ParentChange:
+  case QEvent::ZOrderChange:
+    scheduleChildStackingRefresh();
+    break;
+  default:
+    break;
+  }
+
+  return QWidget::eventFilter(watched, event);
 }

@@ -3,6 +3,7 @@
 #include <array>
 
 #include <QColor>
+#include <QEvent>
 #include <QList>
 #include <QPointer>
 #include <QWidget>
@@ -57,6 +58,7 @@ public:
 protected:
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
   QColor defaultForegroundColor() const;
@@ -66,6 +68,7 @@ private:
   void updateMouseTransparency();
   void applyRuntimeVisibility();
   void raiseCompositeHierarchy();
+  void scheduleChildStackingRefresh();
   bool isStaticChildWidget(const QWidget *child) const;
   void refreshChildStackingOrder();
 
@@ -83,4 +86,5 @@ private:
   bool channelConnected_ = false;
   bool runtimeVisible_ = true;
   bool designModeVisible_ = true;
+  bool childStackingRefreshPending_ = false;
 };

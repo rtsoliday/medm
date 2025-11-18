@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+#include <QVector>
 #include <QtGlobal>
 
 #include "medm_colors.h"
@@ -228,7 +229,7 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
   painter.fillRect(rect(), background);
 
   const int segmentCount = std::max(1, std::abs(endBit_ - startBit_) + 1);
-  const QRect contentRect = rect().adjusted(1, 1, -1, -1);
+  const QRect contentRect = outerRect;
 
   if (contentRect.width() <= 0 || contentRect.height() <= 0
       || segmentCount <= 0) {
@@ -251,6 +252,11 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
   painter.save();
   painter.setPen(Qt::NoPen);
 
+  QVector<int> dividerPositions;
+  if (segmentCount > 1) {
+    dividerPositions.reserve(segmentCount - 1);
+  }
+
   if (vertical) {
     const double delta = segmentCount > 0
         ? static_cast<double>(contentRect.height()) / segmentCount
@@ -264,8 +270,8 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
       nextOffset = std::clamp(nextOffset, offset, contentRect.height());
       const QRect segment(contentRect.left(), contentRect.top() + offset,
           contentRect.width(), nextOffset - offset);
-      if (segment.height() > 1 && segment.width() > 1) {
-        const QRect fillRect = segment.adjusted(1, 1, -1, -1);
+      if (segment.height() > 0 && segment.width() > 0) {
+        const QRect fillRect = segment;
         const int bitIndex = increasing ? (startBit_ + i) : (startBit_ - i);
         const bool bitSet = drawRuntimeBits && bitIndex >= 0 && bitIndex < 32
             && ((displayValue >> bitIndex) & 0x1u);
@@ -273,13 +279,10 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
           painter.fillRect(fillRect, foreground);
         }
       }
-      painter.setPen(QPen(dividerColor, 1));
       if (i < segmentCount - 1 && segment.height() > 0) {
         const int y = contentRect.top() + nextOffset;
-        painter.drawLine(contentRect.left(), y,
-            contentRect.right(), y);
+        dividerPositions.push_back(y);
       }
-      painter.setPen(Qt::NoPen);
       offset = nextOffset;
     }
   } else {
@@ -295,8 +298,8 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
       nextOffset = std::clamp(nextOffset, offset, contentRect.width());
       const QRect segment(contentRect.left() + offset, contentRect.top(),
           nextOffset - offset, contentRect.height());
-      if (segment.width() > 1 && segment.height() > 1) {
-        const QRect fillRect = segment.adjusted(1, 1, -1, -1);
+      if (segment.width() > 0 && segment.height() > 0) {
+        const QRect fillRect = segment;
         const int bitIndex = increasing ? (startBit_ + i) : (startBit_ - i);
         const bool bitSet = drawRuntimeBits && bitIndex >= 0 && bitIndex < 32
             && ((displayValue >> bitIndex) & 0x1u);
@@ -304,17 +307,28 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
           painter.fillRect(fillRect, foreground);
         }
       }
-      painter.setPen(QPen(dividerColor, 1));
       if (i < segmentCount - 1 && segment.width() > 0) {
         const int x = contentRect.left() + nextOffset;
-        painter.drawLine(x, contentRect.top(), x, contentRect.bottom());
+        dividerPositions.push_back(x);
       }
-      painter.setPen(Qt::NoPen);
       offset = nextOffset;
     }
   }
 
   painter.restore();
+
+  if (!dividerPositions.isEmpty()) {
+    painter.setPen(QPen(dividerColor, 1));
+    if (vertical) {
+      for (int y : dividerPositions) {
+        painter.drawLine(contentRect.left(), y, contentRect.right(), y);
+      }
+    } else {
+      for (int x : dividerPositions) {
+        painter.drawLine(x, contentRect.top(), x, contentRect.bottom());
+      }
+    }
+  }
 
   painter.setPen(QPen(dividerColor, 1));
   painter.setBrush(Qt::NoBrush);

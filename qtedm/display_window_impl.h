@@ -18720,27 +18720,23 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
   }
 
   QString countChannel;
-  const QString countValue = propertyValue(cartesianNode,
-      QStringLiteral("count")).trimmed();
-  if (!countValue.isEmpty()) {
+  auto applyCountString = [&element, &countChannel](const QString &raw) {
+    const QString value = raw.trimmed();
+    if (value.isEmpty()) {
+      return;
+    }
     bool ok = false;
-    const int countInt = countValue.toInt(&ok);
+    const int countInt = value.toInt(&ok);
     if (ok) {
       element->setCount(countInt);
+      countChannel.clear();
+      return;
     }
-    countChannel = countValue;
-  }
+    countChannel = value;
+  };
 
-  const QString countPvValue = propertyValue(cartesianNode,
-      QStringLiteral("countPvName")).trimmed();
-  if (!countPvValue.isEmpty()) {
-    bool ok = false;
-    const int countInt = countPvValue.toInt(&ok);
-    if (ok) {
-      element->setCount(countInt);
-    }
-    countChannel = countPvValue;
-  }
+  applyCountString(propertyValue(cartesianNode, QStringLiteral("count")));
+  applyCountString(propertyValue(cartesianNode, QStringLiteral("countPvName")));
 
   if (!countChannel.isEmpty()) {
     element->setCountChannel(countChannel);

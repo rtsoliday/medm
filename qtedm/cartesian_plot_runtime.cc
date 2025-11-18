@@ -701,9 +701,10 @@ void CartesianPlotRuntime::appendYScalarPoint(TraceState &trace)
 void CartesianPlotRuntime::rebuildVectorPoints(TraceState &trace)
 {
   trace.vectorPoints.clear();
-  int capacity = effectiveCapacity(static_cast<int>(trace.xVector.size()));
   switch (trace.mode) {
   case CartesianPlotTraceMode::kXVector: {
+    const int capacity = effectiveCapacity(
+        static_cast<int>(trace.xVector.size()), false);
     const int limit = std::min(capacity,
         static_cast<int>(trace.xVector.size()));
     trace.vectorPoints.reserve(limit);
@@ -713,6 +714,8 @@ void CartesianPlotRuntime::rebuildVectorPoints(TraceState &trace)
     break;
   }
   case CartesianPlotTraceMode::kYVector: {
+    const int capacity = effectiveCapacity(
+        static_cast<int>(trace.yVector.size()), false);
     const int limit = std::min(capacity,
         static_cast<int>(trace.yVector.size()));
     trace.vectorPoints.reserve(limit);
@@ -725,6 +728,8 @@ void CartesianPlotRuntime::rebuildVectorPoints(TraceState &trace)
     if (!trace.hasYScalar || trace.xVector.isEmpty()) {
       break;
     }
+    const int capacity = effectiveCapacity(
+        static_cast<int>(trace.xVector.size()), false);
     const int limit = std::min(capacity,
         static_cast<int>(trace.xVector.size()));
     trace.vectorPoints.reserve(limit);
@@ -737,6 +742,8 @@ void CartesianPlotRuntime::rebuildVectorPoints(TraceState &trace)
     if (!trace.hasXScalar || trace.yVector.isEmpty()) {
       break;
     }
+    const int capacity = effectiveCapacity(
+        static_cast<int>(trace.yVector.size()), false);
     const int limit = std::min(capacity,
         static_cast<int>(trace.yVector.size()));
     trace.vectorPoints.reserve(limit);
@@ -750,7 +757,7 @@ void CartesianPlotRuntime::rebuildVectorPoints(TraceState &trace)
       break;
     }
     const int native = std::min(trace.xVector.size(), trace.yVector.size());
-    capacity = effectiveCapacity(native);
+    const int capacity = effectiveCapacity(native, false);
     const int limit = std::min(capacity, native);
     trace.vectorPoints.reserve(limit);
     for (int i = 0; i < limit; ++i) {
@@ -785,9 +792,13 @@ QVector<QPointF> CartesianPlotRuntime::buildYScalarPoints(
   return points;
 }
 
-int CartesianPlotRuntime::effectiveCapacity(int preferredCount) const
+int CartesianPlotRuntime::effectiveCapacity(int preferredCount,
+    bool allowConfiguredCount) const
 {
-  int capacity = countFromChannel_ > 0 ? countFromChannel_ : configuredCount_;
+  int capacity = countFromChannel_ > 0 ? countFromChannel_ : 0;
+  if (capacity <= 0 && allowConfiguredCount && configuredCount_ > 0) {
+    capacity = configuredCount_;
+  }
   if (capacity <= 0) {
     capacity = preferredCount > 0 ? preferredCount : kCartesianPlotMaximumSampleCount;
   }

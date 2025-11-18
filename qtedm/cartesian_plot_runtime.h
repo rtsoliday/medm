@@ -112,7 +112,8 @@ private:
   QVector<QPointF> buildYScalarPoints(const TraceState &trace) const;
   QVector<QPointF> buildVectorPoints(const TraceState &trace) const;
 
-  int effectiveCapacity(int preferredCount = 0) const;
+  int effectiveCapacity(int preferredCount = 0,
+      bool allowConfiguredCount = true) const;
   bool traceConnected(const TraceState &trace) const;
   bool isTriggerEnabled() const;
 

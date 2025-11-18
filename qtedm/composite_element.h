@@ -87,4 +87,5 @@ private:
   bool runtimeVisible_ = true;
   bool designModeVisible_ = true;
   bool childStackingRefreshPending_ = false;
+  bool childStackingOrderInternallyUpdating_ = false;
 };

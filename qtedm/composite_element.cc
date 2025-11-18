@@ -561,6 +561,10 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
 
 void CompositeElement::refreshChildStackingOrder()
 {
+  if (childStackingOrderInternallyUpdating_) {
+    return;
+  }
+  childStackingOrderInternallyUpdating_ = true;
   QList<QWidget *> staticWidgets;
   QList<QWidget *> interactiveWidgets;
 
@@ -584,10 +588,14 @@ void CompositeElement::refreshChildStackingOrder()
   for (QWidget *widget : interactiveWidgets) {
     widget->raise();
   }
+  childStackingOrderInternallyUpdating_ = false;
 }
 
 void CompositeElement::scheduleChildStackingRefresh()
 {
+  if (childStackingOrderInternallyUpdating_) {
+    return;
+  }
   if (childStackingRefreshPending_) {
     return;
   }
@@ -604,15 +612,17 @@ bool CompositeElement::eventFilter(QObject *watched, QEvent *event)
     return QWidget::eventFilter(watched, event);
   }
 
-  switch (event->type()) {
-  case QEvent::ShowToParent:
-  case QEvent::HideToParent:
-  case QEvent::ParentChange:
-  case QEvent::ZOrderChange:
-    scheduleChildStackingRefresh();
-    break;
-  default:
-    break;
+  if (!childStackingOrderInternallyUpdating_) {
+    switch (event->type()) {
+    case QEvent::ShowToParent:
+    case QEvent::HideToParent:
+    case QEvent::ParentChange:
+    case QEvent::ZOrderChange:
+      scheduleChildStackingRefresh();
+      break;
+    default:
+      break;
+    }
   }
 
   return QWidget::eventFilter(watched, event);

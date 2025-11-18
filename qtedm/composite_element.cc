@@ -580,9 +580,7 @@ void CompositeElement::refreshChildStackingOrder()
       widget->raise();
     }
   }
-  for (int i = interactiveWidgets.size() - 1; i >= 0; --i) {
-    if (QWidget *widget = interactiveWidgets.at(i)) {
-      widget->raise();
-    }
+  for (QWidget *widget : interactiveWidgets) {
+    widget->raise();
   }
 }

@@ -580,13 +580,20 @@ void CompositeElement::refreshChildStackingOrder()
     }
   }
 
-  for (int i = staticWidgets.size() - 1; i >= 0; --i) {
-    if (QWidget *widget = staticWidgets.at(i)) {
+  /* Maintain MEDM semantics:
+   *   1) Raise all static children in the order they appear in the ADL file.
+   *      Later siblings end up on top of earlier ones.
+   *   2) Raise interactive children after the static pass, still preserving
+   *      their declaration order so buttons/sliders overlay correctly. */
+  for (QWidget *widget : staticWidgets) {
+    if (widget) {
       widget->raise();
     }
   }
   for (QWidget *widget : interactiveWidgets) {
-    widget->raise();
+    if (widget) {
+      widget->raise();
+    }
   }
   childStackingOrderInternallyUpdating_ = false;
 }

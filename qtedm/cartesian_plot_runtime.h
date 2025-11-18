@@ -10,6 +10,10 @@
 
 #include <cadef.h>
 
+#ifndef MEDM_CARTESIAN_PLOT_DEBUG
+#  define MEDM_CARTESIAN_PLOT_DEBUG 0
+#endif
+
 #include "display_properties.h"
 
 class CartesianPlotElement;
@@ -120,6 +124,8 @@ private:
   template <typename Func>
   void invokeOnElement(Func &&func);
 
+  void logConfiguredAxisState();
+
   static QVector<double> extractValues(const event_handler_args &args);
 
   static void channelConnectionCallback(struct connection_handler_args args);
@@ -141,6 +147,7 @@ private:
   CartesianPlotEraseMode eraseMode_ = CartesianPlotEraseMode::kIfNotZero;
   int configuredCount_ = 1;
   int countFromChannel_ = 0;
+  bool configuredAxesLogged_ = false;
 };
 
 template <typename Func>

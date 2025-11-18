@@ -564,6 +564,26 @@ void CartesianPlotElement::setAxisTimeFormat(int axisIndex,
   update();
 }
 
+QString CartesianPlotElement::axisLabel(int axisIndex) const
+{
+  if (axisIndex == 0) {
+    return xLabel_;
+  }
+  const int yIndex = axisIndex - 1;
+  if (yIndex < 0 || yIndex >= static_cast<int>(yLabels_.size())) {
+    return {};
+  }
+  return yLabels_[yIndex];
+}
+
+bool CartesianPlotElement::isAxisDrawnOnLeft(int axisIndex) const
+{
+  if (axisIndex == 0) {
+    return true;
+  }
+  return !isYAxisOnRight(axisIndex - 1);
+}
+
 void CartesianPlotElement::setExecuteMode(bool execute)
 {
   if (executeMode_ == execute) {
@@ -629,6 +649,7 @@ void CartesianPlotElement::clearRuntimeState()
   axisRuntimeValid_.fill(false);
   axisRuntimeMinimums_.fill(0.0);
   axisRuntimeMaximums_.fill(0.0);
+  cachedAxisRangesValid_ = false;
   for (Trace &trace : traces_) {
     trace.runtimePoints.clear();
     trace.runtimeConnected = false;
@@ -1025,6 +1046,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
 
   const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
   const QFontMetrics axisMetrics(axisFont);
+  const bool useCachedRanges = executeMode_ && cachedAxisRangesValid_;
   
   // Get pre-calculated axis positions (working from widget edges inward)
   const QRectF widgetBounds = this->rect().adjusted(kOuterMargin, kOuterMargin,
@@ -1033,12 +1055,22 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   
   // Draw all left-side Y-axes
   for (const auto &[axisIndex, xPosition] : axisPos.leftAxes) {
-    paintYAxis(painter, rect, axisIndex, xPosition, true);
+    const int arrayIndex = axisIndex + 1;
+    const AxisRange *precomputed = (useCachedRanges
+        && arrayIndex >= 0 && arrayIndex < kCartesianAxisCount)
+        ? &cachedAxisRanges_[arrayIndex]
+        : nullptr;
+    paintYAxis(painter, rect, axisIndex, xPosition, true, precomputed);
   }
   
   // Draw all right-side Y-axes
   for (const auto &[axisIndex, xPosition] : axisPos.rightAxes) {
-    paintYAxis(painter, rect, axisIndex, xPosition, false);
+    const int arrayIndex = axisIndex + 1;
+    const AxisRange *precomputed = (useCachedRanges
+        && arrayIndex >= 0 && arrayIndex < kCartesianAxisCount)
+        ? &cachedAxisRanges_[arrayIndex]
+        : nullptr;
+    paintYAxis(painter, rect, axisIndex, xPosition, false, precomputed);
   }
 
   // Draw X-axis (bottom)
@@ -1070,18 +1102,23 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   double xAxisMin = 0.0;
   double xAxisMax = 1.0;
   const int xAxisIndex = 0; // X-axis is index 0
-  if (axisRangeStyles_[xAxisIndex] == CartesianPlotRangeStyle::kUserSpecified) {
-    // Use user-specified limits (regardless of execute mode)
+  const AxisRange *xRange = useCachedRanges ? &cachedAxisRanges_[xAxisIndex] : nullptr;
+  CartesianPlotAxisStyle xAxisStyle = axisStyles_[xAxisIndex];
+  if (xRange && xRange->valid) {
+    xAxisMin = xRange->minimum;
+    xAxisMax = xRange->maximum;
+    xAxisStyle = xRange->style;
+  } else if (axisRangeStyles_[xAxisIndex] == CartesianPlotRangeStyle::kUserSpecified) {
     xAxisMin = axisMinimums_[xAxisIndex];
     xAxisMax = axisMaximums_[xAxisIndex];
   } else if (executeMode_ && axisRuntimeValid_[xAxisIndex]) {
-    // Use runtime limits from autoscaling in execute mode
     xAxisMin = axisRuntimeMinimums_[xAxisIndex];
     xAxisMax = axisRuntimeMaximums_[xAxisIndex];
   }
+  const bool xAxisIsLog10 = (xAxisStyle == CartesianPlotAxisStyle::kLog10);
   
   // X-axis ticks and numbers - only within chart area
-  if (axisStyles_[xAxisIndex] == CartesianPlotAxisStyle::kLog10 && xAxisMin > 0.0 && xAxisMax > 0.0) {
+  if (xAxisIsLog10 && xAxisMin > 0.0 && xAxisMax > 0.0) {
     // Logarithmic X-axis tick marks
     const NiceAxisRange nice = computeNiceAxisRange(xAxisMin, xAxisMax, true);
     
@@ -1152,7 +1189,8 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
 }
 
 void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
-    int yAxisIndex, qreal axisX, bool onLeft) const
+  int yAxisIndex, qreal axisX, bool onLeft,
+  const AxisRange *precomputedRange) const
 {
   const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
   const QFontMetrics metrics(axisFont);
@@ -1167,12 +1205,15 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   // Determine axis range for value labels
   double axisMin = 0.0;
   double axisMax = 1.0;
-  if (axisRangeStyles_[arrayIndex] == CartesianPlotRangeStyle::kUserSpecified) {
-    // Use user-specified limits (regardless of execute mode)
+  CartesianPlotAxisStyle axisStyle = axisStyles_[arrayIndex];
+  if (precomputedRange && precomputedRange->valid) {
+    axisMin = precomputedRange->minimum;
+    axisMax = precomputedRange->maximum;
+    axisStyle = precomputedRange->style;
+  } else if (axisRangeStyles_[arrayIndex] == CartesianPlotRangeStyle::kUserSpecified) {
     axisMin = axisMinimums_[arrayIndex];
     axisMax = axisMaximums_[arrayIndex];
   } else if (executeMode_ && axisRuntimeValid_[arrayIndex]) {
-    // Use runtime limits from autoscaling in execute mode
     axisMin = axisRuntimeMinimums_[arrayIndex];
     axisMax = axisRuntimeMaximums_[arrayIndex];
   }
@@ -1182,7 +1223,7 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
                    QPointF(axisX, rect.bottom()));
   
   // Check if this is a Log10 axis
-  const bool isLog10 = (axisStyles_[arrayIndex] == CartesianPlotAxisStyle::kLog10);
+  const bool isLog10 = (axisStyle == CartesianPlotAxisStyle::kLog10);
   
   // Compute "nice" axis range matching MEDM's behavior
   const NiceAxisRange nice = computeNiceAxisRange(axisMin, axisMax, isLog10);
@@ -1547,6 +1588,7 @@ QVector<QPointF> CartesianPlotElement::syntheticTracePoints(const QRectF &rect,
 void CartesianPlotElement::paintTracesExecute(QPainter &painter,
     const QRectF &rect) const
 {
+  cachedAxisRangesValid_ = false;
   std::array<double, kCartesianAxisCount> autoMinimums{};
   std::array<double, kCartesianAxisCount> autoMaximums{};
   std::array<bool, kCartesianAxisCount> hasData{};
@@ -1597,6 +1639,9 @@ void CartesianPlotElement::paintTracesExecute(QPainter &painter,
   if (!ranges[0].valid) {
     return;
   }
+
+  cachedAxisRanges_ = ranges;
+  cachedAxisRangesValid_ = true;
 
   for (int i = 0; i < traceCount(); ++i) {
     const QVector<QPointF> &valuePoints = traces_[i].runtimePoints;

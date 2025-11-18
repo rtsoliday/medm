@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 #include <QByteArray>
 #include <QDebug>
@@ -30,6 +31,113 @@ int axisIndexForYAxis(CartesianPlotYAxis axis)
     return 1;
   }
 }
+
+const char *axisNameForIndex(int axisIndex)
+{
+  switch (axisIndex) {
+  case 0:
+    return "X";
+  case 1:
+    return "Y1";
+  case 2:
+    return "Y2";
+  case 3:
+    return "Y3";
+  case 4:
+    return "Y4";
+  default:
+    return "Y?";
+  }
+}
+
+const char *axisSideString(int axisIndex, const CartesianPlotElement *element)
+{
+  if (!element) {
+    return "Unknown";
+  }
+  if (axisIndex == 0) {
+    return "Bottom";
+  }
+  const bool isLeft = element->isAxisDrawnOnLeft(axisIndex);
+  return isLeft ? "Left" : "Right";
+}
+
+static const char *axisRangeStyleString(CartesianPlotRangeStyle style)
+{
+  switch (style) {
+  case CartesianPlotRangeStyle::kChannel:
+    return "channel";
+  case CartesianPlotRangeStyle::kUserSpecified:
+    return "user";
+  case CartesianPlotRangeStyle::kAutoScale:
+    return "auto";
+  default:
+    return "unknown";
+  }
+}
+
+#if MEDM_CARTESIAN_PLOT_DEBUG
+static void printAxisDebugInfo(const CartesianPlotElement *element,
+    int axisIndex, double minValue, double maxValue, bool valid,
+    const char *sourceLabel)
+{
+  if (!element || !valid) {
+    return;
+  }
+  const char *axisName = axisNameForIndex(axisIndex);
+  const char *sideName = axisSideString(axisIndex, element);
+  const QString label = element->axisLabel(axisIndex);
+  QByteArray labelUtf8 = label.toUtf8();
+  printf("QTEDM DEBUG widget=%p axis=%s label=\"%s\" side=%s range=[%g, %g] (%s)\n",
+      static_cast<const void *>(element), axisName,
+      label.isEmpty() ? "<none>" : labelUtf8.constData(),
+      sideName, minValue, maxValue, sourceLabel);
+}
+
+static void printRuntimeAxisInfo(const CartesianPlotElement *element,
+    int axisIndex, double minValue, double maxValue, bool valid)
+{
+  printAxisDebugInfo(element, axisIndex, minValue, maxValue, valid,
+      "runtime");
+}
+
+static void printConfiguredAxisInfo(const CartesianPlotElement *element,
+    int axisIndex, double minValue, double maxValue, bool valid,
+    CartesianPlotRangeStyle style)
+{
+  const char *source = axisRangeStyleString(style);
+  printAxisDebugInfo(element, axisIndex, minValue, maxValue, valid,
+      source);
+}
+#else
+static inline void printAxisDebugInfo(const CartesianPlotElement *element,
+  int axisIndex, double minValue, double maxValue, bool valid,
+  const char *sourceLabel)
+{
+  Q_UNUSED(element);
+  Q_UNUSED(axisIndex);
+  Q_UNUSED(minValue);
+  Q_UNUSED(maxValue);
+  Q_UNUSED(valid);
+  Q_UNUSED(sourceLabel);
+}
+
+static inline void printRuntimeAxisInfo(const CartesianPlotElement *element,
+  int axisIndex, double minValue, double maxValue, bool valid)
+{
+  printAxisDebugInfo(element, axisIndex, minValue, maxValue, valid,
+    nullptr);
+}
+
+static inline void printConfiguredAxisInfo(const CartesianPlotElement *element,
+  int axisIndex, double minValue, double maxValue, bool valid,
+  CartesianPlotRangeStyle style)
+{
+  Q_UNUSED(style);
+  printAxisDebugInfo(element, axisIndex, minValue, maxValue, valid,
+    nullptr);
+}
+#endif
 
 } // namespace
 
@@ -75,6 +183,7 @@ void CartesianPlotRuntime::start()
   eraseMode_ = element_->eraseMode();
   configuredCount_ = element_->count();
   countFromChannel_ = 0;
+  configuredAxesLogged_ = false;
 
   started_ = true;
 
@@ -83,6 +192,7 @@ void CartesianPlotRuntime::start()
   });
 
   resetState();
+  logConfiguredAxisState();
 
   for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
     TraceState &trace = traces_[i];
@@ -186,6 +296,29 @@ void CartesianPlotRuntime::resetState()
   triggerChannel_ = ChannelState{};
   eraseChannel_ = ChannelState{};
   countChannel_ = ChannelState{};
+}
+
+void CartesianPlotRuntime::logConfiguredAxisState()
+{
+  if (configuredAxesLogged_) {
+    return;
+  }
+  configuredAxesLogged_ = true;
+  invokeOnElement([](CartesianPlotElement *element) {
+    if (!element) {
+      return;
+    }
+    for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+      const auto style = element->axisRangeStyle(axis);
+      const double minVal = element->axisMinimum(axis);
+      const double maxVal = element->axisMaximum(axis);
+      const bool valid = std::isfinite(minVal) && std::isfinite(maxVal)
+          && maxVal >= minVal;
+      if (style == CartesianPlotRangeStyle::kUserSpecified && valid) {
+        printConfiguredAxisInfo(element, axis, minVal, maxVal, valid, style);
+      }
+    }
+  });
 }
 
 void CartesianPlotRuntime::createTraceChannel(int index, ChannelKind kind,
@@ -426,12 +559,14 @@ void CartesianPlotRuntime::handleControlInfo(const ChannelContext &context,
       && context.traceIndex < kCartesianPlotTraceCount) {
     invokeOnElement([low, high, valid](CartesianPlotElement *element) {
       element->setAxisRuntimeLimits(0, low, high, valid);
+      printRuntimeAxisInfo(element, 0, low, high, valid);
     });
   } else if (context.kind == ChannelKind::kTraceY && context.traceIndex >= 0
       && context.traceIndex < kCartesianPlotTraceCount) {
     const int axisIndex = traces_[context.traceIndex].yAxisIndex;
     invokeOnElement([axisIndex, low, high, valid](CartesianPlotElement *element) {
       element->setAxisRuntimeLimits(axisIndex, low, high, valid);
+      printRuntimeAxisInfo(element, axisIndex, low, high, valid);
     });
   }
 }

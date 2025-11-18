@@ -95,6 +95,8 @@ public:
 
   CartesianPlotTimeFormat axisTimeFormat(int axisIndex) const;
   void setAxisTimeFormat(int axisIndex, CartesianPlotTimeFormat format);
+  QString axisLabel(int axisIndex) const;
+  bool isAxisDrawnOnLeft(int axisIndex) const;
 
   bool drawMajorGrid() const;
   void setDrawMajorGrid(bool draw);
@@ -132,6 +134,14 @@ private:
     QVector<QPointF> runtimePoints;
   };
 
+  struct AxisRange
+  {
+    double minimum = 0.0;
+    double maximum = 1.0;
+    bool valid = false;
+    CartesianPlotAxisStyle style = CartesianPlotAxisStyle::kLinear;
+  };
+
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QColor effectiveTraceColor(int index) const;
@@ -139,8 +149,8 @@ private:
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRectF &rect) const;
   void paintAxes(QPainter &painter, const QRectF &rect) const;
-  void paintYAxis(QPainter &painter, const QRectF &rect, int yAxisIndex,
-      qreal axisX, bool onLeft) const;
+    void paintYAxis(QPainter &painter, const QRectF &rect, int yAxisIndex,
+      qreal axisX, bool onLeft, const AxisRange *precomputedRange) const;
   struct YAxisPositions {
     std::vector<std::pair<int, qreal>> leftAxes;  // (axisIndex, xPosition)
     std::vector<std::pair<int, qreal>> rightAxes; // (axisIndex, xPosition)
@@ -152,13 +162,6 @@ private:
   QVector<QPointF> syntheticTracePoints(const QRectF &rect,
       int traceIndex, int sampleCount) const;
   void paintTracesExecute(QPainter &painter, const QRectF &rect) const;
-  struct AxisRange
-  {
-    double minimum = 0.0;
-    double maximum = 1.0;
-    bool valid = false;
-    CartesianPlotAxisStyle style = CartesianPlotAxisStyle::kLinear;
-  };
   AxisRange computeAxisRange(int axisIndex,
       const std::array<bool, kCartesianAxisCount> &hasData,
       const std::array<double, kCartesianAxisCount> &autoMinimums,
@@ -207,4 +210,6 @@ private:
   std::array<bool, kCartesianAxisCount> axisRuntimeValid_{};
   std::array<double, kCartesianAxisCount> axisRuntimeMinimums_{};
   std::array<double, kCartesianAxisCount> axisRuntimeMaximums_{};
+  mutable std::array<AxisRange, kCartesianAxisCount> cachedAxisRanges_{};
+  mutable bool cachedAxisRangesValid_ = false;
 };

@@ -232,8 +232,7 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
 
   if (contentRect.width() <= 0 || contentRect.height() <= 0
       || segmentCount <= 0) {
-    const QColor fg = effectiveForeground();
-    painter.setPen(QPen(fg, 1));
+    painter.setPen(QPen(Qt::black, 1));
     painter.setBrush(Qt::NoBrush);
     painter.drawRect(outerRect);
     if (selected_) {
@@ -247,7 +246,7 @@ void ByteMonitorElement::paintEvent(QPaintEvent *event)
   const bool drawRuntimeBits = !executeMode_ || runtimeConnected_;
   const quint32 displayValue = currentValue();
   const QColor foreground = effectiveForeground();
-  const QColor dividerColor = foreground.darker(160);
+  const QColor dividerColor(Qt::black);
 
   painter.save();
   painter.setPen(Qt::NoPen);

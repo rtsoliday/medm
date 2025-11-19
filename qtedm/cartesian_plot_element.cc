@@ -30,6 +30,8 @@ constexpr int kMinimumSampleCount = 8;
 constexpr int kMaximumSampleCount = kCartesianPlotMaximumSampleCount;
 
 constexpr int kDefaultTraceColorIndex = 14;
+constexpr qreal kAxisCueThickness = 3.0;
+constexpr qreal kAxisCueGap = 2.0;
 
 // Font size constants matching medm's SciPlot defaults
 // (XtNtitleFont = XtFONT_HELVETICA | 24, XtNlabelFont = XtFONT_TIMES | 18, XtNaxisFont = XtFONT_TIMES | 10)
@@ -1421,8 +1423,12 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     // Ensure label stays within visible bounds
     const qreal minX = kOuterMargin;
     const qreal clippedDrawX = std::max(drawX, minX);
-    
     painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
+
+    if (const auto cueColor = axisCueColor(axisIndex)) {
+      const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
+      paintAxisColorCue(painter, labelBounds, *cueColor);
+    }
     
     painter.restore();
   }
@@ -1461,8 +1467,12 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     // Ensure label stays within visible bounds
     const qreal maxX = this->rect().width() - kOuterMargin - rotatedImage.width();
     const qreal clippedDrawX = std::min(drawX, maxX);
-    
     painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
+
+    if (const auto cueColor = axisCueColor(axisIndex)) {
+      const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
+      paintAxisColorCue(painter, labelBounds, *cueColor);
+    }
     
     painter.restore();
   }
@@ -1899,6 +1909,60 @@ bool CartesianPlotElement::isYAxisVisible(int yAxisIndex) const
     }
   }
   return false;
+}
+
+std::optional<QColor> CartesianPlotElement::axisCueColor(int yAxisIndex) const
+{
+  CartesianPlotYAxis targetAxis;
+  switch (yAxisIndex) {
+  case 0: targetAxis = CartesianPlotYAxis::kY1; break;
+  case 1: targetAxis = CartesianPlotYAxis::kY2; break;
+  case 2: targetAxis = CartesianPlotYAxis::kY3; break;
+  case 3: targetAxis = CartesianPlotYAxis::kY4; break;
+  default: return std::nullopt;
+  }
+
+  for (int i = 0; i < traceCount(); ++i) {
+    const auto &trace = traces_[i];
+    const bool hasChannels = !trace.yChannel.trimmed().isEmpty()
+        || !trace.xChannel.trimmed().isEmpty();
+    if (!hasChannels) {
+      continue;
+    }
+    if (trace.yAxis != targetAxis) {
+      continue;
+    }
+    const QColor color = effectiveTraceColor(i);
+    if (color.isValid()) {
+      return color;
+    }
+  }
+  return std::nullopt;
+}
+
+void CartesianPlotElement::paintAxisColorCue(QPainter &painter,
+    const QRectF &labelBounds, const QColor &color) const
+{
+  if (!color.isValid()) {
+    return;
+  }
+  const QRectF widgetBounds(rect());
+  const auto drawCue = [&](const QRectF &cueRect) {
+    const QRectF clipped = cueRect.intersected(widgetBounds);
+    if (clipped.width() > 0.0 && clipped.height() > 0.0) {
+      painter.fillRect(clipped, color);
+    }
+  };
+
+  const QRectF topCue(labelBounds.left(),
+      labelBounds.top() - kAxisCueGap - kAxisCueThickness,
+      labelBounds.width(), kAxisCueThickness);
+  const QRectF bottomCue(labelBounds.left(),
+      labelBounds.bottom() + kAxisCueGap,
+      labelBounds.width(), kAxisCueThickness);
+
+  drawCue(topCue);
+  drawCue(bottomCue);
 }
 
 // Include moc output for Q_OBJECT macro

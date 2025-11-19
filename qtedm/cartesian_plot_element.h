@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -171,6 +172,9 @@ private:
   int axisIndexForTrace(int traceIndex) const;
   bool isYAxisOnRight(int yAxisIndex) const;
   bool isYAxisVisible(int yAxisIndex) const;
+    std::optional<QColor> axisCueColor(int yAxisIndex) const;
+    void paintAxisColorCue(QPainter &painter, const QRectF &labelBounds,
+      const QColor &color) const;
   void ensureRuntimeArraySizes();
   
   struct NiceAxisRange

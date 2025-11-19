@@ -2108,6 +2108,7 @@ private:
   DisplayAreaWidget *displayArea_ = nullptr;
   QString filePath_;
   QString currentLoadDirectory_;
+  bool loadingLegacyAdl_ = false;
   QUndoStack *undoStack_ = nullptr;
   QByteArray lastCommittedState_;
   QString pendingUndoLabel_;
@@ -13404,11 +13405,15 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
     }
   }
 
+  const bool previousLegacyMode = loadingLegacyAdl_;
+  loadingLegacyAdl_ = (fileVersion < 20200);
+
   const QString processedContents = applyMacroSubstitutions(adlContent, macros);
 
   //qWarning() << "Parsing ADL file with" << processedContents.size() << "characters...";
   std::optional<AdlNode> document = AdlParser::parse(processedContents, errorMessage);
   if (!document) {
+    loadingLegacyAdl_ = previousLegacyMode;
     return false;
   }
   //qWarning() << "ADL parsing complete, loading" << document->children.size() << "top-level nodes...";
@@ -13427,20 +13432,18 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   bool elementLoaded = false;
   int elementCount = 0;
   for (const auto &child : document->children) {
-    if (child.name.compare(QStringLiteral("display"), Qt::CaseInsensitive)
-        == 0) {
+    const QString childName = normalizedAdlName(child.name);
+    if (childName == QStringLiteral("display")) {
       displayLoaded = loadDisplaySection(child) || displayLoaded;
       continue;
     }
     /* Check for standalone "basic attribute" node */
-    if (child.name.compare(QStringLiteral("basic attribute"),
-        Qt::CaseInsensitive) == 0) {
+    if (childName == QStringLiteral("basic attribute")) {
       pendingBasicAttribute_ = child;
       continue;
     }
     /* Check for standalone "dynamic attribute" node */
-    if (child.name.compare(QStringLiteral("dynamic attribute"),
-        Qt::CaseInsensitive) == 0) {
+    if (childName == QStringLiteral("dynamic attribute")) {
       pendingDynamicAttribute_ = child;
       continue;
     }
@@ -13510,6 +13513,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   }
   currentLoadDirectory_ = previousLoadDirectory;
   notifyMenus();
+  loadingLegacyAdl_ = previousLegacyMode;
   return displayLoaded || elementLoaded;
 }
 
@@ -15873,6 +15877,15 @@ inline RelatedDisplayMode DisplayWindow::parseRelatedDisplayMode(
   return RelatedDisplayMode::kAdd;
 }
 
+inline QString channelValueWithLegacyFallback(const AdlNode &node)
+{
+  QString value = propertyValue(node, QStringLiteral("chan"));
+  if (value.trimmed().isEmpty()) {
+    value = propertyValue(node, QStringLiteral("ctrl"));
+  }
+  return value;
+}
+
 inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const
@@ -15892,7 +15905,12 @@ inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
       continue;
     }
 
-    if (key.compare(QStringLiteral("chan"), Qt::CaseInsensitive) == 0) {
+    const QString lowerKey = key.toLower();
+    const bool isBaseChannelKey =
+        lowerKey == QStringLiteral("chan") ||
+        lowerKey == QStringLiteral("ctrl");
+
+    if (isBaseChannelKey) {
       const QString value = prop.value;
       if (!value.isEmpty() && baseChannelIndex >= 0
           && baseChannelIndex < 5) {
@@ -15901,13 +15919,21 @@ inline void DisplayWindow::applyChannelProperties(const AdlNode &node,
       continue;
     }
 
-    if (key.length() <= 4
-        || key.left(4).compare(QStringLiteral("chan"), Qt::CaseInsensitive)
-            != 0) {
+    bool hasChannelPrefix = false;
+    int prefixLength = -1;
+    if (lowerKey.startsWith(QStringLiteral("chan"))) {
+      hasChannelPrefix = true;
+      prefixLength = 4;
+    } else if (lowerKey.startsWith(QStringLiteral("ctrl"))) {
+      hasChannelPrefix = true;
+      prefixLength = 4;
+    }
+
+    if (!hasChannelPrefix || key.length() <= prefixLength) {
       continue;
     }
 
-    const QString suffix = key.mid(4);
+    const QString suffix = key.mid(prefixLength);
     if (suffix.isEmpty()) {
       continue;
     }
@@ -16600,7 +16626,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
   if (const AdlNode *monitor = ::findChild(textUpdateNode,
           QStringLiteral("monitor"))) {
     /* Try "chan" first (modern format), then "rdbk" (old format) */
-    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    QString channel = channelValueWithLegacyFallback(*monitor);
     if (channel.isEmpty()) {
       channel = propertyValue(*monitor, QStringLiteral("rdbk"));
     }
@@ -16753,7 +16779,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
 
   if (const AdlNode *control = ::findChild(textEntryNode,
           QStringLiteral("control"))) {
-    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    const QString channel = channelValueWithLegacyFallback(*control);
     if (!channel.trimmed().isEmpty()) {
       element->setChannel(channel.trimmed());
     }
@@ -16901,7 +16927,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
 
   if (const AdlNode *control = ::findChild(valuatorNode,
           QStringLiteral("control"))) {
-    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    const QString channel = channelValueWithLegacyFallback(*control);
     const QString trimmedChannel = channel.trimmed();
     if (!trimmedChannel.isEmpty()) {
       element->setChannel(trimmedChannel);
@@ -17037,6 +17063,12 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
     }
 
     element->setLimits(limits);
+  } else if (loadingLegacyAdl_) {
+    PvLimits limits = element->limits();
+    limits.lowSource = PvLimitSource::kChannel;
+    limits.highSource = PvLimitSource::kChannel;
+    limits.precisionSource = PvLimitSource::kChannel;
+    element->setLimits(limits);
   }
 
   auto channelSetter = [element](int index, const QString &value) {
@@ -17096,8 +17128,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
 
   if (const AdlNode *control = ::findChild(wheelNode,
           QStringLiteral("control"))) {
-    const QString channel = propertyValue(*control,
-        QStringLiteral("chan"));
+    const QString channel = channelValueWithLegacyFallback(*control);
     const QString trimmedChannel = channel.trimmed();
     if (!trimmedChannel.isEmpty()) {
       element->setChannel(trimmedChannel);
@@ -17262,7 +17293,7 @@ inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
 
   if (const AdlNode *control = ::findChild(menuNode,
           QStringLiteral("control"))) {
-    const QString channel = propertyValue(*control, QStringLiteral("chan"));
+    const QString channel = channelValueWithLegacyFallback(*control);
     const QString trimmedChannel = channel.trimmed();
     if (!trimmedChannel.isEmpty()) {
       element->setChannel(trimmedChannel);
@@ -17361,11 +17392,7 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
 
   if (const AdlNode *control = ::findChild(messageNode,
           QStringLiteral("control"))) {
-    QString channel = propertyValue(*control, QStringLiteral("chan"));
-    /* Old format uses "ctrl" instead of "chan" */
-    if (channel.isEmpty()) {
-      channel = propertyValue(*control, QStringLiteral("ctrl"));
-    }
+    const QString channel = channelValueWithLegacyFallback(*control);
     const QString trimmedChannel = channel.trimmed();
     if (!trimmedChannel.isEmpty()) {
       element->setChannel(trimmedChannel);
@@ -18105,11 +18132,7 @@ inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
 
   if (const AdlNode *control = ::findChild(choiceNode,
           QStringLiteral("control"))) {
-    QString channel = propertyValue(*control, QStringLiteral("chan"));
-    /* Old format uses "ctrl" instead of "chan" */
-    if (channel.isEmpty()) {
-      channel = propertyValue(*control, QStringLiteral("ctrl"));
-    }
+    const QString channel = channelValueWithLegacyFallback(*control);
     if (!channel.trimmed().isEmpty()) {
       element->setChannel(channel.trimmed());
     }
@@ -18171,7 +18194,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
   if (const AdlNode *monitor = ::findChild(meterNode,
           QStringLiteral("monitor"))) {
     /* Try "chan" first (modern format), then "rdbk" (old format) */
-    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    QString channel = channelValueWithLegacyFallback(*monitor);
     if (channel.isEmpty()) {
       channel = propertyValue(*monitor, QStringLiteral("rdbk"));
     }
@@ -18328,7 +18351,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
   if (const AdlNode *monitor = ::findChild(barNode,
           QStringLiteral("monitor"))) {
     /* Try "chan" first (modern format), then "rdbk" (old format) */
-    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    QString channel = channelValueWithLegacyFallback(*monitor);
     if (channel.isEmpty()) {
       channel = propertyValue(*monitor, QStringLiteral("rdbk"));
     }
@@ -18495,7 +18518,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
   if (const AdlNode *monitor = ::findChild(indicatorNode,
           QStringLiteral("monitor"))) {
     /* Try "chan" first (modern format), then "rdbk" (old format) */
-    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    QString channel = channelValueWithLegacyFallback(*monitor);
     if (channel.isEmpty()) {
       channel = propertyValue(*monitor, QStringLiteral("rdbk"));
     }
@@ -19062,7 +19085,7 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
       continue;
     }
 
-    const QString channel = propertyValue(child, QStringLiteral("chan"));
+    const QString channel = channelValueWithLegacyFallback(child);
     if (!channel.trimmed().isEmpty()) {
       element->setChannel(penIndex, channel.trimmed());
     }
@@ -19196,7 +19219,7 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
   if (const AdlNode *monitor = ::findChild(byteNode,
           QStringLiteral("monitor"))) {
     /* Try "chan" first (modern format), then "rdbk" (old format) */
-    QString channel = propertyValue(*monitor, QStringLiteral("chan"));
+    QString channel = channelValueWithLegacyFallback(*monitor);
     if (channel.isEmpty()) {
       channel = propertyValue(*monitor, QStringLiteral("rdbk"));
     }
@@ -20273,12 +20296,16 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
           adlContent = convertLegacyAdlFormat(contents, fileVersion);
         }
 
+        const bool previousLegacyMode = loadingLegacyAdl_;
+        loadingLegacyAdl_ = (fileVersion < 20200);
+
         /* Apply macro substitutions */
         const QString processedContents = applyMacroSubstitutions(adlContent, mergedMacros);
 
         QString errorMessage;
         std::optional<AdlNode> document = AdlParser::parse(processedContents, &errorMessage);
         if (!document) {
+          loadingLegacyAdl_ = previousLegacyMode;
           qWarning() << "CompositeElement: Failed to parse composite file:"
                      << resolvedPath << "-" << errorMessage;
         } else {
@@ -20293,11 +20320,10 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
               composite);
           for (const auto &child : document->children) {
             /* Skip file, display, and color map blocks */
-            const QString childName = child.name.trimmed().toLower();
+            const QString childName = normalizedAdlName(child.name);
             if (childName == QStringLiteral("file")
                 || childName == QStringLiteral("display")
-                || childName == QStringLiteral("color map")
-                || childName == QStringLiteral("<<color map>>")) {
+                || childName == QStringLiteral("color map")) {
               continue;
             }
             loadElementNode(child);
@@ -20305,6 +20331,8 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
 
           /* Restore load directory */
           currentLoadDirectory_ = previousLoadDir;
+
+          loadingLegacyAdl_ = previousLegacyMode;
         }
       }
     }
@@ -20318,7 +20346,7 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
 
 inline bool DisplayWindow::loadElementNode(const AdlNode &node)
 {
-  const QString name = node.name.trimmed().toLower();
+  const QString name = normalizedAdlName(node.name);
 
   bool loaded = false;
 

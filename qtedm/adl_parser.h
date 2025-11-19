@@ -30,3 +30,4 @@ QString propertyValue(const AdlNode &node, const QString &key,
     const QString &defaultValue = QString());
 const AdlNode *findChild(const AdlNode &node, const QString &name);
 QList<const AdlNode *> findChildren(const AdlNode &node, const QString &name);
+QString normalizedAdlName(const QString &name);

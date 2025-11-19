@@ -438,10 +438,22 @@ QString propertyValue(const AdlNode &node, const QString &key,
   return defaultValue;
 }
 
+QString normalizedAdlName(const QString &name)
+{
+  QString normalized = name.trimmed();
+  if (normalized.startsWith(QLatin1String("<<")) &&
+      normalized.endsWith(QLatin1String(">>")) &&
+      normalized.size() > 4) {
+    normalized = normalized.mid(2, normalized.size() - 4).trimmed();
+  }
+  return normalized.toLower();
+}
+
 const AdlNode *findChild(const AdlNode &node, const QString &name)
 {
+  const QString target = normalizedAdlName(name);
   for (const auto &child : node.children) {
-    if (child.name.compare(name, Qt::CaseInsensitive) == 0) {
+    if (normalizedAdlName(child.name) == target) {
       return &child;
     }
   }
@@ -450,9 +462,10 @@ const AdlNode *findChild(const AdlNode &node, const QString &name)
 
 QList<const AdlNode *> findChildren(const AdlNode &node, const QString &name)
 {
+  const QString target = normalizedAdlName(name);
   QList<const AdlNode *> matches;
   for (const auto &child : node.children) {
-    if (child.name.compare(name, Qt::CaseInsensitive) == 0) {
+    if (normalizedAdlName(child.name) == target) {
       matches.append(&child);
     }
   }

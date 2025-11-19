@@ -1427,9 +1427,11 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     const qreal clippedDrawX = std::max(drawX, minX);
     painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
 
-    if (const auto cueColor = axisCueColor(axisIndex)) {
-      const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
-      paintAxisColorCue(painter, labelBounds, *cueColor);
+    if (shouldPaintYAxisCue(axisIndex)) {
+      if (const auto cueColor = axisCueColor(axisIndex)) {
+        const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
+        paintAxisColorCue(painter, labelBounds, *cueColor);
+      }
     }
     
     painter.restore();
@@ -1468,9 +1470,11 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     const qreal clippedDrawX = std::min(drawX, maxX);
     painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
 
-    if (const auto cueColor = axisCueColor(axisIndex)) {
-      const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
-      paintAxisColorCue(painter, labelBounds, *cueColor);
+    if (shouldPaintYAxisCue(axisIndex)) {
+      if (const auto cueColor = axisCueColor(axisIndex)) {
+        const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
+        paintAxisColorCue(painter, labelBounds, *cueColor);
+      }
     }
     
     painter.restore();
@@ -1904,6 +1908,22 @@ bool CartesianPlotElement::isYAxisVisible(int yAxisIndex) const
   
   for (const auto &trace : traces_) {
     if (trace.yAxis == targetAxis) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CartesianPlotElement::shouldPaintYAxisCue(int yAxisIndex) const
+{
+  if (!isYAxisVisible(yAxisIndex)) {
+    return false;
+  }
+  for (int i = 0; i < static_cast<int>(yLabels_.size()); ++i) {
+    if (i == yAxisIndex) {
+      continue;
+    }
+    if (isYAxisVisible(i)) {
       return true;
     }
   }

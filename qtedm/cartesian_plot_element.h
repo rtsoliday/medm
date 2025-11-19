@@ -172,6 +172,7 @@ private:
   int axisIndexForTrace(int traceIndex) const;
   bool isYAxisOnRight(int yAxisIndex) const;
   bool isYAxisVisible(int yAxisIndex) const;
+  bool shouldPaintYAxisCue(int yAxisIndex) const;
     std::optional<QColor> axisCueColor(int yAxisIndex) const;
     void paintAxisColorCue(QPainter &painter, const QRectF &labelBounds,
       const QColor &color) const;

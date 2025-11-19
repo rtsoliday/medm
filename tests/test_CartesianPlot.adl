@@ -1,11 +1,12 @@
+
 file {
 	name="/home/SOLIDAY/github/medm/tests/test_CartesianPlot.adl"
 	version=030122
 }
 display {
 	object {
-		x=2610
-		y=71
+		x=2600
+		y=63
 		width=1354
 		height=699
 	}
@@ -499,4 +500,68 @@ display {
 		bclr=4
 	}
 	style="line"
+}
+"cartesian plot" {
+	object {
+		x=1010
+		y=24
+		width=310
+		height=200
+	}
+	plotcom {
+		title="Noise Sweep Gamma"
+		xlabel="Samples"
+		ylabel="Noise"
+		y2label="Envelope"
+		y4label="Bias"
+		clr=11
+		bclr=52
+	}
+	style="line"
+	erase_oldest="plot last n pts"
+	count="cb:ctrl:2845"
+	trace[0] {
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:SIG327"
+		data_clr=6
+		yaxis=0
+		yside=0
+	}
+	trace[1] {
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:RMS011"
+		data_clr=37
+		yaxis=2
+		yside=1
+	}
+	trace[2] {
+		xdata="SPEC:DET:A208"
+		ydata="DEV:FLUX:DRIFT901"
+		data_clr=59
+		yaxis=1
+		yside=0
+	}
+	x_axis {
+		axisStyle="time"
+		rangeStyle="auto-scale"
+		timeFormat="wd hh:00"
+	}
+	y1_axis {
+		rangeStyle="user-specified"
+		minRange=-3.150000
+		maxRange=3.150000
+	}
+	y2_axis {
+		axisStyle="log10"
+		rangeStyle="user-specified"
+		minRange=0.001000
+		maxRange=120.000000
+	}
+	y3_axis {
+		rangeStyle="auto-scale"
+	}
+	trigger="cb:logic:7319"
+	erase="cb:scan:8095"
+	countPvName="cb:ctrl:2845"
+	eraseMode="if zero"
 }

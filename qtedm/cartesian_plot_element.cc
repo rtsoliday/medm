@@ -923,19 +923,15 @@ CartesianPlotElement::calculateYAxisPositions(const QRectF &widgetBounds) const
     }
     
     if (isYAxisOnRight(i)) {
-      // Add space for the label if present (positioned outside the axis)
-      if (!yLabels_[i].trimmed().isEmpty()) {
-        rightX -= labelMetrics.height() + labelGap;
-      }
+      // Always reserve label clearance when the axis is shown
+      rightX -= labelMetrics.height() + labelGap;
       // Position the axis line itself
       positions.rightAxes.push_back({i, rightX});
       // Reserve space for this axis's numbers and move inward
       rightX -= axisSpacing;
     } else {
-      // Add space for the label if present (positioned outside the axis)
-      if (!yLabels_[i].trimmed().isEmpty()) {
-        leftX += labelMetrics.height() + labelGap;
-      }
+      // Always reserve label clearance when the axis is shown
+      leftX += labelMetrics.height() + labelGap;
       // Position the axis line itself
       positions.leftAxes.push_back({i, leftX});
       // Reserve space for this axis's numbers and move inward

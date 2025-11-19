@@ -13375,6 +13375,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
 
   /* Detect file version */
   int fileVersion = 30122; /* Default to current version */
+  bool versionFound = false;
   QRegularExpression versionPattern(QStringLiteral(R"(version\s*=\s*(\d+))"));
   QRegularExpressionMatch versionMatch = versionPattern.match(contents);
   if (versionMatch.hasMatch()) {
@@ -13382,7 +13383,12 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
     int parsedVersion = versionMatch.captured(1).toInt(&ok);
     if (ok) {
       fileVersion = parsedVersion;
+      versionFound = true;
     }
+  }
+
+  if (!versionFound) {
+    fileVersion = 0; /* Treat files without version header as legacy */
   }
 
   /* Convert legacy format if needed */
@@ -20245,6 +20251,7 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
 
         /* Detect file version */
         int fileVersion = 30122;
+        bool versionFound = false;
         QRegularExpression versionPattern(QStringLiteral(R"(version\s*=\s*(\d+))"));
         QRegularExpressionMatch versionMatch = versionPattern.match(contents);
         if (versionMatch.hasMatch()) {
@@ -20252,7 +20259,12 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
           int parsedVersion = versionMatch.captured(1).toInt(&ok);
           if (ok) {
             fileVersion = parsedVersion;
+            versionFound = true;
           }
+        }
+
+        if (!versionFound) {
+          fileVersion = 0; /* Treat missing version headers as legacy */
         }
 
         /* Convert legacy format if needed */

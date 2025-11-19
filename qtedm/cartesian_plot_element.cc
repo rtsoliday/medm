@@ -39,6 +39,15 @@ constexpr int kTitleFontHeight = 24;    // For title text
 constexpr int kLabelFontHeight = 18;    // For axis labels (X, Y1, Y2, Y3, Y4)
 constexpr int kAxisNumberFontHeight = 10;  // For axis tick numbers
 
+QString labelTextOrSpace(const QString &text)
+{
+  const QString trimmed = text.trimmed();
+  if (!trimmed.isEmpty()) {
+    return trimmed;
+  }
+  return QStringLiteral(" ");
+}
+
 QColor defaultTraceColor(int index)
 {
   Q_UNUSED(index);
@@ -1391,13 +1400,10 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   
   // Draw labels for left-side axes
   for (const auto &[axisIndex, xPosition] : axisPos.leftAxes) {
-    if (yLabels_[axisIndex].trimmed().isEmpty()) {
-      continue;
-    }
+    const QString labelText = labelTextOrSpace(yLabels_[axisIndex]);
     
     painter.save();
-    const QString text = yLabels_[axisIndex].trimmed();
-    const qreal textWidth = labelMetrics.horizontalAdvance(text);
+    const qreal textWidth = labelMetrics.horizontalAdvance(labelText);
     const int pixWidth = static_cast<int>(std::ceil(textWidth));
     const int pixHeight = static_cast<int>(std::ceil(labelMetrics.height()));
     
@@ -1408,7 +1414,7 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     QPainter textPainter(&textImage);
     textPainter.setFont(labelFont);
     textPainter.setPen(effectiveForeground());
-    textPainter.drawText(QPointF(0, labelMetrics.ascent()), text);
+    textPainter.drawText(QPointF(0, labelMetrics.ascent()), labelText);
     textPainter.end();
     
     QTransform transform;
@@ -1435,13 +1441,10 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   
   // Draw labels for right-side axes
   for (const auto &[axisIndex, xPosition] : axisPos.rightAxes) {
-    if (yLabels_[axisIndex].trimmed().isEmpty()) {
-      continue;
-    }
+    const QString labelText = labelTextOrSpace(yLabels_[axisIndex]);
     
     painter.save();
-    const QString text = yLabels_[axisIndex].trimmed();
-    const qreal textWidth = labelMetrics.horizontalAdvance(text);
+    const qreal textWidth = labelMetrics.horizontalAdvance(labelText);
     const int pixWidth = static_cast<int>(std::ceil(textWidth));
     const int pixHeight = static_cast<int>(std::ceil(labelMetrics.height()));
     
@@ -1452,7 +1455,7 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     QPainter textPainter(&textImage);
     textPainter.setFont(labelFont);
     textPainter.setPen(effectiveForeground());
-    textPainter.drawText(QPointF(0, labelMetrics.ascent()), text);
+    textPainter.drawText(QPointF(0, labelMetrics.ascent()), labelText);
     textPainter.end();
     
     QTransform transform;

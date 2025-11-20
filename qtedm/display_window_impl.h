@@ -13954,8 +13954,13 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       AdlWriter::writeBasicAttributeSection(stream, 1,
       AdlWriter::medmColorIndex(textForeground),
           RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
+        std::array<QString, 5> rawTextChannels{};
+        rawTextChannels[0] = text->channel(1);
+        rawTextChannels[1] = text->channel(2);
+        rawTextChannels[2] = text->channel(3);
+        rawTextChannels[3] = text->channel(4);
         const auto textChannels = AdlWriter::channelsForMedmFourValues(
-          AdlWriter::collectChannels(text));
+          rawTextChannels);
         AdlWriter::writeDynamicAttributeSection(stream, 1, text->colorMode(),
           text->visibilityMode(), text->visibilityCalc(), textChannels);
       const QString content = text->text();
@@ -16592,6 +16597,27 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
     }
   }
 
+  constexpr int kTextPrimaryChannelIndex = 0;
+  constexpr int kTextChannelAIndex = 1;
+  const auto setTextChannel = [element, kTextPrimaryChannelIndex,
+      kTextChannelAIndex](int index, const QString &value) {
+    constexpr int kChannelCount = 5;
+    if (index < 0) {
+      return;
+    }
+    int targetIndex = index;
+    if (targetIndex == kTextPrimaryChannelIndex) {
+      targetIndex = kTextChannelAIndex;
+    }
+    if (targetIndex >= kChannelCount) {
+      return;
+    }
+    element->setChannel(targetIndex, value);
+    if (targetIndex == kTextChannelAIndex) {
+      element->setChannel(kTextPrimaryChannelIndex, value);
+    }
+  };
+
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
     markWidgetHasDynamicAttribute(element);
@@ -16615,18 +16641,12 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
     if (!calc.isEmpty()) {
       element->setVisibilityCalc(calc);
     }
-    applyChannelProperties(*dyn,
-        [element](int index, const QString &value) {
-          element->setChannel(index, value);
-        },
-        0, 0);
+    applyChannelProperties(*dyn, setTextChannel, kTextChannelAIndex,
+        kTextChannelAIndex);
   }
 
-  applyChannelProperties(effectiveNode,
-      [element](int index, const QString &value) {
-        element->setChannel(index, value);
-      },
-      0, 0);
+  applyChannelProperties(effectiveNode, setTextChannel, kTextChannelAIndex,
+      kTextChannelAIndex);
 
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);

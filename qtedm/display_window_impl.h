@@ -2046,6 +2046,7 @@ private:
   void requestStackingOrderRefresh();
   void markWidgetHasDynamicAttribute(QWidget *widget) const;
   bool widgetHasDynamicAttribute(const QWidget *widget) const;
+  bool isControlWidget(const QWidget *widget) const;
   bool isStaticGraphicWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
@@ -16054,6 +16055,18 @@ inline bool DisplayWindow::widgetHasDynamicAttribute(
   return widget->property(kWidgetHasDynamicAttributeProperty).toBool();
 }
 
+inline bool DisplayWindow::isControlWidget(const QWidget *widget) const
+{
+  return dynamic_cast<const TextEntryElement *>(widget)
+      || dynamic_cast<const SliderElement *>(widget)
+      || dynamic_cast<const WheelSwitchElement *>(widget)
+      || dynamic_cast<const ChoiceButtonElement *>(widget)
+      || dynamic_cast<const MenuElement *>(widget)
+      || dynamic_cast<const MessageButtonElement *>(widget)
+      || dynamic_cast<const ShellCommandElement *>(widget)
+      || dynamic_cast<const RelatedDisplayElement *>(widget);
+}
+
 inline QStringList DisplayWindow::buildDisplaySearchPaths() const
 {
   QStringList searchPaths;
@@ -16482,6 +16495,7 @@ inline void DisplayWindow::refreshStackingOrder()
 {
   stackingOrderInternallyUpdating_ = true;
   QList<QWidget *> staticWidgets;
+  QList<QWidget *> dynamicWidgets;
   QList<QWidget *> interactiveWidgets;
 
   for (auto it = elementStack_.begin(); it != elementStack_.end();) {
@@ -16493,8 +16507,10 @@ inline void DisplayWindow::refreshStackingOrder()
     }
     if (isStaticGraphicWidget(widget)) {
       staticWidgets.append(widget);
-    } else {
+    } else if (isControlWidget(widget)) {
       interactiveWidgets.append(widget);
+    } else {
+      dynamicWidgets.append(widget);
     }
     ++it;
   }
@@ -16504,7 +16520,11 @@ inline void DisplayWindow::refreshStackingOrder()
   for (QWidget *widget : staticWidgets) {
     widget->raise();
   }
-  /* Then raise interactive widgets (monitors, controls, composites, etc.). */
+  /* Raise dynamic widgets (monitors, dynamic graphics, etc.). */
+  for (QWidget *widget : dynamicWidgets) {
+    widget->raise();
+  }
+  /* Then raise interactive controls. */
   for (QWidget *widget : interactiveWidgets) {
     widget->raise();
   }

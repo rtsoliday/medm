@@ -11,8 +11,10 @@
 #include <QTimer>
 
 #include "text_element.h"
+#include "text_entry_element.h"
 #include "choice_button_element.h"
 #include "slider_element.h"
+#include "wheel_switch_element.h"
 #include "rectangle_element.h"
 #include "oval_element.h"
 #include "arc_element.h"
@@ -20,6 +22,17 @@
 #include "polyline_element.h"
 #include "polygon_element.h"
 #include "image_element.h"
+#include "menu_element.h"
+#include "message_button_element.h"
+#include "shell_command_element.h"
+#include "related_display_element.h"
+#include "text_monitor_element.h"
+#include "meter_element.h"
+#include "bar_monitor_element.h"
+#include "scale_monitor_element.h"
+#include "byte_monitor_element.h"
+#include "strip_chart_element.h"
+#include "cartesian_plot_element.h"
 
 namespace {
 
@@ -57,6 +70,29 @@ bool widgetHasDynamicAttribute(const QWidget *widget)
     return false;
   }
   return widget->property(kWidgetHasDynamicAttributeProperty).toBool();
+}
+
+bool isControlChildWidget(const QWidget *child)
+{
+  return dynamic_cast<const TextEntryElement *>(child)
+      || dynamic_cast<const SliderElement *>(child)
+      || dynamic_cast<const WheelSwitchElement *>(child)
+      || dynamic_cast<const ChoiceButtonElement *>(child)
+      || dynamic_cast<const MenuElement *>(child)
+      || dynamic_cast<const MessageButtonElement *>(child)
+      || dynamic_cast<const ShellCommandElement *>(child)
+      || dynamic_cast<const RelatedDisplayElement *>(child);
+}
+
+bool isMonitorChildWidget(const QWidget *child)
+{
+  return dynamic_cast<const TextMonitorElement *>(child)
+      || dynamic_cast<const MeterElement *>(child)
+      || dynamic_cast<const BarMonitorElement *>(child)
+      || dynamic_cast<const ScaleMonitorElement *>(child)
+      || dynamic_cast<const ByteMonitorElement *>(child)
+      || dynamic_cast<const StripChartElement *>(child)
+      || dynamic_cast<const CartesianPlotElement *>(child);
 }
 
 } // namespace
@@ -575,9 +611,6 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
   if (!child) {
     return false;
   }
-  if (widgetHasDynamicAttribute(child)) {
-    return false;
-  }
 
   if (const auto *composite = dynamic_cast<const CompositeElement *>(child)) {
     const QList<QWidget *> children = composite->childWidgets();
@@ -609,7 +642,7 @@ bool CompositeElement::isDynamicGraphicChildWidget(const QWidget *child) const
     return false;
   }
   if (widgetHasDynamicAttribute(child)) {
-    return false;
+    return true;
   }
   if (const auto *rectangle = dynamic_cast<const RectangleElement *>(child)) {
     return hasDynamicGraphicAttributes(rectangle);
@@ -653,11 +686,13 @@ void CompositeElement::refreshChildStackingOrder()
     if (!child) {
       continue;
     }
-    if (widgetHasDynamicAttribute(child)) {
+    if (isControlChildWidget(child)) {
       interactiveWidgets.append(child);
       continue;
     }
-    if (isDynamicGraphicChildWidget(child)) {
+    if (widgetHasDynamicAttribute(child)
+        || isMonitorChildWidget(child)
+        || isDynamicGraphicChildWidget(child)) {
       dynamicWidgets.append(child);
     } else if (isStaticChildWidget(child)) {
       staticWidgets.append(child);

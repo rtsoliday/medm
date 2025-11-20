@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=1805
-		y=126
+		x=1795
+		y=118
 		width=583
 		height=697
 	}
@@ -118,6 +118,7 @@ text {
 	}
 	textix="TEST"
 }
+
 composite {
 	object {
 		x=193
@@ -158,5 +159,341 @@ composite {
 			}
 			textix="TEST"
 		}
+	}
+}
+composite {
+	object {
+		x=27
+		y=127
+		width=123
+		height=80
+	}
+	"composite name"=""
+	children {
+		"text entry" {
+			object {
+				x=33
+				y=149
+				width=100
+				height=30
+			}
+			control {
+				chan="tm:string:status"
+				clr=14
+				bclr=5
+			}
+			limits {
+			}
+		}
+		rectangle {
+			object {
+				x=27
+				y=127
+				width=110
+				height=80
+			}
+			"basic attribute" {
+				clr=30
+			}
+			"dynamic attribute" {
+				chan="channelA_PV"
+			}
+		}
+		text {
+			object {
+				x=130
+				y=164
+				width=20
+				height=15
+			}
+			"basic attribute" {
+				clr=14
+			}
+			textix="V"
+			align="horiz. centered"
+		}
+		"message button" {
+			object {
+				x=97
+				y=181
+				width=30
+				height=15
+			}
+			control {
+				chan="channelB_PV"
+				clr=14
+				bclr=6
+			}
+			label="V"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=96
+				y=131
+				width=30
+				height=15
+			}
+			control {
+				chan="channelB_PV"
+				clr=14
+				bclr=6
+			}
+			label="^"
+			press_msg="1"
+		}
+		text {
+			object {
+				x=129
+				y=128
+				width=10
+				height=10
+			}
+			"basic attribute" {
+				clr=14
+			}
+			textix="1"
+		}
+		text {
+			object {
+				x=131
+				y=188
+				width=10
+				height=10
+			}
+			"basic attribute" {
+				clr=14
+			}
+			textix="1"
+		}
+		"message button" {
+			object {
+				x=65
+				y=181
+				width=30
+				height=15
+			}
+			control {
+				chan="channelB_PV"
+				clr=14
+				bclr=8
+			}
+			label="V"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=64
+				y=131
+				width=30
+				height=15
+			}
+			control {
+				chan="channelB_PV"
+				clr=14
+				bclr=8
+			}
+			label="^"
+			press_msg="1"
+		}
+	}
+	"dynamic attribute" {
+		vis="if zero"
+		chan="channelB_PV"
+	}
+}
+"text entry" {
+	object {
+		x=199
+		y=153
+		width=100
+		height=30
+	}
+	control {
+		chan="tm:string:status"
+		clr=14
+		bclr=5
+	}
+	limits {
+	}
+}
+rectangle {
+	object {
+		x=193
+		y=131
+		width=110
+		height=80
+	}
+	"basic attribute" {
+		clr=30
+	}
+	"dynamic attribute" {
+		chan="channelA_PV"
+	}
+}
+text {
+	object {
+		x=296
+		y=168
+		width=20
+		height=15
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="V"
+	align="horiz. centered"
+}
+"message button" {
+	object {
+		x=263
+		y=185
+		width=30
+		height=15
+	}
+	control {
+		chan="channelB_PV"
+		clr=14
+		bclr=6
+	}
+	label="V"
+	press_msg="1"
+}
+"message button" {
+	object {
+		x=262
+		y=135
+		width=30
+		height=15
+	}
+	control {
+		chan="channelB_PV"
+		clr=14
+		bclr=6
+	}
+	label="^"
+	press_msg="1"
+}
+text {
+	object {
+		x=295
+		y=132
+		width=10
+		height=10
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="1"
+}
+text {
+	object {
+		x=297
+		y=192
+		width=10
+		height=10
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="1"
+}
+"message button" {
+	object {
+		x=231
+		y=185
+		width=30
+		height=15
+	}
+	control {
+		chan="channelB_PV"
+		clr=14
+		bclr=8
+	}
+	label="V"
+	press_msg="1"
+}
+"message button" {
+	object {
+		x=230
+		y=135
+		width=30
+		height=15
+	}
+	control {
+		chan="channelB_PV"
+		clr=14
+		bclr=8
+	}
+	label="^"
+	press_msg="1"
+}
+composite {
+	object {
+		x=15
+		y=253
+		width=130
+		height=80
+	}
+	"composite name"=""
+	children {
+		"text entry" {
+			object {
+				x=15
+				y=276
+				width=130
+				height=30
+			}
+			control {
+				chan="tm:string:status"
+				clr=14
+				bclr=5
+			}
+			limits {
+			}
+		}
+		rectangle {
+			object {
+				x=23
+				y=253
+				width=110
+				height=80
+			}
+			"basic attribute" {
+				clr=25
+			}
+			"dynamic attribute" {
+				chan="channelA_PV"
+			}
+		}
+	}
+}
+"text entry" {
+	object {
+		x=187
+		y=276
+		width=130
+		height=30
+	}
+	control {
+		chan="tm:string:status"
+		clr=14
+		bclr=5
+	}
+	limits {
+	}
+}
+rectangle {
+	object {
+		x=195
+		y=253
+		width=110
+		height=80
+	}
+	"basic attribute" {
+		clr=25
+	}
+	"dynamic attribute" {
+		chan="channelA_PV"
 	}
 }

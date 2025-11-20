@@ -108,6 +108,7 @@ struct CommandLineOptions {
   bool raiseMessageWindow = true;
   bool usePrivateColormap = false;
   bool useBigMousePointer = false;
+  bool testSave = false;
   QString invalidOption;
   QStringList displayFiles;
   QString displayGeometry;
@@ -171,6 +172,8 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.useBigMousePointer = true;
     } else if (arg == QLatin1String("-cmap")) {
       options.usePrivateColormap = true;
+    } else if (arg == QLatin1String("-testSave")) {
+      options.testSave = true;
     } else if (arg == QLatin1String("-macro")) {
       if ((i + 1) < args.size()) {
         QString tmp = args.at(++i);
@@ -654,6 +657,10 @@ int main(int argc, char *argv[])
   options.resolvedDisplayFiles = resolveDisplayArguments(options.displayFiles);
   const std::optional<GeometrySpec> geometrySpec =
       geometrySpecFromString(options.displayGeometry);
+  if (options.testSave) {
+    options.startInExecuteMode = false;
+    options.remoteMode = RemoteMode::kLocal;
+  }
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
   RemoteContext remoteContext;
   remoteContext.mode = options.remoteMode;
@@ -693,6 +700,12 @@ int main(int argc, char *argv[])
         options.displayGeometry.toLocal8Bit().constData());
     fflush(stderr);
     printUsage(programName(args));
+    return 1;
+  }
+
+  if (options.testSave && options.resolvedDisplayFiles.isEmpty()) {
+    fprintf(stderr, "\n-testSave requires at least one ADL file argument\n");
+    fflush(stderr);
     return 1;
   }
 
@@ -1753,6 +1766,7 @@ int main(int argc, char *argv[])
 
   const MacroMap macroDefinitions = parseMacroDefinitionString(options.macroString);
   bool loadedAnyDisplay = false;
+  DisplayWindow *testSaveWindow = nullptr;
 
   if (!options.resolvedDisplayFiles.isEmpty()) {
     for (const QString &resolved : options.resolvedDisplayFiles) {
@@ -1773,7 +1787,40 @@ int main(int argc, char *argv[])
       }
       registerDisplayWindow(displayWin);
       loadedAnyDisplay = true;
+      if (!testSaveWindow) {
+        testSaveWindow = displayWin;
+      }
+      if (options.testSave) {
+        break;
+      }
     }
+  }
+
+  if (options.testSave) {
+    if (!testSaveWindow) {
+      fprintf(stderr, "\nFailed to load ADL file for -testSave\n");
+      fflush(stderr);
+      return 1;
+    }
+    QPointer<DisplayWindow> target(testSaveWindow);
+    QTimer::singleShot(0, &win, [target]() {
+      const QString outputPath = QStringLiteral("/tmp/qtedmTest.adl");
+      if (DisplayWindow *window = target.data()) {
+        if (!window->saveToPath(outputPath)) {
+          fprintf(stderr, "\nFailed to save display to %s\n",
+              outputPath.toLocal8Bit().constData());
+          fflush(stderr);
+          QCoreApplication::exit(1);
+          return;
+        }
+      } else {
+        fprintf(stderr, "\nDisplay window unavailable for test save\n");
+        fflush(stderr);
+        QCoreApplication::exit(1);
+        return;
+      }
+      QCoreApplication::exit(0);
+    });
   }
 
   win.adjustSize();

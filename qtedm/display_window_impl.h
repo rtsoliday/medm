@@ -1538,6 +1538,7 @@ public:
 
   bool save(QWidget *dialogParent = nullptr);
   bool saveAs(QWidget *dialogParent = nullptr);
+  bool saveToPath(const QString &filePath) const;
   bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr,
       const QHash<QString, QString> &macros = {});
   QString filePath() const
@@ -13364,6 +13365,15 @@ inline bool DisplayWindow::saveAs(QWidget *dialogParent)
   return true;
 }
 
+inline bool DisplayWindow::saveToPath(const QString &filePath) const
+{
+  const QString normalized = QFileInfo(filePath).absoluteFilePath();
+  if (normalized.isEmpty()) {
+    return false;
+  }
+  return writeAdlFile(normalized);
+}
+
 inline bool DisplayWindow::loadFromFile(const QString &filePath,
     QString *errorMessage, const QHash<QString, QString> &macros)
 {
@@ -13944,9 +13954,10 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       AdlWriter::writeBasicAttributeSection(stream, 1,
       AdlWriter::medmColorIndex(textForeground),
           RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
-      AdlWriter::writeDynamicAttributeSection(stream, 1, text->colorMode(),
-          text->visibilityMode(), text->visibilityCalc(),
+        const auto textChannels = AdlWriter::channelsForMedmFourValues(
           AdlWriter::collectChannels(text));
+        AdlWriter::writeDynamicAttributeSection(stream, 1, text->colorMode(),
+          text->visibilityMode(), text->visibilityCalc(), textChannels);
       const QString content = text->text();
       if (!content.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,

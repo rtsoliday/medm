@@ -24,6 +24,8 @@
 namespace {
 
 constexpr int kCompositeGraphicChannelCount = 5;
+constexpr char kWidgetHasDynamicAttributeProperty[] =
+    "_adlHasDynamicAttribute";
 
 template <typename ElementType>
 bool hasDynamicGraphicAttributes(const ElementType *element)
@@ -47,6 +49,14 @@ bool hasDynamicGraphicAttributes(const ElementType *element)
     }
   }
   return false;
+}
+
+bool widgetHasDynamicAttribute(const QWidget *widget)
+{
+  if (!widget) {
+    return false;
+  }
+  return widget->property(kWidgetHasDynamicAttributeProperty).toBool();
 }
 
 } // namespace
@@ -565,6 +575,9 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
   if (!child) {
     return false;
   }
+  if (widgetHasDynamicAttribute(child)) {
+    return false;
+  }
 
   if (const auto *composite = dynamic_cast<const CompositeElement *>(child)) {
     const QList<QWidget *> children = composite->childWidgets();
@@ -593,6 +606,9 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
 bool CompositeElement::isDynamicGraphicChildWidget(const QWidget *child) const
 {
   if (!child) {
+    return false;
+  }
+  if (widgetHasDynamicAttribute(child)) {
     return false;
   }
   if (const auto *rectangle = dynamic_cast<const RectangleElement *>(child)) {
@@ -635,6 +651,10 @@ void CompositeElement::refreshChildStackingOrder()
   for (const auto &pointer : childWidgets_) {
     QWidget *child = pointer.data();
     if (!child) {
+      continue;
+    }
+    if (widgetHasDynamicAttribute(child)) {
+      interactiveWidgets.append(child);
       continue;
     }
     if (isDynamicGraphicChildWidget(child)) {

@@ -52,6 +52,8 @@ namespace {
 constexpr double kChannelRetryTimeoutSeconds = 1.0;
 constexpr double kPvInfoTimeoutSeconds = 1.0;
 constexpr qint64 kEpicsEpochOffsetSeconds = 631152000; // 1990-01-01 -> 1970-01-01
+constexpr char kWidgetHasDynamicAttributeProperty[] =
+    "_adlHasDynamicAttribute";
 }
 
 inline void setUtf8Encoding(QTextStream &stream)
@@ -2042,6 +2044,8 @@ private:
   void ensureElementInStack(QWidget *element);
   void refreshStackingOrder();
   void requestStackingOrderRefresh();
+  void markWidgetHasDynamicAttribute(QWidget *widget) const;
+  bool widgetHasDynamicAttribute(const QWidget *widget) const;
   bool isStaticGraphicWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
@@ -16033,6 +16037,23 @@ inline AdlNode DisplayWindow::applyPendingDynamicAttribute(
   return merged;
 }
 
+inline void DisplayWindow::markWidgetHasDynamicAttribute(QWidget *widget) const
+{
+  if (!widget) {
+    return;
+  }
+  widget->setProperty(kWidgetHasDynamicAttributeProperty, true);
+}
+
+inline bool DisplayWindow::widgetHasDynamicAttribute(
+    const QWidget *widget) const
+{
+  if (!widget) {
+    return false;
+  }
+  return widget->property(kWidgetHasDynamicAttributeProperty).toBool();
+}
+
 inline QStringList DisplayWindow::buildDisplaySearchPaths() const
 {
   QStringList searchPaths;
@@ -16426,6 +16447,9 @@ inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
   if (!widget) {
     return false;
   }
+  if (widgetHasDynamicAttribute(widget)) {
+    return false;
+  }
   
   /* Check if this is a CompositeElement with only static children */
   if (const auto *composite = dynamic_cast<const CompositeElement *>(widget)) {
@@ -16539,6 +16563,7 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(element);
     /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
      * Modern format has mode properties directly in dynamic attribute. */
     const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
@@ -19338,6 +19363,7 @@ inline ImageElement *DisplayWindow::loadImageElement(
 
   if (const AdlNode *dyn = ::findChild(imageNode,
           QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(element);
     /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
      * Modern format has mode properties directly in dynamic attribute. */
     const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
@@ -19451,6 +19477,7 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(element);
     /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
      * Modern format has mode properties directly in dynamic attribute. */
     const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
@@ -19561,6 +19588,7 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(element);
     /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
      * Modern format has mode properties directly in dynamic attribute. */
     const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
@@ -19678,6 +19706,7 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(element);
     /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
      * Modern format has mode properties directly in dynamic attribute. */
     const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
@@ -19814,8 +19843,10 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
     }
   };
 
+  bool hasDynamicAttribute = false;
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
+    hasDynamicAttribute = true;
     /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
      * Modern format has mode properties directly in dynamic attribute. */
     const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
@@ -19867,6 +19898,9 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
   element->show();
   element->setSelected(false);
   polygonElements_.append(element);
+  if (hasDynamicAttribute) {
+    markWidgetHasDynamicAttribute(element);
+  }
   ensureElementInStack(element);
   if (executeModeActive_) {
     element->setExecuteMode(true);
@@ -20030,8 +20064,10 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     }
   };
 
+  bool hasDynamicAttribute = false;
   if (const AdlNode *dyn = ::findChild(effectiveNode,
           QStringLiteral("dynamic attribute"))) {
+    hasDynamicAttribute = true;
     /* Old ADL format (pre-version 20200) nests mode properties in attr → mod.
      * Modern format has mode properties directly in dynamic attribute. */
     const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
@@ -20094,6 +20130,9 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     const QPoint localStart = points.first() - geometry.topLeft();
     const QPoint localEnd = points.last() - geometry.topLeft();
     element->setLocalEndpoints(localStart, localEnd);
+    if (hasDynamicAttribute) {
+      markWidgetHasDynamicAttribute(element);
+    }
     if (currentCompositeOwner_) {
       currentCompositeOwner_->adoptChild(element);
     }
@@ -20128,6 +20167,9 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
   element->setAbsolutePoints(points);
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);
+  }
+  if (hasDynamicAttribute) {
+    markWidgetHasDynamicAttribute(element);
   }
   element->show();
   element->setSelected(false);
@@ -20182,6 +20224,7 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
 
   if (const AdlNode *dyn = ::findChild(compositeNode,
           QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(composite);
     const QString colorModeValue = propertyValue(*dyn,
         QStringLiteral("clr"));
     if (!colorModeValue.isEmpty()) {

@@ -34,6 +34,10 @@ public:
 
   const PvLimits &limits() const;
   void setLimits(const PvLimits &limits);
+  bool hasExplicitLimitsBlock() const;
+  void setHasExplicitLimitsBlock(bool hasBlock);
+  bool hasExplicitLimitsData() const;
+  void setHasExplicitLimitsData(bool hasData);
 
   QString channel() const;
   void setChannel(const QString &channel);
@@ -87,6 +91,8 @@ private:
   MeterLabel label_ = MeterLabel::kOutline;
   BarDirection direction_ = BarDirection::kRight;
   PvLimits limits_{};
+  bool hasExplicitLimitsBlock_ = false;
+  bool hasExplicitLimitsData_ = false;
   QString channel_;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;

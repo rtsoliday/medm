@@ -212,6 +212,26 @@ void TextEntryElement::setLimits(const PvLimits &limits)
   }
 }
 
+bool TextEntryElement::hasExplicitLimitsBlock() const
+{
+  return hasExplicitLimitsBlock_;
+}
+
+void TextEntryElement::setHasExplicitLimitsBlock(bool hasBlock)
+{
+  hasExplicitLimitsBlock_ = hasBlock;
+}
+
+bool TextEntryElement::hasExplicitLimitsData() const
+{
+  return hasExplicitLimitsData_;
+}
+
+void TextEntryElement::setHasExplicitLimitsData(bool hasData)
+{
+  hasExplicitLimitsData_ = hasData;
+}
+
 QString TextEntryElement::channel() const
 {
   return channel_;

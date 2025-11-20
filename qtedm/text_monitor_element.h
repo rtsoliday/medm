@@ -45,6 +45,8 @@ public:
   void setLimits(const PvLimits &limits);
   bool hasExplicitLimitsBlock() const;
   void setHasExplicitLimitsBlock(bool hasBlock);
+  bool hasExplicitLimitsData() const;
+  void setHasExplicitLimitsData(bool hasData);
 
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
@@ -78,6 +80,7 @@ private:
   PvLimits limits_{};
   std::array<QString, 5> channels_{};
   bool hasExplicitLimitsBlock_ = false;
+  bool hasExplicitLimitsData_ = false;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
   short runtimeSeverity_ = 0;

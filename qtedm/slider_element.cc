@@ -322,6 +322,26 @@ void SliderElement::setLimits(const PvLimits &limits)
   update();
 }
 
+bool SliderElement::hasExplicitLimitsBlock() const
+{
+  return hasExplicitLimitsBlock_;
+}
+
+void SliderElement::setHasExplicitLimitsBlock(bool hasBlock)
+{
+  hasExplicitLimitsBlock_ = hasBlock;
+}
+
+bool SliderElement::hasExplicitLimitsData() const
+{
+  return hasExplicitLimitsData_;
+}
+
+void SliderElement::setHasExplicitLimitsData(bool hasData)
+{
+  hasExplicitLimitsData_ = hasData;
+}
+
 QString SliderElement::channel() const
 {
   return channel_;

@@ -284,6 +284,26 @@ void MeterElement::setLimits(const PvLimits &limits)
   update();
 }
 
+bool MeterElement::hasExplicitLimitsBlock() const
+{
+  return hasExplicitLimitsBlock_;
+}
+
+void MeterElement::setHasExplicitLimitsBlock(bool hasBlock)
+{
+  hasExplicitLimitsBlock_ = hasBlock;
+}
+
+bool MeterElement::hasExplicitLimitsData() const
+{
+  return hasExplicitLimitsData_;
+}
+
+void MeterElement::setHasExplicitLimitsData(bool hasData)
+{
+  hasExplicitLimitsData_ = hasData;
+}
+
 QString MeterElement::channel() const
 {
   return channel_;

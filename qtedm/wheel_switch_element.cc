@@ -247,6 +247,26 @@ void WheelSwitchElement::setLimits(const PvLimits &limits)
   update();
 }
 
+bool WheelSwitchElement::hasExplicitLimitsBlock() const
+{
+  return hasExplicitLimitsBlock_;
+}
+
+void WheelSwitchElement::setHasExplicitLimitsBlock(bool hasBlock)
+{
+  hasExplicitLimitsBlock_ = hasBlock;
+}
+
+bool WheelSwitchElement::hasExplicitLimitsData() const
+{
+  return hasExplicitLimitsData_;
+}
+
+void WheelSwitchElement::setHasExplicitLimitsData(bool hasData)
+{
+  hasExplicitLimitsData_ = hasData;
+}
+
 QString WheelSwitchElement::channel() const
 {
   return channel_;

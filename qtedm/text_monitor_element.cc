@@ -209,6 +209,16 @@ void TextMonitorElement::setHasExplicitLimitsBlock(bool hasBlock)
   hasExplicitLimitsBlock_ = hasBlock;
 }
 
+bool TextMonitorElement::hasExplicitLimitsData() const
+{
+  return hasExplicitLimitsData_;
+}
+
+void TextMonitorElement::setHasExplicitLimitsData(bool hasData)
+{
+  hasExplicitLimitsData_ = hasData;
+}
+
 QString TextMonitorElement::channel(int index) const
 {
   if (index < 0 || index >= static_cast<int>(channels_.size())) {

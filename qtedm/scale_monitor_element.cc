@@ -183,6 +183,26 @@ void ScaleMonitorElement::setLimits(const PvLimits &limits)
   update();
 }
 
+bool ScaleMonitorElement::hasExplicitLimitsBlock() const
+{
+  return hasExplicitLimitsBlock_;
+}
+
+void ScaleMonitorElement::setHasExplicitLimitsBlock(bool hasBlock)
+{
+  hasExplicitLimitsBlock_ = hasBlock;
+}
+
+bool ScaleMonitorElement::hasExplicitLimitsData() const
+{
+  return hasExplicitLimitsData_;
+}
+
+void ScaleMonitorElement::setHasExplicitLimitsData(bool hasData)
+{
+  hasExplicitLimitsData_ = hasData;
+}
+
 QString ScaleMonitorElement::channel() const
 {
   return channel_;

@@ -189,6 +189,26 @@ void BarMonitorElement::setLimits(const PvLimits &limits)
   update();
 }
 
+bool BarMonitorElement::hasExplicitLimitsBlock() const
+{
+  return hasExplicitLimitsBlock_;
+}
+
+void BarMonitorElement::setHasExplicitLimitsBlock(bool hasBlock)
+{
+  hasExplicitLimitsBlock_ = hasBlock;
+}
+
+bool BarMonitorElement::hasExplicitLimitsData() const
+{
+  return hasExplicitLimitsData_;
+}
+
+void BarMonitorElement::setHasExplicitLimitsData(bool hasData)
+{
+  hasExplicitLimitsData_ = hasData;
+}
+
 QString BarMonitorElement::channel() const
 {
   return channel_;

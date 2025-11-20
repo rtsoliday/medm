@@ -199,6 +199,16 @@ void TextMonitorElement::setLimits(const PvLimits &limits)
   }
 }
 
+bool TextMonitorElement::hasExplicitLimitsBlock() const
+{
+  return hasExplicitLimitsBlock_;
+}
+
+void TextMonitorElement::setHasExplicitLimitsBlock(bool hasBlock)
+{
+  hasExplicitLimitsBlock_ = hasBlock;
+}
+
 QString TextMonitorElement::channel(int index) const
 {
   if (index < 0 || index >= static_cast<int>(channels_.size())) {

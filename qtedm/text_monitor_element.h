@@ -43,6 +43,8 @@ public:
   void setPrecisionDefault(int precision);
   const PvLimits &limits() const;
   void setLimits(const PvLimits &limits);
+  bool hasExplicitLimitsBlock() const;
+  void setHasExplicitLimitsBlock(bool hasBlock);
 
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
@@ -75,6 +77,7 @@ private:
   TextMonitorFormat format_ = TextMonitorFormat::kDecimal;
   PvLimits limits_{};
   std::array<QString, 5> channels_{};
+  bool hasExplicitLimitsBlock_ = false;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
   short runtimeSeverity_ = 0;

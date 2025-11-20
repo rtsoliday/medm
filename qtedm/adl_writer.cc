@@ -390,7 +390,7 @@ void writeObjectSection(QTextStream &stream, int level, const QRect &rect)
 
 void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
     RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth,
-    bool writeWidthForSingleLine)
+    bool writeWidthForSingleLine, bool suppressWidthLine)
 {
   writeIndentedLine(stream, level, QStringLiteral("\"basic attribute\" {"));
   writeIndentedLine(stream, level + 1,
@@ -403,16 +403,18 @@ void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
     writeIndentedLine(stream, level + 1,
         QStringLiteral("fill=\"%1\"").arg(fillString(fill)));
   }
-  if (writeWidthForSingleLine) {
-    if (lineWidth >= 1) {
-      writeIndentedLine(stream, level + 1,
-          QStringLiteral("width=%1").arg(lineWidth));
-    }
-  } else {
-    const int medmWidth = medmLineWidthValue(lineWidth);
-    if (medmWidth > 0) {
-      writeIndentedLine(stream, level + 1,
-          QStringLiteral("width=%1").arg(medmWidth));
+  if (!suppressWidthLine) {
+    if (writeWidthForSingleLine) {
+      if (lineWidth >= 1) {
+        writeIndentedLine(stream, level + 1,
+            QStringLiteral("width=%1").arg(lineWidth));
+      }
+    } else {
+      const int medmWidth = medmLineWidthValue(lineWidth);
+      if (medmWidth > 0) {
+        writeIndentedLine(stream, level + 1,
+            QStringLiteral("width=%1").arg(medmWidth));
+      }
     }
   }
   writeIndentedLine(stream, level, QStringLiteral("}"));
@@ -563,7 +565,7 @@ QString pvLimitSourceString(PvLimitSource source)
 }
 
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
-  bool includeChannelDefaults)
+  bool includeChannelDefaults, bool forceEmptyBlock)
 {
   const bool hasLow = limits.lowSource != PvLimitSource::kChannel;
   const bool hasHigh = limits.highSource != PvLimitSource::kChannel;
@@ -579,6 +581,11 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
   if (!hasLow && !hasHigh && !hasPrecision
     && !includeLowDefault && !includeHighDefault
     && !includePrecisionDefault) {
+    if (!forceEmptyBlock) {
+      return;
+    }
+    writeIndentedLine(stream, level, QStringLiteral("limits {"));
+    writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
 

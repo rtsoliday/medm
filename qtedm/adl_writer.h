@@ -40,7 +40,8 @@ int medmColorIndex(const QColor &color);
 void writeObjectSection(QTextStream &stream, int level, const QRect &rect);
 void writeBasicAttributeSection(QTextStream &stream, int level, int colorIndex,
     RectangleLineStyle lineStyle, RectangleFill fill, int lineWidth,
-    bool writeWidthForSingleLine = false);
+    bool writeWidthForSingleLine = false,
+    bool suppressWidthLine = false);
 void writeDynamicAttributeSection(QTextStream &stream, int level,
     TextColorMode colorMode, TextVisibilityMode visibilityMode,
     const QString &calc, const std::array<QString, 5> &channels);
@@ -58,7 +59,8 @@ void writePlotcom(QTextStream &stream, int level, const QString &title,
     const QString &xLabel, const std::array<QString, 4> &yLabels,
     int colorIndex, int backgroundIndex);
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
-    bool includeChannelDefaults = false);
+    bool includeChannelDefaults = false,
+    bool forceEmptyBlock = false);
 void writeStripChartPenSection(QTextStream &stream, int level, int index,
     const QString &channel, int colorIndex, const PvLimits &limits);
 void writePointsSection(

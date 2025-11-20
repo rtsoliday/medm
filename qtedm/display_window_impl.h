@@ -19,6 +19,7 @@
 #include <QPen>
 #include <QPainter>
 #include <QPixmap>
+#include <QSize>
 #include <QLabel>
 #include <QMimeData>
 #include <QPointer>
@@ -14393,7 +14394,8 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
             QStringLiteral("format=\"%1\"")
                 .arg(AdlWriter::textMonitorFormatString(monitor->format())));
       }
-  AdlWriter::writeLimitsSection(stream, 1, monitor->limits(), true);
+  AdlWriter::writeLimitsSection(stream, 1, monitor->limits(), true,
+      monitor->hasExplicitLimitsBlock());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14526,11 +14528,12 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("rectangle {"));
-      AdlWriter::writeObjectSection(stream, 1, rectangle->geometry());
-    AdlWriter::writeBasicAttributeSection(stream, 1,
-      AdlWriter::medmColorIndex(rectangle->color()),
-      rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
-      true);
+      AdlWriter::writeObjectSection(stream, 1,
+          rectangle->geometryForSerialization());
+      AdlWriter::writeBasicAttributeSection(stream, 1,
+          AdlWriter::medmColorIndex(rectangle->color()),
+          rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
+          true, !rectangle->shouldSerializeLineWidth());
     const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(rectangle));
     // MEDM stores rectangle channels as chan, chanB, chanC, chanD.
@@ -15175,7 +15178,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
           QStringLiteral("format=\"%1\"")
               .arg(AdlWriter::textMonitorFormatString(monitor->format())));
     }
-    AdlWriter::writeLimitsSection(stream, next, monitor->limits(), true);
+    AdlWriter::writeLimitsSection(stream, next, monitor->limits(), true,
+      monitor->hasExplicitLimitsBlock());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -16680,6 +16684,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
   auto *element = new TextMonitorElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  element->setHasExplicitLimitsBlock(false);
 
   const QString alignValue = propertyValue(textUpdateNode,
       QStringLiteral("align"));
@@ -16727,6 +16732,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
 
   if (const AdlNode *limitsNode = ::findChild(textUpdateNode,
           QStringLiteral("limits"))) {
+    element->setHasExplicitLimitsBlock(true);
     PvLimits limits = element->limits();
 
     bool hasLowSource = false;
@@ -19477,6 +19483,7 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
   }
 
   QRect geometry = parseObjectGeometry(effectiveNode);
+  const QSize originalAdlSize = geometry.size();
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
   }
@@ -19487,7 +19494,7 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
 
   auto *element = new RectangleElement(parent);
   element->setFill(RectangleFill::kSolid);
-  element->setGeometry(geometry);
+  element->initializeFromAdlGeometry(geometry, originalAdlSize);
 
   if (const AdlNode *basic = ::findChild(effectiveNode,
           QStringLiteral("basic attribute"))) {
@@ -19508,21 +19515,24 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
     element->setFill(parseRectangleFill(fillValue));
 
     ok = false;
-    const QString widthValue = propertyValue(*basic, QStringLiteral("width"));
+    const AdlProperty *widthProperty = ::findProperty(*basic,
+        QStringLiteral("width"));
+    const QString widthValue = widthProperty ? widthProperty->value
+                                             : QString();
     int width = widthValue.toInt(&ok);
     if (!ok || width <= 0) {
       width = 1;
     }
-    const int adlWidth = ok ? widthValue.toInt() : 0;
-    element->setAdlLineWidth(adlWidth);
-    element->setLineWidth(width);
+    const int adlWidth = (widthProperty && ok) ? widthValue.toInt() : 0;
+    element->setAdlLineWidth(adlWidth, widthProperty != nullptr);
+    element->setLineWidthFromAdl(width);
     
     /* Expand geometry by 1 pixel if adlLineWidth is 0 to prevent clipping */
     if (adlWidth == 0) {
       QRect expandedGeometry = element->geometry();
       expandedGeometry.setWidth(expandedGeometry.width() + 1);
       expandedGeometry.setHeight(expandedGeometry.height() + 1);
-      element->setGeometry(expandedGeometry);
+      element->setGeometryWithoutTracking(expandedGeometry);
     }
   }
 

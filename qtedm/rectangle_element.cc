@@ -94,6 +94,9 @@ int RectangleElement::lineWidth() const
 void RectangleElement::setLineWidth(int width)
 {
   const int clamped = std::max(1, width);
+  if (!suppressLineWidthTracking_ && lineWidth_ != clamped) {
+    lineWidthEdited_ = true;
+  }
   if (lineWidth_ == clamped) {
     return;
   }
@@ -101,14 +104,33 @@ void RectangleElement::setLineWidth(int width)
   update();
 }
 
+void RectangleElement::setLineWidthFromAdl(int width)
+{
+  const bool previous = suppressLineWidthTracking_;
+  suppressLineWidthTracking_ = true;
+  setLineWidth(width);
+  suppressLineWidthTracking_ = previous;
+  lineWidthEdited_ = false;
+}
+
 int RectangleElement::adlLineWidth() const
 {
   return adlLineWidth_;
 }
 
-void RectangleElement::setAdlLineWidth(int width)
+void RectangleElement::setAdlLineWidth(int width, bool hasProperty)
 {
   adlLineWidth_ = width;
+  hasAdlLineWidthProperty_ = hasProperty;
+  lineWidthEdited_ = false;
+}
+
+bool RectangleElement::shouldSerializeLineWidth() const
+{
+  if (hasAdlLineWidthProperty_) {
+    return true;
+  }
+  return lineWidthEdited_;
 }
 
 TextColorMode RectangleElement::colorMode() const
@@ -228,6 +250,42 @@ void RectangleElement::setVisible(bool visible)
     designModeVisible_ = visible;
   }
   QWidget::setVisible(visible);
+}
+
+void RectangleElement::setGeometry(const QRect &rect)
+{
+  const QSize previousSize = QWidget::geometry().size();
+  if (!suppressGeometryTracking_ && hasOriginalAdlSize_ &&
+      rect.size() != previousSize) {
+    sizeEdited_ = true;
+  }
+  QWidget::setGeometry(rect);
+}
+
+void RectangleElement::initializeFromAdlGeometry(const QRect &geometry,
+    const QSize &adlSize)
+{
+  originalAdlSize_ = adlSize;
+  hasOriginalAdlSize_ = true;
+  sizeEdited_ = false;
+  setGeometryWithoutTracking(geometry);
+}
+
+void RectangleElement::setGeometryWithoutTracking(const QRect &geometry)
+{
+  const bool previous = suppressGeometryTracking_;
+  suppressGeometryTracking_ = true;
+  QWidget::setGeometry(geometry);
+  suppressGeometryTracking_ = previous;
+}
+
+QRect RectangleElement::geometryForSerialization() const
+{
+  QRect serialized = geometry();
+  if (hasOriginalAdlSize_ && !sizeEdited_) {
+    serialized.setSize(originalAdlSize_);
+  }
+  return serialized;
 }
 
 void RectangleElement::paintEvent(QPaintEvent *event)

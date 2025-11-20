@@ -4,6 +4,8 @@
 
 #include <QColor>
 #include <QPaintEvent>
+#include <QRect>
+#include <QSize>
 #include <QString>
 #include <QWidget>
 
@@ -28,9 +30,11 @@ public:
 
   int lineWidth() const;
   void setLineWidth(int width);
+  void setLineWidthFromAdl(int width);
+  bool shouldSerializeLineWidth() const;
 
   int adlLineWidth() const;
-  void setAdlLineWidth(int width);
+  void setAdlLineWidth(int width, bool hasProperty);
 
   TextColorMode colorMode() const;
   void setColorMode(TextColorMode mode);
@@ -52,6 +56,13 @@ public:
   void setRuntimeSeverity(short severity);
 
   void setVisible(bool visible) override;
+  void setGeometry(const QRect &rect);
+  using QWidget::setGeometry;
+
+  void initializeFromAdlGeometry(const QRect &geometry,
+      const QSize &adlSize);
+  void setGeometryWithoutTracking(const QRect &geometry);
+  QRect geometryForSerialization() const;
 
 protected:
   void paintEvent(QPaintEvent *event) override;
@@ -77,5 +88,12 @@ private:
   bool runtimeConnected_ = false;
   bool runtimeVisible_ = true;
   short runtimeSeverity_ = 0;
+  bool suppressGeometryTracking_ = false;
+  bool hasOriginalAdlSize_ = false;
+  QSize originalAdlSize_;
+  bool sizeEdited_ = false;
+  bool suppressLineWidthTracking_ = false;
+  bool lineWidthEdited_ = false;
+  bool hasAdlLineWidthProperty_ = false;
 };
 

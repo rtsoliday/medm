@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+#include <QVariant>
 
 #include "medm_colors.h"
 
@@ -226,8 +227,16 @@ void PolylineElement::setAbsolutePoints(const QVector<QPoint> &points)
     bounding.setHeight(std::max(1, lineWidth_));
   }
 
-  const int widthSpan = std::max(1, bounding.width() - 1);
-  const int heightSpan = std::max(1, bounding.height() - 1);
+  QRect targetRect = bounding;
+  const QVariant original = property("_adlOriginalGeometry");
+  const bool geometryEdited = property("_adlGeometryEdited").toBool();
+  if (original.isValid() && original.canConvert<QRect>()
+      && !geometryEdited) {
+    targetRect = original.toRect();
+  }
+
+  const int widthSpan = std::max(1, targetRect.width());
+  const int heightSpan = std::max(1, targetRect.height());
   const double width = static_cast<double>(widthSpan);
   const double height = static_cast<double>(heightSpan);
 
@@ -235,16 +244,16 @@ void PolylineElement::setAbsolutePoints(const QVector<QPoint> &points)
   normalizedPoints_.reserve(points.size());
   for (const QPoint &point : points) {
     const double nx = width > 0.0
-        ? static_cast<double>(point.x() - bounding.left()) / width
+        ? static_cast<double>(point.x() - targetRect.left()) / width
         : 0.0;
     const double ny = height > 0.0
-        ? static_cast<double>(point.y() - bounding.top()) / height
+        ? static_cast<double>(point.y() - targetRect.top()) / height
         : 0.0;
     normalizedPoints_.append(QPointF(std::clamp(nx, 0.0, 1.0),
         std::clamp(ny, 0.0, 1.0)));
   }
 
-  QWidget::setGeometry(bounding);
+  QWidget::setGeometry(targetRect);
   recalcLocalPolyline();
   update();
 }
@@ -258,8 +267,8 @@ QVector<QPoint> PolylineElement::absolutePoints() const
 
   points.reserve(normalizedPoints_.size());
   const QRect globalRect = geometry();
-  const int w = std::max(1, globalRect.width() - 1);
-  const int h = std::max(1, globalRect.height() - 1);
+  const int w = std::max(1, globalRect.width());
+  const int h = std::max(1, globalRect.height());
   for (const QPointF &norm : normalizedPoints_) {
     const double clampedX = std::clamp(norm.x(), 0.0, 1.0);
     const double clampedY = std::clamp(norm.y(), 0.0, 1.0);
@@ -410,4 +419,3 @@ void PolylineElement::recalcLocalPolyline()
     localPolyline_.append(QPoint(x, y));
   }
 }
-

@@ -2270,6 +2270,8 @@ private:
   QList<QPointer<QWidget>> multiSelection_;
   QList<QPointer<QWidget>> elementStack_;
   QSet<QWidget *> elementStackSet_;  /* Fast O(1) duplicate checking for elementStack_ */
+  QHash<const QWidget *, QRect> originalAdlGeometries_;
+  QHash<const QWidget *, QVector<QPoint>> originalPolylinePoints_;
   bool stackingRefreshPending_ = false;
   bool stackingOrderInternallyUpdating_ = false;
   DisplayStackingEventFilter *stackingEventFilter_ = nullptr;
@@ -7978,6 +7980,8 @@ private:
     if (!element) {
       return;
     }
+    originalAdlGeometries_.remove(element);
+    originalPolylinePoints_.remove(element);
     bool removed = false;
     for (auto it = elementStack_.begin(); it != elementStack_.end();) {
       QWidget *current = it->data();
@@ -13877,6 +13881,13 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
   };
 
   auto serializedGeometry = [this](QWidget *widget) {
+    if (!widget) {
+      return QRect();
+    }
+    if (originalAdlGeometries_.contains(widget)) {
+      return absoluteGeometryForWidget(widget,
+          originalAdlGeometries_.value(widget));
+    }
     return absoluteGeometryForWidget(widget,
         widgetGeometryForSerialization(widget));
   };
@@ -14689,7 +14700,12 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       AdlWriter::collectChannels(line));
     AdlWriter::writeDynamicAttributeSection(stream, 1, line->colorMode(),
       line->visibilityMode(), line->visibilityCalc(), lineChannels);
-      const QVector<QPoint> points = line->absolutePoints();
+    QVector<QPoint> points = line->absolutePoints();
+    auto pointsIt = originalPolylinePoints_.find(line);
+    if (pointsIt != originalPolylinePoints_.end()
+        && !widgetGeometryEdited(line)) {
+      points = pointsIt.value();
+    }
       if (points.size() >= 2) {
         AdlWriter::writePointsSection(stream, 1, points);
       }
@@ -14709,7 +14725,13 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     AdlWriter::writeDynamicAttributeSection(stream, 1,
       polyline->colorMode(), polyline->visibilityMode(),
       polyline->visibilityCalc(), polylineChannels);
-      AdlWriter::writePointsSection(stream, 1, polyline->absolutePoints());
+      QVector<QPoint> points = polyline->absolutePoints();
+      auto pointsIt = originalPolylinePoints_.find(polyline);
+      if (pointsIt != originalPolylinePoints_.end()
+          && !widgetGeometryEdited(polyline)) {
+        points = pointsIt.value();
+      }
+      AdlWriter::writePointsSection(stream, 1, points);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14785,6 +14807,13 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   const int next = indent + 1;
 
   auto serializedGeometry = [this](QWidget *target) {
+    if (!target) {
+      return QRect();
+    }
+    if (originalAdlGeometries_.contains(target)) {
+      return absoluteGeometryForWidget(target,
+          originalAdlGeometries_.value(target));
+    }
     return absoluteGeometryForWidget(target,
         widgetGeometryForSerialization(target));
   };
@@ -15534,11 +15563,16 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
         RectangleFill::kSolid, line->lineWidth(), true);
     const auto lineChannels = AdlWriter::channelsForMedmFourValues(
-        AdlWriter::collectChannels(line));
+      AdlWriter::collectChannels(line));
     AdlWriter::writeDynamicAttributeSection(stream, next,
-        line->colorMode(), line->visibilityMode(),
-        line->visibilityCalc(), lineChannels);
-    const QVector<QPoint> points = line->absolutePoints();
+      line->colorMode(), line->visibilityMode(),
+      line->visibilityCalc(), lineChannels);
+    QVector<QPoint> points = line->absolutePoints();
+    auto pointsIt = originalPolylinePoints_.find(line);
+    if (pointsIt != originalPolylinePoints_.end()
+        && !widgetGeometryEdited(line)) {
+      points = pointsIt.value();
+    }
     if (points.size() >= 2) {
       AdlWriter::writePointsSection(stream, next, points);
     }
@@ -15560,7 +15594,13 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeDynamicAttributeSection(stream, next,
         polyline->colorMode(), polyline->visibilityMode(),
         polyline->visibilityCalc(), polylineChannels);
-    AdlWriter::writePointsSection(stream, next, polyline->absolutePoints());
+    QVector<QPoint> points = polyline->absolutePoints();
+    auto pointsIt = originalPolylinePoints_.find(polyline);
+    if (pointsIt != originalPolylinePoints_.end()
+        && !widgetGeometryEdited(polyline)) {
+      points = pointsIt.value();
+    }
+    AdlWriter::writePointsSection(stream, next, points);
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -16222,6 +16262,9 @@ inline void DisplayWindow::recordWidgetOriginalGeometry(QWidget *widget,
   if (!widget) {
     return;
   }
+  if (auto *mutableThis = const_cast<DisplayWindow *>(this)) {
+    mutableThis->originalAdlGeometries_.insert(widget, geometry);
+  }
   widget->setProperty(kOriginalAdlGeometryProperty, geometry);
   widget->setProperty(kAdlGeometryEditedProperty, false);
 }
@@ -16231,9 +16274,12 @@ inline void DisplayWindow::markWidgetGeometryEdited(QWidget *widget) const
   if (!widget) {
     return;
   }
-  if (!widget->property(kOriginalAdlGeometryProperty).isValid()) {
-    widget->setProperty(kOriginalAdlGeometryProperty, widget->geometry());
+  const QRect current = widget->geometry();
+  if (auto *mutableThis = const_cast<DisplayWindow *>(this)) {
+    mutableThis->originalAdlGeometries_.insert(widget, current);
+    mutableThis->originalPolylinePoints_.remove(widget);
   }
+  widget->setProperty(kOriginalAdlGeometryProperty, current);
   widget->setProperty(kAdlGeometryEditedProperty, true);
 }
 
@@ -16257,11 +16303,13 @@ inline QRect DisplayWindow::widgetGeometryForSerialization(
   } else {
     geometry = widget->geometry();
   }
-  const QVariant original = widget->property(kOriginalAdlGeometryProperty);
-  if (original.isValid() && original.canConvert<QRect>()) {
-    const QRect originalRect = original.toRect();
-    if (!widgetGeometryEdited(widget) || geometry == originalRect) {
-      geometry = originalRect;
+  const auto it = originalAdlGeometries_.find(widget);
+  if (it != originalAdlGeometries_.end()) {
+    geometry = it.value();
+  } else {
+    const QVariant original = widget->property(kOriginalAdlGeometryProperty);
+    if (original.isValid() && original.canConvert<QRect>()) {
+      geometry = original.toRect();
     }
   }
   return geometry;
@@ -20433,6 +20481,7 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
     }
   }
   recordWidgetOriginalGeometry(element, originalGeometry);
+  originalPolylinePoints_.insert(element, points);
   element->setAbsolutePoints(points);
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);
@@ -20667,7 +20716,9 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
 
   if (points.size() == 2) {
     auto *element = new LineElement(parent);
-    element->setGeometry(geometry);
+    const QRect initialGeometry = originalGeometry.isValid()
+        ? originalGeometry : geometry;
+    element->setGeometry(initialGeometry);
     element->setForegroundColor(color);
     element->setLineStyle(lineStyle);
     element->setLineWidth(lineWidth);
@@ -20681,6 +20732,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
       }
     }
     recordWidgetOriginalGeometry(element, originalGeometry);
+    originalPolylinePoints_.insert(element, points);
     const QPoint localStart = points.first() - geometry.topLeft();
     const QPoint localEnd = points.last() - geometry.topLeft();
     element->setLocalEndpoints(localStart, localEnd);

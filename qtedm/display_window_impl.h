@@ -16560,9 +16560,19 @@ inline QRect DisplayWindow::absoluteGeometryForWidget(
   if (!widget) {
     return localGeometry;
   }
-  QRect absolute = localGeometry;
-  absolute.moveTopLeft(widgetDisplayRect(widget).topLeft());
-  return absolute;
+  if (!displayArea_) {
+    return localGeometry;
+  }
+
+  QPoint displayTopLeft;
+  if (const QWidget *parent = widget->parentWidget()) {
+    displayTopLeft = displayArea_->mapFromGlobal(
+        parent->mapToGlobal(localGeometry.topLeft()));
+  } else {
+    displayTopLeft = displayArea_->mapFromGlobal(
+        widget->mapToGlobal(localGeometry.topLeft()));
+  }
+  return QRect(displayTopLeft, localGeometry.size());
 }
 
 inline std::optional<AdlNode> DisplayWindow::widgetToAdlNode(QWidget *widget) const
@@ -20177,12 +20187,19 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
     return nullptr;
   }
 
+  const bool hasObjectGeometry =
+      ::findChild(effectiveNode, QStringLiteral("object")) != nullptr;
+  QRect originalGeometry = hasObjectGeometry
+      ? parseObjectGeometry(effectiveNode)
+      : QPolygon(points).boundingRect();
   if (!currentElementOffset_.isNull()) {
     for (QPoint &point : points) {
       point += currentElementOffset_;
     }
+    if (hasObjectGeometry) {
+      originalGeometry.translate(currentElementOffset_);
+    }
   }
-  const QRect originalGeometry = QPolygon(points).boundingRect();
 
   QColor color = colorForIndex(14);
   RectangleLineStyle lineStyle = RectangleLineStyle::kSolid;
@@ -20401,6 +20418,11 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     return nullptr;
   }
 
+  const bool hasObjectGeometry =
+      ::findChild(effectiveNode, QStringLiteral("object")) != nullptr;
+  QRect originalGeometry = hasObjectGeometry
+      ? parseObjectGeometry(effectiveNode)
+      : QRect();
   QVector<QPoint> points = parsePolylinePoints(effectiveNode);
   if (points.size() < 2) {
     return nullptr;
@@ -20410,6 +20432,12 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
     for (QPoint &point : points) {
       point += currentElementOffset_;
     }
+    if (hasObjectGeometry) {
+      originalGeometry.translate(currentElementOffset_);
+    }
+  }
+  if (!hasObjectGeometry) {
+    originalGeometry = QPolygon(points).boundingRect();
   }
 
   QColor color = colorForIndex(14);
@@ -20488,7 +20516,6 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
 
   QPolygon polygon(points);
   QRect geometry = polygon.boundingRect();
-  const QRect originalGeometry = geometry;
   
   /* Expand geometry to accommodate line width, matching MEDM behavior */
   const int halfWidth = lineWidth / 2;

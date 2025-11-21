@@ -342,6 +342,36 @@ void SliderElement::setHasExplicitLimitsData(bool hasData)
   hasExplicitLimitsData_ = hasData;
 }
 
+bool SliderElement::hasExplicitLowLimitData() const
+{
+  return hasExplicitLowLimitData_;
+}
+
+void SliderElement::setHasExplicitLowLimitData(bool hasData)
+{
+  hasExplicitLowLimitData_ = hasData;
+}
+
+bool SliderElement::hasExplicitHighLimitData() const
+{
+  return hasExplicitHighLimitData_;
+}
+
+void SliderElement::setHasExplicitHighLimitData(bool hasData)
+{
+  hasExplicitHighLimitData_ = hasData;
+}
+
+bool SliderElement::hasExplicitPrecisionData() const
+{
+  return hasExplicitPrecisionData_;
+}
+
+void SliderElement::setHasExplicitPrecisionData(bool hasData)
+{
+  hasExplicitPrecisionData_ = hasData;
+}
+
 QString SliderElement::channel() const
 {
   return channel_;

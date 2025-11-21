@@ -209,6 +209,36 @@ void BarMonitorElement::setHasExplicitLimitsData(bool hasData)
   hasExplicitLimitsData_ = hasData;
 }
 
+bool BarMonitorElement::hasExplicitLowLimitData() const
+{
+  return hasExplicitLowLimitData_;
+}
+
+void BarMonitorElement::setHasExplicitLowLimitData(bool hasData)
+{
+  hasExplicitLowLimitData_ = hasData;
+}
+
+bool BarMonitorElement::hasExplicitHighLimitData() const
+{
+  return hasExplicitHighLimitData_;
+}
+
+void BarMonitorElement::setHasExplicitHighLimitData(bool hasData)
+{
+  hasExplicitHighLimitData_ = hasData;
+}
+
+bool BarMonitorElement::hasExplicitPrecisionData() const
+{
+  return hasExplicitPrecisionData_;
+}
+
+void BarMonitorElement::setHasExplicitPrecisionData(bool hasData)
+{
+  hasExplicitPrecisionData_ = hasData;
+}
+
 QString BarMonitorElement::channel() const
 {
   return channel_;

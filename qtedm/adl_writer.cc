@@ -565,17 +565,21 @@ QString pvLimitSourceString(PvLimitSource source)
 }
 
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
-  bool includeChannelDefaults, bool forceEmptyBlock)
+  bool includeChannelDefaults, bool forceEmptyBlock,
+  bool includePrecisionDefaults,
+  bool includeLowChannelDefault, bool includeHighChannelDefault)
 {
   const bool hasLow = limits.lowSource != PvLimitSource::kChannel;
   const bool hasHigh = limits.highSource != PvLimitSource::kChannel;
   const bool hasPrecision = limits.precisionSource != PvLimitSource::kChannel;
 
-  const bool includeLowDefault = includeChannelDefaults && !hasLow
+  const bool includeLowDefault = includeChannelDefaults
+      && includeLowChannelDefault && !hasLow
       && std::abs(limits.lowDefault - 0.0) > 1e-9;
-  const bool includeHighDefault = includeChannelDefaults && !hasHigh
+  const bool includeHighDefault = includeChannelDefaults
+      && includeHighChannelDefault && !hasHigh
       && std::abs(limits.highDefault - 1.0) > 1e-9;
-  const bool includePrecisionDefault = includeChannelDefaults && !hasPrecision
+  const bool includePrecisionDefault = includePrecisionDefaults && !hasPrecision
     && limits.precisionDefault != 0;
 
   if (!hasLow && !hasHigh && !hasPrecision
@@ -656,7 +660,7 @@ void writeStripChartPenSection(QTextStream &stream, int level, int index,
           .arg(escapeAdlString(trimmedChannel)));
   writeIndentedLine(stream, level + 1,
       QStringLiteral("clr=%1").arg(colorIndex));
-  writeLimitsSection(stream, level + 1, limits, true);
+  writeLimitsSection(stream, level + 1, limits, true, false, true, true, true);
   writeIndentedLine(stream, level, QStringLiteral("}"));
 }
 

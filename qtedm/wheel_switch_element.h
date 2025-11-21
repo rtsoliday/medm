@@ -46,6 +46,12 @@ public:
   void setHasExplicitLimitsBlock(bool hasBlock);
   bool hasExplicitLimitsData() const;
   void setHasExplicitLimitsData(bool hasData);
+  bool hasExplicitLowLimitData() const;
+  void setHasExplicitLowLimitData(bool hasData);
+  bool hasExplicitHighLimitData() const;
+  void setHasExplicitHighLimitData(bool hasData);
+  bool hasExplicitPrecisionData() const;
+  void setHasExplicitPrecisionData(bool hasData);
 
   QString channel() const;
   void setChannel(const QString &channel);
@@ -147,6 +153,9 @@ private:
   PvLimits limits_{};
   bool hasExplicitLimitsBlock_ = false;
   bool hasExplicitLimitsData_ = false;
+  bool hasExplicitLowLimitData_ = false;
+  bool hasExplicitHighLimitData_ = false;
+  bool hasExplicitPrecisionData_ = false;
   QString channel_;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;

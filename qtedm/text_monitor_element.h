@@ -47,6 +47,12 @@ public:
   void setHasExplicitLimitsBlock(bool hasBlock);
   bool hasExplicitLimitsData() const;
   void setHasExplicitLimitsData(bool hasData);
+  bool hasExplicitLowLimitData() const;
+  void setHasExplicitLowLimitData(bool hasData);
+  bool hasExplicitHighLimitData() const;
+  void setHasExplicitHighLimitData(bool hasData);
+  bool hasExplicitPrecisionData() const;
+  void setHasExplicitPrecisionData(bool hasData);
 
   QString channel(int index) const;
   void setChannel(int index, const QString &value);
@@ -81,6 +87,9 @@ private:
   std::array<QString, 5> channels_{};
   bool hasExplicitLimitsBlock_ = false;
   bool hasExplicitLimitsData_ = false;
+  bool hasExplicitLowLimitData_ = false;
+  bool hasExplicitHighLimitData_ = false;
+  bool hasExplicitPrecisionData_ = false;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
   short runtimeSeverity_ = 0;

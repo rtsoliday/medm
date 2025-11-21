@@ -267,6 +267,36 @@ void WheelSwitchElement::setHasExplicitLimitsData(bool hasData)
   hasExplicitLimitsData_ = hasData;
 }
 
+bool WheelSwitchElement::hasExplicitLowLimitData() const
+{
+  return hasExplicitLowLimitData_;
+}
+
+void WheelSwitchElement::setHasExplicitLowLimitData(bool hasData)
+{
+  hasExplicitLowLimitData_ = hasData;
+}
+
+bool WheelSwitchElement::hasExplicitHighLimitData() const
+{
+  return hasExplicitHighLimitData_;
+}
+
+void WheelSwitchElement::setHasExplicitHighLimitData(bool hasData)
+{
+  hasExplicitHighLimitData_ = hasData;
+}
+
+bool WheelSwitchElement::hasExplicitPrecisionData() const
+{
+  return hasExplicitPrecisionData_;
+}
+
+void WheelSwitchElement::setHasExplicitPrecisionData(bool hasData)
+{
+  hasExplicitPrecisionData_ = hasData;
+}
+
 QString WheelSwitchElement::channel() const
 {
   return channel_;

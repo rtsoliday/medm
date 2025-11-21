@@ -14057,7 +14057,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::textMonitorFormatString(entry->format())));
       }
         AdlWriter::writeLimitsSection(stream, 1, entry->limits(),
-          entry->hasExplicitLimitsData(), entry->hasExplicitLimitsBlock());
+          entry->hasExplicitLimitsData(), entry->hasExplicitLimitsBlock(),
+          entry->hasExplicitPrecisionData(),
+          entry->hasExplicitLowLimitData(), entry->hasExplicitHighLimitData());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14089,12 +14091,14 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::barDirectionString(slider->direction())));
       }
       if (std::abs(slider->increment() - 1.0) > 1e-9) {
-        AdlWriter::writeIndentedLine(stream, 1,
+          AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("dPrecision=%1")
-                .arg(QString::number(slider->increment(), 'g', 6)));
+              .arg(QString::number(slider->increment(), 'f', 6)));
       }
         AdlWriter::writeLimitsSection(stream, 1, slider->limits(),
-          slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock());
+          slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock(),
+          slider->hasExplicitPrecisionData(),
+          slider->hasExplicitLowLimitData(), slider->hasExplicitHighLimitData());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14122,7 +14126,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::escapeAdlString(wheelFormat)));
       }
         AdlWriter::writeLimitsSection(stream, 1, wheel->limits(),
-          wheel->hasExplicitLimitsData(), wheel->hasExplicitLimitsBlock());
+          wheel->hasExplicitLimitsData(), wheel->hasExplicitLimitsBlock(),
+          wheel->hasExplicitPrecisionData(),
+          wheel->hasExplicitLowLimitData(), wheel->hasExplicitHighLimitData());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14321,7 +14327,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::colorModeString(meter->colorMode())));
       }
     AdlWriter::writeLimitsSection(stream, 1, meter->limits(),
-      meter->hasExplicitLimitsData(), meter->hasExplicitLimitsBlock());
+      meter->hasExplicitLimitsData(), meter->hasExplicitLimitsBlock(),
+      meter->hasExplicitPrecisionData(),
+      meter->hasExplicitLowLimitData(), meter->hasExplicitHighLimitData());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14357,7 +14365,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::barFillModeString(bar->fillMode())));
       }
         AdlWriter::writeLimitsSection(stream, 1, bar->limits(),
-          bar->hasExplicitLimitsData(), bar->hasExplicitLimitsBlock());
+          bar->hasExplicitLimitsData(), bar->hasExplicitLimitsBlock(),
+          bar->hasExplicitPrecisionData(),
+          bar->hasExplicitLowLimitData(), bar->hasExplicitHighLimitData());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14389,7 +14399,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::barDirectionString(scale->direction())));
       }
         AdlWriter::writeLimitsSection(stream, 1, scale->limits(),
-          scale->hasExplicitLimitsData(), scale->hasExplicitLimitsBlock());
+          scale->hasExplicitLimitsData(), scale->hasExplicitLimitsBlock(),
+          scale->hasExplicitPrecisionData(),
+          scale->hasExplicitLowLimitData(), scale->hasExplicitHighLimitData());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14456,7 +14468,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::textMonitorFormatString(monitor->format())));
       }
     AdlWriter::writeLimitsSection(stream, 1, monitor->limits(),
-      monitor->hasExplicitLimitsData(), monitor->hasExplicitLimitsBlock());
+      monitor->hasExplicitLimitsData(), monitor->hasExplicitLimitsBlock(),
+      monitor->hasExplicitPrecisionData(),
+      monitor->hasExplicitLowLimitData(), monitor->hasExplicitHighLimitData());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14863,7 +14877,9 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::textMonitorFormatString(entry->format())));
     }
     AdlWriter::writeLimitsSection(stream, next, entry->limits(),
-      entry->hasExplicitLimitsData(), entry->hasExplicitLimitsBlock());
+      entry->hasExplicitLimitsData(), entry->hasExplicitLimitsBlock(),
+      entry->hasExplicitPrecisionData(),
+      entry->hasExplicitLowLimitData(), entry->hasExplicitHighLimitData());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -14897,11 +14913,13 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     }
     if (std::abs(slider->increment() - 1.0) > 1e-9) {
       AdlWriter::writeIndentedLine(stream, next,
-          QStringLiteral("dPrecision=%1")
-              .arg(QString::number(slider->increment(), 'g', 6)));
+        QStringLiteral("dPrecision=%1")
+          .arg(QString::number(slider->increment(), 'f', 6)));
     }
     AdlWriter::writeLimitsSection(stream, next, slider->limits(),
-      slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock());
+      slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock(),
+      slider->hasExplicitPrecisionData(),
+      slider->hasExplicitLowLimitData(), slider->hasExplicitHighLimitData());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -14930,7 +14948,9 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::escapeAdlString(wheelFormat)));
     }
     AdlWriter::writeLimitsSection(stream, next, wheel->limits(),
-      wheel->hasExplicitLimitsData(), wheel->hasExplicitLimitsBlock());
+      wheel->hasExplicitLimitsData(), wheel->hasExplicitLimitsBlock(),
+      wheel->hasExplicitPrecisionData(),
+      wheel->hasExplicitLowLimitData(), wheel->hasExplicitHighLimitData());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -15135,7 +15155,9 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::colorModeString(meter->colorMode())));
     }
     AdlWriter::writeLimitsSection(stream, next, meter->limits(),
-      meter->hasExplicitLimitsData(), meter->hasExplicitLimitsBlock());
+      meter->hasExplicitLimitsData(), meter->hasExplicitLimitsBlock(),
+      meter->hasExplicitPrecisionData(),
+      meter->hasExplicitLowLimitData(), meter->hasExplicitHighLimitData());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -15172,7 +15194,9 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::barFillModeString(bar->fillMode())));
     }
     AdlWriter::writeLimitsSection(stream, next, bar->limits(),
-      bar->hasExplicitLimitsData(), bar->hasExplicitLimitsBlock());
+      bar->hasExplicitLimitsData(), bar->hasExplicitLimitsBlock(),
+      bar->hasExplicitPrecisionData(),
+      bar->hasExplicitLowLimitData(), bar->hasExplicitHighLimitData());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -15204,7 +15228,9 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::barDirectionString(scale->direction())));
     }
     AdlWriter::writeLimitsSection(stream, next, scale->limits(),
-      scale->hasExplicitLimitsData(), scale->hasExplicitLimitsBlock());
+      scale->hasExplicitLimitsData(), scale->hasExplicitLimitsBlock(),
+      scale->hasExplicitPrecisionData(),
+      scale->hasExplicitLowLimitData(), scale->hasExplicitHighLimitData());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -15272,7 +15298,9 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::textMonitorFormatString(monitor->format())));
     }
     AdlWriter::writeLimitsSection(stream, next, monitor->limits(),
-      monitor->hasExplicitLimitsData(), monitor->hasExplicitLimitsBlock());
+      monitor->hasExplicitLimitsData(), monitor->hasExplicitLimitsBlock(),
+      monitor->hasExplicitPrecisionData(),
+      monitor->hasExplicitLowLimitData(), monitor->hasExplicitHighLimitData());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -16560,19 +16588,9 @@ inline QRect DisplayWindow::absoluteGeometryForWidget(
   if (!widget) {
     return localGeometry;
   }
-  if (!displayArea_) {
-    return localGeometry;
-  }
-
-  QPoint displayTopLeft;
-  if (const QWidget *parent = widget->parentWidget()) {
-    displayTopLeft = displayArea_->mapFromGlobal(
-        parent->mapToGlobal(localGeometry.topLeft()));
-  } else {
-    displayTopLeft = displayArea_->mapFromGlobal(
-        widget->mapToGlobal(localGeometry.topLeft()));
-  }
-  return QRect(displayTopLeft, localGeometry.size());
+  QRect absolute = localGeometry;
+  absolute.moveTopLeft(widgetDisplayRect(widget).topLeft());
+  return absolute;
 }
 
 inline std::optional<AdlNode> DisplayWindow::widgetToAdlNode(QWidget *widget) const
@@ -16871,6 +16889,9 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
   recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
 
   const QString alignValue = propertyValue(textUpdateNode,
       QStringLiteral("align"));
@@ -16925,12 +16946,16 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
     bool hasHighSource = false;
     bool hasPrecisionSource = false;
     bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
       hasLowSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -16940,6 +16965,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("loprDefault"))) {
@@ -16948,6 +16974,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     }
 
@@ -16956,6 +16983,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
       limits.highSource = parseLimitSource(prop->value);
       hasHighSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -16965,6 +16993,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("hoprDefault"))) {
@@ -16973,6 +17002,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     }
 
@@ -16980,7 +17010,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
       hasPrecisionSource = true;
-      hasExplicitLimitsData = true;
+      hasExplicitPrecisionData = true;
     }
 
     if (!hasLowSource) {
@@ -16999,7 +17029,7 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("precDefault"))) {
@@ -17007,12 +17037,15 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     }
 
     element->setLimits(limits);
     element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
   }
 
   if (element->text().isEmpty()) {
@@ -17047,6 +17080,9 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
   recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
 
   const QString formatValue = propertyValue(textEntryNode,
       QStringLiteral("format"));
@@ -17091,12 +17127,16 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
     bool hasHighSource = false;
     bool hasPrecisionSource = false;
     bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
       hasLowSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -17106,6 +17146,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("loprDefault"))) {
@@ -17114,6 +17155,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     }
 
@@ -17122,6 +17164,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
       limits.highSource = parseLimitSource(prop->value);
       hasHighSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -17131,6 +17174,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("hoprDefault"))) {
@@ -17139,6 +17183,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     }
 
@@ -17146,7 +17191,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
       hasPrecisionSource = true;
-      hasExplicitLimitsData = true;
+      hasExplicitPrecisionData = true;
     }
 
     if (!hasLowSource) {
@@ -17165,7 +17210,7 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("precDefault"))) {
@@ -17173,12 +17218,15 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     }
 
     element->setLimits(limits);
     element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
   }
 
   auto channelSetter = [element](int, const QString &value) {
@@ -17224,6 +17272,9 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
   recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
 
   if (const AdlNode *control = ::findChild(valuatorNode,
           QStringLiteral("control"))) {
@@ -17287,12 +17338,16 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
     bool hasHighSource = false;
     bool hasPrecisionSource = false;
     bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
       hasLowSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -17302,6 +17357,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("loprDefault"))) {
@@ -17310,6 +17366,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     }
 
@@ -17318,6 +17375,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
       limits.highSource = parseLimitSource(prop->value);
       hasHighSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -17327,6 +17385,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("hoprDefault"))) {
@@ -17335,6 +17394,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     }
 
@@ -17342,7 +17402,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
       hasPrecisionSource = true;
-      hasExplicitLimitsData = true;
+       hasExplicitPrecisionData = true;
     }
 
     if (!hasLowSource) {
@@ -17361,7 +17421,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+         hasExplicitPrecisionData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("precDefault"))) {
@@ -17369,12 +17429,15 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+         hasExplicitPrecisionData = true;
       }
     }
 
     element->setLimits(limits);
     element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+     element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
   } else if (loadingLegacyAdl_) {
     PvLimits limits = element->limits();
     limits.lowSource = PvLimitSource::kChannel;
@@ -17382,6 +17445,9 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
     limits.precisionSource = PvLimitSource::kChannel;
     element->setLimits(limits);
     element->setHasExplicitLimitsData(false);
+    element->setHasExplicitLowLimitData(false);
+    element->setHasExplicitHighLimitData(false);
+     element->setHasExplicitPrecisionData(false);
   }
 
   auto channelSetter = [element](int index, const QString &value) {
@@ -17430,6 +17496,9 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
   recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
 
   const QString colorModeValue = propertyValue(wheelNode,
       QStringLiteral("clrmod"));
@@ -17477,12 +17546,16 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
     bool hasPrecisionSource = false;
     bool hasPrecisionValue = false;
     bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
       hasLowSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -17492,6 +17565,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("loprDefault"))) {
@@ -17500,6 +17574,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     }
 
@@ -17508,6 +17583,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
       limits.highSource = parseLimitSource(prop->value);
       hasHighSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -17517,6 +17593,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("hoprDefault"))) {
@@ -17525,6 +17602,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     }
 
@@ -17532,7 +17610,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
       hasPrecisionSource = true;
-      hasExplicitLimitsData = true;
+      hasExplicitPrecisionData = true;
     }
 
     if (!hasLowSource) {
@@ -17552,7 +17630,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
       if (ok) {
         limits.precisionDefault = value;
         hasPrecisionValue = true;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("precDefault"))) {
@@ -17561,12 +17639,15 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
       if (ok) {
         limits.precisionDefault = value;
         hasPrecisionValue = true;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     }
 
     element->setLimits(limits);
     element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
     if (hasPrecisionValue) {
       element->setPrecision(static_cast<double>(limits.precisionDefault));
     }
@@ -18540,6 +18621,9 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
   recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
 
   if (const AdlNode *monitor = ::findChild(meterNode,
           QStringLiteral("monitor"))) {
@@ -18590,12 +18674,16 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
     bool hasHighSource = false;
     bool hasPrecisionSource = false;
     bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
       hasLowSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -18605,6 +18693,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("loprDefault"))) {
@@ -18613,6 +18702,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     }
 
@@ -18621,6 +18711,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
       limits.highSource = parseLimitSource(prop->value);
       hasHighSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -18630,6 +18721,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("hoprDefault"))) {
@@ -18638,6 +18730,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     }
 
@@ -18645,7 +18738,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
       hasPrecisionSource = true;
-      hasExplicitLimitsData = true;
+      hasExplicitPrecisionData = true;
     }
 
     if (!hasLowSource) {
@@ -18664,7 +18757,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("precDefault"))) {
@@ -18672,12 +18765,15 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     }
 
     element->setLimits(limits);
     element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
   }
 
   if (currentCompositeOwner_) {
@@ -18714,6 +18810,9 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
   recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
 
   if (const AdlNode *monitor = ::findChild(barNode,
           QStringLiteral("monitor"))) {
@@ -18773,12 +18872,16 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
     bool hasHighSource = false;
     bool hasPrecisionSource = false;
     bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
       hasLowSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -18788,6 +18891,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("loprDefault"))) {
@@ -18796,6 +18900,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     }
 
@@ -18804,6 +18909,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
       limits.highSource = parseLimitSource(prop->value);
       hasHighSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -18813,6 +18919,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("hoprDefault"))) {
@@ -18821,6 +18928,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     }
 
@@ -18828,7 +18936,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
       hasPrecisionSource = true;
-      hasExplicitLimitsData = true;
+      hasExplicitPrecisionData = true;
     }
 
     if (!hasLowSource) {
@@ -18847,7 +18955,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("precDefault"))) {
@@ -18855,12 +18963,15 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     }
 
     element->setLimits(limits);
     element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
   }
 
   if (currentCompositeOwner_) {
@@ -18898,6 +19009,9 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
   recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
 
   if (const AdlNode *monitor = ::findChild(indicatorNode,
           QStringLiteral("monitor"))) {
@@ -18955,12 +19069,16 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
     bool hasHighSource = false;
     bool hasPrecisionSource = false;
     bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
             QStringLiteral("loprSrc"))) {
       limits.lowSource = parseLimitSource(prop->value);
       hasLowSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -18970,6 +19088,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("loprDefault"))) {
@@ -18978,6 +19097,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
       if (ok) {
         limits.lowDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
       }
     }
 
@@ -18986,6 +19106,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
       limits.highSource = parseLimitSource(prop->value);
       hasHighSource = true;
       hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
     }
 
     if (const AdlProperty *prop = ::findProperty(*limitsNode,
@@ -18995,6 +19116,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("hoprDefault"))) {
@@ -19003,6 +19125,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
       if (ok) {
         limits.highDefault = value;
         hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
       }
     }
 
@@ -19010,7 +19133,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
             QStringLiteral("precSrc"))) {
       limits.precisionSource = parseLimitSource(prop->value);
       hasPrecisionSource = true;
-      hasExplicitLimitsData = true;
+      hasExplicitPrecisionData = true;
     }
 
     if (!hasLowSource) {
@@ -19029,7 +19152,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
                    QStringLiteral("precDefault"))) {
@@ -19037,12 +19160,15 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
       const int value = prop->value.toInt(&ok);
       if (ok) {
         limits.precisionDefault = value;
-        hasExplicitLimitsData = true;
+        hasExplicitPrecisionData = true;
       }
     }
 
     element->setLimits(limits);
     element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
   }
 
   if (currentCompositeOwner_) {

@@ -219,6 +219,36 @@ void TextMonitorElement::setHasExplicitLimitsData(bool hasData)
   hasExplicitLimitsData_ = hasData;
 }
 
+bool TextMonitorElement::hasExplicitLowLimitData() const
+{
+  return hasExplicitLowLimitData_;
+}
+
+void TextMonitorElement::setHasExplicitLowLimitData(bool hasData)
+{
+  hasExplicitLowLimitData_ = hasData;
+}
+
+bool TextMonitorElement::hasExplicitHighLimitData() const
+{
+  return hasExplicitHighLimitData_;
+}
+
+void TextMonitorElement::setHasExplicitHighLimitData(bool hasData)
+{
+  hasExplicitHighLimitData_ = hasData;
+}
+
+bool TextMonitorElement::hasExplicitPrecisionData() const
+{
+  return hasExplicitPrecisionData_;
+}
+
+void TextMonitorElement::setHasExplicitPrecisionData(bool hasData)
+{
+  hasExplicitPrecisionData_ = hasData;
+}
+
 QString TextMonitorElement::channel(int index) const
 {
   if (index < 0 || index >= static_cast<int>(channels_.size())) {

@@ -232,6 +232,36 @@ void TextEntryElement::setHasExplicitLimitsData(bool hasData)
   hasExplicitLimitsData_ = hasData;
 }
 
+bool TextEntryElement::hasExplicitLowLimitData() const
+{
+  return hasExplicitLowLimitData_;
+}
+
+void TextEntryElement::setHasExplicitLowLimitData(bool hasData)
+{
+  hasExplicitLowLimitData_ = hasData;
+}
+
+bool TextEntryElement::hasExplicitHighLimitData() const
+{
+  return hasExplicitHighLimitData_;
+}
+
+void TextEntryElement::setHasExplicitHighLimitData(bool hasData)
+{
+  hasExplicitHighLimitData_ = hasData;
+}
+
+bool TextEntryElement::hasExplicitPrecisionData() const
+{
+  return hasExplicitPrecisionData_;
+}
+
+void TextEntryElement::setHasExplicitPrecisionData(bool hasData)
+{
+  hasExplicitPrecisionData_ = hasData;
+}
+
 QString TextEntryElement::channel() const
 {
   return channel_;

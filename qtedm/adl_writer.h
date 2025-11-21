@@ -60,7 +60,10 @@ void writePlotcom(QTextStream &stream, int level, const QString &title,
     int colorIndex, int backgroundIndex);
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
     bool includeChannelDefaults = false,
-    bool forceEmptyBlock = false);
+    bool forceEmptyBlock = false,
+    bool includePrecisionDefaults = false,
+    bool includeLowChannelDefault = false,
+    bool includeHighChannelDefault = false);
 void writeStripChartPenSection(QTextStream &stream, int level, int index,
     const QString &channel, int colorIndex, const PvLimits &limits);
 void writePointsSection(

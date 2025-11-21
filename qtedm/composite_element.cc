@@ -137,6 +137,19 @@ QString CompositeElement::compositeName() const
 void CompositeElement::setCompositeName(const QString &name)
 {
   compositeName_ = name;
+  if (name.trimmed().isEmpty()) {
+    hasExplicitCompositeName_ = false;
+  }
+}
+
+bool CompositeElement::hasExplicitCompositeName() const
+{
+  return hasExplicitCompositeName_;
+}
+
+void CompositeElement::setHasExplicitCompositeName(bool hasExplicitName)
+{
+  hasExplicitCompositeName_ = hasExplicitName;
 }
 
 QString CompositeElement::compositeFile() const

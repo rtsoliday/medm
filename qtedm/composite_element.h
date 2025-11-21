@@ -20,6 +20,8 @@ public:
 
   QString compositeName() const;
   void setCompositeName(const QString &name);
+  bool hasExplicitCompositeName() const;
+  void setHasExplicitCompositeName(bool hasExplicitName);
 
   QString compositeFile() const;
   void setCompositeFile(const QString &filePath);
@@ -89,4 +91,5 @@ private:
   bool designModeVisible_ = true;
   bool childStackingRefreshPending_ = false;
   bool childStackingOrderInternallyUpdating_ = false;
+  bool hasExplicitCompositeName_ = false;
 };

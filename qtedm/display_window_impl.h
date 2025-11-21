@@ -2053,6 +2053,8 @@ private:
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
   void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
+  QRect absoluteGeometryForWidget(const QWidget *widget,
+      const QRect &localGeometry) const;
   static QString applyMacroSubstitutions(const QString &input,
       const QHash<QString, QString> &macros);
   void writeWidgetAdl(QTextStream &stream, QWidget *widget, int indent,
@@ -13916,13 +13918,18 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("composite {"));
-      AdlWriter::writeObjectSection(stream, 1, composite->geometry());
-      const QString compositeName = composite->compositeName().trimmed();
-      if (!compositeName.isEmpty()) {
+        AdlWriter::writeObjectSection(stream, 1,
+          absoluteGeometryForWidget(composite, composite->geometry()));
+        const QString rawCompositeName = composite->compositeName();
+        const QString trimmedCompositeName = rawCompositeName.trimmed();
+        const bool hasExplicitName = composite->hasExplicitCompositeName();
+        if (hasExplicitName || !trimmedCompositeName.isEmpty()) {
+        const QString nameToWrite = hasExplicitName ? rawCompositeName
+                              : trimmedCompositeName;
         AdlWriter::writeIndentedLine(stream, 1,
-            QStringLiteral("\"composite name\"=\"%1\"")
-                .arg(AdlWriter::escapeAdlString(compositeName)));
-      }
+          QStringLiteral("\"composite name\"=\"%1\"")
+            .arg(AdlWriter::escapeAdlString(nameToWrite)));
+        }
       const QString compositeFile = composite->compositeFile().trimmed();
       if (!compositeFile.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -14713,12 +14720,17 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("composite {"));
-    AdlWriter::writeObjectSection(stream, next, composite->geometry());
-    const QString compositeName = composite->compositeName().trimmed();
-    if (!compositeName.isEmpty()) {
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(composite, composite->geometry()));
+    const QString rawCompositeName = composite->compositeName();
+    const QString trimmedCompositeName = rawCompositeName.trimmed();
+    const bool hasExplicitName = composite->hasExplicitCompositeName();
+    if (hasExplicitName || !trimmedCompositeName.isEmpty()) {
+      const QString nameToWrite = hasExplicitName ? rawCompositeName
+                            : trimmedCompositeName;
       AdlWriter::writeIndentedLine(stream, next,
-          QStringLiteral("\"composite name\"=\"%1\"")
-              .arg(AdlWriter::escapeAdlString(compositeName)));
+        QStringLiteral("\"composite name\"=\"%1\"")
+          .arg(AdlWriter::escapeAdlString(nameToWrite)));
     }
     const QString compositeFile = composite->compositeFile().trimmed();
     if (!compositeFile.isEmpty()) {
@@ -14746,7 +14758,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *text = dynamic_cast<TextElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text {"));
-    AdlWriter::writeObjectSection(stream, next, text->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(text, text->geometry()));
     const QColor textForeground = resolveForeground(text,
         text->foregroundColor());
     AdlWriter::writeBasicAttributeSection(stream, next,
@@ -14775,7 +14788,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *entry = dynamic_cast<TextEntryElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text entry\" {"));
-    AdlWriter::writeObjectSection(stream, next, entry->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(entry, entry->geometry()));
     const QColor entryForeground = resolveForeground(entry,
         entry->foregroundColor());
     const QColor entryBackground = resolveBackground(entry,
@@ -14802,7 +14816,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("valuator {"));
-    AdlWriter::writeObjectSection(stream, next, slider->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(slider, slider->geometry()));
     const QColor sliderForeground = resolveForeground(slider,
         slider->foregroundColor());
     const QColor sliderBackground = resolveBackground(slider,
@@ -14839,7 +14854,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"wheel switch\" {"));
-    AdlWriter::writeObjectSection(stream, next, wheel->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(wheel, wheel->geometry()));
     const QColor wheelForeground = resolveForeground(wheel,
         wheel->foregroundColor());
     const QColor wheelBackground = resolveBackground(wheel,
@@ -14867,7 +14883,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"choice button\" {"));
-    AdlWriter::writeObjectSection(stream, next, choice->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(choice, choice->geometry()));
     const QColor choiceForeground = resolveForeground(choice,
         choice->foregroundColor());
     const QColor choiceBackground = resolveBackground(choice,
@@ -14891,7 +14908,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("menu {"));
-    AdlWriter::writeObjectSection(stream, next, menu->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(menu, menu->geometry()));
     const QColor menuForeground = resolveForeground(menu,
         menu->foregroundColor());
     const QColor menuBackground = resolveBackground(menu,
@@ -14911,7 +14929,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"message button\" {"));
-    AdlWriter::writeObjectSection(stream, next, message->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(message, message->geometry()));
     const QColor messageForeground = resolveForeground(message,
         message->foregroundColor());
     const QColor messageBackground = resolveBackground(message,
@@ -14949,7 +14968,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"shell command\" {"));
-    AdlWriter::writeObjectSection(stream, next, shell->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(shell, shell->geometry()));
     const int commandIndent = next + 1;
     for (int i = 0; i < shell->entryCount(); ++i) {
       const QString entryLabel = shell->entryLabel(i);
@@ -15003,7 +15023,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"related display\" {"));
-    AdlWriter::writeObjectSection(stream, next, related->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(related, related->geometry()));
     for (int i = 0; i < related->entryCount(); ++i) {
       RelatedDisplayEntry entry = related->entry(i);
       if (entry.label.trimmed().isEmpty() && entry.name.trimmed().isEmpty()
@@ -15039,7 +15060,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("meter {"));
-    AdlWriter::writeObjectSection(stream, next, meter->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(meter, meter->geometry()));
     const QColor meterForeground = resolveForeground(meter,
         meter->foregroundColor());
     const QColor meterBackground = resolveBackground(meter,
@@ -15065,7 +15087,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
-    AdlWriter::writeObjectSection(stream, next, bar->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(bar, bar->geometry()));
     const QColor barForeground = resolveForeground(bar,
         bar->foregroundColor());
     const QColor barBackground = resolveBackground(bar,
@@ -15101,7 +15124,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("indicator {"));
-    AdlWriter::writeObjectSection(stream, next, scale->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(scale, scale->geometry()));
     const QColor scaleForeground = resolveForeground(scale,
         scale->foregroundColor());
     const QColor scaleBackground = resolveBackground(scale,
@@ -15132,7 +15156,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("byte {"));
-    AdlWriter::writeObjectSection(stream, next, byte->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(byte, byte->geometry()));
     const QColor byteForeground = resolveForeground(byte,
         byte->foregroundColor());
     const QColor byteBackground = resolveBackground(byte,
@@ -15165,7 +15190,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text update\" {"));
-    AdlWriter::writeObjectSection(stream, next, monitor->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(monitor, monitor->geometry()));
     const QColor monitorForeground = resolveForeground(monitor,
         monitor->foregroundColor());
     const QColor monitorBackground = resolveBackground(monitor,
@@ -15199,7 +15225,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"strip chart\" {"));
-    AdlWriter::writeObjectSection(stream, next, strip->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(strip, strip->geometry()));
     std::array<QString, 4> yLabels{};
     yLabels[0] = strip->yLabel();
     const QColor stripForeground = resolveForeground(strip,
@@ -15234,7 +15261,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *cartesian = dynamic_cast<CartesianPlotElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"cartesian plot\" {"));
-    AdlWriter::writeObjectSection(stream, next, cartesian->geometry());
+    AdlWriter::writeObjectSection(stream, next,
+      absoluteGeometryForWidget(cartesian, cartesian->geometry()));
     std::array<QString, 4> yLabels{};
     for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
       yLabels[i] = cartesian->yLabel(i);
@@ -15322,136 +15350,144 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   }
 
   if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
-  AdlWriter::writeIndentedLine(stream, level,
-    QStringLiteral("rectangle {"));
-  AdlWriter::writeObjectSection(stream, next, rectangle->geometry());
-  AdlWriter::writeBasicAttributeSection(stream, next,
-    AdlWriter::medmColorIndex(rectangle->color()),
-    rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
-    true);
-  const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
-    AdlWriter::collectChannels(rectangle));
-  AdlWriter::writeDynamicAttributeSection(stream, next,
-    rectangle->colorMode(), rectangle->visibilityMode(),
-    rectangle->visibilityCalc(), rectangleChannels);
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
-  return;
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("rectangle {"));
+    const QRect serialized = absoluteGeometryForWidget(rectangle,
+        rectangle->geometryForSerialization());
+    AdlWriter::writeObjectSection(stream, next, serialized);
+    AdlWriter::writeBasicAttributeSection(stream, next,
+        AdlWriter::medmColorIndex(rectangle->color()),
+        rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
+        true);
+    const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannels(rectangle));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        rectangle->colorMode(), rectangle->visibilityMode(),
+        rectangle->visibilityCalc(), rectangleChannels);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
   }
 
   if (auto *image = dynamic_cast<ImageElement *>(widget)) {
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("image {"));
-  AdlWriter::writeObjectSection(stream, next, image->geometry());
-  AdlWriter::writeIndentedLine(stream, next,
-    QStringLiteral("type=\"%1\"")
-      .arg(AdlWriter::imageTypeString(image->imageType())));
-  const QString imageName = image->imageName();
-  if (!imageName.isEmpty()) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("image {"));
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(image, image->geometry()));
     AdlWriter::writeIndentedLine(stream, next,
-      QStringLiteral("\"image name\"=\"%1\"")
-        .arg(AdlWriter::escapeAdlString(imageName)));
-  }
-  const QString imageCalc = image->calc();
-  if (!imageCalc.trimmed().isEmpty()) {
-    AdlWriter::writeIndentedLine(stream, next,
-      QStringLiteral("calc=\"%1\"")
-        .arg(AdlWriter::escapeAdlString(imageCalc)));
-  }
-  const auto imageChannels = AdlWriter::channelsForMedmFourValues(
-    AdlWriter::collectChannels(image));
-  AdlWriter::writeDynamicAttributeSection(stream, next,
-    image->colorMode(), image->visibilityMode(), image->visibilityCalc(),
-    imageChannels);
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
-  return;
+        QStringLiteral("type=\"%1\"")
+            .arg(AdlWriter::imageTypeString(image->imageType())));
+    const QString imageName = image->imageName();
+    if (!imageName.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("\"image name\"=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(imageName)));
+    }
+    const QString imageCalc = image->calc();
+    if (!imageCalc.trimmed().isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("calc=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(imageCalc)));
+    }
+    const auto imageChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannels(image));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        image->colorMode(), image->visibilityMode(), image->visibilityCalc(),
+        imageChannels);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
   }
 
   if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
-  AdlWriter::writeObjectSection(stream, next, oval->geometry());
-  AdlWriter::writeBasicAttributeSection(stream, next,
-    AdlWriter::medmColorIndex(oval->color()), oval->lineStyle(),
-    oval->fill(), oval->lineWidth());
-  const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
-    AdlWriter::collectChannels(oval));
-  AdlWriter::writeDynamicAttributeSection(stream, next,
-    oval->colorMode(), oval->visibilityMode(), oval->visibilityCalc(),
-    ovalChannels);
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
-  return;
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(oval, oval->geometry()));
+    AdlWriter::writeBasicAttributeSection(stream, next,
+        AdlWriter::medmColorIndex(oval->color()), oval->lineStyle(),
+        oval->fill(), oval->lineWidth());
+    const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannels(oval));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        oval->colorMode(), oval->visibilityMode(), oval->visibilityCalc(),
+        ovalChannels);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
   }
 
   if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("arc {"));
-  AdlWriter::writeObjectSection(stream, next, arc->geometry());
-  AdlWriter::writeBasicAttributeSection(stream, next,
-    AdlWriter::medmColorIndex(arc->color()), arc->lineStyle(),
-    arc->fill(), arc->lineWidth());
-  const auto arcChannels = AdlWriter::channelsForMedmFourValues(
-    AdlWriter::collectChannels(arc));
-  AdlWriter::writeDynamicAttributeSection(stream, next,
-    arc->colorMode(), arc->visibilityMode(), arc->visibilityCalc(),
-    arcChannels);
-  AdlWriter::writeIndentedLine(stream, next,
-    QStringLiteral("begin=%1").arg(arc->beginAngle()));
-  AdlWriter::writeIndentedLine(stream, next,
-    QStringLiteral("path=%1").arg(arc->pathAngle()));
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
-  return;
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("arc {"));
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(arc, arc->geometry()));
+    AdlWriter::writeBasicAttributeSection(stream, next,
+        AdlWriter::medmColorIndex(arc->color()), arc->lineStyle(),
+        arc->fill(), arc->lineWidth());
+    const auto arcChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannels(arc));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        arc->colorMode(), arc->visibilityMode(), arc->visibilityCalc(),
+        arcChannels);
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("begin=%1").arg(arc->beginAngle()));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("path=%1").arg(arc->pathAngle()));
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
   }
 
   if (auto *line = dynamic_cast<LineElement *>(widget)) {
-  AdlWriter::writeIndentedLine(stream, level,
-    QStringLiteral("polyline {"));
-  AdlWriter::writeObjectSection(stream, next, line->geometry());
-  AdlWriter::writeBasicAttributeSection(stream, next,
-    AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
-    RectangleFill::kSolid, line->lineWidth(), true);
-  const auto lineChannels = AdlWriter::channelsForMedmFourValues(
-    AdlWriter::collectChannels(line));
-  AdlWriter::writeDynamicAttributeSection(stream, next,
-    line->colorMode(), line->visibilityMode(),
-    line->visibilityCalc(), lineChannels);
-  const QVector<QPoint> points = line->absolutePoints();
-  if (points.size() >= 2) {
-    AdlWriter::writePointsSection(stream, next, points);
-  }
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
-  return;
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("polyline {"));
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(line, line->geometry()));
+    AdlWriter::writeBasicAttributeSection(stream, next,
+        AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
+        RectangleFill::kSolid, line->lineWidth(), true);
+    const auto lineChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannels(line));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        line->colorMode(), line->visibilityMode(),
+        line->visibilityCalc(), lineChannels);
+    const QVector<QPoint> points = line->absolutePoints();
+    if (points.size() >= 2) {
+      AdlWriter::writePointsSection(stream, next, points);
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
   }
 
   if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
-  AdlWriter::writeIndentedLine(stream, level,
-    QStringLiteral("polyline {"));
-  AdlWriter::writeObjectSection(stream, next, polyline->geometry());
-  AdlWriter::writeBasicAttributeSection(stream, next,
-    AdlWriter::medmColorIndex(polyline->color()),
-    polyline->lineStyle(), RectangleFill::kSolid,
-    polyline->lineWidth(), true);
-  const auto polylineChannels = AdlWriter::channelsForMedmFourValues(
-    AdlWriter::collectChannels(polyline));
-  AdlWriter::writeDynamicAttributeSection(stream, next,
-    polyline->colorMode(), polyline->visibilityMode(),
-    polyline->visibilityCalc(), polylineChannels);
-  AdlWriter::writePointsSection(stream, next, polyline->absolutePoints());
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
-  return;
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("polyline {"));
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(polyline, polyline->geometry()));
+    AdlWriter::writeBasicAttributeSection(stream, next,
+        AdlWriter::medmColorIndex(polyline->color()),
+        polyline->lineStyle(), RectangleFill::kSolid,
+        polyline->lineWidth(), true);
+    const auto polylineChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannels(polyline));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        polyline->colorMode(), polyline->visibilityMode(),
+        polyline->visibilityCalc(), polylineChannels);
+    AdlWriter::writePointsSection(stream, next, polyline->absolutePoints());
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
   }
 
   if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
-  AdlWriter::writeIndentedLine(stream, level,
-    QStringLiteral("polygon {"));
-  AdlWriter::writeObjectSection(stream, next, polygon->geometry());
-  AdlWriter::writeBasicAttributeSection(stream, next,
-    AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
-    polygon->fill(), polygon->lineWidth());
-  const auto polygonChannels = AdlWriter::channelsForMedmFourValues(
-    AdlWriter::collectChannels(polygon));
-  AdlWriter::writeDynamicAttributeSection(stream, next,
-    polygon->colorMode(), polygon->visibilityMode(),
-    polygon->visibilityCalc(), polygonChannels);
-  AdlWriter::writePointsSection(stream, next, polygon->absolutePoints());
-  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
-  return;
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("polygon {"));
+    AdlWriter::writeObjectSection(stream, next,
+        absoluteGeometryForWidget(polygon, polygon->geometry()));
+    AdlWriter::writeBasicAttributeSection(stream, next,
+        AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
+        polygon->fill(), polygon->lineWidth());
+    const auto polygonChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannels(polygon));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        polygon->colorMode(), polygon->visibilityMode(),
+        polygon->visibilityCalc(), polygonChannels);
+    AdlWriter::writePointsSection(stream, next, polygon->absolutePoints());
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
   }
 }
 
@@ -16404,6 +16440,17 @@ inline void DisplayWindow::setWidgetDisplayRect(QWidget *widget,
     localTopLeft -= parentTopLeftInDisplay;
   }
   widget->setGeometry(QRect(localTopLeft, displayRect.size()));
+}
+
+inline QRect DisplayWindow::absoluteGeometryForWidget(
+    const QWidget *widget, const QRect &localGeometry) const
+{
+  if (!widget) {
+    return localGeometry;
+  }
+  QRect absolute = localGeometry;
+  absolute.moveTopLeft(widgetDisplayRect(widget).topLeft());
+  return absolute;
 }
 
 inline std::optional<AdlNode> DisplayWindow::widgetToAdlNode(QWidget *widget) const
@@ -20370,10 +20417,11 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
   auto *composite = new CompositeElement(parent);
   composite->setGeometry(geometry);
 
-  const QString compositeName = propertyValue(compositeNode,
-      QStringLiteral("composite name"));
-  if (!compositeName.trimmed().isEmpty()) {
-    composite->setCompositeName(compositeName.trimmed());
+  composite->setHasExplicitCompositeName(false);
+  if (const AdlProperty *nameProp = ::findProperty(compositeNode,
+          QStringLiteral("composite name"))) {
+    composite->setCompositeName(nameProp->value.trimmed());
+    composite->setHasExplicitCompositeName(true);
   }
 
   const QString compositeFile = propertyValue(compositeNode,

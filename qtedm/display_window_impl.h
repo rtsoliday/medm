@@ -13994,9 +13994,11 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
           AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
         }
       }
+      const auto compositeChannels = AdlWriter::channelsForMedmFourValues(
+          composite->channels());
       AdlWriter::writeDynamicAttributeSection(stream, 1,
           composite->colorMode(), composite->visibilityMode(),
-          composite->visibilityCalc(), composite->channels());
+          composite->visibilityCalc(), compositeChannels);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -14818,9 +14820,11 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
       }
     }
+    const auto compositeChannels = AdlWriter::channelsForMedmFourValues(
+        composite->channels());
     AdlWriter::writeDynamicAttributeSection(stream, next,
         composite->colorMode(), composite->visibilityMode(),
-        composite->visibilityCalc(), composite->channels());
+        composite->visibilityCalc(), compositeChannels);
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -14834,9 +14838,16 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeBasicAttributeSection(stream, next,
         AdlWriter::medmColorIndex(textForeground),
         RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
+    std::array<QString, 5> rawTextChannels{};
+    rawTextChannels[0] = text->channel(1);
+    rawTextChannels[1] = text->channel(2);
+    rawTextChannels[2] = text->channel(3);
+    rawTextChannels[3] = text->channel(4);
+    const auto textChannels = AdlWriter::channelsForMedmFourValues(
+        rawTextChannels);
     AdlWriter::writeDynamicAttributeSection(stream, next,
         text->colorMode(), text->visibilityMode(), text->visibilityCalc(),
-        AdlWriter::collectChannels(text));
+        textChannels);
     const QString content = text->text();
     if (!content.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,

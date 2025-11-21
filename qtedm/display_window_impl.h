@@ -29,6 +29,7 @@
 #include <QStringList>
 #include <QEventLoop>
 #include <QTextStream>
+#include <QVariant>
 
 #ifdef KeyPress
 #  undef KeyPress
@@ -55,6 +56,8 @@ constexpr double kPvInfoTimeoutSeconds = 1.0;
 constexpr qint64 kEpicsEpochOffsetSeconds = 631152000; // 1990-01-01 -> 1970-01-01
 constexpr char kWidgetHasDynamicAttributeProperty[] =
     "_adlHasDynamicAttribute";
+constexpr char kOriginalAdlGeometryProperty[] = "_adlOriginalGeometry";
+constexpr char kAdlGeometryEditedProperty[] = "_adlGeometryEdited";
 }
 
 inline void setUtf8Encoding(QTextStream &stream)
@@ -984,6 +987,7 @@ public:
     setNextUndoLabel(QStringLiteral("Group Elements"));
     auto *composite = new CompositeElement(displayArea_);
     composite->setGeometry(compositeRect);
+    recordWidgetOriginalGeometry(composite, compositeRect);
     composite->show();
 
     int insertIndex = elementStack_.size();
@@ -1004,6 +1008,7 @@ public:
       widget->setParent(composite);
       widget->move(relativePos);
       widget->show();
+      markWidgetGeometryEdited(widget);
       composite->adoptChild(widget);
     }
 
@@ -2048,6 +2053,11 @@ private:
   void requestStackingOrderRefresh();
   void markWidgetHasDynamicAttribute(QWidget *widget) const;
   bool widgetHasDynamicAttribute(const QWidget *widget) const;
+  void recordWidgetOriginalGeometry(QWidget *widget,
+      const QRect &geometry) const;
+  void markWidgetGeometryEdited(QWidget *widget) const;
+  bool widgetGeometryEdited(const QWidget *widget) const;
+  QRect widgetGeometryForSerialization(const QWidget *widget) const;
   bool isControlWidget(const QWidget *widget) const;
   bool isStaticGraphicWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
@@ -9156,12 +9166,18 @@ private:
   {
     const bool wasActive = middleButtonDragActive_;
     const bool moved = middleButtonDragMoved_;
+    const QList<QPointer<QWidget>> draggedWidgets = middleButtonDragWidgets_;
     middleButtonDragActive_ = false;
     middleButtonDragMoved_ = false;
     middleButtonInitialRects_.clear();
     middleButtonDragWidgets_.clear();
     middleButtonBoundingRect_ = QRect();
     if (applyChanges && wasActive && moved) {
+      for (const QPointer<QWidget> &pointer : draggedWidgets) {
+        if (QWidget *widget = pointer.data()) {
+          markWidgetGeometryEdited(widget);
+        }
+      }
       setNextUndoLabel(QStringLiteral("Move Selection"));
       markDirty();
       refreshResourcePaletteGeometry();
@@ -11491,6 +11507,11 @@ private:
     }
 
     if (applyChanges && vertexEditMoved_) {
+      if (vertexEditMode_ == VertexEditMode::kPolygon) {
+        markWidgetGeometryEdited(vertexEditPolygon_);
+      } else if (vertexEditMode_ == VertexEditMode::kPolyline) {
+        markWidgetGeometryEdited(vertexEditPolyline_);
+      }
       setNextUndoLabel(QStringLiteral("Edit Vertices"));
       markDirty();
       refreshResourcePaletteGeometry();
@@ -11530,6 +11551,7 @@ private:
     auto *element = new TextElement(displayArea_);
     element->setFont(font());
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->setText(QStringLiteral("Text"));
     element->show();
     ensureElementInStack(element);
@@ -11561,6 +11583,7 @@ private:
     auto *element = new TextMonitorElement(displayArea_);
     element->setFont(font());
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->setText(element->channel(0));
     element->show();
     ensureElementInStack(element);
@@ -11591,6 +11614,7 @@ private:
     auto *element = new TextEntryElement(displayArea_);
     element->setFont(font());
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     textEntryElements_.append(element);
@@ -11619,6 +11643,7 @@ private:
     }
     auto *element = new SliderElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     sliderElements_.append(element);
@@ -11647,6 +11672,7 @@ private:
     }
     auto *element = new WheelSwitchElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     wheelSwitchElements_.append(element);
@@ -11676,6 +11702,7 @@ private:
     auto *element = new ChoiceButtonElement(displayArea_);
     element->setFont(font());
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     choiceButtonElements_.append(element);
@@ -11705,6 +11732,7 @@ private:
     auto *element = new MenuElement(displayArea_);
     element->setFont(font());
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     menuElements_.append(element);
@@ -11734,6 +11762,7 @@ private:
     auto *element = new MessageButtonElement(displayArea_);
     element->setFont(font());
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     messageButtonElements_.append(element);
@@ -11763,6 +11792,7 @@ private:
     auto *element = new ShellCommandElement(displayArea_);
     element->setFont(font());
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->setLabel(QStringLiteral("Shell Command"));
     element->show();
     ensureElementInStack(element);
@@ -11792,16 +11822,17 @@ private:
       return;
     }
     auto *element = new RelatedDisplayElement(displayArea_);
-   element->setFont(font());
-   element->setGeometry(target);
-   element->show();
-   ensureElementInStack(element);
-   relatedDisplayElements_.append(element);
+    element->setFont(font());
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    relatedDisplayElements_.append(element);
     connectRelatedDisplayElement(element);
-   selectRelatedDisplayElement(element);
-   showResourcePaletteForRelatedDisplay(element);
-   deactivateCreateTool();
-   markDirty();
+    selectRelatedDisplayElement(element);
+    showResourcePaletteForRelatedDisplay(element);
+    deactivateCreateTool();
+    markDirty();
   }
 
   void createMeterElement(const QRect &rect)
@@ -11823,6 +11854,7 @@ private:
     }
     auto *element = new MeterElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     meterElements_.append(element);
@@ -11851,6 +11883,7 @@ private:
     }
     auto *element = new BarMonitorElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     barMonitorElements_.append(element);
@@ -11879,6 +11912,7 @@ private:
     }
     auto *element = new ScaleMonitorElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     scaleMonitorElements_.append(element);
@@ -11907,6 +11941,7 @@ private:
     }
     auto *element = new StripChartElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     stripChartElements_.append(element);
@@ -11935,6 +11970,7 @@ private:
     }
     auto *element = new CartesianPlotElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     cartesianPlotElements_.append(element);
@@ -11963,6 +11999,7 @@ private:
     }
     auto *element = new ByteMonitorElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     byteMonitorElements_.append(element);
@@ -11991,6 +12028,7 @@ private:
     }
     auto *element = new RectangleElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     rectangleElements_.append(element);
@@ -12027,6 +12065,7 @@ private:
     }
     auto *element = new ImageElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     if (!filePath_.isEmpty()) {
       element->setBaseDirectory(QFileInfo(filePath_).absolutePath());
     }
@@ -12066,6 +12105,7 @@ private:
     }
     auto *element = new OvalElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     ovalElements_.append(element);
@@ -12102,6 +12142,7 @@ private:
     }
     auto *element = new ArcElement(displayArea_);
     element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
     element->show();
     ensureElementInStack(element);
     arcElements_.append(element);
@@ -12149,6 +12190,7 @@ private:
 
     auto *element = new LineElement(displayArea_);
     element->setGeometry(rect);
+    recordWidgetOriginalGeometry(element, rect);
     element->setLocalEndpoints(localStart, localEnd);
     element->show();
     ensureElementInStack(element);
@@ -13834,6 +13876,11 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     return resolveColor(widget, candidate, QPalette::Window);
   };
 
+  auto serializedGeometry = [this](QWidget *widget) {
+    return absoluteGeometryForWidget(widget,
+        widgetGeometryForSerialization(widget));
+  };
+
   const QString hint = fileNameHint.isEmpty() ? filePath_ : fileNameHint;
   const QFileInfo info(hint);
   QString fileName = info.filePath();
@@ -13918,8 +13965,8 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("composite {"));
-        AdlWriter::writeObjectSection(stream, 1,
-          absoluteGeometryForWidget(composite, composite->geometry()));
+      AdlWriter::writeObjectSection(stream, 1,
+          serializedGeometry(composite));
         const QString rawCompositeName = composite->compositeName();
         const QString trimmedCompositeName = rawCompositeName.trimmed();
         const bool hasExplicitName = composite->hasExplicitCompositeName();
@@ -13956,7 +14003,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *text = dynamic_cast<TextElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("text {"));
-      AdlWriter::writeObjectSection(stream, 1, text->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(text));
     const QColor textForeground = resolvedForegroundColor(text,
       text->foregroundColor());
       AdlWriter::writeBasicAttributeSection(stream, 1,
@@ -13991,7 +14038,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *entry = dynamic_cast<TextEntryElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"text entry\" {"));
-      AdlWriter::writeObjectSection(stream, 1, entry->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(entry));
     const QColor entryForeground = resolvedForegroundColor(entry,
       entry->foregroundColor());
     const QColor entryBackground = resolvedBackgroundColor(entry,
@@ -14018,7 +14065,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("valuator {"));
-      AdlWriter::writeObjectSection(stream, 1, slider->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(slider));
     const QColor sliderForeground = resolvedForegroundColor(slider,
       slider->foregroundColor());
     const QColor sliderBackground = resolvedBackgroundColor(slider,
@@ -14055,7 +14102,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *wheel = dynamic_cast<WheelSwitchElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"wheel switch\" {"));
-      AdlWriter::writeObjectSection(stream, 1, wheel->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(wheel));
     const QColor wheelForeground = resolvedForegroundColor(wheel,
       wheel->foregroundColor());
     const QColor wheelBackground = resolvedBackgroundColor(wheel,
@@ -14083,7 +14130,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *choice = dynamic_cast<ChoiceButtonElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"choice button\" {"));
-      AdlWriter::writeObjectSection(stream, 1, choice->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(choice));
     const QColor choiceForeground = resolvedForegroundColor(choice,
       choice->foregroundColor());
     const QColor choiceBackground = resolvedBackgroundColor(choice,
@@ -14108,7 +14155,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("menu {"));
-      AdlWriter::writeObjectSection(stream, 1, menu->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(menu));
     const QColor menuForeground = resolvedForegroundColor(menu,
       menu->foregroundColor());
     const QColor menuBackground = resolvedBackgroundColor(menu,
@@ -14128,7 +14175,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"message button\" {"));
-      AdlWriter::writeObjectSection(stream, 1, message->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(message));
     const QColor messageForeground = resolvedForegroundColor(message,
       message->foregroundColor());
     const QColor messageBackground = resolvedBackgroundColor(message,
@@ -14166,7 +14213,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *shell = dynamic_cast<ShellCommandElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"shell command\" {"));
-      AdlWriter::writeObjectSection(stream, 1, shell->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(shell));
       for (int i = 0; i < shell->entryCount(); ++i) {
         const QString entryLabel = shell->entryLabel(i);
         const QString entryCommand = shell->entryCommand(i);
@@ -14219,7 +14266,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *related = dynamic_cast<RelatedDisplayElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"related display\" {"));
-      AdlWriter::writeObjectSection(stream, 1, related->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(related));
       for (int i = 0; i < related->entryCount(); ++i) {
         RelatedDisplayEntry entry = related->entry(i);
         if (entry.label.trimmed().isEmpty() && entry.name.trimmed().isEmpty()
@@ -14255,7 +14302,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("meter {"));
-      AdlWriter::writeObjectSection(stream, 1, meter->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(meter));
     const QColor meterForeground = resolvedForegroundColor(meter,
       meter->foregroundColor());
     const QColor meterBackground = resolvedBackgroundColor(meter,
@@ -14281,7 +14328,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("bar {"));
-      AdlWriter::writeObjectSection(stream, 1, bar->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(bar));
     const QColor barForeground = resolvedForegroundColor(bar,
       bar->foregroundColor());
     const QColor barBackground = resolvedBackgroundColor(bar,
@@ -14318,7 +14365,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("indicator {"));
-      AdlWriter::writeObjectSection(stream, 1, scale->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(scale));
     const QColor scaleForeground = resolvedForegroundColor(scale,
       scale->foregroundColor());
     const QColor scaleBackground = resolvedBackgroundColor(scale,
@@ -14349,7 +14396,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("byte {"));
-      AdlWriter::writeObjectSection(stream, 1, byte->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(byte));
     const QColor byteForeground = resolvedForegroundColor(byte,
       byte->foregroundColor());
     const QColor byteBackground = resolvedBackgroundColor(byte,
@@ -14382,7 +14429,8 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"text update\" {"));
-      AdlWriter::writeObjectSection(stream, 1, monitor->geometry());
+      AdlWriter::writeObjectSection(stream, 1,
+          serializedGeometry(monitor));
     const QColor monitorForeground = resolvedForegroundColor(monitor,
       monitor->foregroundColor());
     const QColor monitorBackground = resolvedBackgroundColor(monitor,
@@ -14416,7 +14464,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"strip chart\" {"));
-      AdlWriter::writeObjectSection(stream, 1, strip->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(strip));
       std::array<QString, 4> stripYLabels{};
       stripYLabels[0] = strip->yLabel();
     const QColor stripForeground = resolvedForegroundColor(strip,
@@ -14452,7 +14500,8 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *cartesian = dynamic_cast<CartesianPlotElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"cartesian plot\" {"));
-      AdlWriter::writeObjectSection(stream, 1, cartesian->geometry());
+      AdlWriter::writeObjectSection(stream, 1,
+          serializedGeometry(cartesian));
       std::array<QString, 4> yLabels{};
       for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
         yLabels[i] = cartesian->yLabel(i);
@@ -14542,7 +14591,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("rectangle {"));
       AdlWriter::writeObjectSection(stream, 1,
-          rectangle->geometryForSerialization());
+          serializedGeometry(rectangle));
       AdlWriter::writeBasicAttributeSection(stream, 1,
           AdlWriter::medmColorIndex(rectangle->color()),
           rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
@@ -14559,7 +14608,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *image = dynamic_cast<ImageElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("image {"));
-      AdlWriter::writeObjectSection(stream, 1, image->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(image));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("type=\"%1\"")
               .arg(AdlWriter::imageTypeString(image->imageType())));
@@ -14585,7 +14634,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("oval {"));
-      AdlWriter::writeObjectSection(stream, 1, oval->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(oval));
       AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(oval->color()),
           oval->lineStyle(), oval->fill(), oval->lineWidth());
     const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
@@ -14599,7 +14648,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("arc {"));
-      AdlWriter::writeObjectSection(stream, 1, arc->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(arc));
       AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(arc->color()),
           arc->lineStyle(), arc->fill(), arc->lineWidth());
       const auto arcChannels = AdlWriter::channelsForMedmFourValues(
@@ -14617,7 +14666,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *line = dynamic_cast<LineElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("polyline {"));
-      AdlWriter::writeObjectSection(stream, 1, line->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(line));
     AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(line->color()),
       line->lineStyle(), RectangleFill::kSolid, line->lineWidth(), true);
     const auto lineChannels = AdlWriter::channelsForMedmFourValues(
@@ -14634,7 +14683,8 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *polyline = dynamic_cast<PolylineElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("polyline {"));
-      AdlWriter::writeObjectSection(stream, 1, polyline->geometry());
+      AdlWriter::writeObjectSection(stream, 1,
+          serializedGeometry(polyline));
     AdlWriter::writeBasicAttributeSection(stream, 1,
       AdlWriter::medmColorIndex(polyline->color()), polyline->lineStyle(),
       RectangleFill::kSolid, polyline->lineWidth(), true);
@@ -14650,7 +14700,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
     if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("polygon {"));
-      AdlWriter::writeObjectSection(stream, 1, polygon->geometry());
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(polygon));
       AdlWriter::writeBasicAttributeSection(stream, 1,
           AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
           polygon->fill(), polygon->lineWidth());
@@ -14718,10 +14768,15 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   const int level = indent;
   const int next = indent + 1;
 
+  auto serializedGeometry = [this](QWidget *target) {
+    return absoluteGeometryForWidget(target,
+        widgetGeometryForSerialization(target));
+  };
+
   if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("composite {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(composite, composite->geometry()));
+        serializedGeometry(composite));
     const QString rawCompositeName = composite->compositeName();
     const QString trimmedCompositeName = rawCompositeName.trimmed();
     const bool hasExplicitName = composite->hasExplicitCompositeName();
@@ -14759,7 +14814,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *text = dynamic_cast<TextElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(text, text->geometry()));
+        serializedGeometry(text));
     const QColor textForeground = resolveForeground(text,
         text->foregroundColor());
     AdlWriter::writeBasicAttributeSection(stream, next,
@@ -14789,7 +14844,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text entry\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(entry, entry->geometry()));
+        serializedGeometry(entry));
     const QColor entryForeground = resolveForeground(entry,
         entry->foregroundColor());
     const QColor entryBackground = resolveBackground(entry,
@@ -14817,7 +14872,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("valuator {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(slider, slider->geometry()));
+        serializedGeometry(slider));
     const QColor sliderForeground = resolveForeground(slider,
         slider->foregroundColor());
     const QColor sliderBackground = resolveBackground(slider,
@@ -14855,7 +14910,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"wheel switch\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(wheel, wheel->geometry()));
+        serializedGeometry(wheel));
     const QColor wheelForeground = resolveForeground(wheel,
         wheel->foregroundColor());
     const QColor wheelBackground = resolveBackground(wheel,
@@ -14884,7 +14939,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"choice button\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(choice, choice->geometry()));
+        serializedGeometry(choice));
     const QColor choiceForeground = resolveForeground(choice,
         choice->foregroundColor());
     const QColor choiceBackground = resolveBackground(choice,
@@ -14909,7 +14964,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *menu = dynamic_cast<MenuElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("menu {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(menu, menu->geometry()));
+        serializedGeometry(menu));
     const QColor menuForeground = resolveForeground(menu,
         menu->foregroundColor());
     const QColor menuBackground = resolveBackground(menu,
@@ -14930,7 +14985,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"message button\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(message, message->geometry()));
+        serializedGeometry(message));
     const QColor messageForeground = resolveForeground(message,
         message->foregroundColor());
     const QColor messageBackground = resolveBackground(message,
@@ -14969,7 +15024,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"shell command\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(shell, shell->geometry()));
+        serializedGeometry(shell));
     const int commandIndent = next + 1;
     for (int i = 0; i < shell->entryCount(); ++i) {
       const QString entryLabel = shell->entryLabel(i);
@@ -15024,7 +15079,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"related display\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(related, related->geometry()));
+        serializedGeometry(related));
     for (int i = 0; i < related->entryCount(); ++i) {
       RelatedDisplayEntry entry = related->entry(i);
       if (entry.label.trimmed().isEmpty() && entry.name.trimmed().isEmpty()
@@ -15058,10 +15113,10 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
-  if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
-    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("meter {"));
-    AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(meter, meter->geometry()));
+    if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, level, QStringLiteral("meter {"));
+      AdlWriter::writeObjectSection(stream, next,
+          serializedGeometry(meter));
     const QColor meterForeground = resolveForeground(meter,
         meter->foregroundColor());
     const QColor meterBackground = resolveBackground(meter,
@@ -15085,10 +15140,10 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
-  if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
-    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
-    AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(bar, bar->geometry()));
+    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
+      AdlWriter::writeObjectSection(stream, next,
+          serializedGeometry(bar));
     const QColor barForeground = resolveForeground(bar,
         bar->foregroundColor());
     const QColor barBackground = resolveBackground(bar,
@@ -15125,7 +15180,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("indicator {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(scale, scale->geometry()));
+        serializedGeometry(scale));
     const QColor scaleForeground = resolveForeground(scale,
         scale->foregroundColor());
     const QColor scaleBackground = resolveBackground(scale,
@@ -15157,7 +15212,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("byte {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(byte, byte->geometry()));
+        serializedGeometry(byte));
     const QColor byteForeground = resolveForeground(byte,
         byte->foregroundColor());
     const QColor byteBackground = resolveBackground(byte,
@@ -15191,7 +15246,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text update\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(monitor, monitor->geometry()));
+        serializedGeometry(monitor));
     const QColor monitorForeground = resolveForeground(monitor,
         monitor->foregroundColor());
     const QColor monitorBackground = resolveBackground(monitor,
@@ -15226,7 +15281,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"strip chart\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(strip, strip->geometry()));
+        serializedGeometry(strip));
     std::array<QString, 4> yLabels{};
     yLabels[0] = strip->yLabel();
     const QColor stripForeground = resolveForeground(strip,
@@ -15262,7 +15317,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"cartesian plot\" {"));
     AdlWriter::writeObjectSection(stream, next,
-      absoluteGeometryForWidget(cartesian, cartesian->geometry()));
+        serializedGeometry(cartesian));
     std::array<QString, 4> yLabels{};
     for (int i = 0; i < static_cast<int>(yLabels.size()); ++i) {
       yLabels[i] = cartesian->yLabel(i);
@@ -15352,8 +15407,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("rectangle {"));
-    const QRect serialized = absoluteGeometryForWidget(rectangle,
-        rectangle->geometryForSerialization());
+    const QRect serialized = serializedGeometry(rectangle);
     AdlWriter::writeObjectSection(stream, next, serialized);
     AdlWriter::writeBasicAttributeSection(stream, next,
         AdlWriter::medmColorIndex(rectangle->color()),
@@ -15371,7 +15425,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *image = dynamic_cast<ImageElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("image {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(image, image->geometry()));
+        serializedGeometry(image));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("type=\"%1\"")
             .arg(AdlWriter::imageTypeString(image->imageType())));
@@ -15399,7 +15453,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(oval, oval->geometry()));
+        serializedGeometry(oval));
     AdlWriter::writeBasicAttributeSection(stream, next,
         AdlWriter::medmColorIndex(oval->color()), oval->lineStyle(),
         oval->fill(), oval->lineWidth());
@@ -15415,7 +15469,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
   if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("arc {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(arc, arc->geometry()));
+        serializedGeometry(arc));
     AdlWriter::writeBasicAttributeSection(stream, next,
         AdlWriter::medmColorIndex(arc->color()), arc->lineStyle(),
         arc->fill(), arc->lineWidth());
@@ -15436,7 +15490,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("polyline {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(line, line->geometry()));
+        serializedGeometry(line));
     AdlWriter::writeBasicAttributeSection(stream, next,
         AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
         RectangleFill::kSolid, line->lineWidth(), true);
@@ -15457,7 +15511,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("polyline {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(polyline, polyline->geometry()));
+        serializedGeometry(polyline));
     AdlWriter::writeBasicAttributeSection(stream, next,
         AdlWriter::medmColorIndex(polyline->color()),
         polyline->lineStyle(), RectangleFill::kSolid,
@@ -15476,7 +15530,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("polygon {"));
     AdlWriter::writeObjectSection(stream, next,
-        absoluteGeometryForWidget(polygon, polygon->geometry()));
+        serializedGeometry(polygon));
     AdlWriter::writeBasicAttributeSection(stream, next,
         AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
         polygon->fill(), polygon->lineWidth());
@@ -16123,6 +16177,57 @@ inline bool DisplayWindow::widgetHasDynamicAttribute(
   return widget->property(kWidgetHasDynamicAttributeProperty).toBool();
 }
 
+inline void DisplayWindow::recordWidgetOriginalGeometry(QWidget *widget,
+    const QRect &geometry) const
+{
+  if (!widget) {
+    return;
+  }
+  widget->setProperty(kOriginalAdlGeometryProperty, geometry);
+  widget->setProperty(kAdlGeometryEditedProperty, false);
+}
+
+inline void DisplayWindow::markWidgetGeometryEdited(QWidget *widget) const
+{
+  if (!widget) {
+    return;
+  }
+  if (!widget->property(kOriginalAdlGeometryProperty).isValid()) {
+    widget->setProperty(kOriginalAdlGeometryProperty, widget->geometry());
+  }
+  widget->setProperty(kAdlGeometryEditedProperty, true);
+}
+
+inline bool DisplayWindow::widgetGeometryEdited(const QWidget *widget) const
+{
+  if (!widget) {
+    return false;
+  }
+  return widget->property(kAdlGeometryEditedProperty).toBool();
+}
+
+inline QRect DisplayWindow::widgetGeometryForSerialization(
+    const QWidget *widget) const
+{
+  if (!widget) {
+    return QRect();
+  }
+  QRect geometry;
+  if (const auto *rectangle = dynamic_cast<const RectangleElement *>(widget)) {
+    geometry = rectangle->geometryForSerialization();
+  } else {
+    geometry = widget->geometry();
+  }
+  const QVariant original = widget->property(kOriginalAdlGeometryProperty);
+  if (original.isValid() && original.canConvert<QRect>()) {
+    const QRect originalRect = original.toRect();
+    if (!widgetGeometryEdited(widget) || geometry == originalRect) {
+      geometry = originalRect;
+    }
+  }
+  return geometry;
+}
+
 inline bool DisplayWindow::isControlWidget(const QWidget *widget) const
 {
   return dynamic_cast<const TextEntryElement *>(widget)
@@ -16429,8 +16534,12 @@ inline void DisplayWindow::setWidgetDisplayRect(QWidget *widget,
   if (!widget) {
     return;
   }
+  const QRect currentDisplayRect = widgetDisplayRect(widget);
   if (!displayArea_) {
     widget->setGeometry(displayRect);
+    if (displayRect != currentDisplayRect) {
+      markWidgetGeometryEdited(widget);
+    }
     return;
   }
   QPoint localTopLeft = displayRect.topLeft();
@@ -16440,6 +16549,9 @@ inline void DisplayWindow::setWidgetDisplayRect(QWidget *widget,
     localTopLeft -= parentTopLeftInDisplay;
   }
   widget->setGeometry(QRect(localTopLeft, displayRect.size()));
+  if (displayRect != currentDisplayRect) {
+    markWidgetGeometryEdited(widget);
+  }
 }
 
 inline QRect DisplayWindow::absoluteGeometryForWidget(
@@ -16635,12 +16747,14 @@ inline TextElement *DisplayWindow::loadTextElement(const AdlNode &textNode)
   }
   QRect geometry = parseObjectGeometry(effectiveNode);
   geometry.translate(currentElementOffset_);
+  const QRect originalGeometry = geometry;
   if (geometry.height() < kMinimumTextElementHeight) {
     geometry.setHeight(kMinimumTextElementHeight);
   }
   auto *element = new TextElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   const QString content = propertyValue(effectiveNode, QStringLiteral("textix"));
   if (!content.isEmpty()) {
     element->setText(content);
@@ -16740,9 +16854,11 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
 
   QRect geometry = parseObjectGeometry(textUpdateNode);
   geometry.translate(currentElementOffset_);
+  const QRect originalGeometry = geometry;
   auto *element = new TextMonitorElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
 
@@ -16914,9 +17030,11 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
 
   QRect geometry = parseObjectGeometry(textEntryNode);
   geometry.translate(currentElementOffset_);
+  const QRect originalGeometry = geometry;
   auto *element = new TextEntryElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
 
@@ -17081,6 +17199,7 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
   }
 
   QRect geometry = parseObjectGeometry(valuatorNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumSliderWidth) {
     geometry.setWidth(kMinimumSliderWidth);
   }
@@ -17088,9 +17207,11 @@ inline SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNo
     geometry.setHeight(kMinimumSliderHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new SliderElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
 
@@ -17284,6 +17405,7 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
   }
 
   QRect geometry = parseObjectGeometry(wheelNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumWheelSwitchWidth) {
     geometry.setWidth(kMinimumWheelSwitchWidth);
   }
@@ -17291,9 +17413,11 @@ inline WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &
     geometry.setHeight(kMinimumWheelSwitchHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new WheelSwitchElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
 
@@ -17469,6 +17593,7 @@ inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
   }
 
   QRect geometry = parseObjectGeometry(menuNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumTextWidth) {
     geometry.setWidth(kMinimumTextWidth);
   }
@@ -17476,10 +17601,12 @@ inline MenuElement *DisplayWindow::loadMenuElement(const AdlNode &menuNode)
     geometry.setHeight(kMinimumTextHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new MenuElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   const QString colorModeValue = propertyValue(menuNode,
       QStringLiteral("clrmod"));
@@ -17547,6 +17674,7 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
   }
 
   QRect geometry = parseObjectGeometry(messageNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumTextWidth) {
     geometry.setWidth(kMinimumTextWidth);
   }
@@ -17554,10 +17682,12 @@ inline MessageButtonElement *DisplayWindow::loadMessageButtonElement(
     geometry.setHeight(kMinimumTextHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new MessageButtonElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   const QString colorModeValue = propertyValue(messageNode,
       QStringLiteral("clrmod"));
@@ -17637,6 +17767,7 @@ inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
   }
 
   QRect geometry = parseObjectGeometry(shellNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumTextWidth) {
     geometry.setWidth(kMinimumTextWidth);
   }
@@ -17644,10 +17775,12 @@ inline ShellCommandElement *DisplayWindow::loadShellCommandElement(
     geometry.setHeight(kMinimumTextHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new ShellCommandElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   bool ok = false;
   const QString clrStr = propertyValue(shellNode, QStringLiteral("clr"));
@@ -18016,6 +18149,7 @@ inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
   }
 
   QRect geometry = parseObjectGeometry(relatedNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumTextWidth) {
     geometry.setWidth(kMinimumTextWidth);
   }
@@ -18023,10 +18157,12 @@ inline RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
     geometry.setHeight(kMinimumTextHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new RelatedDisplayElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   bool ok = false;
   const QString clrValue = propertyValue(relatedNode, QStringLiteral("clr"));
@@ -18302,6 +18438,7 @@ inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
   }
 
   QRect geometry = parseObjectGeometry(choiceNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumTextWidth) {
     geometry.setWidth(kMinimumTextWidth);
   }
@@ -18309,10 +18446,12 @@ inline ChoiceButtonElement *DisplayWindow::loadChoiceButtonElement(
     geometry.setHeight(kMinimumTextHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new ChoiceButtonElement(parent);
   element->setFont(font());
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   const QString colorModeValue = propertyValue(choiceNode,
       QStringLiteral("clrmod"));
@@ -18376,6 +18515,7 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
   }
 
   QRect geometry = parseObjectGeometry(meterNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumMeterSize) {
     geometry.setWidth(kMinimumMeterSize);
   }
@@ -18383,9 +18523,11 @@ inline MeterElement *DisplayWindow::loadMeterElement(const AdlNode &meterNode)
     geometry.setHeight(kMinimumMeterSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new MeterElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
 
@@ -18547,6 +18689,7 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
   }
 
   QRect geometry = parseObjectGeometry(barNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumBarSize) {
     geometry.setWidth(kMinimumBarSize);
   }
@@ -18554,9 +18697,11 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
     geometry.setHeight(kMinimumBarSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new BarMonitorElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
 
@@ -18728,6 +18873,7 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
   }
 
   QRect geometry = parseObjectGeometry(indicatorNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumScaleSize) {
     geometry.setWidth(kMinimumScaleSize);
   }
@@ -18735,9 +18881,11 @@ inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
     geometry.setHeight(kMinimumScaleSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new ScaleMonitorElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setHasExplicitLimitsBlock(false);
   element->setHasExplicitLimitsData(false);
 
@@ -18907,6 +19055,7 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
   }
 
   QRect geometry = parseObjectGeometry(cartesianNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumCartesianPlotWidth) {
     geometry.setWidth(kMinimumCartesianPlotWidth);
   }
@@ -18914,9 +19063,11 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     geometry.setHeight(kMinimumCartesianPlotHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new CartesianPlotElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   if (const AdlNode *plotcom = ::findChild(cartesianNode,
           QStringLiteral("plotcom"))) {
@@ -19211,6 +19362,7 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
   }
 
   QRect geometry = parseObjectGeometry(stripNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumStripChartWidth) {
     geometry.setWidth(kMinimumStripChartWidth);
   }
@@ -19218,9 +19370,11 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
     geometry.setHeight(kMinimumStripChartHeight);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new StripChartElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   if (const AdlNode *plotcom = ::findChild(stripNode,
           QStringLiteral("plotcom"))) {
@@ -19443,6 +19597,7 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
   }
 
   QRect geometry = parseObjectGeometry(byteNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumByteSize) {
     geometry.setWidth(kMinimumByteSize);
   }
@@ -19450,9 +19605,11 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
     geometry.setHeight(kMinimumByteSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new ByteMonitorElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   if (const AdlNode *monitor = ::findChild(byteNode,
           QStringLiteral("monitor"))) {
@@ -19527,6 +19684,7 @@ inline ImageElement *DisplayWindow::loadImageElement(
   }
 
   QRect geometry = parseObjectGeometry(imageNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
   }
@@ -19534,9 +19692,11 @@ inline ImageElement *DisplayWindow::loadImageElement(
     geometry.setHeight(kMinimumRectangleSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new ImageElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   const QString typeValue = propertyValue(imageNode, QStringLiteral("type"));
   if (!typeValue.isEmpty()) {
@@ -19639,6 +19799,7 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
   }
 
   QRect geometry = parseObjectGeometry(effectiveNode);
+  QRect originalGeometry = geometry;
   const QSize originalAdlSize = geometry.size();
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
@@ -19647,10 +19808,12 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
     geometry.setHeight(kMinimumRectangleSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new RectangleElement(parent);
   element->setFill(RectangleFill::kSolid);
   element->initializeFromAdlGeometry(geometry, originalAdlSize);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   if (const AdlNode *basic = ::findChild(effectiveNode,
           QStringLiteral("basic attribute"))) {
@@ -19759,6 +19922,7 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
   }
 
   QRect geometry = parseObjectGeometry(effectiveNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
   }
@@ -19766,9 +19930,11 @@ inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
     geometry.setHeight(kMinimumRectangleSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new OvalElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setFill(RectangleFill::kSolid);
 
   if (const AdlNode *basic = ::findChild(effectiveNode,
@@ -19871,6 +20037,7 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
   }
 
   QRect geometry = parseObjectGeometry(effectiveNode);
+  QRect originalGeometry = geometry;
   if (geometry.width() < kMinimumRectangleSize) {
     geometry.setWidth(kMinimumRectangleSize);
   }
@@ -19878,9 +20045,11 @@ inline ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
     geometry.setHeight(kMinimumRectangleSize);
   }
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *element = new ArcElement(parent);
   element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
 
   bool fillSpecified = false;
 
@@ -20013,6 +20182,7 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
       point += currentElementOffset_;
     }
   }
+  const QRect originalGeometry = QPolygon(points).boundingRect();
 
   QColor color = colorForIndex(14);
   RectangleLineStyle lineStyle = RectangleLineStyle::kSolid;
@@ -20108,6 +20278,7 @@ inline PolygonElement *DisplayWindow::loadPolygonElement(
       element->setChannel(i, channel);
     }
   }
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setAbsolutePoints(points);
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);
@@ -20317,6 +20488,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
 
   QPolygon polygon(points);
   QRect geometry = polygon.boundingRect();
+  const QRect originalGeometry = geometry;
   
   /* Expand geometry to accommodate line width, matching MEDM behavior */
   const int halfWidth = lineWidth / 2;
@@ -20344,6 +20516,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
         element->setChannel(i, channel);
       }
     }
+    recordWidgetOriginalGeometry(element, originalGeometry);
     const QPoint localStart = points.first() - geometry.topLeft();
     const QPoint localEnd = points.last() - geometry.topLeft();
     element->setLocalEndpoints(localStart, localEnd);
@@ -20381,6 +20554,7 @@ inline PolylineElement *DisplayWindow::loadPolylineElement(
       element->setChannel(i, channel);
     }
   }
+  recordWidgetOriginalGeometry(element, originalGeometry);
   element->setAbsolutePoints(points);
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);
@@ -20412,10 +20586,13 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
   }
 
   QRect geometry = parseObjectGeometry(compositeNode);
+  QRect originalGeometry = geometry;
   geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
 
   auto *composite = new CompositeElement(parent);
   composite->setGeometry(geometry);
+  recordWidgetOriginalGeometry(composite, originalGeometry);
 
   composite->setHasExplicitCompositeName(false);
   if (const AdlProperty *nameProp = ::findProperty(compositeNode,

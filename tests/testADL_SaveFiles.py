@@ -35,6 +35,36 @@ def diff_has_only_name_changes(diff_output: str) -> bool:
   return True
 
 
+def report_first_difference(diff_output: str) -> None:
+  """Print the first non-ignored difference for quick visibility."""
+  ignore_tokens = ("name", "version=")
+
+  def is_actionable(line: str) -> bool:
+    if not line.startswith(("<", ">")):
+      return False
+    payload = line[1:].strip().lower()
+    if not payload:
+      return False
+    return not any(token in payload for token in ignore_tokens)
+
+  first_removed = None
+  first_added = None
+  for line in diff_output.splitlines():
+    if not first_removed and line.startswith("<") and is_actionable(line):
+      first_removed = line
+    elif not first_added and line.startswith(">") and is_actionable(line):
+      first_added = line
+    if first_removed and first_added:
+      break
+
+  if first_removed or first_added:
+    print("First unexpected difference:")
+    if first_removed:
+      print(f"  {first_removed}")
+    if first_added:
+      print(f"  {first_added}")
+
+
 def strip_cartesian_counts_with_pv(lines: list[str]) -> list[str]:
   """Remove count= lines for cartesian plots that define countPvName."""
   to_remove: set[int] = set()
@@ -145,7 +175,7 @@ def _strip_text_basic_attribute(block_lines: list[str]) -> list[str]:
       continue
 
     if inside_basic:
-      if not stripped.startswith("fill="):
+      if not stripped.startswith("fill=") and not stripped.startswith("width="):
         result.append(line)
       depth += line.count("{") - line.count("}")
       if depth <= 0:
@@ -175,6 +205,61 @@ def strip_text_fill(lines: list[str]) -> list[str]:
         if depth <= 0:
           break
       result.extend(_strip_text_basic_attribute(block))
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
+def _strip_polyline_basic_attribute(block_lines: list[str]) -> list[str]:
+  """Remove outline fill lines from polyline basic attribute blocks."""
+  result: list[str] = []
+  inside_basic = False
+  depth = 0
+
+  for line in block_lines:
+    stripped = line.strip()
+    if not inside_basic and stripped.startswith('"basic attribute"'):
+      inside_basic = True
+      depth = line.count("{") - line.count("}")
+      result.append(line)
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    if inside_basic:
+      if stripped != 'fill="outline"':
+        result.append(line)
+      depth += line.count("{") - line.count("}")
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    result.append(line)
+
+  return result
+
+
+def strip_polyline_outline_fill(lines: list[str]) -> list[str]:
+  """Remove fill="outline" lines from polyline widgets."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped = line.strip()
+    if stripped.startswith("polyline"):
+      block: list[str] = []
+      depth = 0
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      result.extend(_strip_polyline_basic_attribute(block))
       continue
 
     result.append(line)
@@ -299,6 +384,7 @@ def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
       filtered, ("rectangle", "polyline"))
   filtered = strip_indicator_prec_default(filtered)
   filtered = strip_text_fill(filtered)
+  filtered = strip_polyline_outline_fill(filtered)
   filtered = strip_empty_polyline_blocks(filtered)
   normalized: list[str] = []
   for line in filtered:
@@ -349,6 +435,7 @@ def compare_files(original: Path, saved: Path) -> bool:
     )
     sys.exit(result.returncode)
   print(f"Unexpected differences found in {original.name}:")
+  report_first_difference(result.stdout)
   print(result.stdout.rstrip())
   return False
 

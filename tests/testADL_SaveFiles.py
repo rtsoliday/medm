@@ -128,6 +128,61 @@ def strip_default_width_for_widgets(
   return result
 
 
+def _strip_text_basic_attribute(block_lines: list[str]) -> list[str]:
+  """Remove fill= lines from text widget basic attribute blocks."""
+  result: list[str] = []
+  inside_basic = False
+  depth = 0
+
+  for line in block_lines:
+    stripped = line.strip()
+    if not inside_basic and stripped.startswith('"basic attribute"'):
+      inside_basic = True
+      depth = line.count("{") - line.count("}")
+      result.append(line)
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    if inside_basic:
+      if not stripped.startswith("fill="):
+        result.append(line)
+      depth += line.count("{") - line.count("}")
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    result.append(line)
+
+  return result
+
+
+def strip_text_fill(lines: list[str]) -> list[str]:
+  """Remove basic attribute fill lines added to text widgets."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped = line.strip()
+    if stripped.startswith("text {"):
+      block: list[str] = []
+      depth = 0
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      result.extend(_strip_text_basic_attribute(block))
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
 def _strip_indicator_limits(block_lines: list[str]) -> list[str]:
   """Remove precDefault=1 entries inside indicator limits blocks."""
   result: list[str] = []
@@ -183,12 +238,68 @@ def strip_indicator_prec_default(lines: list[str]) -> list[str]:
   return result
 
 
+def _is_empty_polyline(block_lines: list[str]) -> bool:
+  """Return True if block has a points section with no coordinates."""
+  inside_points = False
+  saw_points = False
+  points_depth = 0
+  for line in block_lines:
+    stripped = line.strip()
+    if not inside_points and stripped.startswith("points"):
+      inside_points = True
+      saw_points = True
+      points_depth = line.count("{") - line.count("}")
+      if "(" in line:
+        return False
+      continue
+
+    if inside_points:
+      if "(" in line:
+        return False
+      points_depth += line.count("{") - line.count("}")
+      if points_depth <= 0:
+        inside_points = False
+        break
+
+  return saw_points and not inside_points
+
+
+def strip_empty_polyline_blocks(lines: list[str]) -> list[str]:
+  """Remove polyline blocks that define no points."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped = line.strip()
+    if stripped.startswith("polyline"):
+      block: list[str] = []
+      depth = 0
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      if _is_empty_polyline(block):
+        continue
+      result.extend(block)
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
 def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   """Return lines with allowed-difference fields removed."""
   filtered = strip_cartesian_counts_with_pv(lines)
   filtered = strip_default_width_for_widgets(
       filtered, ("rectangle", "polyline"))
   filtered = strip_indicator_prec_default(filtered)
+  filtered = strip_text_fill(filtered)
+  filtered = strip_empty_polyline_blocks(filtered)
   normalized: list[str] = []
   for line in filtered:
     stripped = line.strip().lower()

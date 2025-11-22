@@ -138,6 +138,35 @@ def strip_cartesian_counts_with_pv(lines: list[str]) -> list[str]:
   return [line for idx, line in enumerate(lines) if idx not in to_remove]
 
 
+def strip_cartesian_trace_yside_zero(lines: list[str]) -> list[str]:
+  """Remove yside=0 entries inside cartesian trace blocks."""
+  result: list[str] = []
+  inside_trace = False
+  depth = 0
+
+  for line in lines:
+    stripped = line.strip().lower()
+    if not inside_trace and stripped.startswith("trace["):
+      inside_trace = True
+      depth = line.count("{") - line.count("}")
+      result.append(line)
+      if depth <= 0:
+        inside_trace = False
+      continue
+
+    if inside_trace:
+      if stripped != "yside=0":
+        result.append(line)
+      depth += line.count("{") - line.count("}")
+      if depth <= 0:
+        inside_trace = False
+      continue
+
+    result.append(line)
+
+  return result
+
+
 def _strip_default_width_from_block(block_lines: list[str]) -> list[str]:
   """Return block lines omitting width=1 entries inside basic attribute."""
   result: list[str] = []
@@ -194,7 +223,7 @@ def strip_default_width_for_widgets(
   return result
 
 
-def _strip_text_basic_attribute(block_lines: list[str]) -> list[str]:
+def _strip_text_basic_attribute_fill(block_lines: list[str]) -> list[str]:
   """Remove fill= lines from text widget basic attribute blocks."""
   result: list[str] = []
   inside_basic = False
@@ -204,7 +233,7 @@ def _strip_text_basic_attribute(block_lines: list[str]) -> list[str]:
     stripped = line.strip()
     normalized = stripped.lower()
     normalized_compact = normalized.replace(" ", "")
-    if not inside_basic and stripped.startswith('"basic attribute"'):
+    if not inside_basic and normalized.startswith('"basic attribute"'):
       inside_basic = True
       depth = line.count("{") - line.count("}")
       result.append(line)
@@ -213,8 +242,7 @@ def _strip_text_basic_attribute(block_lines: list[str]) -> list[str]:
       continue
 
     if inside_basic:
-      if (not normalized_compact.startswith("fill=") and
-          not normalized_compact.startswith("width=")):
+      if not normalized_compact.startswith("fill="):
         result.append(line)
       depth += line.count("{") - line.count("}")
       if depth <= 0:
@@ -244,7 +272,65 @@ def strip_text_fill(lines: list[str]) -> list[str]:
         i += 1
         if depth <= 0:
           break
-      result.extend(_strip_text_basic_attribute(block))
+      result.extend(_strip_text_basic_attribute_fill(block))
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
+def _strip_text_basic_attribute_width(block_lines: list[str]) -> list[str]:
+  """Remove width= lines from text widget basic attribute blocks."""
+  result: list[str] = []
+  inside_basic = False
+  depth = 0
+
+  for line in block_lines:
+    stripped = line.strip()
+    normalized = stripped.lower()
+    normalized_compact = normalized.replace(" ", "")
+    if not inside_basic and normalized.startswith('"basic attribute"'):
+      inside_basic = True
+      depth = line.count("{") - line.count("}")
+      result.append(line)
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    if inside_basic:
+      if not normalized_compact.startswith("width="):
+        result.append(line)
+      depth += line.count("{") - line.count("}")
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    result.append(line)
+
+  return result
+
+
+def strip_text_width(lines: list[str]) -> list[str]:
+  """Remove width= lines from text widget basic attribute sections."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped = line.strip()
+    normalized = stripped.lower()
+    if normalized.startswith("text {"):
+      block: list[str] = []
+      depth = 0
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      result.extend(_strip_text_basic_attribute_width(block))
       continue
 
     result.append(line)
@@ -476,10 +562,12 @@ def strip_edge_spaces_in_quotes(lines: list[str]) -> list[str]:
 def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   """Return lines with allowed-difference fields removed."""
   filtered = strip_cartesian_counts_with_pv(lines)
+  filtered = strip_cartesian_trace_yside_zero(filtered)
   filtered = strip_default_width_for_widgets(
       filtered, ("rectangle", "polyline"))
   filtered = strip_indicator_prec_default(filtered)
   filtered = strip_text_fill(filtered)
+  filtered = strip_text_width(filtered)
   filtered = strip_polyline_outline_fill(filtered)
   filtered = strip_empty_polyline_blocks(filtered)
   filtered = strip_empty_children_blocks(filtered)

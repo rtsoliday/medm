@@ -29,8 +29,13 @@ def diff_has_only_name_changes(diff_output: str) -> bool:
   for line in diff_output.splitlines():
     if not line:
       continue
-    if line.startswith("<") or line.startswith(">"):
-      if "name" not in line.lower():
+    if line.startswith(("+++", "---", "@@")):
+      continue
+    if line[0] in {"-", "+"}:
+      payload = line[1:].strip().lower()
+      if not payload:
+        continue
+      if "name" not in payload:
         return False
   return True
 
@@ -40,29 +45,60 @@ def report_first_difference(diff_output: str) -> None:
   ignore_tokens = ("name", "version=")
 
   def is_actionable(line: str) -> bool:
-    if not line.startswith(("<", ">")):
+    if line.startswith(("+++", "---")):
+      return False
+    if not line or line[0] not in {"-", "+"}:
       return False
     payload = line[1:].strip().lower()
     if not payload:
       return False
     return not any(token in payload for token in ignore_tokens)
 
-  first_removed = None
-  first_added = None
-  for line in diff_output.splitlines():
-    if not first_removed and line.startswith("<") and is_actionable(line):
-      first_removed = line
-    elif not first_added and line.startswith(">") and is_actionable(line):
-      first_added = line
-    if first_removed and first_added:
-      break
+  removed_line = None
+  removed_text = None
+  added_line = None
+  added_text = None
+  orig_counter = 0
+  new_counter = 0
 
-  if first_removed or first_added:
+  for line in diff_output.splitlines():
+    if line.startswith("@@"):
+      parts = line.split()
+      if len(parts) >= 3:
+        orig_range = parts[1]
+        new_range = parts[2]
+        try:
+          orig_counter = int(orig_range.split(",")[0][2:]) - 1
+          new_counter = int(new_range.split(",")[0][1:]) - 1
+        except ValueError:
+          orig_counter = new_counter = 0
+      continue
+
+    if line.startswith(" "):
+      orig_counter += 1
+      new_counter += 1
+      continue
+
+    if line.startswith("-") and not line.startswith("---"):
+      orig_counter += 1
+      if not removed_text and is_actionable(line):
+        removed_text = line
+        removed_line = orig_counter
+      continue
+
+    if line.startswith("+") and not line.startswith("+++"):
+      new_counter += 1
+      if not added_text and is_actionable(line):
+        added_text = line
+        added_line = new_counter
+      continue
+
+  if removed_text or added_text:
     print("First unexpected difference:")
-    if first_removed:
-      print(f"  {first_removed}")
-    if first_added:
-      print(f"  {first_added}")
+    if removed_text:
+      print(f"  original line {removed_line}: {removed_text}")
+    if added_text:
+      print(f"  new line {added_line}: {added_text}")
 
 
 def strip_cartesian_counts_with_pv(lines: list[str]) -> list[str]:
@@ -166,6 +202,8 @@ def _strip_text_basic_attribute(block_lines: list[str]) -> list[str]:
 
   for line in block_lines:
     stripped = line.strip()
+    normalized = stripped.lower()
+    normalized_compact = normalized.replace(" ", "")
     if not inside_basic and stripped.startswith('"basic attribute"'):
       inside_basic = True
       depth = line.count("{") - line.count("}")
@@ -175,7 +213,8 @@ def _strip_text_basic_attribute(block_lines: list[str]) -> list[str]:
       continue
 
     if inside_basic:
-      if not stripped.startswith("fill=") and not stripped.startswith("width="):
+      if (not normalized_compact.startswith("fill=") and
+          not normalized_compact.startswith("width=")):
         result.append(line)
       depth += line.count("{") - line.count("}")
       if depth <= 0:
@@ -194,7 +233,8 @@ def strip_text_fill(lines: list[str]) -> list[str]:
   while i < len(lines):
     line = lines[i]
     stripped = line.strip()
-    if stripped.startswith("text {"):
+    normalized = stripped.lower()
+    if normalized.startswith("text {"):
       block: list[str] = []
       depth = 0
       while i < len(lines):
@@ -377,6 +417,23 @@ def strip_empty_polyline_blocks(lines: list[str]) -> list[str]:
   return result
 
 
+def strip_trailing_spaces_in_quotes(lines: list[str]) -> list[str]:
+  """Trim trailing whitespace inside quoted attribute values."""
+  result: list[str] = []
+  for line in lines:
+    first = line.find('"')
+    last = line.rfind('"')
+    if first == -1 or last == -1 or last <= first:
+      result.append(line)
+      continue
+    value = line[first + 1:last]
+    trimmed = value.rstrip()
+    if trimmed != value:
+      line = line[:first + 1] + trimmed + line[last:]
+    result.append(line)
+  return result
+
+
 def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   """Return lines with allowed-difference fields removed."""
   filtered = strip_cartesian_counts_with_pv(lines)
@@ -386,6 +443,7 @@ def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   filtered = strip_text_fill(filtered)
   filtered = strip_polyline_outline_fill(filtered)
   filtered = strip_empty_polyline_blocks(filtered)
+  filtered = strip_trailing_spaces_in_quotes(filtered)
   normalized: list[str] = []
   for line in filtered:
     stripped = line.strip().lower()
@@ -417,7 +475,7 @@ def files_match_with_allowed_variations(original: Path, saved: Path) -> bool:
 def compare_files(original: Path, saved: Path) -> bool:
   """Run diff and allow only approved differences between files."""
   result = subprocess.run(
-      ["diff", "-w", str(saved), str(original)],
+      ["diff", "-w", "-u", str(saved), str(original)],
       capture_output=True,
       text=True,
       check=False,

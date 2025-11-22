@@ -5,9 +5,9 @@ file {
 }
 display {
 	object {
-		x=0
+		x=10
 		y=53
-		width=400
+		width=600
 		height=1355
 	}
 	clr=14
@@ -635,5 +635,24 @@ text {
 		chanD="channelD_PV"
 	}
 	textix="Example Text Height 60"
+	align="horiz. right"
+}
+text {
+	object {
+		x=291
+		y=1098
+		width=300
+		height=20
+	}
+	"basic attribute" {
+		clr=62
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A&&!B"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+	}
+	textix="Example Text Height 44"
 	align="horiz. right"
 }

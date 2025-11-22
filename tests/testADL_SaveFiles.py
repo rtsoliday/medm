@@ -4,9 +4,48 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import subprocess
 import sys
 from pathlib import Path
+
+
+@dataclass
+class LineEntry:
+  """Single ADL line paired with its 1-based line number."""
+
+  text: str
+  line_no: int
+
+
+def _entries_from_lines(lines: list[str]) -> list[LineEntry]:
+  return [LineEntry(text=line, line_no=idx + 1) for idx, line in enumerate(lines)]
+
+
+def _rebuild_entries_after_filter(
+    entries: list[LineEntry], filtered_lines: list[str]) -> list[LineEntry]:
+  """Return new entries list aligned to the filtered strings."""
+  if not filtered_lines:
+    return []
+  rebuilt: list[LineEntry] = []
+  target_idx = 0
+  total = len(filtered_lines)
+  for entry in entries:
+    if entry.text == filtered_lines[target_idx]:
+      rebuilt.append(LineEntry(filtered_lines[target_idx], entry.line_no))
+      target_idx += 1
+      if target_idx == total:
+        break
+  if target_idx != total:
+    raise RuntimeError("Failed to realign filtered ADL lines with their origins")
+  return rebuilt
+
+
+def _apply_string_filter(
+    entries: list[LineEntry], filter_func) -> list[LineEntry]:
+  """Run existing string-based filters while keeping line numbers."""
+  filtered = filter_func([entry.text for entry in entries])
+  return _rebuild_entries_after_filter(entries, filtered)
 
 
 def run_qtedm(adl_path: Path, qtedm_path: Path) -> None:
@@ -339,6 +378,120 @@ def strip_text_width(lines: list[str]) -> list[str]:
   return result
 
 
+def _strip_oval_basic_attribute_width(block_lines: list[str]) -> list[str]:
+  """Remove width= lines inside oval basic attribute sections."""
+  result: list[str] = []
+  inside_basic = False
+  depth = 0
+
+  for line in block_lines:
+    stripped = line.strip()
+    normalized = stripped.lower()
+    normalized_compact = normalized.replace(" ", "")
+    if not inside_basic and normalized.startswith('"basic attribute"'):
+      inside_basic = True
+      depth = line.count("{") - line.count("}")
+      result.append(line)
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    if inside_basic:
+      if not normalized_compact.startswith("width="):
+        result.append(line)
+      depth += line.count("{") - line.count("}")
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    result.append(line)
+
+  return result
+
+
+def strip_oval_width(lines: list[str]) -> list[str]:
+  """Remove width= lines from oval widget basic attribute sections."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped = line.strip().lower()
+    if stripped.startswith("oval"):
+      block: list[str] = []
+      depth = 0
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      result.extend(_strip_oval_basic_attribute_width(block))
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
+def _strip_arc_basic_attribute_width(block_lines: list[str]) -> list[str]:
+  """Remove width= lines inside arc basic attribute sections."""
+  result: list[str] = []
+  inside_basic = False
+  depth = 0
+
+  for line in block_lines:
+    stripped = line.strip()
+    normalized = stripped.lower()
+    normalized_compact = normalized.replace(" ", "")
+    if not inside_basic and normalized.startswith('"basic attribute"'):
+      inside_basic = True
+      depth = line.count("{") - line.count("}")
+      result.append(line)
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    if inside_basic:
+      if not normalized_compact.startswith("width="):
+        result.append(line)
+      depth += line.count("{") - line.count("}")
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    result.append(line)
+
+  return result
+
+
+def strip_arc_width(lines: list[str]) -> list[str]:
+  """Remove width= lines from arc widget basic attribute sections."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped = line.strip().lower()
+    if stripped.startswith("arc"):
+      block: list[str] = []
+      depth = 0
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      result.extend(_strip_arc_basic_attribute_width(block))
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
 def _strip_polyline_basic_attribute(block_lines: list[str]) -> list[str]:
   """Remove fill entries and default widths from polyline basic attributes."""
   result: list[str] = []
@@ -544,44 +697,66 @@ def strip_default_dprecision(lines: list[str]) -> list[str]:
 
 def strip_edge_spaces_in_quotes(lines: list[str]) -> list[str]:
   """Trim leading/trailing whitespace inside quoted attribute values."""
-  result: list[str] = []
-  for line in lines:
+  entries = strip_edge_spaces_in_quotes_entries(_entries_from_lines(lines))
+  return [entry.text for entry in entries]
+
+
+def strip_edge_spaces_in_quotes_entries(
+    entries: list[LineEntry]) -> list[LineEntry]:
+  """Entry-aware version of quote trimming that preserves line numbers."""
+  result: list[LineEntry] = []
+  for entry in entries:
+    line = entry.text
     first = line.find('"')
     last = line.rfind('"')
     if first == -1 or last == -1 or last <= first:
-      result.append(line)
+      result.append(entry)
       continue
     value = line[first + 1:last]
     trimmed = value.strip()
     if trimmed != value:
       line = line[:first + 1] + trimmed + line[last:]
-    result.append(line)
+    result.append(LineEntry(text=line, line_no=entry.line_no))
   return result
+
+
+def normalize_entries_for_allowed_differences(
+    lines: list[str]) -> list[LineEntry]:
+  """Return LineEntries after removing allowed variations."""
+  entries = _entries_from_lines(lines)
+  entries = _apply_string_filter(entries, strip_cartesian_counts_with_pv)
+  entries = _apply_string_filter(entries, strip_cartesian_trace_yside_zero)
+  entries = _apply_string_filter(
+      entries,
+      lambda data: strip_default_width_for_widgets(data, ("rectangle", "polyline")),
+  )
+  entries = _apply_string_filter(entries, strip_indicator_prec_default)
+  entries = _apply_string_filter(entries, strip_text_fill)
+  entries = _apply_string_filter(entries, strip_text_width)
+  entries = _apply_string_filter(entries, strip_oval_width)
+  entries = _apply_string_filter(entries, strip_arc_width)
+  entries = _apply_string_filter(entries, strip_polyline_outline_fill)
+  entries = _apply_string_filter(entries, strip_empty_polyline_blocks)
+  entries = _apply_string_filter(entries, strip_empty_children_blocks)
+  entries = _apply_string_filter(entries, strip_default_dprecision)
+  entries = strip_edge_spaces_in_quotes_entries(entries)
+
+  normalized: list[LineEntry] = []
+  for entry in entries:
+    stripped_lower = entry.text.strip().lower()
+    if not stripped_lower:
+      continue
+    if "name" in stripped_lower:
+      continue
+    if stripped_lower.startswith("version="):
+      continue
+    normalized.append(entry)
+  return normalized
 
 
 def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   """Return lines with allowed-difference fields removed."""
-  filtered = strip_cartesian_counts_with_pv(lines)
-  filtered = strip_cartesian_trace_yside_zero(filtered)
-  filtered = strip_default_width_for_widgets(
-      filtered, ("rectangle", "polyline"))
-  filtered = strip_indicator_prec_default(filtered)
-  filtered = strip_text_fill(filtered)
-  filtered = strip_text_width(filtered)
-  filtered = strip_polyline_outline_fill(filtered)
-  filtered = strip_empty_polyline_blocks(filtered)
-  filtered = strip_empty_children_blocks(filtered)
-  filtered = strip_default_dprecision(filtered)
-  filtered = strip_edge_spaces_in_quotes(filtered)
-  normalized: list[str] = []
-  for line in filtered:
-    stripped = line.strip().lower()
-    if "name" in stripped:
-      continue
-    if stripped.startswith("version="):
-      continue
-    normalized.append(line)
-  return [line for line in normalized if line.strip()]
+  return [entry.text for entry in normalize_entries_for_allowed_differences(lines)]
 
 
 def files_match_with_allowed_variations(original: Path, saved: Path) -> bool:
@@ -622,9 +797,46 @@ def compare_files(original: Path, saved: Path) -> bool:
     )
     sys.exit(result.returncode)
   print(f"Unexpected differences found in {original.name}:")
+  report_first_filtered_difference(original, saved)
   report_first_difference(result.stdout)
   print(result.stdout.rstrip())
   return False
+
+
+def report_first_filtered_difference(original: Path, saved: Path) -> None:
+  """Show the earliest difference after applying allowed filters."""
+  try:
+    original_lines = original.read_text().splitlines()
+    saved_lines = saved.read_text().splitlines()
+  except OSError as exc:
+    sys.stderr.write(
+        f"Failed to read files for filtered diff reporting: {exc}\n"
+    )
+    return
+
+  original_entries = normalize_entries_for_allowed_differences(original_lines)
+  saved_entries = normalize_entries_for_allowed_differences(saved_lines)
+
+  max_len = max(len(original_entries), len(saved_entries))
+  for idx in range(max_len):
+    orig_entry = original_entries[idx] if idx < len(original_entries) else None
+    saved_entry = saved_entries[idx] if idx < len(saved_entries) else None
+    if orig_entry and saved_entry and orig_entry.text == saved_entry.text:
+      continue
+    print("First unexpected difference after allowed filters:")
+    if orig_entry:
+      print(
+          f"  original {original.name}:{orig_entry.line_no}: {orig_entry.text.strip()}"
+      )
+    else:
+      print("  original: <no line>")
+    if saved_entry:
+      print(
+          f"  saved {saved.name}:{saved_entry.line_no}: {saved_entry.text.strip()}"
+      )
+    else:
+      print("  saved: <no line>")
+    break
 
 
 def main() -> int:

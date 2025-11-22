@@ -417,6 +417,11 @@ def strip_empty_polyline_blocks(lines: list[str]) -> list[str]:
   return result
 
 
+def strip_default_dprecision(lines: list[str]) -> list[str]:
+  """Drop dPrecision entries that remain at the default 1.0."""
+  return [line for line in lines if line.strip() != "dPrecision=1.000000"]
+
+
 def strip_edge_spaces_in_quotes(lines: list[str]) -> list[str]:
   """Trim leading/trailing whitespace inside quoted attribute values."""
   result: list[str] = []
@@ -443,6 +448,7 @@ def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   filtered = strip_text_fill(filtered)
   filtered = strip_polyline_outline_fill(filtered)
   filtered = strip_empty_polyline_blocks(filtered)
+  filtered = strip_default_dprecision(filtered)
   filtered = strip_edge_spaces_in_quotes(filtered)
   normalized: list[str] = []
   for line in filtered:

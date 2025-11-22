@@ -417,8 +417,8 @@ def strip_empty_polyline_blocks(lines: list[str]) -> list[str]:
   return result
 
 
-def strip_trailing_spaces_in_quotes(lines: list[str]) -> list[str]:
-  """Trim trailing whitespace inside quoted attribute values."""
+def strip_edge_spaces_in_quotes(lines: list[str]) -> list[str]:
+  """Trim leading/trailing whitespace inside quoted attribute values."""
   result: list[str] = []
   for line in lines:
     first = line.find('"')
@@ -427,7 +427,7 @@ def strip_trailing_spaces_in_quotes(lines: list[str]) -> list[str]:
       result.append(line)
       continue
     value = line[first + 1:last]
-    trimmed = value.rstrip()
+    trimmed = value.strip()
     if trimmed != value:
       line = line[:first + 1] + trimmed + line[last:]
     result.append(line)
@@ -443,7 +443,7 @@ def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   filtered = strip_text_fill(filtered)
   filtered = strip_polyline_outline_fill(filtered)
   filtered = strip_empty_polyline_blocks(filtered)
-  filtered = strip_trailing_spaces_in_quotes(filtered)
+  filtered = strip_edge_spaces_in_quotes(filtered)
   normalized: list[str] = []
   for line in filtered:
     stripped = line.strip().lower()

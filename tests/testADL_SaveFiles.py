@@ -189,7 +189,14 @@ def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   filtered = strip_default_width_for_widgets(
       filtered, ("rectangle", "polyline"))
   filtered = strip_indicator_prec_default(filtered)
-  normalized = [line for line in filtered if "name" not in line.lower()]
+  normalized: list[str] = []
+  for line in filtered:
+    stripped = line.strip().lower()
+    if "name" in stripped:
+      continue
+    if stripped.startswith("version="):
+      continue
+    normalized.append(line)
   return [line for line in normalized if line.strip()]
 
 

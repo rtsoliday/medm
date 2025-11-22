@@ -254,13 +254,15 @@ def strip_text_fill(lines: list[str]) -> list[str]:
 
 
 def _strip_polyline_basic_attribute(block_lines: list[str]) -> list[str]:
-  """Remove outline fill lines from polyline basic attribute blocks."""
+  """Remove fill entries and default widths from polyline basic attributes."""
   result: list[str] = []
   inside_basic = False
   depth = 0
 
   for line in block_lines:
     stripped = line.strip()
+    normalized = stripped.lower()
+    normalized_compact = normalized.replace(" ", "")
     if not inside_basic and stripped.startswith('"basic attribute"'):
       inside_basic = True
       depth = line.count("{") - line.count("}")
@@ -270,7 +272,8 @@ def _strip_polyline_basic_attribute(block_lines: list[str]) -> list[str]:
       continue
 
     if inside_basic:
-      if stripped != 'fill="outline"':
+      if (not normalized_compact.startswith("fill=") and
+          normalized_compact != "width=1"):
         result.append(line)
       depth += line.count("{") - line.count("}")
       if depth <= 0:
@@ -417,6 +420,37 @@ def strip_empty_polyline_blocks(lines: list[str]) -> list[str]:
   return result
 
 
+def strip_empty_children_blocks(lines: list[str]) -> list[str]:
+  """Drop children blocks that contain no child definitions."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped = line.strip().lower()
+    if stripped.startswith("children"):
+      block: list[str] = []
+      depth = 0
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      inner_has_content = any(
+          blk_line.strip() and blk_line.strip() != "}"
+          for blk_line in block[1:]
+      )
+      if inner_has_content:
+        result.extend(block)
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
 def strip_default_dprecision(lines: list[str]) -> list[str]:
   """Drop dPrecision entries that remain at the default 1.0."""
   return [line for line in lines if line.strip() != "dPrecision=1.000000"]
@@ -448,6 +482,7 @@ def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
   filtered = strip_text_fill(filtered)
   filtered = strip_polyline_outline_fill(filtered)
   filtered = strip_empty_polyline_blocks(filtered)
+  filtered = strip_empty_children_blocks(filtered)
   filtered = strip_default_dprecision(filtered)
   filtered = strip_edge_spaces_in_quotes(filtered)
   normalized: list[str] = []

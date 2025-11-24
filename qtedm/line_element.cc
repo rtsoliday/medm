@@ -2,17 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include <QApplication>
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
 
-#include "medm_colors.h"
-
 LineElement::LineElement(QWidget *parent)
-  : QWidget(parent)
+  : GraphicShapeElement(parent)
 {
   setAutoFillBackground(false);
   setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -22,39 +19,6 @@ LineElement::LineElement(QWidget *parent)
   setLineWidth(1);
   setColorMode(TextColorMode::kStatic);
   setVisibilityMode(TextVisibilityMode::kStatic);
-  designModeVisible_ = QWidget::isVisible();
-  update();
-}
-
-void LineElement::setSelected(bool selected)
-{
-  if (selected_ == selected) {
-    return;
-  }
-  selected_ = selected;
-  update();
-}
-
-bool LineElement::isSelected() const
-{
-  return selected_;
-}
-
-QColor LineElement::color() const
-{
-  return color_;
-}
-
-void LineElement::setForegroundColor(const QColor &color)
-{
-  QColor effective = color;
-  if (!effective.isValid()) {
-    effective = defaultForegroundColor();
-  }
-  if (color_ == effective) {
-    return;
-  }
-  color_ = effective;
   update();
 }
 
@@ -87,58 +51,6 @@ void LineElement::setLineWidth(int width)
   update();
 }
 
-TextColorMode LineElement::colorMode() const
-{
-  return colorMode_;
-}
-
-void LineElement::setColorMode(TextColorMode mode)
-{
-  colorMode_ = mode;
-}
-
-TextVisibilityMode LineElement::visibilityMode() const
-{
-  return visibilityMode_;
-}
-
-void LineElement::setVisibilityMode(TextVisibilityMode mode)
-{
-  visibilityMode_ = mode;
-}
-
-QString LineElement::visibilityCalc() const
-{
-  return visibilityCalc_;
-}
-
-void LineElement::setVisibilityCalc(const QString &calc)
-{
-  if (visibilityCalc_ == calc) {
-    return;
-  }
-  visibilityCalc_ = calc;
-}
-
-QString LineElement::channel(int index) const
-{
-  if (index < 0 || index >= static_cast<int>(channels_.size())) {
-    return QString();
-  }
-  return channels_[index];
-}
-
-void LineElement::setChannel(int index, const QString &value)
-{
-  if (index < 0 || index >= static_cast<int>(channels_.size())) {
-    return;
-  }
-  if (channels_[index] == value) {
-    return;
-  }
-  channels_[index] = value;
-}
-
 void LineElement::setLocalEndpoints(const QPoint &start, const QPoint &end)
 {
   const QSize currentSize = size();
@@ -167,73 +79,6 @@ QVector<QPoint> LineElement::absolutePoints() const
   return points;
 }
 
-void LineElement::setExecuteMode(bool execute)
-{
-  if (executeMode_ == execute) {
-    return;
-  }
-
-  if (execute) {
-    designModeVisible_ = QWidget::isVisible();
-  }
-
-  executeMode_ = execute;
-  runtimeConnected_ = false;
-  runtimeVisible_ = true;
-  runtimeSeverity_ = 0;
-  updateExecuteState();
-}
-
-bool LineElement::isExecuteMode() const
-{
-  return executeMode_;
-}
-
-void LineElement::setRuntimeConnected(bool connected)
-{
-  if (runtimeConnected_ == connected) {
-    return;
-  }
-  runtimeConnected_ = connected;
-  if (executeMode_) {
-    updateExecuteState();
-  }
-}
-
-void LineElement::setRuntimeVisible(bool visible)
-{
-  if (runtimeVisible_ == visible) {
-    return;
-  }
-  runtimeVisible_ = visible;
-  if (executeMode_) {
-    applyRuntimeVisibility();
-  }
-}
-
-void LineElement::setRuntimeSeverity(short severity)
-{
-  if (severity < 0) {
-    severity = 0;
-  }
-  severity = std::min<short>(severity, 3);
-  if (runtimeSeverity_ == severity) {
-    return;
-  }
-  runtimeSeverity_ = severity;
-  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
-    update();
-  }
-}
-
-void LineElement::setVisible(bool visible)
-{
-  if (!executeMode_) {
-    designModeVisible_ = visible;
-  }
-  QWidget::setVisible(visible);
-}
-
 void LineElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -253,61 +98,9 @@ void LineElement::paintEvent(QPaintEvent *event)
   const QPoint endPoint = pointFromRatio(endRatio_);
   painter.drawLine(startPoint, endPoint);
 
-  if (selected_) {
-    QPen selectionPen(Qt::black);
-    selectionPen.setStyle(Qt::DashLine);
-    selectionPen.setWidth(1);
-    painter.setPen(selectionPen);
-    painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  if (isSelected()) {
+    drawSelectionOutline(painter, rect().adjusted(0, 0, -1, -1));
   }
-}
-
-QColor LineElement::defaultForegroundColor() const
-{
-  if (const QWidget *parent = parentWidget()) {
-    return parent->palette().color(QPalette::WindowText);
-  }
-  if (qApp) {
-    return qApp->palette().color(QPalette::WindowText);
-  }
-  return QColor(Qt::black);
-}
-
-QColor LineElement::effectiveForegroundColor() const
-{
-  const QColor baseColor = color_.isValid() ? color_ : defaultForegroundColor();
-  if (!executeMode_) {
-    return baseColor;
-  }
-
-  if (!runtimeConnected_) {
-    return QColor(255, 255, 255);
-  }
-
-  switch (colorMode_) {
-  case TextColorMode::kAlarm:
-    return MedmColors::alarmColorForSeverity(runtimeSeverity_);
-  case TextColorMode::kDiscrete:
-  case TextColorMode::kStatic:
-  default:
-    return baseColor;
-  }
-}
-
-void LineElement::applyRuntimeVisibility()
-{
-  if (executeMode_) {
-    const bool visible = designModeVisible_ && runtimeVisible_;
-    QWidget::setVisible(visible);
-  } else {
-    QWidget::setVisible(designModeVisible_);
-  }
-}
-
-void LineElement::updateExecuteState()
-{
-  applyRuntimeVisibility();
-  update();
 }
 
 QPoint LineElement::clampToSize(const QPoint &point, const QSize &size) const
@@ -334,4 +127,3 @@ QPoint LineElement::pointFromRatio(const QPointF &ratio) const
   const int y = static_cast<int>(std::round(std::clamp(ratio.y(), 0.0, 1.0) * denomY));
   return QPoint(x, y);
 }
-

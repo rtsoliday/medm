@@ -2,17 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include <QApplication>
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
 
-#include "medm_colors.h"
-
 PolygonElement::PolygonElement(QWidget *parent)
-  : QWidget(parent)
+  : GraphicShapeElement(parent)
 {
   setAutoFillBackground(false);
   setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -23,39 +20,6 @@ PolygonElement::PolygonElement(QWidget *parent)
   setLineWidth(1);
   setColorMode(TextColorMode::kStatic);
   setVisibilityMode(TextVisibilityMode::kStatic);
-  designModeVisible_ = QWidget::isVisible();
-  update();
-}
-
-void PolygonElement::setSelected(bool selected)
-{
-  if (selected_ == selected) {
-    return;
-  }
-  selected_ = selected;
-  update();
-}
-
-bool PolygonElement::isSelected() const
-{
-  return selected_;
-}
-
-QColor PolygonElement::color() const
-{
-  return color_;
-}
-
-void PolygonElement::setForegroundColor(const QColor &color)
-{
-  QColor effective = color;
-  if (!effective.isValid()) {
-    effective = defaultForegroundColor();
-  }
-  if (color_ == effective) {
-    return;
-  }
-  color_ = effective;
   update();
 }
 
@@ -117,117 +81,6 @@ void PolygonElement::setLineWidth(int width)
     const QVector<QPoint> points = absolutePoints();
     setAbsolutePoints(points);
   } else {
-    update();
-  }
-}
-
-TextColorMode PolygonElement::colorMode() const
-{
-  return colorMode_;
-}
-
-void PolygonElement::setColorMode(TextColorMode mode)
-{
-  colorMode_ = mode;
-}
-
-TextVisibilityMode PolygonElement::visibilityMode() const
-{
-  return visibilityMode_;
-}
-
-void PolygonElement::setVisibilityMode(TextVisibilityMode mode)
-{
-  visibilityMode_ = mode;
-}
-
-QString PolygonElement::visibilityCalc() const
-{
-  return visibilityCalc_;
-}
-
-void PolygonElement::setVisibilityCalc(const QString &calc)
-{
-  if (visibilityCalc_ == calc) {
-    return;
-  }
-  visibilityCalc_ = calc;
-}
-
-QString PolygonElement::channel(int index) const
-{
-  if (index < 0 || index >= static_cast<int>(channels_.size())) {
-    return QString();
-  }
-  return channels_[index];
-}
-
-void PolygonElement::setChannel(int index, const QString &value)
-{
-  if (index < 0 || index >= static_cast<int>(channels_.size())) {
-    return;
-  }
-  if (channels_[index] == value) {
-    return;
-  }
-  channels_[index] = value;
-}
-
-void PolygonElement::setExecuteMode(bool execute)
-{
-  if (executeMode_ == execute) {
-    return;
-  }
-
-  if (execute) {
-    designModeVisible_ = QWidget::isVisible();
-  }
-
-  executeMode_ = execute;
-  runtimeConnected_ = false;
-  runtimeVisible_ = true;
-  runtimeSeverity_ = 0;
-  updateExecuteState();
-}
-
-bool PolygonElement::isExecuteMode() const
-{
-  return executeMode_;
-}
-
-void PolygonElement::setRuntimeConnected(bool connected)
-{
-  if (runtimeConnected_ == connected) {
-    return;
-  }
-  runtimeConnected_ = connected;
-  if (executeMode_) {
-    updateExecuteState();
-  }
-}
-
-void PolygonElement::setRuntimeVisible(bool visible)
-{
-  if (runtimeVisible_ == visible) {
-    return;
-  }
-  runtimeVisible_ = visible;
-  if (executeMode_) {
-    applyRuntimeVisibility();
-  }
-}
-
-void PolygonElement::setRuntimeSeverity(short severity)
-{
-  if (severity < 0) {
-    severity = 0;
-  }
-  severity = std::min<short>(severity, 3);
-  if (runtimeSeverity_ == severity) {
-    return;
-  }
-  runtimeSeverity_ = severity;
-  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
     update();
   }
 }
@@ -315,14 +168,6 @@ bool PolygonElement::containsGlobalPoint(const QPoint &point) const
   return localPolygon_.containsPoint(localPoint, Qt::OddEvenFill);
 }
 
-void PolygonElement::setVisible(bool visible)
-{
-  if (!executeMode_) {
-    designModeVisible_ = visible;
-  }
-  QWidget::setVisible(visible);
-}
-
 void PolygonElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -350,13 +195,8 @@ void PolygonElement::paintEvent(QPaintEvent *event)
     painter.drawPolygon(localPolygon_);
   }
 
-  if (selected_) {
-    QPen selectionPen(Qt::black);
-    selectionPen.setStyle(Qt::DashLine);
-    selectionPen.setWidth(1);
-    painter.setPen(selectionPen);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  if (isSelected()) {
+    drawSelectionOutline(painter, rect().adjusted(0, 0, -1, -1));
   }
 }
 
@@ -364,54 +204,6 @@ void PolygonElement::resizeEvent(QResizeEvent *event)
 {
   QWidget::resizeEvent(event);
   recalcLocalPolygon();
-}
-
-QColor PolygonElement::defaultForegroundColor() const
-{
-  if (const QWidget *parent = parentWidget()) {
-    return parent->palette().color(QPalette::WindowText);
-  }
-  if (qApp) {
-    return qApp->palette().color(QPalette::WindowText);
-  }
-  return QColor(Qt::black);
-}
-
-QColor PolygonElement::effectiveForegroundColor() const
-{
-  const QColor baseColor = color_.isValid() ? color_ : defaultForegroundColor();
-  if (!executeMode_) {
-    return baseColor;
-  }
-
-  if (!runtimeConnected_) {
-    return QColor(255, 255, 255);
-  }
-
-  switch (colorMode_) {
-  case TextColorMode::kAlarm:
-    return MedmColors::alarmColorForSeverity(runtimeSeverity_);
-  case TextColorMode::kDiscrete:
-  case TextColorMode::kStatic:
-  default:
-    return baseColor;
-  }
-}
-
-void PolygonElement::applyRuntimeVisibility()
-{
-  if (executeMode_) {
-    const bool visible = designModeVisible_ && runtimeVisible_;
-    QWidget::setVisible(visible);
-  } else {
-    QWidget::setVisible(designModeVisible_);
-  }
-}
-
-void PolygonElement::updateExecuteState()
-{
-  applyRuntimeVisibility();
-  update();
 }
 
 void PolygonElement::recalcLocalPolygon()
@@ -431,4 +223,3 @@ void PolygonElement::recalcLocalPolygon()
     localPolygon_.append(QPoint(x, y));
   }
 }
-

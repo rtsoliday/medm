@@ -15,213 +15,80 @@ constexpr int kDefaultFrameIndex = 0;
 }
 
 ImageElement::ImageElement(QWidget *parent)
-  : QWidget(parent)
+  : GraphicShapeElement(parent)
 {
   setAutoFillBackground(false);
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setAttribute(Qt::WA_NoSystemBackground, true);
-  designModeVisible_ = QWidget::isVisible();
   reloadImage();
   update();
 }
 
-void ImageElement::setSelected(bool selected)
-{
-	if (selected_ == selected) {
-		return;
-	}
-	selected_ = selected;
-	update();
-}
-
-bool ImageElement::isSelected() const
-{
-	return selected_;
-}
-
 ImageType ImageElement::imageType() const
 {
-	return imageType_;
+  return imageType_;
 }
 
 void ImageElement::setImageType(ImageType type)
 {
-	if (imageType_ == type) {
-		return;
-	}
-	imageType_ = type;
-	reloadImage();
-	update();
+  if (imageType_ == type) {
+    return;
+  }
+  imageType_ = type;
+  reloadImage();
+  update();
 }
 
 QString ImageElement::imageName() const
 {
-	return imageName_;
+  return imageName_;
 }
 
 void ImageElement::setImageName(const QString &name)
 {
-	if (imageName_ == name) {
-		return;
-	}
-	imageName_ = name;
-	if (imageName_.isEmpty()) {
-		setToolTip(QString());
-	} else {
-		setToolTip(imageName_);
-	}
-	reloadImage();
-	update();
+  if (imageName_ == name) {
+    return;
+  }
+  imageName_ = name;
+  if (imageName_.isEmpty()) {
+    setToolTip(QString());
+  } else {
+    setToolTip(imageName_);
+  }
+  reloadImage();
+  update();
 }
 
 QString ImageElement::baseDirectory() const
 {
-	return baseDirectory_;
+  return baseDirectory_;
 }
 
 void ImageElement::setBaseDirectory(const QString &directory)
 {
-	QString normalized = directory.trimmed();
-	if (!normalized.isEmpty()) {
-		normalized = QDir(normalized).absolutePath();
-	}
-	if (baseDirectory_ == normalized) {
-		return;
-	}
-	baseDirectory_ = normalized;
-	reloadImage();
-	update();
+  QString normalized = directory.trimmed();
+  if (!normalized.isEmpty()) {
+    normalized = QDir(normalized).absolutePath();
+  }
+  if (baseDirectory_ == normalized) {
+    return;
+  }
+  baseDirectory_ = normalized;
+  reloadImage();
+  update();
 }
 
 QString ImageElement::calc() const
 {
-	return calc_;
+  return calc_;
 }
 
 void ImageElement::setCalc(const QString &calc)
 {
-	if (calc_ == calc) {
-		return;
-	}
-	calc_ = calc;
-}
-
-TextColorMode ImageElement::colorMode() const
-{
-	return colorMode_;
-}
-
-void ImageElement::setColorMode(TextColorMode mode)
-{
-	colorMode_ = mode;
-}
-
-TextVisibilityMode ImageElement::visibilityMode() const
-{
-	return visibilityMode_;
-}
-
-void ImageElement::setVisibilityMode(TextVisibilityMode mode)
-{
-	visibilityMode_ = mode;
-}
-
-QString ImageElement::visibilityCalc() const
-{
-	return visibilityCalc_;
-}
-
-void ImageElement::setVisibilityCalc(const QString &calc)
-{
-	if (visibilityCalc_ == calc) {
-		return;
-	}
-	visibilityCalc_ = calc;
-}
-
-QString ImageElement::channel(int index) const
-{
-	if (index < 0 || index >= static_cast<int>(channels_.size())) {
-		return QString();
-	}
-	return channels_[index];
-}
-
-void ImageElement::setChannel(int index, const QString &value)
-{
-	if (index < 0 || index >= static_cast<int>(channels_.size())) {
-		return;
-	}
-	if (channels_[index] == value) {
-		return;
-	}
-	channels_[index] = value;
-}
-
-void ImageElement::setExecuteMode(bool execute)
-{
-	if (executeMode_ == execute) {
-		return;
-	}
-	if (execute) {
-		designModeVisible_ = QWidget::isVisible();
-	}
-	executeMode_ = execute;
-	runtimeConnected_ = false;
-	runtimeVisible_ = true;
-	runtimeSeverity_ = 0;
-	runtimeAnimate_ = false;
-	runtimeFrameValid_ = !pixmap_.isNull();
-	runtimeFrameIndex_ = kDefaultFrameIndex;
-	if (movie_) {
-		movie_->setPaused(true);
-		movie_->jumpToFrame(runtimeFrameIndex_);
-		updateCurrentPixmap();
-	}
-	applyRuntimeVisibility();
-	update();
-}
-
-bool ImageElement::isExecuteMode() const
-{
-	return executeMode_;
-}
-
-void ImageElement::setRuntimeConnected(bool connected)
-{
-	if (runtimeConnected_ == connected) {
-		return;
-	}
-	runtimeConnected_ = connected;
-	if (!runtimeConnected_) {
-		setRuntimeAnimate(false);
-	}
-	if (executeMode_) {
-		update();
-	}
-}
-
-void ImageElement::setRuntimeVisible(bool visible)
-{
-	if (runtimeVisible_ == visible) {
-		return;
-	}
-	runtimeVisible_ = visible;
-	applyRuntimeVisibility();
-}
-
-void ImageElement::setRuntimeSeverity(short severity)
-{
-	if (severity < 0) {
-		severity = 0;
-	}
-	if (runtimeSeverity_ == severity) {
-		return;
-	}
-	runtimeSeverity_ = severity;
-	if (executeMode_) {
-		update();
-	}
+  if (calc_ == calc) {
+    return;
+  }
+  calc_ = calc;
 }
 
 void ImageElement::setRuntimeAnimate(bool animate)
@@ -285,6 +152,40 @@ void ImageElement::setRuntimeFrameValid(bool valid)
 	update();
 }
 
+void ImageElement::onRuntimeStateReset()
+{
+  runtimeAnimate_ = false;
+  runtimeFrameValid_ = !pixmap_.isNull();
+  runtimeFrameIndex_ = kDefaultFrameIndex;
+  if (movie_) {
+    movie_->setPaused(true);
+    movie_->jumpToFrame(runtimeFrameIndex_);
+    updateCurrentPixmap();
+  }
+}
+
+void ImageElement::onRuntimeConnectedChanged()
+{
+  if (!runtimeConnected_) {
+    setRuntimeAnimate(false);
+  }
+}
+
+void ImageElement::onRuntimeSeverityChanged()
+{
+  if (isExecuteMode()) {
+    onExecuteStateApplied();
+  }
+}
+
+short ImageElement::normalizeRuntimeSeverity(short severity) const
+{
+  if (severity < 0) {
+    return 0;
+  }
+  return severity;
+}
+
 int ImageElement::frameCount() const
 {
 	if (movie_) {
@@ -305,45 +206,32 @@ int ImageElement::frameCount() const
 
 void ImageElement::paintEvent(QPaintEvent *event)
 {
-	Q_UNUSED(event);
+  Q_UNUSED(event);
 
-	QPainter painter(this);
-	painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-	const QRect drawRect = rect().adjusted(0, 0, -1, -1);
+  QPainter painter(this);
+  painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+  const QRect drawRect = rect().adjusted(0, 0, -1, -1);
 
-	const bool showImage = !pixmap_.isNull()
-			&& (!executeMode_ || (runtimeConnected_ && runtimeFrameValid_));
+  const bool showImage = !pixmap_.isNull()
+      && (!executeMode_ || (runtimeConnected_ && runtimeFrameValid_));
 
-	if (showImage) {
-		painter.drawPixmap(drawRect, pixmap_);
-	} else {
-		const QColor bgColor = (executeMode_ && !runtimeConnected_)
-				? QColor(255, 255, 255)
-				: backgroundColor();
-		painter.fillRect(drawRect, bgColor);
-		painter.setPen(QPen(foregroundColor(), 1, Qt::DashLine));
-		painter.drawRect(drawRect);
-		painter.setPen(QPen(foregroundColor(), 1, Qt::SolidLine));
-		painter.drawLine(drawRect.topLeft(), drawRect.bottomRight());
-		painter.drawLine(drawRect.topRight(), drawRect.bottomLeft());
-	}
+  if (showImage) {
+    painter.drawPixmap(drawRect, pixmap_);
+  } else {
+    const QColor bgColor = (executeMode_ && !runtimeConnected_)
+        ? QColor(255, 255, 255)
+        : backgroundColor();
+    painter.fillRect(drawRect, bgColor);
+    painter.setPen(QPen(foregroundColor(), 1, Qt::DashLine));
+    painter.drawRect(drawRect);
+    painter.setPen(QPen(foregroundColor(), 1, Qt::SolidLine));
+    painter.drawLine(drawRect.topLeft(), drawRect.bottomRight());
+    painter.drawLine(drawRect.topRight(), drawRect.bottomLeft());
+  }
 
-	if (selected_) {
-		QPen pen(Qt::black);
-		pen.setStyle(Qt::DashLine);
-		pen.setWidth(1);
-		painter.setPen(pen);
-		painter.setBrush(Qt::NoBrush);
-		painter.drawRect(drawRect);
-	}
-}
-
-void ImageElement::setVisible(bool visible)
-{
-	if (!executeMode_) {
-		designModeVisible_ = visible;
-	}
-	QWidget::setVisible(visible);
+  if (isSelected()) {
+    drawSelectionOutline(painter, drawRect);
+  }
 }
 
 void ImageElement::reloadImage()
@@ -479,15 +367,6 @@ void ImageElement::updateCurrentPixmap()
 		runtimeFrameValid_ = true;
 	}
 	update();
-}
-
-void ImageElement::applyRuntimeVisibility()
-{
-	if (executeMode_) {
-		QWidget::setVisible(designModeVisible_ && runtimeVisible_);
-	} else {
-		QWidget::setVisible(designModeVisible_);
-	}
 }
 
 QColor ImageElement::foregroundColor() const

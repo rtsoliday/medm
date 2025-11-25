@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QtEDM Reference Manual</title>
+  <style>
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      line-height: 1.5;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      color: #000;
+    }
+    h1 {
+      font-family: Arial, sans-serif;
+      font-size: 36pt;
+      font-weight: bold;
+      border-bottom: 4px solid #000;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 14pt;
+      font-weight: bold;
+      margin-top: 30px;
+      margin-bottom: 10px;
+    }
+    h3 {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    .author {
+      font-family: Arial, sans-serif;
+      font-size: 14pt;
+      font-weight: bold;
+    }
+    .date {
+      font-family: Arial, sans-serif;
+      font-size: 14pt;
+      font-weight: bold;
+    }
+    .affiliation {
+      font-family: Arial, sans-serif;
+      font-size: 14pt;
+    }
+    p {
+      text-indent: 0.5in;
+      margin-bottom: 10px;
+    }
+    ul {
+      margin-left: 0.5in;
+    }
+    li {
+      margin-bottom: 5px;
+    }
+    code, pre {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10pt;
+      background-color: #f5f5f5;
+      padding: 2px 4px;
+    }
+    pre {
+      padding: 10px;
+      margin-left: 0.5in;
+      overflow-x: auto;
+    }
+    a {
+      color: blue;
+    }
+    a:visited {
+      color: purple;
+    }
+    table {
+      border-collapse: collapse;
+      margin-left: 0.5in;
+      margin-bottom: 15px;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 5px 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #e0e0e0;
+    }
+    .toc {
+      margin-left: 0.5in;
+    }
+    .toc a {
+      text-decoration: none;
+    }
+    .toc a:hover {
+      text-decoration: underline;
+    }
+    .note {
+      margin-left: 0.5in;
+      padding: 10px;
+      background-color: #ffffcc;
+      border-left: 4px solid #ffcc00;
+    }
+  </style>
+</head>
+<body>
+
+<h1>QtEDM Reference Manual</h1>
+
+<p class="author">Robert Soliday</p>
+<p class="date">November 2025</p>
+<p class="affiliation">Advanced Photon Source</p>
+<p class="affiliation">Argonne National Laboratory</p>
+
+<h2><a name="Contents"></a>Contents</h2>
+
+<div class="toc">
+  <p><a href="#Introduction">Introduction</a></p>
+  <p><a href="#Relationship">Relationship to MEDM</a></p>
+  <p><a href="#Requirements">Requirements</a></p>
+  <p><a href="#CommandLine">Command Line</a></p>
+  <p><a href="#Modes">Modes of Operation</a></p>
+  <p><a href="#Widgets">Supported Widgets</a></p>
+  <p><a href="#Environment">Environment Variables</a></p>
+  <p><a href="#ADLFiles">ADL Files</a></p>
+  <p><a href="#Features">Features</a></p>
+  <p><a href="#Differences">Differences from MEDM</a></p>
+  <p><a href="#Building">Building QtEDM</a></p>
+  <p><a href="#Acknowledgments">Acknowledgments</a></p>
+  <p><a href="#TechSupport">Technical Support</a></p>
+  <p><a href="#Copyright">Copyright</a></p>
+</div>
+
+<h2><a name="Introduction"></a>Introduction</h2>
+
+<p>QtEDM (Qt Editor and Display Manager) is a modern Qt5-based reimplementation of MEDM, the classic Motif Editor and Display Manager for EPICS control systems. QtEDM provides a graphical user interface for designing and operating control screens that interact with EPICS process variables through Channel Access.</p>
+
+<p>Like MEDM, QtEDM uses ADL (ASCII Display List) files to define displays. These files describe the layout, appearance, and behavior of graphical objects that present and/or modify EPICS process variables. Typical widgets include buttons, meters, sliders, text fields, strip charts, and Cartesian plots.</p>
+
+<p>QtEDM operates in two modes:</p>
+<ul>
+  <li><strong>EDIT mode</strong> &ndash; Used to create and modify display (.adl) files</li>
+  <li><strong>EXECUTE mode</strong> &ndash; Renders displays for operators and connects widgets to process variables</li>
+</ul>
+
+<h2><a name="Relationship"></a>Relationship to MEDM</h2>
+
+<p>QtEDM is designed as a drop-in replacement for MEDM. It reads and writes the same ADL file format, supports the same widget types, and provides equivalent functionality. The primary differences are:</p>
+
+<ul>
+  <li><strong>Modern GUI toolkit</strong> &ndash; Qt5 instead of Motif/X11</li>
+  <li><strong>Cross-platform potential</strong> &ndash; Qt enables easier porting to different platforms</li>
+  <li><strong>Improved rendering</strong> &ndash; Better font handling and anti-aliased graphics</li>
+  <li><strong>Active development</strong> &ndash; Ongoing maintenance alongside the legacy MEDM</li>
+</ul>
+
+<p>Both MEDM and QtEDM are built from the same source repository and share the ADL file parser logic, ensuring compatibility between the two implementations.</p>
+
+<h2><a name="Requirements"></a>Requirements</h2>
+
+<p>QtEDM requires the following:</p>
+
+<ul>
+  <li><strong>Qt5</strong> &ndash; Version 5.12 or later (Qt6 is also supported)</li>
+  <li><strong>EPICS Base</strong> &ndash; Version 7.0 or later, with Channel Access support</li>
+  <li><strong>SDDS Library</strong> &ndash; Required for building</li>
+  <li><strong>X11</strong> &ndash; On Linux/Unix systems for certain window management features</li>
+  <li><strong>C++11 compiler</strong> &ndash; GCC 4.9+, Clang 3.4+, or equivalent</li>
+</ul>
+
+<p>QtEDM is primarily developed and tested on Linux. The program should build on other Unix-like systems with Qt5 support.</p>
+
+<h2><a name="CommandLine"></a>Command Line</h2>
+
+<p>QtEDM can be executed from the command line in the general form:</p>
+
+<pre>qtedm [options] [display-files]</pre>
+
+<p>Options are:</p>
+
+<table>
+  <tr>
+    <th>Option</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>-help</code>, <code>-h</code>, <code>-?</code></td>
+    <td>Display usage information and exit</td>
+  </tr>
+  <tr>
+    <td><code>-version</code></td>
+    <td>Display version information and exit</td>
+  </tr>
+  <tr>
+    <td><code>-x</code></td>
+    <td>Start in EXECUTE mode (default is EDIT mode)</td>
+  </tr>
+  <tr>
+    <td><code>-local</code></td>
+    <td>Run in local mode (default)</td>
+  </tr>
+  <tr>
+    <td><code>-attach</code></td>
+    <td>Attach to an existing QtEDM instance</td>
+  </tr>
+  <tr>
+    <td><code>-cleanup</code></td>
+    <td>Clean up shared resources from previous instances</td>
+  </tr>
+  <tr>
+    <td><code>-macro "xxx=aaa,yyy=bbb,..."</code></td>
+    <td>Define macro substitutions for PV names</td>
+  </tr>
+  <tr>
+    <td><code>-dg geometry</code></td>
+    <td>Specify display geometry (WxH+X+Y format)</td>
+  </tr>
+  <tr>
+    <td><code>-displayFont alias|scalable</code></td>
+    <td>Select font mode: alias (MEDM-compatible) or scalable</td>
+  </tr>
+  <tr>
+    <td><code>-noMsg</code></td>
+    <td>Do not raise the message window on startup</td>
+  </tr>
+  <tr>
+    <td><code>-bigMousePointer</code></td>
+    <td>Use a larger mouse pointer for accessibility</td>
+  </tr>
+  <tr>
+    <td><code>-cmap</code></td>
+    <td>Use a private colormap (compatibility option)</td>
+  </tr>
+</table>
+
+<h3>Examples</h3>
+
+<p>Start QtEDM with a display in execute mode:</p>
+<pre>qtedm -x main.adl</pre>
+
+<p>Start with macro substitutions:</p>
+<pre>qtedm -x -macro "P=ioc1:,R=motor1" motor.adl</pre>
+
+<p>Open multiple displays:</p>
+<pre>qtedm -x display1.adl display2.adl display3.adl</pre>
+
+<h2><a name="Modes"></a>Modes of Operation</h2>
+
+<h3>EDIT Mode</h3>
+
+<p>In EDIT mode, QtEDM functions as a display editor. You can:</p>
+
+<ul>
+  <li>Create new displays or open existing ADL files</li>
+  <li>Add, select, move, resize, and delete widgets</li>
+  <li>Edit widget properties through the Resource Palette</li>
+  <li>Copy, cut, and paste widgets</li>
+  <li>Group widgets into composites</li>
+  <li>Save displays to ADL files</li>
+  <li>Toggle grid display and snap-to-grid</li>
+</ul>
+
+<p>The Object Palette provides access to all available widget types. Click on a widget type, then click and drag on the display to create a new widget.</p>
+
+<h3>EXECUTE Mode</h3>
+
+<p>In EXECUTE mode, QtEDM connects to EPICS and displays live process variable data. Widgets become interactive:</p>
+
+<ul>
+  <li>Monitor widgets display current PV values</li>
+  <li>Control widgets allow operators to modify PV values</li>
+  <li>Dynamic attributes change widget appearance based on PV values</li>
+  <li>Related Display buttons open additional screens</li>
+  <li>Shell Command buttons execute system commands</li>
+</ul>
+
+<p>To switch between modes, use the Edit menu or press Ctrl+E (toggle Edit mode) or Ctrl+X (toggle Execute mode).</p>
+
+<h2><a name="Widgets"></a>Supported Widgets</h2>
+
+<p>QtEDM supports the following widget types, matching MEDM's capabilities:</p>
+
+<h3>Graphics</h3>
+<ul>
+  <li><strong>Rectangle</strong> &ndash; Filled or outlined rectangles</li>
+  <li><strong>Oval</strong> &ndash; Filled or outlined ellipses and circles</li>
+  <li><strong>Arc</strong> &ndash; Partial ellipses (pie slices or arcs)</li>
+  <li><strong>Line</strong> &ndash; Straight lines with optional arrows</li>
+  <li><strong>Polyline</strong> &ndash; Connected line segments</li>
+  <li><strong>Polygon</strong> &ndash; Filled multi-sided shapes</li>
+  <li><strong>Text</strong> &ndash; Static text labels</li>
+  <li><strong>Image</strong> &ndash; GIF and other image formats</li>
+  <li><strong>Composite</strong> &ndash; Groups of widgets treated as a unit</li>
+</ul>
+
+<h3>Monitors</h3>
+<ul>
+  <li><strong>Text Monitor</strong> &ndash; Displays PV value as text</li>
+  <li><strong>Bar Monitor</strong> &ndash; Horizontal or vertical bar graph</li>
+  <li><strong>Byte Monitor</strong> &ndash; Displays individual bits of an integer PV</li>
+  <li><strong>Scale Monitor</strong> &ndash; Linear or logarithmic scale indicator</li>
+  <li><strong>Meter</strong> &ndash; Analog meter display</li>
+  <li><strong>Strip Chart</strong> &ndash; Time-based trending of PV values</li>
+  <li><strong>Cartesian Plot</strong> &ndash; X-Y plotting with multiple traces</li>
+</ul>
+
+<h3>Controllers</h3>
+<ul>
+  <li><strong>Text Entry</strong> &ndash; Text input for setting PV values</li>
+  <li><strong>Slider</strong> &ndash; Horizontal or vertical slider control</li>
+  <li><strong>Wheel Switch</strong> &ndash; Digit-by-digit numeric input</li>
+  <li><strong>Choice Button</strong> &ndash; Radio button or menu selection</li>
+  <li><strong>Menu</strong> &ndash; Dropdown menu for enumerated PVs</li>
+  <li><strong>Message Button</strong> &ndash; Button that writes a value to a PV</li>
+  <li><strong>Related Display</strong> &ndash; Button to open other ADL displays</li>
+  <li><strong>Shell Command</strong> &ndash; Button to execute shell commands</li>
+</ul>
+
+<h2><a name="Environment"></a>Environment Variables</h2>
+
+<p>QtEDM uses the following environment variables:</p>
+
+<table>
+  <tr>
+    <th>Variable</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>EPICS_DISPLAY_PATH</code></td>
+    <td>Colon-separated list of directories to search for ADL files</td>
+  </tr>
+  <tr>
+    <td><code>EPICS_CA_ADDR_LIST</code></td>
+    <td>EPICS Channel Access address list</td>
+  </tr>
+  <tr>
+    <td><code>EPICS_CA_AUTO_ADDR_LIST</code></td>
+    <td>Enable/disable automatic CA address discovery</td>
+  </tr>
+</table>
+
+<p>Standard EPICS Channel Access environment variables are also used. See the EPICS documentation for details.</p>
+
+<h2><a name="ADLFiles"></a>ADL Files</h2>
+
+<p>ADL (ASCII Display List) files are text files that describe display layouts. QtEDM uses the same ADL format as MEDM, ensuring full compatibility between the two programs.</p>
+
+<p>An ADL file contains:</p>
+<ul>
+  <li>A file header with format version and creation information</li>
+  <li>A display block defining overall display properties</li>
+  <li>A color map defining the 65-color palette</li>
+  <li>Widget definitions with their properties and PV associations</li>
+</ul>
+
+<p>QtEDM reads ADL files created by MEDM and vice versa. The file format is documented in the MEDM Reference Manual.</p>
+
+<h2><a name="Features"></a>Features</h2>
+
+<h3>Dynamic Attributes</h3>
+
+<p>Graphics widgets support dynamic attributes that change appearance based on PV values:</p>
+<ul>
+  <li><strong>Visibility</strong> &ndash; Show or hide based on PV value or calculation</li>
+  <li><strong>Color</strong> &ndash; Change color based on alarm state or discrete value</li>
+</ul>
+
+<h3>Macro Substitution</h3>
+
+<p>PV names can include macro references like <code>$(P)</code> that are replaced at runtime. This allows creating reusable displays that work with different devices.</p>
+
+<h3>Related Displays</h3>
+
+<p>Related Display widgets can open additional displays, optionally passing macro substitutions and replacing or overlaying the current display.</p>
+
+<h3>Printing</h3>
+
+<p>Displays can be printed using the File &gt; Print menu. Page setup options allow configuring paper size and orientation.</p>
+
+<h3>PV Information</h3>
+
+<p>Right-click on a widget in EXECUTE mode to access PV information including connection status, current value, alarm limits, and access rights.</p>
+
+<h2><a name="Differences"></a>Differences from MEDM</h2>
+
+<p>While QtEDM strives for full MEDM compatibility, there are some differences:</p>
+
+<ul>
+  <li><strong>Appearance</strong> &ndash; Qt rendering may produce slightly different visual results than Motif</li>
+  <li><strong>Font handling</strong> &ndash; QtEDM uses scalable fonts with alias mode for MEDM compatibility</li>
+  <li><strong>Window management</strong> &ndash; Some window behaviors may differ depending on the desktop environment</li>
+  <li><strong>Platform support</strong> &ndash; QtEDM currently focuses on Linux; Windows and macOS support may vary</li>
+</ul>
+
+<h2><a name="Building"></a>Building QtEDM</h2>
+
+<p>QtEDM is built as part of the MEDM source distribution. From the repository root:</p>
+
+<pre>make</pre>
+
+<p>This builds both MEDM and QtEDM. The QtEDM binary is installed to <code>bin/&lt;arch&gt;/qtedm</code>.</p>
+
+<p>Build requirements:</p>
+<ul>
+  <li>Qt5 development packages (qt5-devel or equivalent)</li>
+  <li>EPICS Base with headers and libraries</li>
+  <li>SDDS library</li>
+  <li>pkg-config for Qt detection</li>
+</ul>
+
+<p>The build system automatically detects Qt5 using pkg-config and configures the appropriate compiler and linker flags.</p>
+
+<h2><a name="Acknowledgments"></a>Acknowledgments</h2>
+
+<p>QtEDM builds upon the foundation laid by the original MEDM developers:</p>
+
+<ul>
+  <li><strong>Mark Anderson</strong> &ndash; Original MEDM design and implementation at Argonne National Laboratory</li>
+  <li><strong>Frederick Vong</strong> &ndash; Significant enhancements and new ADL format</li>
+  <li><strong>Kenneth Evans, Jr.</strong> &ndash; Long-time maintainer, wrote the original reference manual, and made substantial improvements.</li>
+</ul>
+
+<p>QtEDM was developed by Robert Soliday at Argonne National Laboratory as a modern alternative to the Motif-based MEDM, ensuring continued support for EPICS display management on contemporary Linux systems.</p>
+
+<p>The EPICS community has contributed numerous bug fixes, platform ports, and suggestions that have improved both MEDM and QtEDM.</p>
+
+<h2><a name="TechSupport"></a>Technical Support</h2>
+
+<p>If you have problems, comments, or questions about QtEDM you can send them to <a href="mailto:soliday@anl.gov">soliday@anl.gov</a>. If you wish to report a bug, it is essential that you send enough information for the bug to be reproduced. It would be helpful to include:</p>
+
+<ul>
+  <li>QtEDM version number (from <code>qtedm -version</code>)</li>
+  <li>Operating system and Qt version</li>
+  <li>How QtEDM was started (command line options)</li>
+  <li>The circumstances in which the problem occurs</li>
+  <li>An explicit list of steps to duplicate the problem</li>
+  <li>A copy of the ADL file if relevant</li>
+</ul>
+
+<p>Another source of help is the EPICS Tech-Talk forum at <a href="https://epics.anl.gov/tech-talk/index.php">https://epics.anl.gov/tech-talk/index.php</a>. This page includes an archive of articles and directions for joining the forum. You may present your problem and often get practical responses from the many users of EPICS.</p>
+
+<h2><a name="Copyright"></a>Copyright</h2>
+
+<p>Copyright &copy; 2002 The University of Chicago, as Operator of Argonne National Laboratory.</p>
+<p>Copyright &copy; 2002 The Regents of the University of California, as Operator of Los Alamos National Laboratory.</p>
+
+<p>QtEDM is distributed subject to a Software License Agreement found in the file LICENSE that is included with the distribution.</p>
+
+<p>EPICS and Channel Access are trademarks of the University of Chicago.</p>
+
+</body>
+</html>

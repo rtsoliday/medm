@@ -125,7 +125,7 @@ SubscriptionHandle SharedChannelManager::subscribe(
   /* If already connected, deliver cached data immediately */
   if (channel->connected) {
     if (sub.connectionCallback) {
-      sub.connectionCallback(true);
+      sub.connectionCallback(true, channel->cachedData);
     }
     if (sub.accessRightsCallback) {
       sub.accessRightsCallback(channel->canRead, channel->canWrite);
@@ -386,7 +386,7 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
   /* Notify all subscribers of connection state change */
   for (const auto &sub : channel->subscribers) {
     if (sub.connectionCallback) {
-      sub.connectionCallback(connected);
+      sub.connectionCallback(connected, channel->cachedData);
     }
   }
 }

@@ -67,7 +67,9 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
       DBR_TIME_DOUBLE,
       1,  /* Single element */
       [this](const SharedChannelData &data) { handleChannelData(data); },
-      [this](bool connected) { handleChannelConnection(connected); });
+      [this](bool connected, const SharedChannelData &) {
+        handleChannelConnection(connected);
+      });
 }
 
 template <typename ElementType>

@@ -176,7 +176,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::initializeChannels()
         [this, idx](const SharedChannelData &data) {
           handleChannelData(idx, data);
         },
-        [this, idx](bool connected) {
+        [this, idx](bool connected, const SharedChannelData &) {
           handleChannelConnection(idx, connected);
         });
   }

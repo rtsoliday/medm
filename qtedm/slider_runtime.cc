@@ -66,7 +66,9 @@ void SliderRuntime::start()
       DBR_TIME_DOUBLE,
       1,  /* Single element */
       [this](const SharedChannelData &data) { handleChannelData(data); },
-      [this](bool connected) { handleChannelConnection(connected); },
+      [this](bool connected, const SharedChannelData &) {
+        handleChannelConnection(connected);
+      },
       [this](bool canRead, bool canWrite) { handleAccessRights(canRead, canWrite); });
 }
 

@@ -79,8 +79,8 @@ void TextMonitorRuntime::start()
       [this](const SharedChannelData &data) {
         handleChannelData(data);
       },
-      [this](bool conn) {
-        handleChannelConnection(conn);
+      [this](bool conn, const SharedChannelData &data) {
+        handleChannelConnection(conn, data);
       });
 }
 
@@ -127,7 +127,8 @@ chtype TextMonitorRuntime::determineSubscriptionType(short nativeFieldType) cons
   }
 }
 
-void TextMonitorRuntime::handleChannelConnection(bool connected)
+void TextMonitorRuntime::handleChannelConnection(bool connected,
+    const SharedChannelData &data)
 {
   if (!started_) {
     return;
@@ -136,6 +137,34 @@ void TextMonitorRuntime::handleChannelConnection(bool connected)
   connected_ = connected;
 
   if (connected) {
+    /* Check if we need to resubscribe with a different DBR type.
+     * This happens when native field type is STRING, ENUM, or CHAR
+     * and we initially subscribed with DBR_TIME_DOUBLE.
+     * Do this in the connection callback so we don't depend on
+     * the value callback which may fail for incompatible conversions. */
+    if (nativeFieldType_ < 0 && data.nativeFieldType >= 0) {
+      nativeFieldType_ = data.nativeFieldType;
+      elementCount_ = data.nativeElementCount;
+
+      chtype neededType = determineSubscriptionType(nativeFieldType_);
+      if (neededType != DBR_TIME_DOUBLE) {
+        /* Resubscribe with the appropriate type */
+        auto &mgr = SharedChannelManager::instance();
+        subscription_.reset();
+        subscription_ = mgr.subscribe(
+            channelName_,
+            neededType,
+            (neededType == DBR_TIME_CHAR) ? elementCount_ : 1,
+            [this](const SharedChannelData &newData) {
+              handleChannelData(newData);
+            },
+            [this](bool conn, const SharedChannelData &connData) {
+              handleChannelConnection(conn, connData);
+            });
+        return;  /* Wait for new subscription */
+      }
+    }
+
     if (element_) {
       element_->setRuntimeConnected(true);
     }
@@ -157,30 +186,11 @@ void TextMonitorRuntime::handleChannelData(const SharedChannelData &data)
     return;
   }
 
-  /* Check if we need to resubscribe with a different DBR type.
-   * This happens when native field type is STRING, ENUM, or CHAR
-   * and we initially subscribed with DBR_TIME_DOUBLE. */
+  /* Update native type info if not already set (for cases where value
+   * arrives before or concurrently with connection callback). */
   if (nativeFieldType_ < 0 && data.nativeFieldType >= 0) {
     nativeFieldType_ = data.nativeFieldType;
     elementCount_ = data.nativeElementCount;
-
-    chtype neededType = determineSubscriptionType(nativeFieldType_);
-    if (neededType != DBR_TIME_DOUBLE) {
-      /* Resubscribe with the appropriate type */
-      auto &mgr = SharedChannelManager::instance();
-      subscription_.reset();
-      subscription_ = mgr.subscribe(
-          channelName_,
-          neededType,
-          (neededType == DBR_TIME_CHAR) ? elementCount_ : 1,
-          [this](const SharedChannelData &newData) {
-            handleChannelData(newData);
-          },
-          [this](bool conn) {
-            handleChannelConnection(conn);
-          });
-      return;  /* Wait for new subscription data */
-    }
   }
 
   /* Determine value kind based on native field type */

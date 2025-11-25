@@ -107,9 +107,11 @@ private:
   SharedChannelManager *manager_ = nullptr;
 };
 
-/* Callback types for channel events */
+/* Callback types for channel events.
+ * Note: Connection callback receives SharedChannelData reference to provide
+ * native type info immediately upon connection, before any value arrives. */
 using ChannelValueCallback = std::function<void(const SharedChannelData &)>;
-using ChannelConnectionCallback = std::function<void(bool connected)>;
+using ChannelConnectionCallback = std::function<void(bool connected, const SharedChannelData &data)>;
 using ChannelAccessRightsCallback = std::function<void(bool canRead, bool canWrite)>;
 
 /* Singleton manager for shared EPICS Channel Access connections.

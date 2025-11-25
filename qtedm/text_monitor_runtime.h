@@ -39,7 +39,7 @@ private:
   };
 
   void resetRuntimeState();
-  void handleChannelConnection(bool connected);
+  void handleChannelConnection(bool connected, const SharedChannelData &data);
   void handleChannelData(const SharedChannelData &data);
   void updateElementDisplay();
   int resolvedPrecision() const;

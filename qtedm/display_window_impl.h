@@ -13,6 +13,8 @@
 #include <QDebug>
 #include <QClipboard>
 #include <QDrag>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QGuiApplication>
 #include <QDateTime>
 #include <QCursor>
@@ -33,6 +35,7 @@
 #include <QStringList>
 #include <QEventLoop>
 #include <QTextStream>
+#include <QUrl>
 #include <QVariant>
 
 #ifdef KeyPress
@@ -315,6 +318,7 @@ public:
           pasteSelection();
         });
     updateDirtyIndicator();
+    setAcceptDrops(true);
   }
 
   ~DisplayWindow() override
@@ -2051,9 +2055,49 @@ protected:
     QMainWindow::mouseDoubleClickEvent(event);
   }
 
+  void dragEnterEvent(QDragEnterEvent *event) override
+  {
+    if (event->mimeData()->hasUrls()) {
+      const QList<QUrl> urls = event->mimeData()->urls();
+      for (const QUrl &url : urls) {
+        if (url.isLocalFile()) {
+          const QString path = url.toLocalFile();
+          if (path.endsWith(QLatin1String(".adl"), Qt::CaseInsensitive)) {
+            event->acceptProposedAction();
+            return;
+          }
+        }
+      }
+    }
+    QMainWindow::dragEnterEvent(event);
+  }
+
+  void dropEvent(QDropEvent *event) override
+  {
+    if (event->mimeData()->hasUrls()) {
+      QStringList adlFiles;
+      const QList<QUrl> urls = event->mimeData()->urls();
+      for (const QUrl &url : urls) {
+        if (url.isLocalFile()) {
+          const QString path = url.toLocalFile();
+          if (path.endsWith(QLatin1String(".adl"), Qt::CaseInsensitive)) {
+            adlFiles.append(path);
+          }
+        }
+      }
+      if (!adlFiles.isEmpty()) {
+        event->acceptProposedAction();
+        handleDroppedAdlFiles(adlFiles);
+        return;
+      }
+    }
+    QMainWindow::dropEvent(event);
+  }
+
 private:
   bool writeAdlFile(const QString &filePath) const;
   void clearAllElements();
+  void handleDroppedAdlFiles(const QStringList &filePaths);
   QString convertLegacyAdlFormat(const QString &adlText, int fileVersion) const;
   bool loadDisplaySection(const AdlNode &displayNode);
   TextElement *loadTextElement(const AdlNode &textNode);
@@ -18631,6 +18675,39 @@ inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin,
             }
           }
         });
+  }
+}
+
+inline void DisplayWindow::handleDroppedAdlFiles(const QStringList &filePaths)
+{
+  auto state = state_.lock();
+  if (!state) {
+    return;
+  }
+
+  for (const QString &filePath : filePaths) {
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists() || !fileInfo.isFile()) {
+      QMessageBox::warning(this,
+          QStringLiteral("Open Display"),
+          QStringLiteral("File not found:\n%1").arg(filePath));
+      continue;
+    }
+
+    auto *newWindow = new DisplayWindow(palette(), resourcePaletteBase_,
+        font(), labelFont_, state_);
+    QString errorMessage;
+    if (!newWindow->loadFromFile(filePath, &errorMessage)) {
+      const QString message = errorMessage.isEmpty()
+          ? QStringLiteral("Failed to open display:\n%1").arg(filePath)
+          : errorMessage;
+      QMessageBox::critical(this,
+          QStringLiteral("Open Display"), message);
+      delete newWindow;
+      continue;
+    }
+
+    registerDisplayWindow(newWindow, true);
   }
 }
 

@@ -1606,6 +1606,15 @@ int main(int argc, char *argv[])
     }
   };
 
+  /* Set up drag-and-drop support for .adl files on main window */
+  mainWindowController->setDisplayWindowFactory(
+      [displayPalette, &palette, fixed10Font, fixed13Font](
+          std::weak_ptr<DisplayState> weakState) -> DisplayWindow * {
+        return new DisplayWindow(displayPalette, palette,
+            fixed10Font, fixed13Font, weakState);
+      });
+  mainWindowController->setDisplayWindowRegistrar(registerDisplayWindow);
+
   QObject::connect(newAct, &QAction::triggered, &win,
       [state, displayPalette, &win, fixed10Font, &palette, fixed13Font,
           registerDisplayWindow]() {

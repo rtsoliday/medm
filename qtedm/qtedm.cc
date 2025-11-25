@@ -1005,13 +1005,7 @@ int main(int argc, char *argv[])
         showHelpBrowser(&win, QStringLiteral("QtEDM Help - Overview"),
             helpPath, fixed13Font, palette);
       });
-  helpMenu->addAction("&Contents");
-  helpMenu->addAction("Object &Index");
-  helpMenu->addAction("&Editing");
-  helpMenu->addAction("&New Features");
-  helpMenu->addAction("Technical &Support");
-  helpMenu->addAction("On &Help");
-  auto *onVersionAct = helpMenu->addAction("On &Version");
+  auto *onVersionAct = helpMenu->addAction("&Version");
   QObject::connect(onVersionAct, &QAction::triggered, &win,
       [&win, &fixed13Font, &fixed10Font, &palette]() {
         showVersionDialog(&win, fixed13Font, fixed10Font, palette, false);

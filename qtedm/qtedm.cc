@@ -1072,14 +1072,7 @@ int main(int argc, char *argv[])
       std::weak_ptr<DisplayState>(state), &win);
   state->displayListDialog = displayListDialog;
 
-//TODO: Implement embedded display (container) widget supporting macro substitution.
 //TODO: Add tabbed container / stacked widget support for multi-view displays.
-//TODO: Implement LED array / multi-bit indicator widget for compact status visualization.
-//TODO: Add combo box (mbbo/mbbi) widget for enumerated PV states.
-//TODO: Implement linked slider + numeric spinbox widget for analog control PVs.
-//TODO: Create real-time stripplot widget using Qwt or QtCharts for scalar PVs.
-//TODO: Add XY plot widget for displaying related PV pairs or SDDS data.
-//TODO: Implement bar graph / analog meter / gauge widgets for analog feedback values.
 
 //TODO: Implement 2D image viewer for EPICS areaDetector NDArray PVs.
 //TODO: Add 2D contour / heatmap widget (like sddscontour) for SDDS or array PVs.

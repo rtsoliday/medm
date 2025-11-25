@@ -17,7 +17,6 @@
 
 namespace {
 using RuntimeUtils::kInvalidSeverity;
-using RuntimeUtils::isNumericFieldType;
 
 } // namespace
 
@@ -60,21 +59,15 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
     return;
   }
 
-  QByteArray channelBytes = channelName_.toLatin1();
-  int status = ca_create_channel(channelBytes.constData(),
-      &SingleChannelMonitorRuntimeBase::channelConnectionCallback, this,
-      CA_PRIORITY_DEFAULT, &channelId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << channelName_ << ':' << ca_message(status);
-    channelId_ = nullptr;
-    return;
-  }
-
-  StatisticsTracker::instance().registerChannelCreated();
-
-  ca_set_puser(channelId_, this);
-  ca_flush_io();
+  /* Use SharedChannelManager for connection sharing.
+   * These monitors all use DBR_TIME_DOUBLE with element count 1. */
+  auto &mgr = SharedChannelManager::instance();
+  subscription_ = mgr.subscribe(
+      channelName_,
+      DBR_TIME_DOUBLE,
+      1,  /* Single element */
+      [this](const SharedChannelData &data) { handleChannelData(data); },
+      [this](bool connected) { handleChannelConnection(connected); });
 }
 
 template <typename ElementType>
@@ -86,7 +79,10 @@ void SingleChannelMonitorRuntimeBase<ElementType>::stop()
 
   started_ = false;
   StatisticsTracker::instance().registerDisplayObjectStopped();
-  unsubscribe();
+
+  /* SubscriptionHandle automatically unsubscribes on reset */
+  subscription_.reset();
+
   resetRuntimeState();
 }
 
@@ -94,11 +90,10 @@ template <typename ElementType>
 void SingleChannelMonitorRuntimeBase<ElementType>::resetRuntimeState()
 {
   connected_ = false;
-  fieldType_ = -1;
-  elementCount_ = 1;
   lastValue_ = 0.0;
   hasLastValue_ = false;
   lastSeverity_ = kInvalidSeverity;
+  hasControlInfo_ = false;
 
   invokeOnElement([](ElementType *element) {
     element->clearRuntimeState();
@@ -108,107 +103,36 @@ void SingleChannelMonitorRuntimeBase<ElementType>::resetRuntimeState()
 }
 
 template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::subscribe()
+void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelConnection(bool connected)
 {
-  if (subscriptionId_ || !channelId_) {
-    return;
-  }
-
-  int status = ca_create_subscription(DBR_TIME_DOUBLE, 1, channelId_,
-      DBE_VALUE | DBE_ALARM,
-      &SingleChannelMonitorRuntimeBase::valueEventCallback, this, &subscriptionId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << channelName_ << ':'
-               << ca_message(status);
-    subscriptionId_ = nullptr;
-    return;
-  }
-
-  ca_flush_io();
-}
-
-template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::unsubscribe()
-{
-  auto &stats = StatisticsTracker::instance();
-  if (subscriptionId_) {
-    ca_clear_subscription(subscriptionId_);
-    subscriptionId_ = nullptr;
-  }
-  if (channelId_) {
-    if (connected_) {
-      stats.registerChannelDisconnected();
-      connected_ = false;
-    }
-    ca_clear_channel(channelId_);
-    stats.registerChannelDestroyed();
-    channelId_ = nullptr;
-  }
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
-
-template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::requestControlInfo()
-{
-  if (!channelId_ || !isNumericFieldType(fieldType_)) {
-    return;
-  }
-
-  int status = ca_array_get_callback(DBR_CTRL_DOUBLE, 1, channelId_,
-      &SingleChannelMonitorRuntimeBase::controlInfoCallback, this);
-  if (status == ECA_NORMAL) {
-    ca_flush_io();
-  } else {
-    qWarning() << "Failed to request control info for" << channelName_
-               << ':' << ca_message(status);
-  }
-}
-
-template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::handleConnectionEvent(const connection_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
+  if (!started_) {
     return;
   }
 
   auto &stats = StatisticsTracker::instance();
 
-  if (args.op == CA_OP_CONN_UP) {
+  if (connected) {
     const bool wasConnected = connected_;
     connected_ = true;
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
-    fieldType_ = ca_field_type(channelId_);
-    elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
     hasLastValue_ = false;
     lastValue_ = 0.0;
     lastSeverity_ = kInvalidSeverity;
-
-    if (!isNumericFieldType(fieldType_)) {
-      qWarning() << "Monitor channel" << channelName_ << "is not numeric";
-      invokeOnElement([](ElementType *element) {
-        element->setRuntimeConnected(false);
-        element->setRuntimeSeverity(kInvalidSeverity);
-      });
-      return;
-    }
 
     invokeOnElement([](ElementType *element) {
       element->setRuntimeConnected(true);
       element->setRuntimeSeverity(0);
     });
-    subscribe();
-    requestControlInfo();
-  } else if (args.op == CA_OP_CONN_DOWN) {
+  } else {
     const bool wasConnected = connected_;
     connected_ = false;
     if (wasConnected) {
       stats.registerChannelDisconnected();
     }
     hasLastValue_ = false;
+    hasControlInfo_ = false;
     invokeOnElement([](ElementType *element) {
       element->setRuntimeConnected(false);
       element->setRuntimeSeverity(kInvalidSeverity);
@@ -217,24 +141,36 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleConnectionEvent(const c
 }
 
 template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::handleValueEvent(const event_handler_args &args)
+void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const SharedChannelData &data)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.type != DBR_TIME_DOUBLE) {
+  if (!started_) {
     return;
   }
 
-  const auto *value = static_cast<const dbr_time_double *>(args.dbr);
-  const double numericValue = value->value;
-  const short severity = value->severity;
+  const double numericValue = data.numericValue;
+  const short severity = data.severity;
 
   {
     auto &stats = StatisticsTracker::instance();
     stats.registerCaEvent();
     stats.registerUpdateRequest(true);
     stats.registerUpdateExecuted();
+  }
+
+  /* Apply limits from control info if available and not yet done */
+  if (!hasControlInfo_ && (data.hasControlInfo || data.lopr != 0.0 || data.hopr != 0.0)) {
+    hasControlInfo_ = true;
+    const double low = data.lopr;
+    const double high = data.hopr;
+    const int precision = data.precision;
+
+    /* Only apply if we got reasonable limits */
+    if (low != high || low != 0.0) {
+      invokeOnElement([low, high, precision](ElementType *element) {
+        element->setRuntimeLimits(low, high);
+        element->setRuntimePrecision(precision);
+      });
+    }
   }
 
   if (severity != lastSeverity_) {
@@ -254,63 +190,6 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleValueEvent(const event_
     invokeOnElement([numericValue](ElementType *element) {
       element->setRuntimeValue(numericValue);
     });
-  }
-}
-
-template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::handleControlInfo(const event_handler_args &args)
-{
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.type != DBR_CTRL_DOUBLE) {
-    return;
-  }
-
-  const auto *info = static_cast<const dbr_ctrl_double *>(args.dbr);
-  const double low = info->lower_disp_limit;
-  const double high = info->upper_disp_limit;
-  const int precision = info->precision;
-
-  invokeOnElement([low, high, precision](ElementType *element) {
-    element->setRuntimeLimits(low, high);
-    element->setRuntimePrecision(precision);
-  });
-}
-
-template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::channelConnectionCallback(struct connection_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<SingleChannelMonitorRuntimeBase *>(ca_puser(args.chid));
-  if (self) {
-    self->handleConnectionEvent(args);
-  }
-}
-
-template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::valueEventCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<SingleChannelMonitorRuntimeBase *>(args.usr);
-  if (self) {
-    self->handleValueEvent(args);
-  }
-}
-
-template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::controlInfoCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<SingleChannelMonitorRuntimeBase *>(args.usr);
-  if (self) {
-    self->handleControlInfo(args);
   }
 }
 

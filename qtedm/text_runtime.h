@@ -20,10 +20,8 @@ protected:
   /* Override to add statistics tracking */
   void onStart() override;
   void onStop() override;
-  void onChannelCreated(int channelIndex) override;
   void onChannelConnected(int channelIndex) override;
   void onChannelDisconnected(int channelIndex) override;
-  void onChannelDestroyed(int channelIndex) override;
 
   /* Override to provide element type name for warning messages */
   const char *elementTypeName() const override { return "text element"; }

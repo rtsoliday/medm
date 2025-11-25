@@ -6,15 +6,19 @@
 
 #include <cadef.h>
 
-struct dbr_ctrl_enum;
-class QByteArray;
-
 #include "display_properties.h"
+#include "shared_channel_manager.h"
 
 class TextMonitorElement;
 
 class DisplayWindow;
 
+/* Runtime component for TextMonitorElement that handles EPICS Channel Access.
+ *
+ * Now uses SharedChannelManager for connection sharing. Because text monitors
+ * need specific DBR types (STRING, ENUM, CHAR, DOUBLE) depending on the
+ * native field type, different monitors of the same PV may or may not share
+ * a channel depending on field type. */
 class TextMonitorRuntime : public QObject
 {
   friend class DisplayWindow;
@@ -35,28 +39,19 @@ private:
   };
 
   void resetRuntimeState();
-  void subscribe();
-  void unsubscribe();
-  void requestControlInfo();
-  void handleConnectionEvent(const connection_handler_args &args);
-  void handleValueEvent(const event_handler_args &args);
-  void handleControlInfo(const event_handler_args &args);
+  void handleChannelConnection(bool connected);
+  void handleChannelData(const SharedChannelData &data);
   void updateElementDisplay();
   int resolvedPrecision() const;
   QString formatNumeric(double value, int precision) const;
   QString formatEnumValue(short value) const;
   QString formatCharArray(const QByteArray &bytes) const;
-
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-  static void controlInfoCallback(struct event_handler_args args);
+  chtype determineSubscriptionType(short nativeFieldType) const;
 
   TextMonitorElement *element_ = nullptr;
   QString channelName_;
-  chid channelId_ = nullptr;
-  evid subscriptionId_ = nullptr;
-  chtype subscriptionType_ = DBR_TIME_DOUBLE;
-  short fieldType_ = -1;
+  SubscriptionHandle subscription_;
+  short nativeFieldType_ = -1;
   long elementCount_ = 1;
   bool connected_ = false;
   bool started_ = false;

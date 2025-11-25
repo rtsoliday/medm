@@ -5,14 +5,17 @@
 #include <QMetaObject>
 #include <QString>
 
-#include <cadef.h>
-
 #include <utility>
+
+#include "shared_channel_manager.h"
 
 class SliderElement;
 
 class DisplayWindow;
 
+/* Runtime for slider control widget.
+ * Uses SharedChannelManager for connection sharing with other widgets
+ * monitoring the same PV. Handles reading values and writing user input. */
 class SliderRuntime : public QObject
 {
   friend class DisplayWindow;
@@ -25,35 +28,23 @@ public:
 
 private:
   void resetRuntimeState();
-  void subscribe();
-  void unsubscribe();
-  void requestControlInfo();
-  void handleConnectionEvent(const connection_handler_args &args);
-  void handleValueEvent(const event_handler_args &args);
-  void handleControlInfo(const event_handler_args &args);
-  void handleAccessRightsEvent(const access_rights_handler_args &args);
+  void handleChannelConnection(bool connected);
+  void handleChannelData(const SharedChannelData &data);
+  void handleAccessRights(bool canRead, bool canWrite);
   void handleActivation(double value);
-  void updateWriteAccess();
 
   template <typename Func>
   void invokeOnElement(Func &&func);
 
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-  static void controlInfoCallback(struct event_handler_args args);
-  static void accessRightsCallback(struct access_rights_handler_args args);
-
   QPointer<SliderElement> element_;
   QString channelName_;
-  chid channelId_ = nullptr;
-  evid subscriptionId_ = nullptr;
+  SubscriptionHandle subscription_;
   bool started_ = false;
   bool connected_ = false;
-  short fieldType_ = -1;
-  long elementCount_ = 1;
   double lastValue_ = 0.0;
   bool hasLastValue_ = false;
   short lastSeverity_ = 0;
+  bool hasControlInfo_ = false;
   bool lastWriteAccess_ = false;
 };
 

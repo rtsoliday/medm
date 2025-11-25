@@ -62,6 +62,7 @@ qtedm_SRC = qtedm.cc \
             bar_monitor_element.cc \
             bar_monitor_runtime.cc \
             channel_access_context.cc \
+            shared_channel_manager.cc \
             slider_element.cc \
             slider_runtime.cc \
             wheel_switch_element.cc \

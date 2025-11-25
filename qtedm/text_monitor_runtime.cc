@@ -11,6 +11,7 @@
 #include "channel_access_context.h"
 #include "text_monitor_element.h"
 #include "text_format_utils.h"
+#include "shared_channel_manager.h"
 
 #include <cvtFast.h>
 #include <db_access.h>
@@ -48,9 +49,8 @@ void TextMonitorRuntime::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
+  ChannelAccessContext::instance().ensureInitialized();
+  if (!ChannelAccessContext::instance().isInitialized()) {
     qWarning() << "Channel Access context not available";
     return;
   }
@@ -62,20 +62,26 @@ void TextMonitorRuntime::start()
     return;
   }
 
-  QByteArray channelBytes = channelName_.toLatin1();
-  int status = ca_create_channel(channelBytes.constData(),
-      &TextMonitorRuntime::channelConnectionCallback, this,
-      CA_PRIORITY_DEFAULT, &channelId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << channelName_ << ":" << ca_message(status);
-    channelId_ = nullptr;
-    return;
-  }
-
-  ca_set_puser(channelId_, this);
-
-  ca_flush_io();
+  /* TextMonitor needs specific DBR types for proper display:
+   * - DBR_TIME_STRING for string PVs
+   * - DBR_TIME_ENUM for enum PVs (to get string representation)
+   * - DBR_TIME_CHAR for char arrays (waveform strings)
+   * - DBR_TIME_DOUBLE for numeric PVs
+   *
+   * We start with DBR_TIME_DOUBLE and will resubscribe if needed
+   * once we know the native field type. Different DBR types create
+   * different shared channels per the user's requirements. */
+  auto &mgr = SharedChannelManager::instance();
+  subscription_ = mgr.subscribe(
+      channelName_,
+      DBR_TIME_DOUBLE,  /* Initial type - may be refined */
+      0,                /* Native element count */
+      [this](const SharedChannelData &data) {
+        handleChannelData(data);
+      },
+      [this](bool conn) {
+        handleChannelConnection(conn);
+      });
 }
 
 void TextMonitorRuntime::stop()
@@ -84,7 +90,7 @@ void TextMonitorRuntime::stop()
     return;
   }
   started_ = false;
-  unsubscribe();
+  subscription_.reset();
   resetRuntimeState();
 }
 
@@ -97,6 +103,8 @@ void TextMonitorRuntime::resetRuntimeState()
   lastEnumValue_ = 0;
   lastSeverity_ = 0;
   channelPrecision_ = -1;
+  nativeFieldType_ = -1;
+  elementCount_ = 1;
   enumStrings_.clear();
   if (element_) {
     element_->setRuntimeConnected(false);
@@ -105,112 +113,36 @@ void TextMonitorRuntime::resetRuntimeState()
   }
 }
 
-void TextMonitorRuntime::unsubscribe()
+chtype TextMonitorRuntime::determineSubscriptionType(short nativeFieldType) const
 {
-  if (subscriptionId_) {
-    ca_clear_subscription(subscriptionId_);
-    subscriptionId_ = nullptr;
-  }
-  if (channelId_) {
-    ca_clear_channel(channelId_);
-    channelId_ = nullptr;
-  }
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
-
-void TextMonitorRuntime::subscribe()
-{
-  if (subscriptionId_ || !channelId_) {
-    return;
-  }
-
-  switch (fieldType_) {
+  switch (nativeFieldType) {
   case DBR_STRING:
-    valueKind_ = ValueKind::kString;
-    subscriptionType_ = DBR_TIME_STRING;
-    elementCount_ = 1;
-    break;
+    return DBR_TIME_STRING;
   case DBR_ENUM:
-    valueKind_ = ValueKind::kEnum;
-    subscriptionType_ = DBR_TIME_ENUM;
-    elementCount_ = 1;
-    break;
+    return DBR_TIME_ENUM;
   case DBR_CHAR:
-    /* Always treat CHAR as CharArray, matching MEDM behavior.
-     * Format setting at display time determines string vs numeric display. */
-    valueKind_ = ValueKind::kCharArray;
-    subscriptionType_ = DBR_TIME_CHAR;
-    break;
+    return DBR_TIME_CHAR;
   default:
-    valueKind_ = ValueKind::kNumeric;
-    subscriptionType_ = DBR_TIME_DOUBLE;
-    elementCount_ = std::max<long>(elementCount_, 1);
-    break;
-  }
-
-  int status = ca_create_subscription(subscriptionType_, elementCount_,
-      channelId_, DBE_VALUE | DBE_ALARM,
-      &TextMonitorRuntime::valueEventCallback, this, &subscriptionId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << channelName_ << ":"
-               << ca_message(status);
-    subscriptionId_ = nullptr;
-    return;
-  }
-  ca_flush_io();
-}
-
-void TextMonitorRuntime::requestControlInfo()
-{
-  if (!channelId_) {
-    return;
-  }
-
-  chtype controlType = 0;
-  switch (fieldType_) {
-  case DBR_ENUM:
-    controlType = DBR_CTRL_ENUM;
-    break;
-  case DBR_CHAR:
-  case DBR_SHORT:
-  case DBR_LONG:
-  case DBR_FLOAT:
-  case DBR_DOUBLE:
-    controlType = DBR_CTRL_DOUBLE;
-    break;
-  default:
-    return;
-  }
-
-  int status = ca_array_get_callback(controlType, 1, channelId_,
-      &TextMonitorRuntime::controlInfoCallback, this);
-  if (status == ECA_NORMAL) {
-    ca_flush_io();
+    return DBR_TIME_DOUBLE;
   }
 }
 
-void TextMonitorRuntime::handleConnectionEvent(
-    const connection_handler_args &args)
+void TextMonitorRuntime::handleChannelConnection(bool connected)
 {
-  if (!started_ || args.chid != channelId_) {
+  if (!started_) {
     return;
   }
 
-  if (args.op == CA_OP_CONN_UP) {
-    connected_ = true;
-    fieldType_ = ca_field_type(channelId_);
-    elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
-    subscribe();
-    requestControlInfo();
+  connected_ = connected;
+
+  if (connected) {
     if (element_) {
       element_->setRuntimeConnected(true);
     }
-  } else if (args.op == CA_OP_CONN_DOWN) {
-    connected_ = false;
+  } else {
     hasNumericValue_ = false;
     hasStringValue_ = false;
+    nativeFieldType_ = -1;
     if (element_) {
       element_->setRuntimeConnected(false);
       element_->setRuntimeSeverity(kInvalidAlarmSeverity);
@@ -219,84 +151,84 @@ void TextMonitorRuntime::handleConnectionEvent(
   }
 }
 
-void TextMonitorRuntime::handleValueEvent(const event_handler_args &args)
+void TextMonitorRuntime::handleChannelData(const SharedChannelData &data)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.status != ECA_NORMAL) {
+  if (!started_) {
     return;
   }
 
-  switch (args.type) {
-  case DBR_TIME_STRING: {
-    const auto *data = static_cast<const dbr_time_string *>(args.dbr);
-    lastStringValue_ = QString::fromLatin1(data->value);
-    hasStringValue_ = true;
-    hasNumericValue_ = false;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  case DBR_TIME_ENUM: {
-    const auto *data = static_cast<const dbr_time_enum *>(args.dbr);
-    lastEnumValue_ = data->value;
-    lastNumericValue_ = static_cast<double>(data->value);
-    hasNumericValue_ = true;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  case DBR_TIME_DOUBLE: {
-    const auto *data = static_cast<const dbr_time_double *>(args.dbr);
-    lastNumericValue_ = data->value;
-    hasNumericValue_ = true;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  case DBR_TIME_CHAR: {
-    const auto *data = static_cast<const dbr_time_char *>(args.dbr);
-    const auto *raw = reinterpret_cast<const char *>(&data->value);
-    QByteArray bytes(raw, static_cast<int>(args.count));
-    lastStringValue_ = formatCharArray(bytes);
-    /* Always mark as having string value for CHAR arrays, even if empty.
-     * This matches MEDM behavior: format=STRING shows empty string for all zeros. */
-    hasStringValue_ = true;
-    lastNumericValue_ = static_cast<double>(data->value);
-    hasNumericValue_ = true;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  default:
-    return;
-  }
+  /* Check if we need to resubscribe with a different DBR type.
+   * This happens when native field type is STRING, ENUM, or CHAR
+   * and we initially subscribed with DBR_TIME_DOUBLE. */
+  if (nativeFieldType_ < 0 && data.nativeFieldType >= 0) {
+    nativeFieldType_ = data.nativeFieldType;
+    elementCount_ = data.nativeElementCount;
 
-  updateElementDisplay();
-}
-
-void TextMonitorRuntime::handleControlInfo(const event_handler_args &args)
-{
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.status != ECA_NORMAL) {
-    return;
-  }
-
-  switch (args.type) {
-  case DBR_CTRL_DOUBLE: {
-    const auto *ctrl = static_cast<const dbr_ctrl_double *>(args.dbr);
-    channelPrecision_ = ctrl->precision;
-    break;
-  }
-  case DBR_CTRL_ENUM: {
-    const auto *ctrl = static_cast<const dbr_ctrl_enum *>(args.dbr);
-    enumStrings_.clear();
-    for (int i = 0; i < ctrl->no_str; ++i) {
-      enumStrings_.append(QString::fromLatin1(ctrl->strs[i]));
+    chtype neededType = determineSubscriptionType(nativeFieldType_);
+    if (neededType != DBR_TIME_DOUBLE) {
+      /* Resubscribe with the appropriate type */
+      auto &mgr = SharedChannelManager::instance();
+      subscription_.reset();
+      subscription_ = mgr.subscribe(
+          channelName_,
+          neededType,
+          (neededType == DBR_TIME_CHAR) ? elementCount_ : 1,
+          [this](const SharedChannelData &newData) {
+            handleChannelData(newData);
+          },
+          [this](bool conn) {
+            handleChannelConnection(conn);
+          });
+      return;  /* Wait for new subscription data */
     }
+  }
+
+  /* Determine value kind based on native field type */
+  switch (nativeFieldType_) {
+  case DBR_STRING:
+    valueKind_ = ValueKind::kString;
+    break;
+  case DBR_ENUM:
+    valueKind_ = ValueKind::kEnum;
+    break;
+  case DBR_CHAR:
+    valueKind_ = ValueKind::kCharArray;
+    break;
+  default:
+    valueKind_ = ValueKind::kNumeric;
     break;
   }
-  default:
-    break;
+
+  /* Extract values from shared data */
+  lastSeverity_ = data.severity;
+
+  if (data.isString) {
+    lastStringValue_ = data.stringValue;
+    hasStringValue_ = true;
+  }
+
+  if (data.isCharArray) {
+    lastStringValue_ = formatCharArray(data.charArrayValue);
+    hasStringValue_ = true;
+    lastNumericValue_ = data.numericValue;
+    hasNumericValue_ = true;
+  }
+
+  if (data.isEnum) {
+    lastEnumValue_ = data.enumValue;
+    lastNumericValue_ = data.numericValue;
+    hasNumericValue_ = true;
+  }
+
+  if (data.isNumeric && !data.isEnum && !data.isCharArray) {
+    lastNumericValue_ = data.numericValue;
+    hasNumericValue_ = true;
+  }
+
+  /* Copy control info */
+  if (data.hasControlInfo) {
+    channelPrecision_ = data.precision;
+    enumStrings_ = data.enumStrings;
   }
 
   updateElementDisplay();
@@ -432,25 +364,3 @@ QString TextMonitorRuntime::formatCharArray(const QByteArray &bytes) const
   return QString::fromLatin1(bytes);
 }
 
-void TextMonitorRuntime::channelConnectionCallback(
-    struct connection_handler_args args)
-{
-  if (auto *runtime = static_cast<TextMonitorRuntime *>(
-          ca_puser(args.chid))) {
-    runtime->handleConnectionEvent(args);
-  }
-}
-
-void TextMonitorRuntime::valueEventCallback(struct event_handler_args args)
-{
-  if (auto *runtime = static_cast<TextMonitorRuntime *>(args.usr)) {
-    runtime->handleValueEvent(args);
-  }
-}
-
-void TextMonitorRuntime::controlInfoCallback(struct event_handler_args args)
-{
-  if (auto *runtime = static_cast<TextMonitorRuntime *>(args.usr)) {
-    runtime->handleControlInfo(args);
-  }
-}

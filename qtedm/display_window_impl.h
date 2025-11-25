@@ -7269,207 +7269,209 @@ private:
       return refs;
     }
 
-    auto addRef = [&](const QString &channel, chid channelId) {
+    /* With SharedChannelManager, we no longer have direct access to channel IDs.
+     * The PvInfoDialog will create temporary channels as needed. */
+    auto addRef = [&](const QString &channel) {
       const QString trimmed = channel.trimmed();
       if (trimmed.isEmpty()) {
         return;
       }
       PvInfoChannelRef ref;
       ref.name = trimmed;
-      ref.channelId = channelId;
+      ref.channelId = nullptr;
       refs.append(ref);
     };
 
     if (auto *element = dynamic_cast<TextElement *>(widget)) {
       if (auto *runtime = textRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
       if (auto *runtime = textMonitorRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       if (auto *runtime = textEntryRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {
       if (auto *runtime = sliderRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {
       if (auto *runtime = wheelSwitchRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<ChoiceButtonElement *>(widget)) {
       if (auto *runtime = choiceButtonRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<MenuElement *>(widget)) {
       if (auto *runtime = menuRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<MessageButtonElement *>(widget)) {
       if (auto *runtime = messageButtonRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<MeterElement *>(widget)) {
       if (auto *runtime = meterRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
       if (auto *runtime = barMonitorRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
       if (auto *runtime = scaleMonitorRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
       if (auto *runtime = byteMonitorRuntimes_.value(element, nullptr)) {
-        addRef(runtime->channelName_, runtime->channelId_);
+        addRef(runtime->channelName_);
       } else {
-        addRef(element->channel(), nullptr);
+        addRef(element->channel());
       }
     } else if (auto *element = dynamic_cast<RectangleElement *>(widget)) {
       if (auto *runtime = rectangleRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<ImageElement *>(widget)) {
       if (auto *runtime = imageRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
       if (auto *runtime = ovalRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<ArcElement *>(widget)) {
       if (auto *runtime = arcRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<LineElement *>(widget)) {
       if (auto *runtime = lineRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<PolylineElement *>(widget)) {
       if (auto *runtime = polylineRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<PolygonElement *>(widget)) {
       if (auto *runtime = polygonRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
-          addRef(channel.name, channel.channelId);
+          addRef(channel.name);
         }
       } else {
         const auto rawChannels = AdlWriter::collectChannels(element);
         for (const QString &channel : rawChannels) {
-          addRef(channel, nullptr);
+          addRef(channel);
         }
       }
     } else if (auto *element = dynamic_cast<CompositeElement *>(widget)) {
       const auto rawChannels = element->channels();
       for (const QString &channel : rawChannels) {
-        addRef(channel, nullptr);
+        addRef(channel);
       }
     } else if (auto *element = dynamic_cast<StripChartElement *>(widget)) {
       if (auto *runtime = stripChartRuntimes_.value(element, nullptr)) {
         for (const auto &pen : runtime->pens_) {
-          addRef(pen.channelName, pen.channelId);
+          addRef(pen.channelName);
         }
       } else {
         const int penCount = element->penCount();
         for (int i = 0; i < penCount; ++i) {
-          addRef(element->channel(i), nullptr);
+          addRef(element->channel(i));
         }
       }
     } else if (auto *element = dynamic_cast<CartesianPlotElement *>(widget)) {
       if (auto *runtime = cartesianPlotRuntimes_.value(element, nullptr)) {
         for (const auto &trace : runtime->traces_) {
-          addRef(trace.x.name, trace.x.channelId);
-          addRef(trace.y.name, trace.y.channelId);
+          addRef(trace.x.name);
+          addRef(trace.y.name);
         }
-        addRef(runtime->triggerChannel_.name, runtime->triggerChannel_.channelId);
-        addRef(runtime->eraseChannel_.name, runtime->eraseChannel_.channelId);
-        addRef(runtime->countChannel_.name, runtime->countChannel_.channelId);
+        addRef(runtime->triggerChannel_.name);
+        addRef(runtime->eraseChannel_.name);
+        addRef(runtime->countChannel_.name);
       } else {
-        addRef(element->triggerChannel(), nullptr);
-        addRef(element->eraseChannel(), nullptr);
-        addRef(element->countChannel(), nullptr);
+        addRef(element->triggerChannel());
+        addRef(element->eraseChannel());
+        addRef(element->countChannel());
         const int traceCount = element->traceCount();
         for (int i = 0; i < traceCount; ++i) {
-          addRef(element->traceXChannel(i), nullptr);
-          addRef(element->traceYChannel(i), nullptr);
+          addRef(element->traceXChannel(i));
+          addRef(element->traceYChannel(i));
         }
       }
     }

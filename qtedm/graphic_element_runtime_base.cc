@@ -10,7 +10,7 @@
 
 #include "channel_access_context.h"
 #include "runtime_utils.h"
-#include "statistics_tracker.h"
+#include "shared_channel_manager.h"
 
 /* External C functions for MEDM calc expression evaluation */
 extern "C" {
@@ -22,7 +22,6 @@ namespace {
 using RuntimeUtils::kInvalidSeverity;
 using RuntimeUtils::kVisibilityEpsilon;
 using RuntimeUtils::kCalcInputCount;
-using RuntimeUtils::appendNullTerminator;
 
 } // namespace
 
@@ -33,7 +32,6 @@ GraphicElementRuntimeBase<ElementType, ChannelCount>::GraphicElementRuntimeBase(
   , element_(element)
 {
   for (int i = 0; i < static_cast<int>(channels_.size()); ++i) {
-    channels_[i].owner = this;
     channels_[i].index = i;
   }
 }
@@ -129,14 +127,9 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::resetState()
 
   for (auto &channel : channels_) {
     channel.name.clear();
-    channel.channelId = nullptr;
-    channel.subscriptionId = nullptr;
-    channel.subscriptionType = DBR_TIME_DOUBLE;
-    channel.fieldType = -1;
-    channel.elementCount = 1;
+    channel.subscription.reset();
     channel.connected = false;
     channel.hasValue = false;
-    channel.controlInfoRequested = false;
     channel.hasControlInfo = false;
     channel.value = 0.0;
     channel.severity = 0;
@@ -144,6 +137,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::resetState()
     channel.hopr = 0.0;
     channel.lopr = 0.0;
     channel.precision = -1;
+    channel.elementCount = 1;
   }
 
   if (element_) {
@@ -166,28 +160,25 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::initializeChannels()
     return;
   }
 
+  auto &mgr = SharedChannelManager::instance();
+
   for (auto &channel : channels_) {
     channel.name = element_->channel(channel.index).trimmed();
     if (channel.name.isEmpty()) {
       continue;
     }
 
-    QByteArray channelBytes = channel.name.toLatin1();
-    int status = ca_create_channel(channelBytes.constData(),
-        &GraphicElementRuntimeBase::channelConnectionCallback, nullptr,
-        CA_PRIORITY_DEFAULT, &channel.channelId);
-    if (status != ECA_NORMAL) {
-      qWarning() << "Failed to create Channel Access channel for"
-                 << channel.name << ':' << ca_message(status);
-      channel.channelId = nullptr;
-      continue;
-    }
-    ca_set_puser(channel.channelId, &channel);
-    onChannelCreated(channel.index);
-  }
-
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
+    const int idx = channel.index;
+    channel.subscription = mgr.subscribe(
+        channel.name,
+        DBR_TIME_DOUBLE,  /* Graphic elements use double for visibility calc */
+        1,                /* Single element for visibility/color logic */
+        [this, idx](const SharedChannelData &data) {
+          handleChannelData(idx, data);
+        },
+        [this, idx](bool connected) {
+          handleChannelConnection(idx, connected);
+        });
   }
 }
 
@@ -195,294 +186,71 @@ template <typename ElementType, size_t ChannelCount>
 void GraphicElementRuntimeBase<ElementType, ChannelCount>::cleanupChannels()
 {
   for (auto &channel : channels_) {
-    if (channel.subscriptionId) {
-      ca_clear_subscription(channel.subscriptionId);
-      channel.subscriptionId = nullptr;
+    if (channel.connected) {
+      onChannelDisconnected(channel.index);
     }
-    if (channel.channelId) {
-      if (channel.connected) {
-        onChannelDisconnected(channel.index);
-      }
-      onChannelDestroyed(channel.index);
-      ca_set_puser(channel.channelId, nullptr);
-      ca_clear_channel(channel.channelId);
-      channel.channelId = nullptr;
-    }
-  }
-
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
-
-template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::subscribeChannel(
-    ChannelRuntime &channel)
-{
-  if (channel.subscriptionId || !channel.channelId) {
-    return;
-  }
-
-  switch (channel.fieldType) {
-  case DBR_STRING:
-    channel.subscriptionType = DBR_TIME_STRING;
-    break;
-  case DBR_ENUM:
-    channel.subscriptionType = DBR_TIME_ENUM;
-    break;
-  case DBR_CHAR:
-    channel.subscriptionType = DBR_TIME_CHAR;
-    break;
-  case DBR_SHORT:
-    channel.subscriptionType = DBR_TIME_SHORT;
-    break;
-  case DBR_LONG:
-    channel.subscriptionType = DBR_TIME_LONG;
-    break;
-  case DBR_FLOAT:
-    channel.subscriptionType = DBR_TIME_FLOAT;
-    break;
-  case DBR_DOUBLE:
-  default:
-    channel.subscriptionType = DBR_TIME_DOUBLE;
-    break;
-  }
-
-  long count = std::max<long>(channel.elementCount, 1);
-  int status = ca_create_subscription(channel.subscriptionType, count,
-      channel.channelId, DBE_VALUE | DBE_ALARM,
-      &GraphicElementRuntimeBase::valueEventCallback, &channel,
-      &channel.subscriptionId);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << channel.name << ':'
-               << ca_message(status);
-    channel.subscriptionId = nullptr;
-    return;
-  }
-  channel.hasValue = false;
-
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
-
-template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::unsubscribeChannel(
-    ChannelRuntime &channel)
-{
-  if (channel.subscriptionId) {
-    ca_clear_subscription(channel.subscriptionId);
-    channel.subscriptionId = nullptr;
-  }
-  channel.hasValue = false;
-}
-
-template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::requestControlInfo(
-    ChannelRuntime &channel)
-{
-  if (channel.index != 0 || !channel.channelId) {
-    return;
-  }
-  if (channel.controlInfoRequested) {
-    return;
-  }
-
-  chtype controlType = 0;
-  switch (channel.fieldType) {
-  case DBR_CHAR:
-  case DBR_SHORT:
-  case DBR_LONG:
-  case DBR_FLOAT:
-  case DBR_DOUBLE:
-    controlType = DBR_CTRL_DOUBLE;
-    break;
-  default:
-    break;
-  }
-
-  channel.controlInfoRequested = true;
-  if (controlType == 0) {
-    channel.hasControlInfo = false;
-    return;
-  }
-
-  int status = ca_array_get_callback(controlType, 1, channel.channelId,
-      &GraphicElementRuntimeBase::controlInfoCallback, &channel);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to request control info for" << channel.name
-               << ':' << ca_message(status);
-    return;
-  }
-
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
+    channel.subscription.reset();
   }
 }
 
 template <typename ElementType, size_t ChannelCount>
 void GraphicElementRuntimeBase<ElementType, ChannelCount>::handleChannelConnection(
-    ChannelRuntime &channel, const connection_handler_args &args)
+    int channelIndex, bool connected)
 {
-  if (!started_) {
+  if (!started_ || channelIndex < 0
+      || channelIndex >= static_cast<int>(channels_.size())) {
     return;
   }
 
-  if (args.op == CA_OP_CONN_UP) {
+  ChannelRuntime &channel = channels_[channelIndex];
+
+  if (connected) {
     channel.connected = true;
-    channel.fieldType = ca_field_type(args.chid);
-    channel.elementCount = std::max<long>(ca_element_count(args.chid), 1);
     channel.hasValue = false;
     channel.value = 0.0;
     channel.severity = 0;
     channel.status = 0;
-    subscribeChannel(channel);
-    requestControlInfo(channel);
-    onChannelConnected(channel.index);
-  } else if (args.op == CA_OP_CONN_DOWN) {
+    onChannelConnected(channelIndex);
+  } else {
     channel.connected = false;
     channel.hasValue = false;
     channel.value = 0.0;
     channel.severity = 0;
     channel.status = 0;
-    unsubscribeChannel(channel);
-    onChannelDisconnected(channel.index);
+    onChannelDisconnected(channelIndex);
   }
 
   evaluateState();
 }
 
 template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::handleChannelValue(
-    ChannelRuntime &channel, const event_handler_args &args)
+void GraphicElementRuntimeBase<ElementType, ChannelCount>::handleChannelData(
+    int channelIndex, const SharedChannelData &data)
 {
-  if (!started_) {
-    return;
-  }
-  if (!args.dbr) {
-    return;
-  }
-
-  double newValue = channel.value;
-  short newSeverity = channel.severity;
-  short newStatus = channel.status;
-  bool processed = false;
-
-  switch (args.type) {
-  case DBR_TIME_DOUBLE: {
-    const auto *value = static_cast<const dbr_time_double *>(args.dbr);
-    newValue = value->value;
-    newSeverity = value->severity;
-    newStatus = value->status;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_FLOAT: {
-    const auto *value = static_cast<const dbr_time_float *>(args.dbr);
-    newValue = value->value;
-    newSeverity = value->severity;
-    newStatus = value->status;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_LONG: {
-    const auto *value = static_cast<const dbr_time_long *>(args.dbr);
-    newValue = static_cast<double>(value->value);
-    newSeverity = value->severity;
-    newStatus = value->status;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_SHORT: {
-    const auto *value = static_cast<const dbr_time_short *>(args.dbr);
-    newValue = static_cast<double>(value->value);
-    newSeverity = value->severity;
-    newStatus = value->status;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_CHAR: {
-    const auto *value = static_cast<const dbr_time_char *>(args.dbr);
-    if (channel.elementCount > 1) {
-      QByteArray bytes(reinterpret_cast<const char *>(value->value),
-          channel.elementCount);
-      appendNullTerminator(bytes);
-      char *end = nullptr;
-      double parsed = std::strtod(bytes.constData(), &end);
-      if (end && *end == '\0') {
-        newValue = parsed;
-      } else {
-        newValue = 0.0;
-      }
-    } else {
-      newValue = static_cast<double>(value->value);
-    }
-    newSeverity = value->severity;
-    newStatus = value->status;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_ENUM: {
-    const auto *value = static_cast<const dbr_time_enum *>(args.dbr);
-    newValue = static_cast<double>(value->value);
-    newSeverity = value->severity;
-    newStatus = value->status;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_STRING: {
-    const auto *value = static_cast<const dbr_time_string *>(args.dbr);
-    QByteArray bytes(value->value, static_cast<int>(sizeof(value->value)));
-    appendNullTerminator(bytes);
-    char *end = nullptr;
-    double parsed = std::strtod(bytes.constData(), &end);
-    if (end && *end == '\0') {
-      newValue = parsed;
-    } else {
-      newValue = 0.0;
-    }
-    newSeverity = value->severity;
-    newStatus = value->status;
-    processed = true;
-    break;
-  }
-  default:
-    break;
-  }
-
-  if (!processed) {
+  if (!started_ || channelIndex < 0
+      || channelIndex >= static_cast<int>(channels_.size())) {
     return;
   }
 
-  channel.value = newValue;
-  channel.severity = newSeverity;
-  channel.status = newStatus;
-  channel.hasValue = true;
+  ChannelRuntime &channel = channels_[channelIndex];
 
-  if (channel.index == 0 && element_) {
-    element_->setRuntimeSeverity(newSeverity);
-  }
+  /* Extract numeric value from shared data */
+  channel.value = data.numericValue;
+  channel.severity = data.severity;
+  channel.status = data.status;
+  channel.hasValue = data.hasValue;
+  channel.elementCount = data.nativeElementCount;
 
-  evaluateState();
-}
-
-template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::handleChannelControlInfo(
-    ChannelRuntime &channel, const event_handler_args &args)
-{
-  if (!started_) {
-    return;
-  }
-  if (!args.dbr) {
-    return;
-  }
-
-  if (args.type == DBR_CTRL_DOUBLE) {
-    const auto *info = static_cast<const dbr_ctrl_double *>(args.dbr);
-    channel.hopr = info->upper_ctrl_limit;
-    channel.lopr = info->lower_ctrl_limit;
-    channel.precision = info->precision;
+  /* Copy control info if available */
+  if (data.hasControlInfo) {
+    channel.hopr = data.hopr;
+    channel.lopr = data.lopr;
+    channel.precision = data.precision;
     channel.hasControlInfo = true;
+  }
+
+  if (channelIndex == 0 && element_) {
+    element_->setRuntimeSeverity(data.severity);
   }
 
   evaluateState();
@@ -579,48 +347,6 @@ bool GraphicElementRuntimeBase<ElementType, ChannelCount>::evaluateCalcExpressio
   long status = calcPerform(args, &result,
       const_cast<char *>(calcPostfix_.constData()));
   return status == 0;
-}
-
-template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::channelConnectionCallback(
-    connection_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *channel = static_cast<ChannelRuntime *>(ca_puser(args.chid));
-  if (!channel || !channel->owner) {
-    return;
-  }
-  channel->owner->handleChannelConnection(*channel, args);
-}
-
-template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::valueEventCallback(
-    event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *channel = static_cast<ChannelRuntime *>(args.usr);
-  if (!channel || !channel->owner) {
-    return;
-  }
-  channel->owner->handleChannelValue(*channel, args);
-}
-
-template <typename ElementType, size_t ChannelCount>
-void GraphicElementRuntimeBase<ElementType, ChannelCount>::controlInfoCallback(
-    event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *channel = static_cast<ChannelRuntime *>(args.usr);
-  if (!channel || !channel->owner) {
-    return;
-  }
-  channel->owner->handleChannelControlInfo(*channel, args);
 }
 
 /* Explicit template instantiations for the element types that use this base class.

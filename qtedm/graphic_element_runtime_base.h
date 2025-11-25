@@ -13,6 +13,7 @@
 
 #include "display_properties.h"
 #include "element_runtime_traits.h"
+#include "shared_channel_manager.h"
 
 class RectangleElement;
 class ImageElement;
@@ -38,6 +39,10 @@ class DisplayWindow;
  * graphic elements (rectangle, oval, arc, line, polygon, polyline, image, text) to
  * eliminate code duplication while preserving type safety.
  *
+ * Now uses SharedChannelManager for connection sharing - multiple widgets
+ * monitoring the same PV (with the same DBR type and element count) share
+ * a single CA channel.
+ *
  * Template Parameters:
  *   ElementType: The element widget class (e.g., RectangleElement)
  *   ChannelCount: Number of channels to support (default 5)
@@ -57,17 +62,6 @@ class GraphicElementRuntimeBase : public QObject
 {
   friend class DisplayWindow;
 
-  // Compile-time interface validation
-  // TODO: Re-enable after debugging trait detection
-  /*
-  static_assert(ElementTraits::HasVisibilityInterface<ElementType>::value,
-                "ElementType must provide RuntimeVisibilityInterface methods");
-  static_assert(ElementTraits::HasChannelInterface<ElementType>::value,
-                "ElementType must provide RuntimeChannelInterface methods");
-  static_assert(ElementTraits::HasColorInterface<ElementType>::value,
-                "ElementType must provide RuntimeColorInterface methods");
-  */
-
 public:
   explicit GraphicElementRuntimeBase(ElementType *element);
   ~GraphicElementRuntimeBase() override;
@@ -80,17 +74,11 @@ protected:
   /* Channel runtime structure - tracks state for each EPICS channel */
   struct ChannelRuntime
   {
-    GraphicElementRuntimeBase *owner = nullptr;
     int index = 0;
     QString name;
-    chid channelId = nullptr;
-    evid subscriptionId = nullptr;
-    chtype subscriptionType = DBR_TIME_DOUBLE;
-    short fieldType = -1;
-    long elementCount = 1;
+    SubscriptionHandle subscription;
     bool connected = false;
     bool hasValue = false;
-    bool controlInfoRequested = false;
     bool hasControlInfo = false;
     double value = 0.0;
     short severity = 0;
@@ -98,6 +86,7 @@ protected:
     double hopr = 0.0;
     double lopr = 0.0;
     short precision = -1;
+    long elementCount = 1;
   };
 
   ElementType *element() { return element_; }
@@ -115,10 +104,8 @@ protected:
   virtual void onStart() {}
   virtual void onStop() {}
   virtual void onStateEvaluated() {}
-  virtual void onChannelCreated(int channelIndex) { (void)channelIndex; }
   virtual void onChannelConnected(int channelIndex) { (void)channelIndex; }
   virtual void onChannelDisconnected(int channelIndex) { (void)channelIndex; }
-  virtual void onChannelDestroyed(int channelIndex) { (void)channelIndex; }
 
   /* Virtual method for element type name (for warning messages) */
   virtual const char *elementTypeName() const { return "graphic element"; }
@@ -128,25 +115,13 @@ protected:
   bool isCalcValid() const { return calcValid_; }
 
 private:
-
   void resetState();
   void initializeChannels();
   void cleanupChannels();
-  void subscribeChannel(ChannelRuntime &channel);
-  void unsubscribeChannel(ChannelRuntime &channel);
-  void requestControlInfo(ChannelRuntime &channel);
-  void handleChannelConnection(ChannelRuntime &channel,
-      const connection_handler_args &args);
-  void handleChannelValue(ChannelRuntime &channel,
-      const event_handler_args &args);
-  void handleChannelControlInfo(ChannelRuntime &channel,
-      const event_handler_args &args);
+  void handleChannelData(int channelIndex, const SharedChannelData &data);
+  void handleChannelConnection(int channelIndex, bool connected);
   void evaluateState();
   bool evaluateCalcExpression(double &result) const;
-
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-  static void controlInfoCallback(struct event_handler_args args);
 
   ElementType *element_ = nullptr;
   std::array<ChannelRuntime, ChannelCount> channels_{};

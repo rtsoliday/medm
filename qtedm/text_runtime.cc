@@ -30,12 +30,6 @@ void TextRuntime::onStop()
   StatisticsTracker::instance().registerDisplayObjectStopped();
 }
 
-void TextRuntime::onChannelCreated(int channelIndex)
-{
-  (void)channelIndex;
-  StatisticsTracker::instance().registerChannelCreated();
-}
-
 void TextRuntime::onChannelConnected(int channelIndex)
 {
   (void)channelIndex;
@@ -46,10 +40,4 @@ void TextRuntime::onChannelDisconnected(int channelIndex)
 {
   (void)channelIndex;
   StatisticsTracker::instance().registerChannelDisconnected();
-}
-
-void TextRuntime::onChannelDestroyed(int channelIndex)
-{
-  (void)channelIndex;
-  StatisticsTracker::instance().registerChannelDestroyed();
 }

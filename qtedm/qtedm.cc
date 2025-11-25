@@ -989,21 +989,9 @@ int main(int argc, char *argv[])
   auto *overviewAct = helpMenu->addAction("&Overview");
   QObject::connect(overviewAct, &QAction::triggered, &win,
       [&win, &fixed13Font, &palette]() {
-        /* Find the help file relative to the executable */
-        QString appDir = QCoreApplication::applicationDirPath();
-        QString helpPath = appDir + QStringLiteral("/../../docs/QtEDM.html");
-        QFileInfo helpInfo(helpPath);
-        if (!helpInfo.exists()) {
-          /* Try alternate location */
-          helpPath = appDir + QStringLiteral("/../docs/QtEDM.html");
-          helpInfo.setFile(helpPath);
-        }
-        if (!helpInfo.exists()) {
-          /* Try in same directory as executable */
-          helpPath = appDir + QStringLiteral("/QtEDM.html");
-        }
+        /* Use embedded resource for help file */
         showHelpBrowser(&win, QStringLiteral("QtEDM Help - Overview"),
-            helpPath, fixed13Font, palette);
+            QStringLiteral(":/help/QtEDM.html"), fixed13Font, palette);
       });
   auto *onVersionAct = helpMenu->addAction("&Version");
   QObject::connect(onVersionAct, &QAction::triggered, &win,

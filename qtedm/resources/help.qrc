@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/help">
+    <file alias="QtEDM.html">../../docs/QtEDM.html</file>
+  </qresource>
+</RCC>

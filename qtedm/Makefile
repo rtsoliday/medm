@@ -181,10 +181,15 @@ endif
 include ../Makefile.build
 
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
+qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
 
 $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | $(OBJ_DIR)
 	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp -o $@
+
+$(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html | $(OBJ_DIR)
+	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
+	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp -o $@
 
 $(OBJ_DIR)/moc_cartesian_plot_element.cpp: cartesian_plot_element.h | $(OBJ_DIR)
 	$(MOC) $(shell pkg-config --cflags Qt5Widgets) $< -o $@

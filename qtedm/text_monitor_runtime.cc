@@ -263,7 +263,9 @@ void TextMonitorRuntime::updateElementDisplay()
     displayText = lastStringValue_;
     break;
   case ValueKind::kCharArray:
-    if (element_->format() == TextMonitorFormat::kString && hasStringValue_) {
+    if (element_->format() == TextMonitorFormat::kString) {
+      /* For char arrays in STRING format, always show the string value
+       * even if empty (all null bytes). Don't fall back to numeric. */
       displayText = lastStringValue_;
     } else if (hasNumericValue_) {
       displayText = formatNumeric(lastNumericValue_, resolvedPrecision());

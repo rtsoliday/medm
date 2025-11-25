@@ -2,6 +2,7 @@
 
 #include <QCursor>
 #include <QDialog>
+#include <QFile>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -10,6 +11,7 @@
 #include <QPixmap>
 #include <QPushButton>
 #include <QScreen>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QString>
@@ -198,6 +200,72 @@ void showVersionDialog(QWidget *parent, const QFont &titleFont,
     QTimer::singleShot(5000, dialog, &QDialog::accept);
   }
 
+  dialog->show();
+  dialog->raise();
+  dialog->activateWindow();
+}
+
+void showHelpBrowser(QWidget *parent, const QString &title,
+    const QString &htmlFilePath, const QFont &font, const QPalette &palette)
+{
+  /* Check if the dialog already exists */
+  QString dialogName = QStringLiteral("qtedmHelpBrowser_") + title;
+  dialogName.replace(QLatin1Char(' '), QLatin1Char('_'));
+  
+  QDialog *dialog = parent ? parent->findChild<QDialog *>(dialogName)
+                           : nullptr;
+
+  if (!dialog) {
+    dialog = new QDialog(parent, Qt::Window);
+    dialog->setObjectName(dialogName);
+    dialog->setWindowTitle(title);
+    dialog->setModal(false);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setAutoFillBackground(true);
+    dialog->setBackgroundRole(QPalette::Window);
+    dialog->setPalette(palette);
+
+    auto *layout = new QVBoxLayout(dialog);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(8);
+
+    auto *browser = new QTextBrowser(dialog);
+    browser->setFont(font);
+    browser->setOpenExternalLinks(true);
+    browser->setReadOnly(true);
+    browser->setMinimumSize(700, 500);
+
+    /* Try to load the HTML file */
+    QFile file(htmlFilePath);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      QString html = QString::fromUtf8(file.readAll());
+      file.close();
+      browser->setHtml(html);
+    } else {
+      browser->setHtml(QStringLiteral(
+          "<html><body><h1>Help Not Available</h1>"
+          "<p>Could not open help file:</p>"
+          "<p><code>%1</code></p></body></html>").arg(htmlFilePath));
+    }
+
+    layout->addWidget(browser);
+
+    auto *buttonLayout = new QHBoxLayout;
+    buttonLayout->addStretch(1);
+    auto *closeButton = new QPushButton(QStringLiteral("Close"), dialog);
+    closeButton->setFont(font);
+    closeButton->setAutoDefault(false);
+    closeButton->setDefault(false);
+    buttonLayout->addWidget(closeButton);
+    layout->addLayout(buttonLayout);
+
+    QObject::connect(closeButton, &QPushButton::clicked, dialog,
+        &QDialog::close);
+
+    dialog->resize(750, 600);
+  }
+
+  centerDialog(dialog);
   dialog->show();
   dialog->raise();
   dialog->activateWindow();

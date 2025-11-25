@@ -986,7 +986,25 @@ int main(int argc, char *argv[])
 
   auto *helpMenu = menuBar->addMenu("&Help");
   helpMenu->setFont(fixed13Font);
-  helpMenu->addAction("&Overview");
+  auto *overviewAct = helpMenu->addAction("&Overview");
+  QObject::connect(overviewAct, &QAction::triggered, &win,
+      [&win, &fixed13Font, &palette]() {
+        /* Find the help file relative to the executable */
+        QString appDir = QCoreApplication::applicationDirPath();
+        QString helpPath = appDir + QStringLiteral("/../../docs/QtEDM.html");
+        QFileInfo helpInfo(helpPath);
+        if (!helpInfo.exists()) {
+          /* Try alternate location */
+          helpPath = appDir + QStringLiteral("/../docs/QtEDM.html");
+          helpInfo.setFile(helpPath);
+        }
+        if (!helpInfo.exists()) {
+          /* Try in same directory as executable */
+          helpPath = appDir + QStringLiteral("/QtEDM.html");
+        }
+        showHelpBrowser(&win, QStringLiteral("QtEDM Help - Overview"),
+            helpPath, fixed13Font, palette);
+      });
   helpMenu->addAction("&Contents");
   helpMenu->addAction("Object &Index");
   helpMenu->addAction("&Editing");

@@ -116,8 +116,8 @@ ifeq ($(OS), Windows)
  CCFLAGS += /std:c++17 /Zc:__cplusplus /permissive- -I"C:\\Qt\\6.8.2\\msvc2022_64\\include" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtCore" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtGui" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtWidgets"
  LDFLAGS += /LIBPATH:"C:\\Qt\\6.8.2\\msvc2022_64\\lib" Qt6PrintSupport.lib Qt6Widgets.lib Qt6Gui.lib Qt6Core.lib
 else
- CCFLAGS += $(shell pkg-config --cflags Qt5Widgets)
- LDFLAGS += $(shell pkg-config --libs Qt5Widgets)
+ CCFLAGS += $(shell pkg-config --cflags Qt5Widgets Qt5PrintSupport)
+ LDFLAGS += $(shell pkg-config --libs Qt5Widgets Qt5PrintSupport)
 endif
 
 

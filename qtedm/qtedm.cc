@@ -19,9 +19,12 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPageSetupDialog>
 #include <QPalette>
 #include <QPointer>
 #include <QPoint>
+#include <QPrintDialog>
+#include <QPrinter>
 #include <QRadioButton>
 #include <QRegularExpression>
 #include <QScreen>
@@ -878,8 +881,9 @@ int main(int argc, char *argv[])
   auto *saveAsAct = fileMenu->addAction("Save &As...");
   auto *closeAct = fileMenu->addAction("&Close");
   fileMenu->addSeparator();
-  fileMenu->addAction("Print Set&up...");
-  fileMenu->addAction("&Print");
+  auto *printSetupAct = fileMenu->addAction("Print Set&up...");
+  auto *printAct = fileMenu->addAction("&Print");
+  printAct->setShortcut(QKeySequence::Print);
   fileMenu->addSeparator();
   auto *exitAct = fileMenu->addAction("E&xit");
   exitAct->setShortcut(QKeySequence::Quit);
@@ -1149,6 +1153,26 @@ int main(int argc, char *argv[])
       [state]() {
         if (auto active = state->activeDisplay.data()) {
           active->save();
+        }
+      });
+  QObject::connect(printSetupAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->showPrintSetup();
+        } else if (!state->displays.isEmpty()) {
+          if (auto firstDisplay = state->displays.first().data()) {
+            firstDisplay->showPrintSetup();
+          }
+        }
+      });
+  QObject::connect(printAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->printDisplay();
+        } else if (!state->displays.isEmpty()) {
+          if (auto firstDisplay = state->displays.first().data()) {
+            firstDisplay->printDisplay();
+          }
         }
       });
   QObject::connect(undoAct, &QAction::triggered, &win,

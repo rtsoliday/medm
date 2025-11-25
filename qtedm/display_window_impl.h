@@ -5,6 +5,7 @@
 #endif
 
 #include <cmath>
+#include <memory>
 #include <type_traits>
 #include <cstring>
 #include <cstdlib>
@@ -16,9 +17,12 @@
 #include <QDateTime>
 #include <QCursor>
 #include <QFont>
+#include <QPageSetupDialog>
 #include <QPen>
 #include <QPainter>
 #include <QPixmap>
+#include <QPrintDialog>
+#include <QPrinter>
 #include <QSize>
 #include <QLabel>
 #include <QMimeData>
@@ -1545,6 +1549,74 @@ public:
   bool save(QWidget *dialogParent = nullptr);
   bool saveAs(QWidget *dialogParent = nullptr);
   bool saveToPath(const QString &filePath) const;
+
+  void showPrintSetup()
+  {
+    if (!printer_) {
+      printer_ = std::make_unique<QPrinter>(QPrinter::HighResolution);
+      printer_->setDocName(windowTitle());
+    }
+    QPageSetupDialog dialog(printer_.get(), this);
+    dialog.exec();
+  }
+
+  void printDisplay()
+  {
+    if (!displayArea_) {
+      return;
+    }
+    if (!printer_) {
+      printer_ = std::make_unique<QPrinter>(QPrinter::HighResolution);
+    }
+    printer_->setDocName(windowTitle());
+
+    QPrintDialog dialog(printer_.get(), this);
+    dialog.setWindowTitle(QStringLiteral("Print Display"));
+    if (dialog.exec() != QDialog::Accepted) {
+      return;
+    }
+
+    // Render the display area to the printer
+    QPainter painter;
+    if (!painter.begin(printer_.get())) {
+      qWarning() << "Failed to open printer for painting";
+      return;
+    }
+
+    // Get the printable area
+    QRectF printableRect = printer_->pageLayout().paintRectPixels(printer_->resolution());
+    
+    // Grab the display area as a pixmap
+    QPixmap pixmap = displayArea_->grab();
+    
+    // Calculate scaling to fit the page while preserving aspect ratio
+    qreal scaleX = printableRect.width() / pixmap.width();
+    qreal scaleY = printableRect.height() / pixmap.height();
+    qreal scale = qMin(scaleX, scaleY);
+    
+    // Calculate centered position
+    qreal scaledWidth = pixmap.width() * scale;
+    qreal scaledHeight = pixmap.height() * scale;
+    qreal offsetX = (printableRect.width() - scaledWidth) / 2.0;
+    qreal offsetY = (printableRect.height() - scaledHeight) / 2.0;
+    
+    // Draw the pixmap scaled and centered
+    QRectF targetRect(offsetX, offsetY, scaledWidth, scaledHeight);
+    painter.drawPixmap(targetRect.toRect(), pixmap);
+
+    // Optionally add title at the top
+    QString title = filePath_.isEmpty() ? windowTitle() : QFileInfo(filePath_).fileName();
+    if (!title.isEmpty()) {
+      QFont titleFont = painter.font();
+      titleFont.setPointSize(12);
+      painter.setFont(titleFont);
+      painter.drawText(QRectF(0, 0, printableRect.width(), offsetY),
+          Qt::AlignCenter | Qt::AlignBottom, title);
+    }
+
+    painter.end();
+  }
+
   bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr,
       const QHash<QString, QString> &macros = {});
   QString filePath() const
@@ -2125,6 +2197,7 @@ private:
   QPalette resourcePaletteBase_;
   ResourcePaletteDialog *resourcePalette_ = nullptr;
   DisplayAreaWidget *displayArea_ = nullptr;
+  std::unique_ptr<QPrinter> printer_;
   QString filePath_;
   QString currentLoadDirectory_;
   bool loadingLegacyAdl_ = false;
@@ -12525,8 +12598,13 @@ private:
     menu.setObjectName(QStringLiteral("executeModeContextMenu"));
     menu.setSeparatorsCollapsible(false);
 
-    // Mirror MEDM execute popup menu; actions will be wired up later.
-    menu.addAction(QStringLiteral("Print"));
+    // Mirror MEDM execute popup menu
+    QAction *printAction = menu.addAction(QStringLiteral("Print"));
+    QObject::connect(printAction, &QAction::triggered, this,
+        [this]() {
+          setAsActiveDisplay();
+          printDisplay();
+        });
     QAction *closeAction = menu.addAction(QStringLiteral("Close"));
     QObject::connect(closeAction, &QAction::triggered, this,
         [this]() {

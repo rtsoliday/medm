@@ -1034,9 +1034,16 @@ void StripChartElement::paintTickMarks(QPainter &painter, const QRect &chartRect
   const int nDivX = calculateXAxisTickCount(chartRect.width(), QFontMetrics(labelFont()));
   int nDivY = std::min(kMaxTickMarks, kGridLines);
 
+  // Data is drawn in plotArea = chartRect.adjusted(1, 1, -1, -1)
+  // Data Y formula: plotArea.top() + (plotArea.height() - 1) * (1.0 - normalized)
+  // Tick marks should align with where data at each division would be drawn
+  const int plotTop = chartRect.top() + 1;
+  const int plotHeight = chartRect.height() - 2;
+
   // Draw Y-axis tick marks (left side of chart)
   for (int i = 0; i <= nDivY; ++i) {
-    const int tickY = chartRect.top() + i * chartRect.height() / nDivY;
+    // Match the data coordinate formula: plotTop + (plotHeight - 1) * (i / nDivY)
+    const int tickY = plotTop + i * (plotHeight - 1) / nDivY;
     const int x1 = chartRect.left() - 2 - (markerHeight - 1);
     const int x2 = chartRect.left() - 2;
     painter.drawLine(x1, tickY, x2, tickY);
@@ -1179,7 +1186,11 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
         const QString text = formatNumber(value, fmt.format, fmt.decimal);
         const int textWidth = metrics.horizontalAdvance(text);
         
-        const int tickY = chartRect.top() + i * (chartRect.height() - 1) / nDivY;
+        // Match tick mark and data coordinate system:
+        // Data is drawn in plotArea = chartRect.adjusted(1, 1, -1, -1)
+        const int plotTop = chartRect.top() + 1;
+        const int plotHeight = chartRect.height() - 2;
+        const int tickY = plotTop + i * (plotHeight - 1) / nDivY;
         
         // Calculate vertical offset for this range label
         const int labelHeight = metrics.height();

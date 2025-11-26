@@ -717,6 +717,17 @@ StripChartElement::Layout StripChartElement::calculateLayout(
   // Calculate space needed for X-axis labels and tick marks
   const int xAxisSpace = metrics.height() + markerHeight + 2 + kInnerMargin;
   bottom -= xAxisSpace;
+
+  // Calculate Y-axis label height extension (like MEDM's heightExt).
+  // Y-axis labels are stacked vertically and centered on each tick mark.
+  // The topmost tick's labels extend above the chart; ensure we have room.
+  const int yAxisHeightExt = calculateYAxisLabelHeightExtension(metrics);
+  const int minTopMargin = yAxisHeightExt + kShadowThickness;
+  const int currentTopMargin = top - layout.innerRect.top();
+  if (currentTopMargin < minTopMargin) {
+    // Increase top margin to accommodate Y-axis labels extending above the chart
+    top = layout.innerRect.top() + minTopMargin;
+  }
   
   // Apply symmetric right margin, but use the smaller of left or top margin
   // if the top margin is less (for visual consistency)
@@ -860,6 +871,59 @@ int StripChartElement::calculateYAxisLabelWidth(const QFontMetrics &metrics) con
   // Total width = text width + space for color indicators
   constexpr int kLineSpace = 3;
   return maxWidth + (maxDots * kLineSpace);
+}
+
+int StripChartElement::calculateYAxisLabelHeightExtension(
+    const QFontMetrics &metrics) const
+{
+  // Count the number of unique Y-axis ranges (like MEDM's calcYAxisLabelHeight).
+  // Y-axis labels are vertically stacked at each tick mark, centered on the tick.
+  // This function returns how much the labels extend above (or below) the tick,
+  // which determines the minimum top/bottom margin needed to avoid clipping.
+  int numRanges = 0;
+
+  struct YAxisRange {
+    double low;
+    double high;
+  };
+  std::vector<YAxisRange> ranges;
+
+  for (int p = 0; p < penCount(); ++p) {
+    if (pens_[p].channel.trimmed().isEmpty()) {
+      continue;
+    }
+
+    const double low = effectivePenLow(p);
+    const double high = effectivePenHigh(p);
+
+    if (!std::isfinite(low) || !std::isfinite(high)) {
+      continue;
+    }
+
+    // Check if this range already exists
+    bool found = false;
+    for (const auto &range : ranges) {
+      if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      YAxisRange newRange;
+      newRange.low = low;
+      newRange.high = high;
+      ranges.push_back(newRange);
+    }
+  }
+
+  numRanges = ranges.empty() ? 1 : static_cast<int>(ranges.size());
+
+  // The total height of stacked labels at each tick is numRanges * fontHeight.
+  // Labels are centered on the tick, so they extend (totalHeight / 2) above.
+  const int labelHeight = metrics.height();
+  const int totalLabelsHeight = numRanges * labelHeight;
+  return (totalLabelsHeight + 1) / 2;  // Half extends above the tick mark
 }
 
 // Calculate the optimal number of X-axis tick divisions based on available width.

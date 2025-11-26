@@ -105,6 +105,7 @@ private:
   QRect chartRect() const;
   Layout calculateLayout(const QFontMetrics &metrics) const;
   int calculateYAxisLabelWidth(const QFontMetrics &metrics) const;
+  int calculateYAxisLabelHeightExtension(const QFontMetrics &metrics) const;
   int calculateXAxisTickCount(int chartWidth, const QFontMetrics &metrics) const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRect &content) const;

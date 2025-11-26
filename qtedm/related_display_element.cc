@@ -421,8 +421,9 @@ int RelatedDisplayElement::activeEntryCount() const
 {
   int count = 0;
   for (const auto &entry : entries_) {
-    if (!entry.label.trimmed().isEmpty() || !entry.name.trimmed().isEmpty()
-        || !entry.args.trimmed().isEmpty()) {
+    /* Match MEDM behavior: only count entries with non-empty labels.
+     * Entries with just a name but no label are not shown as buttons. */
+    if (!entry.label.trimmed().isEmpty()) {
       ++count;
     }
   }

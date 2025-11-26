@@ -619,6 +619,48 @@ void CompositeElement::raiseCompositeHierarchy()
   refreshChildStackingOrder();
 }
 
+/*
+ * Child Widget Stacking Order
+ * ===========================
+ *
+ * MEDM renders display elements in ADL (ASCII Display List) declaration order,
+ * with later elements drawn on top of earlier ones. QtEDM uses Qt's widget
+ * stacking to achieve a similar effect, but must account for Qt's different
+ * rendering model.
+ *
+ * QtEDM classifies child widgets into three categories for stacking purposes:
+ *
+ * 1. STATIC WIDGETS (raised first, at bottom of stack)
+ *    - Graphic elements with no dynamic attributes (no visibility rules,
+ *      no color mode changes, no channel connections)
+ *    - Composites that contain ONLY static graphic children
+ *    - Examples: plain rectangles, static text labels, decorative shapes
+ *
+ * 2. DYNAMIC WIDGETS (raised second, middle of stack)
+ *    - Graphic elements with dynamic attributes (visibility rules like
+ *      "if not zero", alarm-sensitive color modes, channel connections)
+ *    - Composites that contain ANY dynamic graphic children
+ *    - Text elements with channel connections (even without visibility rules)
+ *    - Examples: rectangles that show/hide based on PV values, alarm indicators
+ *
+ * 3. INTERACTIVE WIDGETS (raised last, top of stack)
+ *    - Control widgets: text entries, sliders, buttons, menus, related displays
+ *    - Monitor widgets: text updates, meters, bar graphs, strip charts
+ *    - These must be on top so users can interact with them
+ *
+ * IMPORTANT: Composites are containers, not controls. A composite's stacking
+ * category is determined by its GRAPHIC content, not by whether it contains
+ * controls. Controls inside a composite are managed by that composite's own
+ * internal stacking order.
+ *
+ * Example: A composite containing a related display + static rectangle is
+ * classified as STATIC (not interactive), because its graphic content (the
+ * rectangle) has no dynamic attributes. The related display inside will be
+ * raised to the top within that composite's internal stacking.
+ *
+ * Within each category, widgets maintain their ADL declaration order.
+ */
+
 bool CompositeElement::isStaticChildWidget(const QWidget *child) const
 {
   if (!child) {
@@ -626,19 +668,32 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
   }
 
   if (const auto *composite = dynamic_cast<const CompositeElement *>(child)) {
+    /*
+     * A composite is STATIC if it contains NO dynamic graphic children.
+     *
+     * IMPORTANT: Controls (related displays, buttons, text entries, etc.)
+     * inside a composite do NOT affect whether the composite is static or
+     * dynamic. Controls are handled by the composite's own internal stacking
+     * order - they will be raised to the top within that composite.
+     *
+     * This allows patterns like:
+     *   composite {
+     *     related display (invisible)  <- control, ignored for classification
+     *     rectangle (clr=57)           <- static graphic
+     *   }
+     * to be correctly classified as STATIC, so sibling composites with
+     * dynamic rectangles will stack on top of it.
+     */
     const QList<QWidget *> children = composite->childWidgets();
-    if (children.isEmpty()) {
-      return true;
-    }
     for (QWidget *grandChild : children) {
-      if (composite->isDynamicGraphicChildWidget(grandChild)
-          || !composite->isStaticChildWidget(grandChild)) {
+      if (isDynamicGraphicChildWidget(grandChild)) {
         return false;
       }
     }
     return true;
   }
 
+  /* These are the primitive graphic element types that can be static */
   return dynamic_cast<const RectangleElement *>(child)
       || dynamic_cast<const ImageElement *>(child)
       || dynamic_cast<const OvalElement *>(child)
@@ -654,9 +709,19 @@ bool CompositeElement::isDynamicGraphicChildWidget(const QWidget *child) const
   if (!child) {
     return false;
   }
+
+  /* Check for the _adlHasDynamicAttribute property set during parsing */
   if (widgetHasDynamicAttribute(child)) {
     return true;
   }
+
+  /*
+   * Check primitive graphic elements for dynamic attributes.
+   * An element is dynamic if it has:
+   *   - Non-static visibility mode (if zero, if not zero, calc)
+   *   - Non-static color mode (alarm-sensitive)
+   *   - Any channel connections
+   */
   if (const auto *rectangle = dynamic_cast<const RectangleElement *>(child)) {
     return hasDynamicGraphicAttributes(rectangle);
   }
@@ -681,6 +746,47 @@ bool CompositeElement::isDynamicGraphicChildWidget(const QWidget *child) const
   if (const auto *text = dynamic_cast<const TextElement *>(child)) {
     return hasDynamicGraphicAttributes(text);
   }
+
+  /*
+   * Check if the child is a composite with dynamic content.
+   *
+   * A composite is DYNAMIC if:
+   *   1. It has its own dynamic attributes (visibility/color mode), OR
+   *   2. It contains ANY dynamic graphic children (recursively)
+   *
+   * This ensures composites with dynamic content are stacked in the dynamic
+   * layer along with sibling dynamic elements, maintaining proper ADL order
+   * within that layer.
+   *
+   * Example of why this matters:
+   *   Level 4 composite contains:
+   *     - Level 5a: composite with static rectangle (clr=57)    <- STATIC
+   *     - Level 5b: composite with dynamic rectangles (clr=16)  <- DYNAMIC
+   *     - Level 5c: composite with dynamic rectangles (clr=20)  <- DYNAMIC
+   *
+   *   Without this check, Level 5b and 5c would fall through to interactive,
+   *   breaking the layering. With this check, they're correctly identified
+   *   as dynamic and stacked above Level 5a.
+   */
+  if (const auto *composite = dynamic_cast<const CompositeElement *>(child)) {
+    /* Check if composite has its own dynamic attributes */
+    if (composite->visibilityMode() != TextVisibilityMode::kStatic
+        || composite->colorMode() != TextColorMode::kStatic) {
+      return true;
+    }
+    for (int i = 0; i < 5; ++i) {
+      if (!composite->channel(i).trimmed().isEmpty()) {
+        return true;
+      }
+    }
+    /* Recursively check if any children are dynamic */
+    const QList<QWidget *> children = composite->childWidgets();
+    for (QWidget *grandChild : children) {
+      if (isDynamicGraphicChildWidget(grandChild)) {
+        return true;
+      }
+    }
+  }
   return false;
 }
 
@@ -690,19 +796,29 @@ void CompositeElement::refreshChildStackingOrder()
     return;
   }
   childStackingOrderInternallyUpdating_ = true;
+
   QList<QWidget *> staticWidgets;
   QList<QWidget *> dynamicWidgets;
   QList<QWidget *> interactiveWidgets;
 
+  /*
+   * Classify each child widget into one of three stacking categories.
+   * See the comment block above isStaticChildWidget() for detailed
+   * explanation of the classification logic.
+   */
   for (const auto &pointer : childWidgets_) {
     QWidget *child = pointer.data();
     if (!child) {
       continue;
     }
+
+    /* Controls (buttons, text entries, etc.) always go to interactive layer */
     if (isControlChildWidget(child)) {
       interactiveWidgets.append(child);
       continue;
     }
+
+    /* Check for dynamic attributes or monitor widgets */
     if (widgetHasDynamicAttribute(child)
         || isMonitorChildWidget(child)
         || isDynamicGraphicChildWidget(child)) {
@@ -710,17 +826,27 @@ void CompositeElement::refreshChildStackingOrder()
     } else if (isStaticChildWidget(child)) {
       staticWidgets.append(child);
     } else {
+      /*
+       * Fallback: anything not classified goes to interactive layer.
+       * This should rarely happen - most widgets should be caught by
+       * the checks above. If new widget types are added, they should
+       * be explicitly handled in the classification functions.
+       */
       interactiveWidgets.append(child);
     }
   }
 
-  /* Maintain MEDM semantics:
-   *   1) Raise purely static children in ADL order so later siblings land on
-   *      top of earlier ones.
-   *   2) Raise graphic widgets with dynamic attributes next so they stay above
-   *      static art but below interactive controls.
-   *   3) Raise interactive children last, still in declaration order, so
-   *      operators can always access them. */
+  /*
+   * Apply stacking order by raising widgets in category order.
+   * Qt's raise() moves a widget to the top of its siblings' stack.
+   * By raising in order (static, dynamic, interactive), we ensure:
+   *   - Static widgets are at the bottom
+   *   - Dynamic widgets are in the middle (above static)
+   *   - Interactive widgets are at the top (always accessible)
+   *
+   * Within each category, widgets are raised in their original ADL order,
+   * so later declarations end up on top of earlier ones.
+   */
   for (QWidget *widget : staticWidgets) {
     if (widget) {
       widget->raise();
@@ -736,6 +862,7 @@ void CompositeElement::refreshChildStackingOrder()
       widget->raise();
     }
   }
+
   childStackingOrderInternallyUpdating_ = false;
 }
 

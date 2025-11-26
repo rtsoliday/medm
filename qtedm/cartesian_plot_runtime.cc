@@ -972,7 +972,15 @@ int CartesianPlotRuntime::effectiveCapacity(int preferredCount,
   if (capacity <= 0) {
     capacity = preferredCount > 0 ? preferredCount : kCartesianPlotMaximumSampleCount;
   }
-  capacity = std::clamp(capacity, 1, kCartesianPlotMaximumSampleCount);
+  /* For vector data (allowConfiguredCount=false), don't apply the maximum
+   * sample count limit - use the full vector size from the channel.
+   * This matches MEDM behavior where vector element count is used directly.
+   * The limit only applies to scalar accumulation modes. */
+  if (allowConfiguredCount) {
+    capacity = std::clamp(capacity, 1, kCartesianPlotMaximumSampleCount);
+  } else {
+    capacity = std::max(capacity, 1);
+  }
   return capacity;
 }
 

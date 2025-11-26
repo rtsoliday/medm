@@ -366,7 +366,17 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
 
   if (!suppressHiddenVisual) {
     painter.fillRect(canvas, effectiveBackground());
-    const QRect content = canvas.adjusted(1, 1, -1, -1);
+    QRect content;
+    switch (visual_) {
+    case RelatedDisplayVisual::kRowOfButtons:
+    case RelatedDisplayVisual::kColumnOfButtons:
+      /* For button visuals, use the full canvas with no margins to match MEDM */
+      content = canvas;
+      break;
+    default:
+      content = canvas.adjusted(1, 1, -1, -1);
+      break;
+    }
     switch (visual_) {
     case RelatedDisplayVisual::kRowOfButtons:
       paintButtonVisual(painter, content, false);
@@ -529,7 +539,7 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   painter.save();
   painter.setPen(Qt::NoPen);
   painter.setBrush(bg);
-  painter.drawRect(content.adjusted(-1, -1, 0, 0));
+  painter.drawRect(content);
 
   const int activeCount = activeEntryCount();
   const int displayCount = activeCount > 0 ? activeCount : 2;
@@ -551,30 +561,36 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
       if (index >= displayCount) {
         break;
       }
+      /* Calculate button rect to fill the full cell with no gaps.
+       * MEDM uses XmNmarginWidth=0, XmNmarginHeight=0, XmNspacing=0
+       * and XmNshadowThickness=2 for each button. */
       QRect buttonRect(content.left() + column * buttonWidth,
           content.top() + row * buttonHeight,
           buttonWidth, buttonHeight);
-      buttonRect = buttonRect.adjusted(2, 2, -2, -2);
 
-      QRect buttonOuter = buttonRect.adjusted(-1, -1, 1, 1);
+      /* Draw outer bevel (shadow thickness = 2 pixels total) */
       painter.setPen(QPen(bg.lighter(135), 1));
-      painter.drawLine(buttonOuter.topLeft(), buttonOuter.topRight());
-      painter.drawLine(buttonOuter.topLeft(), buttonOuter.bottomLeft());
+      painter.drawLine(buttonRect.topLeft(), buttonRect.topRight() - QPoint(1, 0));
+      painter.drawLine(buttonRect.topLeft(), buttonRect.bottomLeft() - QPoint(0, 1));
       painter.setPen(QPen(bg.darker(145), 1));
-      painter.drawLine(buttonOuter.bottomLeft(), buttonOuter.bottomRight());
-      painter.drawLine(buttonOuter.topRight(), buttonOuter.bottomRight());
+      painter.drawLine(buttonRect.bottomLeft(), buttonRect.bottomRight() - QPoint(1, 0));
+      painter.drawLine(buttonRect.topRight(), buttonRect.bottomRight() - QPoint(0, 1));
 
-      QRect buttonInner = buttonRect;
+      /* Draw inner bevel */
+      QRect innerBevel = buttonRect.adjusted(1, 1, -1, -1);
       painter.setPen(QPen(bg.lighter(150), 1));
-      painter.drawLine(buttonInner.topLeft(), buttonInner.topRight());
-      painter.drawLine(buttonInner.topLeft(), buttonInner.bottomLeft());
+      painter.drawLine(innerBevel.topLeft(), innerBevel.topRight() - QPoint(1, 0));
+      painter.drawLine(innerBevel.topLeft(), innerBevel.bottomLeft() - QPoint(0, 1));
       painter.setPen(QPen(bg.darker(170), 1));
-      painter.drawLine(buttonInner.bottomLeft(), buttonInner.bottomRight());
-      painter.drawLine(buttonInner.topRight(), buttonInner.bottomRight());
+      painter.drawLine(innerBevel.bottomLeft(), innerBevel.bottomRight() - QPoint(1, 0));
+      painter.drawLine(innerBevel.topRight(), innerBevel.bottomRight() - QPoint(0, 1));
 
-      painter.fillRect(buttonInner.adjusted(1, 1, -1, -1), bg);
+      /* Fill button interior */
+      QRect interior = buttonRect.adjusted(2, 2, -2, -2);
+      painter.fillRect(interior, bg);
+
+      /* Draw text */
       painter.setPen(fg);
-
       QString text;
       if (index < activeCount) {
         text = entryDisplayLabel(entries_[index]);
@@ -582,8 +598,7 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
       if (text.isEmpty()) {
         text = QStringLiteral("Display %1").arg(index + 1);
       }
-      painter.drawText(buttonRect.adjusted(4, 0, -4, 0),
-          Qt::AlignCenter, text);
+      painter.drawText(interior, Qt::AlignCenter, text);
       ++index;
     }
   }
@@ -746,7 +761,8 @@ int RelatedDisplayElement::firstUsableEntryIndex() const
 
 int RelatedDisplayElement::buttonEntryIndexAt(const QPoint &pos) const
 {
-  QRect content = rect().adjusted(1, 1, -1, -1);
+  /* For button visuals, use the full rect with no margins to match painting */
+  QRect content = rect();
   if (!content.contains(pos)) {
     return -1;
   }

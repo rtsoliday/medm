@@ -107,6 +107,7 @@ private:
   int calculateYAxisLabelWidth(const QFontMetrics &metrics) const;
   int calculateYAxisLabelHeightExtension(const QFontMetrics &metrics) const;
   int calculateXAxisTickCount(int chartWidth, const QFontMetrics &metrics) const;
+  int calculateYAxisTickCount(int chartHeight, const QFontMetrics &metrics) const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRect &content) const;
   void paintTickMarks(QPainter &painter, const QRect &chartRect) const;

@@ -977,6 +977,90 @@ int StripChartElement::calculateXAxisTickCount(int chartWidth,
   return 2;
 }
 
+// Calculate the optimal number of Y-axis tick divisions based on available height.
+// This function mimics MEDM's behavior: it calculates how many sets of stacked
+// labels (one per unique Y-axis range) can fit vertically without overlapping.
+// The algorithm:
+// 1. Counts the number of unique Y-axis ranges (numRanges)
+// 2. Calculates the height needed for one row of stacked labels plus spacing
+// 3. Divides the available chart height by this to get the number of divisions
+// 4. Caps at reasonable values (max 10, skip 7 and 9 like MEDM)
+// 5. Guarantees at least 1 division (min and max always shown)
+int StripChartElement::calculateYAxisTickCount(int chartHeight,
+    const QFontMetrics &metrics) const
+{
+  if (chartHeight <= 0) {
+    return kGridLines;
+  }
+
+  // Count the number of unique Y-axis ranges (like MEDM's sccd.numYAxisLabel)
+  int numRanges = 0;
+  struct YAxisRange {
+    double low;
+    double high;
+  };
+  std::vector<YAxisRange> ranges;
+
+  for (int p = 0; p < penCount(); ++p) {
+    if (pens_[p].channel.trimmed().isEmpty()) {
+      continue;
+    }
+
+    const double low = effectivePenLow(p);
+    const double high = effectivePenHigh(p);
+
+    if (!std::isfinite(low) || !std::isfinite(high)) {
+      continue;
+    }
+
+    // Check if this range already exists
+    bool found = false;
+    for (const auto &range : ranges) {
+      if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      YAxisRange newRange;
+      newRange.low = low;
+      newRange.high = high;
+      ranges.push_back(newRange);
+    }
+  }
+
+  numRanges = ranges.empty() ? 1 : static_cast<int>(ranges.size());
+
+  // Calculate the height needed for one set of stacked labels plus vertical spacing.
+  // MEDM uses: labelHeight = (numYAxisLabel + verticalSpacing) * axisLabelFontHeight
+  // where verticalSpacing is typically 2.0
+  constexpr double kVerticalSpacing = 2.0;
+  const int fontHeight = metrics.height();
+  const int labelHeight = static_cast<int>((static_cast<double>(numRanges) + kVerticalSpacing) 
+                                           * static_cast<double>(fontHeight));
+
+  // Calculate number of divisions that can fit
+  // MEDM uses: nDiv = (dataHeight - 1) / labelHeight
+  int nDiv = (chartHeight - 1) / labelHeight;
+
+  // Cap at reasonable values like MEDM does
+  if (nDiv > 10) {
+    nDiv = 10;
+  } else if (nDiv == 9) {
+    nDiv = 8;
+  } else if (nDiv == 7) {
+    nDiv = 6;
+  }
+
+  // Ensure at least 1 division (shows min and max)
+  if (nDiv < 1) {
+    nDiv = 1;
+  }
+
+  return nDiv;
+}
+
 QColor StripChartElement::effectiveForeground() const
 {
   if (foregroundColor_.isValid()) {
@@ -1095,8 +1179,9 @@ void StripChartElement::paintTickMarks(QPainter &painter, const QRect &chartRect
   painter.setPen(pen);
 
   // Calculate number of divisions (limit to reasonable range)
-  const int nDivX = calculateXAxisTickCount(chartRect.width(), QFontMetrics(labelFont()));
-  int nDivY = std::min(kMaxTickMarks, kGridLines);
+  const QFontMetrics labelMetrics(labelFont());
+  const int nDivX = calculateXAxisTickCount(chartRect.width(), labelMetrics);
+  const int nDivY = calculateYAxisTickCount(chartRect.height(), labelMetrics);
 
   // Data is drawn in plotArea = chartRect.adjusted(1, 1, -1, -1)
   // Data Y formula: plotArea.top() + (plotArea.height() - 1) * (1.0 - normalized)
@@ -1140,7 +1225,7 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
   painter.setPen(pen);
 
   const int nDivX = calculateXAxisTickCount(chartRect.width(), metrics);
-  const int nDivY = std::min(kMaxTickMarks, kGridLines);
+  const int nDivY = calculateYAxisTickCount(chartRect.height(), metrics);
 
   // Draw X-axis scale numbers (bottom, counting backward from 0)
   {

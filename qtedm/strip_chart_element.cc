@@ -1258,8 +1258,12 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
         segmentStarted = false;
         continue;
       }
-      double normalized = (sampleValue - low) / range;
-      normalized = std::clamp(normalized, 0.0, 1.0);
+      // Skip values outside the LOPR-HOPR range instead of clamping them
+      if (sampleValue < low || sampleValue > high) {
+        segmentStarted = false;
+        continue;
+      }
+      const double normalized = (sampleValue - low) / range;
       const double x = content.left()
           + (static_cast<double>(offsetColumns + s) / denominator) * width;
       const double y = content.top() + (height - 1.0) * (1.0 - normalized);

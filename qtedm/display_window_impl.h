@@ -85,6 +85,84 @@ inline void setLatin1Encoding(QTextStream &stream)
 #endif
 }
 
+// Compute "nice" axis limits for a range [xmin, xmax] with n divisions.
+// This replicates the linear_scale algorithm from medm/medmStripChart.c
+// used to convert legacy delay+units to period values.
+inline void linearScale(double xmin, double xmax, int n,
+                        double *xminp, double *xmaxp, double *dist)
+{
+  static const double vint[4] = { 1.0, 2.0, 5.0, 10.0 };
+  static const double sqr[3] = { 1.414214, 3.162278, 7.071068 };
+  const double del = 0.0000002; // account for round-off errors
+
+  if (!(xmin <= xmax && n > 0)) {
+    return;
+  }
+
+  // Provide 10% spread if graph is parallel to an axis
+  if (xmax == xmin) {
+    xmax *= 1.05;
+    xmin *= 0.95;
+  }
+
+  const double fn = static_cast<double>(n);
+
+  // Find approximate interval size
+  const double a = (xmax - xmin) / fn;
+  const double al = std::log10(a);
+  int nal = static_cast<int>(al);
+  if (a < 1.0) {
+    nal -= 1;
+  }
+
+  // Scale 'a' into variable 'b' between 1 and 10
+  const double b = a / std::pow(10.0, static_cast<double>(nal));
+
+  // Find the closest permissible value for b
+  int i = 4;
+  for (int j = 1; j < 4; ++j) {
+    if (b < sqr[j - 1]) {
+      i = j;
+      break;
+    }
+  }
+
+  // Compute the interval size
+  *dist = vint[i - 1] * std::pow(10.0, static_cast<double>(nal));
+
+  const double fm1 = xmin / (*dist);
+  int m1 = static_cast<int>(fm1);
+  if (fm1 < 0.0) {
+    m1 -= 1;
+  }
+  if (std::abs(static_cast<double>(m1) + 1.0 - fm1) < del) {
+    m1 += 1;
+  }
+
+  // New min limit
+  *xminp = (*dist) * static_cast<double>(m1);
+
+  const double fm2 = xmax / (*dist);
+  int m2 = static_cast<int>(fm2) + 1;
+  if (fm2 < -1.0) {
+    m2 -= 1;
+  }
+  if (std::abs(fm2 + 1.0 - static_cast<double>(m2)) < del) {
+    m2 -= 1;
+  }
+
+  // New max limit
+  *xmaxp = (*dist) * static_cast<double>(m2);
+
+  // Adjust limits to account for round-off if necessary
+  if (*xminp > xmin) {
+    *xminp = xmin;
+  }
+  if (*xmaxp < xmax) {
+    *xmaxp = xmax;
+  }
+}
+
 class DisplayAreaWidget : public QWidget
 {
 public:
@@ -19786,19 +19864,32 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
   if (ok) {
     element->setPeriod(periodValue);
   } else {
-    // Handle legacy "delay" format - medm converts delay to period based on units.
-    // For SECONDS: period = delay * 60
-    // For MINUTES: period = delay
-    // For MILLISECONDS: period = delay
+    // Handle legacy "delay" format - medm converts delay to period based on units
+    // using the linear_scale algorithm to compute "nice" axis values.
     const QString delayStr = propertyValue(stripNode, QStringLiteral("delay"));
     const QString unitsStr = propertyValue(stripNode, QStringLiteral("units"));
-    periodValue = delayStr.toDouble(&ok);
-    if (ok) {
+    const double delayValue = delayStr.toDouble(&ok);
+    if (ok && delayValue > 0) {
       // Apply medm's delay-to-period conversion based on units
       const TimeUnits units = parseTimeUnits(unitsStr);
-      if (units == TimeUnits::kSeconds) {
-        periodValue *= 60.0;  // medm multiplies by 60 for seconds
+      double dummy1 = 0.0;
+      switch (units) {
+        case TimeUnits::kMilliseconds:
+          dummy1 = -0.060 * delayValue;
+          break;
+        case TimeUnits::kSeconds:
+          dummy1 = -60.0 * delayValue;
+          break;
+        case TimeUnits::kMinutes:
+          dummy1 = -3600.0 * delayValue;
+          break;
+        default:
+          dummy1 = -60.0 * delayValue;
+          break;
       }
+      double val = 0.0, dummy2 = 0.0, dummy3 = 0.0;
+      linearScale(dummy1, 0.0, 2, &val, &dummy2, &dummy3);
+      periodValue = -val;
       element->setPeriod(periodValue);
     }
   }

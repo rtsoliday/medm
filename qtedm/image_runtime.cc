@@ -22,9 +22,12 @@ ImageRuntime::ImageRuntime(ImageElement *element)
 {
 }
 
-void ImageRuntime::onStart()
+void ImageRuntime::onBeforeFirstEvaluation()
 {
-  /* Initialize image-specific calc expression for frame selection */
+  /* Initialize image-specific calc expression for frame selection.
+   * This must happen before the first evaluateState() call so that
+   * if channels are already connected (e.g., from SharedChannelManager cache),
+   * the calc expression is ready for evaluation. */
   const QString imageCalcExpr = element()->calc().trimmed();
   hasImageCalcExpression_ = !imageCalcExpr.isEmpty();
   animate_ = imageCalcExpr.isEmpty() && element()->frameCount() > 1;
@@ -45,6 +48,11 @@ void ImageRuntime::onStart()
                  << "(error" << error << ')';
     }
   }
+}
+
+void ImageRuntime::onStart()
+{
+  /* Additional start-time initialization (if needed in future) */
 }
 
 void ImageRuntime::onStop()

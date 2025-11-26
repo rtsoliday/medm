@@ -21,6 +21,9 @@ public:
   ~ImageRuntime() override = default;
 
 protected:
+  /* Override to initialize image calc before first state evaluation */
+  void onBeforeFirstEvaluation() override;
+
   /* Override to add image-specific initialization */
   void onStart() override;
 

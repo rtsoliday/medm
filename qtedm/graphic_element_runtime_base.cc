@@ -111,6 +111,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
   }
 
   initializeChannels();
+  onBeforeFirstEvaluation();
   evaluateState();
   onStart();
 }

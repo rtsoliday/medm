@@ -116,6 +116,7 @@ protected:
   void setLayeringNeeded(bool needed) { layeringNeeded_ = needed; }
 
   /* Virtual hooks for derived classes to extend behavior */
+  virtual void onBeforeFirstEvaluation() {} /* Called before first evaluateState() */
   virtual void onStart() {}
   virtual void onStop() {}
   virtual void onStateEvaluated() {}

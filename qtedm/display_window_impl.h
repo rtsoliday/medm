@@ -270,6 +270,7 @@ public:
     stackingEventFilter_ = new DisplayStackingEventFilter(this);
 
     undoStack_ = new QUndoStack(this);
+    undoStack_->setUndoLimit(100);
     cleanStateSnapshot_ = serializeStateForUndo(filePath_);
     lastCommittedState_ = cleanStateSnapshot_;
     undoStack_->setClean();
@@ -316,6 +317,26 @@ public:
         [this]() {
           setAsActiveDisplay();
           pasteSelection();
+        });
+    auto *undoShortcut =
+        new QShortcut(QKeySequence::Undo, this);
+    undoShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(undoShortcut, &QShortcut::activated, this,
+        [this]() {
+          setAsActiveDisplay();
+          if (undoStack_ && undoStack_->canUndo()) {
+            undoStack_->undo();
+          }
+        });
+    auto *redoShortcut =
+        new QShortcut(QKeySequence::Redo, this);
+    redoShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(redoShortcut, &QShortcut::activated, this,
+        [this]() {
+          setAsActiveDisplay();
+          if (undoStack_ && undoStack_->canRedo()) {
+            undoStack_->redo();
+          }
         });
     updateDirtyIndicator();
     setAcceptDrops(true);
@@ -13154,6 +13175,30 @@ private:
       setAsActiveDisplay();
       if (undoStack_->canUndo()) {
         undoStack_->undo();
+      }
+    });
+
+    QString redoLabel = QStringLiteral("Redo");
+    bool canRedo = false;
+    if (undoStack_) {
+      if (undoStack_->canRedo()) {
+        canRedo = true;
+        const QString stackText = undoStack_->redoText();
+        if (!stackText.isEmpty()) {
+          redoLabel = QStringLiteral("Redo %1").arg(stackText);
+        }
+      }
+    }
+    auto *redoAction =
+        addMenuAction(&menu, redoLabel, QKeySequence::Redo);
+    redoAction->setEnabled(canRedo);
+    QObject::connect(redoAction, &QAction::triggered, this, [this]() {
+      if (!undoStack_) {
+        return;
+      }
+      setAsActiveDisplay();
+      if (undoStack_->canRedo()) {
+        undoStack_->redo();
       }
     });
 

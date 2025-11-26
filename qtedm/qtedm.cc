@@ -897,6 +897,9 @@ int main(int argc, char *argv[])
   auto *undoAct = editMenu->addAction("&Undo");
   undoAct->setShortcut(QKeySequence::Undo);
   undoAct->setEnabled(false);
+  auto *redoAct = editMenu->addAction("&Redo");
+  redoAct->setShortcut(QKeySequence::Redo);
+  redoAct->setEnabled(false);
   editMenu->addSeparator();
   auto *cutAct = editMenu->addAction("Cu&t");
   cutAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_X));
@@ -1101,7 +1104,6 @@ int main(int argc, char *argv[])
 //TODO: Implement dockable layouts so operators can rearrange displays.
 //TODO: Add searchable PV inspection mode (show PV name and metadata on click).
 //TODO: Implement developer overlay for PV connection state and update rate.
-//TODO: Add undo/redo support to the display editor.
 
 //TODO: Add support for importing caQtDM .ui and CSS .opi display files.
 //TODO: Design plugin API for custom widgets (C++ or Python registration).
@@ -1173,6 +1175,14 @@ int main(int argc, char *argv[])
         if (auto active = state->activeDisplay.data()) {
           if (auto *stack = active->undoStack()) {
             stack->undo();
+          }
+        }
+      });
+  QObject::connect(redoAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          if (auto *stack = active->undoStack()) {
+            stack->redo();
           }
         }
       });
@@ -1421,7 +1431,7 @@ int main(int argc, char *argv[])
       displayBackgroundColor);
 
   *updateMenus = [state, editMenu, palettesMenu, newAct, saveAct, saveAsAct,
-    closeAct, undoAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
+    closeAct, undoAct, redoAct, cutAct, copyAct, pasteAct, raiseAct, lowerAct, groupAct,
     ungroupAct, alignLeftAct, alignHorizontalCenterAct, alignRightAct,
     alignTopAct, alignVerticalCenterAct, alignBottomAct, positionToGridAct,
     edgesToGridAct, spaceHorizontalAct, spaceVerticalAct, space2DAct,
@@ -1491,6 +1501,21 @@ int main(int argc, char *argv[])
     }
     undoAct->setEnabled(enableUndo);
     undoAct->setText(undoTextLabel);
+    QString redoTextLabel = QStringLiteral("&Redo");
+    bool enableRedo = false;
+    if (canEditActive && active) {
+      if (auto *stack = active->undoStack()) {
+        if (stack->canRedo()) {
+          enableRedo = true;
+          const QString stackText = stack->redoText();
+          if (!stackText.isEmpty()) {
+            redoTextLabel = QStringLiteral("&Redo %1").arg(stackText);
+          }
+        }
+      }
+    }
+    redoAct->setEnabled(enableRedo);
+    redoAct->setText(redoTextLabel);
     const bool hasSelection = canEditActive && active
         && active->hasCopyableSelection();
     cutAct->setEnabled(hasSelection);

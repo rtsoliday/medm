@@ -9,6 +9,7 @@
 #include <db_access.h>
 
 #include "channel_access_context.h"
+#include "image_element.h"
 #include "runtime_utils.h"
 #include "shared_channel_manager.h"
 
@@ -16,6 +17,14 @@
 extern "C" {
 long calcPerform(double *parg, double *presult, char *post);
 long postfix(char *pinfix, char *ppostfix, short *perror);
+}
+
+/* Implementation of ElementCalcChannelTraits for ImageElement.
+ * Images need channels if they have a calc expression for frame selection. */
+bool ElementCalcChannelTraits<ImageElement>::needsChannelsForCalc(
+    const ImageElement *element)
+{
+  return element && !element->calc().trimmed().isEmpty();
 }
 
 namespace {
@@ -68,11 +77,13 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
     }
   }
 
-  /* Channels are needed only if a channel is specified AND
-   * (color mode is dynamic OR visibility mode is dynamic) */
+  /* Channels are needed if a channel is specified AND
+   * (color mode is dynamic OR visibility mode is dynamic OR
+   *  element has a calc expression that needs channel values) */
   channelsNeeded_ = hasChannel
       && ((element_->colorMode() != TextColorMode::kStatic)
-          || (element_->visibilityMode() != TextVisibilityMode::kStatic));
+          || (element_->visibilityMode() != TextVisibilityMode::kStatic)
+          || ElementCalcChannelTraits<ElementType>::needsChannelsForCalc(element_));
   layeringNeeded_ = channelsNeeded_;
   if (!layeringNeeded_ && hasChannel
       && ElementLayeringTraits<ElementType>::kLayerOnAnyChannel) {

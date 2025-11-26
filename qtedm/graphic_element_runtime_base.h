@@ -30,6 +30,21 @@ struct ElementLayeringTraits
   static constexpr bool kLayerOnAnyChannel = false;
 };
 
+/* Trait to check if an element needs channels for a calc expression
+ * (beyond visibility/color mode). Override for ImageElement to check
+ * for image-specific calc expression used for frame selection. */
+template <typename ElementType>
+struct ElementCalcChannelTraits
+{
+  static bool needsChannelsForCalc(const ElementType *) { return false; }
+};
+
+template <>
+struct ElementCalcChannelTraits<ImageElement>
+{
+  static bool needsChannelsForCalc(const ImageElement *element);
+};
+
 class DisplayWindow;
 
 /* Base class template for graphic element runtimes that support dynamic

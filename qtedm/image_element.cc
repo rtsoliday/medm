@@ -109,6 +109,10 @@ void ImageElement::setRuntimeAnimate(bool animate)
 		}
 		movie_->setPaused(false);
 	} else {
+		/* QMovie::jumpToFrame() requires the movie to be started first */
+		if (movie_->state() == QMovie::NotRunning) {
+			movie_->start();
+		}
 		movie_->setPaused(true);
 		movie_->jumpToFrame(runtimeFrameIndex_);
 		updateCurrentPixmap();
@@ -132,6 +136,11 @@ void ImageElement::setRuntimeFrameIndex(int index)
 	runtimeFrameIndex_ = clamped;
 	if (movie_) {
 		if (!runtimeAnimate_) {
+			/* QMovie::jumpToFrame() requires the movie to be started first.
+			 * Start it, then immediately pause before jumping to the frame. */
+			if (movie_->state() == QMovie::NotRunning) {
+				movie_->start();
+			}
 			movie_->setPaused(true);
 			movie_->jumpToFrame(runtimeFrameIndex_);
 			updateCurrentPixmap();
@@ -158,6 +167,10 @@ void ImageElement::onRuntimeStateReset()
   runtimeFrameValid_ = !pixmap_.isNull();
   runtimeFrameIndex_ = kDefaultFrameIndex;
   if (movie_) {
+    /* QMovie::jumpToFrame() requires the movie to be started first */
+    if (movie_->state() == QMovie::NotRunning) {
+      movie_->start();
+    }
     movie_->setPaused(true);
     movie_->jumpToFrame(runtimeFrameIndex_);
     updateCurrentPixmap();

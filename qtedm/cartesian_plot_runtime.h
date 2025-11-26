@@ -101,6 +101,7 @@ private:
   void handleCountValue(const event_handler_args &args);
 
   void updateTraceMode(int index);
+  void updateXAxisRangeForYOnlyTraces();
   void clearTraceData(int index, bool notifyElement);
   void emitTraceData(int index, const QVector<QPointF> &points,
       CartesianPlotTraceMode mode, bool connected);

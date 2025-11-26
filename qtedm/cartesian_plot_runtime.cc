@@ -703,6 +703,41 @@ void CartesianPlotRuntime::updateTraceMode(int index)
   invokeOnElement([index, mode](CartesianPlotElement *element) {
     element->setTraceRuntimeMode(index, mode);
   });
+
+  /* Update X-axis range for Y-only traces to match MEDM behavior */
+  updateXAxisRangeForYOnlyTraces();
+}
+
+void CartesianPlotRuntime::updateXAxisRangeForYOnlyTraces()
+{
+  /* Match MEDM behavior: when Y-only vectors are used (no X channel),
+   * the X-axis range should be 0 to (elementCount - 1) based on the
+   * Y vector element count. This is the "from channel" range style
+   * when there's no X channel to provide LOPR/HOPR. */
+  double maxX = 0.0;
+  bool hasYOnlyVector = false;
+
+  for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
+    const TraceState &trace = traces_[i];
+    const bool hasX = !trace.x.name.isEmpty();
+    const bool hasY = !trace.y.name.isEmpty();
+    const bool yVector = hasY && trace.y.elementCount > 1;
+
+    if (!hasX && yVector) {
+      /* Y-only vector trace - X range is 0 to (elementCount - 1) */
+      hasYOnlyVector = true;
+      const double traceMaxX = static_cast<double>(trace.y.elementCount - 1);
+      if (traceMaxX > maxX) {
+        maxX = traceMaxX;
+      }
+    }
+  }
+
+  if (hasYOnlyVector) {
+    invokeOnElement([maxX](CartesianPlotElement *element) {
+      element->setAxisRuntimeLimits(0, 0.0, maxX, true);
+    });
+  }
 }
 
 void CartesianPlotRuntime::clearTraceData(int index, bool notifyElement)

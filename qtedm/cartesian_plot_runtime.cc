@@ -32,7 +32,8 @@ int axisIndexForYAxis(CartesianPlotYAxis axis)
   }
 }
 
-const char *axisNameForIndex(int axisIndex)
+#if MEDM_CARTESIAN_PLOT_DEBUG
+static const char *axisNameForIndex(int axisIndex)
 {
   switch (axisIndex) {
   case 0:
@@ -50,7 +51,7 @@ const char *axisNameForIndex(int axisIndex)
   }
 }
 
-const char *axisSideString(int axisIndex, const CartesianPlotElement *element)
+static const char *axisSideString(int axisIndex, const CartesianPlotElement *element)
 {
   if (!element) {
     return "Unknown";
@@ -76,7 +77,6 @@ static const char *axisRangeStyleString(CartesianPlotRangeStyle style)
   }
 }
 
-#if MEDM_CARTESIAN_PLOT_DEBUG
 static void printAxisDebugInfo(const CartesianPlotElement *element,
     int axisIndex, double minValue, double maxValue, bool valid,
     const char *sourceLabel)
@@ -110,32 +110,26 @@ static void printConfiguredAxisInfo(const CartesianPlotElement *element,
       source);
 }
 #else
-static inline void printAxisDebugInfo(const CartesianPlotElement *element,
-  int axisIndex, double minValue, double maxValue, bool valid,
-  const char *sourceLabel)
+static inline void printRuntimeAxisInfo(const CartesianPlotElement *element,
+  int axisIndex, double minValue, double maxValue, bool valid)
 {
   Q_UNUSED(element);
   Q_UNUSED(axisIndex);
   Q_UNUSED(minValue);
   Q_UNUSED(maxValue);
   Q_UNUSED(valid);
-  Q_UNUSED(sourceLabel);
-}
-
-static inline void printRuntimeAxisInfo(const CartesianPlotElement *element,
-  int axisIndex, double minValue, double maxValue, bool valid)
-{
-  printAxisDebugInfo(element, axisIndex, minValue, maxValue, valid,
-    nullptr);
 }
 
 static inline void printConfiguredAxisInfo(const CartesianPlotElement *element,
   int axisIndex, double minValue, double maxValue, bool valid,
   CartesianPlotRangeStyle style)
 {
+  Q_UNUSED(element);
+  Q_UNUSED(axisIndex);
+  Q_UNUSED(minValue);
+  Q_UNUSED(maxValue);
+  Q_UNUSED(valid);
   Q_UNUSED(style);
-  printAxisDebugInfo(element, axisIndex, minValue, maxValue, valid,
-    nullptr);
 }
 #endif
 

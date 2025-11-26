@@ -251,6 +251,7 @@ void StripChartElement::setForegroundColor(const QColor &color)
     return;
   }
   foregroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -265,6 +266,7 @@ void StripChartElement::setBackgroundColor(const QColor &color)
     return;
   }
   backgroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -279,6 +281,7 @@ void StripChartElement::setTitle(const QString &title)
     return;
   }
   title_ = title;
+  invalidateStaticCache();
   update();
 }
 
@@ -293,6 +296,7 @@ void StripChartElement::setXLabel(const QString &label)
     return;
   }
   xLabel_ = label;
+  invalidateStaticCache();
   update();
 }
 
@@ -307,6 +311,7 @@ void StripChartElement::setYLabel(const QString &label)
     return;
   }
   yLabel_ = label;
+  invalidateStaticCache();
   update();
 }
 
@@ -326,6 +331,7 @@ void StripChartElement::setPeriod(double period)
   sampleIntervalMs_ = periodMilliseconds();
   cachedChartWidth_ = 0;
   updateSamplingGeometry(chartRect().width());
+  invalidateStaticCache();
   updateRefreshTimer();
   update();
 }
@@ -345,6 +351,7 @@ void StripChartElement::setUnits(TimeUnits units)
   sampleIntervalMs_ = periodMilliseconds();
   cachedChartWidth_ = 0;
   updateSamplingGeometry(chartRect().width());
+  invalidateStaticCache();
   updateRefreshTimer();
   update();
 }
@@ -395,6 +402,7 @@ void StripChartElement::setPenColor(int index, const QColor &color)
     return;
   }
   pens_[index].color = color;
+  invalidatePenCache();
   update();
 }
 
@@ -437,6 +445,8 @@ void StripChartElement::setPenLimits(int index, const PvLimits &limits)
   if (pen.limits.highSource != PvLimitSource::kChannel) {
     pen.runtimeHigh = pen.limits.highDefault;
   }
+  invalidateStaticCache();
+  invalidatePenCache();
   update();
 }
 
@@ -448,6 +458,8 @@ void StripChartElement::setExecuteMode(bool execute)
   executeMode_ = execute;
   clearRuntimeState();
   updateSamplingGeometry(chartRect().width());
+  invalidateStaticCache();
+  invalidatePenCache();
   updateRefreshTimer();
   update();
 }
@@ -492,6 +504,8 @@ void StripChartElement::setRuntimeLimits(int index, double low, double high)
   pen.runtimeLow = low;
   pen.runtimeHigh = high;
   pen.runtimeLimitsValid = true;
+  invalidateStaticCache();
+  invalidatePenCache();
   update();
 }
 
@@ -519,6 +533,7 @@ void StripChartElement::clearRuntimeState()
   cachedChartWidth_ = 0;
   sampleIntervalMs_ = periodMilliseconds();
   lastSampleMs_ = 0;
+  newSampleColumns_ = 0;
   for (int i = 0; i < penCount(); ++i) {
     Pen &pen = pens_[i];
     pen.runtimeConnected = false;
@@ -529,6 +544,7 @@ void StripChartElement::clearRuntimeState()
     pen.runtimeValue = 0.0;
     pen.hasRuntimeValue = false;
   }
+  invalidatePenCache();
   updateRefreshTimer();
   update();
 }
@@ -564,26 +580,51 @@ void StripChartElement::paintEvent(QPaintEvent *event)
   painter.setFont(labelsFont);
   const QFontMetrics metrics(labelsFont);
 
-  paintFrame(painter);
-
-  const Layout layout = calculateLayout(metrics);
-
-  if (layout.innerRect.isValid() && !layout.innerRect.isEmpty()) {
-    painter.fillRect(layout.innerRect, effectiveBackground());
-  }
-
-  if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
-    painter.fillRect(layout.chartRect, effectiveBackground());
-    paintTickMarks(painter, layout.chartRect);
-    paintAxisScales(painter, layout.chartRect, metrics, layout.yAxisLabelOffset);
-    if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
-      paintGrid(painter, layout.chartRect);
-      const QRect plotArea = layout.chartRect.adjusted(1, 1, -1, -1);
-      paintPens(painter, plotArea);
+  // Use cached static content when in execute mode for better performance
+  if (executeMode_) {
+    ensureStaticCache(labelsFont, metrics);
+    if (!staticCache_.isNull()) {
+      painter.drawPixmap(0, 0, staticCache_);
+      // Draw pen data using incremental cache for performance
+      if (cachedLayout_.chartRect.width() > 2 && cachedLayout_.chartRect.height() > 2) {
+        const QRect plotArea = cachedLayout_.chartRect.adjusted(1, 1, -1, -1);
+        ensurePenCache(plotArea);
+        if (!penCache_.isNull()) {
+          painter.drawPixmap(plotArea.topLeft(), penCache_);
+        }
+      }
+    } else {
+      // Fallback if cache creation failed
+      const Layout layout = calculateLayout(metrics);
+      paintStaticContent(painter, layout, metrics);
+      if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
+        const QRect plotArea = layout.chartRect.adjusted(1, 1, -1, -1);
+        paintPens(painter, plotArea);
+      }
     }
-  }
+  } else {
+    // Design mode: draw everything directly (no caching needed)
+    paintFrame(painter);
 
-  paintLabels(painter, layout, metrics);
+    const Layout layout = calculateLayout(metrics);
+
+    if (layout.innerRect.isValid() && !layout.innerRect.isEmpty()) {
+      painter.fillRect(layout.innerRect, effectiveBackground());
+    }
+
+    if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
+      painter.fillRect(layout.chartRect, effectiveBackground());
+      paintTickMarks(painter, layout.chartRect);
+      paintAxisScales(painter, layout.chartRect, metrics, layout.yAxisLabelOffset);
+      if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
+        paintGrid(painter, layout.chartRect);
+        const QRect plotArea = layout.chartRect.adjusted(1, 1, -1, -1);
+        paintPens(painter, plotArea);
+      }
+    }
+
+    paintLabels(painter, layout, metrics);
+  }
 
   if (selected_) {
     paintSelectionOverlay(painter);
@@ -593,6 +634,8 @@ void StripChartElement::paintEvent(QPaintEvent *event)
 void StripChartElement::resizeEvent(QResizeEvent *event)
 {
   QWidget::resizeEvent(event);
+  invalidateStaticCache();
+  invalidatePenCache();
   const QRect chart = chartRect();
   if (chart.width() > 0) {
     updateSamplingGeometry(chart.width());
@@ -1541,6 +1584,9 @@ void StripChartElement::appendSampleColumn()
     newLength = std::max(newLength, static_cast<int>(pen.samples.size()));
   }
   sampleHistoryLength_ = newLength;
+
+  // Track new columns for incremental pen drawing
+  ++newSampleColumns_;
 }
 
 bool StripChartElement::anyPenConnected() const
@@ -1561,4 +1607,258 @@ bool StripChartElement::anyPenReady() const
     }
   }
   return false;
+}
+
+void StripChartElement::invalidateStaticCache()
+{
+  staticCacheDirty_ = true;
+}
+
+void StripChartElement::ensureStaticCache(const QFont &labelsFont,
+    const QFontMetrics &metrics)
+{
+  const QSize widgetSize = size();
+  if (!staticCacheDirty_ && !staticCache_.isNull()
+      && staticCache_.size() == widgetSize) {
+    return;
+  }
+
+  if (widgetSize.isEmpty()) {
+    staticCache_ = QPixmap();
+    staticCacheDirty_ = true;
+    return;
+  }
+
+  staticCache_ = QPixmap(widgetSize);
+  staticCache_.fill(Qt::transparent);
+
+  QPainter cachePainter(&staticCache_);
+  cachePainter.setRenderHint(QPainter::Antialiasing, false);
+  cachePainter.setFont(labelsFont);
+
+  paintFrame(cachePainter);
+
+  cachedLayout_ = calculateLayout(metrics);
+
+  if (cachedLayout_.innerRect.isValid() && !cachedLayout_.innerRect.isEmpty()) {
+    cachePainter.fillRect(cachedLayout_.innerRect, effectiveBackground());
+  }
+
+  if (cachedLayout_.chartRect.width() > 0 && cachedLayout_.chartRect.height() > 0) {
+    cachePainter.fillRect(cachedLayout_.chartRect, effectiveBackground());
+    paintTickMarks(cachePainter, cachedLayout_.chartRect);
+    paintAxisScales(cachePainter, cachedLayout_.chartRect, metrics,
+        cachedLayout_.yAxisLabelOffset);
+    if (cachedLayout_.chartRect.width() > 2 && cachedLayout_.chartRect.height() > 2) {
+      paintGrid(cachePainter, cachedLayout_.chartRect);
+    }
+  }
+
+  paintLabels(cachePainter, cachedLayout_, metrics);
+
+  cachePainter.end();
+  staticCacheDirty_ = false;
+}
+
+void StripChartElement::paintStaticContent(QPainter &painter,
+    const Layout &layout, const QFontMetrics &metrics) const
+{
+  paintFrame(painter);
+
+  if (layout.innerRect.isValid() && !layout.innerRect.isEmpty()) {
+    painter.fillRect(layout.innerRect, effectiveBackground());
+  }
+
+  if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
+    painter.fillRect(layout.chartRect, effectiveBackground());
+    paintTickMarks(painter, layout.chartRect);
+    paintAxisScales(painter, layout.chartRect, metrics, layout.yAxisLabelOffset);
+    if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
+      paintGrid(painter, layout.chartRect);
+    }
+  }
+
+  paintLabels(painter, layout, metrics);
+}
+
+void StripChartElement::invalidatePenCache()
+{
+  penCacheDirty_ = true;
+  newSampleColumns_ = 0;
+}
+
+void StripChartElement::ensurePenCache(const QRect &plotArea)
+{
+  const QSize plotSize = plotArea.size();
+  if (plotSize.isEmpty()) {
+    penCache_ = QPixmap();
+    penCacheDirty_ = true;
+    return;
+  }
+
+  // Check if we need a full redraw
+  const bool sizeChanged = penCache_.isNull() || penCache_.size() != plotSize;
+  const bool plotAreaMoved = penCachePlotArea_ != plotArea;
+  const bool needsFullRedraw = penCacheDirty_ || sizeChanged || plotAreaMoved;
+
+  if (needsFullRedraw) {
+    // Full redraw: create new cache and paint all pens
+    penCache_ = QPixmap(plotSize);
+    penCache_.fill(Qt::transparent);
+
+    QPainter cachePainter(&penCache_);
+    cachePainter.setRenderHint(QPainter::Antialiasing, false);
+
+    // Create a normalized rect at (0,0) for painting
+    const QRect normalizedRect(0, 0, plotSize.width(), plotSize.height());
+    paintRuntimePens(cachePainter, normalizedRect);
+
+    cachePainter.end();
+    penCachePlotArea_ = plotArea;
+    penCacheDirty_ = false;
+    newSampleColumns_ = 0;
+    return;
+  }
+
+  // Incremental update: scroll existing content and draw new columns
+  const int columnsToAdd = newSampleColumns_;
+  if (columnsToAdd <= 0) {
+    return;  // Nothing new to draw
+  }
+
+  // If too many new columns, just do a full redraw
+  const int width = plotSize.width();
+  if (columnsToAdd >= width) {
+    penCacheDirty_ = true;
+    ensurePenCache(plotArea);
+    return;
+  }
+
+  scrollPenCache(columnsToAdd, plotArea);
+  paintIncrementalPens(plotArea, columnsToAdd);
+  newSampleColumns_ = 0;
+}
+
+void StripChartElement::scrollPenCache(int columns, const QRect &plotArea)
+{
+  if (columns <= 0 || penCache_.isNull()) {
+    return;
+  }
+
+  const int width = plotArea.width();
+  const int height = plotArea.height();
+  if (columns >= width) {
+    return;  // Will be handled by full redraw
+  }
+
+  // Scroll existing content left by 'columns' pixels
+  QPixmap newCache(penCache_.size());
+  newCache.fill(Qt::transparent);
+
+  QPainter painter(&newCache);
+  // Copy the right portion of the old cache, shifted left
+  painter.drawPixmap(0, 0, penCache_, columns, 0, width - columns, height);
+  painter.end();
+
+  penCache_ = newCache;
+}
+
+void StripChartElement::paintIncrementalPens(const QRect &plotArea, int newColumns)
+{
+  if (newColumns <= 0 || penCache_.isNull()) {
+    return;
+  }
+
+  const double width = static_cast<double>(plotArea.width());
+  const double height = static_cast<double>(plotArea.height());
+  if (width <= 0.0 || height <= 0.0) {
+    return;
+  }
+
+  QPainter painter(&penCache_);
+  painter.setRenderHint(QPainter::Antialiasing, false);
+
+  int capacity = cachedChartWidth_;
+  if (capacity <= 0) {
+    capacity = std::max(sampleHistoryLength_, 1);
+  }
+  capacity = std::max(capacity, 1);
+  const int denominator = std::max(capacity - 1, 1);
+
+  // Calculate the starting sample index for the new columns
+  // We only need to draw the last 'newColumns' samples
+  const int startColumn = static_cast<int>(width) - newColumns;
+
+  for (int i = 0; i < penCount(); ++i) {
+    const Pen &pen = pens_[i];
+    if (pen.samples.empty()) {
+      continue;
+    }
+
+    const double low = effectivePenLow(i);
+    const double high = effectivePenHigh(i);
+    if (!std::isfinite(low) || !std::isfinite(high)) {
+      continue;
+    }
+    const double range = std::max(std::abs(high - low), kMinimumRangeEpsilon);
+
+    QPen penColor(effectivePenColor(i));
+    penColor.setWidth(1);
+    painter.setPen(penColor);
+    painter.setBrush(Qt::NoBrush);
+
+    const int sampleCount = static_cast<int>(pen.samples.size());
+    const int offsetColumns = std::max(capacity - sampleCount, 0);
+
+    // Determine which samples correspond to the new columns
+    // We need to find samples that map to x >= startColumn
+    // x = (offsetColumns + s) / denominator * width
+    // so we need: (offsetColumns + s) / denominator * width >= startColumn
+    // s >= (startColumn * denominator / width) - offsetColumns
+
+    const int minSampleIdx = std::max(0,
+        static_cast<int>(std::floor((startColumn * denominator / width) - offsetColumns)));
+
+    // Draw the new segment, including one sample before for continuity
+    const int drawStartIdx = std::max(0, minSampleIdx - 1);
+
+    QPainterPath path;
+    bool segmentStarted = false;
+    bool singlePointPending = false;
+    QPointF singlePoint;
+
+    for (int s = drawStartIdx; s < sampleCount; ++s) {
+      const double sampleValue = pen.samples[static_cast<std::size_t>(s)];
+      if (!std::isfinite(sampleValue)) {
+        segmentStarted = false;
+        continue;
+      }
+      // Skip values outside the LOPR-HOPR range
+      if (sampleValue < low || sampleValue > high) {
+        segmentStarted = false;
+        continue;
+      }
+      const double normalized = (sampleValue - low) / range;
+      const double x = (static_cast<double>(offsetColumns + s) / denominator) * width;
+      const double y = (height - 1.0) * (1.0 - normalized);
+
+      if (!segmentStarted) {
+        path.moveTo(x, y);
+        segmentStarted = true;
+        singlePointPending = true;
+        singlePoint = QPointF(x, y);
+      } else {
+        path.lineTo(x, y);
+        singlePointPending = false;
+      }
+    }
+
+    if (path.elementCount() >= 2) {
+      painter.drawPath(path);
+    } else if (singlePointPending) {
+      painter.drawPoint(singlePoint);
+    }
+  }
+
+  painter.end();
 }

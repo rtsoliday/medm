@@ -5,6 +5,7 @@
 
 #include <QColor>
 #include <QFont>
+#include <QPixmap>
 #include <QWidget>
 
 #include "display_properties.h"
@@ -128,6 +129,14 @@ private:
   void appendSampleColumn();
   bool anyPenConnected() const;
   bool anyPenReady() const;
+  void invalidateStaticCache();
+  void ensureStaticCache(const QFont &labelsFont, const QFontMetrics &metrics);
+  void paintStaticContent(QPainter &painter, const Layout &layout,
+      const QFontMetrics &metrics) const;
+  void invalidatePenCache();
+  void ensurePenCache(const QRect &plotArea);
+  void scrollPenCache(int columns, const QRect &plotArea);
+  void paintIncrementalPens(const QRect &plotArea, int newColumns);
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -144,4 +153,11 @@ private:
   qint64 lastSampleMs_ = 0;
   int cachedChartWidth_ = 0;
   int sampleHistoryLength_ = 0;
+  int newSampleColumns_ = 0;  // Columns added since last paint
+  mutable QPixmap staticCache_;
+  mutable bool staticCacheDirty_ = true;
+  mutable Layout cachedLayout_;
+  mutable QPixmap penCache_;
+  mutable bool penCacheDirty_ = true;
+  mutable QRect penCachePlotArea_;
 };

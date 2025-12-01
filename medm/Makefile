@@ -16,6 +16,10 @@ endif
 SDDS_REPO := $(abspath $(SDDS_REPO))
 EPICS_BASE := $(abspath $(EPICS_BASE))
 
+# Detect if libCom.a was built with readline support by checking for undefined readline symbol
+LIBCOM_PATH := $(EPICS_BASE)/lib/$(shell uname -s | sed 's/CYGWIN.*/windows-x64/' | sed 's/Darwin/darwin-x86/' | tr 'A-Z' 'a-z')-$(shell uname -m)/libCom.a
+LIBCOM_NEEDS_READLINE := $(shell nm $(LIBCOM_PATH) 2>/dev/null | grep -q "U readline$$" && echo 1)
+
 include ../Makefile.rules
 
 PROD_LIBS :=
@@ -48,7 +52,7 @@ ifeq ($(OS), Linux)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
-    $(Z_LIB) -lreadline $(PROD_SYS_LIBS)
+    $(Z_LIB) $(if $(LIBCOM_NEEDS_READLINE),-lreadline) $(PROD_SYS_LIBS)
   PROD_SYS_LIBS += $(XM_LIB) $(XMU_LIB) $(XT_LIB) $(X11_LIB) $(XEXT_LIB)
 endif
 

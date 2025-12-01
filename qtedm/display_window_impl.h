@@ -54,6 +54,7 @@
 #include "display_properties.h"
 #include "statistics_tracker.h"
 #include "display_list_dialog.h"
+#include "find_pv_dialog.h"
 #include "pv_info_dialog.h"
 #include "cursor_utils.h"
 
@@ -2871,6 +2872,29 @@ private:
       polygon->setSelected(selected);
       return;
     }
+  }
+
+  void flashWidget(QWidget *widget)
+  {
+    if (!widget) {
+      return;
+    }
+
+    /* Create a temporary overlay widget to flash the found widget */
+    QWidget *overlay = new QWidget(widget->parentWidget());
+    overlay->setGeometry(widget->geometry().adjusted(-3, -3, 3, 3));
+    overlay->setStyleSheet(
+        QStringLiteral("background-color: rgba(255, 200, 0, 180); "
+                       "border: 3px solid #FF8800;"));
+    overlay->setAttribute(Qt::WA_TransparentForMouseEvents);
+    overlay->raise();
+    overlay->show();
+
+    /* Remove the overlay after a short delay */
+    QTimer::singleShot(600, overlay, [overlay]() {
+      overlay->hide();
+      overlay->deleteLater();
+    });
   }
 
   void clearMultiSelection()
@@ -7290,6 +7314,109 @@ private:
     return channels;
   }
 
+public:
+  /* Returns all widgets that may have PV channels associated with them */
+  QList<QWidget *> findPvWidgets() const
+  {
+    QList<QWidget *> widgets;
+
+    auto appendList = [&](const auto &list) {
+      for (auto *element : list) {
+        if (element) {
+          widgets.append(element);
+        }
+      }
+    };
+
+    appendList(textElements_);
+    appendList(textMonitorElements_);
+    appendList(textEntryElements_);
+    appendList(sliderElements_);
+    appendList(wheelSwitchElements_);
+    appendList(choiceButtonElements_);
+    appendList(menuElements_);
+    appendList(messageButtonElements_);
+    appendList(meterElements_);
+    appendList(barMonitorElements_);
+    appendList(scaleMonitorElements_);
+    appendList(byteMonitorElements_);
+    appendList(stripChartElements_);
+    appendList(cartesianPlotElements_);
+    appendList(rectangleElements_);
+    appendList(imageElements_);
+    appendList(ovalElements_);
+    appendList(arcElements_);
+    appendList(lineElements_);
+    appendList(polylineElements_);
+    appendList(polygonElements_);
+    appendList(compositeElements_);
+
+    return widgets;
+  }
+
+  /* Select a single widget and scroll to make it visible */
+  void selectAndScrollToWidget(QWidget *widget)
+  {
+    if (!widget) {
+      return;
+    }
+
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state) {
+      return;
+    }
+
+    /* In edit mode, select the widget */
+    if (state->editMode) {
+      clearSelections();
+      selectWidgetForEditing(widget);
+    }
+
+    /* Flash the widget to highlight it */
+    flashWidget(widget);
+  }
+
+  /* Select multiple widgets */
+  void selectWidgets(const QList<QWidget *> &widgets)
+  {
+    if (widgets.isEmpty()) {
+      return;
+    }
+
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state) {
+      return;
+    }
+
+    /* In edit mode, select the widgets */
+    if (state->editMode) {
+      clearSelections();
+      if (widgets.size() == 1) {
+        selectWidgetForEditing(widgets.front());
+      } else {
+        multiSelection_.clear();
+        for (QWidget *widget : widgets) {
+          if (widget) {
+            setWidgetSelectionState(widget, true);
+            multiSelection_.append(QPointer<QWidget>(widget));
+          }
+        }
+        showResourcePaletteForMultipleSelection();
+      }
+      notifyMenus();
+    }
+
+    /* Flash all widgets to highlight them */
+    for (QWidget *widget : widgets) {
+      if (widget) {
+        flashWidget(widget);
+      }
+    }
+  }
+
+private:
   void startPvInfoPickMode()
   {
     if (!executeModeActive_) {
@@ -12760,6 +12887,11 @@ private:
           setAsActiveDisplay();
           startPvInfoPickMode();
         });
+    QAction *findPvAction = menu.addAction(QStringLiteral("Find PV..."));
+    QObject::connect(findPvAction, &QAction::triggered, this,
+        [this]() {
+          showFindPvDialog();
+        });
     menu.addAction(QStringLiteral("PV Limits"));
     QAction *mainWindowAction =
       menu.addAction(QStringLiteral("QtEDM Main Window"));
@@ -12818,6 +12950,15 @@ private:
   {
     if (auto state = state_.lock()) {
       if (auto *dialog = state->displayListDialog.data()) {
+        dialog->showAndRaise();
+      }
+    }
+  }
+
+  void showFindPvDialog() const
+  {
+    if (auto state = state_.lock()) {
+      if (auto *dialog = state->findPvDialog.data()) {
         dialog->showAndRaise();
       }
     }
@@ -13513,6 +13654,11 @@ private:
     QObject::connect(findOutliersAction, &QAction::triggered, this,
         [this]() {
       findOutliers();
+    });
+    auto *findPvAction = addMenuAction(&menu, QStringLiteral("Find PV..."));
+    QObject::connect(findPvAction, &QAction::triggered, this,
+        [this]() {
+      showFindPvDialog();
     });
     auto *refreshAction = addMenuAction(&menu, QStringLiteral("Refresh"));
     QObject::connect(refreshAction, &QAction::triggered, this, [this]() {

@@ -10,6 +10,7 @@
 class DisplayWindow;
 class QMainWindow;
 class DisplayListDialog;
+class FindPvDialog;
 
 struct ClipboardContent
 {
@@ -57,6 +58,7 @@ struct DisplayState {
   CreateTool createTool = CreateTool::kNone;
   QPointer<QMainWindow> mainWindow;
   QPointer<DisplayListDialog> displayListDialog;
+  QPointer<FindPvDialog> findPvDialog;
   QPointer<DisplayWindow> activeDisplay;
   std::shared_ptr<std::function<void()>> updateMenus;
   std::shared_ptr<ClipboardContent> clipboard;

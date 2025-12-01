@@ -73,6 +73,7 @@ typedef int Status;
 #include "display_state.h"
 #include "display_list_dialog.h"
 #include "display_window.h"
+#include "find_pv_dialog.h"
 #include "legacy_fonts.h"
 #include "main_window_controller.h"
 #include "object_palette_dialog.h"
@@ -978,6 +979,8 @@ int main(int argc, char *argv[])
   messageWindowAct->setEnabled(false);
   auto *statisticsWindowAct = viewMenu->addAction("&Statistics Window");
   auto *viewDisplayListAct = viewMenu->addAction("&Display List");
+  auto *findPvAct = viewMenu->addAction("&Find PV...");
+  findPvAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
 
   auto *palettesMenu = menuBar->addMenu("&Palettes");
   palettesMenu->setFont(fixed13Font);
@@ -1074,6 +1077,9 @@ int main(int argc, char *argv[])
   auto *displayListDialog = new DisplayListDialog(palette, fixed13Font,
       std::weak_ptr<DisplayState>(state), &win);
   state->displayListDialog = displayListDialog;
+  auto *findPvDialog = new FindPvDialog(palette, fixed13Font,
+      std::weak_ptr<DisplayState>(state), &win);
+  state->findPvDialog = findPvDialog;
 
 //TODO: Add tabbed container / stacked widget support for multi-view displays.
 
@@ -1092,7 +1098,6 @@ int main(int argc, char *argv[])
 
 //TODO: Implement alarm summary / banner widget showing active alarms inline.
 //TODO: Add PV tree / hierarchical browser widget for structured PV navigation.
-//TODO: Create embedded WebView widget for docs, Grafana panels, or logs.
 //TODO: Design scriptable widget framework (Python or JavaScript per widget).
 
 //TODO: Implement SDDS table viewer widget for displaying tabular SDDS datasets.
@@ -1102,7 +1107,6 @@ int main(int argc, char *argv[])
 
 //TODO: Add theme/palette system (dark, light, facility-specific branding).
 //TODO: Implement dockable layouts so operators can rearrange displays.
-//TODO: Add searchable PV inspection mode (show PV name and metadata on click).
 //TODO: Implement developer overlay for PV connection state and update rate.
 
 //TODO: Add support for importing caQtDM .ui and CSS .opi display files.
@@ -1128,6 +1132,11 @@ int main(int argc, char *argv[])
   QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
       [displayListDialog]() {
         displayListDialog->showAndRaise();
+      });
+
+  QObject::connect(findPvAct, &QAction::triggered, findPvDialog,
+      [findPvDialog]() {
+        findPvDialog->showAndRaise();
       });
 
   QObject::connect(objectPaletteAct, &QAction::triggered,

@@ -102,6 +102,7 @@ qtedm_SRC = qtedm.cc \
             composite_runtime.cc \
             cartesian_axis_dialog.cc \
             display_list_dialog.cc \
+            find_pv_dialog.cc \
             object_palette_dialog.cc \
             color_palette_dialog.cc \
             pv_limits_dialog.cc \
@@ -197,6 +198,11 @@ $(OBJ_DIR)/moc_cartesian_plot_element.cpp: cartesian_plot_element.h | $(OBJ_DIR)
 	$(MOC) $(shell pkg-config --cflags Qt5Widgets) $< -o $@
 
 $(OBJ_DIR)/cartesian_plot_element.$(OBJEXT): $(OBJ_DIR)/moc_cartesian_plot_element.cpp
+
+$(OBJ_DIR)/moc_find_pv_dialog.cpp: find_pv_dialog.h | $(OBJ_DIR)
+	$(MOC) $(shell pkg-config --cflags Qt5Widgets) $< -o $@
+
+$(OBJ_DIR)/find_pv_dialog.$(OBJEXT): $(OBJ_DIR)/moc_find_pv_dialog.cpp
 
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
 	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_LIBS_SDDS) $(PROD_SYS_LIBS)

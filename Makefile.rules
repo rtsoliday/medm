@@ -145,6 +145,42 @@ ICONV_LIB = $(firstword $(wildcard \
           $(addsuffix /libiconv.so, $(LIB_DIRS)) \
           $(addsuffix /libiconv.a, $(LIB_DIRS))))
 
+# Detect Motif/X11 include directories
+MOTIF_INC_SEARCH := /usr/include /usr/X11R6/include /usr/local/include /opt/local/include \
+                    /usr/X11/include /opt/homebrew/include
+MOTIF_INC = $(firstword $(foreach d,$(MOTIF_INC_SEARCH),$(wildcard $d/Xm/Xm.h)))
+MOTIF_INC := $(patsubst %/Xm/Xm.h,%,$(MOTIF_INC))
+
+X11_INC_SEARCH := /usr/include /usr/X11R6/include /usr/local/include /opt/local/include \
+                  /usr/X11/include /opt/homebrew/include
+X11_INC = $(firstword $(foreach d,$(X11_INC_SEARCH),$(wildcard $d/X11/Xlib.h)))
+X11_INC := $(patsubst %/X11/Xlib.h,%,$(X11_INC))
+
+# Check if Motif development environment is available
+# Requires both headers (Xm.h) and library (libXm)
+ifneq ($(XM_LIB),)
+  ifneq ($(MOTIF_INC),)
+    HAVE_MOTIF = 1
+  endif
+endif
+
+# Detect Qt5 development environment using pkg-config
+# On Windows, Qt detection is handled separately in qtedm/Makefile
+ifneq ($(OS), Windows)
+  QT_CFLAGS := $(shell pkg-config --cflags Qt5Widgets 2>/dev/null)
+  QT_LIBS := $(shell pkg-config --libs Qt5Widgets 2>/dev/null)
+  ifneq ($(QT_CFLAGS),)
+    ifneq ($(QT_LIBS),)
+      HAVE_QT = 1
+    endif
+  endif
+endif
+
+# On Windows, assume Qt is available (checked separately in qtedm/Makefile)
+ifeq ($(OS), Windows)
+  HAVE_QT = 1
+endif
+
 ifneq ($(wildcard /gpfs/fs1/soft/improv/software/spack-built/linux-rhel8-zen3/aocc-4.1.0),)
   IMPROV_BUILD=1
   LZMA_LIB = /gpfs/fs1/soft/improv/software/spack-built/linux-rhel8-zen3/aocc-4.1.0/xz-5.4.1-gju4bpk/lib/liblzma.so

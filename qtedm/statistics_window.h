@@ -9,6 +9,14 @@ class QPushButton;
 class QTimer;
 class QPalette;
 class QFont;
+class QScrollArea;
+class QTableWidget;
+
+enum class StatisticsMode {
+  kInterval,
+  kAverage,
+  kPvDetails
+};
 
 class StatisticsWindow : public QDialog
 {
@@ -28,13 +36,17 @@ private:
   void updateStatistics();
   void updateIntervalDisplay(const StatisticsSnapshot &snapshot);
   void updateAverageDisplay();
+  void updatePvDetailsDisplay();
   void toggleMode();
   void resetAverages();
+  void adjustSizeForMode();
 
   QLabel *label_ = nullptr;
+  QTableWidget *pvTable_ = nullptr;
+  QScrollArea *scrollArea_ = nullptr;
   QPushButton *modeButton_ = nullptr;
   QTimer *timer_ = nullptr;
-  bool averageMode_ = false;
+  StatisticsMode mode_ = StatisticsMode::kInterval;
   StatisticsSnapshot lastSnapshot_;
   double totalElapsedSeconds_ = 0.0;
   double totalCaEvents_ = 0.0;
@@ -42,4 +54,5 @@ private:
   double totalUpdateDiscarded_ = 0.0;
   double totalUpdateExecuted_ = 0.0;
   QFont contentFont_;
+  QPalette basePalette_;
 };

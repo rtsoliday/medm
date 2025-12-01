@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QList>
 #include <QObject>
@@ -38,6 +39,18 @@ inline uint qHash(const SharedChannelKey &key, uint seed = 0)
   return qHash(key.pvName, seed) ^ qHash(key.requestedType, seed)
       ^ qHash(key.elementCount, seed);
 }
+
+/* Summary information about a channel for display in statistics views */
+struct ChannelSummary
+{
+  QString pvName;
+  bool connected = false;
+  bool writable = false;
+  int subscriberCount = 0;
+  int updateCount = 0;      /* Updates since last reset */
+  double updateRate = 0.0;  /* Updates per second */
+  short severity = 0;
+};
 
 /* Data structure holding cached channel values and metadata.
  * This is delivered to subscribers on value updates. */
@@ -168,6 +181,16 @@ public:
   int totalSubscriptionCount() const;
   int connectedChannelCount() const;
 
+  /* Get detailed channel information for statistics display.
+   * Returns a list of ChannelSummary sorted by PV name. */
+  QList<ChannelSummary> channelSummaries() const;
+
+  /* Reset update counters for all channels (for rate calculation) */
+  void resetUpdateCounters();
+
+  /* Get elapsed time since last reset (for rate calculation) */
+  double elapsedSecondsSinceReset() const;
+
 private:
   friend class SubscriptionHandle;
 
@@ -197,6 +220,7 @@ private:
     bool canWrite = false;
     SharedChannelData cachedData;
     QList<Subscriber> subscribers;
+    int updateCount = 0;  /* Updates since last reset for rate calc */
   };
 
   /* CA callbacks - static to match CA API */
@@ -221,5 +245,7 @@ private:
   QHash<SharedChannelKey, SharedChannel *> channels_;
   QHash<quint64, SharedChannel *> subscriptionToChannel_;
   quint64 nextSubscriptionId_ = 1;
+  QElapsedTimer updateRateTimer_;
+  bool updateRateTimerStarted_ = false;
 };
 

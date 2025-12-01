@@ -1107,7 +1107,6 @@ int main(int argc, char *argv[])
 
 //TODO: Add theme/palette system (dark, light, facility-specific branding).
 //TODO: Implement dockable layouts so operators can rearrange displays.
-//TODO: Implement developer overlay for PV connection state and update rate.
 
 //TODO: Add support for importing caQtDM .ui and CSS .opi display files.
 //TODO: Design plugin API for custom widgets (C++ or Python registration).

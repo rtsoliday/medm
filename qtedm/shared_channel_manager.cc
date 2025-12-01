@@ -399,6 +399,7 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
   }
 
   StatisticsTracker::instance().registerCaEvent();
+  ++channel->updateCount;
 
   SharedChannelData &data = channel->cachedData;
 
@@ -837,3 +838,49 @@ int SharedChannelManager::connectedChannelCount() const
   return count;
 }
 
+QList<ChannelSummary> SharedChannelManager::channelSummaries() const
+{
+  QList<ChannelSummary> summaries;
+  summaries.reserve(channels_.size());
+
+  double elapsed = elapsedSecondsSinceReset();
+
+  for (const auto *channel : channels_) {
+    ChannelSummary summary;
+    summary.pvName = channel->key.pvName;
+    summary.connected = channel->connected;
+    summary.writable = channel->canWrite;
+    summary.subscriberCount = channel->subscribers.size();
+    summary.updateCount = channel->updateCount;
+    summary.updateRate = (elapsed > 0.0)
+        ? (static_cast<double>(channel->updateCount) / elapsed)
+        : 0.0;
+    summary.severity = channel->cachedData.severity;
+    summaries.append(summary);
+  }
+
+  /* Sort by PV name for consistent display */
+  std::sort(summaries.begin(), summaries.end(),
+      [](const ChannelSummary &a, const ChannelSummary &b) {
+        return a.pvName.compare(b.pvName, Qt::CaseInsensitive) < 0;
+      });
+
+  return summaries;
+}
+
+void SharedChannelManager::resetUpdateCounters()
+{
+  for (auto *channel : channels_) {
+    channel->updateCount = 0;
+  }
+  updateRateTimer_.start();
+  updateRateTimerStarted_ = true;
+}
+
+double SharedChannelManager::elapsedSecondsSinceReset() const
+{
+  if (!updateRateTimerStarted_) {
+    return 0.0;
+  }
+  return static_cast<double>(updateRateTimer_.elapsed()) / 1000.0;
+}

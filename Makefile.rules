@@ -33,7 +33,7 @@ ifneq ($(wildcard $(DD)../.svn $(DD)../../../../.svn),)
 endif
 
 # Common library search paths
-LIB_DIRS := $(EPICS_LIB_DIR) $(EPICS_EXTENSIONS_LIB_DIR) /usr/lib64 /usr/lib/x86_64-linux-gnu /lib64 /usr/lib /lib /usr/X11/lib /opt/local/lib /sw/lib /usr/sfw/lib $(DD)../../lib
+LIB_DIRS := $(EPICS_LIB_DIR) $(EPICS_EXTENSIONS_LIB_DIR) $(HOME)/epics/extensions/lib/$(EPICS_HOST)-$(EPICS_ARCH) /usr/lib64 /usr/lib/x86_64-linux-gnu /lib64 /usr/lib /lib /usr/X11/lib /opt/local/lib /sw/lib /usr/sfw/lib $(DD)../../lib
 
 FFTW3_LIB = $(firstword $(wildcard \
            $(addsuffix /libfftw3.dylib, $(LIB_DIRS)) \

@@ -15,6 +15,7 @@
 #include <QStyle>
 #include <QStyleOptionButton>
 
+#include "medm_colors.h"
 #include "text_font_utils.h"
 
 namespace {
@@ -237,19 +238,24 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
 
+  /* Compute Motif-style shadow colors for proper bevel visibility
+   * even with very dark backgrounds like black */
+  QColor topShadow, bottomShadow;
+  MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
+
   QRect bevelOuter = canvas.adjusted(0, 0, -1, -1);
-  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.setPen(QPen(topShadow, 1));
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
-  painter.setPen(QPen(bg.darker(145), 1));
+  painter.setPen(QPen(bottomShadow, 1));
   painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
   painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
 
   QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
-  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.setPen(QPen(topShadow.lighter(110), 1));
   painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
   painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
-  painter.setPen(QPen(bg.darker(170), 1));
+  painter.setPen(QPen(bottomShadow.darker(115), 1));
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 

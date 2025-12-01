@@ -16,6 +16,7 @@
 #include <QPixmap>
 #include <QHash>
 
+#include "medm_colors.h"
 #include "text_font_utils.h"
 
 namespace {
@@ -446,6 +447,11 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
 
+  /* Compute Motif-style shadow colors for proper bevel visibility
+   * even with very dark backgrounds like black */
+  QColor topShadow, bottomShadow;
+  MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
+
   painter.save();
 
   QRect bevelOuter = content.adjusted(-1, -1, 1, 1);
@@ -453,18 +459,18 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   painter.setBrush(bg);
   painter.drawRect(bevelOuter);
 
-  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.setPen(QPen(topShadow, 1));
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
-  painter.setPen(QPen(bg.darker(145), 1));
+  painter.setPen(QPen(bottomShadow, 1));
   painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
   painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
 
   QRect bevelInner = content;
-  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.setPen(QPen(topShadow.lighter(110), 1));
   painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
   painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
-  painter.setPen(QPen(bg.darker(170), 1));
+  painter.setPen(QPen(bottomShadow.darker(115), 1));
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
@@ -536,6 +542,11 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
 
+  /* Compute Motif-style shadow colors for proper bevel visibility
+   * even with very dark backgrounds like black */
+  QColor topShadow, bottomShadow;
+  MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
+
   painter.save();
   painter.setPen(Qt::NoPen);
   painter.setBrush(bg);
@@ -569,19 +580,19 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
           buttonWidth, buttonHeight);
 
       /* Draw outer bevel (shadow thickness = 2 pixels total) */
-      painter.setPen(QPen(bg.lighter(135), 1));
+      painter.setPen(QPen(topShadow, 1));
       painter.drawLine(buttonRect.topLeft(), buttonRect.topRight() - QPoint(1, 0));
       painter.drawLine(buttonRect.topLeft(), buttonRect.bottomLeft() - QPoint(0, 1));
-      painter.setPen(QPen(bg.darker(145), 1));
+      painter.setPen(QPen(bottomShadow, 1));
       painter.drawLine(buttonRect.bottomLeft(), buttonRect.bottomRight() - QPoint(1, 0));
       painter.drawLine(buttonRect.topRight(), buttonRect.bottomRight() - QPoint(0, 1));
 
       /* Draw inner bevel */
       QRect innerBevel = buttonRect.adjusted(1, 1, -1, -1);
-      painter.setPen(QPen(bg.lighter(150), 1));
+      painter.setPen(QPen(topShadow.lighter(110), 1));
       painter.drawLine(innerBevel.topLeft(), innerBevel.topRight() - QPoint(1, 0));
       painter.drawLine(innerBevel.topLeft(), innerBevel.bottomLeft() - QPoint(0, 1));
-      painter.setPen(QPen(bg.darker(170), 1));
+      painter.setPen(QPen(bottomShadow.darker(115), 1));
       painter.drawLine(innerBevel.bottomLeft(), innerBevel.bottomRight() - QPoint(1, 0));
       painter.drawLine(innerBevel.topRight(), innerBevel.bottomRight() - QPoint(0, 1));
 
@@ -612,20 +623,25 @@ void RelatedDisplayElement::paintHiddenVisual(QPainter &painter,
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
 
+  /* Compute Motif-style shadow colors for proper bevel visibility
+   * even with very dark backgrounds like black */
+  QColor topShadow, bottomShadow;
+  MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
+
   painter.save();
   QRect hiddenOuter = content.adjusted(-1, -1, 1, 1);
-  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.setPen(QPen(topShadow, 1));
   painter.drawLine(hiddenOuter.topLeft(), hiddenOuter.topRight());
   painter.drawLine(hiddenOuter.topLeft(), hiddenOuter.bottomLeft());
-  painter.setPen(QPen(bg.darker(145), 1));
+  painter.setPen(QPen(bottomShadow, 1));
   painter.drawLine(hiddenOuter.bottomLeft(), hiddenOuter.bottomRight());
   painter.drawLine(hiddenOuter.topRight(), hiddenOuter.bottomRight());
 
   QRect hiddenInner = content;
-  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.setPen(QPen(topShadow.lighter(110), 1));
   painter.drawLine(hiddenInner.topLeft(), hiddenInner.topRight());
   painter.drawLine(hiddenInner.topLeft(), hiddenInner.bottomLeft());
-  painter.setPen(QPen(bg.darker(170), 1));
+  painter.setPen(QPen(bottomShadow.darker(115), 1));
   painter.drawLine(hiddenInner.bottomLeft(), hiddenInner.bottomRight());
   painter.drawLine(hiddenInner.topRight(), hiddenInner.bottomRight());
 

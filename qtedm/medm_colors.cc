@@ -66,5 +66,65 @@ QColor alarmColorForSeverity(short severity)
   return kAlarmColors[static_cast<std::size_t>(index)];
 }
 
+void computeShadowColors(const QColor &background,
+    QColor &topShadow, QColor &bottomShadow)
+{
+  /* This function mimics Motif's XmGetColors() algorithm for computing
+   * shadow colors from a background color. The algorithm handles edge
+   * cases like very dark backgrounds (where percentage-based lighter/darker
+   * would produce invisible shadows).
+   *
+   * Motif's actual algorithm (from Xm/Visual.c):
+   * - For dark backgrounds, both shadows are computed as fractions toward
+   *   lighter colors to ensure visibility
+   * - The top shadow is brighter than the bottom shadow
+   *
+   * For black (0,0,0), Motif produces visible shadows on both sides.
+   */
+
+  const int r = background.red();
+  const int g = background.green();
+  const int b = background.blue();
+
+  /* Calculate brightness using weighted luminance formula */
+  const int brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  int topR, topG, topB;
+  int botR, botG, botB;
+
+  /* Motif uses different thresholds and calculations */
+  if (brightness < 127) {
+    /* Dark background - Motif's formula increases brightness significantly.
+     * For very dark colors, Motif computes: color + (max - color) * factor
+     * Top shadow uses ~55% factor, bottom shadow uses ~27% factor.
+     * For black, this produces:
+     *   top shadow: ~RGB(140, 140, 140)
+     *   bottom shadow: ~RGB(69, 69, 69) */
+    const int topFactor = 55; /* percentage: 55% of the way to white */
+    topR = r + (255 - r) * topFactor / 100;
+    topG = g + (255 - g) * topFactor / 100;
+    topB = b + (255 - b) * topFactor / 100;
+
+    /* Bottom shadow for dark colors - also moves toward lighter but less so */
+    const int botFactor = 27; /* percentage: 27% of the way to white */
+    botR = r + (255 - r) * botFactor / 100;
+    botG = g + (255 - g) * botFactor / 100;
+    botB = b + (255 - b) * botFactor / 100;
+  } else {
+    /* Light background - use percentage-based calculation.
+     * Top shadow is lighter, bottom shadow is darker. */
+    topR = std::min(255, r + (255 - r) * 50 / 100);
+    topG = std::min(255, g + (255 - g) * 50 / 100);
+    topB = std::min(255, b + (255 - b) * 50 / 100);
+
+    botR = r * 50 / 100;
+    botG = g * 50 / 100;
+    botB = b * 50 / 100;
+  }
+
+  topShadow = QColor(topR, topG, topB);
+  bottomShadow = QColor(botR, botG, botB);
+}
+
 } // namespace MedmColors
 

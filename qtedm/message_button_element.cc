@@ -20,6 +20,7 @@
 
 #include "cursor_utils.h"
 #include "legacy_fonts.h"
+#include "medm_colors.h"
 
 namespace {
 
@@ -413,14 +414,17 @@ void MessageButtonElement::applyPaletteColors()
   }
   button_->setPalette(pal);
 
+  /* Compute Motif-style shadow colors for proper bevel visibility
+   * even with very dark backgrounds like black */
+  QColor topShadow, bottomShadow;
+  MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
+
   /* Set stylesheet to prevent gradient rendering with 2-pixel raised bevel matching Shell Command */
   QString fgName = fg.name(QColor::HexRgb);
   QString bgName = bg.name(QColor::HexRgb);
-  /* Create bevel colors matching ShellCommandElement: lighter top/left, darker bottom/right */
-  QString topColor = bg.lighter(135).name(QColor::HexRgb);
-  QString bottomColor = bg.darker(145).name(QColor::HexRgb);
-  QString innerTopColor = bg.lighter(150).name(QColor::HexRgb);
-  QString innerBottomColor = bg.darker(170).name(QColor::HexRgb);
+  /* Create bevel colors using Motif-style shadow computation */
+  QString topColor = topShadow.name(QColor::HexRgb);
+  QString bottomColor = bottomShadow.name(QColor::HexRgb);
   QString stylesheet = QStringLiteral(
       "QPushButton { background-color: %1; color: %2; "
       "border-width: 2px; border-style: solid; "

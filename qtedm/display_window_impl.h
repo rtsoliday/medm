@@ -37,6 +37,8 @@
 #include <QTextStream>
 #include <QUrl>
 #include <QVariant>
+#include <QSvgGenerator>
+#include <QImageWriter>
 
 #ifdef KeyPress
 #  undef KeyPress
@@ -1719,6 +1721,103 @@ public:
     }
 
     painter.end();
+  }
+
+  void exportDisplayImage()
+  {
+    if (!displayArea_) {
+      return;
+    }
+
+    // Build filter string with supported formats
+    QStringList filters;
+    filters << QStringLiteral("PNG Image (*.png)");
+    filters << QStringLiteral("SVG Vector Image (*.svg)");
+    filters << QStringLiteral("JPEG Image (*.jpg *.jpeg)");
+    filters << QStringLiteral("BMP Image (*.bmp)");
+
+    // Determine default filename from display title
+    QString baseName = filePath_.isEmpty()
+        ? QStringLiteral("display")
+        : QFileInfo(filePath_).completeBaseName();
+    QString defaultPath = QDir::currentPath() + QDir::separator() + baseName + QStringLiteral(".png");
+
+    QFileDialog dialog(this, QStringLiteral("Export Display Image"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters(filters);
+    dialog.selectFile(defaultPath);
+    dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    dialog.setModal(true);
+    dialog.setWindowModality(Qt::ApplicationModal);
+
+    if (dialog.exec() != QDialog::Accepted) {
+      return;
+    }
+
+    QString selectedFile = dialog.selectedFiles().value(0);
+    if (selectedFile.isEmpty()) {
+      return;
+    }
+
+    // Determine format from selected filter or file extension
+    QString selectedFilter = dialog.selectedNameFilter();
+    QString suffix = QFileInfo(selectedFile).suffix().toLower();
+
+    // If no extension, add one based on filter
+    if (suffix.isEmpty()) {
+      if (selectedFilter.contains(QStringLiteral("SVG"))) {
+        selectedFile += QStringLiteral(".svg");
+        suffix = QStringLiteral("svg");
+      } else if (selectedFilter.contains(QStringLiteral("JPEG"))) {
+        selectedFile += QStringLiteral(".jpg");
+        suffix = QStringLiteral("jpg");
+      } else if (selectedFilter.contains(QStringLiteral("BMP"))) {
+        selectedFile += QStringLiteral(".bmp");
+        suffix = QStringLiteral("bmp");
+      } else {
+        selectedFile += QStringLiteral(".png");
+        suffix = QStringLiteral("png");
+      }
+    }
+
+    bool success = false;
+
+    if (suffix == QStringLiteral("svg")) {
+      // Export as SVG
+      QSvgGenerator generator;
+      generator.setFileName(selectedFile);
+      generator.setSize(displayArea_->size());
+      generator.setViewBox(QRect(0, 0, displayArea_->width(), displayArea_->height()));
+      generator.setTitle(windowTitle());
+      generator.setDescription(QStringLiteral("QtEDM Display Export"));
+
+      QPainter painter;
+      if (painter.begin(&generator)) {
+        displayArea_->render(&painter);
+        painter.end();
+        success = true;
+      }
+    } else {
+      // Export as raster image (PNG, JPEG, BMP)
+      QPixmap pixmap = displayArea_->grab();
+      if (!pixmap.isNull()) {
+        // Determine format
+        const char *format = "PNG";
+        if (suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg")) {
+          format = "JPEG";
+        } else if (suffix == QStringLiteral("bmp")) {
+          format = "BMP";
+        }
+        success = pixmap.save(selectedFile, format);
+      }
+    }
+
+    if (!success) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to export display image to:\n%1").arg(selectedFile));
+    }
   }
 
   bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr,
@@ -12874,6 +12973,12 @@ private:
         [this]() {
           setAsActiveDisplay();
           printDisplay();
+        });
+    QAction *exportAction = menu.addAction(QStringLiteral("Export Image..."));
+    QObject::connect(exportAction, &QAction::triggered, this,
+        [this]() {
+          setAsActiveDisplay();
+          exportDisplayImage();
         });
     QAction *closeAction = menu.addAction(QStringLiteral("Close"));
     QObject::connect(closeAction, &QAction::triggered, this,

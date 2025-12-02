@@ -1085,7 +1085,7 @@ int main(int argc, char *argv[])
 // ADL-COMPATIBLE FEATURE ENHANCEMENTS (maintain MEDM file compatibility)
 // ===========================================================================
 
-//TODO: Add "Export to PNG/SVG" for display screenshots (MEDM has XWD export).
+//DONE: Add "Export to PNG/SVG" for display screenshots (MEDM has XWD export).
 //TODO: Implement Cartesian Plot axis dialog with runtime axis style changes.
 //TODO: Add Strip Chart data export to SDDS or CSV format.
 //TODO: Implement PV drag-and-drop from widgets to text fields (MEDM feature).

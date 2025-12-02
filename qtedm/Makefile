@@ -118,11 +118,11 @@ qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
 CFLAGS += -I$(EPICS_BASE)/include  -I$(SDDS_REPO)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 CCFLAGS += -I$(EPICS_BASE)/include -I$(SDDS_REPO)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 ifeq ($(OS), Windows)
- CCFLAGS += /std:c++17 /Zc:__cplusplus /permissive- -I"C:\\Qt\\6.8.2\\msvc2022_64\\include" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtCore" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtGui" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtWidgets"
- LDFLAGS += /LIBPATH:"C:\\Qt\\6.8.2\\msvc2022_64\\lib" Qt6PrintSupport.lib Qt6Widgets.lib Qt6Gui.lib Qt6Core.lib
+ CCFLAGS += /std:c++17 /Zc:__cplusplus /permissive- -I"C:\\Qt\\6.8.2\\msvc2022_64\\include" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtCore" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtGui" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtWidgets" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtSvg"
+ LDFLAGS += /LIBPATH:"C:\\Qt\\6.8.2\\msvc2022_64\\lib" Qt6PrintSupport.lib Qt6Svg.lib Qt6Widgets.lib Qt6Gui.lib Qt6Core.lib
 else
- CCFLAGS += $(shell pkg-config --cflags Qt5Widgets Qt5PrintSupport)
- LDFLAGS += $(shell pkg-config --libs Qt5Widgets Qt5PrintSupport)
+ CCFLAGS += $(shell pkg-config --cflags Qt5Widgets Qt5PrintSupport Qt5Svg)
+ LDFLAGS += $(shell pkg-config --libs Qt5Widgets Qt5PrintSupport Qt5Svg)
 endif
 
 

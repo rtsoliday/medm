@@ -9,12 +9,14 @@
 
 #include <QDebug>
 #include <QEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPalette>
 #include <QPen>
+#include <QWheelEvent>
 
 #include "medm_colors.h"
 #include "text_font_utils.h"
@@ -143,6 +145,7 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
   setContextMenuPolicy(Qt::NoContextMenu);  // Handle right-clicks in mousePressEvent
+  setMouseTracking(true);  // Enable mouse tracking for panning
   title_ = QString();  // Empty by default - only shown if specified in ADL
   xLabel_ = QString();  // Empty by default - only shown if specified in ADL
   yLabels_[0] = QString();  // Empty by default
@@ -158,6 +161,8 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
     axisMinimums_[axis] = 0.0;
     axisMaximums_[axis] = 1.0;
     axisTimeFormats_[axis] = CartesianPlotTimeFormat::kHhMmSs;
+    zoomMinimums_[axis] = 0.0;
+    zoomMaximums_[axis] = 1.0;
   }
 }
 
@@ -601,6 +606,11 @@ void CartesianPlotElement::setExecuteMode(bool execute)
     return;
   }
   executeMode_ = execute;
+  if (!execute) {
+    // Reset zoom state when leaving execute mode
+    zoomed_ = false;
+    panning_ = false;
+  }
   clearRuntimeState();
   update();
 }
@@ -830,9 +840,203 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
 
 void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
 {
-  // In execute mode, let parent handle right-clicks for context menu
-  // The axis dialog will be triggered via the context menu
+  if (executeMode_) {
+    if (event->button() == Qt::LeftButton) {
+      // Start panning
+      const QRectF chart = chartRect();
+      if (chart.contains(event->pos())) {
+        panning_ = true;
+        panStartPos_ = event->pos();
+        // Initialize zoom state if not already zoomed
+        if (!zoomed_) {
+          for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+            if (cachedAxisRangesValid_) {
+              zoomMinimums_[axis] = cachedAxisRanges_[axis].minimum;
+              zoomMaximums_[axis] = cachedAxisRanges_[axis].maximum;
+            }
+          }
+        }
+        for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+          panStartMinimums_[axis] = zoomMinimums_[axis];
+          panStartMaximums_[axis] = zoomMaximums_[axis];
+        }
+        setCursor(Qt::ClosedHandCursor);
+        event->accept();
+        return;
+      }
+    } else if (event->button() == Qt::RightButton) {
+      // Show context menu with reset zoom option
+      if (zoomed_) {
+        QMenu menu(this);
+        QAction *resetAction = menu.addAction(tr("Reset Zoom"));
+        QAction *selected = menu.exec(event->globalPos());
+        if (selected == resetAction) {
+          resetZoom();
+        }
+        event->accept();
+        return;
+      }
+    }
+  }
   QWidget::mousePressEvent(event);
+}
+
+void CartesianPlotElement::mouseReleaseEvent(QMouseEvent *event)
+{
+  if (panning_ && event->button() == Qt::LeftButton) {
+    panning_ = false;
+    setCursor(Qt::ArrowCursor);
+    event->accept();
+    return;
+  }
+  QWidget::mouseReleaseEvent(event);
+}
+
+void CartesianPlotElement::mouseMoveEvent(QMouseEvent *event)
+{
+  if (panning_ && executeMode_) {
+    const QRectF chart = chartRect();
+    if (chart.width() <= 0 || chart.height() <= 0) {
+      return;
+    }
+    
+    const QPointF delta = event->pos() - panStartPos_;
+    
+    // Convert pixel delta to data delta for each axis
+    // X axis (index 0)
+    {
+      const double xRange = panStartMaximums_[0] - panStartMinimums_[0];
+      const double xDelta = -delta.x() * xRange / chart.width();
+      zoomMinimums_[0] = panStartMinimums_[0] + xDelta;
+      zoomMaximums_[0] = panStartMaximums_[0] + xDelta;
+    }
+    
+    // Y axes - apply same delta to all visible Y axes
+    for (int axis = 1; axis < kCartesianAxisCount; ++axis) {
+      if (!isYAxisVisible(axis - 1)) {
+        continue;
+      }
+      const double yRange = panStartMaximums_[axis] - panStartMinimums_[axis];
+      const double yDelta = delta.y() * yRange / chart.height();  // Y is inverted
+      zoomMinimums_[axis] = panStartMinimums_[axis] + yDelta;
+      zoomMaximums_[axis] = panStartMaximums_[axis] + yDelta;
+    }
+    
+    zoomed_ = true;
+    cachedAxisRangesValid_ = false;
+    update();
+    event->accept();
+    return;
+  }
+  QWidget::mouseMoveEvent(event);
+}
+
+void CartesianPlotElement::wheelEvent(QWheelEvent *event)
+{
+  if (!executeMode_) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+  
+  const QRectF chart = chartRect();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+  const QPointF pos = event->position();
+#else
+  const QPointF pos = event->posF();
+#endif
+  
+  if (!chart.contains(pos)) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+  
+  // Initialize zoom state from current display if not already zoomed
+  if (!zoomed_) {
+    for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+      if (cachedAxisRangesValid_) {
+        zoomMinimums_[axis] = cachedAxisRanges_[axis].minimum;
+        zoomMaximums_[axis] = cachedAxisRanges_[axis].maximum;
+      }
+    }
+  }
+  
+  // Calculate zoom factor (positive delta = zoom in)
+  const double degrees = event->angleDelta().y() / 8.0;
+  const double steps = degrees / 15.0;
+  const double factor = std::pow(0.9, steps);  // 0.9 = zoom in, 1.11 = zoom out
+  
+  // Determine which axes to zoom based on modifiers
+  const bool zoomX = !event->modifiers().testFlag(Qt::ControlModifier);
+  const bool zoomY = !event->modifiers().testFlag(Qt::ShiftModifier);
+  
+  // Calculate mouse position in chart coordinates (0-1 range)
+  const double chartX = (pos.x() - chart.left()) / chart.width();
+  const double chartY = 1.0 - (pos.y() - chart.top()) / chart.height();  // Y inverted
+  
+  // Zoom X axis centered on mouse position
+  if (zoomX) {
+    const double xMin = zoomMinimums_[0];
+    const double xMax = zoomMaximums_[0];
+    const double xCenter = xMin + chartX * (xMax - xMin);
+    zoomAxis(0, factor, xCenter);
+  }
+  
+  // Zoom Y axes centered on mouse position
+  if (zoomY) {
+    for (int axis = 1; axis < kCartesianAxisCount; ++axis) {
+      if (!isYAxisVisible(axis - 1)) {
+        continue;
+      }
+      const double yMin = zoomMinimums_[axis];
+      const double yMax = zoomMaximums_[axis];
+      const double yCenter = yMin + chartY * (yMax - yMin);
+      zoomAxis(axis, factor, yCenter);
+    }
+  }
+  
+  zoomed_ = true;
+  cachedAxisRangesValid_ = false;
+  update();
+  event->accept();
+}
+
+void CartesianPlotElement::zoomAxis(int axisIndex, double factor, double center)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  
+  const double oldMin = zoomMinimums_[axisIndex];
+  const double oldMax = zoomMaximums_[axisIndex];
+  const double oldRange = oldMax - oldMin;
+  const double newRange = oldRange * factor;
+  
+  // Keep center point at same position
+  const double centerRatio = (center - oldMin) / oldRange;
+  zoomMinimums_[axisIndex] = center - centerRatio * newRange;
+  zoomMaximums_[axisIndex] = center + (1.0 - centerRatio) * newRange;
+}
+
+bool CartesianPlotElement::isZoomed() const
+{
+  return zoomed_;
+}
+
+void CartesianPlotElement::resetZoom()
+{
+  zoomed_ = false;
+  panning_ = false;
+  cachedAxisRangesValid_ = false;
+  update();
+}
+
+void CartesianPlotElement::applyZoomToRange(AxisRange &range, int axisIndex) const
+{
+  if (!zoomed_ || axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return;
+  }
+  range.minimum = zoomMinimums_[axisIndex];
+  range.maximum = zoomMaximums_[axisIndex];
 }
 
 bool CartesianPlotElement::event(QEvent *event)
@@ -1676,6 +1880,15 @@ void CartesianPlotElement::paintTracesExecute(QPainter &painter,
 
   if (!ranges[0].valid) {
     return;
+  }
+
+  // Apply zoom state if zoomed
+  if (zoomed_) {
+    for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+      if (ranges[axis].valid) {
+        applyZoomToRange(ranges[axis], axis);
+      }
+    }
   }
 
   cachedAxisRanges_ = ranges;

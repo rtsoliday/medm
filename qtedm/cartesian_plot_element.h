@@ -122,9 +122,16 @@ public:
   QPointF dataPoint(int traceIndex, int pointIndex) const;
   bool traceHasData(int traceIndex) const;
 
+  // Zoom/pan support (execute mode only)
+  bool isZoomed() const;
+  void resetZoom();
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void wheelEvent(QWheelEvent *event) override;
   bool event(QEvent *event) override;
 
 private:
@@ -183,6 +190,11 @@ private:
       const QColor &color) const;
   void ensureRuntimeArraySizes();
   
+  // Zoom/pan helpers
+  void applyZoomToRange(AxisRange &range, int axisIndex) const;
+  QPointF chartToData(const QPointF &chartPos, const QRectF &chartArea) const;
+  void zoomAxis(int axisIndex, double factor, double center);
+  
   struct NiceAxisRange
   {
     double drawMin;
@@ -222,4 +234,13 @@ private:
   std::array<double, kCartesianAxisCount> axisRuntimeMaximums_{};
   mutable std::array<AxisRange, kCartesianAxisCount> cachedAxisRanges_{};
   mutable bool cachedAxisRangesValid_ = false;
+
+  // Zoom/pan state (execute mode only)
+  bool zoomed_ = false;
+  std::array<double, kCartesianAxisCount> zoomMinimums_{};
+  std::array<double, kCartesianAxisCount> zoomMaximums_{};
+  bool panning_ = false;
+  QPointF panStartPos_;
+  std::array<double, kCartesianAxisCount> panStartMinimums_{};
+  std::array<double, kCartesianAxisCount> panStartMaximums_{};
 };

@@ -33,6 +33,7 @@
 #include "byte_monitor_element.h"
 #include "strip_chart_element.h"
 #include "cartesian_plot_element.h"
+#include "window_utils.h"
 
 namespace {
 
@@ -520,6 +521,12 @@ void CompositeElement::mousePressEvent(QMouseEvent *event)
 {
   // Forward middle button and right-click events to parent window for PV info functionality
   if (executeMode_ && (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)) {
+    if (forwardMouseEventToParent(event)) {
+      return;
+    }
+  }
+  // Forward left clicks to parent when PV Info picking mode is active
+  if (executeMode_ && event->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
     if (forwardMouseEventToParent(event)) {
       return;
     }

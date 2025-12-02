@@ -7,6 +7,7 @@
 
 #include <QtGlobal>
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QEvent>
 #include <QMenu>
@@ -20,6 +21,7 @@
 
 #include "medm_colors.h"
 #include "text_font_utils.h"
+#include "window_utils.h"
 
 namespace {
 
@@ -841,6 +843,27 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
 void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
 {
   if (executeMode_) {
+    // Forward left clicks to parent when PV Info picking mode is active
+    if (event->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
+      QWidget *target = window();
+      if (target) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        const QPointF globalPosF = event->globalPosition();
+        const QPoint globalPoint = globalPosF.toPoint();
+        const QPointF localPos = target->mapFromGlobal(globalPoint);
+        QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
+            event->button(), event->buttons(), event->modifiers());
+#else
+        const QPoint globalPoint = event->globalPos();
+        const QPointF localPos = target->mapFromGlobal(globalPoint);
+        QMouseEvent forwarded(event->type(), localPos, localPos,
+            QPointF(globalPoint), event->button(), event->buttons(),
+            event->modifiers());
+#endif
+        QCoreApplication::sendEvent(target, &forwarded);
+        return;
+      }
+    }
     if (event->button() == Qt::LeftButton) {
       // Start panning
       const QRectF chart = chartRect();

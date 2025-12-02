@@ -20,6 +20,7 @@
 
 #include "legacy_fonts.h"
 #include "cursor_utils.h"
+#include "window_utils.h"
 
 namespace {
 
@@ -949,6 +950,12 @@ bool ChoiceButtonElement::eventFilter(QObject *watched, QEvent *event)
   if (executeMode_ && event && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease)) {
     auto *mouseEvent = static_cast<QMouseEvent *>(event);
     if (mouseEvent->button() == Qt::MiddleButton || mouseEvent->button() == Qt::RightButton) {
+      if (forwardMouseEventToParent(mouseEvent)) {
+        return true;
+      }
+    }
+    // Forward left clicks to parent when PV Info picking mode is active
+    if (mouseEvent->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
       if (forwardMouseEventToParent(mouseEvent)) {
         return true;
       }

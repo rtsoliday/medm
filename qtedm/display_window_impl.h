@@ -2320,6 +2320,11 @@ public:
     return undoStack_;
   }
 
+  bool isPvInfoPickingActive() const
+  {
+    return pvInfoPickingActive_;
+  }
+
 protected:
   void focusInEvent(QFocusEvent *event) override
   {

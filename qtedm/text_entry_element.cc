@@ -14,6 +14,7 @@
 
 #include "cursor_utils.h"
 #include "text_font_utils.h"
+#include "window_utils.h"
 
 namespace {
 
@@ -616,6 +617,12 @@ bool TextEntryElement::eventFilter(QObject *watched, QEvent *event)
     case QEvent::MouseButtonRelease: {
       auto *mouseEvent = static_cast<QMouseEvent *>(event);
       if (mouseEvent->button() == Qt::MiddleButton) {
+        if (forwardMouseEvent(mouseEvent)) {
+          return true;
+        }
+      }
+      // Forward left clicks to parent when PV Info picking mode is active
+      if (mouseEvent->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
         if (forwardMouseEvent(mouseEvent)) {
           return true;
         }

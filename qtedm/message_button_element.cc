@@ -21,6 +21,7 @@
 #include "cursor_utils.h"
 #include "legacy_fonts.h"
 #include "medm_colors.h"
+#include "window_utils.h"
 
 namespace {
 
@@ -554,6 +555,12 @@ void MessageButtonElement::mousePressEvent(QMouseEvent *event)
 {
   // Forward middle button and right-click events to parent window for PV info functionality
   if (executeMode_ && (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)) {
+    if (forwardMouseEventToParent(event)) {
+      return;
+    }
+  }
+  // Forward left clicks to parent when PV Info picking mode is active
+  if (executeMode_ && event->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
     if (forwardMouseEventToParent(event)) {
       return;
     }

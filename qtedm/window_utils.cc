@@ -18,6 +18,8 @@
 
 #include <algorithm>
 
+#include "display_window.h"
+
 namespace {
 
 void centerDialog(QDialog *dialog)
@@ -269,4 +271,20 @@ void showHelpBrowser(QWidget *parent, const QString &title,
   dialog->show();
   dialog->raise();
   dialog->activateWindow();
+}
+
+bool isParentWindowInPvInfoMode(QWidget *widget)
+{
+  if (!widget) {
+    return false;
+  }
+  QWidget *target = widget->window();
+  if (!target) {
+    return false;
+  }
+  auto *displayWindow = dynamic_cast<DisplayWindow *>(target);
+  if (!displayWindow) {
+    return false;
+  }
+  return displayWindow->isPvInfoPickingActive();
 }

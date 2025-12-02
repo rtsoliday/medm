@@ -17,6 +17,7 @@
 
 #include "medm.h"
 
+#include <stdint.h>
 #include <Xm/ToggleB.h>
 #include <Xm/MwmUtil.h>
 

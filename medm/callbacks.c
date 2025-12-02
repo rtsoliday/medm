@@ -26,6 +26,7 @@
 #include "medm.h"
 
 #include <limits.h>
+#include <stdint.h>
 
 
 /* For modal dialogs - defined in utils.c and referenced here in callbacks.c */

@@ -1820,6 +1820,420 @@ public:
     }
   }
 
+  void exportStripChartData(StripChartElement *stripChart)
+  {
+    if (!stripChart) {
+      return;
+    }
+
+    // Build filter string with supported formats
+    QStringList filters;
+    filters << QStringLiteral("SDDS Data File (*.sdds)");
+    filters << QStringLiteral("CSV File (*.csv)");
+
+    // Determine default filename from display title and chart title
+    QString baseName = filePath_.isEmpty()
+        ? QStringLiteral("stripchart")
+        : QFileInfo(filePath_).completeBaseName();
+    const QString chartTitle = stripChart->title();
+    if (!chartTitle.isEmpty()) {
+      QString sanitized = chartTitle;
+      sanitized.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
+          QStringLiteral("_"));
+      baseName = sanitized;
+    }
+    QString defaultPath = QDir::currentPath() + QDir::separator() + baseName
+        + QStringLiteral(".sdds");
+
+    QFileDialog dialog(this, QStringLiteral("Export Strip Chart Data"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters(filters);
+    dialog.selectFile(defaultPath);
+    dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    dialog.setModal(true);
+    dialog.setWindowModality(Qt::ApplicationModal);
+
+    if (dialog.exec() != QDialog::Accepted) {
+      return;
+    }
+
+    QString selectedFile = dialog.selectedFiles().value(0);
+    if (selectedFile.isEmpty()) {
+      return;
+    }
+
+    // Determine format from selected filter or file extension
+    QString selectedFilter = dialog.selectedNameFilter();
+    QString suffix = QFileInfo(selectedFile).suffix().toLower();
+
+    // If no extension, add one based on filter
+    if (suffix.isEmpty()) {
+      if (selectedFilter.contains(QStringLiteral("CSV"))) {
+        selectedFile += QStringLiteral(".csv");
+        suffix = QStringLiteral("csv");
+      } else {
+        selectedFile += QStringLiteral(".sdds");
+        suffix = QStringLiteral("sdds");
+      }
+    }
+
+    bool success = false;
+    const int sampleCount = stripChart->sampleCount();
+    const double interval = stripChart->sampleIntervalSeconds();
+    const int penCount = stripChart->penCount();
+
+    // Gather pen information
+    QStringList channelNames;
+    QList<int> activePenIndices;
+    for (int p = 0; p < penCount; ++p) {
+      if (stripChart->penHasData(p)) {
+        activePenIndices.append(p);
+        QString ch = stripChart->channel(p);
+        if (ch.isEmpty()) {
+          ch = QStringLiteral("Pen%1").arg(p);
+        }
+        channelNames.append(ch);
+      }
+    }
+
+    if (activePenIndices.isEmpty() || sampleCount <= 0) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("No data available to export.\n"
+              "The strip chart has no connected channels with data."));
+      return;
+    }
+
+    QFile file(selectedFile);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to open file for writing:\n%1").arg(selectedFile));
+      return;
+    }
+
+    QTextStream stream(&file);
+    setUtf8Encoding(stream);
+
+    if (suffix == QStringLiteral("sdds")) {
+      // Export as SDDS format
+      // Get current epoch time for EPOCHTIME column (with millisecond precision)
+      const double currentEpochTime =
+          static_cast<double>(QDateTime::currentMSecsSinceEpoch()) / 1000.0;
+
+      stream << QStringLiteral("SDDS1\n");
+      stream << QStringLiteral("&description text=\"Strip Chart Data Export from QtEDM\", "
+          "contents=\"strip chart data\" &end\n");
+
+      // Define Time column
+      stream << QStringLiteral("&column name=Time, type=double, units=s, "
+          "description=\"Time relative to start\" &end\n");
+
+      // Define EPOCHTIME column
+      stream << QStringLiteral("&column name=EPOCHTIME, type=double, units=s, "
+          "description=\"Unix epoch time\" &end\n");
+
+      // Define columns for each active pen
+      for (int i = 0; i < activePenIndices.size(); ++i) {
+        QString colName = channelNames[i];
+        colName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+            QStringLiteral("_"));
+        stream << QStringLiteral("&column name=%1, type=double, "
+            "description=\"%2\" &end\n")
+            .arg(colName)
+            .arg(channelNames[i]);
+      }
+
+      stream << QStringLiteral("&data mode=ascii &end\n");
+
+      // Write row count
+      stream << sampleCount << QStringLiteral("\n");
+
+      // Write data rows
+      for (int s = 0; s < sampleCount; ++s) {
+        // Time is relative, oldest sample at time 0
+        const double time = static_cast<double>(s) * interval;
+        const double epochTime = currentEpochTime + time;
+        stream << QString::number(time, 'g', 15);
+        stream << QStringLiteral(" ") << QString::number(epochTime, 'f', 6);
+        for (int pi : activePenIndices) {
+          double value = stripChart->sampleValue(pi, s);
+          stream << QStringLiteral(" ");
+          if (std::isnan(value)) {
+            stream << QStringLiteral("nan");
+          } else {
+            stream << QString::number(value, 'g', 15);
+          }
+        }
+        stream << QStringLiteral("\n");
+      }
+      success = true;
+    } else {
+      // Export as CSV format
+      // Get current epoch time for EPOCHTIME column (with millisecond precision)
+      const double currentEpochTime =
+          static_cast<double>(QDateTime::currentMSecsSinceEpoch()) / 1000.0;
+
+      // Header row
+      stream << QStringLiteral("Time,EPOCHTIME");
+      for (const QString &ch : channelNames) {
+        stream << QStringLiteral(",\"") << ch << QStringLiteral("\"");
+      }
+      stream << QStringLiteral("\n");
+
+      // Data rows
+      for (int s = 0; s < sampleCount; ++s) {
+        const double time = static_cast<double>(s) * interval;
+        const double epochTime = currentEpochTime + time;
+        stream << QString::number(time, 'g', 15);
+        stream << QStringLiteral(",") << QString::number(epochTime, 'f', 6);
+        for (int pi : activePenIndices) {
+          double value = stripChart->sampleValue(pi, s);
+          stream << QStringLiteral(",");
+          if (std::isnan(value)) {
+            stream << QStringLiteral("");
+          } else {
+            stream << QString::number(value, 'g', 15);
+          }
+        }
+        stream << QStringLiteral("\n");
+      }
+      success = true;
+    }
+
+    file.close();
+
+    if (!success) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to export strip chart data to:\n%1").arg(selectedFile));
+    }
+  }
+
+  void exportCartesianPlotData(CartesianPlotElement *plot)
+  {
+    if (!plot) {
+      return;
+    }
+
+    // Build filter string with supported formats
+    QStringList filters;
+    filters << QStringLiteral("SDDS Data File (*.sdds)");
+    filters << QStringLiteral("CSV File (*.csv)");
+
+    // Determine default filename from display title and plot title
+    QString baseName = filePath_.isEmpty()
+        ? QStringLiteral("cartesianplot")
+        : QFileInfo(filePath_).completeBaseName();
+    const QString plotTitle = plot->title();
+    if (!plotTitle.isEmpty()) {
+      QString sanitized = plotTitle;
+      sanitized.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
+          QStringLiteral("_"));
+      baseName = sanitized;
+    }
+    QString defaultPath = QDir::currentPath() + QDir::separator() + baseName
+        + QStringLiteral(".sdds");
+
+    QFileDialog dialog(this, QStringLiteral("Export Cartesian Plot Data"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters(filters);
+    dialog.selectFile(defaultPath);
+    dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    dialog.setModal(true);
+    dialog.setWindowModality(Qt::ApplicationModal);
+
+    if (dialog.exec() != QDialog::Accepted) {
+      return;
+    }
+
+    QString selectedFile = dialog.selectedFiles().value(0);
+    if (selectedFile.isEmpty()) {
+      return;
+    }
+
+    // Determine format from selected filter or file extension
+    QString selectedFilter = dialog.selectedNameFilter();
+    QString suffix = QFileInfo(selectedFile).suffix().toLower();
+
+    // If no extension, add one based on filter
+    if (suffix.isEmpty()) {
+      if (selectedFilter.contains(QStringLiteral("CSV"))) {
+        selectedFile += QStringLiteral(".csv");
+        suffix = QStringLiteral("csv");
+      } else {
+        selectedFile += QStringLiteral(".sdds");
+        suffix = QStringLiteral("sdds");
+      }
+    }
+
+    bool success = false;
+    const int traceCount = plot->traceCount();
+
+    // Gather trace information and find maximum point count
+    QStringList traceNames;
+    QList<int> activeTraceIndices;
+    int maxPointCount = 0;
+    for (int t = 0; t < traceCount; ++t) {
+      if (plot->traceHasData(t)) {
+        activeTraceIndices.append(t);
+        // Use Y channel name as column name, falling back to X channel or trace number
+        QString ch = plot->traceYChannel(t);
+        if (ch.isEmpty()) {
+          ch = plot->traceXChannel(t);
+        }
+        if (ch.isEmpty()) {
+          ch = QStringLiteral("Trace%1").arg(t);
+        }
+        traceNames.append(ch);
+        maxPointCount = std::max(maxPointCount, plot->dataPointCount(t));
+      }
+    }
+
+    if (activeTraceIndices.isEmpty() || maxPointCount <= 0) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("No data available to export.\n"
+              "The Cartesian plot has no connected traces with data."));
+      return;
+    }
+
+    QFile file(selectedFile);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to open file for writing:\n%1").arg(selectedFile));
+      return;
+    }
+
+    QTextStream stream(&file);
+    setUtf8Encoding(stream);
+
+    if (suffix == QStringLiteral("sdds")) {
+      // Export as SDDS format
+      stream << QStringLiteral("SDDS1\n");
+      stream << QStringLiteral("&description text=\"Cartesian Plot Data Export from QtEDM\", "
+          "contents=\"cartesian plot data\" &end\n");
+
+      // Define Index column
+      stream << QStringLiteral("&column name=Index, type=long, "
+          "description=\"Data point index\" &end\n");
+
+      // Define X and Y columns for each active trace
+      for (int i = 0; i < activeTraceIndices.size(); ++i) {
+        int ti = activeTraceIndices[i];
+        QString xColName = plot->traceXChannel(ti);
+        if (xColName.isEmpty()) {
+          xColName = QStringLiteral("X%1").arg(ti);
+        }
+        xColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+            QStringLiteral("_"));
+        QString yColName = traceNames[i];
+        yColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+            QStringLiteral("_"));
+
+        // If X and Y column names are the same, append suffix
+        if (xColName == yColName) {
+          xColName += QStringLiteral("_X");
+          yColName += QStringLiteral("_Y");
+        }
+
+        stream << QStringLiteral("&column name=%1, type=double, "
+            "description=\"X values for trace %2\" &end\n")
+            .arg(xColName)
+            .arg(ti);
+        stream << QStringLiteral("&column name=%1, type=double, "
+            "description=\"Y values for trace %2\" &end\n")
+            .arg(yColName)
+            .arg(ti);
+      }
+
+      stream << QStringLiteral("&data mode=ascii &end\n");
+
+      // Write row count
+      stream << maxPointCount << QStringLiteral("\n");
+
+      // Write data rows
+      for (int p = 0; p < maxPointCount; ++p) {
+        stream << p;  // Index column
+        for (int i = 0; i < activeTraceIndices.size(); ++i) {
+          int ti = activeTraceIndices[i];
+          int pointCount = plot->dataPointCount(ti);
+          if (p < pointCount) {
+            QPointF pt = plot->dataPoint(ti, p);
+            stream << QStringLiteral(" ");
+            if (std::isnan(pt.x())) {
+              stream << QStringLiteral("nan");
+            } else {
+              stream << QString::number(pt.x(), 'g', 15);
+            }
+            stream << QStringLiteral(" ");
+            if (std::isnan(pt.y())) {
+              stream << QStringLiteral("nan");
+            } else {
+              stream << QString::number(pt.y(), 'g', 15);
+            }
+          } else {
+            // Trace has fewer points; output NaN
+            stream << QStringLiteral(" nan nan");
+          }
+        }
+        stream << QStringLiteral("\n");
+      }
+      success = true;
+    } else {
+      // Export as CSV format
+      // Header row
+      stream << QStringLiteral("Index");
+      for (int i = 0; i < activeTraceIndices.size(); ++i) {
+        int ti = activeTraceIndices[i];
+        QString xName = plot->traceXChannel(ti);
+        if (xName.isEmpty()) {
+          xName = QStringLiteral("X%1").arg(ti);
+        }
+        QString yName = traceNames[i];
+        stream << QStringLiteral(",\"") << xName << QStringLiteral("\"");
+        stream << QStringLiteral(",\"") << yName << QStringLiteral("\"");
+      }
+      stream << QStringLiteral("\n");
+
+      // Data rows
+      for (int p = 0; p < maxPointCount; ++p) {
+        stream << p;  // Index column
+        for (int i = 0; i < activeTraceIndices.size(); ++i) {
+          int ti = activeTraceIndices[i];
+          int pointCount = plot->dataPointCount(ti);
+          if (p < pointCount) {
+            QPointF pt = plot->dataPoint(ti, p);
+            stream << QStringLiteral(",");
+            if (std::isnan(pt.x())) {
+              stream << QStringLiteral("");
+            } else {
+              stream << QString::number(pt.x(), 'g', 15);
+            }
+            stream << QStringLiteral(",");
+            if (std::isnan(pt.y())) {
+              stream << QStringLiteral("");
+            } else {
+              stream << QString::number(pt.y(), 'g', 15);
+            }
+          } else {
+            // Trace has fewer points; output empty cells
+            stream << QStringLiteral(",,");
+          }
+        }
+        stream << QStringLiteral("\n");
+      }
+      success = true;
+    }
+
+    file.close();
+
+    if (!success) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to export Cartesian plot data to:\n%1").arg(selectedFile));
+    }
+  }
+
   bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr,
       const QHash<QString, QString> &macros = {});
   QString filePath() const
@@ -12963,9 +13377,35 @@ private:
   {
     ensureExecuteContextMenuEntriesLoaded();
 
+    // Detect if user clicked on a strip chart or cartesian plot
+    const QPoint windowPos = mapFromGlobal(globalPos);
+    QWidget *clickedWidget = elementAt(windowPos);
+    StripChartElement *clickedStripChart =
+        dynamic_cast<StripChartElement *>(clickedWidget);
+    CartesianPlotElement *clickedCartesianPlot =
+        dynamic_cast<CartesianPlotElement *>(clickedWidget);
+
     QMenu menu(this);
     menu.setObjectName(QStringLiteral("executeModeContextMenu"));
     menu.setSeparatorsCollapsible(false);
+
+    // Show custom menu for Cartesian Plot widgets
+    if (clickedCartesianPlot) {
+      QAction *modifyAxisAction = menu.addAction(QStringLiteral("Modify Axis Values..."));
+      QObject::connect(modifyAxisAction, &QAction::triggered, this,
+          [this, clickedCartesianPlot]() {
+            ensureResourcePalette();
+            resourcePalette_->openCartesianAxisDialogForElement(clickedCartesianPlot);
+          });
+      QAction *exportDataAction = menu.addAction(QStringLiteral("Export Data..."));
+      QObject::connect(exportDataAction, &QAction::triggered, this,
+          [this, clickedCartesianPlot]() {
+            setAsActiveDisplay();
+            exportCartesianPlotData(clickedCartesianPlot);
+          });
+      menu.exec(globalPos);
+      return;
+    }
 
     // Mirror MEDM execute popup menu
     QAction *printAction = menu.addAction(QStringLiteral("Print"));
@@ -12979,6 +13419,15 @@ private:
         [this]() {
           setAsActiveDisplay();
           exportDisplayImage();
+        });
+    QAction *exportDataAction = menu.addAction(QStringLiteral("Export Data..."));
+    exportDataAction->setEnabled(clickedStripChart != nullptr);
+    QObject::connect(exportDataAction, &QAction::triggered, this,
+        [this, clickedStripChart]() {
+          setAsActiveDisplay();
+          if (clickedStripChart) {
+            exportStripChartData(clickedStripChart);
+          }
         });
     QAction *closeAction = menu.addAction(QStringLiteral("Close"));
     QObject::connect(closeAction, &QAction::triggered, this,

@@ -397,6 +397,12 @@
   <li><strong>Enhanced Statistics Window</strong> &ndash; The Statistics Window (View &gt; Statistics Window) includes a third mode called "PV Details" that displays a sortable table of all connected PVs with their connection status, writable status, update rate, and alarm severity. Click the Mode button to cycle through Interval, Average, and PV Details views.</li>
   <li><strong>Find PV Dialog</strong> &ndash; QtEDM provides a Find PV feature (View &gt; Find PV or Ctrl+F) that allows searching for process variables across all open displays. Enter a PV name pattern to locate widgets using matching PVs.</li>
   <li><strong>Export Image</strong> &ndash; QtEDM adds an "Export Image..." option to the right-click context menu in EXECUTE mode. This allows exporting displays as PNG, SVG, JPEG, or BMP images. MEDM supports XWD format via the print command; QtEDM provides more modern image formats including vector SVG output.</li>
+  <li><strong>Export Data</strong> &ndash; QtEDM adds data export capabilities for plot widgets in EXECUTE mode:
+    <ul>
+      <li><strong>Strip Charts:</strong> Right-clicking shows the standard context menu with "Export Data..." enabled. Exports include Time, EPOCHTIME (with millisecond precision), and channel value columns in SDDS or CSV format.</li>
+      <li><strong>Cartesian Plots:</strong> Right-clicking shows a dedicated menu with "Modify Axis Values..." (to access the axis configuration dialog) and "Export Data..." options. Exports include Index and X/Y value pairs for each active trace in SDDS or CSV format.</li>
+    </ul>
+  </li>
 </ul>
 
 <h2><a name="Building"></a>Building QtEDM</h2>

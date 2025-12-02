@@ -569,6 +569,37 @@ void StripChartElement::clearPenRuntimeState(int index)
   }
 }
 
+int StripChartElement::sampleCount() const
+{
+  return sampleHistoryLength_;
+}
+
+double StripChartElement::sampleValue(int penIndex, int sampleIndex) const
+{
+  if (penIndex < 0 || penIndex >= penCount()) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const Pen &pen = pens_[penIndex];
+  if (sampleIndex < 0 || sampleIndex >= static_cast<int>(pen.samples.size())) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return pen.samples[static_cast<std::size_t>(sampleIndex)];
+}
+
+double StripChartElement::sampleIntervalSeconds() const
+{
+  return sampleIntervalMs_ / 1000.0;
+}
+
+bool StripChartElement::penHasData(int index) const
+{
+  if (index < 0 || index >= penCount()) {
+    return false;
+  }
+  const Pen &pen = pens_[index];
+  return !pen.channel.isEmpty() && pen.runtimeConnected && !pen.samples.empty();
+}
+
 void StripChartElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);

@@ -65,6 +65,12 @@ public:
   void clearRuntimeState();
   void clearPenRuntimeState(int index);
 
+  // Data export methods
+  int sampleCount() const;
+  double sampleValue(int penIndex, int sampleIndex) const;
+  double sampleIntervalSeconds() const;
+  bool penHasData(int index) const;
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;

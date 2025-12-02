@@ -726,6 +726,34 @@ void CartesianPlotElement::setAxisRuntimeLimits(int axisIndex,
   update();
 }
 
+int CartesianPlotElement::dataPointCount(int traceIndex) const
+{
+  if (traceIndex < 0 || traceIndex >= traceCount()) {
+    return 0;
+  }
+  return traces_[traceIndex].runtimePoints.size();
+}
+
+QPointF CartesianPlotElement::dataPoint(int traceIndex, int pointIndex) const
+{
+  if (traceIndex < 0 || traceIndex >= traceCount()) {
+    return QPointF();
+  }
+  const auto &points = traces_[traceIndex].runtimePoints;
+  if (pointIndex < 0 || pointIndex >= points.size()) {
+    return QPointF();
+  }
+  return points[pointIndex];
+}
+
+bool CartesianPlotElement::traceHasData(int traceIndex) const
+{
+  if (traceIndex < 0 || traceIndex >= traceCount()) {
+    return false;
+  }
+  return !traces_[traceIndex].runtimePoints.isEmpty();
+}
+
 bool CartesianPlotElement::drawMajorGrid() const
 {
   return drawMajorGrid_;
@@ -802,12 +830,9 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
 
 void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
 {
-  if (executeMode_ && event->button() == Qt::RightButton) {
-    emit axisDialogRequested();
-    event->accept();
-  } else {
-    QWidget::mousePressEvent(event);
-  }
+  // In execute mode, let parent handle right-clicks for context menu
+  // The axis dialog will be triggered via the context menu
+  QWidget::mousePressEvent(event);
 }
 
 bool CartesianPlotElement::event(QEvent *event)

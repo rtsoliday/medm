@@ -117,6 +117,11 @@ public:
   void setAxisRuntimeLimits(int axisIndex, double minimum, double maximum,
       bool valid);
 
+  // Data export support
+  int dataPointCount(int traceIndex) const;
+  QPointF dataPoint(int traceIndex, int pointIndex) const;
+  bool traceHasData(int traceIndex) const;
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;

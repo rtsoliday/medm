@@ -2081,20 +2081,32 @@ public:
     const int traceCount = plot->traceCount();
 
     // Gather trace information and find maximum point count
-    QStringList traceXNames;
-    QStringList traceYNames;
-    QList<int> activeTraceIndices;
+    // Track which X and Y columns to include for each trace
+    struct TraceColumnInfo {
+      int traceIndex;
+      QString xColName;
+      QString yColName;
+      bool includeX;
+      bool includeY;
+    };
+    QList<TraceColumnInfo> traceColumns;
     QSet<QString> usedColumnNames;
     int maxPointCount = 0;
+    
     for (int t = 0; t < traceCount; ++t) {
       if (plot->traceHasData(t)) {
+        TraceColumnInfo info;
+        info.traceIndex = t;
+        info.includeX = true;
+        info.includeY = true;
+        
         // Determine X column name
         QString xCh = plot->traceXChannel(t);
         if (xCh.isEmpty()) {
           xCh = QStringLiteral("X%1").arg(t);
         }
-        QString xColName = xCh;
-        xColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+        info.xColName = xCh;
+        info.xColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
             QStringLiteral("_"));
 
         // Determine Y column name
@@ -2105,31 +2117,39 @@ public:
         if (yCh.isEmpty()) {
           yCh = QStringLiteral("Trace%1").arg(t);
         }
-        QString yColName = yCh;
-        yColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+        info.yColName = yCh;
+        info.yColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
             QStringLiteral("_"));
 
         // If X and Y column names are the same, append suffix
-        if (xColName == yColName) {
-          xColName += QStringLiteral("_X");
-          yColName += QStringLiteral("_Y");
+        if (info.xColName == info.yColName) {
+          info.xColName += QStringLiteral("_X");
+          info.yColName += QStringLiteral("_Y");
         }
 
-        // Skip if either column name is already used (duplicate)
-        if (usedColumnNames.contains(xColName) || usedColumnNames.contains(yColName)) {
-          continue;  // Skip this trace - duplicate column name
+        // Check X column for duplicate
+        if (usedColumnNames.contains(info.xColName)) {
+          info.includeX = false;  // Skip X column - it's a duplicate
+        } else {
+          usedColumnNames.insert(info.xColName);
         }
-        usedColumnNames.insert(xColName);
-        usedColumnNames.insert(yColName);
 
-        activeTraceIndices.append(t);
-        traceXNames.append(xCh);
-        traceYNames.append(yCh);
-        maxPointCount = std::max(maxPointCount, plot->dataPointCount(t));
+        // Check Y column for duplicate
+        if (usedColumnNames.contains(info.yColName)) {
+          info.includeY = false;  // Skip Y column - it's a duplicate
+        } else {
+          usedColumnNames.insert(info.yColName);
+        }
+
+        // Only include trace if at least one column is included
+        if (info.includeX || info.includeY) {
+          traceColumns.append(info);
+          maxPointCount = std::max(maxPointCount, plot->dataPointCount(t));
+        }
       }
     }
 
-    if (activeTraceIndices.isEmpty() || maxPointCount <= 0) {
+    if (traceColumns.isEmpty() || maxPointCount <= 0) {
       QMessageBox::warning(this, QStringLiteral("Export Failed"),
           QStringLiteral("No data available to export.\n"
               "The Cartesian plot has no connected traces with data."));
@@ -2156,30 +2176,20 @@ public:
       stream << QStringLiteral("&column name=Index, type=long, "
           "description=\"Data point index\" &end\n");
 
-      // Define X and Y columns for each active trace
-      for (int i = 0; i < activeTraceIndices.size(); ++i) {
-        int ti = activeTraceIndices[i];
-        QString xColName = traceXNames[i];
-        xColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
-            QStringLiteral("_"));
-        QString yColName = traceYNames[i];
-        yColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
-            QStringLiteral("_"));
-
-        // If X and Y column names are the same, append suffix
-        if (xColName == yColName) {
-          xColName += QStringLiteral("_X");
-          yColName += QStringLiteral("_Y");
+      // Define X and Y columns for each active trace (only non-duplicate columns)
+      for (const auto &info : traceColumns) {
+        if (info.includeX) {
+          stream << QStringLiteral("&column name=%1, type=double, "
+              "description=\"X values for trace %2\" &end\n")
+              .arg(info.xColName)
+              .arg(info.traceIndex);
         }
-
-        stream << QStringLiteral("&column name=%1, type=double, "
-            "description=\"X values for trace %2\" &end\n")
-            .arg(xColName)
-            .arg(ti);
-        stream << QStringLiteral("&column name=%1, type=double, "
-            "description=\"Y values for trace %2\" &end\n")
-            .arg(yColName)
-            .arg(ti);
+        if (info.includeY) {
+          stream << QStringLiteral("&column name=%1, type=double, "
+              "description=\"Y values for trace %2\" &end\n")
+              .arg(info.yColName)
+              .arg(info.traceIndex);
+        }
       }
 
       stream << QStringLiteral("&data mode=ascii &end\n");
@@ -2190,26 +2200,34 @@ public:
       // Write data rows
       for (int p = 0; p < maxPointCount; ++p) {
         stream << p;  // Index column
-        for (int i = 0; i < activeTraceIndices.size(); ++i) {
-          int ti = activeTraceIndices[i];
-          int pointCount = plot->dataPointCount(ti);
+        for (const auto &info : traceColumns) {
+          int pointCount = plot->dataPointCount(info.traceIndex);
           if (p < pointCount) {
-            QPointF pt = plot->dataPoint(ti, p);
-            stream << QStringLiteral(" ");
-            if (std::isnan(pt.x())) {
-              stream << QStringLiteral("nan");
-            } else {
-              stream << QString::number(pt.x(), 'g', 15);
+            QPointF pt = plot->dataPoint(info.traceIndex, p);
+            if (info.includeX) {
+              stream << QStringLiteral(" ");
+              if (std::isnan(pt.x())) {
+                stream << QStringLiteral("nan");
+              } else {
+                stream << QString::number(pt.x(), 'g', 15);
+              }
             }
-            stream << QStringLiteral(" ");
-            if (std::isnan(pt.y())) {
-              stream << QStringLiteral("nan");
-            } else {
-              stream << QString::number(pt.y(), 'g', 15);
+            if (info.includeY) {
+              stream << QStringLiteral(" ");
+              if (std::isnan(pt.y())) {
+                stream << QStringLiteral("nan");
+              } else {
+                stream << QString::number(pt.y(), 'g', 15);
+              }
             }
           } else {
-            // Trace has fewer points; output NaN
-            stream << QStringLiteral(" nan nan");
+            // Trace has fewer points; output NaN for included columns
+            if (info.includeX) {
+              stream << QStringLiteral(" nan");
+            }
+            if (info.includeY) {
+              stream << QStringLiteral(" nan");
+            }
           }
         }
         stream << QStringLiteral("\n");
@@ -2219,37 +2237,47 @@ public:
       // Export as CSV format
       // Header row
       stream << QStringLiteral("Index");
-      for (int i = 0; i < activeTraceIndices.size(); ++i) {
-        QString xName = traceXNames[i];
-        QString yName = traceYNames[i];
-        stream << QStringLiteral(",\"") << xName << QStringLiteral("\"");
-        stream << QStringLiteral(",\"") << yName << QStringLiteral("\"");
+      for (const auto &info : traceColumns) {
+        if (info.includeX) {
+          stream << QStringLiteral(",\"") << info.xColName << QStringLiteral("\"");
+        }
+        if (info.includeY) {
+          stream << QStringLiteral(",\"") << info.yColName << QStringLiteral("\"");
+        }
       }
       stream << QStringLiteral("\n");
 
       // Data rows
       for (int p = 0; p < maxPointCount; ++p) {
         stream << p;  // Index column
-        for (int i = 0; i < activeTraceIndices.size(); ++i) {
-          int ti = activeTraceIndices[i];
-          int pointCount = plot->dataPointCount(ti);
+        for (const auto &info : traceColumns) {
+          int pointCount = plot->dataPointCount(info.traceIndex);
           if (p < pointCount) {
-            QPointF pt = plot->dataPoint(ti, p);
-            stream << QStringLiteral(",");
-            if (std::isnan(pt.x())) {
-              stream << QStringLiteral("");
-            } else {
-              stream << QString::number(pt.x(), 'g', 15);
+            QPointF pt = plot->dataPoint(info.traceIndex, p);
+            if (info.includeX) {
+              stream << QStringLiteral(",");
+              if (std::isnan(pt.x())) {
+                stream << QStringLiteral("");
+              } else {
+                stream << QString::number(pt.x(), 'g', 15);
+              }
             }
-            stream << QStringLiteral(",");
-            if (std::isnan(pt.y())) {
-              stream << QStringLiteral("");
-            } else {
-              stream << QString::number(pt.y(), 'g', 15);
+            if (info.includeY) {
+              stream << QStringLiteral(",");
+              if (std::isnan(pt.y())) {
+                stream << QStringLiteral("");
+              } else {
+                stream << QString::number(pt.y(), 'g', 15);
+              }
             }
           } else {
-            // Trace has fewer points; output empty cells
-            stream << QStringLiteral(",,");
+            // Trace has fewer points; output empty cells for included columns
+            if (info.includeX) {
+              stream << QStringLiteral(",");
+            }
+            if (info.includeY) {
+              stream << QStringLiteral(",");
+            }
           }
         }
         stream << QStringLiteral("\n");

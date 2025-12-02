@@ -1089,7 +1089,7 @@ int main(int argc, char *argv[])
 //TODO: Implement Cartesian Plot axis dialog with runtime axis style changes.
 //DONE: Add Strip Chart data export to SDDS or CSV format.
 //TODO: Implement PV drag-and-drop from widgets to text fields (MEDM feature).
-//TODO: Add Cartesian Plot zoom/pan with mouse wheel and drag gestures.
+//DONE: Add Cartesian Plot zoom/pan with mouse wheel and drag gestures.
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
 //TODO: Add Strip Chart autoscale toggle and manual Y-axis range dialog.
 //TODO: Implement "Save PV Values" snapshot feature for current display state.

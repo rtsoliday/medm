@@ -1887,13 +1887,22 @@ public:
     // Gather pen information
     QStringList channelNames;
     QList<int> activePenIndices;
+    QSet<QString> usedColumnNames;
     for (int p = 0; p < penCount; ++p) {
       if (stripChart->penHasData(p)) {
-        activePenIndices.append(p);
         QString ch = stripChart->channel(p);
         if (ch.isEmpty()) {
           ch = QStringLiteral("Pen%1").arg(p);
         }
+        // Skip duplicate column names
+        QString sanitizedName = ch;
+        sanitizedName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+            QStringLiteral("_"));
+        if (usedColumnNames.contains(sanitizedName)) {
+          continue;  // Skip this pen - duplicate column name
+        }
+        usedColumnNames.insert(sanitizedName);
+        activePenIndices.append(p);
         channelNames.append(ch);
       }
     }
@@ -2072,21 +2081,50 @@ public:
     const int traceCount = plot->traceCount();
 
     // Gather trace information and find maximum point count
-    QStringList traceNames;
+    QStringList traceXNames;
+    QStringList traceYNames;
     QList<int> activeTraceIndices;
+    QSet<QString> usedColumnNames;
     int maxPointCount = 0;
     for (int t = 0; t < traceCount; ++t) {
       if (plot->traceHasData(t)) {
+        // Determine X column name
+        QString xCh = plot->traceXChannel(t);
+        if (xCh.isEmpty()) {
+          xCh = QStringLiteral("X%1").arg(t);
+        }
+        QString xColName = xCh;
+        xColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+            QStringLiteral("_"));
+
+        // Determine Y column name
+        QString yCh = plot->traceYChannel(t);
+        if (yCh.isEmpty()) {
+          yCh = plot->traceXChannel(t);
+        }
+        if (yCh.isEmpty()) {
+          yCh = QStringLiteral("Trace%1").arg(t);
+        }
+        QString yColName = yCh;
+        yColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
+            QStringLiteral("_"));
+
+        // If X and Y column names are the same, append suffix
+        if (xColName == yColName) {
+          xColName += QStringLiteral("_X");
+          yColName += QStringLiteral("_Y");
+        }
+
+        // Skip if either column name is already used (duplicate)
+        if (usedColumnNames.contains(xColName) || usedColumnNames.contains(yColName)) {
+          continue;  // Skip this trace - duplicate column name
+        }
+        usedColumnNames.insert(xColName);
+        usedColumnNames.insert(yColName);
+
         activeTraceIndices.append(t);
-        // Use Y channel name as column name, falling back to X channel or trace number
-        QString ch = plot->traceYChannel(t);
-        if (ch.isEmpty()) {
-          ch = plot->traceXChannel(t);
-        }
-        if (ch.isEmpty()) {
-          ch = QStringLiteral("Trace%1").arg(t);
-        }
-        traceNames.append(ch);
+        traceXNames.append(xCh);
+        traceYNames.append(yCh);
         maxPointCount = std::max(maxPointCount, plot->dataPointCount(t));
       }
     }
@@ -2121,13 +2159,10 @@ public:
       // Define X and Y columns for each active trace
       for (int i = 0; i < activeTraceIndices.size(); ++i) {
         int ti = activeTraceIndices[i];
-        QString xColName = plot->traceXChannel(ti);
-        if (xColName.isEmpty()) {
-          xColName = QStringLiteral("X%1").arg(ti);
-        }
+        QString xColName = traceXNames[i];
         xColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
             QStringLiteral("_"));
-        QString yColName = traceNames[i];
+        QString yColName = traceYNames[i];
         yColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
             QStringLiteral("_"));
 
@@ -2185,12 +2220,8 @@ public:
       // Header row
       stream << QStringLiteral("Index");
       for (int i = 0; i < activeTraceIndices.size(); ++i) {
-        int ti = activeTraceIndices[i];
-        QString xName = plot->traceXChannel(ti);
-        if (xName.isEmpty()) {
-          xName = QStringLiteral("X%1").arg(ti);
-        }
-        QString yName = traceNames[i];
+        QString xName = traceXNames[i];
+        QString yName = traceYNames[i];
         stream << QStringLiteral(",\"") << xName << QStringLiteral("\"");
         stream << QStringLiteral(",\"") << yName << QStringLiteral("\"");
       }

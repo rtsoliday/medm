@@ -1081,6 +1081,44 @@ int main(int argc, char *argv[])
       std::weak_ptr<DisplayState>(state), &win);
   state->findPvDialog = findPvDialog;
 
+// ===========================================================================
+// ADL-COMPATIBLE FEATURE ENHANCEMENTS (maintain MEDM file compatibility)
+// ===========================================================================
+
+//TODO: Add "Export to PNG/SVG" for display screenshots (MEDM has XWD export).
+//TODO: Implement Cartesian Plot axis dialog with runtime axis style changes.
+//TODO: Add Strip Chart data export to SDDS or CSV format.
+//TODO: Implement PV drag-and-drop from widgets to text fields (MEDM feature).
+//TODO: Add Cartesian Plot zoom/pan with mouse wheel and drag gestures.
+//TODO: Implement plot crosshairs showing coordinates at cursor position.
+//TODO: Add Strip Chart autoscale toggle and manual Y-axis range dialog.
+//TODO: Implement "Save PV Values" snapshot feature for current display state.
+//TODO: Add "Restore PV Values" to write saved snapshot back to IOC.
+//TODO: Implement execute-mode right-click context menu (Print, Close, PV Info).
+//TODO: Add keyboard navigation for sliders (arrow keys already work, add Tab).
+//TODO: Implement middle-click paste of PV names from system clipboard.
+//TODO: Add display title bar showing filename and macro substitutions.
+//TODO: Implement "Reload Display" action to refresh from disk without close.
+//TODO: Add configurable update rate throttling per display (reduce CA load).
+//TODO: Implement channel timeout indication (flash/blink on stale data).
+//TODO: Add alarm acknowledgment indicators for widgets with alarm color mode.
+//TODO: Implement rising/falling line elements (medmRisingLine.c equivalent).
+//TODO: Add bezier curve support to polyline elements.
+//TODO: Implement arc fill patterns (pie slice vs. chord fill styles).
+//TODO: Add text rotation support (0/90/180/270 degrees, ADL compatible).
+//TODO: Implement image scaling modes (stretch, fit, tile) for Image widget.
+//TODO: Add animated GIF support for Image widget in execute mode.
+//TODO: Implement embedded composite editing (edit children in place).
+//TODO: Add composite file browser for selecting .adl files as composites.
+//TODO: Implement "Flatten Composite" to inline composite contents.
+//TODO: Add "Create Composite from Selection" with optional file save.
+//TODO: Implement symbol/LED widget with configurable shape (circle, square).
+//TODO: Add multi-state indicator with discrete color mapping (>2 states).
+
+// ===========================================================================
+// EXTENDED FUNCTIONALITY (new features, but ADL round-trip safe)
+// ===========================================================================
+
 //TODO: Add tabbed container / stacked widget support for multi-view displays.
 //TODO: Implement 2D image viewer for EPICS areaDetector NDArray PVs.
 //TODO: Add 2D contour / heatmap widget (like sddscontour) for SDDS or array PVs.
@@ -1098,12 +1136,26 @@ int main(int argc, char *argv[])
 //TODO: Create lattice / beamline schematic widget for visualizing beamline elements.
 //TODO: Implement PV waveform scope widget for fast waveform diagnostics.
 
+// ===========================================================================
+// INFRASTRUCTURE AND INTEGRATION
+// ===========================================================================
+
 //TODO: Add theme/palette system (dark, light, facility-specific branding).
 //TODO: Implement dockable layouts so operators can rearrange displays.
 //TODO: Add support for importing caQtDM .ui and CSS .opi display files.
 //TODO: Design plugin API for custom widgets (C++ or Python registration).
 //TODO: Add EPICS PVAccess (PVA) support alongside Channel Access.
 //TODO: Implement versioned schema system for forward/backward compatibility.
+//TODO: Add macro inheritance for related displays (pass parent macros).
+//TODO: Implement display preloading for frequently-used related displays.
+//TODO: Add command-line batch mode for automated display testing.
+//TODO: Implement accessibility features (screen reader, high contrast).
+//TODO: Add touch-screen friendly controls (larger hit targets, gestures).
+//TODO: Implement session save/restore (remember open displays and positions).
+//TODO: Add multi-monitor support with display placement preferences.
+//TODO: Implement network-based display serving (load ADL from URL).
+//TODO: Add display locking to prevent accidental edits in execute mode.
+//TODO: Implement audit logging for control widget value changes.
 
 
 

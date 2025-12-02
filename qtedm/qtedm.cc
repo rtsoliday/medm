@@ -850,6 +850,55 @@ int main(int argc, char *argv[])
     app.setStyle(fusionStyle);
   }
 
+  /* Create a complete palette to ensure QtEDM looks the same regardless of
+   * the user's desktop theme (dark mode, light mode, etc.) */
+  const QColor backgroundColor(0xb0, 0xc3, 0xca);
+  const QColor highlightColor = backgroundColor.lighter(120);
+  const QColor midHighlightColor = backgroundColor.lighter(108);
+  const QColor shadowColor = backgroundColor.darker(120);
+  const QColor midShadowColor = backgroundColor.darker(140);
+  const QColor disabledTextColor(0x64, 0x64, 0x64);
+  const QColor selectionColor(0x30, 0x80, 0xc0);
+  const QColor linkColor(0x00, 0x00, 0xff);
+
+  /* Start with a fresh palette rather than inheriting from system theme */
+  QPalette palette;
+  palette.setColor(QPalette::Window, backgroundColor);
+  palette.setColor(QPalette::WindowText, Qt::black);
+  palette.setColor(QPalette::Base, backgroundColor);
+  palette.setColor(QPalette::AlternateBase, backgroundColor);
+  palette.setColor(QPalette::Text, Qt::black);
+  palette.setColor(QPalette::Button, backgroundColor);
+  palette.setColor(QPalette::ButtonText, Qt::black);
+  palette.setColor(QPalette::Light, highlightColor);
+  palette.setColor(QPalette::Midlight, midHighlightColor);
+  palette.setColor(QPalette::Dark, shadowColor);
+  palette.setColor(QPalette::Mid, midShadowColor);
+  palette.setColor(QPalette::Shadow, Qt::black);
+  palette.setColor(QPalette::Highlight, selectionColor);
+  palette.setColor(QPalette::HighlightedText, Qt::white);
+  palette.setColor(QPalette::Link, linkColor);
+  palette.setColor(QPalette::LinkVisited, linkColor.darker(120));
+  palette.setColor(QPalette::ToolTipBase, QColor(0xff, 0xff, 0xdc));
+  palette.setColor(QPalette::ToolTipText, Qt::black);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+  palette.setColor(QPalette::PlaceholderText, disabledTextColor);
+#endif
+  palette.setColor(QPalette::BrightText, Qt::white);
+
+  /* Disabled state */
+  palette.setColor(QPalette::Disabled, QPalette::Window, backgroundColor);
+  palette.setColor(QPalette::Disabled, QPalette::WindowText, disabledTextColor);
+  palette.setColor(QPalette::Disabled, QPalette::Base, backgroundColor);
+  palette.setColor(QPalette::Disabled, QPalette::Text, disabledTextColor);
+  palette.setColor(QPalette::Disabled, QPalette::Button, backgroundColor);
+  palette.setColor(QPalette::Disabled, QPalette::ButtonText, disabledTextColor);
+  palette.setColor(QPalette::Disabled, QPalette::Highlight, shadowColor);
+  palette.setColor(QPalette::Disabled, QPalette::HighlightedText, disabledTextColor);
+
+  /* Apply palette to entire application before creating any widgets */
+  app.setPalette(palette);
+
   const QFont fixed10Font = LegacyFonts::fontOrDefault(
       QStringLiteral("widgetDM_10"),
       QFontDatabase::systemFont(QFontDatabase::FixedFont));
@@ -861,28 +910,6 @@ int main(int argc, char *argv[])
   QMainWindow win;
   win.setObjectName("QtedmMainWindow");
   win.setWindowTitle("QtEDM");
-
-  const QColor backgroundColor(0xb0, 0xc3, 0xca);
-  const QColor highlightColor = backgroundColor.lighter(120);
-  const QColor midHighlightColor = backgroundColor.lighter(108);
-  const QColor shadowColor = backgroundColor.darker(120);
-  const QColor midShadowColor = backgroundColor.darker(140);
-  const QColor disabledTextColor(0x64, 0x64, 0x64);
-  QPalette palette = win.palette();
-  palette.setColor(QPalette::Window, backgroundColor);
-  palette.setColor(QPalette::Base, backgroundColor);
-  palette.setColor(QPalette::AlternateBase, backgroundColor);
-  palette.setColor(QPalette::Button, backgroundColor);
-  palette.setColor(QPalette::WindowText, Qt::black);
-  palette.setColor(QPalette::ButtonText, Qt::black);
-  palette.setColor(QPalette::Light, highlightColor);
-  palette.setColor(QPalette::Midlight, midHighlightColor);
-  palette.setColor(QPalette::Dark, shadowColor);
-  palette.setColor(QPalette::Mid, midShadowColor);
-  palette.setColor(QPalette::Disabled, QPalette::WindowText, disabledTextColor);
-  palette.setColor(QPalette::Disabled, QPalette::ButtonText, disabledTextColor);
-  palette.setColor(QPalette::Disabled, QPalette::Text, disabledTextColor);
-  palette.setColor(QPalette::Disabled, QPalette::Button, backgroundColor);
   win.setPalette(palette);
 
   auto *menuBar = win.menuBar();
@@ -1104,11 +1131,8 @@ int main(int argc, char *argv[])
 // ADL-COMPATIBLE FEATURE ENHANCEMENTS (maintain MEDM file compatibility)
 // ===========================================================================
 
-//DONE: Add "Export to PNG/SVG" for display screenshots (MEDM has XWD export).
 //TODO: Implement Cartesian Plot axis dialog with runtime axis style changes.
-//DONE: Add Strip Chart data export to SDDS or CSV format.
 //TODO: Implement PV drag-and-drop from widgets to text fields (MEDM feature).
-//DONE: Add Cartesian Plot zoom/pan with mouse wheel and drag gestures.
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
 //TODO: Add Strip Chart autoscale toggle and manual Y-axis range dialog.
 //TODO: Implement "Save PV Values" snapshot feature for current display state.
@@ -1126,7 +1150,6 @@ int main(int argc, char *argv[])
 //TODO: Implement arc fill patterns (pie slice vs. chord fill styles).
 //TODO: Add text rotation support (0/90/180/270 degrees, ADL compatible).
 //TODO: Implement image scaling modes (stretch, fit, tile) for Image widget.
-//DONE: Add animated GIF support for Image widget in execute mode.
 //TODO: Implement embedded composite editing (edit children in place).
 //TODO: Add composite file browser for selecting .adl files as composites.
 //TODO: Implement "Flatten Composite" to inline composite contents.
@@ -1159,7 +1182,6 @@ int main(int argc, char *argv[])
 // INFRASTRUCTURE AND INTEGRATION
 // ===========================================================================
 
-//TODO: Add theme/palette system (dark, light, facility-specific branding).
 //TODO: Implement dockable layouts so operators can rearrange displays.
 //TODO: Add support for importing caQtDM .ui and CSS .opi display files.
 //TODO: Design plugin API for custom widgets (C++ or Python registration).
@@ -1174,9 +1196,6 @@ int main(int argc, char *argv[])
 //TODO: Add multi-monitor support with display placement preferences.
 //TODO: Implement network-based display serving (load ADL from URL).
 //TODO: Add display locking to prevent accidental edits in execute mode.
-//DONE: Implement audit logging for control widget value changes.
-//      Logs to ~/.medm/audit_TIMESTAMP_PID.log. Enabled by default.
-//      Disable with -nolog command line option or QTEDM_NOLOG=1 environment var.
 
 
 

@@ -1082,24 +1082,17 @@ int main(int argc, char *argv[])
   state->findPvDialog = findPvDialog;
 
 //TODO: Add tabbed container / stacked widget support for multi-view displays.
-
 //TODO: Implement 2D image viewer for EPICS areaDetector NDArray PVs.
 //TODO: Add 2D contour / heatmap widget (like sddscontour) for SDDS or array PVs.
 //TODO: Implement vector/arrow field widget for displaying field maps or quiver data.
 //TODO: Add spectrogram / FFT display widget for frequency-domain visualization.
 //TODO: Create scrolling log or mini-alarm panel widget with timestamps.
-
 //TODO: Implement modern toggle switch and pushbutton styles (with LED indicators).
-//TODO: Add numeric spinbox with PV unit display (from EPICS metadata).
 //TODO: Implement logarithmic slider / knob for wide dynamic-range parameters.
 //TODO: Create rotary knob / dial widget for continuous analog setpoints.
 //TODO: Implement PV table / matrix editor widget for grouped parameter control.
-//TODO: Add macro-enabled button widget to execute macros or scripts on click.
-
 //TODO: Implement alarm summary / banner widget showing active alarms inline.
 //TODO: Add PV tree / hierarchical browser widget for structured PV navigation.
-//TODO: Design scriptable widget framework (Python or JavaScript per widget).
-
 //TODO: Implement SDDS table viewer widget for displaying tabular SDDS datasets.
 //TODO: Add SDDS plot widget for static or live plotting of SDDS data columns.
 //TODO: Create lattice / beamline schematic widget for visualizing beamline elements.
@@ -1107,17 +1100,11 @@ int main(int argc, char *argv[])
 
 //TODO: Add theme/palette system (dark, light, facility-specific branding).
 //TODO: Implement dockable layouts so operators can rearrange displays.
-
 //TODO: Add support for importing caQtDM .ui and CSS .opi display files.
 //TODO: Design plugin API for custom widgets (C++ or Python registration).
 //TODO: Add EPICS PVAccess (PVA) support alongside Channel Access.
 //TODO: Implement versioned schema system for forward/backward compatibility.
 
-//TODO: Phase 1 – Complete MEDM compatibility and core widgets.
-//TODO: Phase 2 – Add visualization widgets and areaDetector integration.
-//TODO: Phase 3 – Introduce scripting and SDDS widget extensions.
-//TODO: Phase 4 – Improve operator UX and theming support.
-//TODO: Phase 5 – Develop plugin framework and PVA integration.
 
 
   auto objectPaletteDialog = QPointer<ObjectPaletteDialog>(

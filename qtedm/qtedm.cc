@@ -434,7 +434,7 @@ void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
       window->move(computeTarget(frameSize, screenGeometry));
     }
 
-    auto moveWindow = [window, spec, resolveScreen, computeTarget]() {
+    auto moveWindow = [window, resolveScreen, computeTarget]() {
       QScreen *screen = resolveScreen();
       if (!screen) {
         return;
@@ -1721,7 +1721,7 @@ int main(int argc, char *argv[])
   mainWindowController->setDisplayWindowRegistrar(registerDisplayWindow);
 
   QObject::connect(newAct, &QAction::triggered, &win,
-      [state, displayPalette, &win, fixed10Font, &palette, fixed13Font,
+      [state, displayPalette, fixed10Font, &palette, fixed13Font,
           registerDisplayWindow]() {
         if (!state->editMode) {
           return;

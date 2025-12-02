@@ -26,7 +26,7 @@ namespace {
 constexpr int kOuterMargin = 4;
 constexpr int kInnerMargin = 4;
 constexpr int kHorizontalMargin = 12;
-constexpr int kGridLines = 5;
+// Unused: constexpr int kGridLines = 5;
 constexpr double kTwoPi = 6.28318530717958647692;
 constexpr int kMinimumSampleCount = 8;
 constexpr int kMaximumSampleCount = kCartesianPlotMaximumSampleCount;

@@ -26,11 +26,7 @@ constexpr qreal kMinimumAxisExtent = 12.0;
 constexpr qreal kAxisSpacing = 4.0;
 constexpr qreal kBevelWidth = 2.0;
 constexpr qreal kLayoutPadding = 3.0;
-constexpr qreal kMinimumLabelPointSize = 10.0;
-constexpr qreal kFontShrinkFactor = 0.9;
-constexpr qreal kFontGrowFactor = 1.05;
-constexpr qreal kLabelTextPadding = 2.0;
-constexpr int kMaxFontSizeIterations = 12;
+// Unused: kMinimumLabelPointSize, kFontShrinkFactor, kFontGrowFactor, kLabelTextPadding, kMaxFontSizeIterations
 
 } // namespace
 

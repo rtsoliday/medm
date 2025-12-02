@@ -321,7 +321,7 @@ ifeq ($(OS), Linux)
   AR = ar rcs
   RANLIB = ranlib
   CFLAGS = -m64 -O3 -g -Wall -fPIC $(EXTRA_INC_DIRS)
-  CCFLAGS = -m64 -O3 -g -Wall -fPIC $(EXTRA_INC_DIRS)
+  CCFLAGS = -m64 -O3 -g -Wall -fPIC -std=c++17 $(EXTRA_INC_DIRS)
   #Use this for memory checking with valgrind
   #CFLAGS = -m64  -g -O0 -Wall -fno-inline -fno-omit-frame-pointer -fPIC $(EXTRA_INC_DIRS)
   #CCFLAGS = -m64  -g -O0 -Wall -fno-inline -fno-omit-frame-pointer -fPIC $(EXTRA_INC_DIRS)
@@ -368,8 +368,8 @@ ifeq ($(OS), Darwin)
   RANLIB = ranlib
   #MAC_VERSION = -mmacosx-version-min=10.13
   CFLAGS = -Wno-deprecated-non-prototype -m64 -O3 -g -Wall -fPIC -fno-common $(MAC_VERSION) $(EXTRA_INC_DIRS)
-  CCFLAGS = -Wno-deprecated-non-prototype -m64 -O3 -g -Wall -fPIC -fno-common -std=c++11 $(MAC_VERSION) $(EXTRA_INC_DIRS)
-  LDFLAGS = $(MAC_VERSION) -std=c++11
+  CCFLAGS = -Wno-deprecated-non-prototype -m64 -O3 -g -Wall -fPIC -fno-common -std=c++17 $(MAC_VERSION) $(EXTRA_INC_DIRS)
+  LDFLAGS = $(MAC_VERSION) -std=c++17
   LIBRARY_SYS_LIBS = -lm
   PROD_SYS_LIBS = -lm
   OBJEXT = o
@@ -387,7 +387,7 @@ ifeq ($(OS), Darwin)
   #-Wall        Enables a broad set of warning messages to help identify potential issues.
   #-fPIC        Generates position-independent code, which is essential for creating shared libraries.
   #-fno-common  Treats uninitialized global variables as separate entities, preventing potential linker conflicts.
-  #-std=c++11   Specifies that the code should be compiled using the C++11 standard.
+  #-std=c++17   Specifies that the code should be compiled using the C++17 standard.
 
 endif
 

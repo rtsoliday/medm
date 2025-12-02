@@ -469,7 +469,7 @@ void WheelSwitchElement::mousePressEvent(QMouseEvent *event)
 
   setFocus(Qt::MouseFocusReason);
 
-  const QRectF outer = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
   const Layout layout = layoutForRect(outer);
   bool handled = false;
 
@@ -561,7 +561,7 @@ void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
     return;
   }
 
-  const QRectF outer = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
   const Layout layout = layoutForRect(outer);
 
   switch (event->key()) {
@@ -662,7 +662,7 @@ void WheelSwitchElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, true);
 
-  const QRectF outer = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
   painter.fillRect(outer, effectiveBackground());
 
   QPen borderPen(Qt::black);
@@ -871,12 +871,13 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   }
 
   // Count digits after decimal in template to determine how many go left vs right
-  int digitsAfterDecimal = 0;
-  for (int i = templateDecimalIndex + 1; i < templateText.size(); ++i) {
-    if (templateText.at(i).isDigit()) {
-      digitsAfterDecimal++;
-    }
-  }
+  // (currently not used but may be needed for future enhancements)
+  // int digitsAfterDecimal = 0;
+  // for (int i = templateDecimalIndex + 1; i < templateText.size(); ++i) {
+  //   if (templateText.at(i).isDigit()) {
+  //     digitsAfterDecimal++;
+  //   }
+  // }
 
   layout.font = wheelSwitchFontForHeight(height());
   if (layout.font.family().isEmpty()) {
@@ -1193,7 +1194,7 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
 
 void WheelSwitchElement::updateHoverState(const QPointF &pos)
 {
-  const QRectF outer = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
   const Layout layout = layoutForRect(outer);
 
   int newIndex = -1;

@@ -7,6 +7,7 @@
 
 #include <db_access.h>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "choice_button_element.h"
 #include "statistics_tracker.h"
@@ -302,6 +303,8 @@ void ChoiceButtonRuntime::handleActivation(int value)
                << channelName_ << ':' << ca_message(status);
     return;
   }
+  AuditLogger::instance().logPut(channelName_, value,
+      QStringLiteral("ChoiceButton"));
   ca_flush_io();
 }
 

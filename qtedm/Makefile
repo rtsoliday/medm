@@ -42,6 +42,7 @@ PROD = qtedm
 
 qtedm_SRC = qtedm.cc \
             adl_parser.cc \
+            audit_logger.cc \
             legacy_fonts.cc \
             window_utils.cc \
             adl_writer.cc \

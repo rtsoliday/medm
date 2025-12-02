@@ -8,6 +8,7 @@
 
 #include <db_access.h>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "menu_element.h"
 #include "statistics_tracker.h"
@@ -301,6 +302,8 @@ void MenuRuntime::handleActivation(int value)
                << channelName_ << ':' << ca_message(status);
     return;
   }
+  AuditLogger::instance().logPut(channelName_, value,
+      QStringLiteral("Menu"));
   ca_flush_io();
 }
 

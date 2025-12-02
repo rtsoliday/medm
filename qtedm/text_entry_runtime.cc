@@ -10,6 +10,7 @@
 #include <cvtFast.h>
 #include <db_access.h>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "runtime_utils.h"
 #include "statistics_tracker.h"
@@ -395,6 +396,10 @@ void TextEntryRuntime::handleActivation(const QString &text)
     }
     bytes.append('\0');
     status = ca_put(DBR_STRING, channelId_, bytes.constData());
+    if (status == ECA_NORMAL) {
+      AuditLogger::instance().logPut(channelName_, trimmed,
+          QStringLiteral("TextEntry"));
+    }
     break;
   }
   case ValueKind::kCharArray: {
@@ -407,6 +412,10 @@ void TextEntryRuntime::handleActivation(const QString &text)
       }
       status = ca_array_put(DBR_CHAR, bytes.size(), channelId_,
           bytes.constData());
+      if (status == ECA_NORMAL) {
+        AuditLogger::instance().logPut(channelName_, trimmed,
+            QStringLiteral("TextEntry"));
+      }
     } else {
       double numeric = 0.0;
       if (!parseNumericInput(trimmed, numeric)) {
@@ -416,6 +425,10 @@ void TextEntryRuntime::handleActivation(const QString &text)
       }
       dbr_double_t value = static_cast<dbr_double_t>(numeric);
       status = ca_put(DBR_DOUBLE, channelId_, &value);
+      if (status == ECA_NORMAL) {
+        AuditLogger::instance().logPut(channelName_, numeric,
+            QStringLiteral("TextEntry"));
+      }
     }
     break;
   }
@@ -427,6 +440,10 @@ void TextEntryRuntime::handleActivation(const QString &text)
       return;
     }
     status = ca_put(DBR_SHORT, channelId_, &enumValue);
+    if (status == ECA_NORMAL) {
+      AuditLogger::instance().logPut(channelName_, static_cast<int>(enumValue),
+          QStringLiteral("TextEntry"));
+    }
     break;
   }
   case ValueKind::kNumeric:
@@ -440,6 +457,10 @@ void TextEntryRuntime::handleActivation(const QString &text)
     }
     dbr_double_t value = static_cast<dbr_double_t>(numeric);
     status = ca_put(DBR_DOUBLE, channelId_, &value);
+    if (status == ECA_NORMAL) {
+      AuditLogger::instance().logPut(channelName_, numeric,
+          QStringLiteral("TextEntry"));
+    }
     break;
   }
   }

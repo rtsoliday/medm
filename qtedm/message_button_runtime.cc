@@ -11,6 +11,7 @@
 
 #include <db_access.h>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "message_button_element.h"
 #include "statistics_tracker.h"
@@ -428,6 +429,8 @@ bool MessageButtonRuntime::sendStringValue(const QString &value)
                << channelName_ << ':' << ca_message(status);
     return false;
   }
+  AuditLogger::instance().logPut(channelName_, value,
+      QStringLiteral("MessageButton"));
   ca_flush_io();
   return true;
 }
@@ -495,6 +498,8 @@ bool MessageButtonRuntime::sendEnumValue(const QString &value)
                << channelName_ << ':' << ca_message(status);
     return false;
   }
+  AuditLogger::instance().logPut(channelName_, static_cast<int>(toSend),
+      QStringLiteral("MessageButton"));
   ca_flush_io();
   return true;
 }
@@ -515,6 +520,8 @@ bool MessageButtonRuntime::sendNumericValue(const QString &value)
                << channelName_ << ':' << ca_message(status);
     return false;
   }
+  AuditLogger::instance().logPut(channelName_, numeric,
+      QStringLiteral("MessageButton"));
   ca_flush_io();
   return true;
 }

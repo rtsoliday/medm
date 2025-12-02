@@ -228,6 +228,10 @@
     <td>Do not raise the message window on startup</td>
   </tr>
   <tr>
+    <td><code>-nolog</code></td>
+    <td>Disable audit logging of control widget value changes</td>
+  </tr>
+  <tr>
     <td><code>-bigMousePointer</code></td>
     <td>Use a larger mouse pointer for accessibility</td>
   </tr>
@@ -408,6 +412,14 @@
       <li><strong>Zoom:</strong> Use the mouse wheel to zoom in and out. The zoom is centered on the cursor position. Hold Shift while scrolling to zoom only the X axis, or hold Ctrl to zoom only the Y axis.</li>
       <li><strong>Pan:</strong> Click and drag with the left mouse button to pan the view. The cursor changes to a closed hand while panning.</li>
       <li><strong>Reset:</strong> Right-click on a zoomed plot to access the "Reset Zoom" option and restore the original view. Zoom state is also automatically reset when switching from EXECUTE to EDIT mode.</li>
+    </ul>
+  </li>
+  <li><strong>Audit Logging</strong> &ndash; QtEDM provides audit logging of all control widget value changes (writes to PVs). This feature is enabled by default and logs to timestamped files in the <code>~/.medm</code> directory.
+    <ul>
+      <li><strong>Log Format:</strong> Each entry contains timestamp, username, widget type, PV name, value written, and display file (if available).</li>
+      <li><strong>Log Location:</strong> Logs are written to <code>~/.medm/audit_YYYYMMDD_HHMMSS_PID.log</code> where PID is the process ID, ensuring unique log files when multiple QtEDM instances run concurrently on shared accounts.</li>
+      <li><strong>Disable Logging:</strong> Use the <code>-nolog</code> command line option or set the environment variable <code>QTEDM_NOLOG=1</code></li>
+      <li><strong>Logged Widgets:</strong> TextEntry, Slider, WheelSwitch, Menu, ChoiceButton, and MessageButton writes are logged.</li>
     </ul>
   </li>
 </ul>

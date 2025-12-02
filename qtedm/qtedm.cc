@@ -69,6 +69,7 @@ typedef int Status;
 #endif
 #endif
 
+#include "audit_logger.h"
 #include "display_properties.h"
 #include "display_state.h"
 #include "display_list_dialog.h"
@@ -113,6 +114,7 @@ struct CommandLineOptions {
   bool usePrivateColormap = false;
   bool useBigMousePointer = false;
   bool testSave = false;
+  bool enableAuditLog = true;
   QString invalidOption;
   QStringList displayFiles;
   QString displayGeometry;
@@ -144,8 +146,13 @@ void printUsage(const QString &program)
       "  [-dg geometry]\n"
       "  [-displayFont alias|scalable]\n"
       "  [-noMsg]\n"
+      "  [-nolog]\n"
       "  [display-files]\n"
       "  [&]\n"
+      "\n"
+      "Options:\n"
+      "  -nolog    Disable audit logging of control widget value changes\n"
+      "            (can also set QTEDM_NOLOG=1 environment variable)\n"
       "\n",
       program.toLocal8Bit().constData());
   fflush(stdout);
@@ -172,6 +179,8 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.showVersion = true;
     } else if (arg == QLatin1String("-noMsg")) {
       options.raiseMessageWindow = false;
+    } else if (arg == QLatin1String("-nolog")) {
+      options.enableAuditLog = false;
     } else if (arg == QLatin1String("-bigMousePointer")) {
       options.useBigMousePointer = true;
     } else if (arg == QLatin1String("-cmap")) {
@@ -206,6 +215,13 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.displayFiles.push_back(arg);
     }
   }
+
+  /* Check QTEDM_NOLOG environment variable */
+  const QByteArray noLogEnv = qgetenv("QTEDM_NOLOG");
+  if (!noLogEnv.isEmpty() && noLogEnv != "0") {
+    options.enableAuditLog = false;
+  }
+
   if (!options.invalidOption.isEmpty()) {
     options.showHelp = true;
   }
@@ -826,6 +842,9 @@ int main(int argc, char *argv[])
     LegacyFonts::setWidgetDMAliasMode(LegacyFonts::WidgetDMAliasMode::kFixed);
   }
 
+  /* Initialize audit logging for control widget value changes */
+  AuditLogger::instance().initialize(options.enableAuditLog);
+
   if (auto *fusionStyle =
           QStyleFactory::create(QStringLiteral("Fusion"))) {
     app.setStyle(fusionStyle);
@@ -1107,7 +1126,7 @@ int main(int argc, char *argv[])
 //TODO: Implement arc fill patterns (pie slice vs. chord fill styles).
 //TODO: Add text rotation support (0/90/180/270 degrees, ADL compatible).
 //TODO: Implement image scaling modes (stretch, fit, tile) for Image widget.
-//TODO: Add animated GIF support for Image widget in execute mode.
+//DONE: Add animated GIF support for Image widget in execute mode.
 //TODO: Implement embedded composite editing (edit children in place).
 //TODO: Add composite file browser for selecting .adl files as composites.
 //TODO: Implement "Flatten Composite" to inline composite contents.
@@ -1155,7 +1174,9 @@ int main(int argc, char *argv[])
 //TODO: Add multi-monitor support with display placement preferences.
 //TODO: Implement network-based display serving (load ADL from URL).
 //TODO: Add display locking to prevent accidental edits in execute mode.
-//TODO: Implement audit logging for control widget value changes.
+//DONE: Implement audit logging for control widget value changes.
+//      Logs to ~/.medm/audit_TIMESTAMP_PID.log. Enabled by default.
+//      Disable with -nolog command line option or QTEDM_NOLOG=1 environment var.
 
 
 

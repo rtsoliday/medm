@@ -9,6 +9,7 @@
 
 #include <db_access.h>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "runtime_utils.h"
 #include "wheel_switch_element.h"
@@ -302,6 +303,8 @@ void WheelSwitchRuntime::handleActivation(double value)
                << channelName_ << ':' << ca_message(status);
     return;
   }
+  AuditLogger::instance().logPut(channelName_, value,
+      QStringLiteral("WheelSwitch"));
   ca_flush_io();
 }
 

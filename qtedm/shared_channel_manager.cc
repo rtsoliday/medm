@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "statistics_tracker.h"
 
@@ -664,12 +665,20 @@ bool SharedChannelManager::putValue(const QString &pvName, double value)
       return false;
     }
     int putStatus = ca_put(DBR_DOUBLE, putChannel, &value);
+    if (putStatus == ECA_NORMAL) {
+      AuditLogger::instance().logPut(trimmed, value,
+          QStringLiteral("Slider"));
+    }
     ca_flush_io();
     ca_clear_channel(putChannel);
     return putStatus == ECA_NORMAL;
   }
 
   int status = ca_put(DBR_DOUBLE, putChannel, &value);
+  if (status == ECA_NORMAL) {
+    AuditLogger::instance().logPut(trimmed, value,
+        QStringLiteral("Slider"));
+  }
   ca_flush_io();
   return status == ECA_NORMAL;
 }

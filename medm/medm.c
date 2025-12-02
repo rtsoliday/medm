@@ -2349,7 +2349,7 @@ static void editHelpDialogCallback(Widget w, XtPointer cd, XtPointer cbs) {
 }
 
 static void modeCallback(Widget w, XtPointer cd, XtPointer cbs) {
-  DlTraversalMode mode = (DlTraversalMode)cd;
+  DlTraversalMode mode = (DlTraversalMode)(uintptr_t)cd;
   XmToggleButtonCallbackStruct *call_data = (XmToggleButtonCallbackStruct *)cbs;
   DisplayInfo *displayInfo;
 

@@ -566,7 +566,7 @@ void drawingAreaCallback(Widget w, XtPointer clientData, XtPointer callData)
 
 void wmCloseCallback(Widget w, XtPointer cd, XtPointer cbs)
 {
-    ShellType shellType = (ShellType) cd;
+    ShellType shellType = (ShellType)(uintptr_t)cd;
 
     UNREFERENCED(cbs);
 

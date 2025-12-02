@@ -2475,9 +2475,9 @@ static void initializeResourcePaletteElements()
               for (k = j; k < MAX_RESOURCES_FOR_DL_ELEMENT; k++)
                 {
 #if defined(_WIN32)
-                  Sleep(50)
+                  Sleep(50);
 #else
-                  sleep(.05);
+                  usleep(50000);
 #endif
                   resourcePaletteElements[index].childIndexRC[k] = 0;
                   resourcePaletteElements[index].children[k] = NULL;

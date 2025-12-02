@@ -139,7 +139,7 @@ extern XButtonPressedEvent lastEvent;
  */
 void objectMenuCallback(Widget w, XtPointer clientData, XtPointer cbs)
 {
-    DlElementType type = (DlElementType) clientData;
+    DlElementType type = (DlElementType)(uintptr_t)clientData;
     DisplayInfo *di;
 
     UNREFERENCED(w);
@@ -207,7 +207,7 @@ static void objectToggleCallback(Widget w, XtPointer clientData,
   XtPointer callbackStruct)
 {
     DisplayInfo *di;
-    DlElementType type = (DlElementType)clientData; /* KE: Not used, Possibly not valid  */
+    DlElementType type = (DlElementType)(uintptr_t)clientData; /* KE: Not used, Possibly not valid  */
     XmToggleButtonCallbackStruct *call_data =
       (XmToggleButtonCallbackStruct *)callbackStruct;
 

@@ -1367,6 +1367,7 @@ DlColormap *parseAndExtractExternalColormap(DisplayInfo *displayInfo,
 	displayInfo->filePtr = savedFilePtr;
     }
   /* KE: There was no return for this branch */
+    (void)nestingLevel;  /* Tracked but not used */
     return(dlColormap);
 }
 

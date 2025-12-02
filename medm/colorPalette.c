@@ -408,7 +408,7 @@ void setCurrentDisplayColorsInColorPalette(int rcType, int index)
   /* for types with color vectors, also specify element */
 {
     Arg args[2];
-    int i, n = 0;
+    int i;
 
 /* create the color palette if it doesn't yet exist */
     if (colorMW == NULL) createColor();
@@ -424,7 +424,7 @@ void setCurrentDisplayColorsInColorPalette(int rcType, int index)
 	currentColormap = currentDisplayInfo->colormap;
 	for (i = 0; i < MIN(currentDisplayInfo->dlColormapCounter,
 	  DL_MAX_COLORS); i++) {
-	    XtSetArg(args[0],XmNbackground,currentColormap[i]); n++;
+	    XtSetArg(args[0],XmNbackground,currentColormap[i]);
 	    XtSetValues(globalColorPalettePB[i],args,1);
 	}
     }

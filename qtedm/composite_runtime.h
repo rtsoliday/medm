@@ -6,7 +6,7 @@
 #include <QObject>
 #include <QString>
 
-#include <cadef.h>
+#include "shared_channel_manager.h"
 
 class CompositeElement;
 
@@ -23,16 +23,11 @@ public:
   void stop();
 
 private:
-  struct ChannelRuntime
+  /* Channel state tracked per subscription */
+  struct ChannelState
   {
-    CompositeRuntime *owner = nullptr;
-    int index = 0;
     QString name;
-    chid channelId = nullptr;
-    evid subscriptionId = nullptr;
-    chtype subscriptionType = DBR_TIME_DOUBLE;
-    short fieldType = -1;
-    long elementCount = 1;
+    SubscriptionHandle subscription;
     bool connected = false;
     bool hasValue = false;
     double value = 0.0;
@@ -42,20 +37,13 @@ private:
   void resetState();
   void initializeChannels();
   void cleanupChannels();
-  void subscribeChannel(ChannelRuntime &channel);
-  void unsubscribeChannel(ChannelRuntime &channel);
-  void handleChannelConnection(ChannelRuntime &channel,
-      const connection_handler_args &args);
-  void handleChannelValue(ChannelRuntime &channel,
-      const event_handler_args &args);
+  void handleChannelConnection(int index, bool connected);
+  void handleChannelValue(int index, const SharedChannelData &data);
   void evaluateVisibility();
   bool evaluateCalcExpression(double &result) const;
 
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-
   CompositeElement *element_ = nullptr;
-  std::array<ChannelRuntime, 5> channels_{};
+  std::array<ChannelState, 5> channels_{};
   QByteArray calcPostfix_;
   bool calcValid_ = false;
   bool started_ = false;

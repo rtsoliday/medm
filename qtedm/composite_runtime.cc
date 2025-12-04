@@ -39,10 +39,6 @@ CompositeRuntime::CompositeRuntime(CompositeElement *element)
   : QObject(nullptr)
   , element_(element)
 {
-  for (std::size_t i = 0; i < channels_.size(); ++i) {
-    channels_[i].owner = this;
-    channels_[i].index = static_cast<int>(i);
-  }
 }
 
 CompositeRuntime::~CompositeRuntime()
@@ -119,231 +115,76 @@ void CompositeRuntime::initializeChannels()
     return;
   }
 
-  /* Create channels for all non-empty channel names */
+  ChannelAccessContext::instance().ensureInitialized();
+  if (!ChannelAccessContext::instance().isInitialized()) {
+    qWarning() << "CompositeRuntime: Channel Access context not available";
+    return;
+  }
+
+  auto &mgr = SharedChannelManager::instance();
+
+  /* Create subscriptions for all non-empty channel names */
   for (std::size_t i = 0; i < channels_.size(); ++i) {
-    const QString channelName = element_->channel(static_cast<int>(i));
+    const QString channelName = element_->channel(static_cast<int>(i)).trimmed();
     if (channelName.isEmpty()) {
       continue;
     }
     channels_[i].name = channelName;
-    
-    /* Create channel */
-    const QByteArray nameBytes = channelName.toUtf8();
-    const int result = ca_create_channel(
-        nameBytes.constData(),
-        channelConnectionCallback,
-        nullptr,
-        CA_PRIORITY_DEFAULT,
-        &channels_[i].channelId);
 
-    if (result != ECA_NORMAL) {
-      qWarning() << "CompositeRuntime: ca_create_channel failed for"
-                 << channelName << ":" << ca_message(result);
-      channels_[i].channelId = nullptr;
-    } else {
-      ca_set_puser(channels_[i].channelId, &channels_[i]);
-    }
-  }
-
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
+    const int index = static_cast<int>(i);
+    channels_[i].subscription = mgr.subscribe(
+        channelName,
+        DBR_TIME_DOUBLE,
+        1,  /* Single element */
+        [this, index](const SharedChannelData &data) {
+          handleChannelValue(index, data);
+        },
+        [this, index](bool connected, const SharedChannelData &) {
+          handleChannelConnection(index, connected);
+        });
   }
 }
 
 void CompositeRuntime::cleanupChannels()
 {
   for (auto &channel : channels_) {
-    unsubscribeChannel(channel);
-  }
-}
-
-void CompositeRuntime::subscribeChannel(ChannelRuntime &channel)
-{
-  if (!channel.channelId || channel.subscriptionId) {
-    return;
-  }
-
-  /* Determine subscription type based on field type */
-  switch (channel.fieldType) {
-  case DBR_CHAR:
-    channel.subscriptionType = DBR_TIME_CHAR;
-    break;
-  case DBR_SHORT:
-    channel.subscriptionType = DBR_TIME_SHORT;
-    break;
-  case DBR_LONG:
-    channel.subscriptionType = DBR_TIME_LONG;
-    break;
-  case DBR_FLOAT:
-    channel.subscriptionType = DBR_TIME_FLOAT;
-    break;
-  case DBR_DOUBLE:
-  default:
-    channel.subscriptionType = DBR_TIME_DOUBLE;
-    break;
-  }
-
-  long count = std::max<long>(channel.elementCount, 1);
-  int status = ca_create_subscription(channel.subscriptionType, count,
-      channel.channelId, DBE_VALUE | DBE_ALARM,
-      &CompositeRuntime::valueEventCallback, &channel,
-      &channel.subscriptionId);
-  if (status != ECA_NORMAL) {
-    qWarning() << "CompositeRuntime: Failed to subscribe to" << channel.name
-               << ':' << ca_message(status);
-    channel.subscriptionId = nullptr;
-    return;
-  }
-  channel.hasValue = false;
-
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
-
-void CompositeRuntime::unsubscribeChannel(ChannelRuntime &channel)
-{
-  if (channel.subscriptionId) {
-    ca_clear_subscription(channel.subscriptionId);
-    channel.subscriptionId = nullptr;
-  }
-  if (channel.channelId) {
-    ca_clear_channel(channel.channelId);
-    channel.channelId = nullptr;
-  }
-  channel.connected = false;
-  channel.hasValue = false;
-  channel.name.clear();
-}
-
-void CompositeRuntime::handleChannelConnection(ChannelRuntime &channel,
-    const connection_handler_args &args)
-{
-  if (!started_) {
-    return;
-  }
-
-  auto &stats = StatisticsTracker::instance();
-
-  if (args.op == CA_OP_CONN_UP) {
-    const bool wasConnected = channel.connected;
-    channel.connected = true;
-    if (!wasConnected) {
-      stats.registerChannelConnected();
-    }
-    channel.fieldType = ca_field_type(args.chid);
-    channel.elementCount = std::max<long>(ca_element_count(args.chid), 1);
-    channel.hasValue = false;
-    channel.value = 0.0;
-    channel.severity = 0;
-    subscribeChannel(channel);
-  } else if (args.op == CA_OP_CONN_DOWN) {
-    const bool wasConnected = channel.connected;
+    channel.subscription.reset();
+    channel.name.clear();
     channel.connected = false;
-    if (wasConnected) {
-      stats.registerChannelDisconnected();
-    }
     channel.hasValue = false;
     channel.value = 0.0;
     channel.severity = 0;
-    if (channel.subscriptionId) {
-      ca_clear_subscription(channel.subscriptionId);
-      channel.subscriptionId = nullptr;
-    }
+  }
+}
+
+void CompositeRuntime::handleChannelConnection(int index, bool connected)
+{
+  if (!started_ || index < 0 || index >= static_cast<int>(channels_.size())) {
+    return;
+  }
+
+  auto &channel = channels_[static_cast<std::size_t>(index)];
+  channel.connected = connected;
+
+  if (!connected) {
+    channel.hasValue = false;
+    channel.value = 0.0;
+    channel.severity = 0;
   }
 
   evaluateVisibility();
 }
 
-void CompositeRuntime::handleChannelValue(ChannelRuntime &channel,
-    const event_handler_args &args)
+void CompositeRuntime::handleChannelValue(int index, const SharedChannelData &data)
 {
-  if (!started_) {
-    return;
-  }
-  if (!args.dbr) {
+  if (!started_ || index < 0 || index >= static_cast<int>(channels_.size())) {
     return;
   }
 
-  double newValue = channel.value;
-  short newSeverity = channel.severity;
-  bool processed = false;
-
-  switch (args.type) {
-  case DBR_TIME_DOUBLE: {
-    const auto *value = static_cast<const dbr_time_double *>(args.dbr);
-    newValue = value->value;
-    newSeverity = value->severity;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_FLOAT: {
-    const auto *value = static_cast<const dbr_time_float *>(args.dbr);
-    newValue = value->value;
-    newSeverity = value->severity;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_LONG: {
-    const auto *value = static_cast<const dbr_time_long *>(args.dbr);
-    newValue = static_cast<double>(value->value);
-    newSeverity = value->severity;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_SHORT: {
-    const auto *value = static_cast<const dbr_time_short *>(args.dbr);
-    newValue = static_cast<double>(value->value);
-    newSeverity = value->severity;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_CHAR: {
-    const auto *value = static_cast<const dbr_time_char *>(args.dbr);
-    newValue = static_cast<double>(value->value);
-    newSeverity = value->severity;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_ENUM: {
-    const auto *value = static_cast<const dbr_time_enum *>(args.dbr);
-    newValue = static_cast<double>(value->value);
-    newSeverity = value->severity;
-    processed = true;
-    break;
-  }
-  case DBR_TIME_STRING: {
-    const auto *value = static_cast<const dbr_time_string *>(args.dbr);
-    QByteArray bytes(value->value, static_cast<int>(sizeof(value->value)));
-    char *end = nullptr;
-    double parsed = std::strtod(bytes.constData(), &end);
-    if (end && *end == '\0') {
-      newValue = parsed;
-    } else {
-      newValue = 0.0;
-    }
-    newSeverity = value->severity;
-    processed = true;
-    break;
-  }
-  default:
-    break;
-  }
-
-  if (!processed) {
-    return;
-  }
-
-  {
-    auto &stats = StatisticsTracker::instance();
-    stats.registerCaEvent();
-    stats.registerUpdateRequest(true);
-    stats.registerUpdateExecuted();
-  }
-
-  channel.value = newValue;
-  channel.severity = newSeverity;
-  channel.hasValue = true;
+  auto &channel = channels_[static_cast<std::size_t>(index)];
+  channel.value = data.numericValue;
+  channel.severity = data.severity;
+  channel.hasValue = data.hasValue;
 
   evaluateVisibility();
 }
@@ -380,7 +221,7 @@ void CompositeRuntime::evaluateVisibility()
   }
 
   const TextVisibilityMode visibilityMode = element_->visibilityMode();
-  const ChannelRuntime &primary = channels_[0];
+  const ChannelState &primary = channels_[0];
 
   bool visible = true;
   switch (visibilityMode) {
@@ -431,30 +272,4 @@ bool CompositeRuntime::evaluateCalcExpression(double &result) const
   long status = calcPerform(args, &result,
       const_cast<char *>(calcPostfix_.constData()));
   return status == 0;
-}
-
-void CompositeRuntime::channelConnectionCallback(
-    struct connection_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *channel = static_cast<ChannelRuntime *>(ca_puser(args.chid));
-  if (!channel || !channel->owner) {
-    return;
-  }
-
-  channel->owner->handleChannelConnection(*channel, args);
-}
-
-void CompositeRuntime::valueEventCallback(event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *channel = static_cast<ChannelRuntime *>(args.usr);
-  if (!channel || !channel->owner) {
-    return;
-  }
-  channel->owner->handleChannelValue(*channel, args);
 }

@@ -55,6 +55,7 @@
 #include "channel_access_context.h"
 #include "display_properties.h"
 #include "statistics_tracker.h"
+#include "startup_timing.h"
 #include "display_list_dialog.h"
 #include "find_pv_dialog.h"
 #include "pv_info_dialog.h"
@@ -14437,6 +14438,7 @@ inline bool DisplayWindow::saveToPath(const QString &filePath) const
 inline bool DisplayWindow::loadFromFile(const QString &filePath,
     QString *errorMessage, const QHash<QString, QString> &macros)
 {
+  QTEDM_TIMING_MARK("loadFromFile: Opening file");
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
     if (errorMessage) {
@@ -14445,9 +14447,11 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
     return false;
   }
 
+  QTEDM_TIMING_MARK("loadFromFile: Reading file contents");
   QTextStream stream(&file);
   setLatin1Encoding(stream);
   const QString contents = stream.readAll();
+  QTEDM_TIMING_MARK_COUNT("loadFromFile: File size (chars)", contents.size());
 
   /* Detect file version */
   int fileVersion = 30122; /* Default to current version */
@@ -14470,6 +14474,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   /* Convert legacy format if needed */
   QString adlContent = contents;
   if (fileVersion < 20200) {
+    QTEDM_TIMING_MARK("loadFromFile: Converting legacy ADL format");
     adlContent = convertLegacyAdlFormat(contents, fileVersion);
     /* Debug: write converted content to /tmp/qtedm_converted.adl */
     QFile debugFile(QStringLiteral("/tmp/qtedm_converted.adl"));
@@ -14483,16 +14488,18 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   const bool previousLegacyMode = loadingLegacyAdl_;
   loadingLegacyAdl_ = (fileVersion < 20200);
 
+  QTEDM_TIMING_MARK("loadFromFile: Applying macro substitutions");
   const QString processedContents = applyMacroSubstitutions(adlContent, macros);
 
-  //qWarning() << "Parsing ADL file with" << processedContents.size() << "characters...";
+  QTEDM_TIMING_MARK("loadFromFile: Parsing ADL");
   std::optional<AdlNode> document = AdlParser::parse(processedContents, errorMessage);
   if (!document) {
     loadingLegacyAdl_ = previousLegacyMode;
     return false;
   }
-  //qWarning() << "ADL parsing complete, loading" << document->children.size() << "top-level nodes...";
+  QTEDM_TIMING_MARK_COUNT("loadFromFile: ADL nodes parsed", static_cast<int>(document->children.size()));
 
+  QTEDM_TIMING_MARK("loadFromFile: Clearing existing elements");
   clearAllElements();
 
   /* Set restoringState_ to defer per-element stacking order updates during bulk load */
@@ -14501,6 +14508,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   const QString previousLoadDirectory = currentLoadDirectory_;
   currentLoadDirectory_ = QFileInfo(filePath).absolutePath();
 
+  QTEDM_TIMING_MARK("loadFromFile: Loading element nodes");
   pendingBasicAttribute_ = std::nullopt;
   pendingDynamicAttribute_ = std::nullopt;
   bool displayLoaded = false;
@@ -14526,17 +14534,18 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       elementLoaded = true;
       elementCount++;
       if (elementCount % 1000 == 0) {
-        //qWarning() << "Loaded" << elementCount << "elements...";
+        QTEDM_TIMING_MARK_COUNT("loadFromFile: Elements loaded so far", elementCount);
       }
       continue;
     }
   }
-  //qWarning() << "Finished loading" << elementCount << "elements";
+  QTEDM_TIMING_MARK_COUNT("loadFromFile: Total elements loaded", elementCount);
   pendingBasicAttribute_ = std::nullopt;
   pendingDynamicAttribute_ = std::nullopt;
 
   /* Re-enable stacking order updates and refresh to ensure static graphics
    * are below interactive widgets regardless of ADL file ordering */
+  QTEDM_TIMING_MARK("loadFromFile: Refreshing stacking order");
   restoringState_ = false;
   refreshStackingOrder();
 
@@ -14562,12 +14571,13 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   } else {
     /* Use a timer to defer the snapshot creation until the event loop runs */
     QTimer::singleShot(0, this, [this, filePath]() {
+      QTEDM_TIMING_MARK("loadFromFile: Creating deferred undo snapshot");
       cleanStateSnapshot_ = serializeStateForUndo(filePath);
       lastCommittedState_ = cleanStateSnapshot_;
-      //qWarning() << "Created deferred undo snapshot for file with" << elementStack_.size() << "elements";
     });
   }
   updateDirtyFromUndoStack();
+  QTEDM_TIMING_MARK("loadFromFile: Complete");
   /* Defer UI updates for large files to avoid blocking during initial load */
   if (totalElements < 1000) {
     if (displayArea_) {
@@ -22240,10 +22250,25 @@ inline void DisplayWindow::enterExecuteMode()
   if (executeModeActive_) {
     return;
   }
+  QTEDM_TIMING_MARK("enterExecuteMode: Starting");
   executeModeActive_ = true;
   if (displayArea_) {
     displayArea_->setExecuteMode(true);
   }
+  /* Report element counts for timing diagnostics */
+  int totalWidgets = compositeElements_.size() + textElements_.size() +
+      textEntryElements_.size() + rectangleElements_.size() +
+      imageElements_.size() + ovalElements_.size() + arcElements_.size() +
+      lineElements_.size() + polylineElements_.size() + polygonElements_.size() +
+      meterElements_.size() + scaleMonitorElements_.size() +
+      stripChartElements_.size() + cartesianPlotElements_.size() +
+      barMonitorElements_.size() + byteMonitorElements_.size() +
+      sliderElements_.size() + wheelSwitchElements_.size() +
+      textMonitorElements_.size() + choiceButtonElements_.size() +
+      menuElements_.size() + messageButtonElements_.size() +
+      shellCommandElements_.size() + relatedDisplayElements_.size();
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Total widgets to start", totalWidgets);
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating composite runtimes", compositeElements_.size());
   for (CompositeElement *element : compositeElements_) {
     if (!element) {
       continue;
@@ -22255,6 +22280,7 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating text runtimes", textElements_.size());
   for (TextElement *element : textElements_) {
     if (!element) {
       continue;
@@ -22266,6 +22292,7 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating text entry runtimes", textEntryElements_.size());
   for (TextEntryElement *element : textEntryElements_) {
     if (!element) {
       continue;
@@ -22277,6 +22304,10 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  int graphicCount = rectangleElements_.size() + imageElements_.size() +
+      ovalElements_.size() + arcElements_.size() + lineElements_.size() +
+      polylineElements_.size() + polygonElements_.size() + meterElements_.size();
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating graphic runtimes", graphicCount);
   for (RectangleElement *element : rectangleElements_) {
     if (!element) {
       continue;
@@ -22365,6 +22396,10 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  int monitorCount = scaleMonitorElements_.size() + stripChartElements_.size() +
+      cartesianPlotElements_.size() + barMonitorElements_.size() +
+      byteMonitorElements_.size();
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating monitor runtimes", monitorCount);
   for (ScaleMonitorElement *element : scaleMonitorElements_) {
     if (!element) {
       continue;
@@ -22420,6 +22455,10 @@ inline void DisplayWindow::enterExecuteMode()
       runtime->start();
     }
   }
+  int controlCount = sliderElements_.size() + wheelSwitchElements_.size() +
+      textMonitorElements_.size() + choiceButtonElements_.size() +
+      menuElements_.size() + messageButtonElements_.size();
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating control runtimes", controlCount);
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -22499,6 +22538,7 @@ inline void DisplayWindow::enterExecuteMode()
     element->setExecuteMode(true);
   }
 
+  QTEDM_TIMING_MARK("enterExecuteMode: Adjusting widget layering");
   /* Mimic MEDM's behavior: raise dynamic widgets above static widgets
    * MEDM draws static graphics to drawingAreaPixmap and dynamic widgets
    * to updatePixmap (layered on top). In Qt, we achieve the same effect
@@ -22673,6 +22713,7 @@ inline void DisplayWindow::enterExecuteMode()
       element->raise();
     }
   }
+  QTEDM_TIMING_MARK("enterExecuteMode: Complete - waiting for PV connections");
 }
 
 inline void DisplayWindow::leaveExecuteMode()
@@ -22680,6 +22721,7 @@ inline void DisplayWindow::leaveExecuteMode()
   if (!executeModeActive_) {
     return;
   }
+  QTEDM_TIMING_MARK("leaveExecuteMode: Starting");
   executeModeActive_ = false;
   if (displayArea_) {
     displayArea_->setExecuteMode(false);

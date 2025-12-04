@@ -78,6 +78,7 @@ typedef int Status;
 #include "legacy_fonts.h"
 #include "main_window_controller.h"
 #include "object_palette_dialog.h"
+#include "startup_timing.h"
 #include "statistics_window.h"
 #include "window_utils.h"
 #include "cursor_utils.h"
@@ -153,6 +154,12 @@ void printUsage(const QString &program)
       "Options:\n"
       "  -nolog    Disable audit logging of control widget value changes\n"
       "            (can also set QTEDM_NOLOG=1 environment variable)\n"
+      "\n"
+      "Environment Variables:\n"
+      "  QTEDM_TIMING_DIAGNOSTICS=1\n"
+      "            Enable startup timing diagnostics. Prints timestamped\n"
+      "            messages to stderr showing how long each startup phase\n"
+      "            takes, from launch to display fully populated.\n"
       "\n",
       program.toLocal8Bit().constData());
   fflush(stdout);
@@ -661,6 +668,9 @@ class RemoteRequestFilter : public QAbstractNativeEventFilter {
 
 int main(int argc, char *argv[])
 {
+  /* Initialize timing diagnostics as early as possible */
+  QTEDM_TIMING_MARK("Entering main()");
+
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
   // High-DPI is on by default in Qt6
 #else
@@ -669,11 +679,14 @@ int main(int argc, char *argv[])
   QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
 
+  QTEDM_TIMING_MARK("Creating QApplication");
   QApplication app(argc, argv);
+  QTEDM_TIMING_MARK("QApplication created");
   Q_INIT_RESOURCE(icons);
 
   const QStringList args = QCoreApplication::arguments();
   CommandLineOptions options = parseCommandLine(args);
+  QTEDM_TIMING_MARK("Command line parsed");
   options.resolvedDisplayFiles = resolveDisplayArguments(options.displayFiles);
   const std::optional<GeometrySpec> geometrySpec =
       geometrySpecFromString(options.displayGeometry);
@@ -829,6 +842,7 @@ int main(int argc, char *argv[])
     return 0;
   }
 
+  QTEDM_TIMING_MARK("Initializing fonts");
   if (options.displayFont.compare(QStringLiteral("scalable"), Qt::CaseInsensitive) == 0) {
     LegacyFonts::setWidgetDMAliasMode(LegacyFonts::WidgetDMAliasMode::kScalable);
   } else if (options.displayFont.isEmpty() ||
@@ -845,11 +859,13 @@ int main(int argc, char *argv[])
   /* Initialize audit logging for control widget value changes */
   AuditLogger::instance().initialize(options.enableAuditLog);
 
+  QTEDM_TIMING_MARK("Setting application style");
   if (auto *fusionStyle =
           QStyleFactory::create(QStringLiteral("Fusion"))) {
     app.setStyle(fusionStyle);
   }
 
+  QTEDM_TIMING_MARK("Creating application palette");
   /* Create a complete palette to ensure QtEDM looks the same regardless of
    * the user's desktop theme (dark mode, light mode, etc.) */
   const QColor backgroundColor(0xb0, 0xc3, 0xca);
@@ -898,6 +914,7 @@ int main(int argc, char *argv[])
 
   /* Apply palette to entire application before creating any widgets */
   app.setPalette(palette);
+  QTEDM_TIMING_MARK("Application palette applied");
 
   const QFont fixed10Font = LegacyFonts::fontOrDefault(
       QStringLiteral("widgetDM_10"),
@@ -906,12 +923,15 @@ int main(int argc, char *argv[])
 
   const QFont fixed13Font = LegacyFonts::fontOrDefault(
       QStringLiteral("miscFixed13"), fixed10Font);
+  QTEDM_TIMING_MARK("Fonts configured");
 
+  QTEDM_TIMING_MARK("Creating main window");
   QMainWindow win;
   win.setObjectName("QtedmMainWindow");
   win.setWindowTitle("QtEDM");
   win.setPalette(palette);
 
+  QTEDM_TIMING_MARK("Setting up menu bar");
   auto *menuBar = win.menuBar();
   menuBar->setAutoFillBackground(true);
   menuBar->setPalette(palette);
@@ -1112,7 +1132,9 @@ int main(int argc, char *argv[])
   modeStack->addWidget(modeButtonsWidget);
   modeStack->addWidget(executeOnlyWidget);
   modeBox->setLayout(modeStack);
+  QTEDM_TIMING_MARK("Mode panel created");
 
+  QTEDM_TIMING_MARK("Creating display state");
   auto state = std::make_shared<DisplayState>();
   state->mainWindow = &win;
   auto *mainWindowController = new MainWindowController(&win,
@@ -1126,6 +1148,7 @@ int main(int argc, char *argv[])
   auto *findPvDialog = new FindPvDialog(palette, fixed13Font,
       std::weak_ptr<DisplayState>(state), &win);
   state->findPvDialog = findPvDialog;
+  QTEDM_TIMING_MARK("Display state created");
 
 // ===========================================================================
 // ADL-COMPATIBLE FEATURE ENHANCEMENTS (maintain MEDM file compatibility)
@@ -1701,10 +1724,13 @@ int main(int argc, char *argv[])
           }
         });
 
+    QTEDM_TIMING_MARK("Showing display window");
     displayWin->show();
     displayWin->raise();
     displayWin->activateWindow();
+    QTEDM_TIMING_MARK("Entering execute mode for display");
     displayWin->handleEditModeChanged(state->editMode);
+    QTEDM_TIMING_MARK("Display window ready");
 
     if (updateMenus && *updateMenus) {
       (*updateMenus)();
@@ -1902,14 +1928,18 @@ int main(int argc, char *argv[])
   }
 #endif
 
+  QTEDM_TIMING_MARK("Preparing to load display files");
   const MacroMap macroDefinitions = parseMacroDefinitionString(options.macroString);
   bool loadedAnyDisplay = false;
   DisplayWindow *testSaveWindow = nullptr;
 
   if (!options.resolvedDisplayFiles.isEmpty()) {
+    QTEDM_TIMING_MARK_COUNT("Display files to load", options.resolvedDisplayFiles.size());
     for (const QString &resolved : options.resolvedDisplayFiles) {
+      QTEDM_TIMING_MARK_DETAIL("Creating DisplayWindow for", resolved);
       auto *displayWin = new DisplayWindow(displayPalette, palette,
           fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
+      QTEDM_TIMING_MARK_DETAIL("Loading ADL file", resolved);
       QString errorMessage;
       if (!displayWin->loadFromFile(resolved, &errorMessage, macroDefinitions)) {
         const QString message = errorMessage.isEmpty()
@@ -1920,10 +1950,13 @@ int main(int argc, char *argv[])
         delete displayWin;
         continue;
       }
+      QTEDM_TIMING_MARK("ADL file loaded successfully");
       if (geometrySpec) {
         applyCommandLineGeometry(displayWin, *geometrySpec);
       }
+      QTEDM_TIMING_MARK("Registering display window");
       registerDisplayWindow(displayWin);
+      QTEDM_TIMING_MARK("Display window registered");
       loadedAnyDisplay = true;
       if (!testSaveWindow) {
         testSaveWindow = displayWin;
@@ -1976,7 +2009,9 @@ int main(int argc, char *argv[])
           positionWindowTopRight(&win, rightMargin, topMargin);
         });
   }
+  QTEDM_TIMING_MARK("Starting event loop");
   const int exitCode = app.exec();
+  QTEDM_TIMING_MARK("Event loop exited");
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
   if (remoteFilter) {
     if (QCoreApplication *core = QCoreApplication::instance()) {

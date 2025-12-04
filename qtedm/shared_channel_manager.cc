@@ -8,6 +8,7 @@
 
 #include "audit_logger.h"
 #include "channel_access_context.h"
+#include "startup_timing.h"
 #include "statistics_tracker.h"
 
 /* SubscriptionHandle implementation */
@@ -359,6 +360,45 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
   if (connected) {
     if (!wasConnected) {
       StatisticsTracker::instance().registerChannelConnected();
+      ++totalConnectionsMade_;
+      lastConnectedPvName_ = channel->key.pvName;
+      /* Report first connection for timing diagnostics */
+      if (!firstConnectionReported_) {
+        firstConnectionReported_ = true;
+        expectedChannelCount_ = channels_.size();
+        QTEDM_TIMING_MARK_COUNT("PV channels created", expectedChannelCount_);
+        QTEDM_TIMING_MARK_DETAIL("First PV connection", channel->key.pvName);
+      }
+      /* Report connection milestones */
+      if (expectedChannelCount_ > 0) {
+        int pct = (totalConnectionsMade_ * 100) / expectedChannelCount_;
+        if (!connection10Reported_ && pct >= 10) {
+          connection10Reported_ = true;
+          QTEDM_TIMING_MARK_COUNT("PV connections: 10% complete", totalConnectionsMade_);
+        }
+        if (!connection25Reported_ && pct >= 25) {
+          connection25Reported_ = true;
+          QTEDM_TIMING_MARK_COUNT("PV connections: 25% complete", totalConnectionsMade_);
+        }
+        if (!connection50Reported_ && pct >= 50) {
+          connection50Reported_ = true;
+          QTEDM_TIMING_MARK_COUNT("PV connections: 50% complete", totalConnectionsMade_);
+        }
+        if (!connection75Reported_ && pct >= 75) {
+          connection75Reported_ = true;
+          QTEDM_TIMING_MARK_COUNT("PV connections: 75% complete", totalConnectionsMade_);
+        }
+        if (!connection90Reported_ && pct >= 90) {
+          connection90Reported_ = true;
+          QTEDM_TIMING_MARK_COUNT("PV connections: 90% complete", totalConnectionsMade_);
+        }
+      }
+      /* Check if all channels are now connected */
+      if (!lastConnectionReported_ && totalConnectionsMade_ == channels_.size()) {
+        lastConnectionReported_ = true;
+        QTEDM_TIMING_MARK_COUNT("All PVs connected, total", totalConnectionsMade_);
+        QTEDM_TIMING_MARK_DETAIL("Last PV connection", channel->key.pvName);
+      }
     }
 
     /* Store native type info */
@@ -401,6 +441,50 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
 
   StatisticsTracker::instance().registerCaEvent();
   ++channel->updateCount;
+
+  /* Track values for timing diagnostics */
+  bool isFirstValueForChannel = !channel->cachedData.hasValue;
+  if (isFirstValueForChannel) {
+    ++totalValuesReceived_;
+    lastValuePvName_ = channel->key.pvName;
+  }
+  /* Report first value for timing diagnostics */
+  if (!firstValueReported_) {
+    firstValueReported_ = true;
+    QTEDM_TIMING_MARK_DETAIL("First PV value received", channel->key.pvName);
+  }
+  /* Report value milestones */
+  int connectedCount = connectedChannelCount();
+  if (connectedCount > 0 && isFirstValueForChannel) {
+    int pct = (totalValuesReceived_ * 100) / connectedCount;
+    if (!value10Reported_ && pct >= 10) {
+      value10Reported_ = true;
+      QTEDM_TIMING_MARK_COUNT("PV values: 10% complete", totalValuesReceived_);
+    }
+    if (!value25Reported_ && pct >= 25) {
+      value25Reported_ = true;
+      QTEDM_TIMING_MARK_COUNT("PV values: 25% complete", totalValuesReceived_);
+    }
+    if (!value50Reported_ && pct >= 50) {
+      value50Reported_ = true;
+      QTEDM_TIMING_MARK_COUNT("PV values: 50% complete", totalValuesReceived_);
+    }
+    if (!value75Reported_ && pct >= 75) {
+      value75Reported_ = true;
+      QTEDM_TIMING_MARK_COUNT("PV values: 75% complete", totalValuesReceived_);
+    }
+    if (!value90Reported_ && pct >= 90) {
+      value90Reported_ = true;
+      QTEDM_TIMING_MARK_COUNT("PV values: 90% complete", totalValuesReceived_);
+    }
+  }
+  /* Check if all channels have received at least one value */
+  if (!lastValueReported_ && isFirstValueForChannel &&
+      totalValuesReceived_ == connectedCount) {
+    lastValueReported_ = true;
+    QTEDM_TIMING_MARK_COUNT("All PVs have values, total", totalValuesReceived_);
+    QTEDM_TIMING_MARK_DETAIL("Last PV value received", channel->key.pvName);
+  }
 
   SharedChannelData &data = channel->cachedData;
 

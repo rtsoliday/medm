@@ -247,5 +247,25 @@ private:
   quint64 nextSubscriptionId_ = 1;
   QElapsedTimer updateRateTimer_;
   bool updateRateTimerStarted_ = false;
+  bool firstConnectionReported_ = false;
+  bool firstValueReported_ = false;
+  int totalConnectionsMade_ = 0;
+  int totalValuesReceived_ = 0;
+  QString lastConnectedPvName_;
+  QString lastValuePvName_;
+  bool lastConnectionReported_ = false;
+  bool lastValueReported_ = false;
+  /* Milestone tracking for timing diagnostics */
+  int expectedChannelCount_ = 0;
+  bool connection10Reported_ = false;
+  bool connection25Reported_ = false;
+  bool connection50Reported_ = false;
+  bool connection75Reported_ = false;
+  bool connection90Reported_ = false;
+  bool value10Reported_ = false;
+  bool value25Reported_ = false;
+  bool value50Reported_ = false;
+  bool value75Reported_ = false;
+  bool value90Reported_ = false;
 };
 

@@ -6,6 +6,8 @@
 
 #include <cadef.h>
 
+#include "startup_timing.h"
+
 namespace {
 constexpr int kPollIntervalMs = 50;
 }
@@ -52,6 +54,7 @@ bool ChannelAccessContext::isInitialized() const
 
 void ChannelAccessContext::initialize()
 {
+  QTEDM_TIMING_MARK("Channel Access: Creating context");
   int status = ca_context_create(ca_disable_preemptive_callback);
   if (status != ECA_NORMAL) {
     qWarning() << "Failed to initialize EPICS Channel Access context:" << ca_message(status);
@@ -59,6 +62,7 @@ void ChannelAccessContext::initialize()
   }
 
   initialized_ = true;
+  QTEDM_TIMING_MARK("Channel Access: Context created, starting poll timer");
 
   pollTimer_ = new QTimer(this);
   pollTimer_->setInterval(kPollIntervalMs);
@@ -66,6 +70,7 @@ void ChannelAccessContext::initialize()
   QObject::connect(pollTimer_, &QTimer::timeout, this,
       &ChannelAccessContext::pollOnce);
   pollTimer_->start();
+  QTEDM_TIMING_MARK("Channel Access: Initialization complete");
 }
 
 void ChannelAccessContext::pollOnce()

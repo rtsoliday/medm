@@ -31,3 +31,4 @@ This repository is organized into the following top-level files and directories:
 
 - When proposing any change to the MEDM or QtEDM source code, rebuild both `medm` and `qtedm` to ensure the modifications compile cleanly.
 - Prefer `make -j4` for faster parallel builds. Only switch back to `make` (single-threaded) if you need to track down a compiler warning or error, as sequential output is easier to diagnose.
+- A full build can take **multiple minutes** to complete. Do not assume the build is stuck if it appears to hang on a single file—this is normal behavior. Wait for the build to finish before concluding there is an issue.

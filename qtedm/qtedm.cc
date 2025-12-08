@@ -1708,6 +1708,17 @@ int main(int argc, char *argv[])
             if (state->activeDisplay == displayPtr) {
               state->activeDisplay.clear();
             }
+            /* Explicitly remove this display from the list. We cannot rely on
+             * QPointer::isNull() here because the destroyed signal is emitted
+             * BEFORE QPointers are nullified (during QObject destructor).
+             * We must compare pointers directly. */
+            auto &displays = state->displays;
+            for (auto it = displays.begin(); it != displays.end(); ++it) {
+              if (*it == displayPtr) {
+                displays.erase(it);
+                break;
+              }
+            }
             bool hasLiveDisplay = false;
             for (auto &display : state->displays) {
               if (!display.isNull()) {

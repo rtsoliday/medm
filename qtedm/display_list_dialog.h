@@ -28,7 +28,7 @@ public:
 private:
   void refresh();
   void updateButtonStates();
-  QList<DisplayWindow *> selectedDisplays() const;
+  QList<QPointer<DisplayWindow>> selectedDisplays() const;
   QString labelForDisplay(DisplayWindow *display) const;
   void handleRaiseRequested();
   void handleCloseRequested();

@@ -162,18 +162,25 @@ void DisplayListDialog::refresh()
 
 void DisplayListDialog::updateButtonStates()
 {
-  const bool hasSelection = !selectedDisplays().isEmpty();
-  raiseButton_->setEnabled(hasSelection);
-  closeButton_->setEnabled(hasSelection);
+  const auto displays = selectedDisplays();
+  bool hasValidSelection = false;
+  for (const auto &display : displays) {
+    if (!display.isNull()) {
+      hasValidSelection = true;
+      break;
+    }
+  }
+  raiseButton_->setEnabled(hasValidSelection);
+  closeButton_->setEnabled(hasValidSelection);
 }
 
-QList<DisplayWindow *> DisplayListDialog::selectedDisplays() const
+QList<QPointer<DisplayWindow>> DisplayListDialog::selectedDisplays() const
 {
-  QList<DisplayWindow *> result;
+  QList<QPointer<DisplayWindow>> result;
   for (QListWidgetItem *item : listWidget_->selectedItems()) {
     if (auto *displayItem = dynamic_cast<DisplayListItem *>(item)) {
       if (auto display = displayItem->display(); !display.isNull()) {
-        result.append(display.data());
+        result.append(display);
       }
     }
   }
@@ -223,8 +230,8 @@ void DisplayListDialog::handleRaiseRequested()
     return;
   }
 
-  for (DisplayWindow *display : displays) {
-    if (!display) {
+  for (const auto &display : displays) {
+    if (display.isNull()) {
       continue;
     }
     display->show();
@@ -242,14 +249,18 @@ void DisplayListDialog::handleCloseRequested()
     return;
   }
 
-  for (DisplayWindow *display : displays) {
-    if (!display) {
+  for (const auto &display : displays) {
+    if (display.isNull()) {
       continue;
     }
     display->close();
   }
 
-  updateButtonStates();
+  /* Refresh the list after closing displays. The destroyed signal will also
+   * trigger a refresh via handleStateChanged(), but that happens after
+   * deferred deletion processes. Do an immediate refresh to update the UI
+   * promptly. */
+  refresh();
 }
 
 void DisplayListDialog::handleRefreshRequested()

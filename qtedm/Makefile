@@ -255,6 +255,11 @@ $(OBJ_DIR)/moc_find_pv_dialog.cpp: find_pv_dialog.h | $(OBJ_DIR)
 
 $(OBJ_DIR)/find_pv_dialog.$(OBJEXT): $(OBJ_DIR)/moc_find_pv_dialog.cpp
 
+$(OBJ_DIR)/moc_shared_channel_manager.cpp: shared_channel_manager.h | $(OBJ_DIR)
+	$(MOC) $(shell pkg-config --cflags $(QT_WIDGETS_PKG)) $< -o $@
+
+$(OBJ_DIR)/shared_channel_manager.$(OBJEXT): $(OBJ_DIR)/moc_shared_channel_manager.cpp
+
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
 	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
 	cp -f $@ $(BIN_DIR)/

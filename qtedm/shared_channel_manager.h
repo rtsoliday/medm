@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 
 #include <QElapsedTimer>
 #include <QHash>
@@ -143,6 +144,7 @@ using ChannelAccessRightsCallback = std::function<void(bool canRead, bool canWri
  */
 class SharedChannelManager : public QObject
 {
+  Q_OBJECT
 
 public:
   static SharedChannelManager &instance();
@@ -241,8 +243,26 @@ private:
   void subscribeToChannel(SharedChannel *channel);
   void requestControlInfo(SharedChannel *channel);
 
+  /* Deferred flush mechanism - batches CA operations to avoid blocking */
+  void scheduleDeferredFlush();
+  void performDeferredFlush();
+
+private Q_SLOTS:
+  /* Thread-safe slots for processing CA callbacks from the CA thread.
+   * These are invoked via QueuedConnection to marshal data to main thread. */
+  void onConnectionChanged(void *channelPtr, bool connected, 
+                           short nativeType, long nativeCount);
+  void onValueReceived(void *channelPtr, QByteArray eventData, int status, 
+                       long type, long count);
+  void onControlInfoReceived(void *channelPtr, QByteArray eventData, 
+                             int status, long type);
+  void onAccessRightsChanged(void *channelPtr, bool canRead, bool canWrite);
+
+private:
   /* Data */
+  mutable std::mutex channelMutex_;  /* Protects channel access from CA thread */
   QHash<SharedChannelKey, SharedChannel *> channels_;
+  bool flushScheduled_ = false;
   QHash<quint64, SharedChannel *> subscriptionToChannel_;
   quint64 nextSubscriptionId_ = 1;
   QElapsedTimer updateRateTimer_;

@@ -22255,6 +22255,7 @@ inline void DisplayWindow::enterExecuteMode()
   if (displayArea_) {
     displayArea_->setExecuteMode(true);
   }
+  
   /* Report element counts for timing diagnostics */
   int totalWidgets = compositeElements_.size() + textElements_.size() +
       textEntryElements_.size() + rectangleElements_.size() +
@@ -22278,6 +22279,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new CompositeRuntime(element);
       compositeRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating text runtimes", textElements_.size());
@@ -22290,6 +22292,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new TextRuntime(element);
       textRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating text entry runtimes", textEntryElements_.size());
@@ -22302,6 +22305,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new TextEntryRuntime(element);
       textEntryRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   int graphicCount = rectangleElements_.size() + imageElements_.size() +
@@ -22317,6 +22321,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new RectangleRuntime(element);
       rectangleRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (ImageElement *element : imageElements_) {
@@ -22328,6 +22333,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new ImageRuntime(element);
       imageRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (OvalElement *element : ovalElements_) {
@@ -22339,6 +22345,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new OvalRuntime(element);
       ovalRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (ArcElement *element : arcElements_) {
@@ -22350,6 +22357,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new ArcRuntime(element);
       arcRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (LineElement *element : lineElements_) {
@@ -22361,6 +22369,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new LineRuntime(element);
       lineRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (PolylineElement *element : polylineElements_) {
@@ -22372,6 +22381,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new PolylineRuntime(element);
       polylineRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (PolygonElement *element : polygonElements_) {
@@ -22383,6 +22393,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new PolygonRuntime(element);
       polygonRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (MeterElement *element : meterElements_) {
@@ -22394,6 +22405,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new MeterRuntime(element);
       meterRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   int monitorCount = scaleMonitorElements_.size() + stripChartElements_.size() +
@@ -22409,6 +22421,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new ScaleMonitorRuntime(element);
       scaleMonitorRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (StripChartElement *element : stripChartElements_) {
@@ -22420,6 +22433,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new StripChartRuntime(element);
       stripChartRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (CartesianPlotElement *element : cartesianPlotElements_) {
@@ -22431,6 +22445,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new CartesianPlotRuntime(element);
       cartesianPlotRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (BarMonitorElement *element : barMonitorElements_) {
@@ -22442,6 +22457,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new BarMonitorRuntime(element);
       barMonitorRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (ByteMonitorElement *element : byteMonitorElements_) {
@@ -22453,6 +22469,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new ByteMonitorRuntime(element);
       byteMonitorRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   int controlCount = sliderElements_.size() + wheelSwitchElements_.size() +
@@ -22468,6 +22485,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new SliderRuntime(element);
       sliderRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (WheelSwitchElement *element : wheelSwitchElements_) {
@@ -22479,6 +22497,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new WheelSwitchRuntime(element);
       wheelSwitchRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (TextMonitorElement *element : textMonitorElements_) {
@@ -22490,6 +22509,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new TextMonitorRuntime(element);
       textMonitorRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (ChoiceButtonElement *element : choiceButtonElements_) {
@@ -22501,6 +22521,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new ChoiceButtonRuntime(element);
       choiceButtonRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (MenuElement *element : menuElements_) {
@@ -22512,6 +22533,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new MenuRuntime(element);
       menuRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (MessageButtonElement *element : messageButtonElements_) {
@@ -22523,6 +22545,7 @@ inline void DisplayWindow::enterExecuteMode()
       auto *runtime = new MessageButtonRuntime(element);
       messageButtonRuntimes_.insert(element, runtime);
       runtime->start();
+
     }
   }
   for (ShellCommandElement *element : shellCommandElements_) {

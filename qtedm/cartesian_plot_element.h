@@ -135,6 +135,9 @@ protected:
   bool event(QEvent *event) override;
 
 private:
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
+
+private:
   struct Trace
   {
     QString xChannel;

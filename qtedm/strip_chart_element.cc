@@ -5,8 +5,10 @@
 #include <limits>
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFontMetrics>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -15,6 +17,7 @@
 #include <QTimer>
 
 #include "medm_colors.h"
+#include "window_utils.h"
 
 namespace {
 
@@ -2052,4 +2055,50 @@ void StripChartElement::paintIncrementalPens(const QRect &plotArea, int newColum
   }
 
   painter.end();
+}
+
+void StripChartElement::mousePressEvent(QMouseEvent *event)
+{
+  // Forward middle button and right-click events to parent window for PV info
+  // functionality and context menu
+  if (executeMode_ && (event->button() == Qt::MiddleButton
+      || event->button() == Qt::RightButton)) {
+    if (forwardMouseEventToParent(event)) {
+      return;
+    }
+  }
+  // Forward left clicks to parent when PV Info picking mode is active
+  if (executeMode_ && event->button() == Qt::LeftButton
+      && isParentWindowInPvInfoMode(this)) {
+    if (forwardMouseEventToParent(event)) {
+      return;
+    }
+  }
+  QWidget::mousePressEvent(event);
+}
+
+bool StripChartElement::forwardMouseEventToParent(QMouseEvent *event) const
+{
+  if (!event) {
+    return false;
+  }
+  QWidget *target = window();
+  if (!target) {
+    return false;
+  }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF globalPosF = event->globalPosition();
+  const QPoint globalPoint = globalPosF.toPoint();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
+      event->button(), event->buttons(), event->modifiers());
+#else
+  const QPoint globalPoint = event->globalPos();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos,
+      QPointF(globalPoint), event->button(), event->buttons(),
+      event->modifiers());
+#endif
+  QCoreApplication::sendEvent(target, &forwarded);
+  return true;
 }

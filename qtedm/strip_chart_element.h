@@ -12,6 +12,7 @@
 
 class QTimer;
 
+class QMouseEvent;
 class QPaintEvent;
 class QPainter;
 class QFontMetrics;
@@ -74,6 +75,10 @@ public:
 protected:
   void paintEvent(QPaintEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
+
+private:
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
 
 private:
   struct Layout

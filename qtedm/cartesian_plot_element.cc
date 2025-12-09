@@ -843,24 +843,15 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
 void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
 {
   if (executeMode_) {
+    // Forward middle button events to parent window for PV info functionality
+    if (event->button() == Qt::MiddleButton) {
+      if (forwardMouseEventToParent(event)) {
+        return;
+      }
+    }
     // Forward left clicks to parent when PV Info picking mode is active
     if (event->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
-      QWidget *target = window();
-      if (target) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-        const QPointF globalPosF = event->globalPosition();
-        const QPoint globalPoint = globalPosF.toPoint();
-        const QPointF localPos = target->mapFromGlobal(globalPoint);
-        QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
-            event->button(), event->buttons(), event->modifiers());
-#else
-        const QPoint globalPoint = event->globalPos();
-        const QPointF localPos = target->mapFromGlobal(globalPoint);
-        QMouseEvent forwarded(event->type(), localPos, localPos,
-            QPointF(globalPoint), event->button(), event->buttons(),
-            event->modifiers());
-#endif
-        QCoreApplication::sendEvent(target, &forwarded);
+      if (forwardMouseEventToParent(event)) {
         return;
       }
     }
@@ -888,7 +879,7 @@ void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
         return;
       }
     } else if (event->button() == Qt::RightButton) {
-      // Show context menu with reset zoom option
+      // Show context menu with reset zoom option only when zoomed
       if (zoomed_) {
         QMenu menu(this);
         QAction *resetAction = menu.addAction(tr("Reset Zoom"));
@@ -897,6 +888,10 @@ void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
           resetZoom();
         }
         event->accept();
+        return;
+      }
+      // Forward right-click events to parent window for context menu
+      if (forwardMouseEventToParent(event)) {
         return;
       }
     }
@@ -1065,6 +1060,32 @@ void CartesianPlotElement::applyZoomToRange(AxisRange &range, int axisIndex) con
 bool CartesianPlotElement::event(QEvent *event)
 {
   return QWidget::event(event);
+}
+
+bool CartesianPlotElement::forwardMouseEventToParent(QMouseEvent *event) const
+{
+  if (!event) {
+    return false;
+  }
+  QWidget *target = window();
+  if (!target) {
+    return false;
+  }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF globalPosF = event->globalPosition();
+  const QPoint globalPoint = globalPosF.toPoint();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
+      event->button(), event->buttons(), event->modifiers());
+#else
+  const QPoint globalPoint = event->globalPos();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos,
+      QPointF(globalPoint), event->button(), event->buttons(),
+      event->modifiers());
+#endif
+  QCoreApplication::sendEvent(target, &forwarded);
+  return true;
 }
 
 QColor CartesianPlotElement::effectiveForeground() const

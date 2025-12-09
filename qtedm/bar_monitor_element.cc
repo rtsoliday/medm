@@ -1,6 +1,7 @@
 #include "bar_monitor_element.h"
 
 #include "medm_colors.h"
+#include "update_coordinator.h"
 
 #include <algorithm>
 #include <cmath>
@@ -301,7 +302,7 @@ void BarMonitorElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (executeMode_ && runtimeConnected_ && changed) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 

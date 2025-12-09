@@ -122,7 +122,8 @@ qtedm_SRC = qtedm.cc \
             statistics_tracker.cc \
             statistics_window.cc \
             cursor_utils.cc \
-            text_runtime_calc_bridge.c
+            text_runtime_calc_bridge.c \
+            update_coordinator.cc
 
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
 

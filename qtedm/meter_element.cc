@@ -1,5 +1,7 @@
 #include "meter_element.h"
 
+#include "update_coordinator.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -399,7 +401,7 @@ void MeterElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (executeMode_ && runtimeConnected_ && changed) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 

@@ -1,5 +1,7 @@
 #include "slider_element.h"
 
+#include "update_coordinator.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>

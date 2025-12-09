@@ -1,5 +1,7 @@
 #include "byte_monitor_element.h"
 
+#include "update_coordinator.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -205,7 +207,7 @@ void ByteMonitorElement::setRuntimeValue(quint32 value)
   }
   runtimeValue_ = value;
   hasRuntimeValue_ = true;
-  update();
+  UpdateCoordinator::instance().requestUpdate(this);
 }
 
 void ByteMonitorElement::clearRuntimeState()

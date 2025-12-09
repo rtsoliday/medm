@@ -536,6 +536,7 @@ void StripChartElement::clearRuntimeState()
   cachedChartWidth_ = 0;
   sampleIntervalMs_ = periodMilliseconds();
   lastSampleMs_ = 0;
+  nextAdvanceTimeMs_ = 0;
   newSampleColumns_ = 0;
   for (int i = 0; i < penCount(); ++i) {
     Pen &pen = pens_[i];
@@ -619,12 +620,37 @@ void StripChartElement::paintEvent(QPaintEvent *event)
     ensureStaticCache(labelsFont, metrics);
     if (!staticCache_.isNull()) {
       painter.drawPixmap(0, 0, staticCache_);
-      // Draw pen data using incremental cache for performance
+      // Draw pen data using circular buffer cache for performance
       if (cachedLayout_.chartRect.width() > 2 && cachedLayout_.chartRect.height() > 2) {
         const QRect plotArea = cachedLayout_.chartRect.adjusted(1, 1, -1, -1);
         ensurePenCache(plotArea);
         if (!penCache_.isNull()) {
-          painter.drawPixmap(plotArea.topLeft(), penCache_);
+          const int cacheWidth = penCache_.width();
+          const int cacheHeight = penCache_.height();
+
+          // MEDM-style circular buffer display:
+          // The write slot points to where the NEXT data will be written.
+          // Data from writeSlot to end is OLDER data (displays on LEFT).
+          // Data from start to writeSlot is NEWER data (displays on RIGHT).
+          const int writeSlot = circularWriteSlot_;
+
+          if (writeSlot > 0 && writeSlot < cacheWidth) {
+            // Two-piece copy for circular buffer effect
+            // Right portion of pixmap (older data) -> left side of display
+            const int rightWidth = cacheWidth - writeSlot;
+            if (rightWidth > 0) {
+              painter.drawPixmap(plotArea.left(), plotArea.top(),
+                  penCache_, writeSlot, 0, rightWidth, cacheHeight);
+            }
+            // Left portion of pixmap (newer data) -> right side of display
+            if (writeSlot > 0) {
+              painter.drawPixmap(plotArea.left() + rightWidth, plotArea.top(),
+                  penCache_, 0, 0, writeSlot, cacheHeight);
+            }
+          } else {
+            // No wraparound yet or writeSlot at boundary - simple copy
+            painter.drawPixmap(plotArea.topLeft(), penCache_);
+          }
         }
       }
     } else {
@@ -1618,6 +1644,7 @@ void StripChartElement::ensureRefreshTimer()
   }
   refreshTimer_ = new QTimer(this);
   refreshTimer_->setTimerType(Qt::PreciseTimer);
+  // Initial interval; will be adjusted dynamically based on sample rate
   refreshTimer_->setInterval(kRefreshIntervalMs);
   QObject::connect(refreshTimer_, &QTimer::timeout, this,
       &StripChartElement::handleRefreshTimer);
@@ -1646,8 +1673,25 @@ void StripChartElement::handleRefreshTimer()
   }
 
   const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+
   maybeAppendSamples(nowMs);
+
+  // Use update() to queue a paint event. This doesn't block the timer
+  // callback, allowing the event loop to process other events. Multiple
+  // update() calls will be coalesced into a single paint, and the paint
+  // will draw all accumulated columns at once.
   update();
+
+  // Dynamically adjust timer interval to match sample rate (MEDM-style)
+  // This ensures the timer fires close to when the next sample is needed
+  if (refreshTimer_ && nextAdvanceTimeMs_ > 0 && sampleIntervalMs_ > 0) {
+    qint64 msUntilNext = nextAdvanceTimeMs_ - nowMs;
+    // Clamp to reasonable bounds: minimum 10ms, maximum sampleIntervalMs_
+    int timerInterval = static_cast<int>(std::clamp(
+        msUntilNext, static_cast<qint64>(10),
+        static_cast<qint64>(std::ceil(sampleIntervalMs_))));
+    refreshTimer_->setInterval(timerInterval);
+  }
 }
 
 void StripChartElement::updateSamplingGeometry(int chartWidth)
@@ -1699,11 +1743,13 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
 {
   if (!anyPenConnected()) {
     lastSampleMs_ = nowMs;
+    nextAdvanceTimeMs_ = 0;
     return;
   }
 
   if (!anyPenReady()) {
     lastSampleMs_ = nowMs;
+    nextAdvanceTimeMs_ = 0;
     return;
   }
 
@@ -1711,6 +1757,7 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
     const int width = chartRect().width();
     if (width <= 0) {
       lastSampleMs_ = nowMs;
+      nextAdvanceTimeMs_ = 0;
       return;
     }
     updateSamplingGeometry(width);
@@ -1725,33 +1772,31 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
     sampleIntervalMs_ = std::max(interval, 10.0);
   }
 
-  if (lastSampleMs_ == 0) {
+  // Initialize nextAdvanceTimeMs_ on first sample (MEDM-style)
+  if (nextAdvanceTimeMs_ == 0) {
     appendSampleColumn();
     lastSampleMs_ = nowMs;
+    nextAdvanceTimeMs_ = nowMs + static_cast<qint64>(std::llround(sampleIntervalMs_));
     return;
   }
 
+  // MEDM-style: check if current time exceeds nextAdvanceTime
+  if (nowMs < nextAdvanceTimeMs_) {
+    return;
+  }
+
+  // Calculate how many pixels (columns) need to be drawn
   const double interval = sampleIntervalMs_;
-  const qint64 elapsedMs = nowMs - lastSampleMs_;
-  if (elapsedMs <= 0) {
-    return;
-  }
-  if (elapsedMs < static_cast<qint64>(interval)) {
-    return;
-  }
+  int totalPixels = 1 + static_cast<int>((nowMs - nextAdvanceTimeMs_) / interval);
+  totalPixels = std::clamp(totalPixels, 1, kMaxSampleBurst);
 
-  int columns = static_cast<int>(elapsedMs / interval);
-  columns = std::clamp(columns, 1, kMaxSampleBurst);
-
-  for (int i = 0; i < columns; ++i) {
+  for (int i = 0; i < totalPixels; ++i) {
     appendSampleColumn();
   }
 
-  const qint64 advanced = static_cast<qint64>(std::llround(interval * columns));
-  lastSampleMs_ += advanced;
-  if (lastSampleMs_ > nowMs) {
-    lastSampleMs_ = nowMs;
-  }
+  // Advance nextAdvanceTimeMs_ by the interval * totalPixels (MEDM-style)
+  nextAdvanceTimeMs_ += static_cast<qint64>(std::llround(interval * totalPixels));
+  lastSampleMs_ = nowMs;
 }
 
 void StripChartElement::appendSampleColumn()
@@ -1879,6 +1924,7 @@ void StripChartElement::invalidatePenCache()
 {
   penCacheDirty_ = true;
   newSampleColumns_ = 0;
+  circularWriteSlot_ = 0;
 }
 
 void StripChartElement::ensurePenCache(const QRect &plotArea)
@@ -1887,8 +1933,12 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
   if (plotSize.isEmpty()) {
     penCache_ = QPixmap();
     penCacheDirty_ = true;
+    circularWriteSlot_ = 0;
     return;
   }
+
+  const int width = plotSize.width();
+  const int height = plotSize.height();
 
   // Check if we need a full redraw
   const bool sizeChanged = penCache_.isNull() || penCache_.size() != plotSize;
@@ -1896,165 +1946,104 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
   const bool needsFullRedraw = penCacheDirty_ || sizeChanged || plotAreaMoved;
 
   if (needsFullRedraw) {
-    // Full redraw: create new cache and paint all pens
-    penCache_ = QPixmap(plotSize);
+    // Full redraw: create cache, paint all pens, and set write slot to end
+    if (sizeChanged || penCache_.isNull()) {
+      penCache_ = QPixmap(plotSize);
+    }
     penCache_.fill(Qt::transparent);
 
     QPainter cachePainter(&penCache_);
     cachePainter.setRenderHint(QPainter::Antialiasing, false);
 
-    // Create a normalized rect at (0,0) for painting
-    const QRect normalizedRect(0, 0, plotSize.width(), plotSize.height());
+    // Paint all existing data
+    const QRect normalizedRect(0, 0, width, height);
     paintRuntimePens(cachePainter, normalizedRect);
 
     cachePainter.end();
+
+    // Set write slot to current sample position (where next data will be drawn)
+    // This is the rightmost position that has data
+    circularWriteSlot_ = std::min(sampleHistoryLength_, width);
+    if (circularWriteSlot_ >= width) {
+      circularWriteSlot_ = 0;  // Wrap around
+    }
+
     penCachePlotArea_ = plotArea;
     penCacheDirty_ = false;
     newSampleColumns_ = 0;
-    return;
-  }
+  } else if (newSampleColumns_ > 0) {
+    // Incremental update: draw only new columns at the circular write position
+    // This is the MEDM-style optimization
+    QPainter cachePainter(&penCache_);
+    cachePainter.setRenderHint(QPainter::Antialiasing, false);
 
-  // Incremental update: scroll existing content and draw new columns
-  const int columnsToAdd = newSampleColumns_;
-  if (columnsToAdd <= 0) {
-    return;  // Nothing new to draw
-  }
+    const int columnsToAdd = std::min(newSampleColumns_, width);
 
-  // If too many new columns, just do a full redraw
-  const int width = plotSize.width();
-  if (columnsToAdd >= width) {
-    penCacheDirty_ = true;
-    ensurePenCache(plotArea);
-    return;
-  }
+    // Get pen data for the newest samples
+    for (int col = 0; col < columnsToAdd; ++col) {
+      const int writeX = circularWriteSlot_;
 
-  scrollPenCache(columnsToAdd, plotArea);
-  paintIncrementalPens(plotArea, columnsToAdd);
-  newSampleColumns_ = 0;
-}
+      // Clear this column with transparent (will show background through it)
+      cachePainter.setCompositionMode(QPainter::CompositionMode_Source);
+      cachePainter.fillRect(writeX, 0, 1, height, Qt::transparent);
+      cachePainter.setCompositionMode(QPainter::CompositionMode_SourceOver);
 
-void StripChartElement::scrollPenCache(int columns, const QRect &plotArea)
-{
-  if (columns <= 0 || penCache_.isNull()) {
-    return;
-  }
+      // Draw pen data for this column
+      // The sample index for this column is (sampleHistoryLength_ - columnsToAdd + col)
+      const int sampleIdx = sampleHistoryLength_ - columnsToAdd + col;
+      if (sampleIdx >= 0) {
+        for (int i = 0; i < penCount(); ++i) {
+          const Pen &pen = pens_[i];
+          if (sampleIdx >= static_cast<int>(pen.samples.size())) {
+            continue;
+          }
 
-  const int width = plotArea.width();
-  const int height = plotArea.height();
-  if (columns >= width) {
-    return;  // Will be handled by full redraw
-  }
+          const double low = effectivePenLow(i);
+          const double high = effectivePenHigh(i);
+          if (!std::isfinite(low) || !std::isfinite(high)) {
+            continue;
+          }
+          const double range = std::max(std::abs(high - low), 1e-12);
 
-  // Scroll existing content left by 'columns' pixels
-  QPixmap newCache(penCache_.size());
-  newCache.fill(Qt::transparent);
+          const double value = pen.samples[static_cast<std::size_t>(sampleIdx)];
+          if (!std::isfinite(value) || value < low || value > high) {
+            continue;
+          }
 
-  QPainter painter(&newCache);
-  // Copy the right portion of the old cache, shifted left
-  painter.drawPixmap(0, 0, penCache_, columns, 0, width - columns, height);
-  painter.end();
+          const double normalized = (value - low) / range;
+          const int y = static_cast<int>((height - 1) * (1.0 - normalized));
 
-  penCache_ = newCache;
-}
+          // Draw a vertical line for this sample (or point)
+          // Check previous sample for line continuity
+          int prevY = y;
+          if (sampleIdx > 0 && static_cast<std::size_t>(sampleIdx - 1) < pen.samples.size()) {
+            const double prevValue = pen.samples[static_cast<std::size_t>(sampleIdx - 1)];
+            if (std::isfinite(prevValue) && prevValue >= low && prevValue <= high) {
+              const double prevNorm = (prevValue - low) / range;
+              prevY = static_cast<int>((height - 1) * (1.0 - prevNorm));
+            }
+          }
 
-void StripChartElement::paintIncrementalPens(const QRect &plotArea, int newColumns)
-{
-  if (newColumns <= 0 || penCache_.isNull()) {
-    return;
-  }
+          QPen penColor(effectivePenColor(i));
+          penColor.setWidth(1);
+          cachePainter.setPen(penColor);
 
-  const double width = static_cast<double>(plotArea.width());
-  const double height = static_cast<double>(plotArea.height());
-  if (width <= 0.0 || height <= 0.0) {
-    return;
-  }
-
-  QPainter painter(&penCache_);
-  painter.setRenderHint(QPainter::Antialiasing, false);
-
-  int capacity = cachedChartWidth_;
-  if (capacity <= 0) {
-    capacity = std::max(sampleHistoryLength_, 1);
-  }
-  capacity = std::max(capacity, 1);
-  const int denominator = std::max(capacity - 1, 1);
-
-  // Calculate the starting sample index for the new columns
-  // We only need to draw the last 'newColumns' samples
-  const int startColumn = static_cast<int>(width) - newColumns;
-
-  for (int i = 0; i < penCount(); ++i) {
-    const Pen &pen = pens_[i];
-    if (pen.samples.empty()) {
-      continue;
-    }
-
-    const double low = effectivePenLow(i);
-    const double high = effectivePenHigh(i);
-    if (!std::isfinite(low) || !std::isfinite(high)) {
-      continue;
-    }
-    const double range = std::max(std::abs(high - low), kMinimumRangeEpsilon);
-
-    QPen penColor(effectivePenColor(i));
-    penColor.setWidth(1);
-    painter.setPen(penColor);
-    painter.setBrush(Qt::NoBrush);
-
-    const int sampleCount = static_cast<int>(pen.samples.size());
-    const int offsetColumns = std::max(capacity - sampleCount, 0);
-
-    // Determine which samples correspond to the new columns
-    // We need to find samples that map to x >= startColumn
-    // x = (offsetColumns + s) / denominator * width
-    // so we need: (offsetColumns + s) / denominator * width >= startColumn
-    // s >= (startColumn * denominator / width) - offsetColumns
-
-    const int minSampleIdx = std::max(0,
-        static_cast<int>(std::floor((startColumn * denominator / width) - offsetColumns)));
-
-    // Draw the new segment, including one sample before for continuity
-    const int drawStartIdx = std::max(0, minSampleIdx - 1);
-
-    QPainterPath path;
-    bool segmentStarted = false;
-    bool singlePointPending = false;
-    QPointF singlePoint;
-
-    for (int s = drawStartIdx; s < sampleCount; ++s) {
-      const double sampleValue = pen.samples[static_cast<std::size_t>(s)];
-      if (!std::isfinite(sampleValue)) {
-        segmentStarted = false;
-        continue;
+          // Draw vertical line from prevY to y (like MEDM does for min/max)
+          if (prevY != y) {
+            cachePainter.drawLine(writeX, std::min(y, prevY), writeX, std::max(y, prevY));
+          } else {
+            cachePainter.drawPoint(writeX, y);
+          }
+        }
       }
-      // Skip values outside the LOPR-HOPR range
-      if (sampleValue < low || sampleValue > high) {
-        segmentStarted = false;
-        continue;
-      }
-      const double normalized = (sampleValue - low) / range;
-      const double x = (static_cast<double>(offsetColumns + s) / denominator) * width;
-      const double y = (height - 1.0) * (1.0 - normalized);
 
-      if (!segmentStarted) {
-        path.moveTo(x, y);
-        segmentStarted = true;
-        singlePointPending = true;
-        singlePoint = QPointF(x, y);
-      } else {
-        path.lineTo(x, y);
-        singlePointPending = false;
-      }
+      // Advance write slot with wraparound
+      circularWriteSlot_ = (circularWriteSlot_ + 1) % width;
     }
 
-    if (path.elementCount() >= 2) {
-      painter.drawPath(path);
-    } else if (singlePointPending) {
-      painter.drawPoint(singlePoint);
-    }
+    cachePainter.end();
+    newSampleColumns_ = 0;
   }
-
-  painter.end();
 }
 
 void StripChartElement::mousePressEvent(QMouseEvent *event)

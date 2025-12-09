@@ -1,5 +1,7 @@
 #include "scale_monitor_element.h"
 
+#include "update_coordinator.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -311,7 +313,7 @@ void ScaleMonitorElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (runtimeConnected_ && changed) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 

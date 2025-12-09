@@ -148,8 +148,6 @@ private:
       const QFontMetrics &metrics) const;
   void invalidatePenCache();
   void ensurePenCache(const QRect &plotArea);
-  void scrollPenCache(int columns, const QRect &plotArea);
-  void paintIncrementalPens(const QRect &plotArea, int newColumns);
 
   bool selected_ = false;
   QColor foregroundColor_;
@@ -164,6 +162,7 @@ private:
   QTimer *refreshTimer_ = nullptr;
   double sampleIntervalMs_ = 1000.0;
   qint64 lastSampleMs_ = 0;
+  qint64 nextAdvanceTimeMs_ = 0;  // MEDM-style: time for next pixel advance
   int cachedChartWidth_ = 0;
   int sampleHistoryLength_ = 0;
   int newSampleColumns_ = 0;  // Columns added since last paint
@@ -173,4 +172,5 @@ private:
   mutable QPixmap penCache_;
   mutable bool penCacheDirty_ = true;
   mutable QRect penCachePlotArea_;
+  mutable int circularWriteSlot_ = 0;  // MEDM-style circular buffer write position
 };

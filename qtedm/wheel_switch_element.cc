@@ -1,5 +1,7 @@
 #include "wheel_switch_element.h"
 
+#include "update_coordinator.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -406,7 +408,7 @@ void WheelSwitchElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (changed) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 

@@ -1528,12 +1528,10 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
         segmentStarted = false;
         continue;
       }
-      // Skip values outside the LOPR-HOPR range instead of clamping them
-      if (sampleValue < low || sampleValue > high) {
-        segmentStarted = false;
-        continue;
-      }
-      const double normalized = (sampleValue - low) / range;
+      // Clamp values to the Y-axis range so lines extend to the edge of the chart
+      // (matching MEDM behavior) rather than creating gaps
+      const double clampedValue = std::clamp(sampleValue, low, high);
+      const double normalized = (clampedValue - low) / range;
       const double x = content.left()
           + (static_cast<double>(offsetColumns + s) / denominator) * width;
       const double y = content.top() + (height - 1.0) * (1.0 - normalized);
@@ -2027,11 +2025,13 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
           const double range = std::max(std::abs(high - low), 1e-12);
 
           const double value = pen.samples[static_cast<std::size_t>(sampleIdx)];
-          if (!std::isfinite(value) || value < low || value > high) {
+          if (!std::isfinite(value)) {
             continue;
           }
 
-          const double normalized = (value - low) / range;
+          // Clamp values to the Y-axis range so lines extend to the edge of the chart
+          const double clampedValue = std::clamp(value, low, high);
+          const double normalized = (clampedValue - low) / range;
           const int y = static_cast<int>((height - 1) * (1.0 - normalized));
 
           // Draw a vertical line for this sample (or point)
@@ -2039,8 +2039,9 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
           int prevY = y;
           if (sampleIdx > 0 && static_cast<std::size_t>(sampleIdx - 1) < pen.samples.size()) {
             const double prevValue = pen.samples[static_cast<std::size_t>(sampleIdx - 1)];
-            if (std::isfinite(prevValue) && prevValue >= low && prevValue <= high) {
-              const double prevNorm = (prevValue - low) / range;
+            if (std::isfinite(prevValue)) {
+              const double clampedPrevValue = std::clamp(prevValue, low, high);
+              const double prevNorm = (clampedPrevValue - low) / range;
               prevY = static_cast<int>((height - 1) * (1.0 - prevNorm));
             }
           }

@@ -281,7 +281,7 @@ void ScaleMonitorElement::setRuntimeConnected(bool connected)
     runtimeHigh_ = limits_.highDefault;
     runtimeValue_ = defaultSampleValue();
   }
-  update();
+  UpdateCoordinator::instance().requestUpdate(this);
 }
 
 void ScaleMonitorElement::setRuntimeSeverity(short severity)
@@ -297,7 +297,7 @@ void ScaleMonitorElement::setRuntimeSeverity(short severity)
   }
   runtimeSeverity_ = severity;
   if (colorMode_ == TextColorMode::kAlarm) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 
@@ -330,7 +330,7 @@ void ScaleMonitorElement::setRuntimeLimits(double low, double high)
   runtimeLimitsValid_ = true;
   if (executeMode_) {
     runtimeValue_ = clampToLimits(runtimeValue_);
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 
@@ -342,7 +342,7 @@ void ScaleMonitorElement::setRuntimePrecision(int precision)
   }
   runtimePrecision_ = clamped;
   if (executeMode_) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 
@@ -356,7 +356,11 @@ void ScaleMonitorElement::clearRuntimeState()
   runtimePrecision_ = -1;
   runtimeValue_ = defaultSampleValue();
   runtimeSeverity_ = kInvalidSeverity;
-  update();
+  if (executeMode_) {
+    UpdateCoordinator::instance().requestUpdate(this);
+  } else {
+    update();
+  }
 }
 
 void ScaleMonitorElement::paintEvent(QPaintEvent *event)

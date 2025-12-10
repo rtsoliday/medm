@@ -177,7 +177,7 @@ void ByteMonitorElement::setRuntimeConnected(bool connected)
     hasRuntimeValue_ = false;
     runtimeValue_ = 0u;
   }
-  update();
+  UpdateCoordinator::instance().requestUpdate(this);
 }
 
 void ByteMonitorElement::setRuntimeSeverity(short severity)
@@ -193,7 +193,7 @@ void ByteMonitorElement::setRuntimeSeverity(short severity)
   }
   runtimeSeverity_ = severity;
   if (colorMode_ == TextColorMode::kAlarm) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 
@@ -216,7 +216,11 @@ void ByteMonitorElement::clearRuntimeState()
   runtimeSeverity_ = kInvalidSeverity;
   hasRuntimeValue_ = false;
   runtimeValue_ = 0u;
-  update();
+  if (executeMode_) {
+    UpdateCoordinator::instance().requestUpdate(this);
+  } else {
+    update();
+  }
 }
 
 void ByteMonitorElement::paintEvent(QPaintEvent *event)

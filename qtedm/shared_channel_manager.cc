@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <QTimer>
 
@@ -11,6 +12,12 @@
 #include "channel_access_context.h"
 #include "startup_timing.h"
 #include "statistics_tracker.h"
+
+namespace {
+/* Minimum interval between subscriber notifications per channel (100ms = 10Hz max).
+ * This rate limits high-frequency PV updates to reduce CPU load. */
+constexpr qint64 kMinNotifyIntervalMs = 100;
+} // namespace
 
 /* SubscriptionHandle implementation */
 
@@ -614,7 +621,6 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
   }
 
   StatisticsTracker::instance().registerCaEvent();
-  ++channel->updateCount;
 
   /* Track values for timing diagnostics */
   bool isFirstValueForChannel = !channel->cachedData.hasValue;
@@ -812,6 +818,54 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
   }
 
   data.hasValue = true;
+
+  /* Check if value or alarm state actually changed.
+   * Skip notification if nothing changed to reduce CPU load. */
+  bool valueChanged = false;
+  if (channel->lastNotifiedSeverity < 0) {
+    /* First value - always notify */
+    valueChanged = true;
+  } else if (data.severity != channel->lastNotifiedSeverity) {
+    /* Alarm state changed */
+    valueChanged = true;
+  } else if (data.isNumeric && data.numericValue != channel->lastNotifiedValue) {
+    /* Numeric value changed */
+    valueChanged = true;
+  } else if (data.isString && data.stringValue != channel->lastNotifiedString) {
+    /* String value changed */
+    valueChanged = true;
+  } else if (data.isEnum && data.enumValue != channel->lastNotifiedEnum) {
+    /* Enum value changed */
+    valueChanged = true;
+  }
+
+  if (!valueChanged) {
+    /* No change - skip notification but still update cached data timestamp */
+    return;
+  }
+
+  /* Rate limit subscriber notifications to reduce CPU load from high-frequency PVs.
+   * Always notify on the first value, then enforce minimum interval between updates. */
+  const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+  if (channel->lastNotifyTimeMs > 0) {
+    const qint64 elapsedMs = nowMs - channel->lastNotifyTimeMs;
+    if (elapsedMs < kMinNotifyIntervalMs) {
+      /* Skip this notification - too soon since last one.
+       * The cached data is still updated, so the next notification
+       * will have the latest value. */
+      return;
+    }
+  }
+  channel->lastNotifyTimeMs = nowMs;
+
+  /* Update last notified values for next comparison */
+  channel->lastNotifiedValue = data.numericValue;
+  channel->lastNotifiedSeverity = data.severity;
+  channel->lastNotifiedString = data.stringValue;
+  channel->lastNotifiedEnum = data.enumValue;
+
+  /* Count this update for statistics (only updates passed to subscribers) */
+  ++channel->updateCount;
 
   /* Notify all subscribers */
   for (const auto &sub : channel->subscribers) {

@@ -8,6 +8,7 @@
 #include <QResizeEvent>
 
 #include "text_font_utils.h"
+#include "update_coordinator.h"
 
 namespace {
 
@@ -325,7 +326,9 @@ void TextMonitorElement::setRuntimeText(const QString &text)
     }
   }
 
-  update();
+  /* Use UpdateCoordinator for throttled updates with adaptive rate control.
+   * This reduces network load when updates arrive faster than we can paint. */
+  UpdateCoordinator::instance().requestUpdate(this);
 }
 
 void TextMonitorElement::setRuntimeConnected(bool connected)
@@ -336,7 +339,8 @@ void TextMonitorElement::setRuntimeConnected(bool connected)
   runtimeConnected_ = connected;
   if (executeMode_) {
     applyPaletteColors();
-    update();
+    /* Use UpdateCoordinator for throttled updates with adaptive rate control. */
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 
@@ -351,7 +355,8 @@ void TextMonitorElement::setRuntimeSeverity(short severity)
   runtimeSeverity_ = severity;
   if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
     applyPaletteColors();
-    update();
+    /* Use UpdateCoordinator for throttled updates with adaptive rate control. */
+    UpdateCoordinator::instance().requestUpdate(this);
   }
 }
 

@@ -223,6 +223,12 @@ private:
     SharedChannelData cachedData;
     QList<Subscriber> subscribers;
     int updateCount = 0;  /* Updates since last reset for rate calc */
+    qint64 lastNotifyTimeMs = 0;  /* Time of last subscriber notification */
+    /* Last notified values for change detection */
+    double lastNotifiedValue = 0.0;
+    short lastNotifiedSeverity = -1;  /* -1 = never notified */
+    QString lastNotifiedString;
+    dbr_enum_t lastNotifiedEnum = 0;
   };
 
   /* CA callbacks - static to match CA API */

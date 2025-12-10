@@ -252,6 +252,15 @@
 <p>Open multiple displays:</p>
 <pre>qtedm -x display1.adl display2.adl display3.adl</pre>
 
+<h3>Remote Display via SSH</h3>
+
+<p>When running QtEDM over an SSH connection with X11 forwarding, it is highly recommended to use the <code>-C</code> option to enable compression. This significantly improves display update performance and provides a smoother experience, especially when monitoring rapidly changing process variables.</p>
+
+<pre>ssh -C -X user@host
+qtedm -x display.adl</pre>
+
+<p>The <code>-C</code> option compresses all data sent over the SSH connection, which reduces the bandwidth required for X11 protocol traffic. Without compression, high-frequency widget updates can overwhelm the connection and cause sluggish or jerky display behavior.</p>
+
 <h2><a name="Modes"></a>Modes of Operation</h2>
 
 <h3>EDIT Mode</h3>

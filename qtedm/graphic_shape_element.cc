@@ -8,6 +8,7 @@
 #include <QPen>
 
 #include "medm_colors.h"
+#include "update_coordinator.h"
 
 GraphicShapeElement::GraphicShapeElement(QWidget *parent)
   : QWidget(parent)
@@ -222,7 +223,13 @@ void GraphicShapeElement::drawSelectionOutline(QPainter &painter,
 
 void GraphicShapeElement::onExecuteStateApplied()
 {
-  update();
+  /* Use UpdateCoordinator for throttled updates with adaptive rate control.
+   * This reduces CPU load when PVs update faster than we can paint. */
+  if (executeMode_) {
+    UpdateCoordinator::instance().requestUpdate(this);
+  } else {
+    update();
+  }
 }
 
 void GraphicShapeElement::onRuntimeSeverityChanged()

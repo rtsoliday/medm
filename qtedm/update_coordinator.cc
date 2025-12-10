@@ -12,10 +12,11 @@ UpdateCoordinator::UpdateCoordinator()
 {
   timer_ = new QTimer();
   timer_->setTimerType(Qt::CoarseTimer);  // Don't need precision for batched updates
-  timer_->setInterval(updateIntervalMs_);
+  timer_->setInterval(currentIntervalMs_);
   QObject::connect(timer_, &QTimer::timeout, [this]() {
     processPendingUpdates();
   });
+  elapsedTimer_.start();
   timer_->start();
 }
 
@@ -43,22 +44,76 @@ void UpdateCoordinator::requestUpdate(QWidget *widget)
 
 void UpdateCoordinator::setUpdateInterval(int intervalMs)
 {
-  if (intervalMs < 10) {
-    intervalMs = 10;  // Minimum 10ms (100Hz max)
+  if (intervalMs < kMinIntervalMs) {
+    intervalMs = kMinIntervalMs;
   }
-  updateIntervalMs_ = intervalMs;
+  baseIntervalMs_ = intervalMs;
+  // Reset current interval to base when user changes setting
+  currentIntervalMs_ = intervalMs;
+  lateTickCount_ = 0;
   if (timer_) {
-    timer_->setInterval(updateIntervalMs_);
+    timer_->setInterval(currentIntervalMs_);
   }
 }
 
 int UpdateCoordinator::updateInterval() const
 {
-  return updateIntervalMs_;
+  return currentIntervalMs_;
+}
+
+bool UpdateCoordinator::isThrottled() const
+{
+  return currentIntervalMs_ > baseIntervalMs_;
+}
+
+void UpdateCoordinator::resetThrottling()
+{
+  currentIntervalMs_ = baseIntervalMs_;
+  lateTickCount_ = 0;
+  if (timer_) {
+    timer_->setInterval(currentIntervalMs_);
+  }
 }
 
 void UpdateCoordinator::processPendingUpdates()
 {
+  const qint64 nowMs = elapsedTimer_.elapsed();
+
+  // Track late ticks for adaptive throttling
+  // This helps smooth performance over slow/variable network connections
+  if (expectedTickTimeMs_ > 0) {
+    const qint64 deltaMs = nowMs - expectedTickTimeMs_;
+    if (deltaMs > kLateThresholdMs) {
+      ++lateTickCount_;
+      if (lateTickCount_ > kLateCountThreshold) {
+        // Increase interval to reduce load
+        currentIntervalMs_ += kIntervalIncrementMs;
+        if (currentIntervalMs_ > kMaxIntervalMs) {
+          // Reset to base if we've slowed down too much
+          currentIntervalMs_ = baseIntervalMs_;
+        }
+        lateTickCount_ = 0;
+        if (timer_) {
+          timer_->setInterval(currentIntervalMs_);
+        }
+      }
+    } else {
+      // Tick was on time - reset late count but don't recover interval.
+      // Assume network is not stable, so keep the slower rate once throttled.
+      // if (currentIntervalMs_ > baseIntervalMs_ && lateTickCount_ == 0) {
+      //   currentIntervalMs_ -= kIntervalIncrementMs / 2;
+      //   if (currentIntervalMs_ < baseIntervalMs_) {
+      //     currentIntervalMs_ = baseIntervalMs_;
+      //   }
+      //   if (timer_) {
+      //     timer_->setInterval(currentIntervalMs_);
+      //   }
+      // }
+      //lateTickCount_ = 0;
+    }
+  }
+  expectedTickTimeMs_ = nowMs + currentIntervalMs_;
+
   if (pendingWidgets_.isEmpty()) {
     return;
   }

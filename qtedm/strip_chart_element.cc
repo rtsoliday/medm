@@ -27,7 +27,10 @@ constexpr int kInnerMargin = 6;
 constexpr int kGridLines = 5;
 constexpr int kMaxTickMarks = 10;
 constexpr double kPenSampleCount = 24.0;
-constexpr int kRefreshIntervalMs = 100;
+constexpr int kDefaultRefreshIntervalMs = 100;
+constexpr int kMaxRefreshIntervalMs = 1000;
+constexpr int kLateThresholdMs = 100;
+constexpr int kLateCountThreshold = 5;
 constexpr double kMinimumRangeEpsilon = 1e-9;
 constexpr int kMaxSampleBurst = 32;
 
@@ -538,6 +541,10 @@ void StripChartElement::clearRuntimeState()
   lastSampleMs_ = 0;
   nextAdvanceTimeMs_ = 0;
   newSampleColumns_ = 0;
+  // Reset adaptive refresh rate state
+  currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
+  lateRefreshCount_ = 0;
+  expectedRefreshTimeMs_ = 0;
   for (int i = 0; i < penCount(); ++i) {
     Pen &pen = pens_[i];
     pen.runtimeConnected = false;
@@ -1644,8 +1651,8 @@ void StripChartElement::ensureRefreshTimer()
   }
   refreshTimer_ = new QTimer(this);
   refreshTimer_->setTimerType(Qt::PreciseTimer);
-  // Initial interval; will be adjusted dynamically based on sample rate
-  refreshTimer_->setInterval(kRefreshIntervalMs);
+  // Initial interval; will be adjusted dynamically based on network performance
+  refreshTimer_->setInterval(currentRefreshIntervalMs_);
   QObject::connect(refreshTimer_, &QTimer::timeout, this,
       &StripChartElement::handleRefreshTimer);
 }
@@ -1674,6 +1681,25 @@ void StripChartElement::handleRefreshTimer()
 
   const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
 
+  // Track late refreshes for adaptive refresh rate adjustment
+  // This helps smooth performance over slow/variable network connections
+  if (expectedRefreshTimeMs_ > 0) {
+    const qint64 deltaMs = nowMs - expectedRefreshTimeMs_;
+    if (deltaMs > kLateThresholdMs) {
+      ++lateRefreshCount_;
+      if (lateRefreshCount_ > kLateCountThreshold) {
+        // Increase refresh interval to reduce network load
+        currentRefreshIntervalMs_ += 100;
+        if (currentRefreshIntervalMs_ > kMaxRefreshIntervalMs) {
+          // Reset to default if we've slowed down too much
+          currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
+        }
+        lateRefreshCount_ = 0;
+      }
+    }
+  }
+  expectedRefreshTimeMs_ = nowMs + currentRefreshIntervalMs_;
+
   maybeAppendSamples(nowMs);
 
   // Use update() to queue a paint event. This doesn't block the timer
@@ -1682,15 +1708,10 @@ void StripChartElement::handleRefreshTimer()
   // will draw all accumulated columns at once.
   update();
 
-  // Dynamically adjust timer interval to match sample rate (MEDM-style)
-  // This ensures the timer fires close to when the next sample is needed
-  if (refreshTimer_ && nextAdvanceTimeMs_ > 0 && sampleIntervalMs_ > 0) {
-    qint64 msUntilNext = nextAdvanceTimeMs_ - nowMs;
-    // Clamp to reasonable bounds: minimum 10ms, maximum sampleIntervalMs_
-    int timerInterval = static_cast<int>(std::clamp(
-        msUntilNext, static_cast<qint64>(10),
-        static_cast<qint64>(std::ceil(sampleIntervalMs_))));
-    refreshTimer_->setInterval(timerInterval);
+  // Always use the adaptive refresh interval for the timer
+  // This ensures consistent timing that can be adjusted for slow networks
+  if (refreshTimer_) {
+    refreshTimer_->setInterval(currentRefreshIntervalMs_);
   }
 }
 

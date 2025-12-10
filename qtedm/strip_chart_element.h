@@ -173,4 +173,9 @@ private:
   mutable bool penCacheDirty_ = true;
   mutable QRect penCachePlotArea_;
   mutable int circularWriteSlot_ = 0;  // MEDM-style circular buffer write position
+  
+  // Adaptive refresh rate for slow network connections
+  int currentRefreshIntervalMs_ = 100;
+  int lateRefreshCount_ = 0;
+  qint64 expectedRefreshTimeMs_ = 0;
 };

@@ -81,11 +81,13 @@ private:
   QElapsedTimer elapsedTimer_;
   qint64 expectedTickTimeMs_ = 0;  // When we expect the next tick
   int lateTickCount_ = 0;          // Consecutive late ticks
+  int onTimeTickCount_ = 0;        // Consecutive on-time ticks (for recovery)
 
   // Throttling constants
-  static constexpr int kMinIntervalMs = 100;       // Minimum 100ms (10Hz max)
-  static constexpr int kMaxIntervalMs = 1000;      // Maximum 1000ms (1Hz min)
-  static constexpr int kLateThresholdMs = 50;      // Tick is "late" if >50ms past expected
-  static constexpr int kLateCountThreshold = 5;    // Increase interval after 5 late ticks
-  static constexpr int kIntervalIncrementMs = 50;  // Increase by 50ms each time
+  static constexpr int kMinIntervalMs = 100;         // Minimum 100ms (10Hz max)
+  static constexpr int kMaxIntervalMs = 1000;        // Maximum 1000ms (1Hz min)
+  static constexpr int kLateThresholdMs = 50;        // Tick is "late" if >50ms past expected
+  static constexpr int kLateCountThreshold = 5;      // Increase interval after 5 late ticks
+  static constexpr int kOnTimeCountThreshold = 100;  // Decrease interval after 100 on-time ticks
+  static constexpr int kIntervalIncrementMs = 50;    // Increase by 50ms each time
 };

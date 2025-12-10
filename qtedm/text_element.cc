@@ -15,6 +15,7 @@
 #include <QShowEvent>
 
 #include "text_font_utils.h"
+#include "update_coordinator.h"
 
 namespace {
 
@@ -702,6 +703,12 @@ void TextElement::updateOverflowStacking()
 void TextElement::requestOverflowRepaint()
 {
   if (overflowWidget_ && overflowWidget_->isVisible()) {
-    overflowWidget_->update();
+    /* Use UpdateCoordinator for throttled updates with adaptive rate control.
+     * This reduces CPU load when PVs update faster than we can paint. */
+    if (executeMode_) {
+      UpdateCoordinator::instance().requestUpdate(overflowWidget_);
+    } else {
+      overflowWidget_->update();
+    }
   }
 }

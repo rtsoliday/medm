@@ -70,6 +70,7 @@ void UpdateCoordinator::resetThrottling()
 {
   currentIntervalMs_ = baseIntervalMs_;
   lateTickCount_ = 0;
+  onTimeTickCount_ = 0;
   if (timer_) {
     timer_->setInterval(currentIntervalMs_);
   }
@@ -85,6 +86,7 @@ void UpdateCoordinator::processPendingUpdates()
     const qint64 deltaMs = nowMs - expectedTickTimeMs_;
     if (deltaMs > kLateThresholdMs) {
       ++lateTickCount_;
+      onTimeTickCount_ = 0;  // Reset on-time counter when late
       if (lateTickCount_ > kLateCountThreshold) {
         // Increase interval to reduce load
         currentIntervalMs_ += kIntervalIncrementMs;
@@ -98,18 +100,24 @@ void UpdateCoordinator::processPendingUpdates()
         }
       }
     } else {
-      // Tick was on time - reset late count but don't recover interval.
-      // Assume network is not stable, so keep the slower rate once throttled.
-      // if (currentIntervalMs_ > baseIntervalMs_ && lateTickCount_ == 0) {
-      //   currentIntervalMs_ -= kIntervalIncrementMs / 2;
-      //   if (currentIntervalMs_ < baseIntervalMs_) {
-      //     currentIntervalMs_ = baseIntervalMs_;
-      //   }
-      //   if (timer_) {
-      //     timer_->setInterval(currentIntervalMs_);
-      //   }
-      // }
-      //lateTickCount_ = 0;
+      // Tick was on time - track consecutive on-time ticks
+      lateTickCount_ = 0;
+      if (currentIntervalMs_ > baseIntervalMs_) {
+        ++onTimeTickCount_;
+        if (onTimeTickCount_ >= kOnTimeCountThreshold) {
+          // Network has been stable for a while, try speeding up
+          currentIntervalMs_ -= kIntervalIncrementMs / 2;
+          if (currentIntervalMs_ < baseIntervalMs_) {
+            currentIntervalMs_ = baseIntervalMs_;
+          }
+          onTimeTickCount_ = 0;
+          if (timer_) {
+            timer_->setInterval(currentIntervalMs_);
+          }
+        }
+      } else {
+        onTimeTickCount_ = 0;
+      }
     }
   }
   expectedTickTimeMs_ = nowMs + currentIntervalMs_;

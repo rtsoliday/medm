@@ -177,5 +177,6 @@ private:
   // Adaptive refresh rate for slow network connections
   int currentRefreshIntervalMs_ = 100;
   int lateRefreshCount_ = 0;
+  int onTimeRefreshCount_ = 0;
   qint64 expectedRefreshTimeMs_ = 0;
 };

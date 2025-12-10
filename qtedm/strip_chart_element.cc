@@ -31,6 +31,8 @@ constexpr int kDefaultRefreshIntervalMs = 100;
 constexpr int kMaxRefreshIntervalMs = 1000;
 constexpr int kLateThresholdMs = 100;
 constexpr int kLateCountThreshold = 5;
+constexpr int kOnTimeCountThreshold = 20;
+constexpr int kIntervalIncrementMs = 100;
 constexpr double kMinimumRangeEpsilon = 1e-9;
 constexpr int kMaxSampleBurst = 32;
 
@@ -544,6 +546,7 @@ void StripChartElement::clearRuntimeState()
   // Reset adaptive refresh rate state
   currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
   lateRefreshCount_ = 0;
+  onTimeRefreshCount_ = 0;
   expectedRefreshTimeMs_ = 0;
   for (int i = 0; i < penCount(); ++i) {
     Pen &pen = pens_[i];
@@ -1648,7 +1651,7 @@ void StripChartElement::ensureRefreshTimer()
     return;
   }
   refreshTimer_ = new QTimer(this);
-  refreshTimer_->setTimerType(Qt::PreciseTimer);
+  refreshTimer_->setTimerType(Qt::CoarseTimer);
   // Initial interval; will be adjusted dynamically based on network performance
   refreshTimer_->setInterval(currentRefreshIntervalMs_);
   QObject::connect(refreshTimer_, &QTimer::timeout, this,
@@ -1685,14 +1688,31 @@ void StripChartElement::handleRefreshTimer()
     const qint64 deltaMs = nowMs - expectedRefreshTimeMs_;
     if (deltaMs > kLateThresholdMs) {
       ++lateRefreshCount_;
+      onTimeRefreshCount_ = 0;  // Reset on-time counter when late
       if (lateRefreshCount_ > kLateCountThreshold) {
-        // Increase refresh interval to reduce network load
-        currentRefreshIntervalMs_ += 100;
+        // Increase refresh interval to reduce load
+        currentRefreshIntervalMs_ += kIntervalIncrementMs;
         if (currentRefreshIntervalMs_ > kMaxRefreshIntervalMs) {
           // Reset to default if we've slowed down too much
           currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
         }
         lateRefreshCount_ = 0;
+      }
+    } else {
+      // Refresh was on time - track consecutive on-time refreshes
+      lateRefreshCount_ = 0;
+      if (currentRefreshIntervalMs_ > kDefaultRefreshIntervalMs) {
+        ++onTimeRefreshCount_;
+        if (onTimeRefreshCount_ >= kOnTimeCountThreshold) {
+          // Network has been stable for a while, try speeding up
+          currentRefreshIntervalMs_ -= kIntervalIncrementMs / 2;
+          if (currentRefreshIntervalMs_ < kDefaultRefreshIntervalMs) {
+            currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
+          }
+          onTimeRefreshCount_ = 0;
+        }
+      } else {
+        onTimeRefreshCount_ = 0;
       }
     }
   }

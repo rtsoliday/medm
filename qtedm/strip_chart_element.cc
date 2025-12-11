@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFontMetrics>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
@@ -15,6 +16,7 @@
 #include <QPalette>
 #include <QResizeEvent>
 #include <QTimer>
+#include <QWheelEvent>
 
 #include "medm_colors.h"
 #include "window_utils.h"
@@ -548,6 +550,11 @@ void StripChartElement::clearRuntimeState()
   lateRefreshCount_ = 0;
   onTimeRefreshCount_ = 0;
   expectedRefreshTimeMs_ = 0;
+  // Reset zoom/pan state
+  zoomed_ = false;
+  zoomYFactor_ = 1.0;
+  zoomYCenter_ = 0.5;
+  panning_ = false;
   for (int i = 0; i < penCount(); ++i) {
     Pen &pen = pens_[i];
     pen.runtimeConnected = false;
@@ -635,32 +642,9 @@ void StripChartElement::paintEvent(QPaintEvent *event)
         const QRect plotArea = cachedLayout_.chartRect.adjusted(1, 1, -1, -1);
         ensurePenCache(plotArea);
         if (!penCache_.isNull()) {
-          const int cacheWidth = penCache_.width();
-          const int cacheHeight = penCache_.height();
-
-          // MEDM-style circular buffer display:
-          // The write slot points to where the NEXT data will be written.
-          // Data from writeSlot to end is OLDER data (displays on LEFT).
-          // Data from start to writeSlot is NEWER data (displays on RIGHT).
-          const int writeSlot = circularWriteSlot_;
-
-          if (writeSlot > 0 && writeSlot < cacheWidth) {
-            // Two-piece copy for circular buffer effect
-            // Right portion of pixmap (older data) -> left side of display
-            const int rightWidth = cacheWidth - writeSlot;
-            if (rightWidth > 0) {
-              painter.drawPixmap(plotArea.left(), plotArea.top(),
-                  penCache_, writeSlot, 0, rightWidth, cacheHeight);
-            }
-            // Left portion of pixmap (newer data) -> right side of display
-            if (writeSlot > 0) {
-              painter.drawPixmap(plotArea.left() + rightWidth, plotArea.top(),
-                  penCache_, 0, 0, writeSlot, cacheHeight);
-            }
-          } else {
-            // No wraparound yet or writeSlot at boundary - simple copy
-            painter.drawPixmap(plotArea.topLeft(), penCache_);
-          }
+          // After full redraw, data fills the entire cache - just display it directly
+          // The paintRuntimePens function handles positioning correctly
+          painter.drawPixmap(plotArea.topLeft(), penCache_);
         }
       }
     } else {
@@ -1333,8 +1317,9 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
         continue;
       }
       
-      const double low = effectivePenLow(p);
-      const double high = effectivePenHigh(p);
+      // Use zoomed range for axis labels when zoomed
+      const double low = zoomedPenLow(p);
+      const double high = zoomedPenHigh(p);
       
       if (!std::isfinite(low) || !std::isfinite(high)) {
         continue;
@@ -1361,11 +1346,12 @@ void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRec
       }
     }
     
-    // If no ranges found, use default
+    // If no ranges found, use default (apply zoom to default as well)
     if (ranges.empty()) {
       YAxisRange defaultRange;
       defaultRange.low = 0.0;
       defaultRange.high = 100.0;
+      applyZoomToRange(defaultRange.low, defaultRange.high);
       defaultRange.penMask = 0;
       defaultRange.numPens = 0;
       ranges.push_back(defaultRange);
@@ -1498,12 +1484,8 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
     return;
   }
 
-  int capacity = cachedChartWidth_;
-  if (capacity <= 0) {
-    capacity = std::max(sampleHistoryLength_, 1);
-  }
-  capacity = std::max(capacity, 1);
-  const int denominator = std::max(capacity - 1, 1);
+  // Use content width as capacity - this ensures samples are drawn within bounds
+  const int capacity = std::max(static_cast<int>(width), 1);
 
   for (int i = 0; i < penCount(); ++i) {
     const Pen &pen = pens_[i];
@@ -1511,8 +1493,9 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
       continue;
     }
 
-    const double low = effectivePenLow(i);
-    const double high = effectivePenHigh(i);
+    // Use zoomed range for rendering when zoomed
+    const double low = zoomedPenLow(i);
+    const double high = zoomedPenHigh(i);
     if (!std::isfinite(low) || !std::isfinite(high)) {
       continue;
     }
@@ -1524,19 +1507,27 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
     QPointF singlePoint;
 
     const int sampleCount = static_cast<int>(pen.samples.size());
-    const int offsetColumns = std::max(capacity - sampleCount, 0);
-    for (int s = 0; s < sampleCount; ++s) {
+    // Only draw the most recent 'capacity' samples to fit the content width
+    const int startSample = std::max(0, sampleCount - capacity);
+    const int samplesToRender = sampleCount - startSample;
+    
+    // Position data on the RIGHT side of the chart (newest at right edge)
+    // offsetColumns shifts data to the right when buffer isn't full
+    const int offsetColumns = capacity - samplesToRender;
+    const int denominator = std::max(capacity - 1, 1);
+    
+    for (int s = startSample; s < sampleCount; ++s) {
       const double sampleValue = pen.samples[static_cast<std::size_t>(s)];
       if (!std::isfinite(sampleValue)) {
         segmentStarted = false;
         continue;
       }
-      // Clamp values to the Y-axis range so lines extend to the edge of the chart
-      // (matching MEDM behavior) rather than creating gaps
-      const double clampedValue = std::clamp(sampleValue, low, high);
-      const double normalized = (clampedValue - low) / range;
+      // When zoomed, allow values outside the visible range to be drawn
+      // (they will extend beyond the chart area but get clipped by Qt)
+      const double normalized = (sampleValue - low) / range;
+      const int renderIndex = s - startSample;
       const double x = content.left()
-          + (static_cast<double>(offsetColumns + s) / denominator) * width;
+          + (static_cast<double>(offsetColumns + renderIndex) / denominator) * (width - 1.0);
       const double y = content.top() + (height - 1.0) * (1.0 - normalized);
 
       if (!segmentStarted) {
@@ -1643,6 +1634,38 @@ double StripChartElement::effectivePenHigh(int index) const
     return pen.runtimeHigh;
   }
   return pen.limits.highDefault;
+}
+
+void StripChartElement::applyZoomToRange(double &low, double &high) const
+{
+  if (!zoomed_) {
+    return;
+  }
+  
+  const double range = high - low;
+  // The visible portion is centered at zoomYCenter_ and spans zoomYFactor_ of the full range
+  // zoomYCenter_ = 0.5 means center is at the middle of the original range
+  // zoomYFactor_ = 1.0 means we see the full range, 0.5 means we see half
+  const double visibleRange = range * zoomYFactor_;
+  const double center = low + zoomYCenter_ * range;
+  low = center - visibleRange / 2.0;
+  high = center + visibleRange / 2.0;
+}
+
+double StripChartElement::zoomedPenLow(int index) const
+{
+  double low = effectivePenLow(index);
+  double high = effectivePenHigh(index);
+  applyZoomToRange(low, high);
+  return low;
+}
+
+double StripChartElement::zoomedPenHigh(int index) const
+{
+  double low = effectivePenLow(index);
+  double high = effectivePenHigh(index);
+  applyZoomToRange(low, high);
+  return high;
 }
 
 void StripChartElement::ensureRefreshTimer()
@@ -1865,6 +1888,12 @@ void StripChartElement::appendSampleColumn()
 
   // Track new columns for incremental pen drawing
   ++newSampleColumns_;
+  
+  // When buffer isn't full yet, we need full redraws to position data correctly
+  // (data should appear on right side of chart, scrolling left)
+  if (sampleHistoryLength_ < cachedChartWidth_) {
+    penCacheDirty_ = true;
+  }
 }
 
 bool StripChartElement::anyPenConnected() const
@@ -1980,9 +2009,10 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
   const int height = plotSize.height();
 
   // Check if we need a full redraw
+  // Always do full redraw when zoomed to ensure correct rendering
   const bool sizeChanged = penCache_.isNull() || penCache_.size() != plotSize;
   const bool plotAreaMoved = penCachePlotArea_ != plotArea;
-  const bool needsFullRedraw = penCacheDirty_ || sizeChanged || plotAreaMoved;
+  const bool needsFullRedraw = penCacheDirty_ || sizeChanged || plotAreaMoved || zoomed_;
 
   if (needsFullRedraw) {
     // Full redraw: create cache, paint all pens, and set write slot to end
@@ -2000,19 +2030,24 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
 
     cachePainter.end();
 
-    // Set write slot to current sample position (where next data will be drawn)
-    // This is the rightmost position that has data
-    circularWriteSlot_ = std::min(sampleHistoryLength_, width);
-    if (circularWriteSlot_ >= width) {
-      circularWriteSlot_ = 0;  // Wrap around
+    // Set write slot based on where data ends in the cache
+    // When buffer not full: data is at positions (capacity - samplesToRender) to (capacity - 1)
+    // When buffer full: data fills entire cache
+    const int samplesToRender = std::min(sampleHistoryLength_, width);
+    if (samplesToRender >= width) {
+      // Buffer is full, next write wraps to 0
+      circularWriteSlot_ = 0;
+    } else {
+      // Buffer not full, next write is at the right edge (after the last sample)
+      circularWriteSlot_ = width;  // This signals "write at end, need full redraw for new data"
     }
 
     penCachePlotArea_ = plotArea;
     penCacheDirty_ = false;
     newSampleColumns_ = 0;
-  } else if (newSampleColumns_ > 0) {
-    // Incremental update: draw only new columns at the circular write position
-    // This is the MEDM-style optimization
+  } else if (newSampleColumns_ > 0 && sampleHistoryLength_ >= width) {
+    // Incremental update: only do this when buffer is full (has wrapped)
+    // When buffer is not full, we need full redraws to position data correctly
     QPainter cachePainter(&penCache_);
     cachePainter.setRenderHint(QPainter::Antialiasing, false);
 
@@ -2037,8 +2072,9 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
             continue;
           }
 
-          const double low = effectivePenLow(i);
-          const double high = effectivePenHigh(i);
+          // Use zoomed range for rendering when zoomed
+          const double low = zoomedPenLow(i);
+          const double high = zoomedPenHigh(i);
           if (!std::isfinite(low) || !std::isfinite(high)) {
             continue;
           }
@@ -2049,9 +2085,8 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
             continue;
           }
 
-          // Clamp values to the Y-axis range so lines extend to the edge of the chart
-          const double clampedValue = std::clamp(value, low, high);
-          const double normalized = (clampedValue - low) / range;
+          // When zoomed, allow values outside the visible range
+          const double normalized = (value - low) / range;
           const int y = static_cast<int>((height - 1) * (1.0 - normalized));
 
           // Draw a vertical line for this sample (or point)
@@ -2060,8 +2095,7 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
           if (sampleIdx > 0 && static_cast<std::size_t>(sampleIdx - 1) < pen.samples.size()) {
             const double prevValue = pen.samples[static_cast<std::size_t>(sampleIdx - 1)];
             if (std::isfinite(prevValue)) {
-              const double clampedPrevValue = std::clamp(prevValue, low, high);
-              const double prevNorm = (clampedPrevValue - low) / range;
+              const double prevNorm = (prevValue - low) / range;
               prevY = static_cast<int>((height - 1) * (1.0 - prevNorm));
             }
           }
@@ -2090,22 +2124,156 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
 
 void StripChartElement::mousePressEvent(QMouseEvent *event)
 {
-  // Forward middle button and right-click events to parent window for PV info
-  // functionality and context menu
-  if (executeMode_ && (event->button() == Qt::MiddleButton
-      || event->button() == Qt::RightButton)) {
-    if (forwardMouseEventToParent(event)) {
-      return;
+  if (executeMode_) {
+    // Forward middle button events to parent window for PV info functionality
+    if (event->button() == Qt::MiddleButton) {
+      if (forwardMouseEventToParent(event)) {
+        return;
+      }
     }
-  }
-  // Forward left clicks to parent when PV Info picking mode is active
-  if (executeMode_ && event->button() == Qt::LeftButton
-      && isParentWindowInPvInfoMode(this)) {
-    if (forwardMouseEventToParent(event)) {
-      return;
+    // Forward left clicks to parent when PV Info picking mode is active
+    if (event->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
+      if (forwardMouseEventToParent(event)) {
+        return;
+      }
+    }
+    if (event->button() == Qt::LeftButton) {
+      // Start panning (Y-axis only)
+      const QRect chart = chartRect();
+      if (chart.contains(event->pos())) {
+        panning_ = true;
+        panStartPos_ = event->pos();
+        panStartYCenter_ = zoomYCenter_;
+        setCursor(Qt::ClosedHandCursor);
+        event->accept();
+        return;
+      }
+    } else if (event->button() == Qt::RightButton) {
+      // Show context menu with reset zoom option only when zoomed
+      if (zoomed_) {
+        QMenu menu(this);
+        QAction *resetAction = menu.addAction(tr("Reset Zoom"));
+        QAction *selected = menu.exec(event->globalPos());
+        if (selected == resetAction) {
+          resetZoom();
+        }
+        event->accept();
+        return;
+      }
+      // Forward right-click events to parent window for context menu
+      if (forwardMouseEventToParent(event)) {
+        return;
+      }
     }
   }
   QWidget::mousePressEvent(event);
+}
+
+void StripChartElement::mouseReleaseEvent(QMouseEvent *event)
+{
+  if (panning_ && event->button() == Qt::LeftButton) {
+    panning_ = false;
+    setCursor(Qt::ArrowCursor);
+    event->accept();
+    return;
+  }
+  QWidget::mouseReleaseEvent(event);
+}
+
+void StripChartElement::mouseMoveEvent(QMouseEvent *event)
+{
+  if (panning_ && executeMode_) {
+    const QRect chart = chartRect();
+    if (chart.height() <= 0) {
+      return;
+    }
+    
+    const QPointF delta = event->pos() - panStartPos_;
+    
+    // Convert pixel delta to normalized coordinate delta for Y axis
+    // Positive delta.y() means dragging down, which should increase yCenter
+    // (showing lower values at center)
+    const double yDelta = delta.y() / static_cast<double>(chart.height());
+    zoomYCenter_ = std::clamp(panStartYCenter_ + yDelta * zoomYFactor_, 0.0, 1.0);
+    
+    // Invalidate caches since axis labels may change with zoom
+    invalidateStaticCache();
+    invalidatePenCache();
+    update();
+    event->accept();
+    return;
+  }
+  QWidget::mouseMoveEvent(event);
+}
+
+void StripChartElement::wheelEvent(QWheelEvent *event)
+{
+  if (!executeMode_) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+  
+  const QRect chart = chartRect();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+  const QPointF pos = event->position();
+#else
+  const QPointF pos = event->posF();
+#endif
+  
+  if (!chart.contains(pos.toPoint())) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+  
+  // Calculate zoom factor (positive delta = zoom in)
+  const double degrees = event->angleDelta().y() / 8.0;
+  const double steps = degrees / 15.0;
+  const double factor = std::pow(0.9, steps);  // 0.9 = zoom in, 1.11 = zoom out
+  
+  // Calculate mouse position in chart coordinates (0-1 range, 0 at bottom)
+  const double chartY = 1.0 - (pos.y() - chart.top()) / chart.height();
+  
+  // Apply zoom centered on mouse position
+  // The visible range is [zoomYCenter_ - zoomYFactor_/2, zoomYCenter_ + zoomYFactor_/2]
+  // We want the point under the mouse to stay at the same screen position
+  const double visibleMin = zoomYCenter_ - zoomYFactor_ / 2.0;
+  const double mouseDataY = visibleMin + chartY * zoomYFactor_;
+  
+  // Apply zoom factor
+  const double newFactor = std::clamp(zoomYFactor_ * factor, 0.01, 10.0);
+  
+  // Calculate new center to keep mouseDataY at the same screen position
+  // newVisibleMin + chartY * newFactor = mouseDataY
+  // newVisibleMin = mouseDataY - chartY * newFactor
+  // newCenter - newFactor/2 = mouseDataY - chartY * newFactor
+  // newCenter = mouseDataY - chartY * newFactor + newFactor/2
+  const double newCenter = mouseDataY - chartY * newFactor + newFactor / 2.0;
+  
+  zoomYFactor_ = newFactor;
+  zoomYCenter_ = std::clamp(newCenter, 0.0, 1.0);
+  zoomed_ = (std::abs(zoomYFactor_ - 1.0) > 0.001 || std::abs(zoomYCenter_ - 0.5) > 0.001);
+  
+  // Invalidate caches since axis labels change with zoom
+  invalidateStaticCache();
+  invalidatePenCache();
+  update();
+  event->accept();
+}
+
+bool StripChartElement::isZoomed() const
+{
+  return zoomed_;
+}
+
+void StripChartElement::resetZoom()
+{
+  zoomed_ = false;
+  zoomYFactor_ = 1.0;
+  zoomYCenter_ = 0.5;
+  panning_ = false;
+  invalidateStaticCache();
+  invalidatePenCache();
+  update();
 }
 
 bool StripChartElement::forwardMouseEventToParent(QMouseEvent *event) const

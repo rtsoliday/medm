@@ -72,10 +72,17 @@ public:
   double sampleIntervalSeconds() const;
   bool penHasData(int index) const;
 
+  // Zoom/pan support (execute mode only, Y-axis only)
+  bool isZoomed() const;
+  void resetZoom();
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void wheelEvent(QWheelEvent *event) override;
 
 private:
   bool forwardMouseEventToParent(QMouseEvent *event) const;
@@ -133,6 +140,9 @@ private:
   double periodMilliseconds() const;
   double effectivePenLow(int index) const;
   double effectivePenHigh(int index) const;
+  void applyZoomToRange(double &low, double &high) const;
+  double zoomedPenLow(int index) const;
+  double zoomedPenHigh(int index) const;
   void ensureRefreshTimer();
   void updateRefreshTimer();
   void handleRefreshTimer();
@@ -179,4 +189,12 @@ private:
   int lateRefreshCount_ = 0;
   int onTimeRefreshCount_ = 0;
   qint64 expectedRefreshTimeMs_ = 0;
+  
+  // Zoom/pan state (execute mode only, Y-axis only)
+  bool zoomed_ = false;
+  double zoomYFactor_ = 1.0;   // Zoom factor (1.0 = no zoom, < 1.0 = zoomed in)
+  double zoomYCenter_ = 0.5;  // Center of zoom in normalized coordinates (0-1)
+  bool panning_ = false;
+  QPointF panStartPos_;
+  double panStartYCenter_ = 0.5;
 };

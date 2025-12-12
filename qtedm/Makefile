@@ -88,6 +88,7 @@ qtedm_SRC = qtedm.cc \
             scale_monitor_runtime.cc \
             strip_chart_element.cc \
             strip_chart_runtime.cc \
+            strip_chart_data_dialog.cc \
             cartesian_plot_element.cc \
             cartesian_plot_runtime.cc \
             graphic_element_runtime_base.cc \

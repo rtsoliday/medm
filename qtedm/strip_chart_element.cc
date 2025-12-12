@@ -338,10 +338,17 @@ void StripChartElement::setPeriod(double period)
   }
   period_ = clamped;
   lastSampleMs_ = 0;
+  nextAdvanceTimeMs_ = 0;
   sampleIntervalMs_ = periodMilliseconds();
   cachedChartWidth_ = 0;
+  // Clear sample history since samples were taken at the old interval
+  sampleHistoryLength_ = 0;
+  for (Pen &pen : pens_) {
+    pen.samples.clear();
+  }
   updateSamplingGeometry(chartRect().width());
   invalidateStaticCache();
+  invalidatePenCache();
   updateRefreshTimer();
   update();
 }
@@ -358,10 +365,17 @@ void StripChartElement::setUnits(TimeUnits units)
   }
   units_ = units;
   lastSampleMs_ = 0;
+  nextAdvanceTimeMs_ = 0;
   sampleIntervalMs_ = periodMilliseconds();
   cachedChartWidth_ = 0;
+  // Clear sample history since samples were taken at the old interval
+  sampleHistoryLength_ = 0;
+  for (Pen &pen : pens_) {
+    pen.samples.clear();
+  }
   updateSamplingGeometry(chartRect().width());
   invalidateStaticCache();
+  invalidatePenCache();
   updateRefreshTimer();
   update();
 }
@@ -1889,11 +1903,10 @@ void StripChartElement::appendSampleColumn()
   // Track new columns for incremental pen drawing
   ++newSampleColumns_;
   
-  // When buffer isn't full yet, we need full redraws to position data correctly
-  // (data should appear on right side of chart, scrolling left)
-  if (sampleHistoryLength_ < cachedChartWidth_) {
-    penCacheDirty_ = true;
-  }
+  // Always mark pen cache dirty so that paintRuntimePens is called
+  // to properly render the scrolling data. The incremental update path
+  // doesn't handle scrolling correctly.
+  penCacheDirty_ = true;
 }
 
 bool StripChartElement::anyPenConnected() const

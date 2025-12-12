@@ -60,6 +60,7 @@
 #include "find_pv_dialog.h"
 #include "pv_info_dialog.h"
 #include "pv_limits_dialog.h"
+#include "strip_chart_data_dialog.h"
 #include "cursor_utils.h"
 
 namespace {
@@ -3020,6 +3021,7 @@ private:
   bool pvLimitsCursorInitialized_ = false;
   bool pvLimitsCursorActive_ = false;
   QCursor pvLimitsCursor_;
+  QPointer<StripChartDataDialog> stripChartDataDialog_;
   QList<TextElement *> textElements_;
   TextElement *selectedTextElement_ = nullptr;
   QHash<TextElement *, TextRuntime *> textRuntimes_;
@@ -8282,31 +8284,9 @@ private:
     }
 
     if (auto *element = dynamic_cast<StripChartElement *>(widget)) {
-      /* Strip chart has separate limits for each pen. Show a menu to select
-         which pen's limits to edit. */
-      QMenu penMenu(this);
-      penMenu.setTitle(tr("Select Pen"));
-      int penCount = element->penCount();
-      bool hasPens = false;
-      for (int i = 0; i < penCount; ++i) {
-        QString channelName = element->channel(i);
-        if (channelName.isEmpty()) {
-          continue;
-        }
-        hasPens = true;
-        QString label = tr("Pen %1: %2").arg(i + 1).arg(channelName);
-        QAction *action = penMenu.addAction(label);
-        action->setData(i);
-      }
-      if (!hasPens) {
-        QAction *noAction = penMenu.addAction(tr("(No pens configured)"));
-        noAction->setEnabled(false);
-      }
-      QAction *selected = penMenu.exec(QCursor::pos());
-      if (selected && selected->data().isValid()) {
-        int penIndex = selected->data().toInt();
-        showPvLimitsForStripChartPen(element, penIndex);
-      }
+      /* Strip chart has a comprehensive data dialog like medm, showing
+         all pens with color, limits, and period/units settings. */
+      showStripChartDataDialog(element);
       return;
     }
 
@@ -8317,27 +8297,16 @@ private:
     dialog->activateWindow();
   }
 
-  void showPvLimitsForStripChartPen(StripChartElement *element, int penIndex)
+  void showStripChartDataDialog(StripChartElement *element)
   {
     if (!element) {
       return;
     }
-    if (penIndex < 0 || penIndex >= element->penCount()) {
-      return;
+    if (!stripChartDataDialog_) {
+      stripChartDataDialog_ = new StripChartDataDialog(palette(), labelFont_,
+          font(), this);
     }
-    PvLimitsDialog *dialog = ensurePvLimitsDialog();
-    if (!dialog) {
-      return;
-    }
-    QString channelName = element->channel(penIndex);
-    dialog->setStripChartCallbacks(
-        channelName,
-        [element, penIndex]() { return element->penLimits(penIndex); },
-        [element, penIndex](const PvLimits &limits) {
-          element->setPenLimits(penIndex, limits);
-        },
-        [element]() { element->update(); });
-    dialog->showForStripChart();
+    stripChartDataDialog_->setTarget(element);
   }
 
   PvLimitsDialog *ensurePvLimitsDialog()

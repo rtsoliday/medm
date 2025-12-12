@@ -59,6 +59,7 @@
 #include "display_list_dialog.h"
 #include "find_pv_dialog.h"
 #include "pv_info_dialog.h"
+#include "pv_limits_dialog.h"
 #include "cursor_utils.h"
 
 namespace {
@@ -2326,6 +2327,11 @@ public:
     return pvInfoPickingActive_;
   }
 
+  bool isPvLimitsPickingActive() const
+  {
+    return pvLimitsPickingActive_;
+  }
+
 protected:
   void focusInEvent(QFocusEvent *event) override
   {
@@ -2339,6 +2345,13 @@ protected:
     if (pvInfoPickingActive_) {
       if (event->key() == Qt::Key_Escape) {
         cancelPvInfoPickMode();
+        event->accept();
+        return;
+      }
+    }
+    if (pvLimitsPickingActive_) {
+      if (event->key() == Qt::Key_Escape) {
+        cancelPvLimitsPickMode();
         event->accept();
         return;
       }
@@ -2364,6 +2377,17 @@ protected:
       if (event->button() == Qt::RightButton
           || event->button() == Qt::MiddleButton) {
         cancelPvInfoPickMode();
+      }
+    }
+    if (pvLimitsPickingActive_) {
+      if (event->button() == Qt::LeftButton) {
+        completePvLimitsPick(event->pos());
+        event->accept();
+        return;
+      }
+      if (event->button() == Qt::RightButton
+          || event->button() == Qt::MiddleButton) {
+        cancelPvLimitsPickMode();
       }
     }
     if (event->button() == Qt::MiddleButton) {
@@ -2991,6 +3015,11 @@ private:
   bool pvInfoCursorInitialized_ = false;
   bool pvInfoCursorActive_ = false;
   QCursor pvInfoCursor_;
+  QPointer<PvLimitsDialog> pvLimitsDialog_;
+  bool pvLimitsPickingActive_ = false;
+  bool pvLimitsCursorInitialized_ = false;
+  bool pvLimitsCursorActive_ = false;
+  QCursor pvLimitsCursor_;
   QList<TextElement *> textElements_;
   TextElement *selectedTextElement_ = nullptr;
   QHash<TextElement *, TextRuntime *> textRuntimes_;
@@ -8065,6 +8094,281 @@ private:
     dialog->show();
     dialog->raise();
     dialog->activateWindow();
+  }
+
+  void startPvLimitsPickMode()
+  {
+    if (!executeModeActive_) {
+      return;
+    }
+    if (pvLimitsPickingActive_) {
+      cancelPvLimitsPickMode();
+    }
+    if (!pvLimitsCursorInitialized_) {
+      pvLimitsCursor_ = createPvLimitsCursor();
+      pvLimitsCursorInitialized_ = true;
+    }
+    QGuiApplication::setOverrideCursor(pvLimitsCursor_);
+    pvLimitsCursorActive_ = true;
+    pvLimitsPickingActive_ = true;
+  }
+
+  void cancelPvLimitsPickMode()
+  {
+    if (!pvLimitsPickingActive_) {
+      return;
+    }
+    pvLimitsPickingActive_ = false;
+    if (pvLimitsCursorActive_) {
+      QGuiApplication::restoreOverrideCursor();
+      pvLimitsCursorActive_ = false;
+    }
+  }
+
+  void completePvLimitsPick(const QPoint &windowPos)
+  {
+    if (!pvLimitsPickingActive_) {
+      return;
+    }
+    QWidget *widget = elementAt(windowPos);
+    cancelPvLimitsPickMode();
+    showPvLimitsForWidget(widget);
+  }
+
+  void showPvLimitsForWidget(QWidget *widget)
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+
+    if (!widget) {
+      dialog->clearTargets();
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+
+    QString channelName;
+
+    if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
+      if (auto *runtime = textMonitorRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel(0);
+      }
+      dialog->setTextMonitorCallbacks(
+          channelName,
+          [element]() { return element->limits().precisionSource; },
+          [element](PvLimitSource source) {
+            PvLimits limits = element->limits();
+            limits.precisionSource = source;
+            element->setLimits(limits);
+          },
+          [element]() { return element->limits().precisionDefault; },
+          [element](int value) {
+            PvLimits limits = element->limits();
+            limits.precisionDefault = value;
+            element->setLimits(limits);
+          },
+          [element]() { element->update(); },
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); });
+      dialog->showForTextMonitor();
+      return;
+    }
+
+    if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
+      if (auto *runtime = textEntryRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setTextMonitorCallbacks(
+          channelName,
+          [element]() { return element->limits().precisionSource; },
+          [element](PvLimitSource source) {
+            PvLimits limits = element->limits();
+            limits.precisionSource = source;
+            element->setLimits(limits);
+          },
+          [element]() { return element->limits().precisionDefault; },
+          [element](int value) {
+            PvLimits limits = element->limits();
+            limits.precisionDefault = value;
+            element->setLimits(limits);
+          },
+          [element]() { element->update(); },
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); });
+      dialog->showForTextMonitor();
+      return;
+    }
+
+    if (auto *element = dynamic_cast<SliderElement *>(widget)) {
+      if (auto *runtime = sliderRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setSliderCallbacks(
+          channelName,
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { element->update(); });
+      dialog->showForSlider();
+      return;
+    }
+
+    if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {
+      if (auto *runtime = wheelSwitchRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setWheelSwitchCallbacks(
+          channelName,
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { element->update(); });
+      dialog->showForWheelSwitch();
+      return;
+    }
+
+    if (auto *element = dynamic_cast<MeterElement *>(widget)) {
+      if (auto *runtime = meterRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setMeterCallbacks(
+          channelName,
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { element->update(); });
+      dialog->showForMeter();
+      return;
+    }
+
+    if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
+      if (auto *runtime = barMonitorRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setBarCallbacks(
+          channelName,
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { element->update(); });
+      dialog->showForBarMonitor();
+      return;
+    }
+
+    if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
+      if (auto *runtime = scaleMonitorRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setScaleCallbacks(
+          channelName,
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { element->update(); });
+      dialog->showForScaleMonitor();
+      return;
+    }
+
+    if (auto *element = dynamic_cast<StripChartElement *>(widget)) {
+      /* Strip chart has separate limits for each pen. Show a menu to select
+         which pen's limits to edit. */
+      QMenu penMenu(this);
+      penMenu.setTitle(tr("Select Pen"));
+      int penCount = element->penCount();
+      bool hasPens = false;
+      for (int i = 0; i < penCount; ++i) {
+        QString channelName = element->channel(i);
+        if (channelName.isEmpty()) {
+          continue;
+        }
+        hasPens = true;
+        QString label = tr("Pen %1: %2").arg(i + 1).arg(channelName);
+        QAction *action = penMenu.addAction(label);
+        action->setData(i);
+      }
+      if (!hasPens) {
+        QAction *noAction = penMenu.addAction(tr("(No pens configured)"));
+        noAction->setEnabled(false);
+      }
+      QAction *selected = penMenu.exec(QCursor::pos());
+      if (selected && selected->data().isValid()) {
+        int penIndex = selected->data().toInt();
+        showPvLimitsForStripChartPen(element, penIndex);
+      }
+      return;
+    }
+
+    /* Widget type doesn't support PV Limits */
+    dialog->clearTargets();
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+  }
+
+  void showPvLimitsForStripChartPen(StripChartElement *element, int penIndex)
+  {
+    if (!element) {
+      return;
+    }
+    if (penIndex < 0 || penIndex >= element->penCount()) {
+      return;
+    }
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    QString channelName = element->channel(penIndex);
+    dialog->setStripChartCallbacks(
+        channelName,
+        [element, penIndex]() { return element->penLimits(penIndex); },
+        [element, penIndex](const PvLimits &limits) {
+          element->setPenLimits(penIndex, limits);
+        },
+        [element]() { element->update(); });
+    dialog->showForStripChart();
+  }
+
+  PvLimitsDialog *ensurePvLimitsDialog()
+  {
+    if (!pvLimitsDialog_) {
+      pvLimitsDialog_ = new PvLimitsDialog(palette(), labelFont_, font(), this);
+    }
+    return pvLimitsDialog_.data();
+  }
+
+  QCursor createPvLimitsCursor() const
+  {
+    QPixmap pixmap(32, 32);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(QPen(Qt::black, 1));
+    painter.setBrush(Qt::white);
+    painter.drawEllipse(QPoint(6, 16), 4, 4);
+
+    QFont font = painter.font();
+    font.setBold(true);
+    font.setPointSize(9);
+    painter.setFont(font);
+    painter.setPen(Qt::white);
+    painter.drawText(QRect(10, 4, 22, 24),
+        Qt::AlignVCenter | Qt::AlignLeft, QStringLiteral("LIM"));
+    painter.end();
+
+    return QCursor(pixmap, 4, 16);
   }
 
   QCursor createPvInfoCursor() const
@@ -13516,7 +13820,12 @@ private:
         [this]() {
           showFindPvDialog();
         });
-    menu.addAction(QStringLiteral("PV Limits"));
+    QAction *pvLimitsAction = menu.addAction(QStringLiteral("PV Limits"));
+    QObject::connect(pvLimitsAction, &QAction::triggered, this,
+        [this]() {
+          setAsActiveDisplay();
+          startPvLimitsPickMode();
+        });
     QAction *mainWindowAction =
       menu.addAction(QStringLiteral("QtEDM Main Window"));
     QObject::connect(mainWindowAction, &QAction::triggered, this,

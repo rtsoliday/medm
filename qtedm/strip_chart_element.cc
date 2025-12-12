@@ -2137,6 +2137,12 @@ void StripChartElement::mousePressEvent(QMouseEvent *event)
         return;
       }
     }
+    // Forward left clicks to parent when PV Limits picking mode is active
+    if (event->button() == Qt::LeftButton && isParentWindowInPvLimitsMode(this)) {
+      if (forwardMouseEventToParent(event)) {
+        return;
+      }
+    }
     if (event->button() == Qt::LeftButton) {
       // Start panning (Y-axis only)
       const QRect chart = chartRect();

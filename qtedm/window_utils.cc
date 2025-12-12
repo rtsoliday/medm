@@ -288,3 +288,19 @@ bool isParentWindowInPvInfoMode(QWidget *widget)
   }
   return displayWindow->isPvInfoPickingActive();
 }
+
+bool isParentWindowInPvLimitsMode(QWidget *widget)
+{
+  if (!widget) {
+    return false;
+  }
+  QWidget *target = widget->window();
+  if (!target) {
+    return false;
+  }
+  auto *displayWindow = dynamic_cast<DisplayWindow *>(target);
+  if (!displayWindow) {
+    return false;
+  }
+  return displayWindow->isPvLimitsPickingActive();
+}

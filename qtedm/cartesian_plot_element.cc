@@ -17,6 +17,7 @@
 #include <QPainterPath>
 #include <QPalette>
 #include <QPen>
+#include <QTimer>
 #include <QWheelEvent>
 
 #include "medm_colors.h"
@@ -42,6 +43,14 @@ constexpr qreal kAxisCueGap = 2.0;
 constexpr int kTitleFontHeight = 24;    // For title text
 constexpr int kLabelFontHeight = 18;    // For axis labels (X, Y1, Y2, Y3, Y4)
 constexpr int kAxisNumberFontHeight = 10;  // For axis tick numbers
+
+// Adaptive refresh timer constants (matching StripChart behavior)
+constexpr int kDefaultRefreshIntervalMs = 100;
+constexpr int kMaxRefreshIntervalMs = 1000;
+constexpr int kLateThresholdMs = 100;
+constexpr int kLateCountThreshold = 5;
+constexpr int kOnTimeCountThreshold = 20;
+constexpr int kIntervalIncrementMs = 100;
 
 QString labelTextOrSpace(const QString &text)
 {
@@ -624,6 +633,7 @@ void CartesianPlotElement::setExecuteMode(bool execute)
   }
   invalidateStaticCache();
   clearRuntimeState();
+  updateRefreshTimer();
   update();
 }
 
@@ -650,6 +660,7 @@ void CartesianPlotElement::setTraceRuntimeConnected(int index, bool connected)
     return;
   }
   traces_[index].runtimeConnected = connected;
+  updateRefreshTimer();
   update();
 }
 
@@ -674,7 +685,14 @@ void CartesianPlotElement::updateTraceRuntimeData(int index,
     }
   }
   traces_[index].runtimePoints = std::move(points);
-  update();
+  
+  // Use refresh timer in execute mode for batched updates
+  if (executeMode_ && refreshTimer_ && refreshTimer_->isActive()) {
+    pendingDataUpdate_ = true;
+    // Timer will call update() at the next tick
+  } else {
+    update();
+  }
 }
 
 void CartesianPlotElement::clearTraceRuntimeData(int index)
@@ -702,7 +720,14 @@ void CartesianPlotElement::clearRuntimeState()
     trace.runtimeConnected = false;
     trace.runtimeMode = CartesianPlotTraceMode::kNone;
   }
+  // Reset adaptive refresh timer state
+  currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
+  lateRefreshCount_ = 0;
+  onTimeRefreshCount_ = 0;
+  expectedRefreshTimeMs_ = 0;
+  pendingDataUpdate_ = false;
   invalidateStaticCache();
+  updateRefreshTimer();
   update();
 }
 
@@ -2316,6 +2341,113 @@ void CartesianPlotElement::paintAxisColorCue(QPainter &painter,
 
   drawCue(topCue);
   drawCue(bottomCue);
+}
+
+void CartesianPlotElement::ensureRefreshTimer()
+{
+  if (refreshTimer_) {
+    return;
+  }
+  refreshTimer_ = new QTimer(this);
+  refreshTimer_->setTimerType(Qt::CoarseTimer);
+  // Initial interval; will be adjusted dynamically based on network performance
+  refreshTimer_->setInterval(currentRefreshIntervalMs_);
+  QObject::connect(refreshTimer_, &QTimer::timeout, this,
+      &CartesianPlotElement::handleRefreshTimer);
+  elapsedTimer_.start();
+}
+
+void CartesianPlotElement::updateRefreshTimer()
+{
+  const bool needTimer = executeMode_ && anyTraceConnected();
+  if (needTimer) {
+    ensureRefreshTimer();
+    if (refreshTimer_ && !refreshTimer_->isActive()) {
+      refreshTimer_->start();
+    }
+  } else if (refreshTimer_) {
+    refreshTimer_->stop();
+  }
+}
+
+void CartesianPlotElement::handleRefreshTimer()
+{
+  if (!executeMode_) {
+    if (refreshTimer_) {
+      refreshTimer_->stop();
+    }
+    return;
+  }
+
+  const qint64 nowMs = elapsedTimer_.elapsed();
+
+  // Track late refreshes for adaptive refresh rate adjustment
+  // This helps smooth performance over slow/variable network connections
+  if (expectedRefreshTimeMs_ > 0) {
+    const qint64 deltaMs = nowMs - expectedRefreshTimeMs_;
+    if (deltaMs > kLateThresholdMs) {
+      ++lateRefreshCount_;
+      onTimeRefreshCount_ = 0;  // Reset on-time counter when late
+      if (lateRefreshCount_ > kLateCountThreshold) {
+        // Increase refresh interval to reduce load
+        currentRefreshIntervalMs_ += kIntervalIncrementMs;
+        if (currentRefreshIntervalMs_ > kMaxRefreshIntervalMs) {
+          // Reset to default if we've slowed down too much
+          currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
+        }
+        lateRefreshCount_ = 0;
+      }
+    } else {
+      // Refresh was on time - track consecutive on-time refreshes
+      lateRefreshCount_ = 0;
+      if (currentRefreshIntervalMs_ > kDefaultRefreshIntervalMs) {
+        ++onTimeRefreshCount_;
+        if (onTimeRefreshCount_ >= kOnTimeCountThreshold) {
+          // Network has been stable for a while, try speeding up
+          currentRefreshIntervalMs_ -= kIntervalIncrementMs / 2;
+          if (currentRefreshIntervalMs_ < kDefaultRefreshIntervalMs) {
+            currentRefreshIntervalMs_ = kDefaultRefreshIntervalMs;
+          }
+          onTimeRefreshCount_ = 0;
+        }
+      } else {
+        onTimeRefreshCount_ = 0;
+      }
+    }
+  }
+  expectedRefreshTimeMs_ = nowMs + currentRefreshIntervalMs_;
+
+  // Only update if there's pending data
+  if (pendingDataUpdate_) {
+    pendingDataUpdate_ = false;
+    update();
+  }
+
+  // Always use the adaptive refresh interval for the timer
+  // This ensures consistent timing that can be adjusted for slow networks
+  if (refreshTimer_) {
+    refreshTimer_->setInterval(currentRefreshIntervalMs_);
+  }
+}
+
+bool CartesianPlotElement::anyTraceConnected() const
+{
+  for (const Trace &trace : traces_) {
+    if (trace.runtimeConnected) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CartesianPlotElement::anyTraceHasData() const
+{
+  for (const Trace &trace : traces_) {
+    if (!trace.runtimePoints.isEmpty()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void CartesianPlotElement::invalidateStaticCache()

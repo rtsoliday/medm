@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QPixmap>
 #include <QVector>
 #include <QWidget>
@@ -14,6 +15,7 @@
 
 class QPaintEvent;
 class QPainter;
+class QTimer;
 
 class CartesianPlotElement : public QWidget
 {
@@ -202,6 +204,13 @@ private:
   void computeAxisRangesFromData() const;
   void paintTracesOnly(QPainter &painter, const QRectF &rect) const;
   
+  // Adaptive refresh timer (like StripChart)
+  void ensureRefreshTimer();
+  void updateRefreshTimer();
+  void handleRefreshTimer();
+  bool anyTraceConnected() const;
+  bool anyTraceHasData() const;
+  
   // Zoom/pan helpers
   void applyZoomToRange(AxisRange &range, int axisIndex) const;
   QPointF chartToData(const QPointF &chartPos, const QRectF &chartArea) const;
@@ -262,4 +271,13 @@ private:
   QPointF panStartPos_;
   std::array<double, kCartesianAxisCount> panStartMinimums_{};
   std::array<double, kCartesianAxisCount> panStartMaximums_{};
+  
+  // Adaptive refresh timer for batched updates (like StripChart)
+  QTimer *refreshTimer_ = nullptr;
+  QElapsedTimer elapsedTimer_;
+  int currentRefreshIntervalMs_ = 100;
+  int lateRefreshCount_ = 0;
+  int onTimeRefreshCount_ = 0;
+  qint64 expectedRefreshTimeMs_ = 0;
+  bool pendingDataUpdate_ = false;  // Flag to track if data changed since last paint
 };

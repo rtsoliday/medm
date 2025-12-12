@@ -193,6 +193,7 @@ void CartesianPlotElement::setForegroundColor(const QColor &color)
     return;
   }
   foregroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -207,6 +208,7 @@ void CartesianPlotElement::setBackgroundColor(const QColor &color)
     return;
   }
   backgroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -221,6 +223,7 @@ void CartesianPlotElement::setTitle(const QString &title)
     return;
   }
   title_ = title;
+  invalidateStaticCache();
   update();
 }
 
@@ -235,6 +238,7 @@ void CartesianPlotElement::setXLabel(const QString &label)
     return;
   }
   xLabel_ = label;
+  invalidateStaticCache();
   update();
 }
 
@@ -255,6 +259,7 @@ void CartesianPlotElement::setYLabel(int index, const QString &label)
     return;
   }
   yLabels_[index] = label;
+  invalidateStaticCache();
   update();
 }
 
@@ -483,6 +488,7 @@ void CartesianPlotElement::setAxisStyle(int axisIndex,
     return;
   }
   axisStyles_[axisIndex] = style;
+  invalidateStaticCache();
   update();
 }
 
@@ -504,6 +510,7 @@ void CartesianPlotElement::setAxisRangeStyle(int axisIndex,
     return;
   }
   axisRangeStyles_[axisIndex] = style;
+  invalidateStaticCache();
   update();
 }
 
@@ -531,6 +538,7 @@ void CartesianPlotElement::setAxisMinimum(int axisIndex, double value)
     axisRuntimeValid_[axisIndex] = true;
   }
   
+  invalidateStaticCache();
   update();
 }
 
@@ -558,6 +566,7 @@ void CartesianPlotElement::setAxisMaximum(int axisIndex, double value)
     axisRuntimeValid_[axisIndex] = true;
   }
   
+  invalidateStaticCache();
   update();
 }
 
@@ -613,6 +622,7 @@ void CartesianPlotElement::setExecuteMode(bool execute)
     zoomed_ = false;
     panning_ = false;
   }
+  invalidateStaticCache();
   clearRuntimeState();
   update();
 }
@@ -678,6 +688,7 @@ void CartesianPlotElement::clearRuntimeState()
     trace.runtimeConnected = false;
     trace.runtimeMode = CartesianPlotTraceMode::kNone;
   }
+  invalidateStaticCache();
   update();
 }
 
@@ -777,6 +788,7 @@ void CartesianPlotElement::setDrawMajorGrid(bool draw)
     return;
   }
   drawMajorGrid_ = draw;
+  invalidateStaticCache();
   update();
 }
 
@@ -791,6 +803,7 @@ void CartesianPlotElement::setDrawMinorGrid(bool draw)
     return;
   }
   drawMinorGrid_ = draw;
+  invalidateStaticCache();
   update();
 }
 
@@ -800,8 +813,6 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, true);
   painter.setRenderHint(QPainter::TextAntialiasing, true);
-
-  painter.fillRect(rect(), effectiveBackground());
 
   // In execute mode, if any PV is not connected or no PVs are defined, fill with solid white
   if (executeMode_) {
@@ -826,14 +837,35 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
       painter.fillRect(rect(), Qt::white);
       return;  // Don't draw anything else
     }
-  }
 
-  const QRectF chart = chartRect();
-  paintFrame(painter);
-  paintGrid(painter, chart);
-  paintTraces(painter, chart);
-  paintAxes(painter, chart);
-  paintLabels(painter, chart);
+    const QRectF chart = chartRect();
+
+    // Step 1: Compute axis ranges first (needed for static cache validation)
+    computeAxisRangesFromData();
+
+    // Step 2: Draw static content (background, frame, grid, axes, labels)
+    // using cache when possible
+    ensureStaticCache(painter);
+    if (!staticCache_.isNull()) {
+      painter.drawPixmap(0, 0, staticCache_);
+    } else {
+      // Fallback if cache creation failed
+      paintStaticContent(painter, chart);
+    }
+
+    // Step 3: Draw traces on top of static content
+    paintTracesOnly(painter, chart);
+  } else {
+    // Design mode: draw everything directly (no caching needed)
+    painter.fillRect(rect(), effectiveBackground());
+
+    const QRectF chart = chartRect();
+    paintFrame(painter);
+    paintGrid(painter, chart);
+    paintTraces(painter, chart);
+    paintAxes(painter, chart);
+    paintLabels(painter, chart);
+  }
 
   if (selected_) {
     paintSelectionOverlay(painter);
@@ -942,6 +974,7 @@ void CartesianPlotElement::mouseMoveEvent(QMouseEvent *event)
     
     zoomed_ = true;
     cachedAxisRangesValid_ = false;
+    invalidateStaticCache();
     update();
     event->accept();
     return;
@@ -1014,6 +1047,7 @@ void CartesianPlotElement::wheelEvent(QWheelEvent *event)
   
   zoomed_ = true;
   cachedAxisRangesValid_ = false;
+  invalidateStaticCache();
   update();
   event->accept();
 }
@@ -1045,6 +1079,7 @@ void CartesianPlotElement::resetZoom()
   zoomed_ = false;
   panning_ = false;
   cachedAxisRangesValid_ = false;
+  invalidateStaticCache();
   update();
 }
 
@@ -2264,6 +2299,258 @@ void CartesianPlotElement::paintAxisColorCue(QPainter &painter,
 
   drawCue(topCue);
   drawCue(bottomCue);
+}
+
+void CartesianPlotElement::invalidateStaticCache()
+{
+  staticCacheDirty_ = true;
+}
+
+bool CartesianPlotElement::staticCacheStillValid() const
+{
+  // Cache is invalid if marked dirty or size changed
+  if (staticCacheDirty_ || staticCache_.isNull()) {
+    return false;
+  }
+  if (staticCacheSize_ != size()) {
+    return false;
+  }
+  // Check if axis ranges have changed (critical for axis labels)
+  if (!cachedAxisRangesValid_) {
+    return false;
+  }
+  for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+    const AxisRange &cached = staticCacheAxisRanges_[axis];
+    const AxisRange &current = cachedAxisRanges_[axis];
+    if (cached.valid != current.valid) {
+      return false;
+    }
+    if (cached.valid && current.valid) {
+      if (!qFuzzyCompare(cached.minimum, current.minimum)
+          || !qFuzzyCompare(cached.maximum, current.maximum)
+          || cached.style != current.style) {
+        return false;
+      }
+    }
+  }
+  // Check if chart rect changed (can happen with different Y-axis visibility)
+  const QRectF currentChartRect = chartRect();
+  if (staticCacheChartRect_ != currentChartRect) {
+    return false;
+  }
+  return true;
+}
+
+void CartesianPlotElement::ensureStaticCache(QPainter &painter)
+{
+  // Check if we can reuse the existing cache
+  if (staticCacheStillValid()) {
+    return;
+  }
+
+  const QSize widgetSize = size();
+  if (widgetSize.isEmpty()) {
+    staticCache_ = QPixmap();
+    staticCacheDirty_ = true;
+    return;
+  }
+
+  // Create or resize the cache pixmap
+  if (staticCache_.isNull() || staticCache_.size() != widgetSize) {
+    staticCache_ = QPixmap(widgetSize);
+  }
+  staticCache_.fill(Qt::transparent);
+
+  // Draw static content to the cache
+  QPainter cachePainter(&staticCache_);
+  cachePainter.setRenderHint(QPainter::Antialiasing, true);
+  cachePainter.setRenderHint(QPainter::TextAntialiasing, true);
+
+  const QRectF chart = chartRect();
+  paintStaticContent(cachePainter, chart);
+
+  cachePainter.end();
+
+  // Store the state used to create this cache for validation
+  staticCacheSize_ = widgetSize;
+  staticCacheChartRect_ = chart;
+  if (cachedAxisRangesValid_) {
+    staticCacheAxisRanges_ = cachedAxisRanges_;
+  }
+  staticCacheDirty_ = false;
+}
+
+void CartesianPlotElement::paintStaticContent(QPainter &painter,
+    const QRectF &chart) const
+{
+  painter.fillRect(rect(), effectiveBackground());
+  paintFrame(painter);
+  paintGrid(painter, chart);
+  paintAxes(painter, chart);
+  paintLabels(painter, chart);
+}
+
+void CartesianPlotElement::computeAxisRangesFromData() const
+{
+  cachedAxisRangesValid_ = false;
+  std::array<double, kCartesianAxisCount> autoMinimums{};
+  std::array<double, kCartesianAxisCount> autoMaximums{};
+  std::array<bool, kCartesianAxisCount> hasData{};
+  for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+    autoMinimums[axis] = std::numeric_limits<double>::infinity();
+    autoMaximums[axis] = -std::numeric_limits<double>::infinity();
+    hasData[axis] = false;
+  }
+
+  for (int i = 0; i < traceCount(); ++i) {
+    const QVector<QPointF> &points = traces_[i].runtimePoints;
+    if (points.isEmpty()) {
+      continue;
+    }
+    const int yAxisIndex = axisIndexForTrace(i);
+    for (const QPointF &valuePoint : points) {
+      const double xValue = valuePoint.x();
+      const double yValue = valuePoint.y();
+      if (std::isfinite(xValue)) {
+        if (!hasData[0]) {
+          autoMinimums[0] = xValue;
+          autoMaximums[0] = xValue;
+          hasData[0] = true;
+        } else {
+          autoMinimums[0] = std::min(autoMinimums[0], xValue);
+          autoMaximums[0] = std::max(autoMaximums[0], xValue);
+        }
+      }
+      if (yAxisIndex >= 0 && yAxisIndex < kCartesianAxisCount
+          && std::isfinite(yValue)) {
+        if (!hasData[yAxisIndex]) {
+          autoMinimums[yAxisIndex] = yValue;
+          autoMaximums[yAxisIndex] = yValue;
+          hasData[yAxisIndex] = true;
+        } else {
+          autoMinimums[yAxisIndex] = std::min(autoMinimums[yAxisIndex], yValue);
+          autoMaximums[yAxisIndex] = std::max(autoMaximums[yAxisIndex], yValue);
+        }
+      }
+    }
+  }
+
+  std::array<AxisRange, kCartesianAxisCount> ranges{};
+  for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+    ranges[axis] = computeAxisRange(axis, hasData, autoMinimums, autoMaximums);
+  }
+
+  if (!ranges[0].valid) {
+    return;
+  }
+
+  // Apply zoom state if zoomed
+  if (zoomed_) {
+    for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+      if (ranges[axis].valid) {
+        applyZoomToRange(ranges[axis], axis);
+      }
+    }
+  }
+
+  cachedAxisRanges_ = ranges;
+  cachedAxisRangesValid_ = true;
+}
+
+void CartesianPlotElement::paintTracesOnly(QPainter &painter,
+    const QRectF &rect) const
+{
+  if (rect.width() <= 0.0 || rect.height() <= 0.0) {
+    return;
+  }
+
+  if (!cachedAxisRangesValid_ || !cachedAxisRanges_[0].valid) {
+    return;
+  }
+
+  const std::array<AxisRange, kCartesianAxisCount> &ranges = cachedAxisRanges_;
+
+  for (int i = 0; i < traceCount(); ++i) {
+    const QVector<QPointF> &valuePoints = traces_[i].runtimePoints;
+    if (valuePoints.isEmpty()) {
+      continue;
+    }
+    const int yAxisIndex = axisIndexForTrace(i);
+    if (yAxisIndex < 0 || yAxisIndex >= kCartesianAxisCount) {
+      continue;
+    }
+    const AxisRange &xRange = ranges[0];
+    const AxisRange &yRange = ranges[yAxisIndex];
+    if (!yRange.valid) {
+      continue;
+    }
+
+    QVector<QPointF> mappedPoints;
+    mappedPoints.reserve(valuePoints.size());
+    for (const QPointF &value : valuePoints) {
+      QPointF mapped;
+      if (!mapPointToChart(value, xRange, yRange, rect, &mapped)) {
+        continue;
+      }
+      mappedPoints.append(mapped);
+    }
+    if (mappedPoints.isEmpty()) {
+      continue;
+    }
+
+    const QColor color = effectiveTraceColor(i);
+    QPen pen(color);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    switch (style_) {
+    case CartesianPlotStyle::kPoint: {
+      painter.save();
+      painter.setBrush(color);
+      for (const QPointF &point : mappedPoints) {
+        painter.drawEllipse(point, 2.0, 2.0);
+      }
+      painter.restore();
+      break;
+    }
+    case CartesianPlotStyle::kLine: {
+      QPainterPath path(mappedPoints.front());
+      for (int j = 1; j < mappedPoints.size(); ++j) {
+        path.lineTo(mappedPoints[j]);
+      }
+      painter.drawPath(path);
+      break;
+    }
+    case CartesianPlotStyle::kStep: {
+      QPainterPath path(mappedPoints.front());
+      for (int j = 1; j < mappedPoints.size(); ++j) {
+        const QPointF &prev = mappedPoints[j - 1];
+        const QPointF &curr = mappedPoints[j];
+        path.lineTo(curr.x(), prev.y());
+        path.lineTo(curr);
+      }
+      painter.drawPath(path);
+      break;
+    }
+    case CartesianPlotStyle::kFillUnder: {
+      QPainterPath path(mappedPoints.front());
+      for (int j = 1; j < mappedPoints.size(); ++j) {
+        path.lineTo(mappedPoints[j]);
+      }
+      path.lineTo(QPointF(mappedPoints.back().x(), rect.bottom()));
+      path.lineTo(QPointF(mappedPoints.front().x(), rect.bottom()));
+      path.closeSubpath();
+      QColor fillColor = color;
+      fillColor.setAlpha(80);
+      painter.save();
+      painter.setBrush(fillColor);
+      painter.drawPath(path);
+      painter.restore();
+      break;
+    }
+    }
+  }
 }
 
 // Include moc output for Q_OBJECT macro

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <QColor>
+#include <QPixmap>
 #include <QVector>
 #include <QWidget>
 
@@ -193,6 +194,14 @@ private:
       const QColor &color) const;
   void ensureRuntimeArraySizes();
   
+  // Static content caching
+  void invalidateStaticCache();
+  void ensureStaticCache(QPainter &painter);
+  bool staticCacheStillValid() const;
+  void paintStaticContent(QPainter &painter, const QRectF &chart) const;
+  void computeAxisRangesFromData() const;
+  void paintTracesOnly(QPainter &painter, const QRectF &rect) const;
+  
   // Zoom/pan helpers
   void applyZoomToRange(AxisRange &range, int axisIndex) const;
   QPointF chartToData(const QPointF &chartPos, const QRectF &chartArea) const;
@@ -237,6 +246,13 @@ private:
   std::array<double, kCartesianAxisCount> axisRuntimeMaximums_{};
   mutable std::array<AxisRange, kCartesianAxisCount> cachedAxisRanges_{};
   mutable bool cachedAxisRangesValid_ = false;
+
+  // Static content caching for performance
+  mutable QPixmap staticCache_;
+  mutable bool staticCacheDirty_ = true;
+  mutable QSize staticCacheSize_;
+  mutable std::array<AxisRange, kCartesianAxisCount> staticCacheAxisRanges_{};
+  mutable QRectF staticCacheChartRect_;
 
   // Zoom/pan state (execute mode only)
   bool zoomed_ = false;

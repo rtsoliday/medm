@@ -825,8 +825,9 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
   QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing, true);
-  painter.setRenderHint(QPainter::TextAntialiasing, true);
+  // Disable antialiasing to match MEDM's crisp appearance
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  painter.setRenderHint(QPainter::TextAntialiasing, false);
 
   // In execute mode, if any PV is not connected or no PVs are defined, fill with solid white
   if (executeMode_) {
@@ -1842,7 +1843,8 @@ void CartesianPlotElement::paintTraces(QPainter &painter, const QRectF &rect) co
       painter.save();
       painter.setBrush(color);
       for (const QPointF &point : points) {
-        painter.drawEllipse(point, 2.0, 2.0);
+        // Use rectangles instead of circles to match MEDM's appearance
+        painter.drawRect(QRectF(point.x() - 2.0, point.y() - 2.0, 4.0, 4.0));
       }
       painter.restore();
       break;
@@ -2026,7 +2028,8 @@ void CartesianPlotElement::paintTracesExecute(QPainter &painter,
       painter.save();
       painter.setBrush(color);
       for (const QPointF &point : mappedPoints) {
-        painter.drawEllipse(point, 2.0, 2.0);
+        // Use rectangles instead of circles to match MEDM's appearance
+        painter.drawRect(QRectF(point.x() - 2.0, point.y() - 2.0, 4.0, 4.0));
       }
       painter.restore();
       break;
@@ -2377,8 +2380,9 @@ void CartesianPlotElement::ensureStaticCache(QPainter &painter)
 
   // Draw static content to the cache
   QPainter cachePainter(&staticCache_);
-  cachePainter.setRenderHint(QPainter::Antialiasing, true);
-  cachePainter.setRenderHint(QPainter::TextAntialiasing, true);
+  // Disable antialiasing to match MEDM's crisp appearance
+  cachePainter.setRenderHint(QPainter::Antialiasing, false);
+  cachePainter.setRenderHint(QPainter::TextAntialiasing, false);
 
   const QRectF chart = chartRect();
   paintStaticContent(cachePainter, chart);
@@ -2523,7 +2527,8 @@ void CartesianPlotElement::paintTracesOnly(QPainter &painter,
       painter.save();
       painter.setBrush(color);
       for (const QPointF &point : mappedPoints) {
-        painter.drawEllipse(point, 2.0, 2.0);
+        // Use rectangles instead of circles to match MEDM's appearance
+        painter.drawRect(QRectF(point.x() - 2.0, point.y() - 2.0, 4.0, 4.0));
       }
       painter.restore();
       break;

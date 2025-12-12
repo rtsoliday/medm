@@ -659,6 +659,20 @@ void CartesianPlotElement::updateTraceRuntimeData(int index,
   if (index < 0 || index >= traceCount()) {
     return;
   }
+  // Skip update if data hasn't changed
+  const QVector<QPointF> &existing = traces_[index].runtimePoints;
+  if (existing.size() == points.size()) {
+    bool identical = true;
+    for (int i = 0; i < points.size(); ++i) {
+      if (existing[i] != points[i]) {
+        identical = false;
+        break;
+      }
+    }
+    if (identical) {
+      return;  // No change, skip repaint
+    }
+  }
   traces_[index].runtimePoints = std::move(points);
   update();
 }

@@ -224,7 +224,8 @@ private:
     int numMajor;
     int numMinor;
   };
-  static NiceAxisRange computeNiceAxisRange(double min, double max, bool isLog);
+  static NiceAxisRange computeNiceAxisRange(double min, double max, bool isLog,
+      bool isXAxis = false);
 
   bool selected_ = false;
   QColor foregroundColor_;

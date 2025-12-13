@@ -78,14 +78,18 @@ QColor defaultTraceColor(int index)
 
 // Nice axis range computation matching MEDM's SciPlot ComputeAxis algorithm
 CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
-    double min, double max, bool isLog)
+    double min, double max, bool isLog, bool isXAxis)
 {
   NiceAxisRange result;
   
   // Delta values for nice tick intervals (from MEDM's CAdeltas)
-  static const double deltas[] = {0.2, 0.5, 1.0, 2.0, 5.0};
-  static const int minors[] = {4, 5, 4, 4, 5};
-  static const int maxMajor = 8;
+  // Must match MEDM exactly: {0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 2.5, 5.0}
+  static constexpr int kNumDeltas = 8;
+  static const double CAdeltas[kNumDeltas] = {0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 2.5, 5.0};
+  static const int CAminors[kNumDeltas] = {4, 4, 4, 5, 4, 4, 4, 5};
+  
+  // MEDM uses different max major ticks for X vs Y axes
+  const int maxMajor = isXAxis ? 6 : 8;
 
   const double minMag = std::fabs(min);
   const double maxMag = std::fabs(max);
@@ -128,21 +132,43 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
   const double normalizedRange = range / std::pow(10.0, exponent);
   
   // Find appropriate delta from the deltas array
-  double delta = deltas[0];
-  int minorNum = minors[0];
-  for (size_t i = 0; i < sizeof(deltas) / sizeof(deltas[0]); ++i) {
-    const int majorNum = static_cast<int>(std::ceil(normalizedRange / deltas[i]));
+  double delta = CAdeltas[0];
+  int minorNum = CAminors[0];
+  int foundIndex = 0;
+  for (int i = 0; i < kNumDeltas; ++i) {
+    const int majorNum = static_cast<int>(std::ceil(normalizedRange / CAdeltas[i]));
     if (majorNum <= maxMajor) {
-      delta = deltas[i];
-      minorNum = minors[i];
+      delta = CAdeltas[i];
+      minorNum = CAminors[i];
+      foundIndex = i;
       break;
     }
   }
   delta *= std::pow(10.0, exponent);
   
   // Round min down and max up to nearest delta
-  result.drawMin = std::floor(min / delta) * delta;
-  result.drawMax = std::ceil(max / delta) * delta;
+  double calcMin = std::floor(min / delta) * delta;
+  double calcMax = std::ceil(max / delta) * delta;
+  
+  // MEDM optimization: check next delta to see if it gives a tighter fit
+  if (foundIndex + 1 < kNumDeltas) {
+    const int majornumN = static_cast<int>(std::ceil(normalizedRange / CAdeltas[foundIndex + 1]));
+    if (majornumN > 2) {
+      const double deltaN = CAdeltas[foundIndex + 1] * std::pow(10.0, exponent);
+      const double calcMinN = std::floor(min / deltaN) * deltaN;
+      const double calcMaxN = std::ceil(max / deltaN) * deltaN;
+      if ((calcMax - calcMin) > (calcMaxN - calcMinN)) {
+        // Use the tighter range
+        delta = deltaN;
+        minorNum = CAminors[foundIndex + 1];
+        calcMin = calcMinN;
+        calcMax = calcMaxN;
+      }
+    }
+  }
+  
+  result.drawMin = calcMin;
+  result.drawMax = calcMax;
   result.majorInc = delta;
   result.numMajor = static_cast<int>(std::floor((result.drawMax - result.drawMin) / delta + 0.5));
   result.numMinor = minorNum;
@@ -1475,7 +1501,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   // X-axis ticks and numbers - only within chart area
   if (xAxisIsLog10 && xAxisMin > 0.0 && xAxisMax > 0.0) {
     // Logarithmic X-axis tick marks
-    const NiceAxisRange nice = computeNiceAxisRange(xAxisMin, xAxisMax, true);
+    const NiceAxisRange nice = computeNiceAxisRange(xAxisMin, xAxisMax, true, true);
     
     double majorValue = nice.drawMin;
     for (int i = 0; i <= nice.numMajor; ++i) {
@@ -1490,8 +1516,8 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
                        QPointF(x, rect.bottom() + majorTickSize));
       
-      // Major tick label
-      QString label = QString::number(majorValue, 'g', 3);
+      // Major tick label - use 'g', 6 to match MEDM's %.6g format
+      QString label = QString::number(majorValue, 'g', 6);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
       const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
@@ -1525,7 +1551,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       // Axis number - map from normalized position to actual value
       const double normalizedValue = static_cast<double>(i) / numMajorTicks;
       const double value = xAxisMin + normalizedValue * (xAxisMax - xAxisMin);
-      QString label = QString::number(value, 'g', 3);
+      QString label = QString::number(value, 'g', 6);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
       const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
@@ -1597,8 +1623,8 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       painter.drawLine(QPointF(axisX - majorTickSize, y),
                        QPointF(axisX + majorTickSize, y));
       
-      // Axis number
-      QString label = QString::number(nice.drawMin, 'g', 3);
+      // Axis number - use 'g', 6 to match MEDM's %.6g format
+      QString label = QString::number(nice.drawMin, 'g', 6);
       const qreal textWidth = metrics.horizontalAdvance(label);
       
       if (onLeft) {
@@ -1643,8 +1669,8 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
         painter.drawLine(QPointF(axisX - majorTickSize, y),
                          QPointF(axisX + majorTickSize, y));
         
-        // Axis number
-        QString label = QString::number(majorValue, 'g', 3);
+        // Axis number - use 'g', 6 to match MEDM's %.6g format
+        QString label = QString::number(majorValue, 'g', 6);
         const qreal textWidth = metrics.horizontalAdvance(label);
         
         if (onLeft) {
@@ -1671,8 +1697,8 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       painter.drawLine(QPointF(axisX - majorTickSize, y),
                        QPointF(axisX + majorTickSize, y));
       
-      // Axis number
-      QString label = QString::number(value, 'g', 3);
+      // Axis number - use 'g', 6 to match MEDM's %.6g format
+      QString label = QString::number(value, 'g', 6);
       const qreal textWidth = metrics.horizontalAdvance(label);
       
       if (onLeft) {
@@ -2163,8 +2189,10 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
   }
 
   // Apply "nice" axis rounding matching MEDM's SciPlot behavior
+  // X-axis is index 0, all others are Y-axes
+  const bool isXAxis = (axisIndex == 0);
   const NiceAxisRange nice = computeNiceAxisRange(
-      minimum, maximum, range.style == CartesianPlotAxisStyle::kLog10);
+      minimum, maximum, range.style == CartesianPlotAxisStyle::kLog10, isXAxis);
   
   range.minimum = nice.drawMin;
   range.maximum = nice.drawMax;

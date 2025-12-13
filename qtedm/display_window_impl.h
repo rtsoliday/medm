@@ -324,6 +324,12 @@ public:
   private:
     DisplayWindow *owner_ = nullptr;
   };
+  /* Format a display window title with QtEDM prefix for visual distinction */
+  static QString formatDisplayTitle(const QString &filename)
+  {
+    return QStringLiteral("QtEDM: %1").arg(filename);
+  }
+
   DisplayWindow(const QPalette &displayPalette, const QPalette &uiPalette,
       const QFont &font, const QFont &labelFont,
       std::weak_ptr<DisplayState> state, QWidget *parent = nullptr)
@@ -334,7 +340,7 @@ public:
   {
     setAttribute(Qt::WA_DeleteOnClose);
     setObjectName(QStringLiteral("qtedmDisplayWindow"));
-    setWindowTitle(QStringLiteral("newDisplay.adl"));
+    setWindowTitle(formatDisplayTitle(QStringLiteral("newDisplay.adl")));
     setFont(font);
     setAutoFillBackground(true);
     setPalette(displayPalette);
@@ -14843,7 +14849,7 @@ inline bool DisplayWindow::save(QWidget *dialogParent)
     return false;
   }
   dirty_ = false;
-  setWindowTitle(QFileInfo(filePath_).fileName());
+  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
   cleanStateSnapshot_ = serializeStateForUndo(filePath_);
   lastCommittedState_ = cleanStateSnapshot_;
   if (undoStack_) {
@@ -14912,7 +14918,7 @@ inline bool DisplayWindow::saveAs(QWidget *dialogParent)
   }
 
   filePath_ = QFileInfo(normalized).absoluteFilePath();
-  setWindowTitle(QFileInfo(filePath_).fileName());
+  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
   dirty_ = false;
   cleanStateSnapshot_ = serializeStateForUndo(filePath_);
   lastCommittedState_ = cleanStateSnapshot_;
@@ -15051,7 +15057,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   refreshStackingOrder();
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
-  setWindowTitle(QFileInfo(filePath_).fileName());
+  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
   macroDefinitions_ = macros;
 
   dirty_ = false;
@@ -22673,7 +22679,7 @@ inline bool DisplayWindow::restoreSerializedState(const QByteArray &data)
 
   filePath_ = previousFilePath;
   if (!filePath_.isEmpty()) {
-    setWindowTitle(QFileInfo(filePath_).fileName());
+    setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
   } else if (!previousTitle.isEmpty()) {
     setWindowTitle(previousTitle);
   }

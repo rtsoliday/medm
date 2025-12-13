@@ -2687,6 +2687,24 @@ protected:
   {
     if (event->button() == Qt::MiddleButton) {
       if (executeDragPending_) {
+        /* Check if mouse is released over a TextEntryElement for PV drop */
+        if (!executeDragChannels_.isEmpty()) {
+          QWidget *widget = elementAt(event->pos());
+          if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
+            /* Only allow drop if the text entry is interactive and STRING format
+             * (mimicking MEDM behavior where non-STRING formats reject drops) */
+            if (textEntry->isExecuteMode()
+                && textEntry->format() == TextMonitorFormat::kString) {
+              const QString pvText = executeDragChannels_.join(QStringLiteral(" "));
+              /* Simulate user typing the PV name and activating it */
+              QLineEdit *lineEdit = textEntry->findChild<QLineEdit *>();
+              if (lineEdit && !lineEdit->isReadOnly()) {
+                lineEdit->setText(pvText);
+                emit lineEdit->editingFinished();
+              }
+            }
+          }
+        }
         cancelExecuteChannelDrag();
         event->accept();
         return;

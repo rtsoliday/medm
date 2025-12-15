@@ -1157,9 +1157,7 @@ int main(int argc, char *argv[])
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
 //TODO: Implement "Save PV Values" snapshot feature for current display state.
 //TODO: Add "Restore PV Values" to write saved snapshot back to IOC.
-//TODO: Add keyboard navigation for sliders (arrow keys already work, add Tab).
-//TODO: Implement middle-click paste of PV names from system clipboard.
-//TODO: Add display title bar showing filename and macro substitutions.
+//DONE: Add display title bar showing filename and macro substitutions.
 //TODO: Implement "Reload Display" action to refresh from disk without close.
 //TODO: Add configurable update rate throttling per display (reduce CA load).
 //TODO: Implement channel timeout indication (flash/blink on stale data).

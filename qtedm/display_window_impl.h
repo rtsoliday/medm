@@ -369,10 +369,25 @@ public:
   private:
     DisplayWindow *owner_ = nullptr;
   };
-  /* Format a display window title with QtEDM prefix for visual distinction */
-  static QString formatDisplayTitle(const QString &filename)
+  /* Format a display window title with QtEDM prefix for visual distinction.
+   * When macros are provided, they are appended in brackets after the filename
+   * to help operators distinguish multiple instances of the same display
+   * opened with different macro substitutions. */
+  static QString formatDisplayTitle(const QString &filename,
+      const QHash<QString, QString> &macros = {})
   {
-    return QStringLiteral("QtEDM: %1").arg(filename);
+    if (macros.isEmpty()) {
+      return QStringLiteral("QtEDM: %1").arg(filename);
+    }
+    /* Build a sorted macro string for consistent display ordering */
+    QStringList macroList;
+    QStringList sortedKeys = macros.keys();
+    sortedKeys.sort();
+    for (const QString &key : sortedKeys) {
+      macroList.append(QStringLiteral("%1=%2").arg(key, macros.value(key)));
+    }
+    const QString macroString = macroList.join(QStringLiteral(","));
+    return QStringLiteral("QtEDM: %1 [%2]").arg(filename, macroString);
   }
 
   DisplayWindow(const QPalette &displayPalette, const QPalette &uiPalette,
@@ -15028,7 +15043,7 @@ inline bool DisplayWindow::save(QWidget *dialogParent)
     return false;
   }
   dirty_ = false;
-  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
+  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName(), macroDefinitions_));
   cleanStateSnapshot_ = serializeStateForUndo(filePath_);
   lastCommittedState_ = cleanStateSnapshot_;
   if (undoStack_) {
@@ -15097,7 +15112,7 @@ inline bool DisplayWindow::saveAs(QWidget *dialogParent)
   }
 
   filePath_ = QFileInfo(normalized).absoluteFilePath();
-  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
+  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName(), macroDefinitions_));
   dirty_ = false;
   cleanStateSnapshot_ = serializeStateForUndo(filePath_);
   lastCommittedState_ = cleanStateSnapshot_;
@@ -15236,8 +15251,8 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   refreshStackingOrder();
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
-  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
   macroDefinitions_ = macros;
+  setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName(), macroDefinitions_));
 
   dirty_ = false;
   if (undoStack_) {
@@ -22858,7 +22873,7 @@ inline bool DisplayWindow::restoreSerializedState(const QByteArray &data)
 
   filePath_ = previousFilePath;
   if (!filePath_.isEmpty()) {
-    setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName()));
+    setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName(), macroDefinitions_));
   } else if (!previousTitle.isEmpty()) {
     setWindowTitle(previousTitle);
   }

@@ -13804,6 +13804,27 @@ private:
             exportStripChartData(clickedStripChart);
           }
         });
+    
+    // Strip chart specific options
+    if (clickedStripChart) {
+      menu.addSeparator();
+      QAction *autoscaleAction = menu.addAction(QStringLiteral("Autoscale"));
+      autoscaleAction->setCheckable(true);
+      autoscaleAction->setChecked(clickedStripChart->isAutoscale());
+      QObject::connect(autoscaleAction, &QAction::triggered, this,
+          [clickedStripChart]() {
+            clickedStripChart->setAutoscale(!clickedStripChart->isAutoscale());
+          });
+      if (clickedStripChart->isZoomed() && !clickedStripChart->isAutoscale()) {
+        QAction *resetZoomAction = menu.addAction(QStringLiteral("Reset Zoom"));
+        QObject::connect(resetZoomAction, &QAction::triggered, this,
+            [clickedStripChart]() {
+              clickedStripChart->resetZoom();
+            });
+      }
+      menu.addSeparator();
+    }
+    
     QAction *closeAction = menu.addAction(QStringLiteral("Close"));
     QObject::connect(closeAction, &QAction::triggered, this,
         [this]() {

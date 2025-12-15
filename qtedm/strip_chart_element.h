@@ -76,6 +76,10 @@ public:
   bool isZoomed() const;
   void resetZoom();
 
+  // Autoscale support (execute mode only, Y-axis only)
+  bool isAutoscale() const;
+  void setAutoscale(bool enable);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
@@ -140,6 +144,7 @@ private:
   double periodMilliseconds() const;
   double effectivePenLow(int index) const;
   double effectivePenHigh(int index) const;
+  void computeAutoscaleLimits() const;
   void applyZoomToRange(double &low, double &high) const;
   double zoomedPenLow(int index) const;
   double zoomedPenHigh(int index) const;
@@ -197,4 +202,10 @@ private:
   bool panning_ = false;
   QPointF panStartPos_;
   double panStartYCenter_ = 0.5;
+  
+  // Autoscale state (execute mode only, Y-axis only)
+  bool autoscale_ = false;
+  mutable double autoscaleLow_ = 0.0;   // Cached autoscale limits
+  mutable double autoscaleHigh_ = 1.0;
+  mutable bool autoscaleLimitsValid_ = false;
 };

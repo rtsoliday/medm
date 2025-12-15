@@ -569,6 +569,8 @@ void StripChartElement::clearRuntimeState()
   zoomYFactor_ = 1.0;
   zoomYCenter_ = 0.5;
   panning_ = false;
+  // Reset autoscale cached limits (but keep autoscale_ mode setting)
+  autoscaleLimitsValid_ = false;
   for (int i = 0; i < penCount(); ++i) {
     Pen &pen = pens_[i];
     pen.runtimeConnected = false;
@@ -1631,6 +1633,11 @@ double StripChartElement::effectivePenLow(int index) const
   if (index < 0 || index >= penCount()) {
     return 0.0;
   }
+  // When autoscale is enabled in execute mode, use computed limits for all pens
+  if (autoscale_ && executeMode_) {
+    computeAutoscaleLimits();
+    return autoscaleLow_;
+  }
   const Pen &pen = pens_[index];
   if (pen.limits.lowSource == PvLimitSource::kChannel && pen.runtimeLimitsValid) {
     return pen.runtimeLow;
@@ -1642,6 +1649,11 @@ double StripChartElement::effectivePenHigh(int index) const
 {
   if (index < 0 || index >= penCount()) {
     return 1.0;
+  }
+  // When autoscale is enabled in execute mode, use computed limits for all pens
+  if (autoscale_ && executeMode_) {
+    computeAutoscaleLimits();
+    return autoscaleHigh_;
   }
   const Pen &pen = pens_[index];
   if (pen.limits.highSource == PvLimitSource::kChannel && pen.runtimeLimitsValid) {
@@ -1900,6 +1912,12 @@ void StripChartElement::appendSampleColumn()
   }
   sampleHistoryLength_ = newLength;
 
+  // Invalidate autoscale limits when new data arrives
+  if (autoscale_) {
+    autoscaleLimitsValid_ = false;
+    invalidateStaticCache();  // Y-axis labels may change
+  }
+
   // Track new columns for incremental pen drawing
   ++newSampleColumns_;
   
@@ -2157,29 +2175,21 @@ void StripChartElement::mousePressEvent(QMouseEvent *event)
       }
     }
     if (event->button() == Qt::LeftButton) {
-      // Start panning (Y-axis only)
-      const QRect chart = chartRect();
-      if (chart.contains(event->pos())) {
-        panning_ = true;
-        panStartPos_ = event->pos();
-        panStartYCenter_ = zoomYCenter_;
-        setCursor(Qt::ClosedHandCursor);
-        event->accept();
-        return;
+      // Start panning (Y-axis only) - only when not in autoscale mode
+      if (!autoscale_) {
+        const QRect chart = chartRect();
+        if (chart.contains(event->pos())) {
+          panning_ = true;
+          panStartPos_ = event->pos();
+          panStartYCenter_ = zoomYCenter_;
+          setCursor(Qt::ClosedHandCursor);
+          event->accept();
+          return;
+        }
       }
     } else if (event->button() == Qt::RightButton) {
-      // Show context menu with reset zoom option only when zoomed
-      if (zoomed_) {
-        QMenu menu(this);
-        QAction *resetAction = menu.addAction(tr("Reset Zoom"));
-        QAction *selected = menu.exec(event->globalPos());
-        if (selected == resetAction) {
-          resetZoom();
-        }
-        event->accept();
-        return;
-      }
       // Forward right-click events to parent window for context menu
+      // The parent window's showExecuteContextMenu will handle strip chart specific options
       if (forwardMouseEventToParent(event)) {
         return;
       }
@@ -2228,6 +2238,12 @@ void StripChartElement::mouseMoveEvent(QMouseEvent *event)
 void StripChartElement::wheelEvent(QWheelEvent *event)
 {
   if (!executeMode_) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+  
+  // Disable wheel zoom when autoscale is enabled
+  if (autoscale_) {
     QWidget::wheelEvent(event);
     return;
   }
@@ -2293,6 +2309,82 @@ void StripChartElement::resetZoom()
   invalidateStaticCache();
   invalidatePenCache();
   update();
+}
+
+bool StripChartElement::isAutoscale() const
+{
+  return autoscale_;
+}
+
+void StripChartElement::setAutoscale(bool enable)
+{
+  if (autoscale_ == enable) {
+    return;
+  }
+  autoscale_ = enable;
+  autoscaleLimitsValid_ = false;
+  // Reset zoom when changing autoscale mode
+  if (enable) {
+    zoomed_ = false;
+    zoomYFactor_ = 1.0;
+    zoomYCenter_ = 0.5;
+  }
+  invalidateStaticCache();
+  invalidatePenCache();
+  update();
+}
+
+void StripChartElement::computeAutoscaleLimits() const
+{
+  if (autoscaleLimitsValid_) {
+    return;
+  }
+
+  double minVal = std::numeric_limits<double>::max();
+  double maxVal = std::numeric_limits<double>::lowest();
+  bool foundData = false;
+
+  // Scan all samples from all connected pens to find data range
+  for (int p = 0; p < penCount(); ++p) {
+    const Pen &pen = pens_[p];
+    if (pen.channel.isEmpty() || !pen.runtimeConnected) {
+      continue;
+    }
+    for (const double sample : pen.samples) {
+      if (!std::isfinite(sample)) {
+        continue;
+      }
+      minVal = std::min(minVal, sample);
+      maxVal = std::max(maxVal, sample);
+      foundData = true;
+    }
+    // Also consider the current runtime value if available
+    if (pen.hasRuntimeValue && std::isfinite(pen.runtimeValue)) {
+      minVal = std::min(minVal, pen.runtimeValue);
+      maxVal = std::max(maxVal, pen.runtimeValue);
+      foundData = true;
+    }
+  }
+
+  if (!foundData) {
+    // No data yet - use default range
+    autoscaleLow_ = 0.0;
+    autoscaleHigh_ = 1.0;
+  } else if (std::abs(maxVal - minVal) < kMinimumRangeEpsilon) {
+    // All values are the same - expand range around that value
+    const double value = (minVal + maxVal) / 2.0;
+    const double margin = std::abs(value) * 0.1;
+    autoscaleLow_ = value - (margin > 0 ? margin : 0.5);
+    autoscaleHigh_ = value + (margin > 0 ? margin : 0.5);
+  } else {
+    // Add 5% margin above and below the data range for visual clarity
+    const double range = maxVal - minVal;
+    const double margin = range * 0.05;
+    autoscaleLow_ = minVal - margin;
+    autoscaleHigh_ = maxVal + margin;
+  }
+
+  autoscaleLimitsValid_ = true;
 }
 
 bool StripChartElement::forwardMouseEventToParent(QMouseEvent *event) const

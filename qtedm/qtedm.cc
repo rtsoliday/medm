@@ -1155,7 +1155,6 @@ int main(int argc, char *argv[])
 // ===========================================================================
 
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
-//TODO: Add Strip Chart autoscale toggle and manual Y-axis range dialog.
 //TODO: Implement "Save PV Values" snapshot feature for current display state.
 //TODO: Add "Restore PV Values" to write saved snapshot back to IOC.
 //TODO: Implement execute-mode right-click context menu (Print, Close, PV Info).

@@ -70,6 +70,7 @@ typedef int Status;
 #endif
 
 #include "audit_logger.h"
+#include "audit_log_viewer_dialog.h"
 #include "display_properties.h"
 #include "display_state.h"
 #include "display_list_dialog.h"
@@ -1047,6 +1048,7 @@ int main(int argc, char *argv[])
   auto *viewDisplayListAct = viewMenu->addAction("&Display List");
   auto *findPvAct = viewMenu->addAction("&Find PV...");
   findPvAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
+  auto *auditLogAct = viewMenu->addAction("&Audit Logs...");
 
   auto *palettesMenu = menuBar->addMenu("&Palettes");
   palettesMenu->setFont(fixed13Font);
@@ -1157,12 +1159,8 @@ int main(int argc, char *argv[])
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
 //TODO: Implement "Save PV Values" snapshot feature for current display state.
 //TODO: Add "Restore PV Values" to write saved snapshot back to IOC.
-//TODO: Add alarm acknowledgment indicators for widgets with alarm color mode.
-//TODO: Implement rising/falling line elements (medmRisingLine.c equivalent).
 //TODO: Add bezier curve support to polyline elements.
 //TODO: Implement arc fill patterns (pie slice vs. chord fill styles).
-//TODO: Add text rotation support (0/90/180/270 degrees, ADL compatible).
-//TODO: Implement image scaling modes (stretch, fit, tile) for Image widget.
 //TODO: Implement embedded composite editing (edit children in place).
 //TODO: Add composite file browser for selecting .adl files as composites.
 //TODO: Implement "Flatten Composite" to inline composite contents.
@@ -1220,6 +1218,9 @@ int main(int argc, char *argv[])
     new StatisticsWindow(palette, fixed13Font, fixed10Font, &win));
   state->raiseMessageWindow = options.raiseMessageWindow;
 
+  auto auditLogViewer = QPointer<AuditLogViewerDialog>(
+      new AuditLogViewerDialog(palette, fixed13Font, &win));
+
   QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
       [displayListDialog]() {
         displayListDialog->showAndRaise();
@@ -1228,6 +1229,13 @@ int main(int argc, char *argv[])
   QObject::connect(findPvAct, &QAction::triggered, findPvDialog,
       [findPvDialog]() {
         findPvDialog->showAndRaise();
+      });
+
+  QObject::connect(auditLogAct, &QAction::triggered, auditLogViewer.data(),
+      [auditLogViewer]() {
+        if (auditLogViewer) {
+          auditLogViewer->showAndRaise();
+        }
       });
 
   QObject::connect(objectPaletteAct, &QAction::triggered,

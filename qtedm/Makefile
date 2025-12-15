@@ -114,6 +114,7 @@ qtedm_SRC = qtedm.cc \
             composite_runtime.cc \
             cartesian_axis_dialog.cc \
             display_list_dialog.cc \
+            audit_log_viewer_dialog.cc \
             find_pv_dialog.cc \
             object_palette_dialog.cc \
             color_palette_dialog.cc \

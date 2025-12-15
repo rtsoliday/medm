@@ -283,8 +283,53 @@ private:
   bool executeModeActive_ = false;
 };
 
+class HiddenButtonMarkerWidget : public QWidget
+{
+public:
+  explicit HiddenButtonMarkerWidget(QWidget *parent = nullptr)
+    : QWidget(parent)
+    , animationPhase_(0)
+  {
+    setAttribute(Qt::WA_TranslucentBackground);
+    setAutoFillBackground(false);
 
+    animationTimer_ = new QTimer(this);
+    animationTimer_->setInterval(200);
+    QObject::connect(animationTimer_, &QTimer::timeout, this, [this]() {
+      animationPhase_ = (animationPhase_ + 1) % 4;
+      update();
+    });
+    animationTimer_->start();
+  }
 
+protected:
+  void paintEvent(QPaintEvent *) override
+  {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    QPen pen;
+    pen.setWidth(2);
+    pen.setStyle(Qt::DashLine);
+    pen.setDashOffset(animationPhase_ * 2);
+
+    if ((animationPhase_ % 2) == 0) {
+      pen.setColor(Qt::white);
+    } else {
+      pen.setColor(Qt::black);
+    }
+
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    QRect borderRect = rect().adjusted(1, 1, -1, -1);
+    painter.drawRect(borderRect);
+  }
+
+private:
+  QTimer *animationTimer_ = nullptr;
+  int animationPhase_ = 0;
+};
 
 
 
@@ -929,6 +974,104 @@ public:
     displayArea_->update();
     refreshResourcePaletteGeometry();
     notifyMenus();
+  }
+
+  void toggleHiddenButtonMarkers()
+  {
+    if (hiddenButtonMarkersVisible_) {
+      destroyHiddenButtonMarkers();
+    } else {
+      createHiddenButtonMarkers();
+    }
+  }
+
+  void destroyHiddenButtonMarkers()
+  {
+    for (QWidget *marker : hiddenButtonMarkers_) {
+      if (marker) {
+        delete marker;
+      }
+    }
+    hiddenButtonMarkers_.clear();
+    hiddenButtonMarkersVisible_ = false;
+  }
+
+  void createHiddenButtonMarkers()
+  {
+    if (!displayArea_) {
+      return;
+    }
+
+    QList<RelatedDisplayElement *> hiddenButtons;
+    collectHiddenButtons(relatedDisplayElements_, hiddenButtons);
+    for (CompositeElement *composite : compositeElements_) {
+      collectHiddenButtonsInComposite(composite, hiddenButtons);
+    }
+
+    if (hiddenButtons.isEmpty()) {
+      QMessageBox msgBox(this);
+      msgBox.setIcon(QMessageBox::Information);
+      msgBox.setWindowTitle(QStringLiteral("Hidden Buttons"));
+      msgBox.setText(QStringLiteral("There are no hidden buttons in this display."));
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.exec();
+      return;
+    }
+
+    for (RelatedDisplayElement *element : hiddenButtons) {
+      QWidget *marker = createHiddenButtonMarker(element);
+      if (marker) {
+        hiddenButtonMarkers_.append(marker);
+      }
+    }
+    hiddenButtonMarkersVisible_ = true;
+  }
+
+  void collectHiddenButtons(const QList<RelatedDisplayElement *> &elements,
+      QList<RelatedDisplayElement *> &result)
+  {
+    for (RelatedDisplayElement *element : elements) {
+      if (element && element->visual() == RelatedDisplayVisual::kHiddenButton) {
+        result.append(element);
+      }
+    }
+  }
+
+  void collectHiddenButtonsInComposite(CompositeElement *composite,
+      QList<RelatedDisplayElement *> &result)
+  {
+    if (!composite) {
+      return;
+    }
+    const QList<QWidget *> children = composite->childWidgets();
+    for (QWidget *child : children) {
+      if (auto *relatedDisplay = dynamic_cast<RelatedDisplayElement *>(child)) {
+        if (relatedDisplay->visual() == RelatedDisplayVisual::kHiddenButton) {
+          result.append(relatedDisplay);
+        }
+      } else if (auto *nestedComposite = dynamic_cast<CompositeElement *>(child)) {
+        collectHiddenButtonsInComposite(nestedComposite, result);
+      }
+    }
+  }
+
+  QWidget *createHiddenButtonMarker(RelatedDisplayElement *element)
+  {
+    if (!element || !displayArea_) {
+      return nullptr;
+    }
+
+    QPoint elementPos = element->mapTo(displayArea_, QPoint(0, 0));
+    QRect markerRect(elementPos.x() - 2, elementPos.y() - 2,
+                     element->width() + 4, element->height() + 4);
+
+    HiddenButtonMarkerWidget *marker = new HiddenButtonMarkerWidget(displayArea_);
+    marker->setGeometry(markerRect);
+    marker->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    marker->show();
+    marker->raise();
+
+    return marker;
   }
 
   void cutSelection()
@@ -3173,6 +3316,8 @@ private:
   QVector<QPoint> vertexEditInitialPoints_;
   QVector<QPoint> vertexEditCurrentPoints_;
   bool vertexEditMoved_ = false;
+  QList<QWidget *> hiddenButtonMarkers_;
+  bool hiddenButtonMarkersVisible_ = false;
 
 
   void setDisplaySelected(bool selected)
@@ -13860,7 +14005,12 @@ private:
         [this]() {
           showDisplayListDialog();
         });
-    menu.addAction(QStringLiteral("Toggle Hidden Button Markers"));
+    QAction *hiddenButtonAction =
+      menu.addAction(QStringLiteral("Toggle Hidden Button Markers"));
+    QObject::connect(hiddenButtonAction, &QAction::triggered, this,
+        [this]() {
+          toggleHiddenButtonMarkers();
+        });
     QAction *refreshAction =
       menu.addAction(QStringLiteral("Refresh"));
     QObject::connect(refreshAction, &QAction::triggered, this,
@@ -23288,6 +23438,7 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   QTEDM_TIMING_MARK("leaveExecuteMode: Starting");
   executeModeActive_ = false;
+  destroyHiddenButtonMarkers();
   if (displayArea_) {
     displayArea_->setExecuteMode(false);
   }

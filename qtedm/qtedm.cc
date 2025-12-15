@@ -1157,7 +1157,6 @@ int main(int argc, char *argv[])
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
 //TODO: Implement "Save PV Values" snapshot feature for current display state.
 //TODO: Add "Restore PV Values" to write saved snapshot back to IOC.
-//TODO: Implement execute-mode right-click context menu (Print, Close, PV Info).
 //TODO: Add keyboard navigation for sliders (arrow keys already work, add Tab).
 //TODO: Implement middle-click paste of PV names from system clipboard.
 //TODO: Add display title bar showing filename and macro substitutions.

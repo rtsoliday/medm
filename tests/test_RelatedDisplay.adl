@@ -8,7 +8,7 @@ display {
 		x=158
 		y=733
 		width=969
-		height=539
+		height=550
 	}
 	clr=14
 	bclr=4
@@ -553,4 +553,91 @@ display {
 	clr=2
 	bclr=62
 	label="extra"
+}
+text {
+	object {
+		x=640
+		y=400
+		width=300
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Hidden Button Test Area"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=640
+		y=420
+		width=300
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Right-click -> Toggle Hidden Button Markers"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=640
+		y=445
+		width=300
+		height=80
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+		width=2
+	}
+}
+"related display" {
+	object {
+		x=660
+		y=455
+		width=80
+		height=60
+	}
+	display[0] {
+		label="Hidden 1"
+		name="test_Slider.adl"
+	}
+	clr=14
+	bclr=4
+	label="HiddenBtn1"
+	visual="invisible"
+}
+"related display" {
+	object {
+		x=760
+		y=455
+		width=80
+		height=60
+	}
+	display[0] {
+		label="Hidden 2"
+		name="test_Bar.adl"
+	}
+	clr=14
+	bclr=4
+	label="HiddenBtn2"
+	visual="invisible"
+}
+"related display" {
+	object {
+		x=860
+		y=455
+		width=60
+		height=60
+	}
+	display[0] {
+		label="Hidden 3"
+		name="test_Meter.adl"
+	}
+	clr=14
+	bclr=4
+	label="HiddenBtn3"
+	visual="invisible"
 }

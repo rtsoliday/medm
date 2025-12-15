@@ -157,6 +157,7 @@ private:
   void appendSampleColumn();
   bool anyPenConnected() const;
   bool anyPenReady() const;
+  bool allDefinedPensConnected() const;
   void invalidateStaticCache();
   void ensureStaticCache(const QFont &labelsFont, const QFontMetrics &metrics);
   void paintStaticContent(QPainter &painter, const Layout &layout,

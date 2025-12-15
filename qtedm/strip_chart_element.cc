@@ -644,6 +644,16 @@ void StripChartElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
+  /* In execute mode, show solid white when any defined pen is disconnected.
+   * This provides a clear visual indication that PV data is unavailable. */
+  if (executeMode_ && !allDefinedPensConnected()) {
+    painter.fillRect(rect(), Qt::white);
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
+
   const QFont labelsFont = labelFont();
   painter.setFont(labelsFont);
   const QFontMetrics metrics(labelsFont);
@@ -1147,6 +1157,22 @@ QColor StripChartElement::effectiveForeground() const
 
 QColor StripChartElement::effectiveBackground() const
 {
+  /* Show white background when any defined pen is disconnected */
+  if (executeMode_) {
+    bool hasDefinedPen = false;
+    for (const Pen &pen : pens_) {
+      if (!pen.channel.trimmed().isEmpty()) {
+        hasDefinedPen = true;
+        if (!pen.runtimeConnected) {
+          return QColor(Qt::white);
+        }
+      }
+    }
+    /* Also show white if no pens are defined but we're in execute mode */
+    if (!hasDefinedPen) {
+      return QColor(Qt::white);
+    }
+  }
   if (backgroundColor_.isValid()) {
     return backgroundColor_;
   }
@@ -1945,6 +1971,20 @@ bool StripChartElement::anyPenReady() const
     }
   }
   return false;
+}
+
+bool StripChartElement::allDefinedPensConnected() const
+{
+  bool hasDefinedPen = false;
+  for (const Pen &pen : pens_) {
+    if (!pen.channel.trimmed().isEmpty()) {
+      hasDefinedPen = true;
+      if (!pen.runtimeConnected) {
+        return false;
+      }
+    }
+  }
+  return hasDefinedPen;
 }
 
 void StripChartElement::invalidateStaticCache()

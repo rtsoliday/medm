@@ -977,18 +977,8 @@ void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
         return;
       }
     } else if (event->button() == Qt::RightButton) {
-      // Show context menu with reset zoom option only when zoomed
-      if (zoomed_) {
-        QMenu menu(this);
-        QAction *resetAction = menu.addAction(tr("Reset Zoom"));
-        QAction *selected = menu.exec(event->globalPos());
-        if (selected == resetAction) {
-          resetZoom();
-        }
-        event->accept();
-        return;
-      }
       // Forward right-click events to parent window for context menu
+      // The parent window will add "Reset Zoom" if we're zoomed
       if (forwardMouseEventToParent(event)) {
         return;
       }

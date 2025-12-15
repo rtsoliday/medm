@@ -13770,6 +13770,14 @@ private:
             setAsActiveDisplay();
             exportCartesianPlotData(clickedCartesianPlot);
           });
+      if (clickedCartesianPlot->isZoomed()) {
+        menu.addSeparator();
+        QAction *resetZoomAction = menu.addAction(QStringLiteral("Reset Zoom"));
+        QObject::connect(resetZoomAction, &QAction::triggered, this,
+            [clickedCartesianPlot]() {
+              clickedCartesianPlot->resetZoom();
+            });
+      }
       menu.exec(globalPos);
       return;
     }

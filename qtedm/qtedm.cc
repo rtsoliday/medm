@@ -1154,7 +1154,6 @@ int main(int argc, char *argv[])
 // ADL-COMPATIBLE FEATURE ENHANCEMENTS (maintain MEDM file compatibility)
 // ===========================================================================
 
-//TODO: Implement Cartesian Plot axis dialog with runtime axis style changes.
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
 //TODO: Add Strip Chart autoscale toggle and manual Y-axis range dialog.
 //TODO: Implement "Save PV Values" snapshot feature for current display state.

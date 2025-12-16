@@ -123,6 +123,7 @@ qtedm_SRC = qtedm.cc \
             medm_colors.cc \
             statistics_tracker.cc \
             statistics_window.cc \
+            memory_tracker.cc \
             cursor_utils.cc \
             text_runtime_calc_bridge.c \
             update_coordinator.cc
@@ -262,6 +263,11 @@ $(OBJ_DIR)/moc_shared_channel_manager.cpp: shared_channel_manager.h | $(OBJ_DIR)
 	$(MOC) $(shell pkg-config --cflags $(QT_WIDGETS_PKG)) $< -o $@
 
 $(OBJ_DIR)/shared_channel_manager.$(OBJEXT): $(OBJ_DIR)/moc_shared_channel_manager.cpp
+
+$(OBJ_DIR)/moc_memory_tracker.cpp: memory_tracker.h | $(OBJ_DIR)
+	$(MOC) $(shell pkg-config --cflags $(QT_WIDGETS_PKG)) $< -o $@
+
+$(OBJ_DIR)/memory_tracker.$(OBJEXT): $(OBJ_DIR)/moc_memory_tracker.cpp
 
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
 	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)

@@ -78,6 +78,7 @@ typedef int Status;
 #include "find_pv_dialog.h"
 #include "legacy_fonts.h"
 #include "main_window_controller.h"
+#include "memory_tracker.h"
 #include "object_palette_dialog.h"
 #include "startup_timing.h"
 #include "statistics_window.h"
@@ -161,6 +162,15 @@ void printUsage(const QString &program)
       "            Enable startup timing diagnostics. Prints timestamped\n"
       "            messages to stderr showing how long each startup phase\n"
       "            takes, from launch to display fully populated.\n"
+      "\n"
+      "  TRACK_MEM=[interval][:logfile]\n"
+      "            Enable memory usage tracking for leak detection.\n"
+      "            interval   Optional sampling interval in seconds (default: 60)\n"
+      "            logfile    Optional path to CSV log file (default: stderr)\n"
+      "            Examples:  TRACK_MEM=1        (log to stderr every 60 sec)\n"
+      "                       TRACK_MEM=30       (log to stderr every 30 sec)\n"
+      "                       TRACK_MEM=/tmp/mem.csv  (log to file every 60 sec)\n"
+      "                       TRACK_MEM=10:/tmp/mem.csv  (file, every 10 sec)\n"
       "\n",
       program.toLocal8Bit().constData());
   fflush(stdout);
@@ -859,6 +869,11 @@ int main(int argc, char *argv[])
 
   /* Initialize audit logging for control widget value changes */
   AuditLogger::instance().initialize(options.enableAuditLog);
+
+  /* Start memory tracking if TRACK_MEM environment variable is set */
+  if (MemoryTracker::instance().isEnabled()) {
+    MemoryTracker::instance().start();
+  }
 
   QTEDM_TIMING_MARK("Setting application style");
   if (auto *fusionStyle =

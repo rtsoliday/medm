@@ -2030,6 +2030,11 @@ void CartesianPlotElement::paintTracesExecute(QPainter &painter,
   cachedAxisRanges_ = ranges;
   cachedAxisRangesValid_ = true;
 
+  // Clip traces to the chart area so data outside axis limits doesn't appear
+  // in the axis label region
+  painter.save();
+  painter.setClipRect(rect);
+
   for (int i = 0; i < traceCount(); ++i) {
     const QVector<QPointF> &valuePoints = traces_[i].runtimePoints;
     if (valuePoints.isEmpty()) {
@@ -2112,6 +2117,8 @@ void CartesianPlotElement::paintTracesExecute(QPainter &painter,
     }
     }
   }
+
+  painter.restore();  // Restore painter state (removes clipping)
 }
 
 CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
@@ -2638,6 +2645,11 @@ void CartesianPlotElement::paintTracesOnly(QPainter &painter,
 
   const std::array<AxisRange, kCartesianAxisCount> &ranges = cachedAxisRanges_;
 
+  // Clip traces to the chart area so data outside axis limits doesn't appear
+  // in the axis label region
+  painter.save();
+  painter.setClipRect(rect);
+
   for (int i = 0; i < traceCount(); ++i) {
     const QVector<QPointF> &valuePoints = traces_[i].runtimePoints;
     if (valuePoints.isEmpty()) {
@@ -2720,6 +2732,8 @@ void CartesianPlotElement::paintTracesOnly(QPainter &painter,
     }
     }
   }
+
+  painter.restore();  // Restore painter state (removes clipping)
 }
 
 // Include moc output for Q_OBJECT macro

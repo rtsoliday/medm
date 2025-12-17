@@ -45,6 +45,10 @@
 #include <memory>
 #include <optional>
 
+#if defined(Q_OS_UNIX)
+#include <sys/resource.h>  // For setrlimit to enable core dumps
+#endif
+
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
 #include <QAbstractNativeEventFilter>
 #include <X11/Xlib.h>
@@ -679,6 +683,14 @@ class RemoteRequestFilter : public QAbstractNativeEventFilter {
 
 int main(int argc, char *argv[])
 {
+#if defined(Q_OS_UNIX)
+  // Enable core dumps for crash debugging
+  struct rlimit core_limit;
+  core_limit.rlim_cur = RLIM_INFINITY;
+  core_limit.rlim_max = RLIM_INFINITY;
+  setrlimit(RLIMIT_CORE, &core_limit);
+#endif
+
   /* Initialize timing diagnostics as early as possible */
   QTEDM_TIMING_MARK("Entering main()");
 

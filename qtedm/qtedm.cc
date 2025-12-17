@@ -804,14 +804,7 @@ int main(int argc, char *argv[])
               remoteContext.existingWindow, &attributes);
           XSetErrorHandler(previousHandler);
           if (!attributeStatus) {
-            fprintf(stdout,
-                "\nCannot connect to existing QtEDM because it is invalid\n"
-                "  (An accompanying Bad Window error can be ignored)\n"
-                "  Continuing with this one as if -cleanup were specified\n");
-            fprintf(stdout,
-                "(Use -local to not use existing QtEDM or be available as an existing QtEDM\n"
-                "  or -cleanup to set this QtEDM as the existing one)\n");
-            fflush(stdout);
+            /* Stale property from a previous QtEDM - continue silently */
           } else {
             if (options.resolvedDisplayFiles.isEmpty()) {
               fprintf(stdout,

@@ -22958,11 +22958,45 @@ inline void DisplayWindow::enterExecuteMode()
     return;
   }
   QTEDM_TIMING_MARK("enterExecuteMode: Starting");
+  const bool restoreDisplayUpdates =
+      displayArea_ ? displayArea_->updatesEnabled() : false;
+  if (displayArea_) {
+    displayArea_->setUpdatesEnabled(false);
+  }
   executeModeActive_ = true;
   if (displayArea_) {
     displayArea_->setExecuteMode(true);
   }
-  
+
+  auto reserveRuntime = [](auto &hash, int expected) {
+    if (expected > 0) {
+      hash.reserve(expected);
+    }
+  };
+
+  reserveRuntime(compositeRuntimes_, compositeElements_.size());
+  reserveRuntime(textRuntimes_, textElements_.size());
+  reserveRuntime(textEntryRuntimes_, textEntryElements_.size());
+  reserveRuntime(rectangleRuntimes_, rectangleElements_.size());
+  reserveRuntime(imageRuntimes_, imageElements_.size());
+  reserveRuntime(ovalRuntimes_, ovalElements_.size());
+  reserveRuntime(arcRuntimes_, arcElements_.size());
+  reserveRuntime(lineRuntimes_, lineElements_.size());
+  reserveRuntime(polylineRuntimes_, polylineElements_.size());
+  reserveRuntime(polygonRuntimes_, polygonElements_.size());
+  reserveRuntime(meterRuntimes_, meterElements_.size());
+  reserveRuntime(scaleMonitorRuntimes_, scaleMonitorElements_.size());
+  reserveRuntime(stripChartRuntimes_, stripChartElements_.size());
+  reserveRuntime(cartesianPlotRuntimes_, cartesianPlotElements_.size());
+  reserveRuntime(barMonitorRuntimes_, barMonitorElements_.size());
+  reserveRuntime(byteMonitorRuntimes_, byteMonitorElements_.size());
+  reserveRuntime(sliderRuntimes_, sliderElements_.size());
+  reserveRuntime(wheelSwitchRuntimes_, wheelSwitchElements_.size());
+  reserveRuntime(textMonitorRuntimes_, textMonitorElements_.size());
+  reserveRuntime(choiceButtonRuntimes_, choiceButtonElements_.size());
+  reserveRuntime(menuRuntimes_, menuElements_.size());
+  reserveRuntime(messageButtonRuntimes_, messageButtonElements_.size());
+
   /* Report element counts for timing diagnostics */
   int totalWidgets = compositeElements_.size() + textElements_.size() +
       textEntryElements_.size() + rectangleElements_.size() +
@@ -23441,6 +23475,12 @@ inline void DisplayWindow::enterExecuteMode()
   for (RelatedDisplayElement *element : relatedDisplayElements_) {
     if (element) {
       element->raise();
+    }
+  }
+  if (displayArea_) {
+    displayArea_->setUpdatesEnabled(restoreDisplayUpdates);
+    if (restoreDisplayUpdates) {
+      displayArea_->update();
     }
   }
   QTEDM_TIMING_MARK("enterExecuteMode: Complete - waiting for PV connections");

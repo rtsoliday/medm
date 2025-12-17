@@ -1175,12 +1175,8 @@ int main(int argc, char *argv[])
   win.installEventFilter(mainWindowController);
   auto updateMenus = std::make_shared<std::function<void()>>();
   state->updateMenus = updateMenus;
-  auto *displayListDialog = new DisplayListDialog(palette, fixed13Font,
-      std::weak_ptr<DisplayState>(state), &win);
-  state->displayListDialog = displayListDialog;
-  auto *findPvDialog = new FindPvDialog(palette, fixed13Font,
-      std::weak_ptr<DisplayState>(state), &win);
-  state->findPvDialog = findPvDialog;
+  QPointer<DisplayListDialog> displayListDialog;
+  QPointer<FindPvDialog> findPvDialog;
   QTEDM_TIMING_MARK("Display state created");
 
 // ===========================================================================
@@ -1237,47 +1233,67 @@ int main(int argc, char *argv[])
 //TODO: Implement session save/restore (remember open displays and positions).
 //TODO: Add multi-monitor support with display placement preferences.
 //TODO: Implement network-based display serving (load ADL from URL).
-//TODO: Add display locking to prevent accidental edits in execute mode.
 
 
 
-  auto objectPaletteDialog = QPointer<ObjectPaletteDialog>(
-      new ObjectPaletteDialog(palette, fixed13Font, fixed10Font,
-          std::weak_ptr<DisplayState>(state), &win));
 
-  auto statisticsWindow = QPointer<StatisticsWindow>(
-    new StatisticsWindow(palette, fixed13Font, fixed10Font, &win));
   state->raiseMessageWindow = options.raiseMessageWindow;
+  QPointer<ObjectPaletteDialog> objectPaletteDialog;
+  QPointer<StatisticsWindow> statisticsWindow;
+  QPointer<AuditLogViewerDialog> auditLogViewer;
 
-  auto auditLogViewer = QPointer<AuditLogViewerDialog>(
-      new AuditLogViewerDialog(palette, fixed13Font, &win));
-
-  QObject::connect(viewDisplayListAct, &QAction::triggered, displayListDialog,
-      [displayListDialog]() {
-        displayListDialog->showAndRaise();
+  QObject::connect(viewDisplayListAct, &QAction::triggered, &win,
+      [&, palette, fixed13Font]() {
+        if (!displayListDialog) {
+          displayListDialog = new DisplayListDialog(palette, fixed13Font,
+              std::weak_ptr<DisplayState>(state), &win);
+          state->displayListDialog = displayListDialog;
+        }
+        if (displayListDialog) {
+          displayListDialog->showAndRaise();
+        }
       });
 
-  QObject::connect(findPvAct, &QAction::triggered, findPvDialog,
-      [findPvDialog]() {
-        findPvDialog->showAndRaise();
+  QObject::connect(findPvAct, &QAction::triggered, &win,
+      [&, palette, fixed13Font]() {
+        if (!findPvDialog) {
+          findPvDialog = new FindPvDialog(palette, fixed13Font,
+              std::weak_ptr<DisplayState>(state), &win);
+          state->findPvDialog = findPvDialog;
+        }
+        if (findPvDialog) {
+          findPvDialog->showAndRaise();
+        }
       });
 
-  QObject::connect(auditLogAct, &QAction::triggered, auditLogViewer.data(),
-      [auditLogViewer]() {
+  QObject::connect(auditLogAct, &QAction::triggered, &win,
+      [&, palette, fixed13Font]() {
+        if (!auditLogViewer) {
+          auditLogViewer = new AuditLogViewerDialog(palette, fixed13Font,
+              &win);
+        }
         if (auditLogViewer) {
           auditLogViewer->showAndRaise();
         }
       });
 
-  QObject::connect(objectPaletteAct, &QAction::triggered,
-      objectPaletteDialog.data(), [objectPaletteDialog]() {
+  QObject::connect(objectPaletteAct, &QAction::triggered, &win,
+      [&, palette, fixed13Font, fixed10Font]() {
+        if (!objectPaletteDialog) {
+          objectPaletteDialog = new ObjectPaletteDialog(palette, fixed13Font,
+              fixed10Font, std::weak_ptr<DisplayState>(state), &win);
+        }
         if (objectPaletteDialog) {
           objectPaletteDialog->showAndRaise();
         }
       });
 
   QObject::connect(statisticsWindowAct, &QAction::triggered, &win,
-      [statisticsWindow]() {
+      [&, palette, fixed13Font, fixed10Font]() {
+        if (!statisticsWindow) {
+          statisticsWindow = new StatisticsWindow(palette, fixed13Font,
+              fixed10Font, &win);
+        }
         if (statisticsWindow) {
           statisticsWindow->showAndRaise();
         }
@@ -1578,8 +1594,8 @@ int main(int argc, char *argv[])
     flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
     rotateCounterclockwiseAct, sameSizeAct, textToContentsAct, toggleGridAct, toggleSnapAct,
     gridSpacingAct, unselectAct, selectAllAct, selectDisplayAct,
-    findOutliersAct, refreshAct, editSummaryAct, displayListDialog,
-    objectPaletteDialog]() {
+    findOutliersAct, refreshAct, editSummaryAct, &displayListDialog,
+    &objectPaletteDialog]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
       if (it->isNull()) {

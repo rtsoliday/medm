@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QString>
 #include <QDebug>
+#include <QTimer>
 
 #include <atomic>
 #include <cstdio>
@@ -178,6 +179,13 @@ private:
             std::memory_order_acq_rel)) {
       StartupTiming::instance().mark(
           "Initial PV values applied to all widgets");
+      if (!idleReportScheduled_) {
+        idleReportScheduled_ = true;
+        QTimer::singleShot(0, []() {
+          StartupTiming::instance().mark(
+              "Event loop idle after initial PV updates");
+        });
+      }
     }
   }
 
@@ -185,6 +193,7 @@ private:
   std::atomic<int> pendingUpdates_{0};
   std::atomic<bool> allValuesReported_{false};
   std::atomic<bool> reported_{false};
+  bool idleReportScheduled_ = false;
 };
 
 /* Convenience macro for timing marks */

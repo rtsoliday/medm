@@ -9,6 +9,8 @@
 
 #include <utility>
 
+#include "startup_timing.h"
+
 class WheelSwitchElement;
 
 class DisplayWindow;
@@ -55,6 +57,7 @@ private:
   bool hasLastValue_ = false;
   short lastSeverity_ = 0;
   bool lastWriteAccess_ = false;
+  bool initialUpdateTracked_ = false;
 };
 
 template <typename Func>

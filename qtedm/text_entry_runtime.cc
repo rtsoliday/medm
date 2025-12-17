@@ -122,6 +122,7 @@ void TextEntryRuntime::resetRuntimeState()
   controlHigh_ = 0.0;
   hasControlLimits_ = false;
   lastWriteAccess_ = false;
+  initialUpdateTracked_ = false;
 
   invokeOnElement([](TextEntryElement *element) {
     element->clearRuntimeState();
@@ -320,6 +321,13 @@ void TextEntryRuntime::handleValueEvent(const event_handler_args &args)
   stats.registerCaEvent();
   stats.registerUpdateRequest(true);
   stats.registerUpdateExecuted();
+
+  if (!initialUpdateTracked_) {
+    auto &tracker = StartupUiSettlingTracker::instance();
+    if (tracker.enabled()) {
+      tracker.recordInitialUpdateQueued();
+    }
+  }
 
   updateElementDisplay();
 }
@@ -537,10 +545,18 @@ void TextEntryRuntime::updateElementDisplay()
   }
 
   const short severity = lastSeverity_;
-  invokeOnElement([displayText, severity](TextEntryElement *element) {
+  const bool needsInitialMark = !initialUpdateTracked_;
+  invokeOnElement([displayText, severity, needsInitialMark, this](TextEntryElement *element) {
     element->setRuntimeConnected(true);
     element->setRuntimeSeverity(severity);
     element->setRuntimeText(displayText);
+    if (needsInitialMark && !initialUpdateTracked_) {
+      auto &tracker = StartupUiSettlingTracker::instance();
+      if (tracker.enabled()) {
+        tracker.recordInitialUpdateApplied();
+      }
+      initialUpdateTracked_ = true;
+    }
   });
 }
 

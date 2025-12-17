@@ -7,6 +7,8 @@
 #include <QStringList>
 #include <QByteArray>
 
+#include "startup_timing.h"
+
 #include <cadef.h>
 
 #include <utility>
@@ -83,6 +85,7 @@ private:
   double controlHigh_ = 0.0;
   bool hasControlLimits_ = false;
   bool lastWriteAccess_ = false;
+  bool initialUpdateTracked_ = false;
 };
 
 template <typename Func>

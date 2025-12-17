@@ -136,6 +136,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::resetState()
   calcValid_ = false;
   channelsNeeded_ = true;
   layeringNeeded_ = true;
+  initialUpdateReported_ = false;
 
   for (auto &channel : channels_) {
     channel.name.clear();
@@ -266,6 +267,15 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::handleChannelData(
   }
 
   evaluateState();
+
+  if (!initialUpdateReported_ && channel.hasValue) {
+    auto &tracker = StartupUiSettlingTracker::instance();
+    if (tracker.enabled()) {
+      tracker.recordInitialUpdateQueued();
+      tracker.recordInitialUpdateApplied();
+    }
+    initialUpdateReported_ = true;
+  }
 }
 
 template <typename ElementType, size_t ChannelCount>

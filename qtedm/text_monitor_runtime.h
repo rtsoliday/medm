@@ -8,6 +8,7 @@
 
 #include "display_properties.h"
 #include "shared_channel_manager.h"
+#include "startup_timing.h"
 
 class TextMonitorElement;
 
@@ -64,4 +65,5 @@ private:
   short lastSeverity_ = 0;
   short channelPrecision_ = -1;
   QStringList enumStrings_;
+  bool initialUpdateTracked_ = false;
 };

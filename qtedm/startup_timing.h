@@ -4,6 +4,7 @@
 #include <QString>
 #include <QDebug>
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 
@@ -112,6 +113,80 @@ private:
   bool enabled_ = false;
 };
 
+/* Tracks when all PV-driven widgets have applied their initial values.
+ * This is only active when startup timing diagnostics are enabled. */
+class StartupUiSettlingTracker {
+public:
+  static StartupUiSettlingTracker &instance()
+  {
+    static StartupUiSettlingTracker tracker;
+    return tracker;
+  }
+
+  bool enabled() const { return enabled_; }
+
+  /* Record that an initial widget update has been queued/applied. */
+  void recordInitialUpdateQueued()
+  {
+    if (!enabled_) {
+      return;
+    }
+    pendingUpdates_.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  void recordInitialUpdateApplied()
+  {
+    if (!enabled_) {
+      return;
+    }
+    int before = pendingUpdates_.fetch_sub(1, std::memory_order_acq_rel);
+    if (before <= 0) {
+      pendingUpdates_.store(0, std::memory_order_release);
+    }
+    maybeReportSettled();
+  }
+
+  /* Called when SharedChannelManager has received at least one value for all PVs. */
+  void markAllPvValuesReceived()
+  {
+    if (!enabled_) {
+      return;
+    }
+    allValuesReported_.store(true, std::memory_order_release);
+    maybeReportSettled();
+  }
+
+private:
+  StartupUiSettlingTracker()
+    : enabled_(StartupTiming::instance().isEnabled())
+  {
+  }
+
+  void maybeReportSettled()
+  {
+    if (!enabled_) {
+      return;
+    }
+    if (!allValuesReported_.load(std::memory_order_acquire)) {
+      return;
+    }
+    if (pendingUpdates_.load(std::memory_order_acquire) != 0) {
+      return;
+    }
+    bool expected = false;
+    if (reported_.compare_exchange_strong(expected, true,
+            std::memory_order_acq_rel)) {
+      StartupTiming::instance().mark(
+          "Initial PV values applied to all widgets");
+    }
+  }
+
+  const bool enabled_ = false;
+  std::atomic<int> pendingUpdates_{0};
+  std::atomic<bool> allValuesReported_{false};
+  std::atomic<bool> reported_{false};
+};
+
 /* Convenience macro for timing marks */
 #define QTEDM_TIMING_MARK(event) \
   StartupTiming::instance().mark(event)
@@ -150,4 +225,3 @@ private:
 
 #define QTEDM_SCOPED_TIMING(event) \
   ScopedTiming scopedTiming_##__LINE__(event)
-

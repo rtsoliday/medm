@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "shared_channel_manager.h"
+#include "startup_timing.h"
 
 class SliderElement;
 
@@ -46,6 +47,7 @@ private:
   short lastSeverity_ = 0;
   bool hasControlInfo_ = false;
   bool lastWriteAccess_ = false;
+  bool initialUpdateTracked_ = false;
 };
 
 template <typename Func>

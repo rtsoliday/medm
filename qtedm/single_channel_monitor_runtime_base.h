@@ -12,6 +12,7 @@
 
 #include "element_runtime_traits.h"
 #include "shared_channel_manager.h"
+#include "startup_timing.h"
 
 class DisplayWindow;
 
@@ -49,6 +50,7 @@ protected:
   bool hasLastValue_ = false;
   short lastSeverity_ = 3;
   bool hasControlInfo_ = false;
+  bool initialUpdateTracked_ = false;
 };
 
 template <typename ElementType>
@@ -68,4 +70,3 @@ inline void SingleChannelMonitorRuntimeBase<ElementType>::invokeOnElement(Func &
       },
       Qt::QueuedConnection);
 }
-

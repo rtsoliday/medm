@@ -14,6 +14,7 @@
 #include "display_properties.h"
 #include "element_runtime_traits.h"
 #include "shared_channel_manager.h"
+#include "startup_timing.h"
 
 class RectangleElement;
 class ImageElement;
@@ -146,6 +147,7 @@ private:
   bool channelsNeeded_ = true;
   bool layeringNeeded_ = true;
   bool started_ = false;
+  bool initialUpdateReported_ = false;
 };
 
 template <>

@@ -664,6 +664,7 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     lastValueReported_ = true;
     QTEDM_TIMING_MARK_COUNT("All PVs have values, total", totalValuesReceived_);
     QTEDM_TIMING_MARK_DETAIL("Last PV value received", channel->key.pvName);
+    StartupUiSettlingTracker::instance().markAllPvValuesReceived();
   }
 
   SharedChannelData &data = channel->cachedData;

@@ -98,6 +98,7 @@ void SliderRuntime::resetRuntimeState()
   lastSeverity_ = 0;
   hasControlInfo_ = false;
   lastWriteAccess_ = false;
+  initialUpdateTracked_ = false;
 
   if (element_) {
     invokeOnElement([](SliderElement *element) {
@@ -188,9 +189,22 @@ void SliderRuntime::handleChannelData(const SharedChannelData &data)
   if (!hasLastValue_ || std::abs(numericValue - lastValue_) > 1e-12) {
     lastValue_ = numericValue;
     hasLastValue_ = true;
+    if (!initialUpdateTracked_) {
+      auto &tracker = StartupUiSettlingTracker::instance();
+      if (tracker.enabled()) {
+        tracker.recordInitialUpdateQueued();
+      }
+    }
     invokeOnElement([numericValue](SliderElement *element) {
       element->setRuntimeValue(numericValue);
     });
+    if (!initialUpdateTracked_) {
+      auto &tracker = StartupUiSettlingTracker::instance();
+      if (tracker.enabled()) {
+        tracker.recordInitialUpdateApplied();
+      }
+      initialUpdateTracked_ = true;
+    }
   }
 }
 

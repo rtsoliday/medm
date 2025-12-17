@@ -106,6 +106,7 @@ void TextMonitorRuntime::resetRuntimeState()
   nativeFieldType_ = -1;
   elementCount_ = 1;
   enumStrings_.clear();
+  initialUpdateTracked_ = false;
   if (element_) {
     element_->setRuntimeConnected(false);
     element_->setRuntimeSeverity(0);
@@ -242,6 +243,15 @@ void TextMonitorRuntime::handleChannelData(const SharedChannelData &data)
   }
 
   updateElementDisplay();
+
+  if (!initialUpdateTracked_) {
+    auto &tracker = StartupUiSettlingTracker::instance();
+    if (tracker.enabled()) {
+      tracker.recordInitialUpdateQueued();
+      tracker.recordInitialUpdateApplied();
+    }
+    initialUpdateTracked_ = true;
+  }
 }
 
 void TextMonitorRuntime::updateElementDisplay()
@@ -375,4 +385,3 @@ QString TextMonitorRuntime::formatCharArray(const QByteArray &bytes) const
   }
   return QString::fromLatin1(bytes);
 }
-

@@ -96,6 +96,7 @@ void SingleChannelMonitorRuntimeBase<ElementType>::resetRuntimeState()
   hasLastValue_ = false;
   lastSeverity_ = kInvalidSeverity;
   hasControlInfo_ = false;
+  initialUpdateTracked_ = false;
 
   invokeOnElement([](ElementType *element) {
     element->clearRuntimeState();
@@ -189,9 +190,22 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
   if (!hasLastValue_ || std::abs(numericValue - lastValue_) > 1e-12) {
     lastValue_ = numericValue;
     hasLastValue_ = true;
+    if (!initialUpdateTracked_) {
+      auto &tracker = StartupUiSettlingTracker::instance();
+      if (tracker.enabled()) {
+        tracker.recordInitialUpdateQueued();
+      }
+    }
     invokeOnElement([numericValue](ElementType *element) {
       element->setRuntimeValue(numericValue);
     });
+    if (!initialUpdateTracked_) {
+      auto &tracker = StartupUiSettlingTracker::instance();
+      if (tracker.enabled()) {
+        tracker.recordInitialUpdateApplied();
+      }
+      initialUpdateTracked_ = true;
+    }
   }
 }
 

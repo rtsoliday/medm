@@ -105,6 +105,7 @@ void WheelSwitchRuntime::resetRuntimeState()
   hasLastValue_ = false;
   lastSeverity_ = kInvalidSeverity;
   lastWriteAccess_ = false;
+  initialUpdateTracked_ = false;
 
   if (element_) {
     invokeOnElement([](WheelSwitchElement *element) {
@@ -252,9 +253,22 @@ void WheelSwitchRuntime::handleValueEvent(const event_handler_args &args)
   if (!hasLastValue_ || std::abs(numericValue - lastValue_) > 1e-12) {
     lastValue_ = numericValue;
     hasLastValue_ = true;
+    if (!initialUpdateTracked_) {
+      auto &tracker = StartupUiSettlingTracker::instance();
+      if (tracker.enabled()) {
+        tracker.recordInitialUpdateQueued();
+      }
+    }
     invokeOnElement([numericValue](WheelSwitchElement *element) {
       element->setRuntimeValue(numericValue);
     });
+    if (!initialUpdateTracked_) {
+      auto &tracker = StartupUiSettlingTracker::instance();
+      if (tracker.enabled()) {
+        tracker.recordInitialUpdateApplied();
+      }
+      initialUpdateTracked_ = true;
+    }
   }
 }
 

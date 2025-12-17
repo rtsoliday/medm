@@ -121,6 +121,7 @@ struct CommandLineOptions {
   bool usePrivateColormap = false;
   bool useBigMousePointer = false;
   bool testSave = false;
+  bool crashTest = false;
   bool enableAuditLog = true;
   QString invalidOption;
   QStringList displayFiles;
@@ -209,6 +210,9 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       options.usePrivateColormap = true;
     } else if (arg == QLatin1String("-testSave")) {
       options.testSave = true;
+    } else if (arg == QLatin1String("-crashTest") ||
+               arg == QLatin1String("--crash-test")) {
+      options.crashTest = true;
     } else if (arg == QLatin1String("-macro")) {
       if ((i + 1) < args.size()) {
         QString tmp = args.at(++i);
@@ -740,6 +744,13 @@ int main(int argc, char *argv[])
   if (options.showHelp) {
     printUsage(programName(args));
     return 0;
+  }
+
+  if (options.crashTest) {
+    fprintf(stdout, "Forcing crash to test core dump generation...\n");
+    fflush(stdout);
+    volatile int *crash = nullptr;
+    *crash = 42;  // Deliberate null pointer dereference
   }
 
   if (!options.macroString.isEmpty() && !options.startInExecuteMode) {

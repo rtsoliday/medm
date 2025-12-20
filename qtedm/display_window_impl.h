@@ -15309,6 +15309,32 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
       }
     });
   }
+
+  /* Ensure the loaded display's ADL size is applied even on window managers
+   * (e.g. GNOME/Mutter) that may defer or override geometry during load.
+   * This is particularly noticeable for Related Display "Replace" when the
+   * target display is smaller than the current window. */
+  if (displayArea_) {
+    const QSize desiredAreaSize = displayArea_->minimumSize();
+    QPointer<DisplayWindow> self(this);
+    auto applyLoadedSize = [self, desiredAreaSize]() {
+      DisplayWindow *window = self.data();
+      if (!window || !window->displayArea_) {
+        return;
+      }
+      if (desiredAreaSize.width() <= 0 || desiredAreaSize.height() <= 0) {
+        return;
+      }
+      const QSize currentWindowSize = window->size();
+      const QSize currentAreaSize = window->displayArea_->size();
+      const int extraWidth = currentWindowSize.width() - currentAreaSize.width();
+      const int extraHeight = currentWindowSize.height() - currentAreaSize.height();
+      window->resize(desiredAreaSize.width() + extraWidth,
+          desiredAreaSize.height() + extraHeight);
+    };
+    QTimer::singleShot(0, this, applyLoadedSize);
+    QTimer::singleShot(50, this, applyLoadedSize);
+  }
   QTEDM_TIMING_MARK("loadFromFile: Complete");
   /* Defer UI updates for large files to avoid blocking during initial load */
   if (totalElements < 1000) {
@@ -20246,17 +20272,43 @@ inline void DisplayWindow::handleRelatedDisplayActivation(
   }
 
   /* Match MEDM behavior: Related Display in "Add" mode opens at the same
-   * X/Y position as the window that launched it. We apply the move after the
-   * window is shown because some window managers ignore pre-show positioning
-   * and may place the new window on a different monitor. */
+   * X/Y position as the window that launched it.
+   *
+   * Apply both move and resize after the window is shown. Some window
+   * managers ignore pre-show geometry and may reuse the size of the
+   * currently-active (and potentially closing) window. This especially shows
+   * up when the target display is smaller than the launcher. */
   const QPoint launchPos = pos();
   registerDisplayWindow(newWindow, true);
   QPointer<DisplayWindow> positioned(newWindow);
-  QTimer::singleShot(0, newWindow, [positioned, launchPos]() {
+
+  auto applyPostShowGeometry = [positioned, launchPos]() {
     if (DisplayWindow *window = positioned.data()) {
       window->move(launchPos);
+
+      QWidget *area = window->centralWidget();
+      if (!area) {
+        return;
+      }
+
+      const QSize targetAreaSize = area->minimumSize();
+      if (targetAreaSize.width() <= 0 || targetAreaSize.height() <= 0) {
+        return;
+      }
+
+      const QSize currentWindowSize = window->size();
+      const QSize currentAreaSize = area->size();
+      const int extraWidth = currentWindowSize.width() - currentAreaSize.width();
+      const int extraHeight = currentWindowSize.height() - currentAreaSize.height();
+      window->resize(targetAreaSize.width() + extraWidth,
+          targetAreaSize.height() + extraHeight);
     }
-  });
+  };
+
+  /* Mutter can finalize a window's size after it is shown; apply twice
+   * (queued + small delay) to avoid inheriting the launcher geometry. */
+  QTimer::singleShot(0, newWindow, applyPostShowGeometry);
+  QTimer::singleShot(50, newWindow, applyPostShowGeometry);
 }
 
 inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin,

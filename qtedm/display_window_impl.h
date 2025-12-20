@@ -20271,21 +20271,18 @@ inline void DisplayWindow::handleRelatedDisplayActivation(
     return;
   }
 
-  /* Match MEDM behavior: Related Display in "Add" mode opens at the same
-   * X/Y position as the window that launched it.
+  /* Related Display in "Add" mode should not inherit the launcher's on-screen
+   * position.
    *
-   * Apply both move and resize after the window is shown. Some window
-   * managers ignore pre-show geometry and may reuse the size of the
-   * currently-active (and potentially closing) window. This especially shows
-   * up when the target display is smaller than the launcher. */
-  const QPoint launchPos = pos();
+   * Still apply resize after the window is shown. Some window managers ignore
+   * pre-show geometry and may reuse the size of the currently-active window.
+   * This especially shows up when the target display is smaller than the
+   * launcher. */
   registerDisplayWindow(newWindow, true);
   QPointer<DisplayWindow> positioned(newWindow);
 
-  auto applyPostShowGeometry = [positioned, launchPos]() {
+  auto applyPostShowGeometry = [positioned]() {
     if (DisplayWindow *window = positioned.data()) {
-      window->move(launchPos);
-
       QWidget *area = window->centralWidget();
       if (!area) {
         return;

@@ -3148,6 +3148,8 @@ private:
   std::optional<AdlNode> pendingDynamicAttribute_;
   bool dirty_ = true;
   bool executeModeActive_ = false;
+  bool preserveNextLoadPosition_ = false;
+  QPoint preservedLoadPosition_;
   bool displaySelected_ = false;
   bool gridOn_ = kDefaultGridOn;
   bool snapToGrid_ = kDefaultSnapToGrid;
@@ -15139,6 +15141,9 @@ inline bool DisplayWindow::saveToPath(const QString &filePath) const
 inline bool DisplayWindow::loadFromFile(const QString &filePath,
     QString *errorMessage, const QHash<QString, QString> &macros)
 {
+  const bool restartExecuteModeAfterLoad = executeModeActive_;
+  const bool preservePositionAfterLoad = preserveNextLoadPosition_;
+  const QPoint positionToRestore = preservedLoadPosition_;
   QTEDM_TIMING_MARK("loadFromFile: Opening file");
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -15201,6 +15206,14 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   QTEDM_TIMING_MARK_COUNT("loadFromFile: ADL nodes parsed", static_cast<int>(document->children.size()));
 
   QTEDM_TIMING_MARK("loadFromFile: Clearing existing elements");
+  if (restartExecuteModeAfterLoad) {
+    /* When replacing a display while executing, tear down all runtimes before
+     * deleting widgets. This avoids stale runtime hash keys (e.g. TextMonitor)
+     * pointing at widgets scheduled for deletion, which can crash later when
+     * enterExecuteMode() raises layered widgets. */
+    leaveExecuteMode();
+  }
+  destroyHiddenButtonMarkers();
   clearAllElements();
 
   /* Set restoringState_ to defer per-element stacking order updates during bulk load */
@@ -15278,6 +15291,24 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
     });
   }
   updateDirtyFromUndoStack();
+
+  /* If this display was already in execute mode (e.g. Related Display with
+   * Replace Display policy), start runtimes for the newly loaded elements. */
+  if (restartExecuteModeAfterLoad) {
+    enterExecuteMode();
+  }
+
+  /* For Related Display Replace, ignore ADL-provided x/y and keep the existing
+   * window's on-screen position (MEDM behavior). */
+  if (preservePositionAfterLoad) {
+    move(positionToRestore);
+    QPointer<DisplayWindow> self(this);
+    QTimer::singleShot(0, this, [self, positionToRestore]() {
+      if (DisplayWindow *window = self.data()) {
+        window->move(positionToRestore);
+      }
+    });
+  }
   QTEDM_TIMING_MARK("loadFromFile: Complete");
   /* Defer UI updates for large files to avoid blocking during initial load */
   if (totalElements < 1000) {
@@ -17482,7 +17513,7 @@ inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
     if (hasYProperty) {
       targetPos.setY(geometry.y());
     }
-    if (hasXProperty || hasYProperty) {
+    if ((hasXProperty || hasYProperty) && !preserveNextLoadPosition_) {
       // Preserve unspecified axes so partial geometry in the ADL stays intact.
       move(targetPos);
     }
@@ -20155,8 +20186,13 @@ inline void DisplayWindow::handleRelatedDisplayActivation(
       parseMacroDefinitionString(substitutedArgs);
 
   if (replace) {
+    const QPoint preservePos = pos();
+    preserveNextLoadPosition_ = true;
+    preservedLoadPosition_ = preservePos;
     QString errorMessage;
-    if (!loadFromFile(resolved, &errorMessage, macros)) {
+    const bool loaded = loadFromFile(resolved, &errorMessage, macros);
+    preserveNextLoadPosition_ = false;
+    if (!loaded) {
       const QString message = errorMessage.isEmpty()
           ? QStringLiteral("Failed to open display:\n%1").arg(resolved)
           : errorMessage;
@@ -20209,7 +20245,18 @@ inline void DisplayWindow::handleRelatedDisplayActivation(
     return;
   }
 
+  /* Match MEDM behavior: Related Display in "Add" mode opens at the same
+   * X/Y position as the window that launched it. We apply the move after the
+   * window is shown because some window managers ignore pre-show positioning
+   * and may place the new window on a different monitor. */
+  const QPoint launchPos = pos();
   registerDisplayWindow(newWindow, true);
+  QPointer<DisplayWindow> positioned(newWindow);
+  QTimer::singleShot(0, newWindow, [positioned, launchPos]() {
+    if (DisplayWindow *window = positioned.data()) {
+      window->move(launchPos);
+    }
+  });
 }
 
 inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin,

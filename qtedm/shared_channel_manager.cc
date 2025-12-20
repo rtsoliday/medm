@@ -17,6 +17,8 @@ namespace {
 /* Minimum interval between subscriber notifications per channel (100ms = 10Hz max).
  * This rate limits high-frequency PV updates to reduce CPU load. */
 constexpr qint64 kMinNotifyIntervalMs = 100;
+/* Idle time after the last connection change before reporting completion. */
+constexpr int kConnectionCompletionIdleMs = 100;
 } // namespace
 
 /* SubscriptionHandle implementation */
@@ -77,6 +79,10 @@ SharedChannelManager::SharedChannelManager()
 {
   /* Register types for queued connections from CA thread */
   qRegisterMetaType<QByteArray>("QByteArray");
+
+  connectionCompletionTimer_.setSingleShot(true);
+  connect(&connectionCompletionTimer_, &QTimer::timeout,
+      this, &SharedChannelManager::reportConnectionCompletion);
 }
 
 SharedChannelManager::~SharedChannelManager()
@@ -605,6 +611,8 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
     }
   }
 
+  scheduleConnectionCompletionReport();
+
   /* Notify all subscribers of connection state change */
   for (const auto &sub : channel->subscribers) {
     if (sub.connectionCallback) {
@@ -663,6 +671,10 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
       totalValuesReceived_ == connectedCount) {
     lastValueReported_ = true;
     QTEDM_TIMING_MARK_COUNT("All PVs have values, total", totalValuesReceived_);
+    QTEDM_TIMING_MARK_DETAIL("PV values: all complete",
+        QStringLiteral("values for %1 of %2 connected PVs")
+            .arg(totalValuesReceived_)
+            .arg(connectedCount));
     QTEDM_TIMING_MARK_DETAIL("Last PV value received", channel->key.pvName);
     StartupUiSettlingTracker::instance().markAllPvValuesReceived();
   }
@@ -1205,6 +1217,35 @@ double SharedChannelManager::elapsedSecondsSinceReset() const
     return 0.0;
   }
   return static_cast<double>(updateRateTimer_.elapsed()) / 1000.0;
+}
+
+void SharedChannelManager::scheduleConnectionCompletionReport()
+{
+  if (!StartupTiming::instance().isEnabled()) {
+    return;
+  }
+  connectionCompletionTimer_.start(kConnectionCompletionIdleMs);
+}
+
+void SharedChannelManager::reportConnectionCompletion()
+{
+  if (!StartupTiming::instance().isEnabled()) {
+    return;
+  }
+  int connectedCount = connectedChannelCount();
+  int expectedCount = expectedChannelCount_ > 0
+      ? expectedChannelCount_
+      : channels_.size();
+  if (connectedCount == lastConnectionCompletionCount_
+      && expectedCount == lastConnectionCompletionTotal_) {
+    return;
+  }
+  lastConnectionCompletionCount_ = connectedCount;
+  lastConnectionCompletionTotal_ = expectedCount;
+  QString detail = QStringLiteral("connected %1 of %2")
+      .arg(connectedCount)
+      .arg(expectedCount);
+  QTEDM_TIMING_MARK_DETAIL("PV connections: all finished", detail);
 }
 
 void SharedChannelManager::scheduleDeferredFlush()

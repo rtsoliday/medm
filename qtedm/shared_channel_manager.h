@@ -10,6 +10,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 #include <QVector>
 
 #include <cadef.h>
@@ -252,6 +253,8 @@ private:
   /* Deferred flush mechanism - batches CA operations to avoid blocking */
   void scheduleDeferredFlush();
   void performDeferredFlush();
+  void scheduleConnectionCompletionReport();
+  void reportConnectionCompletion();
 
 private Q_SLOTS:
   /* Thread-safe slots for processing CA callbacks from the CA thread.
@@ -293,5 +296,7 @@ private:
   bool value50Reported_ = false;
   bool value75Reported_ = false;
   bool value90Reported_ = false;
+  QTimer connectionCompletionTimer_;
+  int lastConnectionCompletionCount_ = -1;
+  int lastConnectionCompletionTotal_ = -1;
 };
-

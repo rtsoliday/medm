@@ -743,7 +743,7 @@ public:
         [this]() { commitTextVisibilityCalc(); });
 
     for (int i = 0; i < static_cast<int>(textChannelEdits_.size()); ++i) {
-      if (i == kTextPrimaryChannelIndex) {
+      if (i >= kTextVisibleChannelCount) {
         textChannelEdits_[i] = nullptr;
         continue;
       }
@@ -2695,10 +2695,6 @@ public:
       }
       QString value =
           textChannelGetters_[i] ? textChannelGetters_[i]() : QString();
-      if (i == kTextChannelAIndex && value.trimmed().isEmpty()
-          && textChannelGetters_[kTextPrimaryChannelIndex]) {
-        value = textChannelGetters_[kTextPrimaryChannelIndex]();
-      }
       const QSignalBlocker blocker(edit);
       edit->setText(value);
       committedTexts_[edit] = edit->text();
@@ -7229,11 +7225,11 @@ protected:
 
 private:
   static constexpr int kPaletteSpacing = 12;
-  static constexpr int kTextPrimaryChannelIndex = 0;
-  static constexpr int kTextChannelAIndex = 1;
-  static constexpr int kTextChannelBIndex = 2;
-  static constexpr int kTextChannelCIndex = 3;
-  static constexpr int kTextChannelDIndex = 4;
+  static constexpr int kTextVisibleChannelCount = 4;
+  static constexpr int kTextChannelAIndex = 0;
+  static constexpr int kTextChannelBIndex = 1;
+  static constexpr int kTextChannelCIndex = 2;
+  static constexpr int kTextChannelDIndex = 3;
   enum class SelectionKind {
     kNone,
     kDisplay,
@@ -7615,9 +7611,6 @@ private:
     const QString value = edit->text();
     textChannelSetters_[index](value);
     committedTexts_[edit] = value;
-    if (index == kTextChannelAIndex && textChannelSetters_[kTextPrimaryChannelIndex]) {
-      textChannelSetters_[kTextPrimaryChannelIndex](value);
-    }
     if (index == kTextChannelAIndex) {
       updateTextChannelDependentControls();
     }
@@ -7661,25 +7654,21 @@ private:
 
   void updateTextChannelDependentControls()
   {
-    bool hasPrimaryChannel = false;
-    if (textChannelGetters_[kTextPrimaryChannelIndex]) {
-      const QString value = textChannelGetters_[kTextPrimaryChannelIndex]();
-      hasPrimaryChannel = !value.trimmed().isEmpty();
+    bool hasChannelA = false;
+    if (textChannelGetters_[kTextChannelAIndex]) {
+      const QString value = textChannelGetters_[kTextChannelAIndex]();
+      hasChannelA = !value.trimmed().isEmpty();
     }
-    if (!hasPrimaryChannel) {
+    if (!hasChannelA) {
       QLineEdit *channelEdit = textChannelEdits_[kTextChannelAIndex];
       if (channelEdit) {
-        hasPrimaryChannel = !channelEdit->text().trimmed().isEmpty();
+        hasChannelA = !channelEdit->text().trimmed().isEmpty();
       }
     }
-    if (!hasPrimaryChannel && textChannelGetters_[kTextChannelAIndex]) {
-      const QString value = textChannelGetters_[kTextChannelAIndex]();
-      hasPrimaryChannel = !value.trimmed().isEmpty();
-    }
 
-    setFieldEnabled(textColorModeCombo_, hasPrimaryChannel);
-    setFieldEnabled(textVisibilityCombo_, hasPrimaryChannel);
-    setFieldEnabled(textVisibilityCalcEdit_, hasPrimaryChannel);
+    setFieldEnabled(textColorModeCombo_, hasChannelA);
+    setFieldEnabled(textVisibilityCombo_, hasChannelA);
+    setFieldEnabled(textVisibilityCalcEdit_, hasChannelA);
   }
 
   void updateRectangleChannelDependentControls()

@@ -15,8 +15,8 @@ class QTextStream;
 
 namespace AdlWriter {
 
-constexpr int kMedmVersionNumber = 40000;
-constexpr int kMedmPvaVersionNumber = 40001;
+constexpr int kMedmVersionNumber = 30122;
+constexpr int kMedmPvaVersionNumber = 40000;
 
 QString indentString(int level);
 void writeIndentedLine(QTextStream &stream, int level, const QString &text);

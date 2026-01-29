@@ -15747,9 +15747,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     }
   }
   fileName = QDir::cleanPath(fileName);
-    const int versionNumber = hasPvaChannels()
-      ? AdlWriter::kMedmPvaVersionNumber
-      : AdlWriter::kMedmVersionNumber;
+        const int versionNumber = hasPvaChannels()
+          ? AdlWriter::kMedmPvaVersionNumber
+          : AdlWriter::kMedmVersionNumber;
   AdlWriter::writeIndentedLine(stream, 0, QString());
   stream << "file {";
   AdlWriter::writeIndentedLine(stream, 1,

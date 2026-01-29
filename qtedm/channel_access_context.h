@@ -3,6 +3,8 @@
 #include <QHash>
 #include <QObject>
 
+#include "pv_protocol.h"
+
 class QSocketNotifier;
 class QTimer;
 
@@ -13,6 +15,8 @@ public:
 
   void ensureInitialized();
   bool isInitialized() const;
+  void ensureInitializedForProtocol(PvProtocol protocol);
+  bool isInitializedForProtocol(PvProtocol protocol) const;
 
 private:
   ChannelAccessContext();

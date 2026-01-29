@@ -15,6 +15,7 @@
 #include <QPolygonF>
 
 #include "medm_colors.h"
+#include "pv_name_utils.h"
 
 namespace {
 
@@ -242,10 +243,11 @@ QString ScaleMonitorElement::channel() const
 
 void ScaleMonitorElement::setChannel(const QString &channel)
 {
-  if (channel_ == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = channel;
+  channel_ = normalized;
   update();
 }
 

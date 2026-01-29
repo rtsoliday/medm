@@ -13,6 +13,7 @@
 
 #include "cartesian_plot_element.h"
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
 
 namespace {
@@ -166,11 +167,39 @@ void CartesianPlotRuntime::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available for Cartesian Plot";
-    return;
+  bool needsCa = false;
+  for (int i = 0; i < kCartesianPlotTraceCount && !needsCa; ++i) {
+    const QString xName = element_->traceXChannel(i).trimmed();
+    const QString yName = element_->traceYChannel(i).trimmed();
+    if (!xName.isEmpty() && parsePvName(xName).protocol == PvProtocol::kCa) {
+      needsCa = true;
+      break;
+    }
+    if (!yName.isEmpty() && parsePvName(yName).protocol == PvProtocol::kCa) {
+      needsCa = true;
+      break;
+    }
+  }
+  if (!needsCa) {
+    const QString triggerName = element_->triggerChannel().trimmed();
+    const QString eraseName = element_->eraseChannel().trimmed();
+    const QString countName = element_->countChannel().trimmed();
+    if (!triggerName.isEmpty() && parsePvName(triggerName).protocol == PvProtocol::kCa) {
+      needsCa = true;
+    } else if (!eraseName.isEmpty() && parsePvName(eraseName).protocol == PvProtocol::kCa) {
+      needsCa = true;
+    } else if (!countName.isEmpty() && parsePvName(countName).protocol == PvProtocol::kCa) {
+      needsCa = true;
+    }
+  }
+
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available for Cartesian Plot";
+      return;
+    }
   }
 
   eraseOldest_ = element_->eraseOldest();
@@ -237,7 +266,6 @@ void CartesianPlotRuntime::start()
         countContext_);
   }
 
-  ca_flush_io();
 }
 
 void CartesianPlotRuntime::stop()
@@ -255,7 +283,6 @@ void CartesianPlotRuntime::stop()
   unsubscribeChannel(eraseChannel_);
   unsubscribeChannel(countChannel_);
 
-  ca_flush_io();
 
   invokeOnElement([](CartesianPlotElement *element) {
     element->clearRuntimeState();
@@ -278,12 +305,10 @@ void CartesianPlotRuntime::resetState()
     trace.lastYScalar = 0.0;
     trace.x.connected = false;
     trace.y.connected = false;
-    trace.x.channelId = nullptr;
-    trace.x.subscriptionId = nullptr;
+    trace.x.subscription.reset();
     trace.x.fieldType = -1;
     trace.x.elementCount = 0;
-    trace.y.channelId = nullptr;
-    trace.y.subscriptionId = nullptr;
+    trace.y.subscription.reset();
     trace.y.fieldType = -1;
     trace.y.elementCount = 0;
   }
@@ -318,21 +343,12 @@ void CartesianPlotRuntime::logConfiguredAxisState()
 void CartesianPlotRuntime::createTraceChannel(int index, ChannelKind kind,
     ChannelState &state, ChannelContext &context)
 {
+  context.kind = kind;
+  context.traceIndex = index;
   if (!started_ || state.name.isEmpty()) {
     return;
   }
-
-  QByteArray bytes = state.name.toLatin1();
-  int status = ca_create_channel(bytes.constData(),
-      &CartesianPlotRuntime::channelConnectionCallback, &context,
-      CA_PRIORITY_DEFAULT, &state.channelId);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << state.name << ':' << ca_message(status);
-    state.channelId = nullptr;
-    return;
-  }
-  ca_set_puser(state.channelId, &context);
+  subscribeChannel(state, context);
 }
 
 void CartesianPlotRuntime::createAuxiliaryChannel(ChannelKind kind,
@@ -343,89 +359,41 @@ void CartesianPlotRuntime::createAuxiliaryChannel(ChannelKind kind,
   if (!started_ || state.name.isEmpty()) {
     return;
   }
-
-  QByteArray bytes = state.name.toLatin1();
-  int status = ca_create_channel(bytes.constData(),
-      &CartesianPlotRuntime::channelConnectionCallback, &context,
-      CA_PRIORITY_DEFAULT, &state.channelId);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << state.name << ':' << ca_message(status);
-    state.channelId = nullptr;
-    return;
-  }
-  ca_set_puser(state.channelId, &context);
+  subscribeChannel(state, context);
 }
 
 void CartesianPlotRuntime::subscribeChannel(ChannelState &state,
     ChannelContext &context)
 {
-  if (!state.channelId || state.subscriptionId) {
+  if (state.name.isEmpty()) {
     return;
   }
-  const long count = state.elementCount > 0 ? state.elementCount : 1;
-  int status = ca_create_subscription(DBR_TIME_DOUBLE, count,
-      state.channelId, DBE_VALUE | DBE_ALARM,
-      &CartesianPlotRuntime::valueEventCallback, &context,
-      &state.subscriptionId);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << state.name << ':'
-               << ca_message(status);
-    state.subscriptionId = nullptr;
-  }
+
+  state.subscription.reset();
+
+  auto &mgr = PvChannelManager::instance();
+  state.subscription = mgr.subscribe(
+      state.name,
+      DBR_TIME_DOUBLE,
+      0,
+      [this, context](const SharedChannelData &data) {
+        handleValue(context, data);
+      },
+      [this, context](bool connected, const SharedChannelData &data) {
+        handleConnection(context, connected, data);
+      });
 }
 
 void CartesianPlotRuntime::unsubscribeChannel(ChannelState &state)
 {
-  if (state.subscriptionId) {
-    ca_clear_subscription(state.subscriptionId);
-    state.subscriptionId = nullptr;
-  }
-  if (state.channelId) {
-    ca_clear_channel(state.channelId);
-    state.channelId = nullptr;
-  }
+  state.subscription.reset();
   state.connected = false;
   state.fieldType = -1;
   state.elementCount = 0;
 }
 
-void CartesianPlotRuntime::channelConnectionCallback(
-    struct connection_handler_args args)
-{
-  auto *context = static_cast<ChannelContext *>(ca_puser(args.chid));
-  if (!context || !context->runtime) {
-    return;
-  }
-  context->runtime->handleConnection(*context, args);
-}
-
-void CartesianPlotRuntime::valueEventCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *context = static_cast<ChannelContext *>(args.usr);
-  if (!context || !context->runtime) {
-    return;
-  }
-  context->runtime->handleValue(*context, args);
-}
-
-void CartesianPlotRuntime::controlInfoCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *context = static_cast<ChannelContext *>(args.usr);
-  if (!context || !context->runtime) {
-    return;
-  }
-  context->runtime->handleControlInfo(*context, args);
-}
-
 void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
-    const connection_handler_args &args)
+    bool connected, const SharedChannelData &data)
 {
   if (!started_) {
     return;
@@ -446,69 +414,45 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
     state = &countChannel_;
   }
 
-  if (!state || (!state->channelId) || state->channelId != args.chid) {
+  if (!state) {
     return;
   }
 
-  if (args.op == CA_OP_CONN_UP) {
+  if (connected) {
     state->connected = true;
-    state->fieldType = ca_field_type(args.chid);
-    state->elementCount = ca_element_count(args.chid);
+    state->fieldType = data.nativeFieldType;
+    state->elementCount = data.nativeElementCount;
 
-    if ((context.kind == ChannelKind::kTraceX
-            || context.kind == ChannelKind::kTraceY)
-        && !RuntimeUtils::isNumericFieldType(state->fieldType)) {
-      qWarning() << "Cartesian Plot channel" << state->name
-                 << "is not numeric";
+    if (context.kind == ChannelKind::kTrigger
+        || context.kind == ChannelKind::kErase
+        || context.kind == ChannelKind::kCount) {
       return;
     }
 
-    ChannelContext *subscriptionContext = nullptr;
-    if (context.kind == ChannelKind::kTraceX && context.traceIndex >= 0
-        && context.traceIndex < kCartesianPlotTraceCount) {
-      subscriptionContext = &xContexts_[context.traceIndex];
-    } else if (context.kind == ChannelKind::kTraceY && context.traceIndex >= 0
-        && context.traceIndex < kCartesianPlotTraceCount) {
-      subscriptionContext = &yContexts_[context.traceIndex];
-    } else {
-      subscriptionContext = const_cast<ChannelContext *>(&context);
-    }
-    subscribeChannel(*state, *subscriptionContext);
-
-    if (RuntimeUtils::isNumericFieldType(state->fieldType)) {
-      ChannelContext *controlContext = subscriptionContext;
-      int status = ca_array_get_callback(DBR_CTRL_DOUBLE, 1, state->channelId,
-          &CartesianPlotRuntime::controlInfoCallback, controlContext);
-      if (status != ECA_NORMAL) {
-        qWarning() << "Failed to request control info for" << state->name
-                   << ':' << ca_message(status);
-      }
-    }
-
     if (context.kind == ChannelKind::kTraceX
         || context.kind == ChannelKind::kTraceY) {
+      const bool traceConn = traceConnected(traces_[context.traceIndex]);
       updateTraceMode(context.traceIndex);
-      const bool connected = traceConnected(traces_[context.traceIndex]);
-      invokeOnElement([index = context.traceIndex, connected](CartesianPlotElement *element) {
-        element->setTraceRuntimeConnected(index, connected);
+      invokeOnElement([index = context.traceIndex, traceConn](CartesianPlotElement *element) {
+        element->setTraceRuntimeConnected(index, traceConn);
       });
+      handleTraceControlInfo(context.traceIndex,
+          context.kind == ChannelKind::kTraceX, data);
     }
-  } else if (args.op == CA_OP_CONN_DOWN) {
+  } else {
     state->connected = false;
-    state->fieldType = -1;
-    state->elementCount = 0;
     if (context.kind == ChannelKind::kTraceX
         || context.kind == ChannelKind::kTraceY) {
-      const bool connected = traceConnected(traces_[context.traceIndex]);
-      invokeOnElement([index = context.traceIndex, connected](CartesianPlotElement *element) {
-        element->setTraceRuntimeConnected(index, connected);
+      const bool traceConn = traceConnected(traces_[context.traceIndex]);
+      invokeOnElement([index = context.traceIndex, traceConn](CartesianPlotElement *element) {
+        element->setTraceRuntimeConnected(index, traceConn);
       });
     }
   }
 }
 
 void CartesianPlotRuntime::handleValue(const ChannelContext &context,
-    const event_handler_args &args)
+    const SharedChannelData &data)
 {
   if (!started_) {
     return;
@@ -517,62 +461,37 @@ void CartesianPlotRuntime::handleValue(const ChannelContext &context,
   switch (context.kind) {
   case ChannelKind::kTraceX:
     if (context.traceIndex >= 0 && context.traceIndex < kCartesianPlotTraceCount) {
-      handleTraceValue(context.traceIndex, true, args);
+      handleTraceValue(context.traceIndex, true, data);
     }
     break;
   case ChannelKind::kTraceY:
     if (context.traceIndex >= 0 && context.traceIndex < kCartesianPlotTraceCount) {
-      handleTraceValue(context.traceIndex, false, args);
+      handleTraceValue(context.traceIndex, false, data);
     }
     break;
   case ChannelKind::kTrigger:
-    handleTriggerValue(args);
+    handleTriggerValue(data);
     break;
   case ChannelKind::kErase:
-    handleEraseValue(args);
+    handleEraseValue(data);
     break;
   case ChannelKind::kCount:
-    handleCountValue(args);
+    handleCountValue(data);
     break;
-  }
-}
-
-void CartesianPlotRuntime::handleControlInfo(const ChannelContext &context,
-    const event_handler_args &args)
-{
-  if (!started_ || args.type != DBR_CTRL_DOUBLE || !args.dbr) {
-    return;
-  }
-
-  const auto *info = static_cast<const dbr_ctrl_double *>(args.dbr);
-  const double low = info->lower_disp_limit;
-  const double high = info->upper_disp_limit;
-  bool valid = std::isfinite(low) && std::isfinite(high) && high >= low;
-
-  if (context.kind == ChannelKind::kTraceX && context.traceIndex >= 0
-      && context.traceIndex < kCartesianPlotTraceCount) {
-    invokeOnElement([low, high, valid](CartesianPlotElement *element) {
-      element->setAxisRuntimeLimits(0, low, high, valid);
-      printRuntimeAxisInfo(element, 0, low, high, valid);
-    });
-  } else if (context.kind == ChannelKind::kTraceY && context.traceIndex >= 0
-      && context.traceIndex < kCartesianPlotTraceCount) {
-    const int axisIndex = traces_[context.traceIndex].yAxisIndex;
-    invokeOnElement([axisIndex, low, high, valid](CartesianPlotElement *element) {
-      element->setAxisRuntimeLimits(axisIndex, low, high, valid);
-      printRuntimeAxisInfo(element, axisIndex, low, high, valid);
-    });
   }
 }
 
 void CartesianPlotRuntime::handleTraceValue(int index, bool isX,
-    const event_handler_args &args)
+    const SharedChannelData &data)
 {
   if (index < 0 || index >= kCartesianPlotTraceCount) {
     return;
   }
+  if (data.hasControlInfo) {
+    handleTraceControlInfo(index, isX, data);
+  }
   TraceState &trace = traces_[index];
-  QVector<double> values = extractValues(args);
+  QVector<double> values = extractValues(data);
   if (values.isEmpty()) {
     return;
   }
@@ -601,9 +520,37 @@ void CartesianPlotRuntime::handleTraceValue(int index, bool isX,
   processTraceUpdate(index, false);
 }
 
-void CartesianPlotRuntime::handleTriggerValue(const event_handler_args &args)
+void CartesianPlotRuntime::handleTraceControlInfo(int index, bool isX,
+    const SharedChannelData &data)
 {
-  Q_UNUSED(args);
+  if (!started_ || index < 0 || index >= kCartesianPlotTraceCount) {
+    return;
+  }
+  if (!data.hasControlInfo) {
+    return;
+  }
+
+  const double low = data.lopr;
+  const double high = data.hopr;
+  bool valid = std::isfinite(low) && std::isfinite(high) && high >= low;
+
+  if (isX) {
+    invokeOnElement([low, high, valid](CartesianPlotElement *element) {
+      element->setAxisRuntimeLimits(0, low, high, valid);
+      printRuntimeAxisInfo(element, 0, low, high, valid);
+    });
+  } else {
+    const int axisIndex = traces_[index].yAxisIndex;
+    invokeOnElement([axisIndex, low, high, valid](CartesianPlotElement *element) {
+      element->setAxisRuntimeLimits(axisIndex, low, high, valid);
+      printRuntimeAxisInfo(element, axisIndex, low, high, valid);
+    });
+  }
+}
+
+void CartesianPlotRuntime::handleTriggerValue(const SharedChannelData &data)
+{
+  Q_UNUSED(data);
   if (!started_) {
     return;
   }
@@ -612,9 +559,9 @@ void CartesianPlotRuntime::handleTriggerValue(const event_handler_args &args)
   }
 }
 
-void CartesianPlotRuntime::handleEraseValue(const event_handler_args &args)
+void CartesianPlotRuntime::handleEraseValue(const SharedChannelData &data)
 {
-  QVector<double> values = extractValues(args);
+  QVector<double> values = extractValues(data);
   if (values.isEmpty()) {
     return;
   }
@@ -637,9 +584,9 @@ void CartesianPlotRuntime::handleEraseValue(const event_handler_args &args)
   }
 }
 
-void CartesianPlotRuntime::handleCountValue(const event_handler_args &args)
+void CartesianPlotRuntime::handleCountValue(const SharedChannelData &data)
 {
-  QVector<double> values = extractValues(args);
+  QVector<double> values = extractValues(data);
   if (values.isEmpty()) {
     return;
   }
@@ -1000,18 +947,15 @@ bool CartesianPlotRuntime::isTriggerEnabled() const
 }
 
 QVector<double> CartesianPlotRuntime::extractValues(
-    const event_handler_args &args)
+    const SharedChannelData &data)
 {
   QVector<double> values;
-  if (args.type != DBR_TIME_DOUBLE || !args.dbr) {
+  if (data.isArray && !data.arrayValues.isEmpty()) {
+    values = data.arrayValues;
     return values;
   }
-  const auto *timeValue = static_cast<const dbr_time_double *>(args.dbr);
-  const int count = static_cast<int>(args.count > 0 ? args.count : 1);
-  values.resize(count);
-  const double *data = reinterpret_cast<const double *>(&timeValue->value);
-  for (int i = 0; i < count; ++i) {
-    values[i] = data[i];
+  if (data.isNumeric) {
+    values.append(data.numericValue);
   }
   return values;
 }

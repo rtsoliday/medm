@@ -7,19 +7,19 @@
 #include <cadef.h>
 
 #include "display_properties.h"
-#include "shared_channel_manager.h"
+#include "pv_channel_manager.h"
 #include "startup_timing.h"
 
 class TextMonitorElement;
 
 class DisplayWindow;
 
-/* Runtime component for TextMonitorElement that handles EPICS Channel Access.
+/* Runtime component for TextMonitorElement that handles EPICS PVs.
  *
- * Now uses SharedChannelManager for connection sharing. Because text monitors
+ * Now uses PvChannelManager for connection sharing. Because text monitors
  * need specific DBR types (STRING, ENUM, CHAR, DOUBLE) depending on the
  * native field type, different monitors of the same PV may or may not share
- * a channel depending on field type. */
+ * a channel depending on field type and protocol. */
 class TextMonitorRuntime : public QObject
 {
   friend class DisplayWindow;

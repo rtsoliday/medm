@@ -82,8 +82,11 @@ struct SharedChannelData
   double hopr = 0.0;
   double lopr = 0.0;
   short precision = -1;
+  QString units;
   QStringList enumStrings;
   bool hasControlInfo = false;
+  bool hasUnits = false;
+  bool hasPrecision = false;
 
   /* Flags indicating what data is valid */
   bool hasValue = false;
@@ -92,6 +95,14 @@ struct SharedChannelData
   bool isEnum = false;
   bool isCharArray = false;
   bool isArray = false;
+};
+
+/* Protocol-agnostic interface for subscription ownership. */
+class SubscriptionOwner
+{
+public:
+  virtual ~SubscriptionOwner() = default;
+  virtual void unsubscribe(quint64 subscriptionId) = 0;
 };
 
 /* Handle returned when subscribing to a channel.
@@ -116,10 +127,12 @@ public:
 
 private:
   friend class SharedChannelManager;
-  explicit SubscriptionHandle(quint64 id, SharedChannelManager *manager);
+  friend class PvaChannelManager;
+  friend class SubscriptionOwner;
+  explicit SubscriptionHandle(quint64 id, SubscriptionOwner *owner);
 
   quint64 id_ = 0;
-  SharedChannelManager *manager_ = nullptr;
+  SubscriptionOwner *owner_ = nullptr;
 };
 
 /* Callback types for channel events.
@@ -143,7 +156,7 @@ using ChannelAccessRightsCallback = std::function<void(bool canRead, bool canWri
  *   // ... later ...
  *   handle.reset();  // or let handle go out of scope
  */
-class SharedChannelManager : public QObject
+class SharedChannelManager : public QObject, public SubscriptionOwner
 {
   Q_OBJECT
 
@@ -177,6 +190,7 @@ public:
   bool putValue(const QString &pvName, double value);
   bool putValue(const QString &pvName, const QString &value);
   bool putValue(const QString &pvName, dbr_enum_t value);
+  bool putCharArrayValue(const QString &pvName, const QByteArray &value);
   bool putArrayValue(const QString &pvName, const QVector<double> &values);
 
   /* Get current statistics */
@@ -200,7 +214,7 @@ private:
   SharedChannelManager();
   ~SharedChannelManager() override;
 
-  void unsubscribe(quint64 subscriptionId);
+  void unsubscribe(quint64 subscriptionId) override;
 
   /* Internal structures */
   struct Subscriber

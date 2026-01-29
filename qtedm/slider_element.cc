@@ -19,6 +19,7 @@
 #include <QStringList>
 
 #include "cursor_utils.h"
+#include "pv_name_utils.h"
 #include "text_font_utils.h"
 #include "window_utils.h"
 
@@ -382,10 +383,11 @@ QString SliderElement::channel() const
 
 void SliderElement::setChannel(const QString &channel)
 {
-  if (channel_ == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = channel;
+  channel_ = normalized;
   setToolTip(channel_);
   update();
 }

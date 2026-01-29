@@ -6,7 +6,7 @@
 #include <QObject>
 #include <QString>
 
-#include "shared_channel_manager.h"
+#include "pv_channel_manager.h"
 
 class CompositeElement;
 

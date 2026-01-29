@@ -20,6 +20,7 @@
 
 #include "legacy_fonts.h"
 #include "cursor_utils.h"
+#include "pv_name_utils.h"
 #include "window_utils.h"
 
 namespace {
@@ -413,10 +414,11 @@ QString ChoiceButtonElement::channel() const
 
 void ChoiceButtonElement::setChannel(const QString &channel)
 {
-  if (channel_ == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = channel;
+  channel_ = normalized;
   for (QAbstractButton *button : buttons_) {
     if (button) {
       button->setToolTip(channel_);

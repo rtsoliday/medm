@@ -14,6 +14,7 @@
 #include <QtGlobal>
 
 #include "medm_colors.h"
+#include "pv_name_utils.h"
 
 namespace {
 
@@ -142,10 +143,11 @@ QString ByteMonitorElement::channel() const
 
 void ByteMonitorElement::setChannel(const QString &channel)
 {
-  if (channel_ == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = channel;
+  channel_ = normalized;
   update();
 }
 

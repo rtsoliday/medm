@@ -11,16 +11,16 @@
 #include <cadef.h>
 
 #include "element_runtime_traits.h"
-#include "shared_channel_manager.h"
+#include "pv_channel_manager.h"
 #include "startup_timing.h"
 
 class DisplayWindow;
 
 /* Base class template for single-channel monitor runtimes (Meter, Bar, Scale).
  *
- * Now uses SharedChannelManager for connection sharing. These monitors
+ * Now uses PvChannelManager for connection sharing. These monitors
  * all use DBR_TIME_DOUBLE with element count 1, so monitors of the same
- * PV will share a single CA channel. */
+ * PV will share a single channel per protocol. */
 template <typename ElementType>
 class SingleChannelMonitorRuntimeBase : public QObject
 {

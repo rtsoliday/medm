@@ -8,6 +8,7 @@
 #include <QResizeEvent>
 
 #include "text_font_utils.h"
+#include "pv_name_utils.h"
 #include "update_coordinator.h"
 
 namespace {
@@ -263,10 +264,11 @@ void TextMonitorElement::setChannel(int index, const QString &value)
   if (index < 0 || index >= static_cast<int>(channels_.size())) {
     return;
   }
-  if (channels_[index] == value) {
+  const QString normalized = PvNameUtils::normalizePvName(value);
+  if (channels_[index] == normalized) {
     return;
   }
-  channels_[index] = value;
+  channels_[index] = normalized;
 }
 
 void TextMonitorElement::setExecuteMode(bool execute)

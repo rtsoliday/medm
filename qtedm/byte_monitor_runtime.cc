@@ -9,6 +9,7 @@
 
 #include "byte_monitor_element.h"
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "statistics_tracker.h"
 
@@ -43,11 +44,15 @@ void ByteMonitorRuntime::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  const QString initialChannel = element_->channel().trimmed();
+  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   resetRuntimeState();
@@ -59,21 +64,15 @@ void ByteMonitorRuntime::start()
     return;
   }
 
-  QByteArray channelBytes = channelName_.toLatin1();
-  int status = ca_create_channel(channelBytes.constData(),
-      &ByteMonitorRuntime::channelConnectionCallback, this,
-      CA_PRIORITY_DEFAULT, &channelId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << channelName_ << ':' << ca_message(status);
-    channelId_ = nullptr;
-    return;
-  }
-
-  StatisticsTracker::instance().registerChannelCreated();
-
-  ca_set_puser(channelId_, this);
-  ca_flush_io();
+  auto &mgr = PvChannelManager::instance();
+  subscription_ = mgr.subscribe(
+      channelName_,
+      DBR_TIME_LONG,
+      1,
+      [this](const SharedChannelData &data) { handleChannelData(data); },
+      [this](bool connected, const SharedChannelData &data) {
+        handleChannelConnection(connected, data);
+      });
 }
 
 void ByteMonitorRuntime::stop()
@@ -84,7 +83,7 @@ void ByteMonitorRuntime::stop()
 
   started_ = false;
   StatisticsTracker::instance().registerDisplayObjectStopped();
-  unsubscribe();
+  subscription_.reset();
   resetRuntimeState();
 }
 
@@ -104,62 +103,19 @@ void ByteMonitorRuntime::resetRuntimeState()
   });
 }
 
-void ByteMonitorRuntime::subscribe()
-{
-  if (subscriptionId_ || !channelId_) {
-    return;
-  }
-
-  int status = ca_create_subscription(DBR_TIME_LONG, 1, channelId_,
-      DBE_VALUE | DBE_ALARM,
-      &ByteMonitorRuntime::valueEventCallback, this, &subscriptionId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << channelName_ << ':'
-               << ca_message(status);
-    subscriptionId_ = nullptr;
-    return;
-  }
-
-  ca_flush_io();
-}
-
-void ByteMonitorRuntime::unsubscribe()
+void ByteMonitorRuntime::handleChannelConnection(bool connected,
+    const SharedChannelData &data)
 {
   auto &stats = StatisticsTracker::instance();
-  if (subscriptionId_) {
-    ca_clear_subscription(subscriptionId_);
-    subscriptionId_ = nullptr;
-  }
-  if (channelId_) {
-    if (connected_) {
-      stats.registerChannelDisconnected();
-      connected_ = false;
-    }
-    ca_clear_channel(channelId_);
-    stats.registerChannelDestroyed();
-    channelId_ = nullptr;
-  }
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
 
-void ByteMonitorRuntime::handleConnectionEvent(const connection_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
-    return;
-  }
-
-  auto &stats = StatisticsTracker::instance();
-
-  if (args.op == CA_OP_CONN_UP) {
+  if (connected) {
     const bool wasConnected = connected_;
     connected_ = true;
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
-    fieldType_ = ca_field_type(channelId_);
-    elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
+    fieldType_ = data.nativeFieldType;
+    elementCount_ = std::max<long>(data.nativeElementCount, 1);
     hasLastValue_ = false;
     lastValue_ = 0u;
     lastSeverity_ = kInvalidSeverity;
@@ -182,8 +138,7 @@ void ByteMonitorRuntime::handleConnectionEvent(const connection_handler_args &ar
       element->setRuntimeConnected(true);
       element->setRuntimeSeverity(0);
     });
-    subscribe();
-  } else if (args.op == CA_OP_CONN_DOWN) {
+  } else {
     const bool wasConnected = connected_;
     connected_ = false;
     if (wasConnected) {
@@ -197,18 +152,18 @@ void ByteMonitorRuntime::handleConnectionEvent(const connection_handler_args &ar
   }
 }
 
-void ByteMonitorRuntime::handleValueEvent(const event_handler_args &args)
+void ByteMonitorRuntime::handleChannelData(const SharedChannelData &data)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.type != DBR_TIME_LONG) {
+  if (!started_) {
     return;
   }
 
-  const auto *value = static_cast<const dbr_time_long *>(args.dbr);
-  const quint32 numericValue = static_cast<quint32>(value->value);
-  const short severity = value->severity;
+  if (!data.isNumeric) {
+    return;
+  }
+
+  const quint32 numericValue = static_cast<quint32>(data.numericValue);
+  const short severity = data.severity;
 
   {
     auto &stats = StatisticsTracker::instance();
@@ -233,24 +188,3 @@ void ByteMonitorRuntime::handleValueEvent(const event_handler_args &args)
   }
 }
 
-void ByteMonitorRuntime::channelConnectionCallback(struct connection_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<ByteMonitorRuntime *>(ca_puser(args.chid));
-  if (self) {
-    self->handleConnectionEvent(args);
-  }
-}
-
-void ByteMonitorRuntime::valueEventCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<ByteMonitorRuntime *>(args.usr);
-  if (self) {
-    self->handleValueEvent(args);
-  }
-}

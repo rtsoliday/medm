@@ -68,6 +68,21 @@ bool ChannelAccessContext::isInitialized() const
   return initialized_;
 }
 
+void ChannelAccessContext::ensureInitializedForProtocol(PvProtocol protocol)
+{
+  if (protocol == PvProtocol::kCa) {
+    ensureInitialized();
+  }
+}
+
+bool ChannelAccessContext::isInitializedForProtocol(PvProtocol protocol) const
+{
+  if (protocol == PvProtocol::kCa) {
+    return initialized_;
+  }
+  return true;
+}
+
 void ChannelAccessContext::initialize()
 {
   QTEDM_TIMING_MARK("Channel Access: Creating context with preemptive callbacks");

@@ -10,6 +10,7 @@
 #include <db_access.h>
 
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "slider_element.h"
 #include "statistics_tracker.h"
@@ -39,11 +40,15 @@ void SliderRuntime::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  const QString initialChannel = element_->channel().trimmed();
+  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   resetRuntimeState();
@@ -59,8 +64,8 @@ void SliderRuntime::start()
     return;
   }
 
-  /* Use SharedChannelManager for connection sharing */
-  auto &mgr = SharedChannelManager::instance();
+  /* Use PvChannelManager for connection sharing */
+  auto &mgr = PvChannelManager::instance();
   subscription_ = mgr.subscribe(
       channelName_,
       DBR_TIME_DOUBLE,
@@ -233,7 +238,7 @@ void SliderRuntime::handleActivation(double value)
   }
 
   /* Use SharedChannelManager for the put operation */
-  if (!SharedChannelManager::instance().putValue(channelName_, value)) {
+  if (!PvChannelManager::instance().putValue(channelName_, value)) {
     qWarning() << "Failed to write slider value" << value << "to"
                << channelName_;
   }

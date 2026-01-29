@@ -58,8 +58,10 @@
 #include "startup_timing.h"
 #include "display_list_dialog.h"
 #include "find_pv_dialog.h"
+#include "pv_protocol.h"
 #include "pv_info_dialog.h"
 #include "pv_limits_dialog.h"
+#include "pva_channel_manager.h"
 #include "strip_chart_data_dialog.h"
 #include "cursor_utils.h"
 
@@ -3187,9 +3189,11 @@ private:
     double lopr = 0.0;
     bool hasLimits = false;
     int precision = -1;
-   bool hasPrecision = false;
-   QStringList states;
-   bool hasStates = false;
+    bool hasPrecision = false;
+    QString units;
+    bool hasUnits = false;
+    QStringList states;
+    bool hasStates = false;
     QString error;
   };
   bool executeContextMenuInitialized_ = false;
@@ -8154,6 +8158,20 @@ public:
     return widgets;
   }
 
+  bool hasPvaChannels() const
+  {
+    const QList<QWidget *> widgets = findPvWidgets();
+    for (QWidget *widget : widgets) {
+      const QStringList channels = channelsForWidget(widget);
+      for (const QString &channel : channels) {
+        if (parsePvName(channel).protocol == PvProtocol::kPva) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /* Select a single widget and scroll to make it visible */
   void selectAndScrollToWidget(QWidget *widget)
   {
@@ -8947,6 +8965,11 @@ private:
                         : QStringLiteral("Unknown"))
            << '\n';
     stream << "COUNT: " << details.elementCount << '\n';
+        stream << "UNITS: "
+          << (details.hasUnits
+             ? details.units
+             : QStringLiteral("Not Available"))
+          << '\n';
     stream << "ACCESS: " << access << '\n';
     stream << "HOST: "
            << (details.host.isEmpty() ? QStringLiteral("Unknown")
@@ -9108,6 +9131,39 @@ private:
     details = PvInfoChannelDetails{};
     details.name = channelName;
 
+    ParsedPvName parsed = parsePvName(channelName);
+    if (parsed.protocol == PvProtocol::kPva) {
+      PvaChannelManager::PvaInfoSnapshot snapshot;
+      if (!PvaChannelManager::instance().getInfoSnapshot(channelName, snapshot)) {
+        details.error = QStringLiteral("Unable to create PVA channel.");
+        return false;
+      }
+
+      details.fieldType = snapshot.fieldType;
+      details.elementCount = snapshot.elementCount;
+      details.readAccess = snapshot.canRead;
+      details.writeAccess = snapshot.canWrite;
+      details.host = snapshot.host;
+      details.value = snapshot.value;
+      details.hasValue = snapshot.hasValue;
+      details.severity = snapshot.severity;
+      details.hopr = snapshot.hopr;
+      details.lopr = snapshot.lopr;
+      details.hasLimits = snapshot.hasLimits;
+      details.precision = snapshot.precision;
+      details.hasPrecision = snapshot.hasPrecision;
+      details.units = snapshot.units;
+      details.hasUnits = snapshot.hasUnits;
+      details.states = snapshot.states;
+      details.hasStates = snapshot.hasStates;
+      if (!snapshot.connected) {
+        details.error = QStringLiteral("PVA channel is not connected.");
+        return false;
+      }
+      details.error.clear();
+      return true;
+    }
+
     const QString trimmed = channelName.trimmed();
     if (trimmed.isEmpty()) {
       details.error = QStringLiteral("Channel name is empty.");
@@ -9216,6 +9272,8 @@ private:
           details.hasLimits = true;
           details.precision = ctrl.precision;
           details.hasPrecision = (ctrl.precision >= 0);
+          details.units = QString::fromLatin1(ctrl.units);
+          details.hasUnits = !details.units.trimmed().isEmpty();
         }
       }
       break;
@@ -14071,6 +14129,11 @@ private:
   void showDisplayListDialog() const
   {
     if (auto state = state_.lock()) {
+      if (!state->displayListDialog) {
+        state->displayListDialog = new DisplayListDialog(
+            palette(), labelFont_, std::weak_ptr<DisplayState>(state),
+            const_cast<DisplayWindow *>(this));
+      }
       if (auto *dialog = state->displayListDialog.data()) {
         dialog->showAndRaise();
       }
@@ -15160,7 +15223,7 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
   QTEDM_TIMING_MARK_COUNT("loadFromFile: File size (chars)", contents.size());
 
   /* Detect file version */
-  int fileVersion = 30122; /* Default to current version */
+  int fileVersion = 40000; /* Default to current version */
   bool versionFound = false;
   QRegularExpression versionPattern(QStringLiteral(R"(version\s*=\s*(\d+))"));
   QRegularExpressionMatch versionMatch = versionPattern.match(contents);
@@ -15684,6 +15747,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     }
   }
   fileName = QDir::cleanPath(fileName);
+    const int versionNumber = hasPvaChannels()
+      ? AdlWriter::kMedmPvaVersionNumber
+      : AdlWriter::kMedmVersionNumber;
   AdlWriter::writeIndentedLine(stream, 0, QString());
   stream << "file {";
   AdlWriter::writeIndentedLine(stream, 1,
@@ -15691,7 +15757,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
   AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("version=%1")
           .arg(QStringLiteral("%1")
-                   .arg(AdlWriter::kMedmVersionNumber, 6, 10, QLatin1Char('0'))));
+             .arg(versionNumber, 6, 10, QLatin1Char('0'))));
   AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
 
   const int displayWidth = displayArea_ ? displayArea_->width() : width();
@@ -22772,7 +22838,7 @@ inline CompositeElement *DisplayWindow::loadCompositeElement(
         const QString contents = stream.readAll();
 
         /* Detect file version */
-        int fileVersion = 30122;
+        int fileVersion = 40000;
         bool versionFound = false;
         QRegularExpression versionPattern(QStringLiteral(R"(version\s*=\s*(\d+))"));
         QRegularExpressionMatch versionMatch = versionPattern.match(contents);

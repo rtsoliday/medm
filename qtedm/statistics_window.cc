@@ -18,7 +18,7 @@
 
 #include <algorithm>
 
-#include "shared_channel_manager.h"
+#include "pv_channel_manager.h"
 
 namespace {
 constexpr int kUpdateIntervalMs = 5000;
@@ -200,7 +200,7 @@ void StatisticsWindow::hideEvent(QHideEvent *event)
 void StatisticsWindow::restartTracking()
 {
   StatisticsTracker::instance().reset();
-  SharedChannelManager::instance().resetUpdateCounters();
+  PvChannelManager::instance().resetUpdateCounters();
   totalElapsedSeconds_ = 0.0;
   totalCaEvents_ = 0.0;
   totalUpdateRequested_ = 0.0;
@@ -260,7 +260,7 @@ void StatisticsWindow::updatePvDetailsDisplay()
   }
 
   QList<ChannelSummary> summaries =
-      SharedChannelManager::instance().channelSummaries();
+      PvChannelManager::instance().channelSummaries();
 
   /* Limit number of rows to prevent UI issues */
   const int rowCount = std::min(static_cast<int>(summaries.size()), kMaxPvTableRows);
@@ -375,7 +375,7 @@ void StatisticsWindow::toggleMode()
     mode_ = StatisticsMode::kPvDetails;
     label_->setVisible(false);
     scrollArea_->setVisible(true);
-    SharedChannelManager::instance().resetUpdateCounters();
+    PvChannelManager::instance().resetUpdateCounters();
     updatePvDetailsDisplay();
     break;
   case StatisticsMode::kPvDetails:

@@ -8,7 +8,7 @@
 
 #include <utility>
 
-#include <cadef.h>
+#include "pv_channel_manager.h"
 
 class ByteMonitorElement;
 
@@ -26,21 +26,15 @@ public:
 
 private:
   void resetRuntimeState();
-  void subscribe();
-  void unsubscribe();
-  void handleConnectionEvent(const connection_handler_args &args);
-  void handleValueEvent(const event_handler_args &args);
+  void handleChannelConnection(bool connected, const SharedChannelData &data);
+  void handleChannelData(const SharedChannelData &data);
 
   template <typename Func>
   void invokeOnElement(Func &&func);
 
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-
   QPointer<ByteMonitorElement> element_;
   QString channelName_;
-  chid channelId_ = nullptr;
-  evid subscriptionId_ = nullptr;
+  SubscriptionHandle subscription_;
   bool started_ = false;
   bool connected_ = false;
   short fieldType_ = -1;

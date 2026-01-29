@@ -8,13 +8,12 @@
 
 #include <array>
 
-#include <cadef.h>
-
 #ifndef MEDM_CARTESIAN_PLOT_DEBUG
 #  define MEDM_CARTESIAN_PLOT_DEBUG 0
 #endif
 
 #include "display_properties.h"
+#include "pv_channel_manager.h"
 
 class CartesianPlotElement;
 
@@ -43,8 +42,7 @@ private:
   struct ChannelState
   {
     QString name;
-    chid channelId = nullptr;
-    evid subscriptionId = nullptr;
+    SubscriptionHandle subscription;
     bool connected = false;
     short fieldType = -1;
     long elementCount = 0;
@@ -81,24 +79,20 @@ private:
       ChannelState &state, ChannelContext &context);
   void createAuxiliaryChannel(ChannelKind kind, ChannelState &state,
       ChannelContext &context);
-  void subscribeChannel(ChannelState &state, ChannelContext &context);
-  void unsubscribeChannel(ChannelState &state);
-  void handleConnection(const ChannelContext &context,
-      const connection_handler_args &args);
-  void handleValue(const ChannelContext &context,
-      const event_handler_args &args);
-  void handleControlInfo(const ChannelContext &context,
-      const event_handler_args &args);
+    void subscribeChannel(ChannelState &state, ChannelContext &context);
+    void unsubscribeChannel(ChannelState &state);
+    void handleConnection(const ChannelContext &context, bool connected,
+      const SharedChannelData &data);
+    void handleValue(const ChannelContext &context,
+      const SharedChannelData &data);
 
-  void handleTraceConnection(int index, bool isX,
-      const connection_handler_args &args);
-  void handleTraceValue(int index, bool isX,
-      const event_handler_args &args);
-  void handleTraceControlInfo(int index, bool isX,
-      const event_handler_args &args);
-  void handleTriggerValue(const event_handler_args &args);
-  void handleEraseValue(const event_handler_args &args);
-  void handleCountValue(const event_handler_args &args);
+    void handleTraceValue(int index, bool isX,
+      const SharedChannelData &data);
+    void handleTraceControlInfo(int index, bool isX,
+      const SharedChannelData &data);
+    void handleTriggerValue(const SharedChannelData &data);
+    void handleEraseValue(const SharedChannelData &data);
+    void handleCountValue(const SharedChannelData &data);
 
   void updateTraceMode(int index);
   void updateXAxisRangeForYOnlyTraces();
@@ -127,11 +121,7 @@ private:
 
   void logConfiguredAxisState();
 
-  static QVector<double> extractValues(const event_handler_args &args);
-
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-  static void controlInfoCallback(struct event_handler_args args);
+  static QVector<double> extractValues(const SharedChannelData &data);
 
   QPointer<CartesianPlotElement> element_;
   std::array<TraceState, kCartesianPlotTraceCount> traces_{};

@@ -21,6 +21,7 @@
 #include "cursor_utils.h"
 #include "legacy_fonts.h"
 #include "medm_colors.h"
+#include "pv_name_utils.h"
 #include "window_utils.h"
 
 namespace {
@@ -270,10 +271,11 @@ QString MessageButtonElement::channel() const
 
 void MessageButtonElement::setChannel(const QString &channel)
 {
-  if (channel_ == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = channel;
+  channel_ = normalized;
   if (button_) {
     button_->setToolTip(channel_);
   }

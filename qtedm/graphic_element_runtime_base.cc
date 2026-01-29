@@ -11,7 +11,7 @@
 #include "channel_access_context.h"
 #include "image_element.h"
 #include "runtime_utils.h"
-#include "shared_channel_manager.h"
+#include "pv_channel_manager.h"
 
 /* External C functions for MEDM calc expression evaluation */
 extern "C" {
@@ -58,11 +58,24 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  bool needsCa = false;
+  for (int i = 0; i < static_cast<int>(channels_.size()); ++i) {
+    const QString channelName = element_->channel(i).trimmed();
+    if (channelName.isEmpty()) {
+      continue;
+    }
+    if (parsePvName(channelName).protocol == PvProtocol::kCa) {
+      needsCa = true;
+      break;
+    }
+  }
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   resetState();
@@ -173,7 +186,7 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::initializeChannels()
     return;
   }
 
-  auto &mgr = SharedChannelManager::instance();
+  auto &mgr = PvChannelManager::instance();
 
   for (auto &channel : channels_) {
     channel.name = element_->channel(channel.index).trimmed();

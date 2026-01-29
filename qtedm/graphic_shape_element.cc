@@ -8,6 +8,7 @@
 #include <QPen>
 
 #include "medm_colors.h"
+#include "pv_name_utils.h"
 #include "update_coordinator.h"
 
 GraphicShapeElement::GraphicShapeElement(QWidget *parent)
@@ -91,10 +92,11 @@ void GraphicShapeElement::setChannel(int index, const QString &value)
   if (index < 0 || index >= static_cast<int>(channels_.size())) {
     return;
   }
-  if (channels_[index] == value) {
+  const QString normalized = PvNameUtils::normalizePvName(value);
+  if (channels_[index] == normalized) {
     return;
   }
-  channels_[index] = value;
+  channels_[index] = normalized;
 }
 
 void GraphicShapeElement::setExecuteMode(bool execute)

@@ -12,6 +12,7 @@
 
 #include "audit_logger.h"
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "statistics_tracker.h"
 #include "text_entry_element.h"
@@ -49,11 +50,15 @@ void TextEntryRuntime::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  const QString initialChannel = element_->channel().trimmed();
+  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   resetRuntimeState();
@@ -69,24 +74,19 @@ void TextEntryRuntime::start()
     return;
   }
 
-  QByteArray channelBytes = channelName_.toLatin1();
-  int status = ca_create_channel(channelBytes.constData(),
-      &TextEntryRuntime::channelConnectionCallback, this,
-      CA_PRIORITY_DEFAULT, &channelId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << channelName_ << ':' << ca_message(status);
-    channelId_ = nullptr;
-    return;
-  }
+  requestedType_ = DBR_TIME_DOUBLE;
+  requestedCount_ = 0;
 
-  StatisticsTracker::instance().registerChannelCreated();
-
-  ca_set_puser(channelId_, this);
-  ca_replace_access_rights_event(channelId_,
-      &TextEntryRuntime::accessRightsCallback);
-
-  ca_flush_io();
+  auto &mgr = PvChannelManager::instance();
+  subscription_ = mgr.subscribe(
+      channelName_,
+      requestedType_,
+      requestedCount_,
+      [this](const SharedChannelData &data) { handleChannelData(data); },
+      [this](bool connected, const SharedChannelData &data) {
+        handleChannelConnection(connected, data);
+      },
+      [this](bool canRead, bool canWrite) { handleAccessRights(canRead, canWrite); });
 }
 
 void TextEntryRuntime::stop()
@@ -97,7 +97,7 @@ void TextEntryRuntime::stop()
 
   started_ = false;
   StatisticsTracker::instance().registerDisplayObjectStopped();
-  unsubscribe();
+  subscription_.reset();
   if (element_) {
     element_->setActivationCallback(std::function<void(const QString &)>());
   }
@@ -129,127 +129,107 @@ void TextEntryRuntime::resetRuntimeState()
   });
 }
 
-void TextEntryRuntime::subscribe()
+void TextEntryRuntime::resubscribe(int requestedType, long elementCount)
 {
-  if (subscriptionId_ || !channelId_) {
+  if (!started_) {
     return;
   }
 
-  chtype subscriptionType = DBR_TIME_DOUBLE;
-  elementCount_ = std::max<long>(elementCount_, 1);
+  requestedType_ = requestedType;
+  requestedCount_ = elementCount;
+  subscription_.reset();
 
-  switch (fieldType_) {
-  case DBR_STRING:
-    valueKind_ = ValueKind::kString;
-    subscriptionType = DBR_TIME_STRING;
-    elementCount_ = 1;
-    break;
-  case DBR_ENUM:
-    valueKind_ = ValueKind::kEnum;
-    subscriptionType = DBR_TIME_ENUM;
-    elementCount_ = 1;
-    break;
-  case DBR_CHAR:
-    if (elementCount_ > 1) {
-      valueKind_ = ValueKind::kCharArray;
-    } else {
-      valueKind_ = ValueKind::kNumeric;
-    }
-    subscriptionType = DBR_TIME_CHAR;
-    break;
-  default:
-    valueKind_ = ValueKind::kNumeric;
-    subscriptionType = DBR_TIME_DOUBLE;
-    break;
-  }
-
-  int status = ca_create_subscription(subscriptionType, elementCount_,
-      channelId_, DBE_VALUE | DBE_ALARM,
-      &TextEntryRuntime::valueEventCallback, this, &subscriptionId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << channelName_ << ":"
-               << ca_message(status);
-    subscriptionId_ = nullptr;
-    return;
-  }
-  ca_flush_io();
+  auto &mgr = PvChannelManager::instance();
+  subscription_ = mgr.subscribe(
+      channelName_,
+      requestedType_,
+      requestedCount_,
+      [this](const SharedChannelData &data) { handleChannelData(data); },
+      [this](bool connected, const SharedChannelData &data) {
+        handleChannelConnection(connected, data);
+      },
+      [this](bool canRead, bool canWrite) { handleAccessRights(canRead, canWrite); });
 }
 
-void TextEntryRuntime::unsubscribe()
+void TextEntryRuntime::handleChannelConnection(bool connected,
+    const SharedChannelData &data)
 {
-  if (subscriptionId_) {
-    ca_clear_subscription(subscriptionId_);
-    subscriptionId_ = nullptr;
-  }
-  if (channelId_) {
-    ca_clear_channel(channelId_);
-    channelId_ = nullptr;
-  }
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
-
-void TextEntryRuntime::requestControlInfo()
-{
-  if (!channelId_) {
-    return;
-  }
-
-  chtype controlType = 0;
-  switch (fieldType_) {
-  case DBR_ENUM:
-    controlType = DBR_CTRL_ENUM;
-    break;
-  case DBR_CHAR:
-  case DBR_SHORT:
-  case DBR_LONG:
-  case DBR_FLOAT:
-  case DBR_DOUBLE:
-    controlType = DBR_CTRL_DOUBLE;
-    break;
-  default:
-    break;
-  }
-
-  if (!controlType) {
-    return;
-  }
-
-  int status = ca_array_get_callback(controlType, 1, channelId_,
-      &TextEntryRuntime::controlInfoCallback, this);
-  if (status == ECA_NORMAL) {
-    ca_flush_io();
-  }
-}
-
-void TextEntryRuntime::handleConnectionEvent(
-    const connection_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
+  if (!started_) {
     return;
   }
 
   auto &stats = StatisticsTracker::instance();
 
-  if (args.op == CA_OP_CONN_UP) {
+  if (connected) {
     const bool wasConnected = connected_;
     connected_ = true;
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
-    fieldType_ = ca_field_type(channelId_);
-    elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
+
+    fieldType_ = data.nativeFieldType;
+    elementCount_ = std::max<long>(data.nativeElementCount, 1);
+
+    int desiredType = DBR_TIME_DOUBLE;
+    long desiredCount = 1;
+    switch (fieldType_) {
+    case DBR_STRING:
+      valueKind_ = ValueKind::kString;
+      desiredType = DBR_TIME_STRING;
+      desiredCount = 1;
+      break;
+    case DBR_ENUM:
+      valueKind_ = ValueKind::kEnum;
+      desiredType = DBR_TIME_ENUM;
+      desiredCount = 1;
+      break;
+    case DBR_CHAR:
+      if (elementCount_ > 1) {
+        valueKind_ = ValueKind::kCharArray;
+      } else {
+        valueKind_ = ValueKind::kNumeric;
+      }
+      desiredType = DBR_TIME_CHAR;
+      desiredCount = elementCount_;
+      break;
+    default:
+      valueKind_ = ValueKind::kNumeric;
+      desiredType = DBR_TIME_DOUBLE;
+      desiredCount = 1;
+      break;
+    }
+
     if (valueKind_ == ValueKind::kNumeric && !isNumericFieldType(fieldType_)) {
       valueKind_ = ValueKind::kString;
     }
-    updateWriteAccess();
-    subscribe();
-    requestControlInfo();
+
+    if (desiredType != requestedType_ || desiredCount != requestedCount_) {
+      resubscribe(desiredType, desiredCount);
+      return;
+    }
+
+    enumStrings_ = data.enumStrings;
+    if (data.hasPrecision) {
+      channelPrecision_ = data.precision;
+    }
+    if (data.hasControlInfo) {
+      controlLow_ = data.lopr;
+      controlHigh_ = data.hopr;
+      hasControlLimits_ = std::isfinite(controlLow_)
+          && std::isfinite(controlHigh_);
+      const double low = controlLow_;
+      const double high = controlHigh_;
+      const int precision = data.precision;
+      invokeOnElement([low, high, precision](TextEntryElement *element) {
+        element->setRuntimeLimits(low, high);
+        element->setRuntimePrecision(precision);
+      });
+    }
+
     invokeOnElement([](TextEntryElement *element) {
       element->setRuntimeConnected(true);
     });
-  } else if (args.op == CA_OP_CONN_DOWN) {
+  } else {
     const bool wasConnected = connected_;
     connected_ = false;
     if (wasConnected) {
@@ -267,54 +247,57 @@ void TextEntryRuntime::handleConnectionEvent(
   }
 }
 
-void TextEntryRuntime::handleValueEvent(const event_handler_args &args)
+void TextEntryRuntime::handleChannelData(const SharedChannelData &data)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.status != ECA_NORMAL) {
+  if (!started_) {
     return;
   }
 
-  switch (args.type) {
-  case DBR_TIME_STRING: {
-    const auto *data = static_cast<const dbr_time_string *>(args.dbr);
-    lastStringValue_ = QString::fromLatin1(data->value);
+  if (data.isString) {
+    lastStringValue_ = data.stringValue;
     hasStringValue_ = true;
     hasNumericValue_ = false;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  case DBR_TIME_ENUM: {
-    const auto *data = static_cast<const dbr_time_enum *>(args.dbr);
-    lastEnumValue_ = data->value;
-    lastNumericValue_ = static_cast<double>(data->value);
+    lastSeverity_ = data.severity;
+  } else if (data.isEnum) {
+    lastEnumValue_ = static_cast<short>(data.enumValue);
+    lastNumericValue_ = data.numericValue;
     hasNumericValue_ = true;
     hasStringValue_ = false;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  case DBR_TIME_DOUBLE: {
-    const auto *data = static_cast<const dbr_time_double *>(args.dbr);
-    lastNumericValue_ = data->value;
-    hasNumericValue_ = true;
-    hasStringValue_ = false;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  case DBR_TIME_CHAR: {
-    const auto *data = static_cast<const dbr_time_char *>(args.dbr);
-    const auto *raw = reinterpret_cast<const char *>(&data->value);
-    QByteArray bytes(raw, static_cast<int>(args.count));
-    lastStringValue_ = formatCharArray(bytes);
+    lastSeverity_ = data.severity;
+  } else if (data.isCharArray) {
+    lastStringValue_ = formatCharArray(data.charArrayValue);
     hasStringValue_ = !lastStringValue_.isEmpty();
-    lastNumericValue_ = static_cast<double>(data->value);
+    if (data.isNumeric) {
+      lastNumericValue_ = data.numericValue;
+      hasNumericValue_ = true;
+    }
+    lastSeverity_ = data.severity;
+  } else if (data.isNumeric) {
+    lastNumericValue_ = data.numericValue;
     hasNumericValue_ = true;
-    lastSeverity_ = data->severity;
-    break;
-  }
-  default:
+    hasStringValue_ = false;
+    lastSeverity_ = data.severity;
+  } else {
     return;
+  }
+
+  if (!data.enumStrings.isEmpty() && enumStrings_ != data.enumStrings) {
+    enumStrings_ = data.enumStrings;
+  }
+
+  if (data.hasControlInfo) {
+    channelPrecision_ = data.precision;
+    controlLow_ = data.lopr;
+    controlHigh_ = data.hopr;
+    hasControlLimits_ = std::isfinite(controlLow_)
+        && std::isfinite(controlHigh_);
+    const double low = controlLow_;
+    const double high = controlHigh_;
+    const int precision = data.precision;
+    invokeOnElement([low, high, precision](TextEntryElement *element) {
+      element->setRuntimeLimits(low, high);
+      element->setRuntimePrecision(precision);
+    });
   }
 
   auto &stats = StatisticsTracker::instance();
@@ -332,69 +315,27 @@ void TextEntryRuntime::handleValueEvent(const event_handler_args &args)
   updateElementDisplay();
 }
 
-void TextEntryRuntime::handleControlInfo(const event_handler_args &args)
+void TextEntryRuntime::handleAccessRights(bool /*canRead*/, bool canWrite)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
+  if (!started_) {
     return;
   }
-  if (args.status != ECA_NORMAL) {
+  if (canWrite == lastWriteAccess_) {
     return;
   }
-
-  switch (args.type) {
-  case DBR_CTRL_ENUM: {
-    const auto *ctrl = static_cast<const dbr_ctrl_enum *>(args.dbr);
-    enumStrings_.clear();
-    const int count = ctrl->no_str;
-    for (int i = 0; i < count; ++i) {
-      const char *state = ctrl->strs[i];
-      if (state && std::strlen(state) > 0) {
-        enumStrings_.append(QString::fromLatin1(state));
-      } else {
-        enumStrings_.append(QString());
-      }
-    }
-    break;
-  }
-  case DBR_CTRL_DOUBLE: {
-    const auto *ctrl = static_cast<const dbr_ctrl_double *>(args.dbr);
-    channelPrecision_ = ctrl->precision;
-    controlLow_ = ctrl->lower_disp_limit;
-    controlHigh_ = ctrl->upper_disp_limit;
-    hasControlLimits_ = std::isfinite(controlLow_)
-        && std::isfinite(controlHigh_);
-    double low = ctrl->lower_disp_limit;
-    double high = ctrl->upper_disp_limit;
-    int precision = ctrl->precision;
-    invokeOnElement([low, high, precision](TextEntryElement *element) {
-      element->setRuntimeLimits(low, high);
-      element->setRuntimePrecision(precision);
-    });
-    updateElementDisplay();
-    break;
-  }
-  default:
-    break;
-  }
-}
-
-void TextEntryRuntime::handleAccessRightsEvent(
-    const access_rights_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
-    return;
-  }
-  updateWriteAccess();
+  lastWriteAccess_ = canWrite;
+  invokeOnElement([canWrite](TextEntryElement *element) {
+    element->setRuntimeWriteAccess(canWrite);
+  });
 }
 
 void TextEntryRuntime::handleActivation(const QString &text)
 {
-  if (!started_ || !channelId_ || !connected_ || !lastWriteAccess_) {
+  if (!started_ || !connected_ || !lastWriteAccess_) {
     return;
   }
 
   QString trimmed = text.trimmed();
-  int status = ECA_NORMAL;
 
   switch (valueKind_) {
   case ValueKind::kString: {
@@ -402,12 +343,13 @@ void TextEntryRuntime::handleActivation(const QString &text)
     if (bytes.size() >= MAX_STRING_SIZE) {
       bytes.truncate(MAX_STRING_SIZE - 1);
     }
-    bytes.append('\0');
-    status = ca_put(DBR_STRING, channelId_, bytes.constData());
-    if (status == ECA_NORMAL) {
-      AuditLogger::instance().logPut(channelName_, trimmed,
-          QStringLiteral("TextEntry"));
+    if (!PvChannelManager::instance().putValue(channelName_, trimmed)) {
+      qWarning() << "Failed to write Text Entry value" << trimmed << "to"
+                 << channelName_;
+      return;
     }
+    AuditLogger::instance().logPut(channelName_, trimmed,
+        QStringLiteral("TextEntry"));
     break;
   }
   case ValueKind::kCharArray: {
@@ -418,12 +360,13 @@ void TextEntryRuntime::handleActivation(const QString &text)
                    << "value" << trimmed;
         return;
       }
-      status = ca_array_put(DBR_CHAR, bytes.size(), channelId_,
-          bytes.constData());
-      if (status == ECA_NORMAL) {
-        AuditLogger::instance().logPut(channelName_, trimmed,
-            QStringLiteral("TextEntry"));
+      if (!PvChannelManager::instance().putCharArrayValue(channelName_, bytes)) {
+        qWarning() << "Failed to write Text Entry value" << trimmed << "to"
+                   << channelName_;
+        return;
       }
+      AuditLogger::instance().logPut(channelName_, trimmed,
+          QStringLiteral("TextEntry"));
     } else {
       double numeric = 0.0;
       if (!parseNumericInput(trimmed, numeric)) {
@@ -431,12 +374,13 @@ void TextEntryRuntime::handleActivation(const QString &text)
                    << "value" << trimmed;
         return;
       }
-      dbr_double_t value = static_cast<dbr_double_t>(numeric);
-      status = ca_put(DBR_DOUBLE, channelId_, &value);
-      if (status == ECA_NORMAL) {
-        AuditLogger::instance().logPut(channelName_, numeric,
-            QStringLiteral("TextEntry"));
+      if (!PvChannelManager::instance().putValue(channelName_, numeric)) {
+        qWarning() << "Failed to write Text Entry value" << trimmed << "to"
+                   << channelName_;
+        return;
       }
+      AuditLogger::instance().logPut(channelName_, numeric,
+          QStringLiteral("TextEntry"));
     }
     break;
   }
@@ -447,11 +391,14 @@ void TextEntryRuntime::handleActivation(const QString &text)
                  << "value" << trimmed;
       return;
     }
-    status = ca_put(DBR_SHORT, channelId_, &enumValue);
-    if (status == ECA_NORMAL) {
-      AuditLogger::instance().logPut(channelName_, static_cast<int>(enumValue),
-          QStringLiteral("TextEntry"));
+    if (!PvChannelManager::instance().putValue(channelName_,
+        static_cast<dbr_enum_t>(enumValue))) {
+      qWarning() << "Failed to write Text Entry value" << trimmed << "to"
+                 << channelName_;
+      return;
     }
+    AuditLogger::instance().logPut(channelName_, static_cast<int>(enumValue),
+        QStringLiteral("TextEntry"));
     break;
   }
   case ValueKind::kNumeric:
@@ -463,37 +410,16 @@ void TextEntryRuntime::handleActivation(const QString &text)
                  << "value" << trimmed;
       return;
     }
-    dbr_double_t value = static_cast<dbr_double_t>(numeric);
-    status = ca_put(DBR_DOUBLE, channelId_, &value);
-    if (status == ECA_NORMAL) {
-      AuditLogger::instance().logPut(channelName_, numeric,
-          QStringLiteral("TextEntry"));
+    if (!PvChannelManager::instance().putValue(channelName_, numeric)) {
+      qWarning() << "Failed to write Text Entry value" << trimmed << "to"
+                 << channelName_;
+      return;
     }
+    AuditLogger::instance().logPut(channelName_, numeric,
+        QStringLiteral("TextEntry"));
     break;
   }
   }
-
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to write Text Entry value" << trimmed << "to"
-               << channelName_ << ':' << ca_message(status);
-    return;
-  }
-  ca_flush_io();
-}
-
-void TextEntryRuntime::updateWriteAccess()
-{
-  if (!channelId_) {
-    return;
-  }
-  const bool writeAccess = ca_write_access(channelId_) != 0;
-  if (writeAccess == lastWriteAccess_) {
-    return;
-  }
-  lastWriteAccess_ = writeAccess;
-  invokeOnElement([writeAccess](TextEntryElement *element) {
-    element->setRuntimeWriteAccess(writeAccess);
-  });
 }
 
 void TextEntryRuntime::updateElementDisplay()
@@ -528,8 +454,6 @@ void TextEntryRuntime::updateElementDisplay()
     break;
   case ValueKind::kCharArray:
     if (element_->format() == TextMonitorFormat::kString) {
-      /* For char arrays in STRING format, always show the string value
-       * even if empty (all null bytes). Don't fall back to numeric. */
       displayText = lastStringValue_;
     } else if (hasNumericValue_) {
       displayText = formatNumeric(lastNumericValue_, resolvedPrecision());
@@ -789,50 +713,4 @@ bool TextEntryRuntime::parseCharArrayInput(const QString &text,
     bytes[copyLen] = '\0';
   }
   return true;
-}
-
-void TextEntryRuntime::channelConnectionCallback(
-    struct connection_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<TextEntryRuntime *>(ca_puser(args.chid));
-  if (self) {
-    self->handleConnectionEvent(args);
-  }
-}
-
-void TextEntryRuntime::valueEventCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<TextEntryRuntime *>(args.usr);
-  if (self) {
-    self->handleValueEvent(args);
-  }
-}
-
-void TextEntryRuntime::controlInfoCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<TextEntryRuntime *>(args.usr);
-  if (self) {
-    self->handleControlInfo(args);
-  }
-}
-
-void TextEntryRuntime::accessRightsCallback(
-    struct access_rights_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<TextEntryRuntime *>(ca_puser(args.chid));
-  if (self) {
-    self->handleAccessRightsEvent(args);
-  }
 }

@@ -19,6 +19,7 @@
 #include <QWheelEvent>
 
 #include "medm_colors.h"
+#include "pv_name_utils.h"
 #include "window_utils.h"
 
 namespace {
@@ -398,10 +399,11 @@ void StripChartElement::setChannel(int index, const QString &channel)
   if (index < 0 || index >= penCount()) {
     return;
   }
-  if (pens_[index].channel == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (pens_[index].channel == normalized) {
     return;
   }
-  pens_[index].channel = channel;
+  pens_[index].channel = normalized;
   if (executeMode_) {
     clearPenRuntimeState(index);
   }

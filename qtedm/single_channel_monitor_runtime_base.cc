@@ -43,11 +43,15 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  const QString initialChannel = element_->channel().trimmed();
+  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   resetRuntimeState();
@@ -61,7 +65,7 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
 
   /* Use SharedChannelManager for connection sharing.
    * These monitors all use DBR_TIME_DOUBLE with element count 1. */
-  auto &mgr = SharedChannelManager::instance();
+  auto &mgr = PvChannelManager::instance();
   subscription_ = mgr.subscribe(
       channelName_,
       DBR_TIME_DOUBLE,
@@ -160,6 +164,7 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
     stats.registerUpdateExecuted();
   }
 
+  bool controlInfoApplied = false;
   /* Apply limits from control info if available and not yet done */
   if (!hasControlInfo_ && (data.hasControlInfo || data.lopr != 0.0 || data.hopr != 0.0)) {
     hasControlInfo_ = true;
@@ -173,6 +178,7 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
         element->setRuntimeLimits(low, high);
         element->setRuntimePrecision(precision);
       });
+      controlInfoApplied = true;
     }
   }
 
@@ -187,6 +193,9 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
     return;
   }
 
+  if (controlInfoApplied) {
+    hasLastValue_ = false;
+  }
   if (!hasLastValue_ || std::abs(numericValue - lastValue_) > 1e-12) {
     lastValue_ = numericValue;
     hasLastValue_ = true;

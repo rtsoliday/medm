@@ -13,7 +13,7 @@
 
 #include "display_properties.h"
 #include "element_runtime_traits.h"
-#include "shared_channel_manager.h"
+#include "pv_channel_manager.h"
 #include "startup_timing.h"
 
 class RectangleElement;
@@ -55,9 +55,9 @@ class DisplayWindow;
  * graphic elements (rectangle, oval, arc, line, polygon, polyline, image, text) to
  * eliminate code duplication while preserving type safety.
  *
- * Now uses SharedChannelManager for connection sharing - multiple widgets
- * monitoring the same PV (with the same DBR type and element count) share
- * a single CA channel.
+ * Now uses PvChannelManager for protocol-aware connection sharing - multiple
+ * widgets monitoring the same PV (with the same DBR type and element count)
+ * share a single channel per protocol.
  *
  * Template Parameters:
  *   ElementType: The element widget class (e.g., RectangleElement)

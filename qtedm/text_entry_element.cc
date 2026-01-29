@@ -13,6 +13,7 @@
 #include <QSignalBlocker>
 
 #include "cursor_utils.h"
+#include "pv_name_utils.h"
 #include "text_font_utils.h"
 #include "window_utils.h"
 
@@ -270,10 +271,11 @@ QString TextEntryElement::channel() const
 
 void TextEntryElement::setChannel(const QString &value)
 {
-  if (channel_ == value) {
+  const QString normalized = PvNameUtils::normalizePvName(value);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = value;
+  channel_ = normalized;
   if (!executeMode_ && lineEdit_) {
     QSignalBlocker blocker(lineEdit_);
     lineEdit_->setText(channel_);

@@ -23,9 +23,9 @@ constexpr int kConnectionCompletionIdleMs = 100;
 
 /* SubscriptionHandle implementation */
 
-SubscriptionHandle::SubscriptionHandle(quint64 id, SharedChannelManager *manager)
+SubscriptionHandle::SubscriptionHandle(quint64 id, SubscriptionOwner *owner)
   : id_(id)
-  , manager_(manager)
+  , owner_(owner)
 {
 }
 
@@ -36,10 +36,10 @@ SubscriptionHandle::~SubscriptionHandle()
 
 SubscriptionHandle::SubscriptionHandle(SubscriptionHandle &&other) noexcept
   : id_(other.id_)
-  , manager_(other.manager_)
+  , owner_(other.owner_)
 {
   other.id_ = 0;
-  other.manager_ = nullptr;
+  other.owner_ = nullptr;
 }
 
 SubscriptionHandle &SubscriptionHandle::operator=(SubscriptionHandle &&other) noexcept
@@ -47,20 +47,20 @@ SubscriptionHandle &SubscriptionHandle::operator=(SubscriptionHandle &&other) no
   if (this != &other) {
     reset();
     id_ = other.id_;
-    manager_ = other.manager_;
+    owner_ = other.owner_;
     other.id_ = 0;
-    other.manager_ = nullptr;
+    other.owner_ = nullptr;
   }
   return *this;
 }
 
 void SubscriptionHandle::reset()
 {
-  if (id_ != 0 && manager_) {
-    manager_->unsubscribe(id_);
+  if (id_ != 0 && owner_) {
+    owner_->unsubscribe(id_);
   }
   id_ = 0;
-  manager_ = nullptr;
+  owner_ = nullptr;
 }
 
 /* SharedChannelManager implementation */
@@ -903,6 +903,9 @@ void SharedChannelManager::handleControlInfo(SharedChannel *channel,
     data.hopr = info->upper_ctrl_limit;
     data.lopr = info->lower_ctrl_limit;
     data.precision = info->precision;
+    data.hasPrecision = (info->precision >= 0);
+    data.units = QString::fromLatin1(info->units);
+    data.hasUnits = !data.units.trimmed().isEmpty();
     data.hasControlInfo = true;
     break;
   }
@@ -1097,6 +1100,55 @@ bool SharedChannelManager::putValue(const QString &pvName, dbr_enum_t value)
   }
 
   int status = ca_put(DBR_ENUM, putChannel, &value);
+  ca_flush_io();
+  return status == ECA_NORMAL;
+}
+
+bool SharedChannelManager::putCharArrayValue(const QString &pvName,
+    const QByteArray &value)
+{
+  ChannelAccessContext::instance().ensureInitialized();
+  if (!ChannelAccessContext::instance().isInitialized()) {
+    return false;
+  }
+
+  QString trimmed = pvName.trimmed();
+  if (trimmed.isEmpty()) {
+    return false;
+  }
+
+  chid putChannel = nullptr;
+  for (auto *channel : channels_) {
+    if (channel->key.pvName == trimmed && channel->connected) {
+      putChannel = channel->channelId;
+      break;
+    }
+  }
+
+  const unsigned long count = static_cast<unsigned long>(value.size());
+  if (count == 0) {
+    return false;
+  }
+
+  if (!putChannel) {
+    QByteArray pvBytes = trimmed.toLatin1();
+    int status = ca_create_channel(
+        pvBytes.constData(), nullptr, nullptr, CA_PRIORITY_DEFAULT, &putChannel);
+    if (status != ECA_NORMAL) {
+      return false;
+    }
+    ca_pend_io(1.0);
+    if (ca_state(putChannel) != cs_conn) {
+      ca_clear_channel(putChannel);
+      return false;
+    }
+    int putStatus = ca_array_put(DBR_CHAR, count, putChannel, value.constData());
+    ca_flush_io();
+    ca_clear_channel(putChannel);
+    return putStatus == ECA_NORMAL;
+  }
+
+  int status = ca_array_put(DBR_CHAR, count, putChannel, value.constData());
   ca_flush_io();
   return status == ECA_NORMAL;
 }

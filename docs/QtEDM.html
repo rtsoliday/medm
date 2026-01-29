@@ -372,6 +372,22 @@ qtedm -x display.adl</pre>
 
 <p>QtEDM reads ADL files created by MEDM and vice versa. The file format is documented in the MEDM Reference Manual.</p>
 
+<h3>PV Protocol Prefix</h3>
+
+<p>QtEDM supports both Channel Access (CA) and PVAccess (PVA). To force PVA for a
+specific channel, prefix the PV name with <code>pva://</code>:</p>
+
+<ul>
+  <li><code>pva://my:pv:name</code> &ndash; Connect using PVAccess</li>
+  <li><code>my:pv:name</code> &ndash; Default Channel Access (no prefix)</li>
+</ul>
+
+<h3>ADL Version Header</h3>
+
+<p>QtEDM writes a file header version of <strong>40001</strong> when any PV uses the
+<code>pva://</code> prefix. Displays with only CA PVs are saved with version <strong>40000</strong>.
+Both versions remain fully readable by QtEDM.</p>
+
 <h2><a name="Features"></a>Features</h2>
 
 <h3>Dynamic Attributes</h3>

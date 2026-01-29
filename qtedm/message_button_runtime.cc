@@ -14,6 +14,7 @@
 #include "audit_logger.h"
 #include "channel_access_context.h"
 #include "message_button_element.h"
+#include "pv_channel_manager.h"
 #include "statistics_tracker.h"
 
 namespace {
@@ -40,11 +41,15 @@ void MessageButtonRuntime::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  const QString initialChannel = element_->channel().trimmed();
+  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   started_ = true;
@@ -63,24 +68,16 @@ void MessageButtonRuntime::start()
     return;
   }
 
-  QByteArray channelBytes = channelName_.toLatin1();
-  int status = ca_create_channel(channelBytes.constData(),
-      &MessageButtonRuntime::channelConnectionCallback, this,
-      CA_PRIORITY_DEFAULT, &channelId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << channelName_ << ':' << ca_message(status);
-    channelId_ = nullptr;
-    return;
-  }
-
-  StatisticsTracker::instance().registerChannelCreated();
-
-  ca_set_puser(channelId_, this);
-  ca_replace_access_rights_event(channelId_,
-      &MessageButtonRuntime::accessRightsCallback);
-
-  ca_flush_io();
+  auto &mgr = PvChannelManager::instance();
+  subscription_ = mgr.subscribe(
+      channelName_,
+      DBR_TIME_DOUBLE,
+      0,
+      [this](const SharedChannelData &data) { handleChannelData(data); },
+      [this](bool connected, const SharedChannelData &data) {
+        handleChannelConnection(connected, data);
+      },
+      [this](bool canRead, bool canWrite) { handleAccessRights(canRead, canWrite); });
 }
 
 void MessageButtonRuntime::stop()
@@ -91,7 +88,7 @@ void MessageButtonRuntime::stop()
 
   started_ = false;
   StatisticsTracker::instance().registerDisplayObjectStopped();
-  unsubscribe();
+  subscription_.reset();
   if (element_) {
     element_->setPressCallback(std::function<void()>());
     element_->setReleaseCallback(std::function<void()>());
@@ -115,138 +112,25 @@ void MessageButtonRuntime::resetRuntimeState()
   });
 }
 
-void MessageButtonRuntime::subscribe()
-{
-  if (subscriptionId_ || !channelId_) {
-    return;
-  }
-
-  chtype subscriptionType = 0;
-  long count = 1;
-  switch (fieldType_) {
-  case DBR_STRING:
-    subscriptionType = DBR_TIME_STRING;
-    count = 1;
-    break;
-  case DBR_ENUM:
-    subscriptionType = DBR_TIME_ENUM;
-    count = 1;
-    break;
-  case DBR_CHAR:
-    subscriptionType = DBR_TIME_CHAR;
-    count = std::max<long>(elementCount_, 1);
-    break;
-  case DBR_SHORT:
-    subscriptionType = DBR_TIME_SHORT;
-    count = 1;
-    break;
-  case DBR_LONG:
-    subscriptionType = DBR_TIME_LONG;
-    count = 1;
-    break;
-  case DBR_FLOAT:
-    subscriptionType = DBR_TIME_FLOAT;
-    count = 1;
-    break;
-  case DBR_DOUBLE:
-  default:
-    subscriptionType = DBR_TIME_DOUBLE;
-    count = 1;
-    break;
-  }
-
-  int status = ca_create_subscription(subscriptionType, count, channelId_,
-      DBE_VALUE | DBE_ALARM, &MessageButtonRuntime::valueEventCallback,
-      this, &subscriptionId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << channelName_ << ':'
-               << ca_message(status);
-    subscriptionId_ = nullptr;
-    return;
-  }
-
-  ca_flush_io();
-}
-
-void MessageButtonRuntime::unsubscribe()
+void MessageButtonRuntime::handleChannelConnection(bool connected,
+    const SharedChannelData &data)
 {
   auto &stats = StatisticsTracker::instance();
-  if (subscriptionId_) {
-    ca_clear_subscription(subscriptionId_);
-    subscriptionId_ = nullptr;
-  }
-  if (channelId_) {
-    if (connected_) {
-      stats.registerChannelDisconnected();
-      connected_ = false;
-    }
-    ca_replace_access_rights_event(channelId_, nullptr);
-    ca_clear_channel(channelId_);
-    stats.registerChannelDestroyed();
-    channelId_ = nullptr;
-  }
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
 
-void MessageButtonRuntime::requestControlInfo()
-{
-  if (!channelId_ || fieldType_ != DBR_ENUM) {
-    return;
-  }
-
-  int status = ca_array_get_callback(DBR_CTRL_ENUM, 1, channelId_,
-      &MessageButtonRuntime::controlInfoCallback, this);
-  if (status == ECA_NORMAL) {
-    ca_flush_io();
-  } else {
-    qWarning() << "Failed to request control info for" << channelName_
-               << ':' << ca_message(status);
-  }
-}
-
-void MessageButtonRuntime::updateWriteAccess()
-{
-  if (!channelId_) {
-    return;
-  }
-  bool writeAccess = ca_write_access(channelId_) != 0;
-  if (writeAccess == lastWriteAccess_) {
-    return;
-  }
-  lastWriteAccess_ = writeAccess;
-  invokeOnElement([writeAccess](MessageButtonElement *element) {
-    element->setRuntimeWriteAccess(writeAccess);
-  });
-}
-
-void MessageButtonRuntime::handleConnectionEvent(
-    const connection_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
-    return;
-  }
-
-  auto &stats = StatisticsTracker::instance();
-
-  if (args.op == CA_OP_CONN_UP) {
+  if (connected) {
     const bool wasConnected = connected_;
     connected_ = true;
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
-    fieldType_ = ca_field_type(channelId_);
-    elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
-    enumStrings_.clear();
-    updateWriteAccess();
+    fieldType_ = data.nativeFieldType;
+    elementCount_ = std::max<long>(data.nativeElementCount, 1);
+    enumStrings_ = data.enumStrings;
     invokeOnElement([](MessageButtonElement *element) {
       element->setRuntimeConnected(true);
       element->setRuntimeSeverity(0);
     });
-    subscribe();
-    requestControlInfo();
-  } else if (args.op == CA_OP_CONN_DOWN) {
+  } else {
     const bool wasConnected = connected_;
     connected_ = false;
     if (wasConnected) {
@@ -262,38 +146,12 @@ void MessageButtonRuntime::handleConnectionEvent(
   }
 }
 
-void MessageButtonRuntime::handleValueEvent(const event_handler_args &args)
+void MessageButtonRuntime::handleChannelData(const SharedChannelData &data)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
+  if (!started_) {
     return;
   }
-
-  short severity = 0;
-  switch (args.type) {
-  case DBR_TIME_STRING:
-    severity = static_cast<const dbr_time_string *>(args.dbr)->severity;
-    break;
-  case DBR_TIME_ENUM:
-    severity = static_cast<const dbr_time_enum *>(args.dbr)->severity;
-    break;
-  case DBR_TIME_CHAR:
-    severity = static_cast<const dbr_time_char *>(args.dbr)->severity;
-    break;
-  case DBR_TIME_SHORT:
-    severity = static_cast<const dbr_time_short *>(args.dbr)->severity;
-    break;
-  case DBR_TIME_LONG:
-    severity = static_cast<const dbr_time_long *>(args.dbr)->severity;
-    break;
-  case DBR_TIME_FLOAT:
-    severity = static_cast<const dbr_time_float *>(args.dbr)->severity;
-    break;
-  case DBR_TIME_DOUBLE:
-    severity = static_cast<const dbr_time_double *>(args.dbr)->severity;
-    break;
-  default:
-    return;
-  }
+  const short severity = data.severity;
 
   {
     auto &stats = StatisticsTracker::instance();
@@ -308,41 +166,28 @@ void MessageButtonRuntime::handleValueEvent(const event_handler_args &args)
       element->setRuntimeSeverity(severity);
     });
   }
+
+  if (!data.enumStrings.isEmpty() && enumStrings_ != data.enumStrings) {
+    enumStrings_ = data.enumStrings;
+  }
 }
-
-void MessageButtonRuntime::handleControlInfo(
-    const event_handler_args &args)
+void MessageButtonRuntime::handleAccessRights(bool /*canRead*/, bool canWrite)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
+  if (!started_) {
     return;
   }
-  if (args.type != DBR_CTRL_ENUM) {
+  if (canWrite == lastWriteAccess_) {
     return;
   }
-
-  const auto *info = static_cast<const dbr_ctrl_enum *>(args.dbr);
-  int count = std::clamp<int>(info->no_str, 0, MAX_ENUM_STATES);
-
-  QStringList strings;
-  strings.reserve(count);
-  for (int i = 0; i < count; ++i) {
-    strings.append(QString::fromLatin1(info->strs[i]));
-  }
-  enumStrings_ = strings;
-}
-
-void MessageButtonRuntime::handleAccessRightsEvent(
-    const access_rights_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
-    return;
-  }
-  updateWriteAccess();
+  lastWriteAccess_ = canWrite;
+  invokeOnElement([canWrite](MessageButtonElement *element) {
+    element->setRuntimeWriteAccess(canWrite);
+  });
 }
 
 void MessageButtonRuntime::handlePress()
 {
-  if (!started_ || !channelId_ || !connected_ || !lastWriteAccess_) {
+  if (!started_ || !connected_ || !lastWriteAccess_) {
     return;
   }
   if (!element_) {
@@ -361,7 +206,7 @@ void MessageButtonRuntime::handlePress()
 
 void MessageButtonRuntime::handleRelease()
 {
-  if (!started_ || !channelId_ || !connected_ || !lastWriteAccess_) {
+  if (!started_ || !connected_ || !lastWriteAccess_) {
     return;
   }
   if (!element_) {
@@ -380,9 +225,6 @@ void MessageButtonRuntime::handleRelease()
 
 bool MessageButtonRuntime::sendValue(const QString &value)
 {
-  if (!channelId_) {
-    return false;
-  }
   const QString trimmed = value.trimmed();
   if (trimmed.isEmpty()) {
     return true;
@@ -417,21 +259,13 @@ bool MessageButtonRuntime::sendValue(const QString &value)
 
 bool MessageButtonRuntime::sendStringValue(const QString &value)
 {
-  dbr_string_t buffer;
-  std::memset(buffer, 0, sizeof(buffer));
-
-  QByteArray bytes = value.toLatin1();
-  std::strncpy(buffer, bytes.constData(), sizeof(buffer) - 1);
-
-  int status = ca_put(DBR_STRING, channelId_, buffer);
-  if (status != ECA_NORMAL) {
+  if (!PvChannelManager::instance().putValue(channelName_, value)) {
     qWarning() << "Failed to write string" << value << "to"
-               << channelName_ << ':' << ca_message(status);
+               << channelName_;
     return false;
   }
   AuditLogger::instance().logPut(channelName_, value,
       QStringLiteral("MessageButton"));
-  ca_flush_io();
   return true;
 }
 
@@ -451,14 +285,11 @@ bool MessageButtonRuntime::sendCharArrayValue(const QString &value)
     std::memcpy(data.data(), bytes.constData(), copyCount);
   }
 
-  int status = ca_array_put(DBR_CHAR, static_cast<unsigned long>(clamped),
-      channelId_, data.constData());
-  if (status != ECA_NORMAL) {
+  if (!PvChannelManager::instance().putCharArrayValue(channelName_, data)) {
     qWarning() << "Failed to write char array" << value << "to"
-               << channelName_ << ':' << ca_message(status);
+               << channelName_;
     return false;
   }
-  ca_flush_io();
   return true;
 }
 
@@ -492,15 +323,13 @@ bool MessageButtonRuntime::sendEnumValue(const QString &value)
     toSend = static_cast<dbr_enum_t>(rounded);
   }
 
-  int status = ca_put(DBR_ENUM, channelId_, &toSend);
-  if (status != ECA_NORMAL) {
+  if (!PvChannelManager::instance().putValue(channelName_, toSend)) {
     qWarning() << "Failed to write enum" << value << "to"
-               << channelName_ << ':' << ca_message(status);
+               << channelName_;
     return false;
   }
   AuditLogger::instance().logPut(channelName_, static_cast<int>(toSend),
       QStringLiteral("MessageButton"));
-  ca_flush_io();
   return true;
 }
 
@@ -514,60 +343,12 @@ bool MessageButtonRuntime::sendNumericValue(const QString &value)
     return false;
   }
 
-  int status = ca_put(DBR_DOUBLE, channelId_, &numeric);
-  if (status != ECA_NORMAL) {
+  if (!PvChannelManager::instance().putValue(channelName_, numeric)) {
     qWarning() << "Failed to write numeric" << value << "to"
-               << channelName_ << ':' << ca_message(status);
+               << channelName_;
     return false;
   }
   AuditLogger::instance().logPut(channelName_, numeric,
       QStringLiteral("MessageButton"));
-  ca_flush_io();
   return true;
-}
-
-void MessageButtonRuntime::channelConnectionCallback(
-    struct connection_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<MessageButtonRuntime *>(ca_puser(args.chid));
-  if (self) {
-    self->handleConnectionEvent(args);
-  }
-}
-
-void MessageButtonRuntime::valueEventCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<MessageButtonRuntime *>(args.usr);
-  if (self) {
-    self->handleValueEvent(args);
-  }
-}
-
-void MessageButtonRuntime::controlInfoCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<MessageButtonRuntime *>(args.usr);
-  if (self) {
-    self->handleControlInfo(args);
-  }
-}
-
-void MessageButtonRuntime::accessRightsCallback(
-    struct access_rights_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<MessageButtonRuntime *>(ca_puser(args.chid));
-  if (self) {
-    self->handleAccessRightsEvent(args);
-  }
 }

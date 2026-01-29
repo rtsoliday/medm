@@ -2,6 +2,7 @@
 #include "composite_element.h"
 #include "display_properties.h"
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "statistics_tracker.h"
 
 #include <QDebug>
@@ -115,13 +116,26 @@ void CompositeRuntime::initializeChannels()
     return;
   }
 
-  ChannelAccessContext::instance().ensureInitialized();
-  if (!ChannelAccessContext::instance().isInitialized()) {
-    qWarning() << "CompositeRuntime: Channel Access context not available";
-    return;
-  }
+    bool needsCa = false;
+    for (int i = 0; i < static_cast<int>(channels_.size()); ++i) {
+      const QString channelName = element_->channel(i).trimmed();
+      if (channelName.isEmpty()) {
+        continue;
+      }
+      if (parsePvName(channelName).protocol == PvProtocol::kCa) {
+        needsCa = true;
+        break;
+      }
+    }
+    if (needsCa) {
+      ChannelAccessContext::instance().ensureInitializedForProtocol(PvProtocol::kCa);
+      if (!ChannelAccessContext::instance().isInitialized()) {
+        qWarning() << "Channel Access context not available";
+        return;
+      }
+    }
 
-  auto &mgr = SharedChannelManager::instance();
+  auto &mgr = PvChannelManager::instance();
 
   /* Create subscriptions for all non-empty channel names */
   for (std::size_t i = 0; i < channels_.size(); ++i) {

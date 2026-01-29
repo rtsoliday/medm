@@ -23,6 +23,7 @@
 
 #include "legacy_fonts.h"
 #include "medm_colors.h"
+#include "pv_name_utils.h"
 #include "cursor_utils.h"
 #include "window_utils.h"
 
@@ -307,10 +308,11 @@ QString WheelSwitchElement::channel() const
 
 void WheelSwitchElement::setChannel(const QString &channel)
 {
-  if (channel_ == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = channel;
+  channel_ = normalized;
   setToolTip(channel_.trimmed());
   update();
 }

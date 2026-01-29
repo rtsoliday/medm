@@ -9,9 +9,9 @@
 
 #include "startup_timing.h"
 
-#include <cadef.h>
-
 #include <utility>
+
+#include "pv_channel_manager.h"
 
 class TextEntryElement;
 
@@ -38,15 +38,11 @@ private:
   };
 
   void resetRuntimeState();
-  void subscribe();
-  void unsubscribe();
-  void requestControlInfo();
-  void handleConnectionEvent(const connection_handler_args &args);
-  void handleValueEvent(const event_handler_args &args);
-  void handleControlInfo(const event_handler_args &args);
-  void handleAccessRightsEvent(const access_rights_handler_args &args);
+  void resubscribe(int requestedType, long elementCount);
+  void handleChannelConnection(bool connected, const SharedChannelData &data);
+  void handleChannelData(const SharedChannelData &data);
+  void handleAccessRights(bool canRead, bool canWrite);
   void handleActivation(const QString &text);
-  void updateWriteAccess();
   void updateElementDisplay();
   int resolvedPrecision() const;
   QString formatNumeric(double value, int precision) const;
@@ -59,15 +55,9 @@ private:
   template <typename Func>
   void invokeOnElement(Func &&func);
 
-  static void channelConnectionCallback(struct connection_handler_args args);
-  static void valueEventCallback(struct event_handler_args args);
-  static void controlInfoCallback(struct event_handler_args args);
-  static void accessRightsCallback(struct access_rights_handler_args args);
-
   QPointer<TextEntryElement> element_;
   QString channelName_;
-  chid channelId_ = nullptr;
-  evid subscriptionId_ = nullptr;
+  SubscriptionHandle subscription_;
   bool started_ = false;
   bool connected_ = false;
   short fieldType_ = -1;
@@ -86,6 +76,8 @@ private:
   bool hasControlLimits_ = false;
   bool lastWriteAccess_ = false;
   bool initialUpdateTracked_ = false;
+  int requestedType_ = 0;
+  long requestedCount_ = 0;
 };
 
 template <typename Func>

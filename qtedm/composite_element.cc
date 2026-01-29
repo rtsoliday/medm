@@ -27,6 +27,7 @@
 #include "shell_command_element.h"
 #include "related_display_element.h"
 #include "text_monitor_element.h"
+#include "pv_name_utils.h"
 #include "meter_element.h"
 #include "bar_monitor_element.h"
 #include "scale_monitor_element.h"
@@ -242,7 +243,11 @@ void CompositeElement::setChannel(int index, const QString &value)
   if (index < 0 || index >= static_cast<int>(channels_.size())) {
     return;
   }
-  channels_[static_cast<std::size_t>(index)] = value;
+  const QString normalized = PvNameUtils::normalizePvName(value);
+  if (channels_[static_cast<std::size_t>(index)] == normalized) {
+    return;
+  }
+  channels_[static_cast<std::size_t>(index)] = normalized;
   updateMouseTransparency();
 }
 

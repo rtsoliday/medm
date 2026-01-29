@@ -11,7 +11,7 @@
 #include "channel_access_context.h"
 #include "text_monitor_element.h"
 #include "text_format_utils.h"
-#include "shared_channel_manager.h"
+#include "pv_channel_manager.h"
 
 #include <cvtFast.h>
 #include <db_access.h>
@@ -49,10 +49,14 @@ void TextMonitorRuntime::start()
     return;
   }
 
-  ChannelAccessContext::instance().ensureInitialized();
-  if (!ChannelAccessContext::instance().isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  const QString initialChannel = element_->channel(0).trimmed();
+  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (needsCa) {
+    ChannelAccessContext::instance().ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!ChannelAccessContext::instance().isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   started_ = true;
@@ -71,7 +75,7 @@ void TextMonitorRuntime::start()
    * We start with DBR_TIME_DOUBLE and will resubscribe if needed
    * once we know the native field type. Different DBR types create
    * different shared channels per the user's requirements. */
-  auto &mgr = SharedChannelManager::instance();
+  auto &mgr = PvChannelManager::instance();
   subscription_ = mgr.subscribe(
       channelName_,
       DBR_TIME_DOUBLE,  /* Initial type - may be refined */
@@ -150,7 +154,7 @@ void TextMonitorRuntime::handleChannelConnection(bool connected,
       chtype neededType = determineSubscriptionType(nativeFieldType_);
       if (neededType != DBR_TIME_DOUBLE) {
         /* Resubscribe with the appropriate type */
-        auto &mgr = SharedChannelManager::instance();
+        auto &mgr = PvChannelManager::instance();
         subscription_.reset();
         subscription_ = mgr.subscribe(
             channelName_,

@@ -1,6 +1,7 @@
 #include "meter_element.h"
 
 #include "update_coordinator.h"
+#include "pv_name_utils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -343,10 +344,11 @@ QString MeterElement::channel() const
 
 void MeterElement::setChannel(const QString &channel)
 {
-  if (channel_ == channel) {
+  const QString normalized = PvNameUtils::normalizePvName(channel);
+  if (channel_ == normalized) {
     return;
   }
-  channel_ = channel;
+  channel_ = normalized;
   setToolTip(channel_.trimmed());
   update();
 }

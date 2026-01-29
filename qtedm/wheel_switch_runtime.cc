@@ -11,6 +11,7 @@
 
 #include "audit_logger.h"
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "wheel_switch_element.h"
 #include "statistics_tracker.h"
@@ -41,11 +42,15 @@ void WheelSwitchRuntime::start()
     return;
   }
 
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Channel Access context not available";
-    return;
+  const QString initialChannel = element_->channel().trimmed();
+  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (needsCa) {
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitialized()) {
+      qWarning() << "Channel Access context not available";
+      return;
+    }
   }
 
   resetRuntimeState();
@@ -61,24 +66,16 @@ void WheelSwitchRuntime::start()
     return;
   }
 
-  QByteArray channelBytes = channelName_.toLatin1();
-  int status = ca_create_channel(channelBytes.constData(),
-      &WheelSwitchRuntime::channelConnectionCallback, this,
-      CA_PRIORITY_DEFAULT, &channelId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to create Channel Access channel for"
-               << channelName_ << ':' << ca_message(status);
-    channelId_ = nullptr;
-    return;
-  }
-
-  StatisticsTracker::instance().registerChannelCreated();
-
-  ca_set_puser(channelId_, this);
-  ca_replace_access_rights_event(channelId_,
-      &WheelSwitchRuntime::accessRightsCallback);
-
-  ca_flush_io();
+  auto &mgr = PvChannelManager::instance();
+  subscription_ = mgr.subscribe(
+      channelName_,
+      DBR_TIME_DOUBLE,
+      1,
+      [this](const SharedChannelData &data) { handleChannelData(data); },
+      [this](bool connected, const SharedChannelData &) {
+        handleChannelConnection(connected);
+      },
+      [this](bool canRead, bool canWrite) { handleAccessRights(canRead, canWrite); });
 }
 
 void WheelSwitchRuntime::stop()
@@ -89,7 +86,7 @@ void WheelSwitchRuntime::stop()
 
   started_ = false;
   StatisticsTracker::instance().registerDisplayObjectStopped();
-  unsubscribe();
+  subscription_.reset();
   if (element_) {
     element_->setActivationCallback(std::function<void(double)>());
   }
@@ -99,8 +96,6 @@ void WheelSwitchRuntime::stop()
 void WheelSwitchRuntime::resetRuntimeState()
 {
   connected_ = false;
-  fieldType_ = -1;
-  elementCount_ = 1;
   lastValue_ = 0.0;
   hasLastValue_ = false;
   lastSeverity_ = kInvalidSeverity;
@@ -114,97 +109,21 @@ void WheelSwitchRuntime::resetRuntimeState()
   }
 }
 
-void WheelSwitchRuntime::subscribe()
-{
-  if (subscriptionId_ || !channelId_) {
-    return;
-  }
-
-  int status = ca_create_subscription(DBR_TIME_DOUBLE, 1, channelId_,
-      DBE_VALUE | DBE_ALARM,
-      &WheelSwitchRuntime::valueEventCallback, this, &subscriptionId_);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Failed to subscribe to" << channelName_ << ':'
-               << ca_message(status);
-    subscriptionId_ = nullptr;
-    return;
-  }
-
-  ca_flush_io();
-}
-
-void WheelSwitchRuntime::unsubscribe()
+void WheelSwitchRuntime::handleChannelConnection(bool connected)
 {
   auto &stats = StatisticsTracker::instance();
-  if (subscriptionId_) {
-    ca_clear_subscription(subscriptionId_);
-    subscriptionId_ = nullptr;
-  }
-  if (channelId_) {
-    if (connected_) {
-      stats.registerChannelDisconnected();
-      connected_ = false;
-    }
-    ca_replace_access_rights_event(channelId_, nullptr);
-    ca_clear_channel(channelId_);
-    stats.registerChannelDestroyed();
-    channelId_ = nullptr;
-  }
-  if (ChannelAccessContext::instance().isInitialized()) {
-    ca_flush_io();
-  }
-}
 
-void WheelSwitchRuntime::requestControlInfo()
-{
-  if (!channelId_ || !isNumericFieldType(fieldType_)) {
-    return;
-  }
-
-  int status = ca_array_get_callback(DBR_CTRL_DOUBLE, 1, channelId_,
-      &WheelSwitchRuntime::controlInfoCallback, this);
-  if (status == ECA_NORMAL) {
-    ca_flush_io();
-  } else {
-    qWarning() << "Failed to request control info for" << channelName_
-               << ':' << ca_message(status);
-  }
-}
-
-void WheelSwitchRuntime::handleConnectionEvent(const connection_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
-    return;
-  }
-
-  auto &stats = StatisticsTracker::instance();
-
-  if (args.op == CA_OP_CONN_UP) {
+  if (connected) {
     const bool wasConnected = connected_;
     connected_ = true;
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
-    fieldType_ = ca_field_type(channelId_);
-    elementCount_ = std::max<long>(ca_element_count(channelId_), 1);
     lastSeverity_ = kInvalidSeverity;
-    if (!isNumericFieldType(fieldType_)) {
-      qWarning() << "Wheel switch channel" << channelName_
-                 << "is not a numeric type";
-      invokeOnElement([](WheelSwitchElement *element) {
-        element->setRuntimeConnected(false);
-        element->setRuntimeWriteAccess(false);
-        element->setRuntimeSeverity(kInvalidSeverity);
-      });
-      return;
-    }
-    updateWriteAccess();
     invokeOnElement([](WheelSwitchElement *element) {
       element->setRuntimeConnected(true);
     });
-    subscribe();
-    requestControlInfo();
-  } else if (args.op == CA_OP_CONN_DOWN) {
+  } else {
     const bool wasConnected = connected_;
     connected_ = false;
     if (wasConnected) {
@@ -219,24 +138,34 @@ void WheelSwitchRuntime::handleConnectionEvent(const connection_handler_args &ar
   }
 }
 
-void WheelSwitchRuntime::handleValueEvent(const event_handler_args &args)
+void WheelSwitchRuntime::handleChannelData(const SharedChannelData &data)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.type != DBR_TIME_DOUBLE) {
+  if (!started_) {
     return;
   }
 
-  const auto *value = static_cast<const dbr_time_double *>(args.dbr);
-  const double numericValue = value->value;
-  const short severity = value->severity;
+  const double numericValue = data.numericValue;
+  const short severity = data.severity;
 
   {
     auto &stats = StatisticsTracker::instance();
     stats.registerCaEvent();
     stats.registerUpdateRequest(true);
     stats.registerUpdateExecuted();
+  }
+
+  if (!data.isNumeric) {
+    return;
+  }
+
+  if (data.hasControlInfo) {
+    const double low = data.lopr;
+    const double high = data.hopr;
+    const int precision = data.precision;
+    invokeOnElement([low, high, precision](WheelSwitchElement *element) {
+      element->setRuntimeLimits(low, high);
+      element->setRuntimePrecision(precision);
+    });
   }
 
   if (severity != lastSeverity_) {
@@ -272,113 +201,35 @@ void WheelSwitchRuntime::handleValueEvent(const event_handler_args &args)
   }
 }
 
-void WheelSwitchRuntime::handleControlInfo(const event_handler_args &args)
+void WheelSwitchRuntime::handleAccessRights(bool /*canRead*/, bool canWrite)
 {
-  if (!started_ || args.usr != this || !args.dbr) {
-    return;
-  }
-  if (args.type != DBR_CTRL_DOUBLE) {
+  if (!started_) {
     return;
   }
 
-  const auto *info = static_cast<const dbr_ctrl_double *>(args.dbr);
-  const double low = info->lower_disp_limit;
-  const double high = info->upper_disp_limit;
-  const int precision = info->precision;
-
-  invokeOnElement([low, high, precision](WheelSwitchElement *element) {
-    element->setRuntimeLimits(low, high);
-    element->setRuntimePrecision(precision);
+  if (canWrite == lastWriteAccess_) {
+    return;
+  }
+  lastWriteAccess_ = canWrite;
+  invokeOnElement([canWrite](WheelSwitchElement *element) {
+    element->setRuntimeWriteAccess(canWrite);
   });
-}
-
-void WheelSwitchRuntime::handleAccessRightsEvent(
-    const access_rights_handler_args &args)
-{
-  if (!started_ || args.chid != channelId_) {
-    return;
-  }
-  updateWriteAccess();
 }
 
 void WheelSwitchRuntime::handleActivation(double value)
 {
-  if (!started_ || !channelId_ || !connected_ || !lastWriteAccess_) {
+  if (!started_ || !connected_ || !lastWriteAccess_) {
     return;
   }
   if (!std::isfinite(value)) {
     return;
   }
 
-  dbr_double_t toSend = static_cast<dbr_double_t>(value);
-  int status = ca_put(DBR_DOUBLE, channelId_, &toSend);
-  if (status != ECA_NORMAL) {
+  if (!PvChannelManager::instance().putValue(channelName_, value)) {
     qWarning() << "Failed to write wheel switch value" << value << "to"
-               << channelName_ << ':' << ca_message(status);
+               << channelName_;
     return;
   }
   AuditLogger::instance().logPut(channelName_, value,
       QStringLiteral("WheelSwitch"));
-  ca_flush_io();
-}
-
-void WheelSwitchRuntime::updateWriteAccess()
-{
-  if (!channelId_) {
-    return;
-  }
-  const bool writeAccess = ca_write_access(channelId_) != 0;
-  if (writeAccess == lastWriteAccess_) {
-    return;
-  }
-  lastWriteAccess_ = writeAccess;
-  invokeOnElement([writeAccess](WheelSwitchElement *element) {
-    element->setRuntimeWriteAccess(writeAccess);
-  });
-}
-
-void WheelSwitchRuntime::channelConnectionCallback(
-    struct connection_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<WheelSwitchRuntime *>(ca_puser(args.chid));
-  if (self) {
-    self->handleConnectionEvent(args);
-  }
-}
-
-void WheelSwitchRuntime::valueEventCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<WheelSwitchRuntime *>(args.usr);
-  if (self) {
-    self->handleValueEvent(args);
-  }
-}
-
-void WheelSwitchRuntime::controlInfoCallback(struct event_handler_args args)
-{
-  if (!args.usr) {
-    return;
-  }
-  auto *self = static_cast<WheelSwitchRuntime *>(args.usr);
-  if (self) {
-    self->handleControlInfo(args);
-  }
-}
-
-void WheelSwitchRuntime::accessRightsCallback(
-    struct access_rights_handler_args args)
-{
-  if (!args.chid) {
-    return;
-  }
-  auto *self = static_cast<WheelSwitchRuntime *>(ca_puser(args.chid));
-  if (self) {
-    self->handleAccessRightsEvent(args);
-  }
 }

@@ -118,6 +118,28 @@ QString imageTypeString(ImageType type)
   }
 }
 
+QString heatmapDimensionSourceString(HeatmapDimensionSource source)
+{
+  switch (source) {
+  case HeatmapDimensionSource::kChannel:
+    return QStringLiteral("channel");
+  case HeatmapDimensionSource::kStatic:
+  default:
+    return QStringLiteral("static");
+  }
+}
+
+QString heatmapOrderString(HeatmapOrder order)
+{
+  switch (order) {
+  case HeatmapOrder::kColumnMajor:
+    return QStringLiteral("column-major");
+  case HeatmapOrder::kRowMajor:
+  default:
+    return QStringLiteral("row-major");
+  }
+}
+
 QString meterLabelString(MeterLabel label)
 {
   switch (label) {

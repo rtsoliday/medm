@@ -91,6 +91,8 @@
 #include "display_state.h"
 #include "image_element.h"
 #include "image_runtime.h"
+#include "heatmap_element.h"
+#include "heatmap_runtime.h"
 #include "meter_element.h"
 #include "meter_runtime.h"
 #include "line_element.h"

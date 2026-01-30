@@ -558,6 +558,115 @@ public:
     imageLayout->setRowStretch(imageRow, 1);
     entriesLayout->addWidget(imageSection_);
 
+    heatmapSection_ = new QWidget(entriesWidget_);
+    auto *heatmapLayout = new QGridLayout(heatmapSection_);
+    heatmapLayout->setContentsMargins(0, 0, 0, 0);
+    heatmapLayout->setHorizontalSpacing(12);
+    heatmapLayout->setVerticalSpacing(6);
+
+    heatmapTitleEdit_ = createLineEdit();
+    committedTexts_.insert(heatmapTitleEdit_, heatmapTitleEdit_->text());
+    heatmapTitleEdit_->installEventFilter(this);
+    QObject::connect(heatmapTitleEdit_, &QLineEdit::returnPressed, this,
+      [this]() { commitHeatmapTitle(); });
+    QObject::connect(heatmapTitleEdit_, &QLineEdit::editingFinished, this,
+      [this]() { commitHeatmapTitle(); });
+
+    heatmapDataChannelEdit_ = createLineEdit();
+    committedTexts_.insert(heatmapDataChannelEdit_, heatmapDataChannelEdit_->text());
+    heatmapDataChannelEdit_->installEventFilter(this);
+    QObject::connect(heatmapDataChannelEdit_, &QLineEdit::returnPressed, this,
+      [this]() { commitHeatmapDataChannel(); });
+    QObject::connect(heatmapDataChannelEdit_, &QLineEdit::editingFinished, this,
+      [this]() { commitHeatmapDataChannel(); });
+
+    heatmapXSourceCombo_ = new QComboBox;
+    heatmapXSourceCombo_->setFont(valueFont_);
+    heatmapXSourceCombo_->setAutoFillBackground(true);
+    heatmapXSourceCombo_->addItem(QStringLiteral("Static"));
+    heatmapXSourceCombo_->addItem(QStringLiteral("Channel"));
+    QObject::connect(heatmapXSourceCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapXSourceSetter_) {
+        heatmapXSourceSetter_(heatmapDimensionSourceFromIndex(index));
+        }
+        updateHeatmapDimensionControls();
+      });
+
+    heatmapYSourceCombo_ = new QComboBox;
+    heatmapYSourceCombo_->setFont(valueFont_);
+    heatmapYSourceCombo_->setAutoFillBackground(true);
+    heatmapYSourceCombo_->addItem(QStringLiteral("Static"));
+    heatmapYSourceCombo_->addItem(QStringLiteral("Channel"));
+    QObject::connect(heatmapYSourceCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapYSourceSetter_) {
+        heatmapYSourceSetter_(heatmapDimensionSourceFromIndex(index));
+        }
+        updateHeatmapDimensionControls();
+      });
+
+    heatmapXDimEdit_ = createLineEdit();
+    committedTexts_.insert(heatmapXDimEdit_, heatmapXDimEdit_->text());
+    heatmapXDimEdit_->installEventFilter(this);
+    QObject::connect(heatmapXDimEdit_, &QLineEdit::returnPressed, this,
+      [this]() { commitHeatmapXDimension(); });
+    QObject::connect(heatmapXDimEdit_, &QLineEdit::editingFinished, this,
+      [this]() { commitHeatmapXDimension(); });
+
+    heatmapYDimEdit_ = createLineEdit();
+    committedTexts_.insert(heatmapYDimEdit_, heatmapYDimEdit_->text());
+    heatmapYDimEdit_->installEventFilter(this);
+    QObject::connect(heatmapYDimEdit_, &QLineEdit::returnPressed, this,
+      [this]() { commitHeatmapYDimension(); });
+    QObject::connect(heatmapYDimEdit_, &QLineEdit::editingFinished, this,
+      [this]() { commitHeatmapYDimension(); });
+
+    heatmapXDimChannelEdit_ = createLineEdit();
+    committedTexts_.insert(heatmapXDimChannelEdit_, heatmapXDimChannelEdit_->text());
+    heatmapXDimChannelEdit_->installEventFilter(this);
+    QObject::connect(heatmapXDimChannelEdit_, &QLineEdit::returnPressed, this,
+      [this]() { commitHeatmapXDimensionChannel(); });
+    QObject::connect(heatmapXDimChannelEdit_, &QLineEdit::editingFinished, this,
+      [this]() { commitHeatmapXDimensionChannel(); });
+
+    heatmapYDimChannelEdit_ = createLineEdit();
+    committedTexts_.insert(heatmapYDimChannelEdit_, heatmapYDimChannelEdit_->text());
+    heatmapYDimChannelEdit_->installEventFilter(this);
+    QObject::connect(heatmapYDimChannelEdit_, &QLineEdit::returnPressed, this,
+      [this]() { commitHeatmapYDimensionChannel(); });
+    QObject::connect(heatmapYDimChannelEdit_, &QLineEdit::editingFinished, this,
+      [this]() { commitHeatmapYDimensionChannel(); });
+
+    heatmapOrderCombo_ = new QComboBox;
+    heatmapOrderCombo_->setFont(valueFont_);
+    heatmapOrderCombo_->setAutoFillBackground(true);
+    heatmapOrderCombo_->addItem(QStringLiteral("Row-major"));
+    heatmapOrderCombo_->addItem(QStringLiteral("Column-major"));
+    QObject::connect(heatmapOrderCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapOrderSetter_) {
+        heatmapOrderSetter_(heatmapOrderFromIndex(index));
+        }
+      });
+
+    int heatmapRow = 0;
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Title"), heatmapTitleEdit_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Data PV"), heatmapDataChannelEdit_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("X Dimension Source"), heatmapXSourceCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("X Dimension"), heatmapXDimEdit_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("X Dim PV"), heatmapXDimChannelEdit_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dimension Source"), heatmapYSourceCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dimension"), heatmapYDimEdit_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dim PV"), heatmapYDimChannelEdit_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Order"), heatmapOrderCombo_);
+    heatmapLayout->setRowStretch(heatmapRow, 1);
+    updateHeatmapDimensionControls();
+    entriesLayout->addWidget(heatmapSection_);
+
     lineSection_ = new QWidget(entriesWidget_);
     auto *lineLayout = new QGridLayout(lineSection_);
     lineLayout->setContentsMargins(0, 0, 0, 0);
@@ -2323,6 +2432,7 @@ public:
   rectangleSection_->setVisible(false);
   compositeSection_->setVisible(false);
   imageSection_->setVisible(false);
+  heatmapSection_->setVisible(false);
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
   textEntrySection_->setVisible(false);
@@ -6104,6 +6214,133 @@ public:
     showPaletteWithoutActivating();
   }
 
+  void showForHeatmap(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QString()> titleGetter,
+      std::function<void(const QString &)> titleSetter,
+      std::function<QString()> dataChannelGetter,
+      std::function<void(const QString &)> dataChannelSetter,
+      std::function<HeatmapDimensionSource()> xSourceGetter,
+      std::function<void(HeatmapDimensionSource)> xSourceSetter,
+      std::function<HeatmapDimensionSource()> ySourceGetter,
+      std::function<void(HeatmapDimensionSource)> ySourceSetter,
+      std::function<int()> xDimGetter,
+      std::function<void(int)> xDimSetter,
+      std::function<int()> yDimGetter,
+      std::function<void(int)> yDimSetter,
+      std::function<QString()> xDimChannelGetter,
+      std::function<void(const QString &)> xDimChannelSetter,
+      std::function<QString()> yDimChannelGetter,
+      std::function<void(const QString &)> yDimChannelSetter,
+      std::function<HeatmapOrder()> orderGetter,
+      std::function<void(HeatmapOrder)> orderSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kHeatmap;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+
+    heatmapTitleGetter_ = std::move(titleGetter);
+    heatmapTitleSetter_ = std::move(titleSetter);
+    heatmapDataChannelGetter_ = std::move(dataChannelGetter);
+    heatmapDataChannelSetter_ = std::move(dataChannelSetter);
+    heatmapXSourceGetter_ = std::move(xSourceGetter);
+    heatmapXSourceSetter_ = std::move(xSourceSetter);
+    heatmapYSourceGetter_ = std::move(ySourceGetter);
+    heatmapYSourceSetter_ = std::move(ySourceSetter);
+    heatmapXDimensionGetter_ = std::move(xDimGetter);
+    heatmapXDimensionSetter_ = std::move(xDimSetter);
+    heatmapYDimensionGetter_ = std::move(yDimGetter);
+    heatmapYDimensionSetter_ = std::move(yDimSetter);
+    heatmapXDimChannelGetter_ = std::move(xDimChannelGetter);
+    heatmapXDimChannelSetter_ = std::move(xDimChannelSetter);
+    heatmapYDimChannelGetter_ = std::move(yDimChannelGetter);
+    heatmapYDimChannelSetter_ = std::move(yDimChannelSetter);
+    heatmapOrderGetter_ = std::move(orderGetter);
+    heatmapOrderSetter_ = std::move(orderSetter);
+
+    QRect heatmapGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (heatmapGeometry.width() <= 0) {
+      heatmapGeometry.setWidth(1);
+    }
+    if (heatmapGeometry.height() <= 0) {
+      heatmapGeometry.setHeight(1);
+    }
+    lastCommittedGeometry_ = heatmapGeometry;
+    updateGeometryEdits(heatmapGeometry);
+
+    if (heatmapTitleEdit_) {
+      const QString value = heatmapTitleGetter_ ? heatmapTitleGetter_() : QString();
+      const QSignalBlocker blocker(heatmapTitleEdit_);
+      heatmapTitleEdit_->setText(value);
+      committedTexts_[heatmapTitleEdit_] = heatmapTitleEdit_->text();
+    }
+
+    if (heatmapDataChannelEdit_) {
+      const QString value = heatmapDataChannelGetter_ ? heatmapDataChannelGetter_() : QString();
+      const QSignalBlocker blocker(heatmapDataChannelEdit_);
+      heatmapDataChannelEdit_->setText(value);
+      committedTexts_[heatmapDataChannelEdit_] = heatmapDataChannelEdit_->text();
+    }
+
+    if (heatmapXSourceCombo_) {
+      const QSignalBlocker blocker(heatmapXSourceCombo_);
+      const HeatmapDimensionSource source = heatmapXSourceGetter_
+          ? heatmapXSourceGetter_()
+          : HeatmapDimensionSource::kStatic;
+      heatmapXSourceCombo_->setCurrentIndex(heatmapDimensionSourceToIndex(source));
+    }
+
+    if (heatmapYSourceCombo_) {
+      const QSignalBlocker blocker(heatmapYSourceCombo_);
+      const HeatmapDimensionSource source = heatmapYSourceGetter_
+          ? heatmapYSourceGetter_()
+          : HeatmapDimensionSource::kStatic;
+      heatmapYSourceCombo_->setCurrentIndex(heatmapDimensionSourceToIndex(source));
+    }
+
+    if (heatmapXDimEdit_) {
+      const int value = heatmapXDimensionGetter_ ? heatmapXDimensionGetter_() : 0;
+      const QSignalBlocker blocker(heatmapXDimEdit_);
+      heatmapXDimEdit_->setText(QString::number(std::max(0, value)));
+      committedTexts_[heatmapXDimEdit_] = heatmapXDimEdit_->text();
+    }
+
+    if (heatmapYDimEdit_) {
+      const int value = heatmapYDimensionGetter_ ? heatmapYDimensionGetter_() : 0;
+      const QSignalBlocker blocker(heatmapYDimEdit_);
+      heatmapYDimEdit_->setText(QString::number(std::max(0, value)));
+      committedTexts_[heatmapYDimEdit_] = heatmapYDimEdit_->text();
+    }
+
+    if (heatmapXDimChannelEdit_) {
+      const QString value = heatmapXDimChannelGetter_ ? heatmapXDimChannelGetter_() : QString();
+      const QSignalBlocker blocker(heatmapXDimChannelEdit_);
+      heatmapXDimChannelEdit_->setText(value);
+      committedTexts_[heatmapXDimChannelEdit_] = heatmapXDimChannelEdit_->text();
+    }
+
+    if (heatmapYDimChannelEdit_) {
+      const QString value = heatmapYDimChannelGetter_ ? heatmapYDimChannelGetter_() : QString();
+      const QSignalBlocker blocker(heatmapYDimChannelEdit_);
+      heatmapYDimChannelEdit_->setText(value);
+      committedTexts_[heatmapYDimChannelEdit_] = heatmapYDimChannelEdit_->text();
+    }
+
+    if (heatmapOrderCombo_) {
+      const QSignalBlocker blocker(heatmapOrderCombo_);
+      const HeatmapOrder order = heatmapOrderGetter_ ? heatmapOrderGetter_()
+                                                    : HeatmapOrder::kRowMajor;
+      heatmapOrderCombo_->setCurrentIndex(heatmapOrderToIndex(order));
+    }
+
+    updateHeatmapDimensionControls();
+    elementLabel_->setText(QStringLiteral("Heatmap"));
+    showPaletteWithoutActivating();
+  }
+
   void showForLine(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> colorGetter,
@@ -7121,6 +7358,29 @@ public:
           visibilityModeToIndex(TextVisibilityMode::kStatic));
     }
 
+    if (heatmapXSourceCombo_) {
+      const QSignalBlocker blocker(heatmapXSourceCombo_);
+      heatmapXSourceCombo_->setCurrentIndex(
+          heatmapDimensionSourceToIndex(HeatmapDimensionSource::kStatic));
+    }
+    if (heatmapYSourceCombo_) {
+      const QSignalBlocker blocker(heatmapYSourceCombo_);
+      heatmapYSourceCombo_->setCurrentIndex(
+          heatmapDimensionSourceToIndex(HeatmapDimensionSource::kStatic));
+    }
+    if (heatmapOrderCombo_) {
+      const QSignalBlocker blocker(heatmapOrderCombo_);
+      heatmapOrderCombo_->setCurrentIndex(
+          heatmapOrderToIndex(HeatmapOrder::kRowMajor));
+    }
+
+    resetLineEdit(heatmapTitleEdit_);
+    resetLineEdit(heatmapDataChannelEdit_);
+    resetLineEdit(heatmapXDimEdit_);
+    resetLineEdit(heatmapYDimEdit_);
+    resetLineEdit(heatmapXDimChannelEdit_);
+    resetLineEdit(heatmapYDimChannelEdit_);
+
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Select..."));
     }
@@ -7143,6 +7403,25 @@ public:
     for (auto &setter : imageChannelSetters_) {
       setter = {};
     }
+
+    heatmapTitleGetter_ = {};
+    heatmapTitleSetter_ = {};
+    heatmapDataChannelGetter_ = {};
+    heatmapDataChannelSetter_ = {};
+    heatmapXSourceGetter_ = {};
+    heatmapXSourceSetter_ = {};
+    heatmapYSourceGetter_ = {};
+    heatmapYSourceSetter_ = {};
+    heatmapXDimensionGetter_ = {};
+    heatmapXDimensionSetter_ = {};
+    heatmapYDimensionGetter_ = {};
+    heatmapYDimensionSetter_ = {};
+    heatmapXDimChannelGetter_ = {};
+    heatmapXDimChannelSetter_ = {};
+    heatmapYDimChannelGetter_ = {};
+    heatmapYDimChannelSetter_ = {};
+    heatmapOrderGetter_ = {};
+    heatmapOrderSetter_ = {};
 
     textMonitorPrecisionSourceGetter_ = {};
     textMonitorPrecisionSourceSetter_ = {};
@@ -7235,6 +7514,7 @@ private:
     kDisplay,
     kRectangle,
     kImage,
+    kHeatmap,
     kPolygon,
     kComposite,
     kLine,
@@ -7439,6 +7719,11 @@ private:
       imageSection_->setVisible(imageVisible);
       imageSection_->setEnabled(imageVisible);
     }
+    if (heatmapSection_) {
+      const bool heatmapVisible = kind == SelectionKind::kHeatmap;
+      heatmapSection_->setVisible(heatmapVisible);
+      heatmapSection_->setEnabled(heatmapVisible);
+    }
     const bool showArcControls = (kind == SelectionKind::kRectangle
         || kind == SelectionKind::kPolygon) && rectangleIsArc_;
     if (arcBeginLabel_) {
@@ -7632,6 +7917,18 @@ private:
     setFieldEnabled(imageColorModeCombo_, hasChannelA);
     setFieldEnabled(imageVisibilityCombo_, hasChannelA);
     setFieldEnabled(imageVisibilityCalcEdit_, hasChannelA);
+  }
+
+  void updateHeatmapDimensionControls()
+  {
+    const bool xFromChannel = heatmapXSourceCombo_
+        && heatmapXSourceCombo_->currentIndex() == 1;
+    const bool yFromChannel = heatmapYSourceCombo_
+        && heatmapYSourceCombo_->currentIndex() == 1;
+    setFieldEnabled(heatmapXDimEdit_, !xFromChannel);
+    setFieldEnabled(heatmapXDimChannelEdit_, xFromChannel);
+    setFieldEnabled(heatmapYDimEdit_, !yFromChannel);
+    setFieldEnabled(heatmapYDimChannelEdit_, yFromChannel);
   }
 
   void updateLineChannelDependentControls()
@@ -8898,6 +9195,100 @@ private:
     committedTexts_[imageVisibilityCalcEdit_] = value;
   }
 
+  void commitHeatmapDataChannel()
+  {
+    if (!heatmapDataChannelEdit_) {
+      return;
+    }
+    if (!heatmapDataChannelSetter_) {
+      revertLineEdit(heatmapDataChannelEdit_);
+      return;
+    }
+    const QString value = heatmapDataChannelEdit_->text();
+    heatmapDataChannelSetter_(value);
+    committedTexts_[heatmapDataChannelEdit_] = value;
+  }
+
+  void commitHeatmapTitle()
+  {
+    if (!heatmapTitleEdit_) {
+      return;
+    }
+    if (!heatmapTitleSetter_) {
+      revertLineEdit(heatmapTitleEdit_);
+      return;
+    }
+    const QString value = heatmapTitleEdit_->text();
+    heatmapTitleSetter_(value);
+    committedTexts_[heatmapTitleEdit_] = value;
+  }
+
+  void commitHeatmapXDimension()
+  {
+    if (!heatmapXDimEdit_) {
+      return;
+    }
+    if (!heatmapXDimensionSetter_) {
+      revertLineEdit(heatmapXDimEdit_);
+      return;
+    }
+    bool ok = false;
+    const int value = heatmapXDimEdit_->text().toInt(&ok);
+    if (!ok || value <= 0) {
+      revertLineEdit(heatmapXDimEdit_);
+      return;
+    }
+    heatmapXDimensionSetter_(value);
+    committedTexts_[heatmapXDimEdit_] = heatmapXDimEdit_->text();
+  }
+
+  void commitHeatmapYDimension()
+  {
+    if (!heatmapYDimEdit_) {
+      return;
+    }
+    if (!heatmapYDimensionSetter_) {
+      revertLineEdit(heatmapYDimEdit_);
+      return;
+    }
+    bool ok = false;
+    const int value = heatmapYDimEdit_->text().toInt(&ok);
+    if (!ok || value <= 0) {
+      revertLineEdit(heatmapYDimEdit_);
+      return;
+    }
+    heatmapYDimensionSetter_(value);
+    committedTexts_[heatmapYDimEdit_] = heatmapYDimEdit_->text();
+  }
+
+  void commitHeatmapXDimensionChannel()
+  {
+    if (!heatmapXDimChannelEdit_) {
+      return;
+    }
+    if (!heatmapXDimChannelSetter_) {
+      revertLineEdit(heatmapXDimChannelEdit_);
+      return;
+    }
+    const QString value = heatmapXDimChannelEdit_->text();
+    heatmapXDimChannelSetter_(value);
+    committedTexts_[heatmapXDimChannelEdit_] = value;
+  }
+
+  void commitHeatmapYDimensionChannel()
+  {
+    if (!heatmapYDimChannelEdit_) {
+      return;
+    }
+    if (!heatmapYDimChannelSetter_) {
+      revertLineEdit(heatmapYDimChannelEdit_);
+      return;
+    }
+    const QString value = heatmapYDimChannelEdit_->text();
+    heatmapYDimChannelSetter_(value);
+    committedTexts_[heatmapYDimChannelEdit_] = value;
+  }
+
   void commitImageChannel(int index)
   {
     if (index < 0 || index >= static_cast<int>(imageChannelEdits_.size())) {
@@ -9084,6 +9475,28 @@ private:
     default:
       return 0;
     }
+  }
+
+  HeatmapDimensionSource heatmapDimensionSourceFromIndex(int index) const
+  {
+    return index == 1 ? HeatmapDimensionSource::kChannel
+                      : HeatmapDimensionSource::kStatic;
+  }
+
+  int heatmapDimensionSourceToIndex(HeatmapDimensionSource source) const
+  {
+    return source == HeatmapDimensionSource::kChannel ? 1 : 0;
+  }
+
+  HeatmapOrder heatmapOrderFromIndex(int index) const
+  {
+    return index == 1 ? HeatmapOrder::kColumnMajor
+                      : HeatmapOrder::kRowMajor;
+  }
+
+  int heatmapOrderToIndex(HeatmapOrder order) const
+  {
+    return order == HeatmapOrder::kColumnMajor ? 1 : 0;
   }
 
   MeterLabel meterLabelFromIndex(int index) const
@@ -9583,6 +9996,7 @@ private:
   QWidget *rectangleSection_ = nullptr;
   QWidget *compositeSection_ = nullptr;
   QWidget *imageSection_ = nullptr;
+  QWidget *heatmapSection_ = nullptr;
   QWidget *lineSection_ = nullptr;
   QWidget *textSection_ = nullptr;
   QLineEdit *xEdit_ = nullptr;
@@ -9598,6 +10012,15 @@ private:
   QComboBox *textVisibilityCombo_ = nullptr;
   QLineEdit *textVisibilityCalcEdit_ = nullptr;
   std::array<QLineEdit *, 5> textChannelEdits_{};
+  QLineEdit *heatmapTitleEdit_ = nullptr;
+  QLineEdit *heatmapDataChannelEdit_ = nullptr;
+  QComboBox *heatmapXSourceCombo_ = nullptr;
+  QComboBox *heatmapYSourceCombo_ = nullptr;
+  QLineEdit *heatmapXDimEdit_ = nullptr;
+  QLineEdit *heatmapYDimEdit_ = nullptr;
+  QLineEdit *heatmapXDimChannelEdit_ = nullptr;
+  QLineEdit *heatmapYDimChannelEdit_ = nullptr;
+  QComboBox *heatmapOrderCombo_ = nullptr;
   QWidget *textMonitorSection_ = nullptr;
   QPushButton *textMonitorForegroundButton_ = nullptr;
   QPushButton *textMonitorBackgroundButton_ = nullptr;
@@ -10420,6 +10843,24 @@ private:
   std::function<void(const QString &)> imageVisibilityCalcSetter_;
   std::array<std::function<QString()>, 4> imageChannelGetters_{};
   std::array<std::function<void(const QString &)>, 4> imageChannelSetters_{};
+  std::function<QString()> heatmapTitleGetter_;
+  std::function<void(const QString &)> heatmapTitleSetter_;
+  std::function<QString()> heatmapDataChannelGetter_;
+  std::function<void(const QString &)> heatmapDataChannelSetter_;
+  std::function<HeatmapDimensionSource()> heatmapXSourceGetter_;
+  std::function<void(HeatmapDimensionSource)> heatmapXSourceSetter_;
+  std::function<HeatmapDimensionSource()> heatmapYSourceGetter_;
+  std::function<void(HeatmapDimensionSource)> heatmapYSourceSetter_;
+  std::function<int()> heatmapXDimensionGetter_;
+  std::function<void(int)> heatmapXDimensionSetter_;
+  std::function<int()> heatmapYDimensionGetter_;
+  std::function<void(int)> heatmapYDimensionSetter_;
+  std::function<QString()> heatmapXDimChannelGetter_;
+  std::function<void(const QString &)> heatmapXDimChannelSetter_;
+  std::function<QString()> heatmapYDimChannelGetter_;
+  std::function<void(const QString &)> heatmapYDimChannelSetter_;
+  std::function<HeatmapOrder()> heatmapOrderGetter_;
+  std::function<void(HeatmapOrder)> heatmapOrderSetter_;
   std::function<QColor()> lineColorGetter_;
   std::function<void(const QColor &)> lineColorSetter_;
   std::function<RectangleLineStyle()> lineLineStyleGetter_;

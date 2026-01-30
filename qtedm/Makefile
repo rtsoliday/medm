@@ -113,6 +113,8 @@ qtedm_SRC = qtedm.cc \
             polygon_runtime.cc \
             image_element.cc \
             image_runtime.cc \
+            heatmap_element.cc \
+            heatmap_runtime.cc \
             composite_element.cc \
             composite_runtime.cc \
             cartesian_axis_dialog.cc \

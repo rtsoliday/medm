@@ -631,6 +631,7 @@ public:
     appendVisible(byteMonitorElements_);
     appendVisible(rectangleElements_);
     appendVisible(imageElements_);
+    appendVisible(heatmapElements_);
     appendVisible(ovalElements_);
     appendVisible(arcElements_);
     appendVisible(lineElements_);
@@ -775,6 +776,9 @@ public:
       if (dynamic_cast<ImageElement *>(widget)) {
         return QStringLiteral("Image");
       }
+      if (dynamic_cast<HeatmapElement *>(widget)) {
+        return QStringLiteral("Heatmap");
+      }
       if (dynamic_cast<OvalElement *>(widget)) {
         return QStringLiteral("Oval");
       }
@@ -839,6 +843,7 @@ public:
     considerList(byteMonitorElements_);
     considerList(rectangleElements_);
     considerList(imageElements_);
+    considerList(heatmapElements_);
     considerList(ovalElements_);
     considerList(arcElements_);
     considerList(lineElements_);
@@ -2693,6 +2698,7 @@ protected:
             || state->createTool == CreateTool::kArc
             || state->createTool == CreateTool::kLine
             || state->createTool == CreateTool::kImage
+            || state->createTool == CreateTool::kHeatmap
             || state->createTool == CreateTool::kRelatedDisplay) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
@@ -3006,6 +3012,7 @@ private:
   StripChartElement *loadStripChartElement(const AdlNode &stripNode);
   ByteMonitorElement *loadByteMonitorElement(const AdlNode &byteNode);
   ImageElement *loadImageElement(const AdlNode &imageNode);
+  HeatmapElement *loadHeatmapElement(const AdlNode &heatmapNode);
   RectangleElement *loadRectangleElement(const AdlNode &rectangleNode);
   OvalElement *loadOvalElement(const AdlNode &ovalNode);
   ArcElement *loadArcElement(const AdlNode &arcNode);
@@ -3117,6 +3124,8 @@ private:
   void registerDisplayWindow(DisplayWindow *displayWin,
       bool delayExecuteMode = false);
   ImageType parseImageType(const QString &value) const;
+  HeatmapDimensionSource parseHeatmapDimensionSource(const QString &value) const;
+  HeatmapOrder parseHeatmapOrder(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
   Qt::Alignment parseAlignment(const QString &value) const;
@@ -3262,6 +3271,9 @@ private:
   QList<ImageElement *> imageElements_;
   QHash<ImageElement *, ImageRuntime *> imageRuntimes_;
   ImageElement *selectedImage_ = nullptr;
+  QList<HeatmapElement *> heatmapElements_;
+  QHash<HeatmapElement *, HeatmapRuntime *> heatmapRuntimes_;
+  HeatmapElement *selectedHeatmap_ = nullptr;
   QList<OvalElement *> ovalElements_;
   QHash<OvalElement *, OvalRuntime *> ovalRuntimes_;
   OvalElement *selectedOval_ = nullptr;
@@ -3517,10 +3529,21 @@ private:
   void clearImageSelection()
   {
     if (!selectedImage_) {
+      clearHeatmapSelection();
       return;
     }
     selectedImage_->setSelected(false);
     selectedImage_ = nullptr;
+    clearHeatmapSelection();
+  }
+
+  void clearHeatmapSelection()
+  {
+    if (!selectedHeatmap_) {
+      return;
+    }
+    selectedHeatmap_->setSelected(false);
+    selectedHeatmap_ = nullptr;
   }
 
   void clearOvalSelection()
@@ -3654,6 +3677,10 @@ private:
     }
     if (auto *image = dynamic_cast<ImageElement *>(widget)) {
       image->setSelected(selected);
+      return;
+    }
+    if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
+      heatmap->setSelected(selected);
       return;
     }
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
@@ -3840,6 +3867,12 @@ private:
       }
       return;
     }
+    if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
+      if (selectedHeatmap_ == heatmap) {
+        selectedHeatmap_ = nullptr;
+      }
+      return;
+    }
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       if (selectedOval_ == oval) {
         selectedOval_ = nullptr;
@@ -4019,6 +4052,12 @@ private:
     if (auto *image = dynamic_cast<ImageElement *>(widget)) {
       if (selectedImage_ == image) {
         clearImageSelection();
+        return;
+      }
+    }
+    if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
+      if (selectedHeatmap_ == heatmap) {
+        clearHeatmapSelection();
         return;
       }
     }
@@ -4224,6 +4263,7 @@ private:
     clearByteMonitorSelection();
     clearRectangleSelection();
     clearImageSelection();
+    clearHeatmapSelection();
     clearOvalSelection();
     clearArcSelection();
     clearLineSelection();
@@ -4244,6 +4284,7 @@ private:
   void removeLineRuntime(LineElement *element);
   void removeRectangleRuntime(RectangleElement *element);
   void removeImageRuntime(ImageElement *element);
+  void removeHeatmapRuntime(HeatmapElement *element);
   void removePolylineRuntime(PolylineElement *element);
   void removePolygonRuntime(PolygonElement *element);
   void removeMeterRuntime(MeterElement *element);
@@ -5205,6 +5246,57 @@ private:
       return true;
     }
 
+    if (selectedHeatmap_) {
+      HeatmapElement *element = selectedHeatmap_;
+      const QRect geometry = widgetDisplayRect(element);
+      const QString title = element->title();
+      const QString dataChannel = element->dataChannel();
+      const HeatmapDimensionSource xSource = element->xDimensionSource();
+      const HeatmapDimensionSource ySource = element->yDimensionSource();
+      const int xDim = element->xDimension();
+      const int yDim = element->yDimension();
+      const QString xDimChannel = element->xDimensionChannel();
+      const QString yDimChannel = element->yDimensionChannel();
+      const HeatmapOrder order = element->order();
+      prepareClipboard([geometry, title, dataChannel, xSource, ySource, xDim,
+                           yDim, xDimChannel, yDimChannel, order](DisplayWindow &target,
+                           const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = target.translateRectForPaste(geometry, offset);
+        auto *newElement = new HeatmapElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setTitle(title);
+        newElement->setDataChannel(dataChannel);
+        newElement->setXDimensionSource(xSource);
+        newElement->setYDimensionSource(ySource);
+        newElement->setXDimension(xDim);
+        newElement->setYDimension(yDim);
+        newElement->setXDimensionChannel(xDimChannel);
+        newElement->setYDimensionChannel(yDimChannel);
+        newElement->setOrder(order);
+        newElement->show();
+        target.ensureElementInStack(newElement);
+        target.heatmapElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.heatmapRuntimes_.contains(newElement)) {
+            auto *runtime = new HeatmapRuntime(newElement);
+            target.heatmapRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
+        target.selectHeatmapElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(heatmapElements_, selectedHeatmap_);
+        finalizeCut();
+      }
+      return true;
+    }
+
     if (selectedOval_) {
       OvalElement *element = selectedOval_;
   const QRect geometry = widgetDisplayRect(element);
@@ -5519,9 +5611,9 @@ private:
         || selectedMeterElement_ || selectedBarMonitorElement_
         || selectedScaleMonitorElement_ || selectedStripChartElement_
         || selectedCartesianPlotElement_ || selectedByteMonitorElement_
-        || selectedRectangle_ || selectedImage_ || selectedOval_
-    || selectedArc_ || selectedLine_ || selectedPolyline_
-    || selectedPolygon_ || selectedCompositeElement_;
+        || selectedRectangle_ || selectedImage_ || selectedHeatmap_ || selectedOval_
+        || selectedArc_ || selectedLine_ || selectedPolyline_
+        || selectedPolygon_ || selectedCompositeElement_;
   }
 
   bool hasAnySelection() const
@@ -5540,6 +5632,7 @@ private:
         || !scaleMonitorElements_.isEmpty() || !stripChartElements_.isEmpty()
         || !cartesianPlotElements_.isEmpty() || !byteMonitorElements_.isEmpty()
         || !rectangleElements_.isEmpty() || !imageElements_.isEmpty()
+        || !heatmapElements_.isEmpty()
         || !ovalElements_.isEmpty() || !arcElements_.isEmpty()
         || !lineElements_.isEmpty() || !polylineElements_.isEmpty()
         || !polygonElements_.isEmpty() || !compositeElements_.isEmpty();
@@ -7402,6 +7495,72 @@ private:
         std::move(channelGetters), std::move(channelSetters));
   }
 
+  void showResourcePaletteForHeatmap(HeatmapElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    dialog->showForHeatmap(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() { return element->title(); },
+        [this, element](const QString &value) {
+          element->setTitle(value);
+          markDirty();
+        },
+        [element]() { return element->dataChannel(); },
+        [this, element](const QString &value) {
+          element->setDataChannel(value);
+          markDirty();
+        },
+        [element]() { return element->xDimensionSource(); },
+        [this, element](HeatmapDimensionSource source) {
+          element->setXDimensionSource(source);
+          markDirty();
+        },
+        [element]() { return element->yDimensionSource(); },
+        [this, element](HeatmapDimensionSource source) {
+          element->setYDimensionSource(source);
+          markDirty();
+        },
+        [element]() { return element->xDimension(); },
+        [this, element](int value) {
+          element->setXDimension(value);
+          markDirty();
+        },
+        [element]() { return element->yDimension(); },
+        [this, element](int value) {
+          element->setYDimension(value);
+          markDirty();
+        },
+        [element]() { return element->xDimensionChannel(); },
+        [this, element](const QString &value) {
+          element->setXDimensionChannel(value);
+          markDirty();
+        },
+        [element]() { return element->yDimensionChannel(); },
+        [this, element](const QString &value) {
+          element->setYDimensionChannel(value);
+          markDirty();
+        },
+        [element]() { return element->order(); },
+        [this, element](HeatmapOrder order) {
+          element->setOrder(order);
+          markDirty();
+        });
+  }
+
   void showResourcePaletteForOval(OvalElement *element)
   {
     if (!element) {
@@ -8014,6 +8173,8 @@ private:
               && image->visibilityMode() == TextVisibilityMode::kStatic) {
             return nullptr;
           }
+        } else if (dynamic_cast<HeatmapElement *>(candidate)) {
+          return candidate;
         } else if (auto *text = dynamic_cast<TextElement *>(candidate)) {
           if (text->colorMode() == TextColorMode::kStatic
               && text->visibilityMode() == TextVisibilityMode::kStatic) {
@@ -8087,6 +8248,14 @@ private:
       appendChannelArray(AdlWriter::collectChannels(element));
     } else if (auto *element = dynamic_cast<ImageElement *>(widget)) {
       appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<HeatmapElement *>(widget)) {
+      appendChannel(element->dataChannel());
+      if (element->xDimensionSource() == HeatmapDimensionSource::kChannel) {
+        appendChannel(element->xDimensionChannel());
+      }
+      if (element->yDimensionSource() == HeatmapDimensionSource::kChannel) {
+        appendChannel(element->yDimensionChannel());
+      }
     } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
       appendChannelArray(AdlWriter::collectChannels(element));
     } else if (auto *element = dynamic_cast<ArcElement *>(widget)) {
@@ -8148,6 +8317,7 @@ public:
     appendList(cartesianPlotElements_);
     appendList(rectangleElements_);
     appendList(imageElements_);
+    appendList(heatmapElements_);
     appendList(ovalElements_);
     appendList(arcElements_);
     appendList(lineElements_);
@@ -8644,6 +8814,9 @@ private:
     if (dynamic_cast<ImageElement *>(widget)) {
       return QStringLiteral("Image");
     }
+    if (dynamic_cast<HeatmapElement *>(widget)) {
+      return QStringLiteral("Heatmap");
+    }
     if (dynamic_cast<OvalElement *>(widget)) {
       return QStringLiteral("Oval");
     }
@@ -8786,6 +8959,14 @@ private:
         for (const QString &channel : rawChannels) {
           addRef(channel);
         }
+      }
+    } else if (auto *element = dynamic_cast<HeatmapElement *>(widget)) {
+      addRef(element->dataChannel());
+      if (element->xDimensionSource() == HeatmapDimensionSource::kChannel) {
+        addRef(element->xDimensionChannel());
+      }
+      if (element->yDimensionSource() == HeatmapDimensionSource::kChannel) {
+        addRef(element->yDimensionChannel());
       }
     } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
       if (auto *runtime = ovalRuntimes_.value(element, nullptr)) {
@@ -10098,6 +10279,42 @@ private:
     selectedImage_->setSelected(true);
   }
 
+  void selectHeatmapElement(HeatmapElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedHeatmap_) {
+      selectedHeatmap_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedHeatmap_ = element;
+    selectedHeatmap_->setSelected(true);
+  }
+
   void selectOvalElement(OvalElement *element)
   {
     if (!element) {
@@ -10368,6 +10585,9 @@ private:
     if (selectedImage_) {
       return selectedImage_;
     }
+    if (selectedHeatmap_) {
+      return selectedHeatmap_;
+    }
     if (selectedOval_) {
       return selectedOval_;
     }
@@ -10467,6 +10687,10 @@ private:
     } else if (auto *image = dynamic_cast<ImageElement *>(widget)) {
       selectImageElement(image);
       showResourcePaletteForImage(image);
+      handled = true;
+    } else if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
+      selectHeatmapElement(heatmap);
+      showResourcePaletteForHeatmap(heatmap);
       handled = true;
     } else if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       selectOvalElement(oval);
@@ -12072,6 +12296,7 @@ private:
     considerList(byteMonitorElements_);
     considerList(rectangleElements_);
     considerList(imageElements_);
+    considerList(heatmapElements_);
     considerList(ovalElements_);
     considerList(arcElements_);
     considerList(lineElements_);
@@ -12379,6 +12604,16 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createImageElement(rect);
+      break;
+    case CreateTool::kHeatmap:
+      if (rect.width() < kMinimumHeatmapWidth) {
+        rect.setWidth(kMinimumHeatmapWidth);
+      }
+      if (rect.height() < kMinimumHeatmapHeight) {
+        rect.setHeight(kMinimumHeatmapHeight);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createHeatmapElement(rect);
       break;
     case CreateTool::kRelatedDisplay:
       if (rect.width() < kMinimumTextWidth) {
@@ -13535,6 +13770,43 @@ private:
     markDirty();
   }
 
+  void createHeatmapElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create Heatmap"));
+    QRect target = rect;
+    if (target.width() < kMinimumHeatmapWidth) {
+      target.setWidth(kMinimumHeatmapWidth);
+    }
+    if (target.height() < kMinimumHeatmapHeight) {
+      target.setHeight(kMinimumHeatmapHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new HeatmapElement(displayArea_);
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    heatmapElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!heatmapRuntimes_.contains(element)) {
+        auto *runtime = new HeatmapRuntime(element);
+        heatmapRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectHeatmapElement(element);
+    showResourcePaletteForHeatmap(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createOvalElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -13835,6 +14107,7 @@ private:
             || state->createTool == CreateTool::kPolyline
             || state->createTool == CreateTool::kLine
             || state->createTool == CreateTool::kImage
+            || state->createTool == CreateTool::kHeatmap
             || state->createTool == CreateTool::kRelatedDisplay);
     if (displayArea_) {
       if (crossCursorActive) {
@@ -14460,6 +14733,13 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
+    auto *heatmapAction = addMenuAction(monitorsMenu, QStringLiteral("Heatmap"));
+    QObject::connect(heatmapAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kHeatmap);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     auto *byteAction = addMenuAction(monitorsMenu, QStringLiteral("Byte Monitor"));
     QObject::connect(byteAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kByteMonitor);
@@ -15057,6 +15337,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     scaleWidget(e);
   }
   for (ImageElement *e : imageElements_) {
+    scaleWidget(e);
+  }
+  for (HeatmapElement *e : heatmapElements_) {
     scaleWidget(e);
   }
   for (OvalElement *e : ovalElements_) {
@@ -16499,6 +16782,66 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       continue;
     }
 
+    if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("heatmap {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(heatmap));
+      const QString title = heatmap->title().trimmed();
+      if (!title.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("title=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(title)));
+      }
+      const QString dataChannel = heatmap->dataChannel().trimmed();
+      if (!dataChannel.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("dataPv=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(dataChannel)));
+      }
+      if (heatmap->xDimension() > 0) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("xDim=%1").arg(heatmap->xDimension()));
+      }
+      if (heatmap->yDimension() > 0) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("yDim=%1").arg(heatmap->yDimension()));
+      }
+      if (heatmap->xDimensionSource() != HeatmapDimensionSource::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("xDimSource=\"%1\"")
+                .arg(AdlWriter::heatmapDimensionSourceString(
+                    heatmap->xDimensionSource())));
+      }
+      if (heatmap->yDimensionSource() != HeatmapDimensionSource::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("yDimSource=\"%1\"")
+                .arg(AdlWriter::heatmapDimensionSourceString(
+                    heatmap->yDimensionSource())));
+      }
+      if (heatmap->xDimensionSource() == HeatmapDimensionSource::kChannel) {
+        const QString xDimPv = heatmap->xDimensionChannel().trimmed();
+        if (!xDimPv.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 1,
+              QStringLiteral("xDimPv=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(xDimPv)));
+        }
+      }
+      if (heatmap->yDimensionSource() == HeatmapDimensionSource::kChannel) {
+        const QString yDimPv = heatmap->yDimensionChannel().trimmed();
+        if (!yDimPv.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 1,
+              QStringLiteral("yDimPv=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(yDimPv)));
+        }
+      }
+      if (heatmap->order() != HeatmapOrder::kRowMajor) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("order=\"%1\"")
+                .arg(AdlWriter::heatmapOrderString(heatmap->order())));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("oval {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(oval));
@@ -17353,6 +17696,67 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("heatmap {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(heatmap));
+    const QString title = heatmap->title().trimmed();
+    if (!title.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("title=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(title)));
+    }
+    const QString dataChannel = heatmap->dataChannel().trimmed();
+    if (!dataChannel.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("dataPv=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(dataChannel)));
+    }
+    if (heatmap->xDimension() > 0) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("xDim=%1").arg(heatmap->xDimension()));
+    }
+    if (heatmap->yDimension() > 0) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("yDim=%1").arg(heatmap->yDimension()));
+    }
+    if (heatmap->xDimensionSource() != HeatmapDimensionSource::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("xDimSource=\"%1\"")
+              .arg(AdlWriter::heatmapDimensionSourceString(
+                  heatmap->xDimensionSource())));
+    }
+    if (heatmap->yDimensionSource() != HeatmapDimensionSource::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("yDimSource=\"%1\"")
+              .arg(AdlWriter::heatmapDimensionSourceString(
+                  heatmap->yDimensionSource())));
+    }
+    if (heatmap->xDimensionSource() == HeatmapDimensionSource::kChannel) {
+      const QString xDimPv = heatmap->xDimensionChannel().trimmed();
+      if (!xDimPv.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next,
+            QStringLiteral("xDimPv=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(xDimPv)));
+      }
+    }
+    if (heatmap->yDimensionSource() == HeatmapDimensionSource::kChannel) {
+      const QString yDimPv = heatmap->yDimensionChannel().trimmed();
+      if (!yDimPv.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next,
+            QStringLiteral("yDimPv=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(yDimPv)));
+      }
+    }
+    if (heatmap->order() != HeatmapOrder::kRowMajor) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("order=\"%1\"")
+              .arg(AdlWriter::heatmapOrderString(heatmap->order())));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
     AdlWriter::writeObjectSection(stream, next,
@@ -17498,6 +17902,8 @@ inline void DisplayWindow::clearAllElements()
           removeRectangleRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ImageElement *>) {
           removeImageRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, HeatmapElement *>) {
+          removeHeatmapRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ArcElement *>) {
           removeArcRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, OvalElement *>) {
@@ -17531,6 +17937,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(byteMonitorElements_);
   clearList(rectangleElements_);
   clearList(imageElements_);
+  clearList(heatmapElements_);
   clearList(ovalElements_);
   clearList(arcElements_);
   clearList(lineElements_);
@@ -18274,6 +18681,28 @@ inline ImageType DisplayWindow::parseImageType(const QString &value) const
     return ImageType::kNone;
   }
   return ImageType::kNone;
+}
+
+inline HeatmapDimensionSource DisplayWindow::parseHeatmapDimensionSource(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.contains(QStringLiteral("channel"))
+      || normalized.contains(QStringLiteral("pv"))) {
+    return HeatmapDimensionSource::kChannel;
+  }
+  return HeatmapDimensionSource::kStatic;
+}
+
+inline HeatmapOrder DisplayWindow::parseHeatmapOrder(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.contains(QStringLiteral("column"))
+      || normalized.contains(QStringLiteral("col"))) {
+    return HeatmapOrder::kColumnMajor;
+  }
+  return HeatmapOrder::kRowMajor;
 }
 
 inline TextMonitorFormat DisplayWindow::parseTextMonitorFormat(
@@ -21894,6 +22323,104 @@ inline ImageElement *DisplayWindow::loadImageElement(
   return element;
 }
 
+inline HeatmapElement *DisplayWindow::loadHeatmapElement(
+    const AdlNode &heatmapNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(heatmapNode);
+  QRect originalGeometry = geometry;
+  if (geometry.width() < kMinimumHeatmapWidth) {
+    geometry.setWidth(kMinimumHeatmapWidth);
+  }
+  if (geometry.height() < kMinimumHeatmapHeight) {
+    geometry.setHeight(kMinimumHeatmapHeight);
+  }
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new HeatmapElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  const QString dataPvValue = propertyValue(heatmapNode,
+      QStringLiteral("dataPv"));
+  if (!dataPvValue.trimmed().isEmpty()) {
+    element->setDataChannel(dataPvValue);
+  } else if (const AdlNode *monitor = ::findChild(heatmapNode,
+                 QStringLiteral("monitor"))) {
+    const QString channel = channelValueWithLegacyFallback(*monitor);
+    if (!channel.trimmed().isEmpty()) {
+      element->setDataChannel(channel);
+    }
+  }
+
+  const QString titleValue = propertyValue(heatmapNode, QStringLiteral("title"));
+  if (!titleValue.trimmed().isEmpty()) {
+    element->setTitle(titleValue);
+  }
+
+  bool ok = false;
+  const QString xDimValue = propertyValue(heatmapNode, QStringLiteral("xDim"));
+  const int xDim = xDimValue.toInt(&ok);
+  if (ok && xDim > 0) {
+    element->setXDimension(xDim);
+  }
+
+  ok = false;
+  const QString yDimValue = propertyValue(heatmapNode, QStringLiteral("yDim"));
+  const int yDim = yDimValue.toInt(&ok);
+  if (ok && yDim > 0) {
+    element->setYDimension(yDim);
+  }
+
+  const QString xSourceValue = propertyValue(heatmapNode,
+      QStringLiteral("xDimSource"));
+  if (!xSourceValue.trimmed().isEmpty()) {
+    element->setXDimensionSource(parseHeatmapDimensionSource(xSourceValue));
+  }
+  const QString ySourceValue = propertyValue(heatmapNode,
+      QStringLiteral("yDimSource"));
+  if (!ySourceValue.trimmed().isEmpty()) {
+    element->setYDimensionSource(parseHeatmapDimensionSource(ySourceValue));
+  }
+
+  const QString xDimPv = propertyValue(heatmapNode, QStringLiteral("xDimPv"));
+  if (!xDimPv.trimmed().isEmpty()) {
+    element->setXDimensionChannel(xDimPv);
+  }
+  const QString yDimPv = propertyValue(heatmapNode, QStringLiteral("yDimPv"));
+  if (!yDimPv.trimmed().isEmpty()) {
+    element->setYDimensionChannel(yDimPv);
+  }
+
+  const QString orderValue = propertyValue(heatmapNode, QStringLiteral("order"));
+  if (!orderValue.trimmed().isEmpty()) {
+    element->setOrder(parseHeatmapOrder(orderValue));
+  }
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  heatmapElements_.append(element);
+  ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!heatmapRuntimes_.contains(element)) {
+      auto *runtime = new HeatmapRuntime(element);
+      heatmapRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
+  return element;
+}
+
 inline RectangleElement *DisplayWindow::loadRectangleElement(
     const AdlNode &rectangleNode)
 {
@@ -22950,6 +23477,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadByteMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("image")) {
     loaded = loadImageElement(node) != nullptr;
+  } else if (name == QStringLiteral("heatmap")) {
+    loaded = loadHeatmapElement(node) != nullptr;
   } else if (name == QStringLiteral("rectangle")) {
     loaded = loadRectangleElement(node) != nullptr;
   } else if (name == QStringLiteral("oval")) {
@@ -23141,6 +23670,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(textEntryRuntimes_, textEntryElements_.size());
   reserveRuntime(rectangleRuntimes_, rectangleElements_.size());
   reserveRuntime(imageRuntimes_, imageElements_.size());
+  reserveRuntime(heatmapRuntimes_, heatmapElements_.size());
   reserveRuntime(ovalRuntimes_, ovalElements_.size());
   reserveRuntime(arcRuntimes_, arcElements_.size());
   reserveRuntime(lineRuntimes_, lineElements_.size());
@@ -23162,7 +23692,7 @@ inline void DisplayWindow::enterExecuteMode()
   /* Report element counts for timing diagnostics */
   int totalWidgets = compositeElements_.size() + textElements_.size() +
       textEntryElements_.size() + rectangleElements_.size() +
-      imageElements_.size() + ovalElements_.size() + arcElements_.size() +
+      imageElements_.size() + heatmapElements_.size() + ovalElements_.size() + arcElements_.size() +
       lineElements_.size() + polylineElements_.size() + polygonElements_.size() +
       meterElements_.size() + scaleMonitorElements_.size() +
       stripChartElements_.size() + cartesianPlotElements_.size() +
@@ -23235,6 +23765,18 @@ inline void DisplayWindow::enterExecuteMode()
     if (!imageRuntimes_.contains(element)) {
       auto *runtime = new ImageRuntime(element);
       imageRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
+  for (HeatmapElement *element : heatmapElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!heatmapRuntimes_.contains(element)) {
+      auto *runtime = new HeatmapRuntime(element);
+      heatmapRuntimes_.insert(element, runtime);
       runtime->start();
 
     }
@@ -23313,7 +23855,7 @@ inline void DisplayWindow::enterExecuteMode()
   }
   int monitorCount = scaleMonitorElements_.size() + stripChartElements_.size() +
       cartesianPlotElements_.size() + barMonitorElements_.size() +
-      byteMonitorElements_.size();
+      byteMonitorElements_.size() + heatmapElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating monitor runtimes", monitorCount);
   for (ScaleMonitorElement *element : scaleMonitorElements_) {
     if (!element) {
@@ -23724,6 +24266,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = heatmapRuntimes_.begin(); it != heatmapRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  heatmapRuntimes_.clear();
+  for (HeatmapElement *element : heatmapElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = ovalRuntimes_.begin(); it != ovalRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -24015,6 +24569,17 @@ inline void DisplayWindow::removeImageRuntime(ImageElement *element)
     return;
   }
   if (auto *runtime = imageRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeHeatmapRuntime(HeatmapElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = heatmapRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

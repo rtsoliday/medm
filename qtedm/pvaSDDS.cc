@@ -49,7 +49,9 @@ typedef std::unordered_multimap<std::string, long>::iterator MymapIterator;
 
 static uint32_t GetElementCountFromNelm(PVA_OVERALL *pva, long index, uint32_t currentCount);
 
+static long ExtractStructureArrayValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr, bool monitorMode);
 static long ExtractUnionValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr, bool monitorMode);
+static long ExtractNTNDArrayValue(PVA_OVERALL *pva, long index, epics::pvData::PVStructurePtr pvStructurePtr, bool monitorMode);
 static long ExtractByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructurePtr root, const std::string &path, bool monitorMode);
 static long PutByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructurePtr root, const std::string &path);
 
@@ -987,6 +989,104 @@ long ExtractScalarArrayValue(PVA_OVERALL *pva, long index, epics::pvData::PVFiel
   return (0);
 }
 
+static long ExtractStructureArrayValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr, bool monitorMode) {
+  epics::pvData::PVStructureArrayPtr arrayPtr;
+  epics::pvData::PVStructureArray::const_svector elements;
+  long i = 0;
+
+  arrayPtr = std::tr1::static_pointer_cast<epics::pvData::PVStructureArray>(PVFieldPtr);
+  elements = arrayPtr->view();
+
+  const long totalElements = static_cast<long>(elements.size());
+  const long elementCount = static_cast<long>(GetElementCountFromNelm(
+      pva, index, static_cast<uint32_t>(totalElements)));
+  if (elementCount <= 0) {
+    return (0);
+  }
+
+  std::string preferredField;
+  epics::pvData::ScalarType scalarType = epics::pvData::pvDouble;
+  if (!elements.empty() && elements[0]) {
+    if (elements[0]->getSubField("value")) {
+      preferredField = "value";
+    } else if (elements[0]->getSubField("size")) {
+      preferredField = "size";
+    } else {
+      const epics::pvData::PVFieldPtrArray fields = elements[0]->getPVFields();
+      for (const auto &field : fields) {
+        if (field && field->getField()->getType() == epics::pvData::scalar) {
+          preferredField = field->getFieldName();
+          break;
+        }
+      }
+    }
+  }
+
+  if (preferredField.empty()) {
+    return (1);
+  }
+
+  if (monitorMode) {
+    i = 0;
+    if (pva->pvaData[index].numMonitorReadings == 0) {
+      pva->pvaData[index].fieldType = epics::pvData::scalarArray;
+      pva->pvaData[index].numMonitorElements = elementCount;
+    } else if (pva->pvaData[index].nonnumeric) {
+      for (long k = 0; k < pva->pvaData[index].numMonitorElements; k++) {
+        if (pva->pvaData[index].monitorData[0].stringValues[k])
+          free(pva->pvaData[index].monitorData[0].stringValues[k]);
+      }
+    }
+    if (pva->pvaData[index].monitorData[0].values == NULL) {
+      pva->pvaData[index].monitorData[0].values = (double *)malloc(sizeof(double) * elementCount);
+      pva->pvaData[index].numeric = true;
+    }
+  } else {
+    i = pva->pvaData[index].numGetReadings;
+    if (pva->pvaData[index].numGetReadings == 0) {
+      pva->pvaData[index].fieldType = epics::pvData::scalarArray;
+      pva->pvaData[index].numGetElements = elementCount;
+    } else if (pva->limitGetReadings) {
+      i = 0;
+    }
+    if (pva->pvaData[index].getData[i].values == NULL) {
+      pva->pvaData[index].getData[i].values = (double *)malloc(sizeof(double) * elementCount);
+      pva->pvaData[index].numeric = true;
+    }
+  }
+
+  for (long k = 0; k < elementCount; k++) {
+    double value = 0.0;
+    if (k < totalElements && elements[k]) {
+      epics::pvData::PVFieldPtr field = elements[k]->getSubField(preferredField);
+      if (field && field->getField()->getType() == epics::pvData::scalar) {
+        epics::pvData::PVScalarPtr pvScalarPtr = std::tr1::static_pointer_cast<epics::pvData::PVScalar>(field);
+        if (k == 0) {
+          scalarType = pvScalarPtr->getScalar()->getScalarType();
+          pva->pvaData[index].scalarType = scalarType;
+        }
+        value = pvScalarPtr->getAs<double>();
+      }
+    }
+    if (monitorMode) {
+      pva->pvaData[index].monitorData[0].values[k] = value;
+    } else {
+      pva->pvaData[index].getData[i].values[k] = value;
+    }
+  }
+
+  if (monitorMode) {
+    pva->pvaData[index].numMonitorReadings = 1;
+  } else {
+    if (pva->limitGetReadings) {
+      pva->pvaData[index].numGetReadings = 1;
+    } else {
+      pva->pvaData[index].numGetReadings++;
+    }
+  }
+  return (0);
+}
+
 static long ExtractUnionValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr, bool monitorMode) {
   epics::pvData::PVUnionPtr pvUnionPtr;
   epics::pvData::PVFieldPtr selectedField;
@@ -1008,6 +1108,9 @@ static long ExtractUnionValue(PVA_OVERALL *pva, long index, epics::pvData::PVFie
   }
   case epics::pvData::structure: {
     return ExtractStructureValue(pva, index, selectedField, monitorMode);
+  }
+  case epics::pvData::structureArray: {
+    return ExtractStructureArrayValue(pva, index, selectedField, monitorMode);
   }
   case epics::pvData::union_: {
     /* Nested unions are allowed; recurse. */
@@ -1115,7 +1218,7 @@ static long ExtractByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructu
     epics::pvData::PVStructurePtr currentStruct = std::tr1::static_pointer_cast<epics::pvData::PVStructure>(current);
     epics::pvData::PVFieldPtr next = currentStruct->getSubField(fieldName);
     if (!next) {
-      std::cerr << "Error: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
+      std::cerr << "Error1: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
       return (1);
     }
     current = next;
@@ -1144,7 +1247,7 @@ static long ExtractByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructu
   }
 
   if (!current) {
-    std::cerr << "Error: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
+    std::cerr << "Error2: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
     return (1);
   }
   switch (current->getField()->getType()) {
@@ -1163,7 +1266,7 @@ static long ExtractByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructu
     return (1);
   }
   default:
-    std::cerr << "ERROR: Need code to handle " << current->getField()->getType() << std::endl;
+    std::cerr << "ERROR1: Need code to handle " << current->getField()->getType() << std::endl;
     return (1);
   }
 }
@@ -1210,7 +1313,7 @@ static long PutByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructurePt
     epics::pvData::PVStructurePtr currentStruct = std::tr1::static_pointer_cast<epics::pvData::PVStructure>(current);
     epics::pvData::PVFieldPtr next = currentStruct->getSubField(fieldName);
     if (!next) {
-      std::cerr << "Error: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
+      std::cerr << "Error3: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
       return (1);
     }
     current = next;
@@ -1239,7 +1342,7 @@ static long PutByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructurePt
   }
 
   if (!current) {
-    std::cerr << "Error: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
+    std::cerr << "Error4: sub-field does not exist for " << pva->pvaChannelNames[index] << std::endl;
     return (1);
   }
   switch (current->getField()->getType()) {
@@ -1256,7 +1359,7 @@ static long PutByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructurePt
     return (1);
   }
   default:
-    std::cerr << "ERROR: Need code to handle " << current->getField()->getType() << std::endl;
+    std::cerr << "ERROR2: Need code to handle " << current->getField()->getType() << std::endl;
     return (1);
   }
 }
@@ -1349,6 +1452,66 @@ long ExtractNTEnumValue(PVA_OVERALL *pva, long index, epics::pvData::PVStructure
   return (1);
 }
 
+long ExtractNTNDArrayValue(PVA_OVERALL *pva, long index,
+    epics::pvData::PVStructurePtr pvStructurePtr, bool monitorMode) {
+  std::string afterDot;
+  size_t pos = pva->pvaChannelNames[index].find('.');
+  if (pos != std::string::npos) {
+    afterDot = pva->pvaChannelNames[index].substr(pos + 1);
+    if (!afterDot.empty()) {
+      if (afterDot.find_first_of("[(@") != std::string::npos) {
+        return ExtractByPath(pva, index, pvStructurePtr, afterDot, monitorMode);
+      }
+      epics::pvData::PVFieldPtr pvFieldPtr =
+          pvStructurePtr->getSubField(afterDot);
+      if (!pvFieldPtr) {
+        fprintf(stderr, "Error5: sub-field does not exist for %s\n",
+            pva->pvaChannelNames[index].c_str());
+        return (1);
+      }
+      switch (pvFieldPtr->getField()->getType()) {
+      case epics::pvData::scalar:
+        return ExtractScalarValue(pva, index, pvFieldPtr, monitorMode);
+      case epics::pvData::scalarArray:
+        return ExtractScalarArrayValue(pva, index, pvFieldPtr, monitorMode);
+      case epics::pvData::structure:
+        return ExtractStructureValue(pva, index, pvFieldPtr, monitorMode);
+      case epics::pvData::union_:
+        return ExtractUnionValue(pva, index, pvFieldPtr, monitorMode);
+      case epics::pvData::structureArray:
+        return ExtractStructureArrayValue(pva, index, pvFieldPtr, monitorMode);
+      default:
+        std::cerr << "ERROR3: Need code to handle "
+                  << pvFieldPtr->getField()->getType() << std::endl;
+        return (1);
+      }
+    }
+  }
+
+  epics::pvData::PVFieldPtr valueField = pvStructurePtr->getSubField("value");
+  if (!valueField) {
+    std::cerr << "ERROR: Value field is missing." << std::endl;
+    return (1);
+  }
+
+  switch (valueField->getField()->getType()) {
+  case epics::pvData::union_:
+    return ExtractUnionValue(pva, index, valueField, monitorMode);
+  case epics::pvData::scalar:
+    return ExtractScalarValue(pva, index, valueField, monitorMode);
+  case epics::pvData::scalarArray:
+    return ExtractScalarArrayValue(pva, index, valueField, monitorMode);
+  case epics::pvData::structure:
+    return ExtractStructureValue(pva, index, valueField, monitorMode);
+  case epics::pvData::structureArray:
+    return ExtractStructureArrayValue(pva, index, valueField, monitorMode);
+  default:
+    std::cerr << "ERROR4: Need code to handle "
+              << valueField->getField()->getType() << std::endl;
+    return (1);
+  }
+}
+
 long ExtractStructureValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr, bool monitorMode) {
   long fieldCount;
   epics::pvData::PVFieldPtrArray PVFieldPtrArray;
@@ -1382,7 +1545,7 @@ long ExtractStructureValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldP
     }
     pvFieldPtr = pvStructurePtr->getSubField(afterDot);
     if (pvFieldPtr == NULL) {
-      fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+      fprintf(stderr, "Error6: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
       return (1);
     }
     switch (pvFieldPtr->getField()->getType()) {
@@ -1415,7 +1578,7 @@ long ExtractStructureValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldP
       return (1);
     }
     default: {
-      std::cerr << "ERROR: Need code to handle " << pvFieldPtr->getField()->getType() << std::endl;
+      std::cerr << "ERROR5: Need code to handle " << pvFieldPtr->getField()->getType() << std::endl;
       return (1);
     }
     }
@@ -1457,7 +1620,7 @@ long ExtractStructureValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldP
     break;
   }
   default: {
-    std::cerr << "ERROR: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
+    std::cerr << "ERROR6: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
     return (1);
   }
   }
@@ -1489,6 +1652,10 @@ long ExtractPVAValuesOld(PVA_OVERALL *pva) {
         if (ExtractNTEnumValue(pva, i, pvStructurePtr, monitorMode)) {
           return (1);
         }
+      } else if (id == "epics:nt/NTNDArray:1.0") {
+        if (ExtractNTNDArrayValue(pva, i, pvStructurePtr, monitorMode)) {
+          return (1);
+        }
       } else if (id == "structure") {
         epics::pvData::PVFieldPtrArray PVFieldPtrArray;
         long fieldCount;
@@ -1502,7 +1669,7 @@ long ExtractPVAValuesOld(PVA_OVERALL *pva) {
           }
         }
         if (fieldCount == 0) {
-          fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
+          fprintf(stderr, "Error7: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
           return (1);
         }
         switch (PVFieldPtrArray[0]->getField()->getType()) {
@@ -1531,7 +1698,7 @@ long ExtractPVAValuesOld(PVA_OVERALL *pva) {
           break;
         }
         default: {
-          std::cerr << "ERROR: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
+          std::cerr << "ERROR7: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
           return (1);
         }
         }
@@ -1601,13 +1768,17 @@ long ExtractPVAValues(PVA_OVERALL *pva) {
         if (ExtractNTEnumValue(pva, i, pvStructurePtr, monitorMode)) {
           return (1);
         }
+      } else if (id == "epics:nt/NTNDArray:1.0") {
+        if (ExtractNTNDArrayValue(pva, i, pvStructurePtr, monitorMode)) {
+          return (1);
+        }
       } else if (id == "structure") {
         epics::pvData::PVFieldPtrArray PVFieldPtrArray;
         long fieldCount;
         PVFieldPtrArray = pva->pvaClientGetPtr[i]->getData()->getPVStructure()->getPVFields();
         fieldCount = pva->pvaClientGetPtr[i]->getData()->getPVStructure()->getStructure()->getNumberFields();
         if (fieldCount == 0) {
-          fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
+          fprintf(stderr, "Error8: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
           return (1);
         }
         if (fieldCount > 1) {
@@ -1622,7 +1793,7 @@ long ExtractPVAValues(PVA_OVERALL *pva) {
             }
             pvFieldPtr =  pva->pvaClientGetPtr[i]->getData()->getPVStructure()->getSubField(afterDot);
             if (pvFieldPtr == NULL) {
-              fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
+              fprintf(stderr, "Error9: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
               return (1);
             }
             if (afterDot.find_first_of("[(@") != std::string::npos) {
@@ -1661,7 +1832,7 @@ long ExtractPVAValues(PVA_OVERALL *pva) {
               return (1);
             }
             default: {
-              std::cerr << "ERROR: Need code to handle " << pva->pvaClientGetPtr[i]->getData()->getPVStructure()->getSubField(afterDot)->getField()->getType() << std::endl;
+              std::cerr << "ERROR8: Need code to handle " << pva->pvaClientGetPtr[i]->getData()->getPVStructure()->getSubField(afterDot)->getField()->getType() << std::endl;
               return (1);
             }
             }
@@ -1706,7 +1877,7 @@ long ExtractPVAValues(PVA_OVERALL *pva) {
           return (1);
         }
         default: {
-          std::cerr << "ERROR: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
+          std::cerr << "ERROR9: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
           return (1);
         }
         }
@@ -1940,7 +2111,7 @@ long PutStructureValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr P
     break;
   }
   default: {
-    std::cerr << "ERROR: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
+    std::cerr << "ERROR10: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
     return (1);
   }
   }
@@ -2235,7 +2406,7 @@ long PutPVAValues(PVA_OVERALL *pva) {
           }
         }
         if (fieldCount == 0) {
-          fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
+          fprintf(stderr, "Error10: sub-field does not exist for %s\n", pva->pvaChannelNames[i].c_str());
           return (1);
         }
         switch (PVFieldPtrArray[0]->getField()->getType()) {
@@ -2270,7 +2441,7 @@ long PutPVAValues(PVA_OVERALL *pva) {
           return (1);
         }
         default: {
-          std::cerr << "ERROR: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
+          std::cerr << "ERROR11: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
           return (1);
         }
         }
@@ -2473,6 +2644,10 @@ long PollMonitoredPVA(PVA_OVERALL **pva, long count) {
               if (ExtractNTEnumValue(pva[n], i, pvStructurePtr, monitorMode)) {
                 return (-1);
               }
+            } else if (id == "epics:nt/NTNDArray:1.0") {
+              if (ExtractNTNDArrayValue(pva[n], i, pvStructurePtr, monitorMode)) {
+                return (-1);
+              }
             } else if (id == "structure") {
               epics::pvData::PVFieldPtrArray PVFieldPtrArray;
               long fieldCount;
@@ -2504,8 +2679,26 @@ long PollMonitoredPVA(PVA_OVERALL **pva, long count) {
                 }
                 break;
               }
+              case epics::pvData::union_: {
+                if (ExtractUnionValue(pva[n], i, PVFieldPtrArray[0], monitorMode)) {
+                  return (-1);
+                }
+                break;
+              }
+              case epics::pvData::structureArray: {
+                size_t pos = pva[n]->pvaChannelNames[i].find('.');
+                if (pos != std::string::npos) {
+                  std::string afterDot = pva[n]->pvaChannelNames[i].substr(pos + 1);
+                  if (ExtractByPath(pva[n], i, pvStructurePtr, afterDot, monitorMode)) {
+                    return (-1);
+                  }
+                  break;
+                }
+                std::cerr << "Error: structureArray requires an index and a member (e.g. dimension[0].size, dimension(0).size, or dimension@0.size)" << std::endl;
+                return (-1);
+              }
               default: {
-                std::cerr << "ERROR: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
+                std::cerr << "ERROR12: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
                 return (-1);
               }
               }
@@ -2545,6 +2738,10 @@ long WaitEventMonitoredPVA(PVA_OVERALL *pva, long index, double secondsToWait) {
           if (ExtractNTEnumValue(pva, i, pvStructurePtr, monitorMode)) {
             return (1);
           }
+        } else if (id == "epics:nt/NTNDArray:1.0") {
+          if (ExtractNTNDArrayValue(pva, i, pvStructurePtr, monitorMode)) {
+            return (1);
+          }
         } else if (id == "structure") {
           epics::pvData::PVFieldPtrArray PVFieldPtrArray;
           long fieldCount;
@@ -2576,8 +2773,26 @@ long WaitEventMonitoredPVA(PVA_OVERALL *pva, long index, double secondsToWait) {
             }
             break;
           }
+          case epics::pvData::union_: {
+            if (ExtractUnionValue(pva, i, PVFieldPtrArray[0], monitorMode)) {
+              return (1);
+            }
+            break;
+          }
+          case epics::pvData::structureArray: {
+            size_t pos = pva->pvaChannelNames[i].find('.');
+            if (pos != std::string::npos) {
+              std::string afterDot = pva->pvaChannelNames[i].substr(pos + 1);
+              if (ExtractByPath(pva, i, pvStructurePtr, afterDot, monitorMode)) {
+                return (1);
+              }
+              break;
+            }
+            std::cerr << "Error: structureArray requires an index and a member (e.g. dimension[0].size, dimension(0).size, or dimension@0.size)" << std::endl;
+            return (1);
+          }
           default: {
-            std::cerr << "ERROR: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
+            std::cerr << "ERROR13: Need code to handle " << PVFieldPtrArray[0]->getField()->getType() << std::endl;
             return (1);
           }
           }
@@ -2795,9 +3010,26 @@ std::string GetFieldType(PVA_OVERALL *pva, long index) {
   id = pvStructurePtr->getStructure()->getID();
   if (id == "epics:nt/NTEnum:1.0") {
     return "ENUM structure";
+  } else if (id == "epics:nt/NTNDArray:1.0") {
+    epics::pvData::PVFieldPtr valueField =
+        pvStructurePtr->getSubField("value");
+    if (!valueField) {
+      return "unknown";
+    }
+    epics::pvData::PVFieldPtr field = valueField;
+    if (valueField->getField()->getType() == epics::pvData::union_) {
+      epics::pvData::PVUnionPtr pvUnionPtr =
+          std::tr1::static_pointer_cast<epics::pvData::PVUnion>(valueField);
+      epics::pvData::PVFieldPtr selectedField = pvUnionPtr->get();
+      if (!selectedField) {
+        return "unknown";
+      }
+      field = selectedField;
+    }
+    return epics::pvData::TypeFunc::name(field->getField()->getType());
   } else if (id == "structure") {
     if (fieldCount == 0) {
-      fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+      fprintf(stderr, "Error11 sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
       return "unknown";
     }
     if (pvStructurePtr->getPVFields()[0]->getFieldName() == "value") {
@@ -2844,16 +3076,16 @@ std::string GetFieldType(PVA_OVERALL *pva, long index) {
 	    }
 	  }
 	  free(copy);
-	  fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+	  fprintf(stderr, "Error12: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
 	  return "unknown";
 	}
       }
     }
     free(copy);
-    fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+    fprintf(stderr, "Error13: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
     return "unknown";
   } else {
-    std::cerr << "ERROR1: Need code to handle " << id << std::endl;
+    std::cerr << "ERROR14: Need code to handle " << id << std::endl;
     return "unknown";
   }
 }
@@ -2908,14 +3140,52 @@ uint32_t GetElementCount(PVA_OVERALL *pva, long index) {
   size_t fieldCount, i = 0;
   if (pva->isConnected[index] == false)
     return 0;
+  if (pva->pvaChannelNames[index].find_first_of("[(@") != std::string::npos) {
+    return 1;
+  }
   pvStructurePtr = pva->pvaClientGetPtr[index]->getData()->getPVStructure();
   fieldCount = pvStructurePtr->getStructure()->getNumberFields();
   id = pvStructurePtr->getStructure()->getID();
   if (id == "epics:nt/NTEnum:1.0") {
     return 1;
+  } else if (id == "epics:nt/NTNDArray:1.0") {
+    epics::pvData::PVFieldPtr valueField =
+        pvStructurePtr->getSubField("value");
+    if (!valueField) {
+      return 0;
+    }
+    epics::pvData::PVFieldPtr field = valueField;
+    if (valueField->getField()->getType() == epics::pvData::union_) {
+      epics::pvData::PVUnionPtr pvUnionPtr =
+          std::tr1::static_pointer_cast<epics::pvData::PVUnion>(valueField);
+      epics::pvData::PVFieldPtr selectedField = pvUnionPtr->get();
+      if (!selectedField) {
+        return 0;
+      }
+      field = selectedField;
+    }
+    switch (field->getField()->getType()) {
+    case epics::pvData::scalar: {
+      return 1;
+    }
+    case epics::pvData::scalarArray: {
+      epics::pvData::PVScalarArrayPtr pvScalarArrayPtr =
+        std::tr1::static_pointer_cast<epics::pvData::PVScalarArray>(field);
+      return GetElementCountFromNelm(pva, index,
+        static_cast<uint32_t>(pvScalarArrayPtr->getLength()));
+    }
+    case epics::pvData::structureArray: {
+      epics::pvData::PVStructureArrayPtr arrayPtr =
+          std::tr1::static_pointer_cast<epics::pvData::PVStructureArray>(field);
+      const uint32_t length = static_cast<uint32_t>(arrayPtr->view().size());
+      return GetElementCountFromNelm(pva, index, length);
+    }
+    default:
+      return 0;
+    }
   } else if (id == "structure") {
     if (fieldCount == 0) {
-      fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+      fprintf(stderr, "Error14: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
       return 0;
     }
 
@@ -2928,8 +3198,34 @@ uint32_t GetElementCount(PVA_OVERALL *pva, long index) {
     	return GetElementCountFromNelm(pva, index,
     	                               std::tr1::static_pointer_cast<const epics::pvData::PVScalarArray>(pvStructurePtr->getPVFields()[0])->getLength());
       }
+      case epics::pvData::union_: {
+        epics::pvData::PVUnionPtr pvUnionPtr =
+            std::tr1::static_pointer_cast<epics::pvData::PVUnion>(pvStructurePtr->getPVFields()[0]);
+        epics::pvData::PVFieldPtr selectedField = pvUnionPtr->get();
+        if (!selectedField) {
+          return 0;
+        }
+        switch (selectedField->getField()->getType()) {
+        case epics::pvData::scalar:
+          return 1;
+        case epics::pvData::scalarArray: {
+          epics::pvData::PVScalarArrayPtr pvScalarArrayPtr =
+              std::tr1::static_pointer_cast<epics::pvData::PVScalarArray>(selectedField);
+          return GetElementCountFromNelm(pva, index,
+              static_cast<uint32_t>(pvScalarArrayPtr->getLength()));
+        }
+        case epics::pvData::structureArray: {
+          epics::pvData::PVStructureArrayPtr arrayPtr =
+              std::tr1::static_pointer_cast<epics::pvData::PVStructureArray>(selectedField);
+          return GetElementCountFromNelm(pva, index,
+              static_cast<uint32_t>(arrayPtr->view().size()));
+        }
+        default:
+          return 0;
+        }
+      }
       default: {
-	std::cerr << "ERROR: Need code to handle " << pvStructurePtr->getPVFields()[0]->getField()->getType() << std::endl;
+	std::cerr << "ERROR15: Need code to handle " << pvStructurePtr->getPVFields()[0]->getField()->getType() << std::endl;
 	return 0;
       }
       }
@@ -2949,8 +3245,34 @@ uint32_t GetElementCount(PVA_OVERALL *pva, long index) {
     return GetElementCountFromNelm(pva, index,
                                    std::tr1::static_pointer_cast<const epics::pvData::PVScalarArray>(pvStructurePtr->getPVFields()[i])->getLength());
 	}
+    	case epics::pvData::union_: {
+          epics::pvData::PVUnionPtr pvUnionPtr =
+              std::tr1::static_pointer_cast<epics::pvData::PVUnion>(pvStructurePtr->getPVFields()[i]);
+          epics::pvData::PVFieldPtr selectedField = pvUnionPtr->get();
+          if (!selectedField) {
+            return 0;
+          }
+          switch (selectedField->getField()->getType()) {
+          case epics::pvData::scalar:
+            return 1;
+          case epics::pvData::scalarArray: {
+            epics::pvData::PVScalarArrayPtr pvScalarArrayPtr =
+                std::tr1::static_pointer_cast<epics::pvData::PVScalarArray>(selectedField);
+            return GetElementCountFromNelm(pva, index,
+                static_cast<uint32_t>(pvScalarArrayPtr->getLength()));
+          }
+          case epics::pvData::structureArray: {
+            epics::pvData::PVStructureArrayPtr arrayPtr =
+                std::tr1::static_pointer_cast<epics::pvData::PVStructureArray>(selectedField);
+            return GetElementCountFromNelm(pva, index,
+                static_cast<uint32_t>(arrayPtr->view().size()));
+          }
+          default:
+            return 0;
+          }
+    	}
 	default: {
-	  std::cerr << "ERROR: Need code to handle " << pvStructurePtr->getPVFields()[i]->getField()->getType() << std::endl;
+	  std::cerr << "ERROR16: Need code to handle " << pvStructurePtr->getPVFields()[i]->getField()->getType() << std::endl;
 	  return 0;
 	}
 	}
@@ -2973,8 +3295,34 @@ uint32_t GetElementCount(PVA_OVERALL *pva, long index) {
     return GetElementCountFromNelm(pva, index,
                                    std::tr1::static_pointer_cast<const epics::pvData::PVScalarArray>(pvStructurePtrA->getPVFields()[i])->getLength());
 	      }
+	      case epics::pvData::union_: {
+        epics::pvData::PVUnionPtr pvUnionPtr =
+            std::tr1::static_pointer_cast<epics::pvData::PVUnion>(pvStructurePtrA->getPVFields()[i]);
+        epics::pvData::PVFieldPtr selectedField = pvUnionPtr->get();
+        if (!selectedField) {
+          return 0;
+        }
+        switch (selectedField->getField()->getType()) {
+        case epics::pvData::scalar:
+          return 1;
+        case epics::pvData::scalarArray: {
+          epics::pvData::PVScalarArrayPtr pvScalarArrayPtr =
+              std::tr1::static_pointer_cast<epics::pvData::PVScalarArray>(selectedField);
+          return GetElementCountFromNelm(pva, index,
+              static_cast<uint32_t>(pvScalarArrayPtr->getLength()));
+        }
+        case epics::pvData::structureArray: {
+          epics::pvData::PVStructureArrayPtr arrayPtr =
+              std::tr1::static_pointer_cast<epics::pvData::PVStructureArray>(selectedField);
+          return GetElementCountFromNelm(pva, index,
+              static_cast<uint32_t>(arrayPtr->view().size()));
+        }
+        default:
+          return 0;
+        }
+	      }
 	      default: {
-		std::cerr << "ERROR: Need code to handle " << pvStructurePtrA->getPVFields()[i]->getField()->getType() << std::endl;
+		std::cerr << "ERROR17: Need code to handle " << pvStructurePtrA->getPVFields()[i]->getField()->getType() << std::endl;
 		return 0;
 	      }
 	      }
@@ -2994,8 +3342,34 @@ uint32_t GetElementCount(PVA_OVERALL *pva, long index) {
           return GetElementCountFromNelm(pva, index,
                                          std::tr1::static_pointer_cast<const epics::pvData::PVScalarArray>(pvStructurePtrB->getPVFields()[i])->getLength());
 		    }
+		    case epics::pvData::union_: {
+            epics::pvData::PVUnionPtr pvUnionPtr =
+                std::tr1::static_pointer_cast<epics::pvData::PVUnion>(pvStructurePtrB->getPVFields()[i]);
+            epics::pvData::PVFieldPtr selectedField = pvUnionPtr->get();
+            if (!selectedField) {
+              return 0;
+            }
+            switch (selectedField->getField()->getType()) {
+            case epics::pvData::scalar:
+              return 1;
+            case epics::pvData::scalarArray: {
+              epics::pvData::PVScalarArrayPtr pvScalarArrayPtr =
+                  std::tr1::static_pointer_cast<epics::pvData::PVScalarArray>(selectedField);
+              return GetElementCountFromNelm(pva, index,
+                  static_cast<uint32_t>(pvScalarArrayPtr->getLength()));
+            }
+            case epics::pvData::structureArray: {
+              epics::pvData::PVStructureArrayPtr arrayPtr =
+                  std::tr1::static_pointer_cast<epics::pvData::PVStructureArray>(selectedField);
+              return GetElementCountFromNelm(pva, index,
+                  static_cast<uint32_t>(arrayPtr->view().size()));
+            }
+            default:
+              return 0;
+            }
+		    }
 		    default: {
-		      std::cerr << "ERROR: Need code to handle " << pvStructurePtrB->getPVFields()[i]->getField()->getType() << std::endl;
+		      std::cerr << "ERROR18: Need code to handle " << pvStructurePtrB->getPVFields()[i]->getField()->getType() << std::endl;
 		      return 0;
 		    }
 		    }
@@ -3007,16 +3381,16 @@ uint32_t GetElementCount(PVA_OVERALL *pva, long index) {
 	    }
 	  }
 	  free(copy);
-	  fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+	  fprintf(stderr, "Error15: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
 	  return 0;
 	}
       }
     }
     free(copy);
-    fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+    fprintf(stderr, "Error16: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
     return 0;
   } else {
-    std::cerr << "ERROR: Need code to handle " << id << std::endl;
+    std::cerr << "ERROR19: Need code to handle " << id << std::endl;
     return 0;
   }
 }
@@ -3032,9 +3406,39 @@ std::string GetNativeDataType(PVA_OVERALL *pva, long index) {
   id = pvStructurePtr->getStructure()->getID();
   if (id == "epics:nt/NTEnum:1.0") {
     return "string";
+  } else if (id == "epics:nt/NTNDArray:1.0") {
+    epics::pvData::PVFieldPtr valueField =
+        pvStructurePtr->getSubField("value");
+    if (!valueField) {
+      return "unknown";
+    }
+    epics::pvData::PVFieldPtr field = valueField;
+    if (valueField->getField()->getType() == epics::pvData::union_) {
+      epics::pvData::PVUnionPtr pvUnionPtr =
+          std::tr1::static_pointer_cast<epics::pvData::PVUnion>(valueField);
+      epics::pvData::PVFieldPtr selectedField = pvUnionPtr->get();
+      if (!selectedField) {
+        return "unknown";
+      }
+      field = selectedField;
+    }
+    switch (field->getField()->getType()) {
+    case epics::pvData::scalar: {
+      return epics::pvData::ScalarTypeFunc::name(
+          std::tr1::static_pointer_cast<const epics::pvData::Scalar>(
+              field->getField())->getScalarType());
+    }
+    case epics::pvData::scalarArray: {
+      return epics::pvData::ScalarTypeFunc::name(
+          std::tr1::static_pointer_cast<const epics::pvData::ScalarArray>(
+              field->getField())->getElementType());
+    }
+    default:
+      return epics::pvData::TypeFunc::name(field->getField()->getType());
+    }
   } else if (id == "structure") {
     if (fieldCount == 0) {
-      fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+      fprintf(stderr, "Error17: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
       return "unknown";
     }
 
@@ -3047,7 +3451,7 @@ std::string GetNativeDataType(PVA_OVERALL *pva, long index) {
 	return epics::pvData::ScalarTypeFunc::name(std::tr1::static_pointer_cast<const epics::pvData::ScalarArray>(pvStructurePtr->getPVFields()[0]->getField())->getElementType());
       }
       default: {
-	std::cerr << "ERROR: Need code to handle " << pvStructurePtr->getPVFields()[0]->getField()->getType() << std::endl;
+	std::cerr << "ERROR20: Need code to handle " << pvStructurePtr->getPVFields()[0]->getField()->getType() << std::endl;
 	return "unknown";
       }
       }
@@ -3067,7 +3471,7 @@ std::string GetNativeDataType(PVA_OVERALL *pva, long index) {
 	  return epics::pvData::ScalarTypeFunc::name(std::tr1::static_pointer_cast<const epics::pvData::ScalarArray>(pvStructurePtr->getPVFields()[0]->getField())->getElementType());
 	}
 	default: {
-	  std::cerr << "ERROR: Need code to handle " << pvStructurePtr->getPVFields()[i]->getField()->getType() << std::endl;
+	  std::cerr << "ERROR21: Need code to handle " << pvStructurePtr->getPVFields()[i]->getField()->getType() << std::endl;
 	  return "unknown";
 	}
 	}
@@ -3090,7 +3494,7 @@ std::string GetNativeDataType(PVA_OVERALL *pva, long index) {
 		return epics::pvData::ScalarTypeFunc::name(std::tr1::static_pointer_cast<const epics::pvData::ScalarArray>(pvStructurePtrA->getPVFields()[0]->getField())->getElementType());
 	      }
 	      default: {
-		std::cerr << "ERROR: Need code to handle " << pvStructurePtrA->getPVFields()[i]->getField()->getType() << std::endl;
+		std::cerr << "ERROR22: Need code to handle " << pvStructurePtrA->getPVFields()[i]->getField()->getType() << std::endl;
 		return "unknown";
 	      }
 	      }
@@ -3110,7 +3514,7 @@ std::string GetNativeDataType(PVA_OVERALL *pva, long index) {
 		      return epics::pvData::ScalarTypeFunc::name(std::tr1::static_pointer_cast<const epics::pvData::ScalarArray>(pvStructurePtrB->getPVFields()[0]->getField())->getElementType());
 		    }
 		    default: {
-		      std::cerr << "ERROR: Need code to handle " << pvStructurePtrB->getPVFields()[i]->getField()->getType() << std::endl;
+		      std::cerr << "ERROR23: Need code to handle " << pvStructurePtrB->getPVFields()[i]->getField()->getType() << std::endl;
 		      return "unknown";
 		    }
 		    }
@@ -3122,16 +3526,16 @@ std::string GetNativeDataType(PVA_OVERALL *pva, long index) {
 	    }
 	  }
 	  free(copy);
-	  fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+	  fprintf(stderr, "Error18: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
 	  return "unknown";
 	}
       }
     }
     free(copy);
-    fprintf(stderr, "Error: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
+    fprintf(stderr, "Error19: sub-field does not exist for %s\n", pva->pvaChannelNames[index].c_str());
     return "unknown";
   } else {
-    std::cerr << "ERROR: Need code to handle " << id << std::endl;
+    std::cerr << "ERROR24: Need code to handle " << id << std::endl;
     return "unknown";
   }
 }

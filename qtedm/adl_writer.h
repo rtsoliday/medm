@@ -27,6 +27,8 @@ QString lineStyleString(RectangleLineStyle style);
 QString fillString(RectangleFill fill);
 QString alignmentString(Qt::Alignment alignment);
 QString imageTypeString(ImageType type);
+QString heatmapDimensionSourceString(HeatmapDimensionSource source);
+QString heatmapOrderString(HeatmapOrder order);
 QString meterLabelString(MeterLabel label);
 QString barDirectionString(BarDirection direction);
 QString barFillModeString(BarFill fill);

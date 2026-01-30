@@ -129,6 +129,18 @@ enum class ImageType
   kTiff
 };
 
+enum class HeatmapDimensionSource
+{
+  kStatic,
+  kChannel,
+};
+
+enum class HeatmapOrder
+{
+  kRowMajor,
+  kColumnMajor,
+};
+
 enum class TimeUnits
 {
   kMilliseconds,
@@ -224,6 +236,8 @@ constexpr int kMinimumStripChartWidth = 60;
 constexpr int kMinimumStripChartHeight = 40;
 constexpr int kMinimumCartesianPlotWidth = 160;
 constexpr int kMinimumCartesianPlotHeight = 120;
+constexpr int kMinimumHeatmapWidth = 40;
+constexpr int kMinimumHeatmapHeight = 40;
 constexpr double kDefaultStripChartPeriod = 60.0;
 constexpr int kRelatedDisplayEntryCount = 16;
 constexpr int kShellCommandEntryCount = 16;

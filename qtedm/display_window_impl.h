@@ -5038,6 +5038,7 @@ private:
       std::array<QColor, kCartesianPlotTraceCount> traceColors{};
       std::array<CartesianPlotYAxis, kCartesianPlotTraceCount> traceAxes{};
       std::array<bool, kCartesianPlotTraceCount> traceRight{};
+      std::array<bool, kCartesianPlotTraceCount> traceSideExplicit{};
       for (int i = 0; i < traceCount && i < kCartesianPlotTraceCount; ++i) {
         const std::size_t idx = static_cast<std::size_t>(i);
         traceX[idx] = element->traceXChannel(i);
@@ -5045,11 +5046,13 @@ private:
         traceColors[idx] = element->traceColor(i);
         traceAxes[idx] = element->traceYAxis(i);
         traceRight[idx] = element->traceUsesRightAxis(i);
+        traceSideExplicit[idx] = element->traceSideExplicit(i);
       }
       prepareClipboard([geometry, foreground, background, title, xLabel, yLabels,
                            style, eraseOldest, count, eraseMode, triggerChannel,
                            eraseChannel, countChannel, traceCount, traceX,
-                           traceY, traceColors, traceAxes, traceRight](
+                           traceY, traceColors, traceAxes, traceRight,
+                           traceSideExplicit](
                            DisplayWindow &target, const QPoint &offset) {
         if (!target.displayArea_) {
           return;
@@ -5077,7 +5080,8 @@ private:
           newElement->setTraceYChannel(i, traceY[idx]);
           newElement->setTraceColor(i, traceColors[idx]);
           newElement->setTraceYAxis(i, traceAxes[idx]);
-          newElement->setTraceUsesRightAxis(i, traceRight[idx]);
+          newElement->setTraceUsesRightAxis(i, traceRight[idx],
+              traceSideExplicit[idx]);
         }
         newElement->show();
         target.ensureElementInStack(newElement);
@@ -6848,7 +6852,7 @@ private:
       };
       sideGetters[i] = [element, i]() { return element->traceUsesRightAxis(i); };
       sideSetters[i] = [this, element, i](bool usesRight) {
-        element->setTraceUsesRightAxis(i, usesRight);
+        element->setTraceUsesRightAxis(i, usesRight, true);
         markDirty();
       };
     }
@@ -21786,11 +21790,12 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     const QString sideStr = propertyValue(child, QStringLiteral("yside"));
     const int sideIndex = sideStr.toInt(&ok);
     if (ok) {
-      element->setTraceUsesRightAxis(traceIndex, sideIndex == 1);
+      element->setTraceUsesRightAxis(traceIndex, sideIndex == 1, true);
     }
   }
 
   auto parseAxisNode = [this, element](const AdlNode &axisNode, int axisIndex) {
+    element->setAxisDefined(axisIndex, true);
     const QString axisStyleValue = propertyValue(axisNode,
         QStringLiteral("axisStyle"));
     if (!axisStyleValue.trimmed().isEmpty()) {

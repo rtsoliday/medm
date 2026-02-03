@@ -10,6 +10,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QEvent>
+#include <QFontDatabase>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -39,10 +40,11 @@ constexpr qreal kAxisCueThickness = 3.0;
 constexpr qreal kAxisCueGap = 2.0;
 
 // Font size constants matching medm's SciPlot defaults
-// (XtNtitleFont = XtFONT_HELVETICA | 24, XtNlabelFont = XtFONT_TIMES | 18, XtNaxisFont = XtFONT_TIMES | 10)
-constexpr int kTitleFontHeight = 24;    // For title text
+// (XtNlabelFont = XtFONT_TIMES | 18, XtNaxisFont = XtFONT_TIMES | 10)
 constexpr int kLabelFontHeight = 18;    // For axis labels (X, Y1, Y2, Y3, Y4)
 constexpr int kAxisNumberFontHeight = 10;  // For axis tick numbers
+constexpr int kTitleScaleFactor = 20;
+constexpr int kMinimumTitleFontHeight = 8;
 
 // Adaptive refresh timer constants (matching StripChart behavior)
 constexpr int kDefaultRefreshIntervalMs = 100;
@@ -72,6 +74,219 @@ QColor defaultTraceColor(int index)
     return palette.back();
   }
   return QColor(Qt::black);
+}
+
+int cartesianPlotTitlePixelHeight(const QSize &widgetSize)
+{
+  if (widgetSize.isEmpty()) {
+    return kMinimumTitleFontHeight;
+  }
+
+  int preferredHeight = std::min(widgetSize.width(), widgetSize.height())
+      / kTitleScaleFactor;
+  switch (preferredHeight) {
+  case 9:
+    preferredHeight = 10;
+    break;
+  case 13:
+    preferredHeight = 14;
+    break;
+  case 15:
+  case 16:
+    preferredHeight = 17;
+    break;
+  case 19:
+    preferredHeight = 20;
+    break;
+  case 21:
+  case 22:
+  case 23:
+    preferredHeight = 24;
+    break;
+  case 26:
+  case 27:
+  case 28:
+  case 29:
+    preferredHeight = 25;
+    break;
+  case 30:
+  case 31:
+  case 32:
+  case 33:
+    preferredHeight = 34;
+    break;
+  }
+
+  return std::max(preferredHeight, kMinimumTitleFontHeight);
+}
+
+QFont cartesianPlotTitleFont(const QSize &widgetSize)
+{
+  const int targetHeight = cartesianPlotTitlePixelHeight(widgetSize);
+  const QFont::StyleStrategy strategy = static_cast<QFont::StyleStrategy>(
+      QFont::PreferAntialias | QFont::PreferOutline | QFont::PreferQuality);
+
+  auto makeFont = [&](const QString &family) {
+    QFont font(family);
+    font.setStyleHint(QFont::SansSerif, QFont::PreferAntialias);
+    font.setStyleStrategy(strategy);
+    font.setPixelSize(targetHeight);
+    font.setWeight(QFont::Normal);
+    font.setBold(false);
+    return font;
+  };
+
+  const QStringList families = {
+      QStringLiteral("Sans Serif"),
+      QStringLiteral("Helvetica"),
+      QStringLiteral("Arial"),
+      QStringLiteral("Liberation Sans"),
+      QStringLiteral("DejaVu Sans")
+  };
+
+  QFont best = makeFont(QStringLiteral("Sans Serif"));
+  int bestHeight = QFontMetrics(best).height();
+
+  for (const QString &family : families) {
+    QFont candidate = makeFont(family);
+    const int height = QFontMetrics(candidate).height();
+    if (height <= targetHeight + 1) {
+      return candidate;
+    }
+    if (height < bestHeight) {
+      best = candidate;
+      bestHeight = height;
+    }
+  }
+
+  QFont systemFont = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
+  systemFont.setStyleHint(QFont::SansSerif, QFont::PreferAntialias);
+  systemFont.setStyleStrategy(strategy);
+  systemFont.setPixelSize(targetHeight);
+  systemFont.setWeight(QFont::Normal);
+  systemFont.setBold(false);
+  if (QFontMetrics(systemFont).height() < bestHeight) {
+    return systemFont;
+  }
+
+  return best;
+}
+
+enum class MedmMarkerStyle {
+  kCircle = 0,
+  kSquare = 1,
+  kUpTriangle = 2,
+  kDiamond = 3,
+  kDownTriangle = 4,
+  kRightTriangle = 5,
+  kLeftTriangle = 6,
+  kBowTie = 7
+};
+
+MedmMarkerStyle markerStyleForTrace(int traceIndex)
+{
+  if (traceIndex <= 0) {
+    return MedmMarkerStyle::kCircle;
+  }
+  switch (traceIndex % 8) {
+  case 0:
+    return MedmMarkerStyle::kCircle;
+  case 1:
+    return MedmMarkerStyle::kSquare;
+  case 2:
+    return MedmMarkerStyle::kUpTriangle;
+  case 3:
+    return MedmMarkerStyle::kDiamond;
+  case 4:
+    return MedmMarkerStyle::kDownTriangle;
+  case 5:
+    return MedmMarkerStyle::kRightTriangle;
+  case 6:
+    return MedmMarkerStyle::kLeftTriangle;
+  case 7:
+    return MedmMarkerStyle::kBowTie;
+  }
+  return MedmMarkerStyle::kCircle;
+}
+
+void drawMedmMarker(QPainter &painter, const QPointF &point,
+    int traceIndex, qreal basePointSize)
+{
+  const MedmMarkerStyle style = markerStyleForTrace(traceIndex);
+  qreal markerSize = basePointSize * 1.3;
+  if (markerSize <= 0.0) {
+    return;
+  }
+  if (style == MedmMarkerStyle::kSquare) {
+    markerSize *= 0.75;
+  }
+  const qreal half = markerSize / 2.0;
+  const qreal x = point.x();
+  const qreal y = point.y();
+
+  switch (style) {
+  case MedmMarkerStyle::kCircle:
+    painter.drawEllipse(QPointF(x, y), half, half);
+    break;
+  case MedmMarkerStyle::kSquare:
+    painter.drawRect(QRectF(x - half, y - half, markerSize, markerSize));
+    break;
+  case MedmMarkerStyle::kUpTriangle: {
+    QPolygonF poly;
+    poly << QPointF(x, y - half)
+         << QPointF(x - half, y + half)
+         << QPointF(x + half, y + half);
+    painter.drawPolygon(poly);
+    break;
+  }
+  case MedmMarkerStyle::kDiamond: {
+    QPolygonF poly;
+    poly << QPointF(x, y - half)
+         << QPointF(x - half, y)
+         << QPointF(x, y + half)
+         << QPointF(x + half, y);
+    painter.drawPolygon(poly);
+    break;
+  }
+  case MedmMarkerStyle::kDownTriangle: {
+    QPolygonF poly;
+    poly << QPointF(x - half, y - half)
+         << QPointF(x + half, y - half)
+         << QPointF(x, y + half);
+    painter.drawPolygon(poly);
+    break;
+  }
+  case MedmMarkerStyle::kRightTriangle: {
+    QPolygonF poly;
+    poly << QPointF(x - half, y - half)
+         << QPointF(x - half, y + half)
+         << QPointF(x + half, y);
+    painter.drawPolygon(poly);
+    break;
+  }
+  case MedmMarkerStyle::kLeftTriangle: {
+    QPolygonF poly;
+    poly << QPointF(x + half, y - half)
+         << QPointF(x + half, y + half)
+         << QPointF(x - half, y);
+    painter.drawPolygon(poly);
+    break;
+  }
+  case MedmMarkerStyle::kBowTie: {
+    QPolygonF left;
+    left << QPointF(x, y)
+         << QPointF(x + half, y - half)
+         << QPointF(x + half, y + half);
+    painter.drawPolygon(left);
+
+    QPolygonF right;
+    right << QPointF(x, y)
+          << QPointF(x - half, y - half)
+          << QPointF(x - half, y + half);
+    painter.drawPolygon(right);
+    break;
+  }
+  }
 }
 
 } // namespace
@@ -191,6 +406,10 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
   yLabels_[3] = QString();  // Empty by default
   for (int i = 0; i < traceCount(); ++i) {
     traces_[i].color = defaultTraceColor(i);
+    if (i > 0) {
+      traces_[i].yAxis = CartesianPlotYAxis::kY2;
+      traces_[i].usesRightAxis = true;
+    }
   }
   for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
     axisStyles_[axis] = CartesianPlotAxisStyle::kLinear;
@@ -198,6 +417,7 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
     axisMinimums_[axis] = 0.0;
     axisMaximums_[axis] = 1.0;
     axisTimeFormats_[axis] = CartesianPlotTimeFormat::kHhMmSs;
+    axisDefined_[axis] = false;
     zoomMinimums_[axis] = 0.0;
     zoomMaximums_[axis] = 1.0;
   }
@@ -495,13 +715,47 @@ bool CartesianPlotElement::traceUsesRightAxis(int index) const
 
 void CartesianPlotElement::setTraceUsesRightAxis(int index, bool usesRightAxis)
 {
+  setTraceUsesRightAxis(index, usesRightAxis, false);
+}
+
+void CartesianPlotElement::setTraceUsesRightAxis(int index, bool usesRightAxis,
+    bool explicitSide)
+{
   if (index < 0 || index >= traceCount()) {
     return;
   }
-  if (traces_[index].usesRightAxis == usesRightAxis) {
+  bool changed = false;
+  if (traces_[index].usesRightAxis != usesRightAxis) {
+    traces_[index].usesRightAxis = usesRightAxis;
+    changed = true;
+  }
+  if (explicitSide && !traces_[index].sideExplicit) {
+    traces_[index].sideExplicit = true;
+    changed = true;
+  }
+  if (changed) {
+    update();
+  }
+}
+
+bool CartesianPlotElement::traceSideExplicit(int index) const
+{
+  if (index < 0 || index >= traceCount()) {
+    return false;
+  }
+  return traces_[index].sideExplicit;
+}
+
+void CartesianPlotElement::setAxisDefined(int axisIndex, bool defined)
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
     return;
   }
-  traces_[index].usesRightAxis = usesRightAxis;
+  if (axisDefined_[axisIndex] == defined) {
+    return;
+  }
+  axisDefined_[axisIndex] = defined;
+  invalidateStaticCache();
   update();
 }
 
@@ -1215,7 +1469,7 @@ QRectF CartesianPlotElement::chartRect() const
     return frame;
   }
 
-  const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
+  const QFont titleFont = cartesianPlotTitleFont(this->rect().size());
   const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
   const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
   
@@ -1720,7 +1974,7 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   painter.save();
   painter.setPen(effectiveForeground());
   
-  const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
+  const QFont titleFont = cartesianPlotTitleFont(this->rect().size());
   const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
   const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
   const QFontMetrics titleMetrics(titleFont);
@@ -1883,9 +2137,9 @@ void CartesianPlotElement::paintTraces(QPainter &painter, const QRectF &rect) co
     case CartesianPlotStyle::kPoint: {
       painter.save();
       painter.setBrush(color);
+      const qreal basePointSize = std::max(2.0, rect.height() / 70.0);
       for (const QPointF &point : points) {
-        // Use rectangles instead of circles to match MEDM's appearance
-        painter.drawRect(QRectF(point.x() - 2.0, point.y() - 2.0, 4.0, 4.0));
+        drawMedmMarker(painter, point, i, basePointSize);
       }
       painter.restore();
       break;
@@ -2073,9 +2327,9 @@ void CartesianPlotElement::paintTracesExecute(QPainter &painter,
     case CartesianPlotStyle::kPoint: {
       painter.save();
       painter.setBrush(color);
+      const qreal basePointSize = std::max(2.0, rect.height() / 70.0);
       for (const QPointF &point : mappedPoints) {
-        // Use rectangles instead of circles to match MEDM's appearance
-        painter.drawRect(QRectF(point.x() - 2.0, point.y() - 2.0, 4.0, 4.0));
+        drawMedmMarker(painter, point, i, basePointSize);
       }
       painter.restore();
       break;
@@ -2270,10 +2524,33 @@ bool CartesianPlotElement::isYAxisOnRight(int yAxisIndex) const
   default: return false;
   }
   
+  auto traceDefinesAxis = [](const Trace &trace) {
+    return !trace.xChannel.trimmed().isEmpty()
+        || !trace.yChannel.trimmed().isEmpty();
+  };
+
+  bool hasExplicitSide = false;
   for (const auto &trace : traces_) {
-    if (trace.yAxis == targetAxis && trace.usesRightAxis) {
-      return true;
+    if (trace.yAxis != targetAxis) {
+      continue;
     }
+    if (!traceDefinesAxis(trace)) {
+      continue;
+    }
+    if (trace.sideExplicit) {
+      hasExplicitSide = true;
+      if (trace.usesRightAxis) {
+        return true;
+      }
+    }
+  }
+  if (hasExplicitSide) {
+    return false;
+  }
+
+  // Default MEDM-like behavior: Y2 and Y4 are on the right when visible
+  if (yAxisIndex == 1 || yAxisIndex == 3) {
+    return true;
   }
   return false;
 }
@@ -2290,8 +2567,16 @@ bool CartesianPlotElement::isYAxisVisible(int yAxisIndex) const
   default: return false;
   }
   
+  auto traceDefinesAxis = [](const Trace &trace) {
+    return !trace.xChannel.trimmed().isEmpty()
+        || !trace.yChannel.trimmed().isEmpty();
+  };
+
   for (const auto &trace : traces_) {
     if (trace.yAxis == targetAxis) {
+      if (!traceDefinesAxis(trace)) {
+        continue;
+      }
       return true;
     }
   }
@@ -2688,9 +2973,9 @@ void CartesianPlotElement::paintTracesOnly(QPainter &painter,
     case CartesianPlotStyle::kPoint: {
       painter.save();
       painter.setBrush(color);
+      const qreal basePointSize = std::max(2.0, rect.height() / 70.0);
       for (const QPointF &point : mappedPoints) {
-        // Use rectangles instead of circles to match MEDM's appearance
-        painter.drawRect(QRectF(point.x() - 2.0, point.y() - 2.0, 4.0, 4.0));
+        drawMedmMarker(painter, point, i, basePointSize);
       }
       painter.restore();
       break;

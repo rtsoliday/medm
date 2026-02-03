@@ -84,6 +84,10 @@ public:
 
   bool traceUsesRightAxis(int index) const;
   void setTraceUsesRightAxis(int index, bool usesRightAxis);
+  void setTraceUsesRightAxis(int index, bool usesRightAxis, bool explicitSide);
+  bool traceSideExplicit(int index) const;
+
+  void setAxisDefined(int axisIndex, bool defined);
 
   CartesianPlotAxisStyle axisStyle(int axisIndex) const;
   void setAxisStyle(int axisIndex, CartesianPlotAxisStyle style);
@@ -148,6 +152,7 @@ private:
     QColor color;
     CartesianPlotYAxis yAxis = CartesianPlotYAxis::kY1;
     bool usesRightAxis = false;
+    bool sideExplicit = false;
     CartesianPlotTraceMode runtimeMode = CartesianPlotTraceMode::kNone;
     bool runtimeConnected = false;
     QVector<QPointF> runtimePoints;
@@ -241,6 +246,7 @@ private:
   QString eraseChannel_;
   QString countChannel_;
   std::array<Trace, kCartesianPlotTraceCount> traces_{};
+  std::array<bool, kCartesianAxisCount> axisDefined_{};
   std::array<CartesianPlotAxisStyle, kCartesianAxisCount> axisStyles_{};
   std::array<CartesianPlotRangeStyle, kCartesianAxisCount> axisRangeStyles_{};
   std::array<double, kCartesianAxisCount> axisMinimums_{};

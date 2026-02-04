@@ -2599,7 +2599,9 @@ static XFontStruct *getFontFromList(Display *display,
     XmStringCharSet charset;
 #endif
     Boolean status;
+  #if DEBUG_FONTS
     int font_count=0;
+  #endif
 
 #if DEBUG_FONTLEAK || DEBUG_FLOW || DEBUG_FONTS
     printf("getFontFromList: font_list=%p\n"
@@ -2642,8 +2644,10 @@ static XFontStruct *getFontFromList(Display *display,
 	      (String *)NULL, (Cardinal *)NULL);
 	}
 
-      /* Get the next entry */
-	font_count++;
+  /* Get the next entry */
+#if DEBUG_FONTS
+  font_count++;
+#endif
 	entry = XmFontListNextEntry(context);
     }
 

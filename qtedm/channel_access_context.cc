@@ -10,10 +10,8 @@
 #include "startup_timing.h"
 
 namespace {
-/* Poll interval - needs to be fast enough to keep up with CA responses.
- * We use a very short interval and rely on the timer being the primary
- * driver of CA event processing. */
-constexpr int kPollIntervalMs = 1;
+/* Timer interval for deferred operations. */
+constexpr int kDeferredPollIntervalMs = 50;
 
 /* Track if we're currently inside pollOnce to prevent re-entrancy */
 static bool inPollOnce = false;
@@ -105,7 +103,7 @@ void ChannelAccessContext::initialize()
   
   /* Light-weight timer for deferred operations - no ca_poll needed */
   pollTimer_ = new QTimer(this);
-  pollTimer_->setInterval(50);  /* 50ms for deferred processing */
+  pollTimer_->setInterval(kDeferredPollIntervalMs);  /* 50ms for deferred processing */
   pollTimer_->setTimerType(Qt::CoarseTimer);
   QObject::connect(pollTimer_, &QTimer::timeout, this,
       &ChannelAccessContext::pollOnce);

@@ -2765,7 +2765,9 @@ protected:
         if (state->editMode) {
           showEditContextMenu(globalPos);
         } else {
-          showExecuteContextMenu(globalPos);
+          if (!showExecuteSliderDialogForRightClick(globalPos)) {
+            showExecuteContextMenu(globalPos);
+          }
         }
         event->accept();
         return;
@@ -14235,6 +14237,196 @@ private:
     }
 
     executeCascadeAvailable_ = !executeMenuEntries_.isEmpty();
+  }
+
+  bool showExecuteSliderDialogForRightClick(const QPoint &globalPos)
+  {
+    const QPoint windowPos = mapFromGlobal(globalPos);
+    QWidget *clickedWidget = elementAt(windowPos);
+    auto *slider = dynamic_cast<SliderElement *>(clickedWidget);
+    if (!slider) {
+      return false;
+    }
+
+    SliderRuntime *runtime = sliderRuntimes_.value(slider, nullptr);
+    const QString channelName = runtime ? runtime->channelName_.trimmed()
+                                        : slider->channel().trimmed();
+    const bool canWrite = runtime && runtime->connected_
+        && runtime->lastWriteAccess_ && !channelName.isEmpty();
+    if (!canWrite) {
+      return true;
+    }
+
+    const PvLimits limits = slider->limits();
+    const double absLimit = std::max(std::abs(limits.lowDefault),
+        std::abs(limits.highDefault));
+    int maxExponent = 0;
+    if (std::isfinite(absLimit) && absLimit > 0.0) {
+      maxExponent = static_cast<int>(std::floor(std::log10(absLimit)));
+    }
+    maxExponent = std::clamp(maxExponent, -12, 12);
+    int minExponent = -std::clamp(limits.precisionDefault, 0, 12);
+    if (minExponent > maxExponent) {
+      minExponent = maxExponent;
+    }
+
+    double currentValue = runtime->hasLastValue_ ? runtime->lastValue_ : 0.0;
+    if (!std::isfinite(currentValue)) {
+      currentValue = 0.0;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(channelName);
+    dialog.setModal(true);
+    dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+
+    auto *layout = new QVBoxLayout(&dialog);
+
+    auto *valueLabel = new QLabel(
+        QStringLiteral("VALUE: %1").arg(channelName), &dialog);
+    layout->addWidget(valueLabel);
+
+    auto *valueEdit = new QLineEdit(&dialog);
+    valueEdit->setText(QString::number(currentValue, 'g', 12));
+    valueEdit->selectAll();
+    layout->addWidget(valueEdit);
+
+    auto *incrementGroup = new QGroupBox(
+        QStringLiteral("Increment (Buttons set 10^N)"), &dialog);
+    auto *incrementLayout = new QVBoxLayout(incrementGroup);
+    auto *incrementCombo = new QComboBox(incrementGroup);
+    for (int exponent = maxExponent; exponent >= minExponent; --exponent) {
+      incrementCombo->addItem(QString::number(exponent), exponent);
+    }
+    incrementLayout->addWidget(incrementCombo);
+
+    auto *incrementEdit = new QLineEdit(incrementGroup);
+    incrementEdit->setText(QString::number(slider->increment(), 'g', 12));
+    incrementLayout->addWidget(incrementEdit);
+    layout->addWidget(incrementGroup);
+
+    int currentExponent = 0;
+    const double increment = slider->increment();
+    if (std::isfinite(increment) && increment > 0.0) {
+      currentExponent = static_cast<int>(std::round(std::log10(increment)));
+    }
+    currentExponent = std::clamp(currentExponent, minExponent, maxExponent);
+    const int exponentIndex = incrementCombo->findData(currentExponent);
+    if (exponentIndex >= 0) {
+      incrementCombo->setCurrentIndex(exponentIndex);
+    }
+
+    auto syncIncrementCombo = [incrementCombo, minExponent, maxExponent](
+                                  double increment) {
+      if (!std::isfinite(increment) || increment <= 0.0) {
+        return;
+      }
+      const double exponentValue = std::log10(increment);
+      const int roundedExponent = static_cast<int>(std::round(exponentValue));
+      const double roundedIncrement =
+          std::pow(10.0, static_cast<double>(roundedExponent));
+      const double tolerance = std::max(1e-12, std::abs(increment) * 1e-9);
+      if (std::abs(roundedIncrement - increment) > tolerance) {
+        return;
+      }
+      const int clampedExponent =
+          std::clamp(roundedExponent, minExponent, maxExponent);
+      const int comboIndex = incrementCombo->findData(clampedExponent);
+      if (comboIndex >= 0 && comboIndex != incrementCombo->currentIndex()) {
+        const bool blocked = incrementCombo->blockSignals(true);
+        incrementCombo->setCurrentIndex(comboIndex);
+        incrementCombo->blockSignals(blocked);
+      }
+    };
+
+    QObject::connect(incrementCombo,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        &dialog, [slider, incrementCombo, incrementEdit](int index) {
+          if (index < 0) {
+            return;
+          }
+          bool ok = false;
+          int exponent = incrementCombo->itemData(index).toInt(&ok);
+          if (!ok) {
+            return;
+          }
+          const double nextIncrement =
+              std::pow(10.0, static_cast<double>(exponent));
+          if (!std::isfinite(nextIncrement) || nextIncrement <= 0.0) {
+            return;
+          }
+          slider->setIncrement(nextIncrement);
+          incrementEdit->setText(QString::number(nextIncrement, 'g', 12));
+        });
+
+    QObject::connect(incrementEdit, &QLineEdit::editingFinished, &dialog,
+        [slider, incrementEdit, syncIncrementCombo]() {
+          bool ok = false;
+          const double typedIncrement =
+              incrementEdit->text().trimmed().toDouble(&ok);
+          if (!ok || !std::isfinite(typedIncrement) || typedIncrement <= 0.0) {
+            incrementEdit->setText(QString::number(slider->increment(), 'g', 12));
+            incrementEdit->selectAll();
+            return;
+          }
+          slider->setIncrement(typedIncrement);
+          syncIncrementCombo(typedIncrement);
+        });
+
+    auto *buttonLayout = new QHBoxLayout();
+    buttonLayout->addStretch(1);
+    auto *okButton = new QPushButton(QStringLiteral("OK"), &dialog);
+    auto *cancelButton = new QPushButton(QStringLiteral("Cancel"), &dialog);
+    okButton->setDefault(true);
+    buttonLayout->addWidget(okButton);
+    buttonLayout->addWidget(cancelButton);
+    layout->addLayout(buttonLayout);
+
+    QObject::connect(cancelButton, &QPushButton::clicked, &dialog,
+        &QDialog::reject);
+    QObject::connect(okButton, &QPushButton::clicked, &dialog,
+        [&dialog, slider, valueEdit, incrementEdit, syncIncrementCombo]() {
+          bool incrementOk = false;
+          const double typedIncrement =
+              incrementEdit->text().trimmed().toDouble(&incrementOk);
+          if (!incrementOk || !std::isfinite(typedIncrement)
+              || typedIncrement <= 0.0) {
+            QMessageBox::warning(&dialog, QStringLiteral("Invalid Increment"),
+                QStringLiteral("Enter a positive finite increment value."));
+            incrementEdit->setFocus(Qt::OtherFocusReason);
+            incrementEdit->selectAll();
+            return;
+          }
+          slider->setIncrement(typedIncrement);
+          syncIncrementCombo(typedIncrement);
+
+          bool ok = false;
+          const double enteredValue = valueEdit->text().trimmed().toDouble(&ok);
+          if (!ok || !std::isfinite(enteredValue)) {
+            QMessageBox::warning(&dialog, QStringLiteral("Invalid Value"),
+                QStringLiteral("Enter a finite numeric value."));
+            valueEdit->setFocus(Qt::OtherFocusReason);
+            valueEdit->selectAll();
+            return;
+          }
+          dialog.setProperty("_sliderEntryValue", enteredValue);
+          dialog.accept();
+        });
+    QObject::connect(valueEdit, &QLineEdit::returnPressed, okButton,
+        &QPushButton::click);
+
+    valueEdit->setFocus(Qt::OtherFocusReason);
+    if (dialog.exec() == QDialog::Accepted) {
+      bool ok = false;
+      const double enteredValue = dialog.property("_sliderEntryValue")
+          .toDouble(&ok);
+      if (ok && std::isfinite(enteredValue)) {
+        runtime->handleActivation(enteredValue);
+        slider->setRuntimeValue(enteredValue);
+      }
+    }
+
+    return true;
   }
 
   void showExecuteContextMenu(const QPoint &globalPos)

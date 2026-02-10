@@ -35,7 +35,7 @@ public:
 
 protected:
   void resetRuntimeState();
-  void handleChannelConnection(bool connected);
+  void handleChannelConnection(bool connected, const SharedChannelData &data);
   void handleChannelData(const SharedChannelData &data);
 
   template <typename Func>

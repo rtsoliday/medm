@@ -184,6 +184,52 @@ set_slider_test_pvs() {
   return 1
 }
 
+set_scale_monitor_test_pvs() {
+  local prefix="$1"
+  local -a scale_init_values=(
+    # pv value lopr hopr prec
+    "scale:test:alpha    12.4   -63.5   78.2   1"
+    "scale:test:beta     64.2   -12.7  125.9   2"
+    "scale:test:gamma    17.375  -5.4   97.3   3"
+    "scale:test:delta    -3.125  -8.4    8.4   3"
+    "scale:test:epsilon  21.7   -48.9   38.6   1"
+    "scale:test:zeta     44.125 -32.6   58.8   4"
+    "scale:test:eta      -7.25  -28.1   14.7   2"
+    "scale:test:theta    11.2  -101.4   64.3   1"
+    "scale:test:iota      2.75   -5.5    5.5   2"
+    "scale:test:kappa   150.5  -250    250     2"
+  )
+
+  echo "Initializing scale monitor PVs for tests/test_ScaleMonitor.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${scale_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Scale monitor PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize scale monitor PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_slider_alarm_probe_pvs() {
   local prefix="$1"
   local -a alarm_probe_fields=(
@@ -192,7 +238,7 @@ set_slider_alarm_probe_pvs() {
     "ZzzButton -5 5 3"
   )
 
-  echo "Configuring alarm probe PV limits for tests/test_Slider.adl"
+  echo "Configuring alarm probe PV limits for slider/scale monitor tests"
   set_local_ca_env
 
   local retries=20
@@ -238,5 +284,6 @@ set_local_ca_env
 "${cmd[@]}" > "${LOG_FILE}" 2>&1 &
 ioc_pid="$!"
 set_slider_test_pvs "${PV_PREFIX}" || true
+set_scale_monitor_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 wait "${ioc_pid}"

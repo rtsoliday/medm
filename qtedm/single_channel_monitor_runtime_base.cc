@@ -71,8 +71,8 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
       DBR_TIME_DOUBLE,
       1,  /* Single element */
       [this](const SharedChannelData &data) { handleChannelData(data); },
-      [this](bool connected, const SharedChannelData &) {
-        handleChannelConnection(connected);
+      [this](bool connected, const SharedChannelData &data) {
+        handleChannelConnection(connected, data);
       });
 }
 
@@ -110,7 +110,8 @@ void SingleChannelMonitorRuntimeBase<ElementType>::resetRuntimeState()
 }
 
 template <typename ElementType>
-void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelConnection(bool connected)
+void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelConnection(
+    bool connected, const SharedChannelData &data)
 {
   if (!started_) {
     return;
@@ -126,11 +127,15 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelConnection(bool 
     }
     hasLastValue_ = false;
     lastValue_ = 0.0;
-    lastSeverity_ = kInvalidSeverity;
+    short initialSeverity = kInvalidSeverity;
+    if (data.hasValue) {
+      initialSeverity = std::clamp<short>(data.severity, 0, kInvalidSeverity);
+    }
+    lastSeverity_ = initialSeverity;
 
-    invokeOnElement([](ElementType *element) {
+    invokeOnElement([initialSeverity](ElementType *element) {
       element->setRuntimeConnected(true);
-      element->setRuntimeSeverity(0);
+      element->setRuntimeSeverity(initialSeverity);
     });
   } else {
     const bool wasConnected = connected_;

@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=15
-		y=53
-		width=1104
-		height=707
+		x=1803
+		y=59
+		width=1800
+		height=1300
 	}
 	clr=14
 	bclr=4
@@ -87,12 +87,680 @@ display {
 		1a7309,
 	}
 }
-indicator {
+text {
 	object {
 		x=24
-		y=28
-		width=128
-		height=168
+		y=10
+		width=1760
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Scale Monitor Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: tick rendering, value text clipping, label placement, direction geometry, and color-mode parity."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Drive PV updates from a shell (for example, cavput) and compare scale monitor redraw/alarm transitions in execute mode."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1760
+		height=800
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (direction/label/color modes + geometry range)"
+}
+text {
+	object {
+		x=220
+		y=154
+		width=190
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: up (static)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=530
+		y=154
+		width=270
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: right (alarm)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=910
+		y=154
+		width=190
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: up (discrete)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1210
+		y=154
+		width=280
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: right (static)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=222
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="none (tiny)"
+}
+text {
+	object {
+		x=56
+		y=326
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="outline (medium)"
+}
+text {
+	object {
+		x=56
+		y=458
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="limits (large)"
+}
+text {
+	object {
+		x=56
+		y=682
+		width=150
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="channel (narrow)"
+}
+text {
+	object {
+		x=56
+		y=808
+		width=170
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="no decor (wide stress)"
+}
+indicator {
+	object {
+		x=286
+		y=192
+		width=56
+		height=78
+	}
+	monitor {
+		chan="scale:test:alpha"
+		clr=12
+		bclr=33
+	}
+	direction="up"
+	limits {
+		loprDefault=-63.5
+		hoprDefault=78.2
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=582
+		y=216
+		width=170
+		height=28
+	}
+	monitor {
+		chan="scale:test:beta"
+		clr=47
+		bclr=6
+	}
+	clrmod="alarm"
+	limits {
+		loprDefault=-12.7
+		hoprDefault=125.9
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=984
+		y=188
+		width=42
+		height=88
+	}
+	monitor {
+		chan="scale:test:gamma"
+		clr=30
+		bclr=52
+	}
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprDefault=-5.4
+		hoprDefault=97.3
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=1260
+		y=218
+		width=170
+		height=24
+	}
+	monitor {
+		chan="scale:test:delta"
+		clr=4
+		bclr=43
+	}
+	limits {
+		loprDefault=-8.4
+		hoprDefault=8.4
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=272
+		y=288
+		width=90
+		height=120
+	}
+	monitor {
+		chan="scale:test:epsilon"
+		clr=51
+		bclr=23
+	}
+	label="outline"
+	direction="up"
+	limits {
+		loprDefault=-48.9
+		hoprDefault=38.6
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=560
+		y=320
+		width=220
+		height=56
+	}
+	monitor {
+		chan="scale:test:zeta"
+		clr=5
+		bclr=58
+	}
+	label="outline"
+	clrmod="alarm"
+	limits {
+		loprDefault=-32.6
+		hoprDefault=58.8
+		precDefault=4
+	}
+}
+indicator {
+	object {
+		x=968
+		y=284
+		width=76
+		height=130
+	}
+	monitor {
+		chan="scale:test:eta"
+		clr=19
+		bclr=7
+	}
+	label="outline"
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprDefault=-28.1
+		hoprDefault=14.7
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=1250
+		y=318
+		width=190
+		height=60
+	}
+	monitor {
+		chan="scale:test:theta"
+		clr=41
+		bclr=10
+	}
+	label="outline"
+	limits {
+		loprDefault=-101.4
+		hoprDefault=64.3
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=254
+		y=418
+		width=120
+		height=210
+	}
+	monitor {
+		chan="scale:test:iota"
+		clr=14
+		bclr=36
+	}
+	label="limits"
+	direction="up"
+	limits {
+		loprDefault=-5.5
+		hoprDefault=5.5
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=530
+		y=470
+		width=280
+		height=110
+	}
+	monitor {
+		chan="scale:test:kappa"
+		clr=24
+		bclr=47
+	}
+	label="limits"
+	clrmod="alarm"
+	limits {
+		loprDefault=-250
+		hoprDefault=250
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=950
+		y=414
+		width=110
+		height=220
+	}
+	monitor {
+		chan="scale:test:alpha"
+		clr=12
+		bclr=33
+	}
+	label="limits"
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprDefault=-63.5
+		hoprDefault=78.2
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=1210
+		y=462
+		width=280
+		height=120
+	}
+	monitor {
+		chan="scale:test:beta"
+		clr=47
+		bclr=6
+	}
+	label="limits"
+	limits {
+		loprDefault=-12.7
+		hoprDefault=125.9
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=377
+		y=629
+		width=120
+		height=170
+	}
+	monitor {
+		chan="scale:test:gamma"
+		clr=30
+		bclr=52
+	}
+	label="channel"
+	direction="up"
+	limits {
+		loprDefault=-5.4
+		hoprDefault=97.3
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=588
+		y=690
+		width=210
+		height=60
+	}
+	monitor {
+		chan="scale:test:delta"
+		clr=4
+		bclr=43
+	}
+	label="channel"
+	clrmod="alarm"
+	limits {
+		loprDefault=-8.4
+		hoprDefault=8.4
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=1057
+		y=645
+		width=120
+		height=180
+	}
+	monitor {
+		chan="scale:test:epsilon"
+		clr=51
+		bclr=23
+	}
+	label="channel"
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprDefault=-48.9
+		hoprDefault=38.6
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=1255
+		y=665
+		width=210
+		height=80
+	}
+	monitor {
+		chan="scale:test:zeta"
+		clr=5
+		bclr=58
+	}
+	label="channel"
+	limits {
+		loprDefault=-32.6
+		hoprDefault=58.8
+		precDefault=4
+	}
+}
+indicator {
+	object {
+		x=278
+		y=774
+		width=80
+		height=110
+	}
+	monitor {
+		chan="scale:test:eta"
+		clr=19
+		bclr=7
+	}
+	label="no decorations"
+	direction="up"
+	limits {
+		loprDefault=-28.1
+		hoprDefault=14.7
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=510
+		y=794
+		width=320
+		height=70
+	}
+	monitor {
+		chan="scale:test:theta"
+		clr=41
+		bclr=10
+	}
+	label="no decorations"
+	clrmod="alarm"
+	limits {
+		loprDefault=-101.4
+		hoprDefault=64.3
+		precDefault=1
+	}
+}
+indicator {
+	object {
+		x=970
+		y=770
+		width=70
+		height=120
+	}
+	monitor {
+		chan="scale:test:iota"
+		clr=14
+		bclr=36
+	}
+	label="no decorations"
+	clrmod="discrete"
+	direction="up"
+	limits {
+		loprDefault=-5.5
+		hoprDefault=5.5
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=1190
+		y=796
+		width=320
+		height=64
+	}
+	monitor {
+		chan="scale:test:kappa"
+		clr=24
+		bclr=47
+	}
+	label="no decorations"
+	limits {
+		loprDefault=-250
+		hoprDefault=250
+		precDefault=2
+	}
+}
+rectangle {
+	object {
+		x=20
+		y=920
+		width=1760
+		height=370
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=930
+		width=700
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=952
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Drive test PVs externally (for example, cavput scale:test:alpha=..., cavput scale:test:kappa=...) and compare redraw timing/fill direction."
+}
+text {
+	object {
+		x=30
+		y=970
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Check disconnected widget behavior: missing PV should keep white/disconnected appearance and avoid stale numeric text."
+}
+text {
+	object {
+		x=30
+		y=988
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Alarm probes: verify UDF/INVALID channels (weirdChan, ZzzButton) render alarm colors and annotations consistently."
+}
+text {
+	object {
+		x=30
+		y=1006
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Geometry stress: compare tiny, narrow, and oversized widgets for clipping, segment count, and label alignment."
+}
+text {
+	object {
+		x=70
+		y=1026
+		width=580
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Reference scale monitors fed by external PV writes"
+	align="horiz. centered"
+}
+indicator {
+	object {
+		x=490
+		y=1044
+		width=86
+		height=160
 	}
 	monitor {
 		chan="scale:test:alpha"
@@ -103,171 +771,136 @@ indicator {
 	clrmod="alarm"
 	direction="up"
 	limits {
-		loprSrc="default"
 		loprDefault=-63.5
-		hoprSrc="default"
 		hoprDefault=78.2
-		precSrc="default"
 		precDefault=1
 	}
 }
 indicator {
 	object {
-		x=212
-		y=32
-		width=140
-		height=150
+		x=684
+		y=1050
+		width=300
+		height=70
 	}
 	monitor {
-		chan="scale:test:beta"
-		clr=47
+		chan="scale:test:kappa"
+		clr=24
+		bclr=47
+	}
+	label="limits"
+	clrmod="discrete"
+	limits {
+		loprDefault=-250
+		hoprDefault=250
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=1000
+		y=1026
+		width=300
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Disconnected PV behavior"
+	align="horiz. centered"
+}
+indicator {
+	object {
+		x=1000
+		y=1050
+		width=300
+		height=70
+	}
+	monitor {
+		chan=" "
+		clr=24
 		bclr=6
 	}
-	label="limits"
-	clrmod="discrete"
-	direction="up"
+	label="channel"
+	clrmod="alarm"
 	limits {
-		loprDefault=-12.7
-		hoprDefault=125.9
-		precSrc="default"
+		loprDefault=-10
+		hoprDefault=10
 		precDefault=2
 	}
 }
-indicator {
+text {
 	object {
-		x=396
-		y=26
-		width=156
-		height=142
+		x=1310
+		y=1026
+		width=430
+		height=14
 	}
-	monitor {
-		chan="scale:test:gamma"
-		clr=30
-		bclr=52
+	"basic attribute" {
+		clr=55
 	}
-	label="outline"
-	clrmod="alarm"
-	limits {
-		loprDefault=-5.4
-		hoprDefault=97.3
-		precSrc="default"
-		precDefault=3
-	}
+	textix="Alarm probes from run_local_ioc.sh (UDF/INVALID expected)"
+	align="horiz. centered"
 }
 indicator {
 	object {
-		x=584
-		y=30
-		width=132
-		height=148
+		x=1310
+		y=1050
+		width=320
+		height=70
 	}
 	monitor {
-		chan="scale:test:delta"
-		clr=4
-		bclr=43
-	}
-	label="no decorations"
-	clrmod="alarm"
-	limits {
-		loprSrc="default"
-		loprDefault=-8.4
-		hoprSrc="default"
-		hoprDefault=8.4
-		precDefault=3
-	}
-}
-indicator {
-	object {
-		x=756
-		y=24
-		width=144
-		height=156
-	}
-	monitor {
-		chan="scale:test:epsilon"
-		clr=51
-		bclr=23
-	}
-	clrmod="discrete"
-	direction="up"
-	limits {
-		loprDefault=-48.9
-		hoprSrc="default"
-		hoprDefault=38.6
-		precSrc="default"
-	}
-}
-indicator {
-	object {
-		x=24
-		y=236
-		width=160
-		height=168
-	}
-	monitor {
-		chan="scale:test:zeta"
-		clr=5
-		bclr=58
+		chan="weirdChan"
+		clr=24
+		bclr=6
 	}
 	label="channel"
-	clrmod="discrete"
-	limits {
-		loprDefault=-32.6
-		hoprDefault=58.8
-		precDefault=4
-	}
-}
-indicator {
-	object {
-		x=214
-		y=232
-		width=152
-		height=144
-	}
-	monitor {
-		chan="scale:test:eta"
-		clr=19
-		bclr=7
-	}
-	label="limits"
 	clrmod="alarm"
-	direction="up"
 	limits {
-		loprDefault=-28.1
-		hoprDefault=14.7
-		precSrc="default"
+		loprDefault=-20
+		hoprDefault=20
 		precDefault=2
 	}
 }
 indicator {
 	object {
-		x=398
-		y=228
-		width=128
-		height=152
+		x=1640
+		y=1040
+		width=120
+		height=230
 	}
 	monitor {
-		chan="scale:test:theta"
-		clr=41
-		bclr=10
+		chan="ZzzButton"
+		clr=20
+		bclr=40
 	}
 	label="outline"
 	clrmod="alarm"
 	direction="up"
 	limits {
-		loprSrc="default"
-		loprDefault=-101.4
-		hoprSrc="default"
-		hoprDefault=64.3
-		precDefault=1
+		loprDefault=-5
+		hoprDefault=5
+		precDefault=3
 	}
+}
+text {
+	object {
+		x=47
+		y=1069
+		width=200
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Geometry stress probes"
 }
 indicator {
 	object {
-		x=584
-		y=236
-		width=170
-		height=140
+		x=45
+		y=1094
+		width=150
+		height=50
 	}
 	monitor {
 		chan="scale:test:iota"
@@ -275,65 +908,18 @@ indicator {
 		bclr=36
 	}
 	label="channel"
-	clrmod="discrete"
 	limits {
 		loprDefault=-5.5
 		hoprDefault=5.5
-	}
-}
-indicator {
-	object {
-		x=772
-		y=232
-		width=130
-		height=162
-	}
-	monitor {
-		chan="scale:test:kappa"
-		clr=24
-		bclr=47
-	}
-	label="no decorations"
-	clrmod="discrete"
-	direction="up"
-	limits {
-		loprSrc="default"
-		loprDefault=-250
-		hoprSrc="default"
-		hoprDefault=250
-		precSrc="default"
 		precDefault=2
 	}
 }
 indicator {
 	object {
-		x=376
-		y=392
-		width=300
-		height=300
-	}
-	monitor {
-		chan="test_scale_pv"
-		clr=16
-		bclr=33
-	}
-	label="channel"
-	direction="up"
-	limits {
-		loprSrc="default"
-		loprDefault=-63.5
-		hoprSrc="default"
-		hoprDefault=78.2
-		precSrc="default"
-		precDefault=1
-	}
-}
-indicator {
-	object {
-		x=41
-		y=437
-		width=198
-		height=32
+		x=281
+		y=1093
+		width=70
+		height=100
 	}
 	monitor {
 		chan="scale:test:gamma"
@@ -341,78 +927,169 @@ indicator {
 		bclr=52
 	}
 	label="outline"
+	direction="up"
 	limits {
 		loprDefault=-5.4
 		hoprDefault=97.3
-		precSrc="default"
 		precDefault=3
 	}
 }
 indicator {
 	object {
-		x=927
-		y=232
-		width=130
-		height=162
+		x=680
+		y=1156
+		width=440
+		height=100
 	}
 	monitor {
-		chan="scale:test:kappa"
-		clr=24
-		bclr=47
+		chan="scale:test:theta"
+		clr=41
+		bclr=10
 	}
+	label="limits"
+	clrmod="discrete"
+	limits {
+		loprDefault=-101.4
+		hoprDefault=64.3
+		precDefault=1
+	}
+}
+text {
+	object {
+		x=1140
+		y=1140
+		width=390
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (direction)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1140
+		y=1158
+		width=190
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="A: right"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1340
+		y=1158
+		width=190
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="B: up"
+	align="horiz. centered"
+}
+indicator {
+	object {
+		x=1140
+		y=1176
+		width=190
+		height=110
+	}
+	monitor {
+		chan="scale:test:beta"
+		clr=47
+		bclr=6
+	}
+	label="channel"
+	clrmod="discrete"
+	limits {
+		loprDefault=-12.7
+		hoprDefault=125.9
+		precDefault=2
+	}
+}
+indicator {
+	object {
+		x=1340
+		y=1176
+		width=190
+		height=110
+	}
+	monitor {
+		chan="scale:test:beta"
+		clr=47
+		bclr=6
+	}
+	label="channel"
 	clrmod="discrete"
 	direction="up"
 	limits {
-		loprSrc="default"
-		loprDefault=-250
-		hoprSrc="default"
-		hoprDefault=250
-		precSrc="default"
+		loprDefault=-12.7
+		hoprDefault=125.9
 		precDefault=2
 	}
 }
 indicator {
 	object {
-		x=708
-		y=440
-		width=130
-		height=100
+		x=43
+		y=1152
+		width=150
+		height=60
 	}
 	monitor {
-		chan="scale:test:kappa"
-		clr=24
-		bclr=47
+		chan="scale:test:iota"
+		clr=14
+		bclr=36
 	}
-	label="no decorations"
-	clrmod="discrete"
+	label="channel"
 	limits {
-		loprSrc="default"
-		loprDefault=-250
-		hoprSrc="default"
-		hoprDefault=250
-		precSrc="default"
+		loprDefault=-5.5
+		hoprDefault=5.5
 		precDefault=2
 	}
 }
 indicator {
 	object {
-		x=874
-		y=443
-		width=130
+		x=362
+		y=1092
+		width=78
 		height=100
 	}
 	monitor {
-		chan="scale:test:kappa"
-		clr=24
-		bclr=47
+		chan="scale:test:gamma"
+		clr=30
+		bclr=52
 	}
-	clrmod="discrete"
+	label="outline"
+	direction="up"
 	limits {
-		loprSrc="default"
-		loprDefault=-250
-		hoprSrc="default"
-		hoprDefault=250
-		precSrc="default"
-		precDefault=2
+		loprDefault=-5.4
+		hoprDefault=97.3
+		precDefault=3
+	}
+}
+indicator {
+	object {
+		x=211
+		y=1093
+		width=60
+		height=100
+	}
+	monitor {
+		chan="scale:test:gamma"
+		clr=30
+		bclr=52
+	}
+	label="outline"
+	direction="up"
+	limits {
+		loprDefault=-5.4
+		hoprDefault=97.3
+		precDefault=3
 	}
 }

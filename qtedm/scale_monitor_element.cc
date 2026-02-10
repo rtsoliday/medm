@@ -24,6 +24,9 @@ constexpr double kSampleNormalizedValue = 0.65;
 constexpr qreal kAxisSpacing = 4.0;
 constexpr qreal kMinimumChartExtent = 16.0;
 constexpr qreal kMinimumAxisExtent = 14.0;
+constexpr qreal kMinimumVerticalAxisWidth = 6.0;
+constexpr qreal kMinimumVerticalTickLength = 3.0;
+constexpr qreal kMaximumAxisTickLength = 10.0;
 constexpr qreal kOutlineMargin = 4.0;
 constexpr qreal kLabelTextPadding = 2.0;
 constexpr qreal kBevelWidth = 2.0;
@@ -564,33 +567,34 @@ ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
         axisWidth = std::max(axisWidth,
             metrics.horizontalAdvance(layout.highLabel) + 6.0);
       }
-      const qreal availableWidth = (right - left) - axisWidth - spacing;
-      const qreal minimumTotal = kMinimumAxisExtent + spacing
-          + kMinimumChartExtent;
-      if ((right - left) < minimumTotal) {
-        const qreal reducedSpacing = std::min<qreal>(spacing, 2.0);
-        const qreal reducedAxisWidth = std::max<qreal>(8.0, axisWidth * 0.6);
-        const qreal reducedChartWidth = std::max<qreal>(8.0,
-            (right - left) - reducedAxisWidth - reducedSpacing);
-        if (reducedAxisWidth + reducedSpacing + reducedChartWidth
-            <= (right - left)) {
-          layout.axisRect = QRectF(left, top, reducedAxisWidth, chartHeight);
-          const qreal chartLeft = layout.axisRect.right() + reducedSpacing;
-          layout.chartRect = QRectF(chartLeft, top, reducedChartWidth,
-              chartHeight);
-        } else {
-          layout.showAxis = false;
-          layout.axisRect = QRectF();
-          layout.chartRect = QRectF(left, top, right - left, chartHeight);
-        }
-      } else if (availableWidth < kMinimumChartExtent) {
+      /* Keep axis layout active while narrow by shrinking axis width first.
+       * This reduces tick size down to a 3 px minimum before switching
+       * to the internal-tick layout. */
+      const qreal totalWidth = right - left;
+      qreal minimumAxisWidthForLayout = kMinimumVerticalAxisWidth;
+      if (layout.showLimits) {
+        QFont minimumLimitFont = qApp ? qApp->font() : QFont();
+        minimumLimitFont.setPixelSize(4);
+        const QFontMetricsF minimumLimitMetrics(minimumLimitFont);
+        const qreal minimumLabelWidth = std::max(
+            minimumLimitMetrics.horizontalAdvance(layout.lowLabel),
+            minimumLimitMetrics.horizontalAdvance(layout.highLabel))
+            + 2.0 * kLabelTextPadding;
+        minimumAxisWidthForLayout = std::max(minimumAxisWidthForLayout,
+            kMinimumVerticalTickLength + 2.0 + minimumLabelWidth);
+      }
+      const qreal maxAxisWidth = totalWidth - spacing - kMinimumChartExtent;
+      if (maxAxisWidth < minimumAxisWidthForLayout) {
         layout.showAxis = false;
         layout.axisRect = QRectF();
         layout.chartRect = QRectF(left, top, right - left, chartHeight);
       } else {
+        axisWidth = std::min(axisWidth, maxAxisWidth);
+        axisWidth = std::max(axisWidth, minimumAxisWidthForLayout);
+        const qreal chartWidth = totalWidth - axisWidth - spacing;
         layout.axisRect = QRectF(left, top, axisWidth, chartHeight);
         const qreal chartLeft = layout.axisRect.right() + spacing;
-        layout.chartRect = QRectF(chartLeft, top, availableWidth, chartHeight);
+        layout.chartRect = QRectF(chartLeft, top, chartWidth, chartHeight);
       }
     } else {
       layout.chartRect = QRectF(left, top, right - left, chartHeight);
@@ -713,7 +717,26 @@ void ScaleMonitorElement::paintAxis(QPainter &painter,
   if (layout.vertical) {
     const qreal axisX = layout.axisRect.right();
     const qreal axisHeight = layout.axisRect.height();
-    const qreal tickLength = std::min<qreal>(layout.axisRect.width(), 10.0);
+    qreal tickLength = std::min<qreal>(layout.axisRect.width(),
+        kMaximumAxisTickLength);
+    if (layout.showLimits) {
+      QFont minimumLimitFont = qApp ? qApp->font() : QFont();
+      minimumLimitFont.setPixelSize(4);
+      const QFontMetricsF minimumLimitMetrics(minimumLimitFont);
+      const qreal minimumLabelWidth = std::max(
+          minimumLimitMetrics.horizontalAdvance(layout.lowLabel),
+          minimumLimitMetrics.horizontalAdvance(layout.highLabel))
+          + 2.0 * kLabelTextPadding;
+      const qreal maxTickForLabels = layout.axisRect.width() - 2.0
+          - minimumLabelWidth;
+      tickLength = std::min(tickLength, maxTickForLabels);
+      tickLength = std::clamp(tickLength, kMinimumVerticalTickLength,
+          kMaximumAxisTickLength);
+    } else if (layout.axisRect.width() < (kMaximumAxisTickLength
+                   + kMinimumVerticalTickLength)) {
+      tickLength = std::clamp(layout.axisRect.width() - kMinimumVerticalTickLength,
+          kMinimumVerticalTickLength, kMaximumAxisTickLength);
+    }
 
     painter.drawLine(QPointF(axisX, layout.axisRect.top()),
         QPointF(axisX, layout.axisRect.bottom()));

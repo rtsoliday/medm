@@ -1,7 +1,8 @@
 # Test Display Authoring Guide
 
-This file documents the pattern used for `test_Slider.adl` and
-`run_local_ioc.sh` so other widget test screens can follow the same approach.
+This file documents the pattern used for `test_Slider.adl`,
+`test_ScaleMonitor.adl`, and `run_local_ioc.sh` so other widget test screens
+can follow the same approach.
 
 ## Goals
 
@@ -35,6 +36,7 @@ Use a two-section layout in each widget test screen.
 - Add text instructions directly in the ADL for manual execute-mode tests.
 - Include at least:
   - writable reference widgets
+  - or explicit external PV-write steps when the widget is monitor-only
   - disconnected/non-connected widget behavior where relevant
   - alarm-rendering probes where relevant
   - stress geometry widgets
@@ -59,6 +61,12 @@ For sliders specifically, call out:
 - increment changes via preset choices and direct text entry
 - no dialog open for disconnected/non-writable cases (match MEDM behavior)
 
+For scale monitors specifically, call out:
+
+- monitor-only behavior (no embedded control widgets in the screen)
+- external PV-write steps (for example, `cavput`) used to drive updates
+- fill/tick/value redraw parity under repeated value changes
+
 ## IOC Initialization Pattern (`run_local_ioc.sh`)
 
 Use deterministic PV initialization before manual testing.
@@ -79,6 +87,9 @@ Use a retry loop (20 retries, small delay) to avoid startup races.
 
 - Keep a per-widget list like:
   - `pv value lopr hopr prec`
+- Keep widget-specific initialization blocks in `run_local_ioc.sh`.
+  - `set_slider_test_pvs` for `slider:test:*`
+  - `set_scale_monitor_test_pvs` for `scale:test:*`
 - Write all fields in one `cavput -list=...` call when possible.
 - Log a clear success/warning message.
 
@@ -109,3 +120,5 @@ For each widget test file:
 - Add one-variable-only A/B baseline row.
 - Extend `run_local_ioc.sh` widget init arrays for values/limits/precision.
 - Add dedicated alarm probe channels if alarm-style parity is important.
+- If the screen is monitor-only (for example, `test_ScaleMonitor.adl`), keep it
+  monitor-only and use external PV writes for behavior checks.

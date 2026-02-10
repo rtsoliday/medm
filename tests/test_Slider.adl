@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=9
-		y=377
-		width=1094
-		height=965
+		x=479
+		y=60
+		width=1840
+		height=1310
 	}
 	clr=14
 	bclr=4
@@ -87,40 +87,287 @@ display {
 		1a7309,
 	}
 }
+text {
+	object {
+		x=24
+		y=10
+		width=1790
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Slider Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: label placement, thumb geometry, value text color, limit text clipping, cursor state, and keyboard/right-click behavior."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Increment testing: click near track ends, use arrow keys, use Ctrl+arrow, then right-click slider and test preset exponent + typed increment edits."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1800
+		height=760
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=560
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Label/Direction matrix with varied geometry (font scaling + decoration checks)"
+}
+text {
+	object {
+		x=84
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: right"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=364
+		y=154
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: left"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=870
+		y=157
+		width=90
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: up"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1110
+		y=157
+		width=110
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Direction: down"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=59
+		y=233
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="none"
+}
+text {
+	object {
+		x=61
+		y=374
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="outline"
+}
+text {
+	object {
+		x=54
+		y=487
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="limits"
+}
+text {
+	object {
+		x=72
+		y=617
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="channel"
+}
+text {
+	object {
+		x=55
+		y=746
+		width=72
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="no decor"
+}
+text {
+	object {
+		x=809
+		y=218
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="none"
+}
+text {
+	object {
+		x=809
+		y=324
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="outline"
+}
+text {
+	object {
+		x=808
+		y=445
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="limits"
+}
+text {
+	object {
+		x=806
+		y=578
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="channel"
+}
+text {
+	object {
+		x=770
+		y=700
+		width=90
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="no decor"
+}
 valuator {
 	object {
-		x=18
-		y=18
-		width=154
-		height=100
+		x=119
+		y=225
+		width=190
+		height=22
 	}
 	control {
 		chan="slider:test:alpha"
 		clr=33
 		bclr=12
 	}
-	label="channel"
 	clrmod="alarm"
 	dPrecision=0.250000
 	limits {
+		loprSrc="default"
 		loprDefault=-12.5
+		hoprSrc="default"
 		hoprDefault=84.3
+		precSrc="default"
 		precDefault=2
 	}
 }
 valuator {
 	object {
-		x=210
-		y=16
-		width=168
-		height=58
+		x=399
+		y=225
+		width=210
+		height=22
 	}
 	control {
 		chan="slider:test:beta"
 		clr=7
 		bclr=45
 	}
-	label="limits"
 	clrmod="discrete"
 	direction="left"
 	dPrecision=1.750000
@@ -135,52 +382,56 @@ valuator {
 }
 valuator {
 	object {
-		x=512
-		y=20
-		width=100
-		height=192
+		x=889
+		y=210
+		width=42
+		height=90
 	}
 	control {
 		chan="slider:test:gamma"
 		clr=28
 		bclr=6
 	}
-	label="channel"
 	direction="up"
 	dPrecision=0.100000
 	limits {
+		loprSrc="default"
+		hoprSrc="default"
 		hoprDefault=360
+		precSrc="default"
 		precDefault=3
 	}
 }
 valuator {
 	object {
-		x=655
-		y=11
-		width=70
-		height=208
+		x=1111
+		y=210
+		width=42
+		height=90
 	}
 	control {
 		chan="slider:test:delta"
 		clr=52
 		bclr=18
 	}
-	label="limits"
 	clrmod="alarm"
 	direction="down"
 	dPrecision=2.500000
 	limits {
+		loprSrc="default"
 		loprDefault=-240.8
+		hoprSrc="default"
 		hoprDefault=240.8
+		precSrc="default"
 		precDefault=1
 	}
 }
 valuator {
 	object {
-		x=224
-		y=420
-		width=188
-		height=60
+		x=121
+		y=366
+		width=220
+		height=32
 	}
 	control {
 		chan="slider:test:epsilon"
@@ -191,25 +442,29 @@ valuator {
 	clrmod="discrete"
 	dPrecision=0.625000
 	limits {
+		loprSrc="default"
 		loprDefault=-6.2
+		hoprSrc="default"
 		hoprDefault=6.2
+		precSrc="default"
 		precDefault=2
 	}
 }
 valuator {
 	object {
-		x=18
-		y=128
-		width=150
-		height=56
+		x=401
+		y=366
+		width=240
+		height=32
 	}
 	control {
 		chan="slider:test:zeta"
 		clr=14
 		bclr=53
 	}
-	label="limits"
+	label="outline"
 	clrmod="alarm"
+	direction="left"
 	dPrecision=3.000000
 	limits {
 		loprSrc="default"
@@ -217,14 +472,15 @@ valuator {
 		hoprSrc="default"
 		hoprDefault=310.5
 		precSrc="default"
+		precDefault=1
 	}
 }
 valuator {
 	object {
-		x=760
-		y=16
-		width=72
-		height=214
+		x=883
+		y=312
+		width=54
+		height=110
 	}
 	control {
 		chan="slider:test:eta"
@@ -235,26 +491,29 @@ valuator {
 	direction="up"
 	dPrecision=0.050000
 	limits {
+		loprSrc="default"
 		loprDefault=-1.2
+		hoprSrc="default"
 		hoprDefault=1.2
+		precSrc="default"
 		precDefault=4
 	}
 }
 valuator {
 	object {
-		x=209
-		y=101
-		width=184
-		height=58
+		x=1105
+		y=312
+		width=54
+		height=110
 	}
 	control {
 		chan="slider:test:theta"
 		clr=24
 		bclr=36
 	}
-	label="channel"
+	label="outline"
 	clrmod="discrete"
-	direction="left"
+	direction="down"
 	dPrecision=1.125000
 	limits {
 		loprSrc="default"
@@ -267,17 +526,17 @@ valuator {
 }
 valuator {
 	object {
-		x=231
-		y=187
-		width=172
-		height=56
+		x=114
+		y=473
+		width=260
+		height=46
 	}
 	control {
 		chan="slider:test:iota"
 		clr=56
 		bclr=22
 	}
-	label="outline"
+	label="limits"
 	clrmod="alarm"
 	dPrecision=0.875000
 	limits {
@@ -288,10 +547,10 @@ valuator {
 }
 valuator {
 	object {
-		x=850
-		y=258
-		width=66
-		height=220
+		x=394
+		y=473
+		width=270
+		height=46
 	}
 	control {
 		chan="slider:test:kappa"
@@ -299,52 +558,50 @@ valuator {
 		bclr=31
 	}
 	label="limits"
-	direction="down"
+	direction="left"
 	dPrecision=4.500000
 	limits {
-		loprSrc="default"
 		loprDefault=10
-		hoprSrc="default"
 		hoprDefault=510
-		precSrc="default"
 	}
 }
 valuator {
 	object {
-		x=860
-		y=32
-		width=64
-		height=210
+		x=872
+		y=433
+		width=74
+		height=130
 	}
 	control {
 		chan="slider:test:lambda"
 		clr=20
 		bclr=40
 	}
+	label="limits"
 	direction="up"
 	dPrecision=0.375000
 	limits {
-		precSrc="default"
+		hoprDefault=150
 		precDefault=2
 	}
 }
 valuator {
 	object {
-		x=15
-		y=205
-		width=188
-		height=60
+		x=1094
+		y=433
+		width=74
+		height=130
 	}
 	control {
 		chan="slider:test:mu"
 		clr=48
 		bclr=31
 	}
-	label="channel"
+	label="limits"
 	clrmod="alarm"
+	direction="down"
 	dPrecision=2.250000
 	limits {
-		loprSrc="default"
 		loprDefault=-220.5
 		hoprDefault=420.5
 		precDefault=1
@@ -352,21 +609,21 @@ valuator {
 }
 valuator {
 	object {
-		x=545
-		y=248
-		width=68
-		height=204
+		x=132
+		y=601
+		width=170
+		height=20
 	}
 	control {
 		chan="slider:test:nu"
 		clr=6
 		bclr=30
 	}
-	label="outline"
+	label="channel"
 	clrmod="discrete"
-	direction="down"
 	dPrecision=0.420000
 	limits {
+		loprSrc="default"
 		loprDefault=-54.2
 		hoprDefault=154.2
 		precDefault=2
@@ -374,78 +631,86 @@ valuator {
 }
 valuator {
 	object {
-		x=218
-		y=264
-		width=176
-		height=58
+		x=412
+		y=601
+		width=190
+		height=20
 	}
 	control {
 		chan="slider:test:xi"
 		clr=11
 		bclr=47
 	}
-	label="limits"
+	label="channel"
 	direction="left"
 	dPrecision=1.333000
 	limits {
 		loprDefault=-17.5
+		hoprSrc="default"
 		hoprDefault=17.5
+		precSrc="default"
+		precDefault=1
 	}
 }
 valuator {
 	object {
-		x=34
-		y=416
-		width=150
-		height=62
+		x=884
+		y=582
+		width=46
+		height=86
 	}
 	control {
 		chan="slider:test:omicron"
-		clr=35
+		clr=14
 		bclr=5
 	}
 	label="channel"
 	clrmod="discrete"
+	direction="up"
 	dPrecision=0.720000
 	limits {
+		loprSrc="default"
 		loprDefault=-8.9
+		hoprSrc="default"
 		hoprDefault=58.9
 		precDefault=3
 	}
 }
 valuator {
 	object {
-		x=755
-		y=253
-		width=80
-		height=212
+		x=1106
+		y=582
+		width=46
+		height=86
 	}
 	control {
 		chan="slider:test:pi"
 		clr=17
 		bclr=38
 	}
+	label="channel"
 	clrmod="alarm"
-	direction="up"
+	direction="down"
 	dPrecision=5.000000
 	limits {
-		loprSrc="default"
+		hoprSrc="default"
 		hoprDefault=500
 		precSrc="default"
 	}
 }
 valuator {
 	object {
-		x=222
-		y=335
-		width=160
-		height=64
+		x=133
+		y=698
+		width=280
+		height=60
 	}
 	control {
 		chan="slider:test:rho"
 		clr=26
 		bclr=50
 	}
+	label="no decorations"
 	dPrecision=0.850000
 	limits {
 		hoprDefault=42
@@ -454,38 +719,40 @@ valuator {
 }
 valuator {
 	object {
-		x=649
-		y=256
-		width=70
-		height=210
+		x=433
+		y=699
+		width=260
+		height=60
 	}
 	control {
 		chan="slider:test:sigma"
 		clr=52
 		bclr=8
 	}
-	label="outline"
-	direction="down"
+	label="no decorations"
+	direction="left"
 	dPrecision=0.240000
 	limits {
 		loprDefault=-2.4
+		hoprDefault=24
 		precDefault=3
 	}
 }
 valuator {
 	object {
-		x=16
-		y=273
-		width=190
-		height=56
+		x=865
+		y=686
+		width=92
+		height=170
 	}
 	control {
 		chan="slider:test:tau"
 		clr=4
 		bclr=28
 	}
-	label="limits"
+	label="no decorations"
 	clrmod="discrete"
+	direction="up"
 	dPrecision=1.600000
 	limits {
 		loprDefault=-160
@@ -495,28 +762,117 @@ valuator {
 }
 valuator {
 	object {
-		x=18
-		y=336
-		width=166
-		height=58
+		x=1087
+		y=686
+		width=92
+		height=170
 	}
 	control {
 		chan="slider:test:upsilon"
 		clr=44
 		bclr=14
 	}
-	label="channel"
+	label="no decorations"
 	clrmod="alarm"
+	direction="down"
 	dPrecision=0.980000
 	limits {
+		hoprDefault=100
+		precDefault=1
 	}
+}
+rectangle {
+	object {
+		x=20
+		y=870
+		width=1800
+		height=430
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=880
+		width=600
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=902
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Writable sliders: drag thumb, click track, keyboard arrows, Ctrl+arrows, verify value/increment behavior and redraw latency."
+}
+text {
+	object {
+		x=30
+		y=920
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Right-click on writable sliders: dialog should open with VALUE and increment controls; change increment via both dropdown and text field."
+}
+text {
+	object {
+		x=30
+		y=938
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Right-click disconnected slider: dialog should NOT open. Compare menu/dialog behavior with MEDM."
+}
+text {
+	object {
+		x=30
+		y=956
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Font stress: compare tiny, medium, and oversized widgets for label clipping, value overlap, and thumb border alignment."
+}
+text {
+	object {
+		x=62
+		y=974
+		width=490
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Writable reference (large horizontal)"
+	align="horiz. centered"
 }
 valuator {
 	object {
-		x=20
-		y=500
-		width=140
-		height=35
+		x=60
+		y=994
+		width=500
+		height=86
 	}
 	control {
 		chan="slider:test:alpha"
@@ -532,19 +888,545 @@ valuator {
 		precDefault=2
 	}
 }
+text {
+	object {
+		x=571
+		y=977
+		width=95
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Writable vertical"
+	align="horiz. centered"
+}
 valuator {
 	object {
-		x=170
-		y=500
-		width=130
-		height=35
+		x=573
+		y=997
+		width=90
+		height=260
+	}
+	control {
+		chan="slider:test:kappa"
+		clr=9
+		bclr=31
+	}
+	label="limits"
+	direction="up"
+	dPrecision=4.500000
+	limits {
+		loprDefault=10
+		hoprDefault=510
+	}
+}
+text {
+	object {
+		x=758
+		y=974
+		width=430
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Disconnected PV (right-click should not open slider dialog)"
+	align="horiz. centered"
+}
+valuator {
+	object {
+		x=760
+		y=994
+		width=430
+		height=80
+	}
+	control {
+		clr=24
+		bclr=6
+	}
+	label="channel"
+	clrmod="alarm"
+	dPrecision=1.000000
+	limits {
+		loprDefault=-10
+		hoprDefault=10
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=1262
+		y=974
+		width=520
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Oversized geometry (font fit + thumb scaling)"
+	align="horiz. centered"
+}
+valuator {
+	object {
+		x=1260
+		y=994
+		width=520
+		height=250
+	}
+	control {
+		chan="slider:test:tau"
+		clr=4
+		bclr=28
+	}
+	label="channel"
+	clrmod="discrete"
+	dPrecision=1.600000
+	limits {
+		loprDefault=-160
+		hoprDefault=160
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=60
+		y=1082
+		width=170
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Tiny font stress"
+	align="horiz. centered"
+}
+valuator {
+	object {
+		x=60
+		y=1100
+		width=170
+		height=18
+	}
+	control {
+		chan="slider:test:rho"
+		clr=26
+		bclr=50
+	}
+	label="channel"
+	dPrecision=0.850000
+	limits {
+		hoprDefault=42
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=240
+		y=1082
+		width=190
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Narrow vertical stress"
+	align="horiz. centered"
+}
+valuator {
+	object {
+		x=422
+		y=1088
+		width=28
+		height=200
+	}
+	control {
+		chan="slider:test:upsilon"
+		clr=44
+		bclr=14
+	}
+	label="outline"
+	clrmod="alarm"
+	direction="down"
+	dPrecision=0.980000
+	limits {
+		hoprDefault=100
+		precDefault=1
+	}
+}
+text {
+	object {
+		x=686
+		y=1081
+		width=55
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm V"
+	align="horiz. centered"
+}
+valuator {
+	object {
+		x=692
+		y=1099
+		width=60
+		height=188
+	}
+	control {
+		chan="ZzzButton"
+		clr=20
+		bclr=40
+	}
+	label="outline"
+	clrmod="alarm"
+	direction="down"
+	dPrecision=0.125000
+	limits {
+		loprDefault=-5
+		hoprDefault=5
+		precDefault=3
+	}
+}
+text {
+	object {
+		x=760
+		y=1082
+		width=430
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm probe (expected UDF/INVALID from run_local_ioc.sh)"
+	align="horiz. centered"
+}
+valuator {
+	object {
+		x=760
+		y=1100
+		width=430
+		height=48
+	}
+	control {
+		chan="weirdChan"
+		clr=24
+		bclr=6
+	}
+	label="channel"
+	clrmod="alarm"
+	dPrecision=0.500000
+	limits {
+		loprDefault=-20
+		hoprDefault=20
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=760
+		y=1150
+		width=430
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual check: alarm-color rendering + right-click parity on INVALID/UDF PVs."
+}
+text {
+	object {
+		x=760
+		y=1158
+		width=430
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (direction)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=760
+		y=1174
+		width=205
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="A: right"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=985
+		y=1174
+		width=205
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="B: left"
+	align="horiz. centered"
+}
+valuator {
+	object {
+		x=760
+		y=1192
+		width=205
+		height=60
 	}
 	control {
 		chan="slider:test:beta"
 		clr=7
 		bclr=45
 	}
+	label="channel"
+	clrmod="discrete"
+	dPrecision=1.750000
+	limits {
+		loprDefault=-95
+		hoprDefault=5
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=985
+		y=1192
+		width=205
+		height=60
+	}
+	control {
+		chan="slider:test:beta"
+		clr=7
+		bclr=45
+	}
+	label="channel"
+	clrmod="discrete"
+	direction="left"
+	dPrecision=1.750000
+	limits {
+		loprDefault=-95
+		hoprDefault=5
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=131
+		y=775
+		width=280
+		height=40
+	}
+	control {
+		chan="slider:test:rho"
+		clr=26
+		bclr=50
+	}
+	label="no decorations"
+	dPrecision=0.850000
+	limits {
+		hoprDefault=42
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=431
+		y=776
+		width=260
+		height=40
+	}
+	control {
+		chan="slider:test:sigma"
+		clr=52
+		bclr=8
+	}
+	label="no decorations"
+	direction="left"
+	dPrecision=0.240000
+	limits {
+		loprDefault=-2.4
+		hoprDefault=24
+		precDefault=3
+	}
+}
+valuator {
+	object {
+		x=133
+		y=631
+		width=170
+		height=45
+	}
+	control {
+		chan="slider:test:nu"
+		clr=6
+		bclr=30
+	}
+	label="channel"
+	clrmod="discrete"
+	dPrecision=0.420000
+	limits {
+		loprSrc="default"
+		loprDefault=-54.2
+		hoprDefault=154.2
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=413
+		y=631
+		width=190
+		height=45
+	}
+	control {
+		chan="slider:test:xi"
+		clr=11
+		bclr=47
+	}
+	label="channel"
+	direction="left"
+	dPrecision=1.333000
+	limits {
+		loprDefault=-17.5
+		hoprSrc="default"
+		hoprDefault=17.5
+		precSrc="default"
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=112
+		y=533
+		width=260
+		height=36
+	}
+	control {
+		chan="slider:test:iota"
+		clr=56
+		bclr=22
+	}
 	label="limits"
+	clrmod="alarm"
+	dPrecision=0.875000
+	limits {
+		loprDefault=-52.7
+		hoprDefault=52.7
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=392
+		y=533
+		width=270
+		height=36
+	}
+	control {
+		chan="slider:test:kappa"
+		clr=9
+		bclr=31
+	}
+	label="limits"
+	direction="left"
+	dPrecision=4.500000
+	limits {
+		loprDefault=10
+		hoprDefault=510
+	}
+}
+valuator {
+	object {
+		x=119
+		y=411
+		width=220
+		height=38
+	}
+	control {
+		chan="slider:test:epsilon"
+		clr=41
+		bclr=9
+	}
+	label="outline"
+	clrmod="discrete"
+	dPrecision=0.625000
+	limits {
+		loprSrc="default"
+		loprDefault=-6.2
+		hoprSrc="default"
+		hoprDefault=6.2
+		precSrc="default"
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=399
+		y=411
+		width=240
+		height=38
+	}
+	control {
+		chan="slider:test:zeta"
+		clr=14
+		bclr=53
+	}
+	label="outline"
+	clrmod="alarm"
+	direction="left"
+	dPrecision=3.000000
+	limits {
+		loprSrc="default"
+		loprDefault=10.5
+		hoprSrc="default"
+		hoprDefault=310.5
+		precSrc="default"
+		precDefault=1
+	}
+}
+valuator {
+	object {
+		x=116
+		y=263
+		width=190
+		height=41
+	}
+	control {
+		chan="slider:test:alpha"
+		clr=33
+		bclr=12
+	}
+	clrmod="alarm"
+	dPrecision=0.250000
+	limits {
+		loprSrc="default"
+		loprDefault=-12.5
+		hoprSrc="default"
+		hoprDefault=84.3
+		precSrc="default"
+		precDefault=2
+	}
+}
+valuator {
+	object {
+		x=396
+		y=263
+		width=210
+		height=41
+	}
+	control {
+		chan="slider:test:beta"
+		clr=7
+		bclr=45
+	}
 	clrmod="discrete"
 	direction="left"
 	dPrecision=1.750000
@@ -559,96 +1441,56 @@ valuator {
 }
 valuator {
 	object {
-		x=310
-		y=500
-		width=50
-		height=150
+		x=944
+		y=212
+		width=30
+		height=90
 	}
 	control {
 		chan="slider:test:gamma"
 		clr=28
 		bclr=6
 	}
-	label="channel"
 	direction="up"
 	dPrecision=0.100000
 	limits {
+		loprSrc="default"
+		hoprSrc="default"
 		hoprDefault=360
+		precSrc="default"
 		precDefault=3
 	}
 }
 valuator {
 	object {
-		x=370
-		y=500
-		width=45
-		height=150
+		x=1173
+		y=209
+		width=30
+		height=90
 	}
 	control {
 		chan="slider:test:delta"
 		clr=52
 		bclr=18
 	}
-	label="limits"
 	clrmod="alarm"
 	direction="down"
 	dPrecision=2.500000
 	limits {
+		loprSrc="default"
 		loprDefault=-240.8
+		hoprSrc="default"
 		hoprDefault=240.8
+		precSrc="default"
 		precDefault=1
 	}
 }
 valuator {
 	object {
-		x=20
-		y=545
-		width=145
-		height=40
-	}
-	control {
-		chan="slider:test:epsilon"
-		clr=41
-		bclr=9
-	}
-	label="outline"
-	clrmod="discrete"
-	dPrecision=0.625000
-	limits {
-		loprDefault=-6.2
-		hoprDefault=6.2
-		precDefault=2
-	}
-}
-valuator {
-	object {
-		x=175
-		y=545
-		width=135
-		height=40
-	}
-	control {
-		chan="slider:test:zeta"
-		clr=14
-		bclr=53
-	}
-	label="limits"
-	clrmod="alarm"
-	dPrecision=3.000000
-	limits {
-		loprSrc="default"
-		loprDefault=10.5
-		hoprSrc="default"
-		hoprDefault=310.5
-		precSrc="default"
-	}
-}
-valuator {
-	object {
-		x=425
-		y=500
-		width=55
-		height=155
+		x=949
+		y=311
+		width=45
+		height=110
 	}
 	control {
 		chan="slider:test:eta"
@@ -659,24 +1501,27 @@ valuator {
 	direction="up"
 	dPrecision=0.050000
 	limits {
+		loprSrc="default"
 		loprDefault=-1.2
+		hoprSrc="default"
 		hoprDefault=1.2
+		precSrc="default"
 		precDefault=4
 	}
 }
 valuator {
 	object {
-		x=490
-		y=500
-		width=50
-		height=160
+		x=1173
+		y=312
+		width=45
+		height=110
 	}
 	control {
 		chan="slider:test:theta"
 		clr=24
 		bclr=36
 	}
-	label="channel"
+	label="outline"
 	clrmod="discrete"
 	direction="down"
 	dPrecision=1.125000
@@ -691,84 +1536,41 @@ valuator {
 }
 valuator {
 	object {
-		x=20
-		y=595
-		width=150
-		height=35
-	}
-	control {
-		chan="slider:test:iota"
-		clr=56
-		bclr=22
-	}
-	label="outline"
-	clrmod="alarm"
-	dPrecision=0.875000
-	limits {
-		loprDefault=-52.7
-		hoprDefault=52.7
-		precDefault=1
-	}
-}
-valuator {
-	object {
-		x=180
-		y=595
-		width=125
-		height=40
-	}
-	control {
-		chan="slider:test:kappa"
-		clr=9
-		bclr=31
-	}
-	label="limits"
-	direction="left"
-	dPrecision=4.500000
-	limits {
-		loprSrc="default"
-		loprDefault=10
-		hoprSrc="default"
-		hoprDefault=510
-		precSrc="default"
-	}
-}
-valuator {
-	object {
-		x=550
-		y=500
-		width=45
-		height=145
+		x=951
+		y=433
+		width=30
+		height=130
 	}
 	control {
 		chan="slider:test:lambda"
 		clr=20
 		bclr=40
 	}
+	label="limits"
 	direction="up"
 	dPrecision=0.375000
 	limits {
-		precSrc="default"
+		hoprDefault=150
 		precDefault=2
 	}
 }
 valuator {
 	object {
-		x=20
-		y=645
-		width=140
-		height=35
+		x=1177
+		y=434
+		width=30
+		height=130
 	}
 	control {
 		chan="slider:test:mu"
 		clr=48
-		bclr=16
+		bclr=31
 	}
-	label="channel"
+	label="limits"
 	clrmod="alarm"
+	direction="down"
 	dPrecision=2.250000
 	limits {
-		loprSrc="default"
 		loprDefault=-220.5
 		hoprDefault=420.5
 		precDefault=1
@@ -776,140 +1578,65 @@ valuator {
 }
 valuator {
 	object {
-		x=605
-		y=500
-		width=50
-		height=150
-	}
-	control {
-		chan="slider:test:nu"
-		clr=6
-		bclr=30
-	}
-	label="outline"
-	clrmod="discrete"
-	direction="down"
-	dPrecision=0.420000
-	limits {
-		loprDefault=-54.2
-		hoprDefault=154.2
-		precDefault=2
-	}
-}
-valuator {
-	object {
-		x=170
-		y=645
-		width=130
-		height=40
-	}
-	control {
-		chan="slider:test:xi"
-		clr=11
-		bclr=47
-	}
-	label="limits"
-	direction="left"
-	dPrecision=1.333000
-	limits {
-		loprDefault=-17.5
-		hoprDefault=17.5
-	}
-}
-valuator {
-	object {
-		x=20
-		y=695
-		width=145
-		height=35
+		x=941
+		y=581
+		width=100
+		height=86
 	}
 	control {
 		chan="slider:test:omicron"
 		clr=14
-		bclr=2
+		bclr=5
 	}
 	label="channel"
 	clrmod="discrete"
+	direction="up"
 	dPrecision=0.720000
 	limits {
+		loprSrc="default"
 		loprDefault=-8.9
+		hoprSrc="default"
 		hoprDefault=58.9
 		precDefault=3
 	}
 }
 valuator {
 	object {
-		x=665
-		y=500
-		width=55
-		height=155
+		x=1162
+		y=581
+		width=230
+		height=86
 	}
 	control {
 		chan="slider:test:pi"
 		clr=17
 		bclr=38
 	}
+	label="channel"
 	clrmod="alarm"
-	direction="up"
+	direction="down"
 	dPrecision=5.000000
 	limits {
-		loprSrc="default"
+		hoprSrc="default"
 		hoprDefault=500
 		precSrc="default"
 	}
 }
 valuator {
 	object {
-		x=175
-		y=695
-		width=135
-		height=40
-	}
-	control {
-		chan="slider:test:rho"
-		clr=26
-		bclr=50
-	}
-	dPrecision=0.850000
-	limits {
-		hoprDefault=42
-		precDefault=2
-	}
-}
-valuator {
-	object {
-		x=730
-		y=500
-		width=45
-		height=160
-	}
-	control {
-		chan="slider:test:sigma"
-		clr=52
-		bclr=8
-	}
-	label="outline"
-	direction="down"
-	dPrecision=0.240000
-	limits {
-		loprDefault=-2.4
-		precDefault=3
-	}
-}
-valuator {
-	object {
-		x=20
-		y=745
-		width=80
-		height=35
+		x=962
+		y=685
+		width=20
+		height=170
 	}
 	control {
 		chan="slider:test:tau"
 		clr=4
 		bclr=28
 	}
-	label="limits"
+	label="no decorations"
 	clrmod="discrete"
+	direction="up"
 	dPrecision=1.600000
 	limits {
 		loprDefault=-160
@@ -919,79 +1646,22 @@ valuator {
 }
 valuator {
 	object {
-		x=785
-		y=500
-		width=50
-		height=145
-	}
-	control {
-		chan="slider:test:upsilon"
-		clr=44
-		bclr=14
-	}
-	label="channel"
-	clrmod="alarm"
-	direction="up"
-	dPrecision=0.980000
-	limits {
-	}
-}
-valuator {
-	object {
-		x=335
-		y=695
-		width=145
-		height=20
-	}
-	control {
-		chan="slider:test:omicron"
-		clr=35
-		bclr=20
-	}
-	clrmod="discrete"
-	dPrecision=0.720000
-	limits {
-		loprDefault=-8.9
-		hoprDefault=58.9
-		precDefault=3
-	}
-}
-valuator {
-	object {
-		x=871
-		y=520
-		width=20
-		height=145
-	}
-	control {
-		chan="slider:test:upsilon"
-		clr=44
-		bclr=14
-	}
-	clrmod="alarm"
-	direction="up"
-	dPrecision=0.980000
-	limits {
-	}
-}
-valuator {
-	object {
-		x=509
+		x=1187
 		y=686
-		width=500
-		height=250
+		width=20
+		height=170
 	}
 	control {
-		chan="slider:test:alpha"
-		clr=33
-		bclr=12
+		chan="slider:test:upsilon"
+		clr=44
+		bclr=14
 	}
-	label="channel"
+	label="no decorations"
 	clrmod="alarm"
-	dPrecision=0.250000
+	direction="down"
+	dPrecision=0.980000
 	limits {
-		loprDefault=-12.5
-		hoprDefault=84.3
-		precDefault=2
+		hoprDefault=100
+		precDefault=1
 	}
 }

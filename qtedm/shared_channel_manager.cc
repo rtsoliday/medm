@@ -1,6 +1,7 @@
 #include "shared_channel_manager.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include <QCoreApplication>
@@ -19,6 +20,21 @@ namespace {
 constexpr qint64 kMinNotifyIntervalMs = 100;
 /* Idle time after the last connection change before reporting completion. */
 constexpr int kConnectionCompletionIdleMs = 100;
+
+bool isNumericMonitorType(chtype requestedType)
+{
+  switch (requestedType) {
+  case DBR_TIME_DOUBLE:
+  case DBR_TIME_FLOAT:
+  case DBR_TIME_LONG:
+  case DBR_TIME_SHORT:
+  case DBR_TIME_CHAR:
+  case DBR_TIME_ENUM:
+    return true;
+  default:
+    return false;
+  }
+}
 } // namespace
 
 /* SubscriptionHandle implementation */
@@ -484,6 +500,73 @@ void SharedChannelManager::onValueReceived(void *channelPtr, QByteArray eventDat
   handleValue(channel, args);
 }
 
+void SharedChannelManager::onDeferredValueNotify(void *channelPtr)
+{
+  auto *channel = static_cast<SharedChannel *>(channelPtr);
+
+  /* Validate the channel pointer */
+  std::lock_guard<std::mutex> lock(channelMutex_);
+  bool found = false;
+  for (auto it = channels_.begin(); it != channels_.end(); ++it) {
+    if (it.value() == channel) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    return;
+  }
+
+  channel->notifyPending = false;
+
+  SharedChannelData &data = channel->cachedData;
+  if (!data.hasValue) {
+    return;
+  }
+
+  bool valueChanged = false;
+  if (channel->lastNotifiedSeverity < 0) {
+    valueChanged = true;
+  } else if (data.severity != channel->lastNotifiedSeverity) {
+    valueChanged = true;
+  } else if (data.isNumeric && data.numericValue != channel->lastNotifiedValue) {
+    valueChanged = true;
+  } else if (data.isString && data.stringValue != channel->lastNotifiedString) {
+    valueChanged = true;
+  } else if (data.isEnum && data.enumValue != channel->lastNotifiedEnum) {
+    valueChanged = true;
+  }
+  if (!valueChanged) {
+    return;
+  }
+
+  const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+  if (channel->lastNotifyTimeMs > 0) {
+    const qint64 elapsedMs = nowMs - channel->lastNotifyTimeMs;
+    if (elapsedMs < kMinNotifyIntervalMs) {
+      const int delayMs = static_cast<int>(kMinNotifyIntervalMs - elapsedMs);
+      channel->notifyPending = true;
+      QTimer::singleShot(delayMs, this, [this, channel]() {
+        onDeferredValueNotify(channel);
+      });
+      return;
+    }
+  }
+
+  channel->lastNotifyTimeMs = nowMs;
+  channel->lastNotifiedValue = data.numericValue;
+  channel->lastNotifiedSeverity = data.severity;
+  channel->lastNotifiedString = data.stringValue;
+  channel->lastNotifiedEnum = data.enumValue;
+  ++channel->updateCount;
+
+  for (const auto &sub : channel->subscribers) {
+    if (sub.valueCallback) {
+      sub.valueCallback(data);
+    }
+  }
+}
+
 void SharedChannelManager::onControlInfoReceived(void *channelPtr, QByteArray eventData,
                                                   int status, long type)
 {
@@ -863,9 +946,15 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
   if (channel->lastNotifyTimeMs > 0) {
     const qint64 elapsedMs = nowMs - channel->lastNotifyTimeMs;
     if (elapsedMs < kMinNotifyIntervalMs) {
-      /* Skip this notification - too soon since last one.
-       * The cached data is still updated, so the next notification
-       * will have the latest value. */
+      /* Defer notification to preserve throttling while guaranteeing delivery
+       * of the latest value (prevents stale displays when updates stop). */
+      if (!channel->notifyPending) {
+        const int delayMs = static_cast<int>(kMinNotifyIntervalMs - elapsedMs);
+        channel->notifyPending = true;
+        QTimer::singleShot(delayMs, this, [this, channel]() {
+          onDeferredValueNotify(channel);
+        });
+      }
       return;
     }
   }
@@ -1008,7 +1097,59 @@ bool SharedChannelManager::putValue(const QString &pvName, double value)
         QStringLiteral("Slider"));
   }
   ca_flush_io();
+  if (status == ECA_NORMAL) {
+    for (auto *channel : channels_) {
+      if (!channel || !channel->connected) {
+        continue;
+      }
+      if (channel->key.pvName != trimmed) {
+        continue;
+      }
+      if (!isNumericMonitorType(channel->key.requestedType)) {
+        continue;
+      }
+      notifySubscribersForLocalNumericPut(channel, value);
+    }
+  }
   return status == ECA_NORMAL;
+}
+
+void SharedChannelManager::notifySubscribersForLocalNumericPut(
+    SharedChannel *channel, double value)
+{
+  if (!channel || !std::isfinite(value)) {
+    return;
+  }
+
+  SharedChannelData &data = channel->cachedData;
+  data.connected = channel->connected;
+  data.hasValue = true;
+  data.isNumeric = true;
+  data.numericValue = value;
+
+  bool valueChanged = false;
+  if (channel->lastNotifiedSeverity < 0) {
+    valueChanged = true;
+  } else if (value != channel->lastNotifiedValue) {
+    valueChanged = true;
+  }
+  if (!valueChanged) {
+    return;
+  }
+
+  channel->lastNotifyTimeMs = QDateTime::currentMSecsSinceEpoch();
+  channel->notifyPending = false;
+  channel->lastNotifiedValue = value;
+  channel->lastNotifiedSeverity = data.severity;
+  channel->lastNotifiedString = data.stringValue;
+  channel->lastNotifiedEnum = data.enumValue;
+  ++channel->updateCount;
+
+  for (const auto &sub : channel->subscribers) {
+    if (sub.valueCallback) {
+      sub.valueCallback(data);
+    }
+  }
 }
 
 bool SharedChannelManager::putValue(const QString &pvName, const QString &value)

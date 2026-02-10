@@ -168,9 +168,16 @@ void SliderRuntime::handleChannelData(const SharedChannelData &data)
   /* Apply limits from control info if available and not yet done */
   if (!hasControlInfo_ && (data.hasControlInfo || data.lopr != 0.0 || data.hopr != 0.0)) {
     hasControlInfo_ = true;
-    const double low = data.lopr;
-    const double high = data.hopr;
+    /* MEDM path converts CA limits through float before use. Mirror that
+     * behavior for compatibility, including possible +/-inf from overflow. */
+    double low = static_cast<double>(static_cast<float>(data.lopr));
+    double high = static_cast<double>(static_cast<float>(data.hopr));
     const int precision = data.precision;
+
+    /* MEDM compatibility: avoid degenerate 0..0 range from channel info. */
+    if (high == 0.0 && low == 0.0) {
+      high += 1.0;
+    }
 
     if (low != high || low != 0.0) {
       invokeOnElement([low, high, precision](SliderElement *element) {

@@ -452,10 +452,11 @@ void SliderElement::setRuntimeSeverity(short severity)
 
 void SliderElement::setRuntimeLimits(double low, double high)
 {
-  if (!std::isfinite(low) || !std::isfinite(high)) {
+  if (std::isnan(low) || std::isnan(high)) {
     return;
   }
-  if (std::abs(high - low) < 1e-12) {
+  if (std::isfinite(low) && std::isfinite(high)
+      && std::abs(high - low) < 1e-12) {
     high = low + 1.0;
   }
   runtimeLow_ = low;
@@ -1620,8 +1621,11 @@ double SliderElement::defaultSampleValue() const
 
 QString SliderElement::formatLimit(double value) const
 {
-  if (!std::isfinite(value)) {
+  if (std::isnan(value)) {
     return QStringLiteral("--");
+  }
+  if (std::isinf(value)) {
+    return value < 0.0 ? QStringLiteral("-inf") : QStringLiteral("inf");
   }
   const int digits = effectivePrecision();
   return QString::number(value, 'f', digits);

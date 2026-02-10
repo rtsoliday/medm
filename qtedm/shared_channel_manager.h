@@ -239,6 +239,7 @@ private:
     QList<Subscriber> subscribers;
     int updateCount = 0;  /* Updates since last reset for rate calc */
     qint64 lastNotifyTimeMs = 0;  /* Time of last subscriber notification */
+    bool notifyPending = false;  /* Deferred notify scheduled */
     /* Last notified values for change detection */
     double lastNotifiedValue = 0.0;
     short lastNotifiedSeverity = -1;  /* -1 = never notified */
@@ -257,6 +258,7 @@ private:
   void handleValue(SharedChannel *channel, const event_handler_args &args);
   void handleControlInfo(SharedChannel *channel, const event_handler_args &args);
   void handleAccessRights(SharedChannel *channel, bool canRead, bool canWrite);
+  void notifySubscribersForLocalNumericPut(SharedChannel *channel, double value);
 
   /* Channel management */
   SharedChannel *findOrCreateChannel(const SharedChannelKey &key);
@@ -277,6 +279,7 @@ private Q_SLOTS:
                            short nativeType, long nativeCount);
   void onValueReceived(void *channelPtr, QByteArray eventData, int status, 
                        long type, long count);
+  void onDeferredValueNotify(void *channelPtr);
   void onControlInfoReceived(void *channelPtr, QByteArray eventData, 
                              int status, long type);
   void onAccessRightsChanged(void *channelPtr, bool canRead, bool canWrite);

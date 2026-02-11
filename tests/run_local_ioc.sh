@@ -230,6 +230,57 @@ set_scale_monitor_test_pvs() {
   return 1
 }
 
+set_meter_test_pvs() {
+  local prefix="$1"
+  local -a meter_init_values=(
+    # pv value lopr hopr prec
+    "meter:fast:alpha      24.5    -14.3    92.7   2"
+    "meter:slow:beta       64.2    -85.6   125.4   1"
+    "meter:burst:gamma      1.275   -3.8     3.8   3"
+    "meter:demo:delta     -12      -47      47     2"
+    "meter:cycle:epsilon   40.8     -5.5    68.9   1"
+    "meter:drift:zeta     -22.3   -120.6    15.4   1"
+    "meter:ramp:eta         2.4     -9.2     9.2   2"
+    "meter:noise:theta     56.2    -32.1   105.6   3"
+    "meter:pulse:iota       0.375   -1.5     1.5   4"
+    "meter:wave:kappa     150     -250     250     0"
+    "meter:scan:lambda    -22.5    -75.3    12.9   2"
+    "meter:burst:mu        21.1     -3.1    42.2   1"
+    "meter:flux:nu          2.125   -0.75    8.35  3"
+    "meter:loop:xi         -1.25   -11       8.35  5"
+    "meter:random:omicron   1.875  -11       8.35  5"
+  )
+
+  echo "Initializing meter PVs for tests/test_Meter.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${meter_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Meter PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize meter PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_slider_alarm_probe_pvs() {
   local prefix="$1"
   local -a alarm_probe_fields=(
@@ -285,5 +336,6 @@ set_local_ca_env
 ioc_pid="$!"
 set_slider_test_pvs "${PV_PREFIX}" || true
 set_scale_monitor_test_pvs "${PV_PREFIX}" || true
+set_meter_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 wait "${ioc_pid}"

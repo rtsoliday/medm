@@ -49,10 +49,14 @@ trap 'rm -f "${tmp_pvs}" "${tmp_out}"' EXIT
 if command -v rg >/dev/null 2>&1; then
   rg --only-matching --no-filename -P 'chan[A-D]?="[^"]+"' "${SCRIPT_DIR}"/*.adl \
     | sed -E 's/^[^=]+="([^"]+)"$/\1/' \
+    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+    | awk 'NF' \
     | sort -u > "${tmp_pvs}"
 else
   grep -hEo 'chan[A-D]?="[^"]+"' "${SCRIPT_DIR}"/*.adl \
     | sed -E 's/^[^=]+="([^"]+)"$/\1/' \
+    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+    | awk 'NF' \
     | sort -u > "${tmp_pvs}"
 fi
 

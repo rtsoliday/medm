@@ -1,8 +1,8 @@
 # Test Display Authoring Guide
 
 This file documents the pattern used for `test_Slider.adl`,
-`test_ScaleMonitor.adl`, and `run_local_ioc.sh` so other widget test screens
-can follow the same approach.
+`test_ScaleMonitor.adl`, `test_Meter.adl`, and `run_local_ioc.sh` so other
+widget test screens can follow the same approach.
 
 ## Goals
 
@@ -90,8 +90,23 @@ Use a retry loop (20 retries, small delay) to avoid startup races.
 - Keep widget-specific initialization blocks in `run_local_ioc.sh`.
   - `set_slider_test_pvs` for `slider:test:*`
   - `set_scale_monitor_test_pvs` for `scale:test:*`
+  - `set_meter_test_pvs` for `meter:*`
 - Write all fields in one `cavput -list=...` call when possible.
 - Log a clear success/warning message.
+
+### Required synchronization when editing `tests/*.adl`
+
+Any update to a test ADL file in `tests/` must include the matching
+`run_local_ioc.sh` updates in the same change.
+
+- If you add, rename, or remove PVs in `tests/test_*.adl`, update the matching
+  widget initialization array in `run_local_ioc.sh`.
+- If you change meter/slider/scale limits or precision defaults in a parity
+  harness, update the `LOPR`/`HOPR`/`PREC` initialization values to match.
+- If you add a new widget test ADL, add a corresponding
+  `set_<widget>_test_pvs` helper and call it from the startup sequence.
+- Keep alarm probe channels in sync with ADL references when they are used for
+  INVALID/UDF rendering checks.
 
 ### Alarm probe initialization
 
@@ -119,6 +134,7 @@ For each widget test file:
 - Add Section B behavior checklist with explicit manual actions.
 - Add one-variable-only A/B baseline row.
 - Extend `run_local_ioc.sh` widget init arrays for values/limits/precision.
+  This is required for every `tests/test_*.adl` change, not optional.
 - Add dedicated alarm probe channels if alarm-style parity is important.
 - If the screen is monitor-only (for example, `test_ScaleMonitor.adl`), keep it
   monitor-only and use external PV writes for behavior checks.

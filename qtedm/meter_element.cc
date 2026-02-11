@@ -467,6 +467,14 @@ void MeterElement::paintEvent(QPaintEvent *event)
 
   drawRaisedBevel(painter, rect(), bgColor, kBevelDepth);
 
+  if (executeMode_ && !runtimeConnected_) {
+    painter.fillRect(rect(), Qt::white);
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
+
   const QRectF bounds = rect().adjusted(6.0, 6.0, -6.0, -6.0);
   if (bounds.width() <= 0.0 || bounds.height() <= 0.0) {
     if (selected_) {

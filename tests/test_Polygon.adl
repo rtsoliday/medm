@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
-		width=793
-		height=536
+		x=2175
+		y=70
+		width=1800
+		height=1300
 	}
 	clr=14
 	bclr=4
@@ -87,251 +87,1312 @@ display {
 		1a7309,
 	}
 }
-polygon {
+text {
 	object {
-		x=22
-		y=16
-		width=38
-		height=27
+		x=24
+		y=10
+		width=1760
+		height=24
 	}
 	"basic attribute" {
-		clr=14
+		clr=54
 	}
-	points {
-		(22,18)
-		(49,16)
-		(60,37)
-		(39,43)
-		(22,18)
-	}
+	textix="Polygon Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
 }
-polygon {
+text {
 	object {
-		x=107
-		y=71
-		width=56
-		height=62
+		x=24
+		y=38
+		width=1760
+		height=16
 	}
 	"basic attribute" {
-		clr=27
-		style="dash"
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: fill/outline rendering, dash/line-width parity, dynamic visibility behavior, alarm/discrete color transitions, and point clipping."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Polygon is monitor-only: drive PV updates externally (for example, cavput channelA_PV=..., cavput channelB_PV=...) and compare redraw/visibility logic."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1760
+		height=800
+	}
+	"basic attribute" {
+		clr=7
 		fill="outline"
-		width=6
-	}
-	points {
-		(110,90)
-		(138,74)
-		(160,92)
-		(152,120)
-		(126,130)
-		(110,115)
-		(110,90)
-	}
-}
-polygon {
-	object {
-		x=210
-		y=55
-		width=70
-		height=65
-	}
-	"basic attribute" {
-		clr=8
 		width=2
 	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (color/visibility/style + geometry range)"
+}
+text {
+	object {
+		x=190
+		y=154
+		width=210
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Static color"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=520
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm + if not zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=850
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Discrete + if not zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1180
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Calc visibility"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1490
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Dash/outline variant"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=222
+		width=120
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=326
+		width=120
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=458
+		width=120
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=56
+		y=682
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow vertical"
+}
+text {
+	object {
+		x=56
+		y=792
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="alt bit stress"
+}
+polygon {
+	object {
+		x=220
+		y=205
+		width=130
+		height=34
+	}
+	"basic attribute" {
+		clr=31
+		width=1
+	}
+	points {
+		(230,221)
+		(280,208)
+		(340,214)
+		(346,229)
+		(292,236)
+		(235,232)
+		(230,221)
+	}
+}
+polygon {
+	object {
+		x=550
+		y=205
+		width=130
+		height=34
+	}
+	"basic attribute" {
+		clr=44
+		width=1
+	}
 	"dynamic attribute" {
-		clr="discrete"
+		clr="alarm"
 		vis="if not zero"
 		chan="channelA_PV"
 	}
 	points {
-		(220,60)
-		(255,55)
-		(280,80)
-		(270,110)
-		(235,120)
-		(210,95)
-		(220,60)
+		(560,221)
+		(610,208)
+		(670,214)
+		(676,229)
+		(622,236)
+		(565,232)
+		(560,221)
 	}
 }
 polygon {
 	object {
-		x=346
-		y=161
-		width=78
-		height=78
+		x=880
+		y=205
+		width=130
+		height=34
 	}
 	"basic attribute" {
-		clr=52
-		style="dash"
-		fill="outline"
-		width=8
+		clr=12
+		width=1
 	}
 	"dynamic attribute" {
-		clr="alarm"
-		vis="if zero"
-		chan="channelA_PV"
-		chanB="channelB_PV"
+		clr="discrete"
+		vis="if not zero"
+		chan="channelB_PV"
 	}
 	points {
-		(360,180)
-		(395,165)
-		(420,190)
-		(410,220)
-		(370,235)
-		(350,210)
-		(360,180)
+		(890,221)
+		(940,208)
+		(1000,214)
+		(1006,229)
+		(952,236)
+		(895,232)
+		(890,221)
 	}
 }
 polygon {
 	object {
-		x=510
-		y=70
-		width=80
-		height=75
+		x=1210
+		y=205
+		width=130
+		height=34
 	}
 	"basic attribute" {
-		clr=31
-		width=3
+		clr=5
+		width=1
 	}
 	"dynamic attribute" {
 		vis="calc"
-		calc="A+B>C"
+		calc="A+B<C"
 		chan="channelA_PV"
 		chanB="channelB_PV"
 		chanC="channelC_PV"
 		chanD="channelD_PV"
 	}
 	points {
-		(520,90)
-		(560,70)
-		(590,95)
-		(585,130)
-		(545,145)
-		(510,125)
-		(520,90)
+		(1220,221)
+		(1270,208)
+		(1330,214)
+		(1336,229)
+		(1282,236)
+		(1225,232)
+		(1220,221)
 	}
 }
 polygon {
 	object {
-		x=93
-		y=238
-		width=74
-		height=69
+		x=1520
+		y=205
+		width=130
+		height=34
+	}
+	"basic attribute" {
+		clr=21
+		style="dash"
+		fill="outline"
+		width=2
+	}
+	points {
+		(1530,221)
+		(1580,208)
+		(1640,214)
+		(1646,229)
+		(1592,236)
+		(1535,232)
+		(1530,221)
+	}
+}
+polygon {
+	object {
+		x=200
+		y=310
+		width=160
+		height=72
+	}
+	"basic attribute" {
+		clr=31
+		fill="outline"
+		width=3
+	}
+	points {
+		(214,330)
+		(260,312)
+		(340,318)
+		(352,346)
+		(312,378)
+		(226,370)
+		(214,330)
+	}
+}
+polygon {
+	object {
+		x=530
+		y=310
+		width=160
+		height=72
+	}
+	"basic attribute" {
+		clr=44
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	points {
+		(544,330)
+		(590,312)
+		(670,318)
+		(682,346)
+		(642,378)
+		(556,370)
+		(544,330)
+	}
+}
+polygon {
+	object {
+		x=860
+		y=310
+		width=160
+		height=72
+	}
+	"basic attribute" {
+		clr=12
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="channelB_PV"
+	}
+	points {
+		(874,330)
+		(920,312)
+		(1000,318)
+		(1012,346)
+		(972,378)
+		(886,370)
+		(874,330)
+	}
+}
+polygon {
+	object {
+		x=1190
+		y=310
+		width=160
+		height=72
+	}
+	"basic attribute" {
+		clr=5
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A+B<C"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
+	}
+	points {
+		(1204,330)
+		(1250,312)
+		(1330,318)
+		(1342,346)
+		(1302,378)
+		(1216,370)
+		(1204,330)
+	}
+}
+polygon {
+	object {
+		x=1500
+		y=310
+		width=160
+		height=72
+	}
+	"basic attribute" {
+		clr=21
+		style="dash"
+		fill="outline"
+		width=3
+	}
+	points {
+		(1514,330)
+		(1560,312)
+		(1640,318)
+		(1652,346)
+		(1612,378)
+		(1526,370)
+		(1514,330)
+	}
+}
+polygon {
+	object {
+		x=170
+		y=430
+		width=220
+		height=170
+	}
+	"basic attribute" {
+		clr=31
+		width=5
+	}
+	points {
+		(190,470)
+		(270,438)
+		(360,456)
+		(380,538)
+		(320,590)
+		(220,576)
+		(190,470)
+	}
+}
+polygon {
+	object {
+		x=500
+		y=430
+		width=220
+		height=170
+	}
+	"basic attribute" {
+		clr=44
+		width=5
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	points {
+		(520,470)
+		(600,438)
+		(690,456)
+		(710,538)
+		(650,590)
+		(550,576)
+		(520,470)
+	}
+}
+polygon {
+	object {
+		x=830
+		y=430
+		width=220
+		height=170
+	}
+	"basic attribute" {
+		clr=12
+		width=5
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="channelB_PV"
+	}
+	points {
+		(850,470)
+		(930,438)
+		(1020,456)
+		(1040,538)
+		(980,590)
+		(880,576)
+		(850,470)
+	}
+}
+polygon {
+	object {
+		x=1160
+		y=430
+		width=220
+		height=170
+	}
+	"basic attribute" {
+		clr=5
+		width=5
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A+B<C"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
+	}
+	points {
+		(1180,470)
+		(1260,438)
+		(1350,456)
+		(1370,538)
+		(1310,590)
+		(1210,576)
+		(1180,470)
+	}
+}
+polygon {
+	object {
+		x=1470
+		y=430
+		width=220
+		height=170
+	}
+	"basic attribute" {
+		clr=21
+		style="dash"
+		fill="outline"
+		width=5
+	}
+	points {
+		(1490,470)
+		(1570,438)
+		(1660,456)
+		(1680,538)
+		(1620,590)
+		(1520,576)
+		(1490,470)
+	}
+}
+polygon {
+	object {
+		x=244
+		y=613
+		width=78
+		height=170
+	}
+	"basic attribute" {
+		clr=31
+		fill="outline"
+		width=4
+	}
+	points {
+		(250,641)
+		(284,621)
+		(314,647)
+		(318,717)
+		(284,773)
+		(254,745)
+		(250,641)
+	}
+}
+polygon {
+	object {
+		x=564
+		y=617
+		width=78
+		height=170
 	}
 	"basic attribute" {
 		clr=44
 		fill="outline"
 		width=4
 	}
-	points {
-		(100,250)
-		(140,240)
-		(165,265)
-		(150,300)
-		(120,305)
-		(95,280)
-		(100,250)
-	}
-}
-polygon {
-	object {
-		x=250
-		y=245
-		width=85
-		height=80
-	}
-	"basic attribute" {
-		clr=18
-		width=2
-	}
 	"dynamic attribute" {
+		clr="alarm"
 		vis="if not zero"
 		chan="channelA_PV"
 	}
 	points {
-		(250,260)
-		(280,245)
-		(320,255)
-		(335,290)
-		(310,325)
-		(265,315)
-		(250,260)
+		(570,645)
+		(604,625)
+		(634,651)
+		(638,721)
+		(604,777)
+		(574,749)
+		(570,645)
 	}
 }
 polygon {
 	object {
-		x=392
-		y=287
-		width=86
-		height=76
+		x=896
+		y=609
+		width=78
+		height=170
 	}
 	"basic attribute" {
-		clr=6
-		style="dash"
+		clr=12
 		fill="outline"
-		width=6
+		width=4
 	}
 	"dynamic attribute" {
-		clr="alarm"
-		chan="channelA_PV"
+		clr="discrete"
+		vis="if not zero"
+		chan="channelB_PV"
 	}
 	points {
-		(410,300)
-		(450,290)
-		(475,310)
-		(460,345)
-		(420,360)
-		(395,330)
-		(410,300)
+		(902,637)
+		(936,617)
+		(966,643)
+		(970,713)
+		(936,769)
+		(906,741)
+		(902,637)
 	}
 }
 polygon {
 	object {
-		x=530
-		y=240
-		width=80
-		height=80
-	}
-	"basic attribute" {
-		clr=57
-		width=5
-	}
-	points {
-		(540,260)
-		(575,240)
-		(610,255)
-		(600,295)
-		(560,320)
-		(530,295)
-		(540,260)
-	}
-}
-polygon {
-	object {
-		x=116
-		y=341
+		x=1225
+		y=611
 		width=78
-		height=83
+		height=170
 	}
 	"basic attribute" {
-		clr=21
+		clr=5
 		fill="outline"
-		width=8
+		width=4
 	}
 	"dynamic attribute" {
 		vis="calc"
-		calc="(A+B)/2"
+		calc="A+B<C"
 		chan="channelA_PV"
 		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
 	}
 	points {
-		(130,360)
-		(165,345)
-		(190,370)
-		(180,405)
-		(145,420)
-		(120,395)
-		(130,360)
+		(1231,639)
+		(1265,619)
+		(1295,645)
+		(1299,715)
+		(1265,771)
+		(1235,743)
+		(1231,639)
+	}
+}
+polygon {
+	object {
+		x=1537
+		y=610
+		width=78
+		height=170
+	}
+	"basic attribute" {
+		clr=21
+		style="dash"
+		fill="outline"
+		width=4
+	}
+	points {
+		(1543,638)
+		(1577,618)
+		(1607,644)
+		(1611,714)
+		(1577,770)
+		(1547,742)
+		(1543,638)
+	}
+}
+polygon {
+	object {
+		x=180
+		y=780
+		width=220
+		height=52
+	}
+	"basic attribute" {
+		clr=31
+		width=2
+	}
+	points {
+		(190,804)
+		(260,784)
+		(350,790)
+		(388,808)
+		(320,826)
+		(220,824)
+		(190,804)
+	}
+}
+polygon {
+	object {
+		x=510
+		y=780
+		width=220
+		height=52
+	}
+	"basic attribute" {
+		clr=44
+		width=2
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	points {
+		(520,804)
+		(590,784)
+		(680,790)
+		(718,808)
+		(650,826)
+		(550,824)
+		(520,804)
+	}
+}
+polygon {
+	object {
+		x=840
+		y=780
+		width=220
+		height=52
+	}
+	"basic attribute" {
+		clr=12
+		width=2
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="channelB_PV"
+	}
+	points {
+		(850,804)
+		(920,784)
+		(1010,790)
+		(1048,808)
+		(980,826)
+		(880,824)
+		(850,804)
+	}
+}
+polygon {
+	object {
+		x=1170
+		y=780
+		width=220
+		height=52
+	}
+	"basic attribute" {
+		clr=5
+		width=2
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A+B<C"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
+	}
+	points {
+		(1180,804)
+		(1250,784)
+		(1340,790)
+		(1378,808)
+		(1310,826)
+		(1210,824)
+		(1180,804)
+	}
+}
+polygon {
+	object {
+		x=1480
+		y=780
+		width=220
+		height=52
+	}
+	"basic attribute" {
+		clr=21
+		style="dash"
+		fill="outline"
+		width=2
+	}
+	points {
+		(1490,804)
+		(1560,784)
+		(1650,790)
+		(1688,808)
+		(1620,826)
+		(1520,824)
+		(1490,804)
+	}
+}
+rectangle {
+	object {
+		x=20
+		y=920
+		width=1760
+		height=370
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=930
+		width=700
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=952
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Polygon is monitor-only: drive channel writes externally (for example, cavput channelA_PV=0, cavput channelA_PV=1.5, cavput channelB_PV=-1)."
+}
+text {
+	object {
+		x=30
+		y=970
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Verify vis conditions: if-zero/if-not-zero and calc expressions should match MEDM for hide/show transitions and redraw timing."
+}
+text {
+	object {
+		x=30
+		y=988
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Check disconnected behavior: blank-channel polygon should keep disconnected appearance and avoid stale alarm/discrete rendering."
+}
+text {
+	object {
+		x=30
+		y=1006
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Alarm probes: verify UDF/INVALID channels (weirdChan, ZzzButton) render alarm colors consistently for polygon dynamic-color mode."
+}
+text {
+	object {
+		x=70
+		y=1026
+		width=650
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Reference polygons fed by external PV writes"
+	align="horiz. centered"
+}
+polygon {
+	object {
+		x=70
+		y=1050
+		width=170
+		height=150
+	}
+	"basic attribute" {
+		clr=44
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	points {
+		(90,1090)
+		(140,1058)
+		(220,1072)
+		(236,1136)
+		(176,1188)
+		(98,1168)
+		(90,1090)
+	}
+}
+polygon {
+	object {
+		x=260
+		y=1060
+		width=220
+		height=72
+	}
+	"basic attribute" {
+		clr=12
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="channelB_PV"
+	}
+	points {
+		(274,1080)
+		(330,1062)
+		(430,1068)
+		(462,1096)
+		(402,1128)
+		(296,1120)
+		(274,1080)
+	}
+}
+polygon {
+	object {
+		x=500
+		y=1060
+		width=220
+		height=72
+	}
+	"basic attribute" {
+		clr=38
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A+B<C"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+		chanC="channelC_PV"
+		chanD="channelD_PV"
+	}
+	points {
+		(514,1080)
+		(570,1062)
+		(670,1068)
+		(702,1096)
+		(642,1128)
+		(536,1120)
+		(514,1080)
+	}
+}
+text {
+	object {
+		x=760
+		y=1026
+		width=310
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Disconnected PV behavior"
+	align="horiz. centered"
+}
+polygon {
+	object {
+		x=760
+		y=1060
+		width=310
+		height=90
+	}
+	"basic attribute" {
+		clr=24
+		fill="outline"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan=" "
+	}
+	points {
+		(778,1098)
+		(860,1066)
+		(1004,1078)
+		(1056,1112)
+		(958,1146)
+		(810,1140)
+		(778,1098)
+	}
+}
+text {
+	object {
+		x=1090
+		y=1026
+		width=450
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm probes from run_local_ioc.sh (UDF/INVALID expected)"
+	align="horiz. centered"
+}
+polygon {
+	object {
+		x=1090
+		y=1060
+		width=210
+		height=92
+	}
+	"basic attribute" {
+		clr=24
+		fill="outline"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		chan="weirdChan"
+	}
+	points {
+		(1110,1094)
+		(1160,1068)
+		(1260,1084)
+		(1286,1126)
+		(1218,1148)
+		(1118,1140)
+		(1110,1094)
+	}
+}
+polygon {
+	object {
+		x=1320
+		y=1060
+		width=210
+		height=92
+	}
+	"basic attribute" {
+		clr=20
+		fill="outline"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		chan="ZzzButton"
+	}
+	points {
+		(1340,1094)
+		(1390,1068)
+		(1490,1084)
+		(1516,1126)
+		(1448,1148)
+		(1348,1140)
+		(1340,1094)
+	}
+}
+text {
+	object {
+		x=70
+		y=1212
+		width=260
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Geometry stress probes"
+}
+polygon {
+	object {
+		x=70
+		y=1232
+		width=110
+		height=30
+	}
+	"basic attribute" {
+		clr=31
+		width=1
+	}
+	points {
+		(78,1246)
+		(105,1234)
+		(172,1238)
+		(175,1254)
+		(120,1260)
+		(82,1258)
+		(78,1246)
+	}
+}
+polygon {
+	object {
+		x=190
+		y=1226
+		width=72
+		height=64
+	}
+	"basic attribute" {
+		clr=57
+		style="dash"
+		fill="outline"
+		width=3
+	}
+	points {
+		(196,1244)
+		(224,1228)
+		(252,1244)
+		(258,1270)
+		(226,1288)
+		(198,1268)
+		(196,1244)
+	}
+}
+polygon {
+	object {
+		x=270
+		y=1218
+		width=220
+		height=72
+	}
+	"basic attribute" {
+		clr=12
+		fill="outline"
+		width=3
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if not zero"
+		chan="channelB_PV"
+	}
+	points {
+		(284,1238)
+		(340,1220)
+		(440,1226)
+		(472,1254)
+		(412,1286)
+		(306,1278)
+		(284,1238)
+	}
+}
+text {
+	object {
+		x=986
+		y=1151
+		width=520
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (line style)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=986
+		y=1169
+		width=250
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="A: solid"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1246
+		y=1169
+		width=250
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="B: dash"
+	align="horiz. centered"
+}
+polygon {
+	object {
+		x=1004
+		y=1193
+		width=240
+		height=90
+	}
+	"basic attribute" {
+		clr=44
+		fill="outline"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	points {
+		(1022,1229)
+		(1084,1201)
+		(1196,1215)
+		(1228,1249)
+		(1152,1277)
+		(1042,1267)
+		(1022,1229)
+	}
+}
+polygon {
+	object {
+		x=1273
+		y=1185
+		width=240
+		height=90
+	}
+	"basic attribute" {
+		clr=44
+		style="dash"
+		fill="outline"
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	points {
+		(1291,1221)
+		(1353,1193)
+		(1465,1207)
+		(1497,1241)
+		(1421,1269)
+		(1311,1259)
+		(1291,1221)
+	}
+}
+polygon {
+	object {
+		x=713
+		y=1157
+		width=278
+		height=80
+	}
+	"basic attribute" {
+		clr=24
+		width=4
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan=" "
+	}
+	points {
+		(713,1189)
+		(795,1157)
+		(939,1169)
+		(991,1203)
+		(893,1237)
+		(745,1231)
+		(713,1189)
 	}
 }

@@ -1,14 +1,13 @@
-
 file {
 	name="/home/SOLIDAY/github/medm/tests/test_WheelSwitch.adl"
 	version=030122
 }
 display {
 	object {
-		x=120
-		y=601
-		width=840
-		height=380
+		x=460
+		y=62
+		width=1840
+		height=1320
 	}
 	clr=14
 	bclr=4
@@ -87,21 +86,220 @@ display {
 		1a7309,
 	}
 }
+text {
+	object {
+		x=24
+		y=10
+		width=1790
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Wheel Switch Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: digit stepping behavior, typed entry parity, alarm/discrete color transitions, and clipping across varied widget geometry."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Input checks: click a digit and step with mouse wheel/arrow keys, type a value, press Enter, and compare readback/update behavior."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1800
+		height=760
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (format/color modes + geometry range)"
+}
+text {
+	object {
+		x=164
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="format A (static)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=492
+		y=154
+		width=190
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="format B (alarm)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=822
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="format C (discrete)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1146
+		y=154
+		width=200
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="format D (static)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1492
+		y=154
+		width=170
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="format E (alarm)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=48
+		y=208
+		width=80
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=42
+		y=338
+		width=90
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=52
+		y=468
+		width=80
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=42
+		y=638
+		width=90
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow"
+}
+text {
+	object {
+		x=32
+		y=758
+		width=104
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="alt formats"
+}
 "wheel switch" {
 	object {
-		x=5
-		y=5
-		width=170
-		height=100
+		x=170
+		y=200
+		width=160
+		height=24
 	}
 	control {
 		chan="wheel:test:A1"
 		clr=6
 		bclr=45
 	}
-	clrmod="alarm"
 	format="%+6.2fKv"
 	limits {
+		loprSrc="default"
 		loprDefault=-17.25
 		hoprSrc="default"
 		hoprDefault=103.5
@@ -111,10 +309,33 @@ display {
 }
 "wheel switch" {
 	object {
-		x=220
-		y=5
+		x=500
+		y=200
 		width=170
-		height=50
+		height=24
+	}
+	control {
+		chan="wheel:test:delta"
+		clr=44
+		bclr=7
+	}
+	clrmod="alarm"
+	format="% 8.3f"
+	limits {
+		loprSrc="default"
+		loprDefault=-9
+		hoprSrc="default"
+		hoprDefault=9
+		precSrc="default"
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=830
+		y=200
+		width=160
+		height=24
 	}
 	control {
 		chan="wheel:test:B7"
@@ -122,18 +343,22 @@ display {
 		bclr=2
 	}
 	clrmod="discrete"
-	format="% 7.1f"
+	format="% 5.0f"
 	limits {
+		loprSrc="default"
+		loprDefault=-50
+		hoprSrc="default"
 		hoprDefault=47.75
+		precSrc="default"
 		precDefault=1
 	}
 }
 "wheel switch" {
 	object {
-		x=420
-		y=20
+		x=1160
+		y=200
 		width=180
-		height=52
+		height=24
 	}
 	control {
 		chan="ws:gamma15"
@@ -142,7 +367,9 @@ display {
 	}
 	format="% 10.4f"
 	limits {
+		loprSrc="default"
 		loprDefault=-3.5
+		hoprSrc="default"
 		hoprDefault=3.5
 		precSrc="default"
 		precDefault=4
@@ -150,25 +377,55 @@ display {
 }
 "wheel switch" {
 	object {
-		x=620
-		y=20
-		width=174
-		height=54
+		x=1490
+		y=200
+		width=170
+		height=24
 	}
 	control {
-		clr=25
-		bclr=14
+		chan="ws:theta9"
+		clr=50
+		bclr=5
 	}
+	clrmod="alarm"
+	format="%+7.4f"
 	limits {
-		hoprDefault=12
+		loprSrc="default"
+		loprDefault=-0.005
+		hoprSrc="default"
+		hoprDefault=0.125
+		precSrc="default"
+		precDefault=4
 	}
 }
 "wheel switch" {
 	object {
-		x=5
-		y=110
-		width=170
-		height=80
+		x=160
+		y=320
+		width=220
+		height=36
+	}
+	control {
+		chan="wheel:test:A1"
+		clr=6
+		bclr=45
+	}
+	format="%+6.2fKv"
+	limits {
+		loprSrc="default"
+		loprDefault=-17.25
+		hoprSrc="default"
+		hoprDefault=103.5
+		precSrc="default"
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=490
+		y=320
+		width=230
+		height=36
 	}
 	control {
 		chan="wheel:test:delta"
@@ -176,58 +433,203 @@ display {
 		bclr=7
 	}
 	clrmod="alarm"
-	format="% 5.2f"
+	format="% 8.3f"
 	limits {
 		loprSrc="default"
 		loprDefault=-9
 		hoprSrc="default"
 		hoprDefault=9
+		precSrc="default"
 		precDefault=2
 	}
 }
 "wheel switch" {
 	object {
-		x=220
-		y=60
-		width=170
-		height=40
+		x=820
+		y=320
+		width=220
+		height=36
 	}
 	control {
-		chan="random:ws:epsilon"
-		clr=58
-		bclr=18
-	}
-	format="% 3.0f"
-	limits {
-		loprDefault=-120
-		hoprSrc="default"
-		hoprDefault=220
-		precSrc="default"
-	}
-}
-"wheel switch" {
-	object {
-		x=420
-		y=110
-		width=178
-		height=50
-	}
-	control {
-		chan="wheel:theta"
-		clr=9
-		bclr=51
+		chan="wheel:test:B7"
+		clr=32
+		bclr=2
 	}
 	clrmod="discrete"
-	format="% 8.3f"
+	format="% 5.0f"
 	limits {
+		loprSrc="default"
+		loprDefault=-50
+		hoprSrc="default"
+		hoprDefault=47.75
+		precSrc="default"
+		precDefault=1
 	}
 }
 "wheel switch" {
 	object {
-		x=620
-		y=110
-		width=175
-		height=52
+		x=1150
+		y=320
+		width=240
+		height=36
+	}
+	control {
+		chan="ws:gamma15"
+		clr=11
+		bclr=30
+	}
+	format="% 10.4f"
+	limits {
+		loprSrc="default"
+		loprDefault=-3.5
+		hoprSrc="default"
+		hoprDefault=3.5
+		precSrc="default"
+		precDefault=4
+	}
+}
+"wheel switch" {
+	object {
+		x=1480
+		y=320
+		width=220
+		height=36
+	}
+	control {
+		chan="ws:theta9"
+		clr=50
+		bclr=5
+	}
+	clrmod="alarm"
+	format="%+7.4f"
+	limits {
+		loprSrc="default"
+		loprDefault=-0.005
+		hoprSrc="default"
+		hoprDefault=0.125
+		precSrc="default"
+		precDefault=4
+	}
+}
+"wheel switch" {
+	object {
+		x=140
+		y=445
+		width=290
+		height=64
+	}
+	control {
+		chan="wheel:test:A1"
+		clr=6
+		bclr=45
+	}
+	format="%+6.2fKv"
+	limits {
+		loprSrc="default"
+		loprDefault=-17.25
+		hoprSrc="default"
+		hoprDefault=103.5
+		precSrc="default"
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=470
+		y=445
+		width=300
+		height=64
+	}
+	control {
+		chan="wheel:test:delta"
+		clr=44
+		bclr=7
+	}
+	clrmod="alarm"
+	format="% 8.3f"
+	limits {
+		loprSrc="default"
+		loprDefault=-9
+		hoprSrc="default"
+		hoprDefault=9
+		precSrc="default"
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=800
+		y=445
+		width=290
+		height=64
+	}
+	control {
+		chan="wheel:test:B7"
+		clr=32
+		bclr=2
+	}
+	clrmod="discrete"
+	format="% 5.0f"
+	limits {
+		loprSrc="default"
+		loprDefault=-50
+		hoprSrc="default"
+		hoprDefault=47.75
+		precSrc="default"
+		precDefault=1
+	}
+}
+"wheel switch" {
+	object {
+		x=1130
+		y=445
+		width=300
+		height=64
+	}
+	control {
+		chan="ws:gamma15"
+		clr=11
+		bclr=30
+	}
+	format="% 10.4f"
+	limits {
+		loprSrc="default"
+		loprDefault=-3.5
+		hoprSrc="default"
+		hoprDefault=3.5
+		precSrc="default"
+		precDefault=4
+	}
+}
+"wheel switch" {
+	object {
+		x=1460
+		y=445
+		width=300
+		height=64
+	}
+	control {
+		chan="ws:theta9"
+		clr=50
+		bclr=5
+	}
+	clrmod="alarm"
+	format="%+7.4f"
+	limits {
+		loprSrc="default"
+		loprDefault=-0.005
+		hoprSrc="default"
+		hoprDefault=0.125
+		precSrc="default"
+		precDefault=4
+	}
+}
+"wheel switch" {
+	object {
+		x=170
+		y=620
+		width=92
+		height=34
 	}
 	control {
 		chan="wheel:test:eta"
@@ -237,54 +639,154 @@ display {
 	clrmod="alarm"
 	format="% 6.0f"
 	limits {
+		loprSrc="default"
 		loprDefault=-1.25
+		hoprSrc="default"
 		hoprDefault=6.75
+		precSrc="default"
 		precDefault=3
 	}
 }
 "wheel switch" {
 	object {
-		x=5
-		y=195
-		width=170
-		height=70
+		x=500
+		y=620
+		width=92
+		height=34
 	}
 	control {
 		chan="ws:zeta"
 		clr=3
 		bclr=27
 	}
+	format="% 7.2f"
 	limits {
 		loprSrc="default"
+		loprDefault=-80
+		hoprSrc="default"
+		hoprDefault=80
 		precSrc="default"
+		precDefault=2
 	}
 }
 "wheel switch" {
 	object {
-		x=220
-		y=200
-		width=170
-		height=50
+		x=830
+		y=620
+		width=92
+		height=34
 	}
 	control {
-		chan="ws:theta9"
-		clr=50
-		bclr=5
+		chan="ws:mu"
+		clr=2
+		bclr=34
 	}
-	clrmod="alarm"
-	format="% 2.1f"
+	clrmod="discrete"
+	format="% 6.2f"
 	limits {
-		loprDefault=-0.005
-		hoprDefault=0.125
-		precDefault=4
+		loprSrc="default"
+		loprDefault=-2
+		hoprSrc="default"
+		hoprDefault=2
+		precSrc="default"
+		precDefault=2
 	}
 }
 "wheel switch" {
 	object {
-		x=420
-		y=200
-		width=176
-		height=52
+		x=1160
+		y=620
+		width=92
+		height=34
+	}
+	control {
+		chan="ws:nu"
+		clr=19
+		bclr=12
+	}
+	format="% 6.1f"
+	limits {
+		loprSrc="default"
+		loprDefault=-360
+		hoprSrc="default"
+		hoprDefault=360
+		precSrc="default"
+		precDefault=1
+	}
+}
+"wheel switch" {
+	object {
+		x=1490
+		y=620
+		width=92
+		height=34
+	}
+	control {
+		chan="ws:xi"
+		clr=27
+		bclr=22
+	}
+	format="% 8.2f"
+	limits {
+		loprSrc="default"
+		loprDefault=-99.99
+		hoprSrc="default"
+		hoprDefault=999.99
+		precSrc="default"
+		precDefault=2
+	}
+}
+"wheel switch" {
+	object {
+		x=160
+		y=740
+		width=240
+		height=38
+	}
+	control {
+		chan="ws:lambda"
+		clr=60
+		bclr=16
+	}
+	format="% 9.4f"
+	limits {
+		loprSrc="default"
+		loprDefault=-2
+		hoprSrc="default"
+		hoprDefault=0
+		precSrc="default"
+		precDefault=3
+	}
+}
+"wheel switch" {
+	object {
+		x=490
+		y=740
+		width=240
+		height=38
+	}
+	control {
+		chan="random:ws:epsilon"
+		clr=58
+		bclr=18
+	}
+	clrmod="alarm"
+	format="% 3.0f"
+	limits {
+		loprSrc="default"
+		loprDefault=-120
+		hoprSrc="default"
+		hoprDefault=220
+		precSrc="default"
+		precDefault=0
+	}
+}
+"wheel switch" {
+	object {
+		x=820
+		y=740
+		width=240
+		height=38
 	}
 	control {
 		chan="wheel:phi"
@@ -294,6 +796,9 @@ display {
 	clrmod="discrete"
 	format="%+5.1f"
 	limits {
+		loprSrc="default"
+		loprDefault=-200
+		hoprSrc="default"
 		hoprDefault=250
 		precSrc="default"
 		precDefault=1
@@ -301,10 +806,33 @@ display {
 }
 "wheel switch" {
 	object {
-		x=620
-		y=200
-		width=178
-		height=54
+		x=1150
+		y=740
+		width=250
+		height=38
+	}
+	control {
+		chan="wheel:theta"
+		clr=9
+		bclr=51
+	}
+	clrmod="discrete"
+	format="% 8.3f"
+	limits {
+		loprSrc="default"
+		loprDefault=-150
+		hoprSrc="default"
+		hoprDefault=150
+		precSrc="default"
+		precDefault=3
+	}
+}
+"wheel switch" {
+	object {
+		x=1480
+		y=740
+		width=250
+		height=38
 	}
 	control {
 		chan="wheel:test:kappa"
@@ -314,57 +842,307 @@ display {
 	clrmod="alarm"
 	format="% 7.3f"
 	limits {
+		loprSrc="default"
 		loprDefault=-55.75
+		hoprSrc="default"
 		hoprDefault=19.125
+		precSrc="default"
+		precDefault=3
+	}
+}
+rectangle {
+	object {
+		x=20
+		y=880
+		width=1800
+		height=420
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=890
+		width=620
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=912
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Writable wheel switches: click a digit and step with mouse wheel or arrow keys; compare step size, carry behavior, and redraw latency."
+}
+text {
+	object {
+		x=30
+		y=930
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Type values directly (signed, decimal, scientific where format allows), press Enter, and compare value acceptance and immediate readback."
+}
+text {
+	object {
+		x=30
+		y=948
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Disconnected/no-channel wheel switch should remain white/disconnected and avoid stale numeric text after edits."
+}
+text {
+	object {
+		x=30
+		y=966
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Alarm probes: weirdChan and ZzzButton should start UDF/INVALID and render alarm colors consistently with MEDM."
+}
+text {
+	object {
+		x=62
+		y=984
+		width=420
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Writable reference widgets"
+	align="horiz. centered"
+}
+"wheel switch" {
+	object {
+		x=60
+		y=1004
+		width=420
+		height=52
+	}
+	control {
+		chan="wheel:test:kappa"
+		clr=7
+		bclr=48
+	}
+	clrmod="alarm"
+	format="% 7.3f"
+	limits {
+		loprSrc="default"
+		loprDefault=-55.75
+		hoprSrc="default"
+		hoprDefault=19.125
+		precSrc="default"
+		precDefault=3
+	}
+}
+text {
+	object {
+		x=502
+		y=984
+		width=420
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Writable medium references"
+	align="horiz. centered"
+}
+"wheel switch" {
+	object {
+		x=500
+		y=1004
+		width=200
+		height=52
+	}
+	control {
+		chan="wheel:theta"
+		clr=9
+		bclr=51
+	}
+	clrmod="discrete"
+	format="% 8.3f"
+	limits {
+		loprSrc="default"
+		loprDefault=-150
+		hoprSrc="default"
+		hoprDefault=150
+		precSrc="default"
 		precDefault=3
 	}
 }
 "wheel switch" {
 	object {
-		x=5
-		y=270
-		width=170
-		height=60
-	}
-	control {
-		chan="ws:lambda"
-		clr=60
-		bclr=16
-	}
-	format="% 9.4f"
-	limits {
-		hoprSrc="default"
-		hoprDefault=0
-		precSrc="default"
-	}
-}
-"wheel switch" {
-	object {
-		x=220
-		y=290
-		width=170
-		height=48
+		x=720
+		y=1004
+		width=200
+		height=52
 	}
 	control {
 		chan="ws:mu"
 		clr=2
 		bclr=34
 	}
-	clrmod="alarm"
 	format="% 6.2f"
 	limits {
 		loprSrc="default"
 		loprDefault=-2
+		hoprSrc="default"
 		hoprDefault=2
+		precSrc="default"
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=942
+		y=984
+		width=420
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Disconnected behavior"
+	align="horiz. centered"
+}
+"wheel switch" {
+	object {
+		x=940
+		y=1004
+		width=420
+		height=52
+	}
+	control {
+		clr=24
+		bclr=6
+	}
+	clrmod="alarm"
+	format="% 7.2f"
+	limits {
+		loprDefault=-10
+		hoprDefault=10
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=62
+		y=1064
+		width=420
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm probes from run_local_ioc.sh"
+	align="horiz. centered"
+}
+"wheel switch" {
+	object {
+		x=60
+		y=1084
+		width=200
+		height=36
+	}
+	control {
+		chan="weirdChan"
+		clr=23
+		bclr=60
+	}
+	clrmod="alarm"
+	format="% 7.2f"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"wheel switch" {
+	object {
+		x=280
+		y=1084
+		width=200
+		height=36
+	}
+	control {
+		chan="ZzzButton"
+		clr=44
+		bclr=52
+	}
+	clrmod="alarm"
+	format="% 8.3f"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=502
+		y=1064
+		width=860
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Geometry stress probes"
+	align="horiz. centered"
+}
+"wheel switch" {
+	object {
+		x=500
+		y=1084
+		width=72
+		height=22
+	}
+	control {
+		chan="ws:xi"
+		clr=27
+		bclr=22
+	}
+	format="% 8.2f"
+	limits {
+		loprSrc="default"
+		loprDefault=-99.99
+		hoprSrc="default"
+		hoprDefault=999.99
+		precSrc="default"
 		precDefault=2
 	}
 }
 "wheel switch" {
 	object {
-		x=420
-		y=290
-		width=178
-		height=80
+		x=582
+		y=1072
+		width=340
+		height=70
 	}
 	control {
 		chan="ws:nu"
@@ -374,48 +1152,140 @@ display {
 	clrmod="discrete"
 	format="% 6.1f"
 	limits {
+		loprSrc="default"
 		loprDefault=-360
+		hoprSrc="default"
 		hoprDefault=360
+		precSrc="default"
+		precDefault=1
 	}
 }
 "wheel switch" {
 	object {
-		x=620
-		y=290
-		width=100
-		height=54
+		x=940
+		y=1084
+		width=200
+		height=36
 	}
 	control {
-		chan="ws:xi"
-		clr=27
-		bclr=22
+		chan="ws:lambda"
+		clr=60
+		bclr=16
 	}
-	format="% 8.2f"
+	format="% 9.4f"
 	limits {
-		loprDefault=-99.99
+		loprSrc="default"
+		loprDefault=-2
 		hoprSrc="default"
-		hoprDefault=999.99
+		hoprDefault=0
+		precSrc="default"
+		precDefault=3
+	}
+}
+"wheel switch" {
+	object {
+		x=1160
+		y=1084
+		width=200
+		height=36
+	}
+	control {
+		chan="random:ws:epsilon"
+		clr=58
+		bclr=18
+	}
+	clrmod="alarm"
+	format="% 3.0f"
+	limits {
+		loprSrc="default"
+		loprDefault=-120
+		hoprSrc="default"
+		hoprDefault=220
+		precSrc="default"
+		precDefault=0
+	}
+}
+text {
+	object {
+		x=700
+		y=1204
+		width=1080
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (color mode); same channel/colors/limits/size/format"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=730
+		y=1222
+		width=300
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="A: static"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1150
+		y=1222
+		width=300
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="B: alarm"
+	align="horiz. centered"
+}
+"wheel switch" {
+	object {
+		x=700
+		y=1242
+		width=360
+		height=48
+	}
+	control {
+		chan="wheel:test:A1"
+		clr=6
+		bclr=45
+	}
+	format="%+6.2fKv"
+	limits {
+		loprSrc="default"
+		loprDefault=-17.25
+		hoprSrc="default"
+		hoprDefault=103.5
+		precSrc="default"
 		precDefault=2
 	}
 }
 "wheel switch" {
 	object {
-		x=224
-		y=110
-		width=170
-		height=80
+		x=1120
+		y=1242
+		width=360
+		height=48
 	}
 	control {
-		chan="wheel:test:delta"
-		clr=44
-		bclr=7
+		chan="wheel:test:A1"
+		clr=6
+		bclr=45
 	}
-	clrmod="discrete"
+	clrmod="alarm"
+	format="%+6.2fKv"
 	limits {
 		loprSrc="default"
+		loprDefault=-17.25
 		hoprSrc="default"
-		hoprDefault=10000
+		hoprDefault=103.5
 		precSrc="default"
-		precDefault=3
+		precDefault=2
 	}
 }

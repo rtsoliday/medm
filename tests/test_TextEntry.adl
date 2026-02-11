@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
-		width=1200
-		height=560
+		x=78
+		y=44
+		width=1840
+		height=1320
 	}
 	clr=14
 	bclr=4
@@ -87,185 +87,230 @@ display {
 		1a7309,
 	}
 }
-"text entry" {
+text {
+	object {
+		x=24
+		y=10
+		width=1790
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Text Entry Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: formatting parity, alarm/discrete colors, editable behavior, disconnected handling, and text clipping under varied geometry."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Write checks: click field, type value (including scientific notation), press Enter, and compare immediate readback/update behavior."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1800
+		height=760
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (format/color modes + geometry range)"
+}
+text {
+	object {
+		x=164
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="compact (static)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=492
+		y=154
+		width=190
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="exponential (alarm)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=822
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="hexadecimal (discrete)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1146
+		y=154
+		width=200
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="sexagesimal-hms (alarm)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1492
+		y=154
+		width=170
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="string (static)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=48
+		y=208
+		width=80
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=42
+		y=338
+		width=90
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=52
+		y=468
+		width=80
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=42
+		y=638
+		width=90
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow"
+}
+text {
 	object {
 		x=32
-		y=28
-		width=152
-		height=34
+		y=758
+		width=104
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="alt formats"
+}
+"text entry" {
+	object {
+		x=170
+		y=200
+		width=160
+		height=24
 	}
 	control {
 		chan="tm:compact:1"
 		clr=7
 		bclr=43
 	}
-	clrmod="alarm"
 	format="compact"
 	limits {
 		loprSrc="default"
-		loprDefault=-72.3
 		hoprSrc="default"
-		hoprDefault=18.6
-		precSrc="default"
-		precDefault=3
-	}
-}
-"text entry" {
-	object {
-		x=226
-		y=26
-		width=174
-		height=28
-	}
-	control {
-		chan="tm:hex:count"
-		clr=52
-		bclr=9
-	}
-	clrmod="discrete"
-	format="hexadecimal"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=424
-		y=32
-		width=132
-		height=38
-	}
-	control {
-		chan="tm:sexagesimal:az"
-		clr=2
-		bclr=50
-	}
-	format="sexagesimal"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=614
-		y=30
-		width=168
-		height=36
-	}
-	control {
-		chan="tm:engr:mix"
-		clr=60
-		bclr=16
-	}
-	clrmod="alarm"
-	format="engr. notation"
-	limits {
-		loprSrc="default"
-		loprDefault=-0.008
-		hoprSrc="default"
-		hoprDefault=0.009
-	}
-}
-"text entry" {
-	object {
-		x=804
-		y=28
-		width=182
-		height=34
-	}
-	control {
-		chan="tm:trunc:edge"
-		clr=33
-		bclr=57
-	}
-	clrmod="discrete"
-	format="truncated"
-	limits {
 		precSrc="default"
 	}
 }
 "text entry" {
 	object {
-		x=992
-		y=30
-		width=158
-		height=32
-	}
-	control {
-		chan="tm:octal:plc"
-		clr=14
-		bclr=4
-	}
-	format="octal"
-	limits {
-		precSrc="default"
-		precDefault=2
-	}
-}
-"text entry" {
-	object {
-		x=36
-		y=102
+		x=500
+		y=200
 		width=170
-		height=32
-	}
-	control {
-		chan="channelA_PV"
-		clr=28
-		bclr=61
-	}
-	clrmod="alarm"
-	limits {
-		loprDefault=-2
-		hoprDefault=3
-		precDefault=1
-	}
-}
-"text entry" {
-	object {
-		x=224
-		y=100
-		width=160
-		height=34
-	}
-	control {
-		chan="tm:sexagesimal:hms"
-		clr=19
-		bclr=10
-	}
-	clrmod="discrete"
-	format="sexagesimal-hms"
-	limits {
-		loprSrc="default"
-		loprDefault=-0.5
-		hoprSrc="default"
-		hoprDefault=7200
-		precSrc="default"
-		precDefault=2
-	}
-}
-"text entry" {
-	object {
-		x=418
-		y=104
-		width=178
-		height=30
-	}
-	control {
-		chan="tm:string:status"
-		clr=47
-		bclr=6
-	}
-	format="string"
-	limits {
-		precSrc="default"
-		precDefault=16
-	}
-}
-"text entry" {
-	object {
-		x=612
-		y=100
-		width=150
-		height=36
+		height=24
 	}
 	control {
 		chan="tm:exp:fastA"
@@ -275,85 +320,111 @@ display {
 	clrmod="alarm"
 	format="exponential"
 	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
 "text entry" {
 	object {
-		x=798
-		y=104
-		width=168
-		height=32
+		x=830
+		y=200
+		width=160
+		height=24
 	}
 	control {
-		chan="tm:sexagesimal:dms"
-		clr=41
-		bclr=22
+		chan="tm:hex:count"
+		clr=52
+		bclr=9
 	}
 	clrmod="discrete"
-	format="sexagesimal-dms"
+	format="hexadecimal"
 	limits {
+		loprSrc="default"
+		hoprSrc="default"
 		precSrc="default"
-		precDefault=3
 	}
 }
 "text entry" {
 	object {
-		x=988
-		y=100
-		width=184
-		height=30
+		x=1160
+		y=200
+		width=180
+		height=24
 	}
 	control {
-		chan="tm:decimal:telemetry"
-		clr=9
-		bclr=34
+		chan="tm:sexagesimal:hms"
+		clr=19
+		bclr=10
+	}
+	clrmod="alarm"
+	format="sexagesimal-hms"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1490
+		y=200
+		width=170
+		height=24
+	}
+	control {
+		chan="tm:string:status"
+		clr=47
+		bclr=6
+	}
+	format="string"
+	limits {
+	}
+}
+"text entry" {
+	object {
+		x=160
+		y=320
+		width=220
+		height=36
+	}
+	control {
+		chan="tm:compact:1"
+		clr=28
+		bclr=61
 	}
 	format="compact"
 	limits {
 		loprSrc="default"
 		hoprSrc="default"
-		hoprDefault=4096
+		precSrc="default"
 	}
 }
 "text entry" {
 	object {
-		x=30
-		y=174
-		width=162
-		height=32
-	}
-	control {
-		chan="channelB_PV"
-		clr=24
-		bclr=13
-	}
-	clrmod="alarm"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=224
-		y=172
-		width=176
-		height=34
+		x=490
+		y=320
+		width=230
+		height=36
 	}
 	control {
 		chan="tm:exp:fastA"
 		clr=55
 		bclr=20
 	}
+	clrmod="alarm"
 	format="exponential"
 	limits {
+		loprSrc="default"
 		hoprSrc="default"
-		hoprDefault=32000
+		precSrc="default"
 	}
 }
 "text entry" {
 	object {
-		x=420
-		y=178
-		width=150
+		x=820
+		y=320
+		width=220
 		height=36
 	}
 	control {
@@ -365,74 +436,74 @@ display {
 	format="hexadecimal"
 	limits {
 		loprSrc="default"
-		loprDefault=-255
+		hoprSrc="default"
 		precSrc="default"
 	}
 }
 "text entry" {
 	object {
-		x=606
-		y=176
-		width=184
-		height=30
-	}
-	control {
-		chan="tm:engr:mix"
-		clr=38
-		bclr=25
-	}
-	clrmod="alarm"
-	format="engr. notation"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=802
-		y=172
-		width=158
+		x=1150
+		y=320
+		width=240
 		height=36
 	}
 	control {
-		chan="tm:trunc:edge"
-		clr=17
-		bclr=53
+		chan="tm:sexagesimal:hms"
+		clr=11
+		bclr=59
 	}
-	format="truncated"
+	clrmod="alarm"
+	format="sexagesimal-hms"
 	limits {
 		loprSrc="default"
-		loprDefault=-1024
 		hoprSrc="default"
-		hoprDefault=1024
 		precSrc="default"
 	}
 }
 "text entry" {
 	object {
-		x=996
-		y=174
-		width=150
-		height=32
+		x=1480
+		y=320
+		width=220
+		height=36
 	}
 	control {
-		chan="tm:octal:plc"
-		clr=29
-		bclr=8
+		chan="tm:string:status"
+		clr=31
+		bclr=18
 	}
-	clrmod="discrete"
-	format="octal"
+	format="string"
 	limits {
 	}
 }
 "text entry" {
 	object {
-		x=612
-		y=240
-		width=178
-		height=34
+		x=140
+		y=445
+		width=290
+		height=64
 	}
 	control {
-		chan="tm:decimal:slow"
+		chan="tm:compact:1"
+		clr=44
+		bclr=52
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=470
+		y=445
+		width=300
+		height=64
+	}
+	control {
+		chan="tm:exp:fastA"
 		clr=58
 		bclr=15
 	}
@@ -440,36 +511,56 @@ display {
 	format="exponential"
 	limits {
 		loprSrc="default"
-		loprDefault=-0.0001
 		hoprSrc="default"
-		hoprDefault=0.0001
 		precSrc="default"
-		precDefault=6
 	}
 }
 "text entry" {
 	object {
-		x=804
-		y=244
-		width=172
-		height=32
+		x=800
+		y=445
+		width=290
+		height=64
 	}
 	control {
-		chan="tm:engr:mix"
-		clr=36
-		bclr=42
+		chan="tm:hex:count"
+		clr=17
+		bclr=53
 	}
 	clrmod="discrete"
-	format="engr. notation"
+	format="hexadecimal"
 	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
 "text entry" {
 	object {
-		x=996
-		y=244
-		width=186
-		height=30
+		x=1130
+		y=445
+		width=300
+		height=64
+	}
+	control {
+		chan="tm:sexagesimal:hms"
+		clr=23
+		bclr=60
+	}
+	clrmod="alarm"
+	format="sexagesimal-hms"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1460
+		y=445
+		width=300
+		height=64
 	}
 	control {
 		chan="tm:string:status"
@@ -482,242 +573,647 @@ display {
 }
 "text entry" {
 	object {
-		x=616
-		y=314
-		width=164
-		height=60
-	}
-	control {
-		chan="tm:octal:plc"
-		clr=23
-		bclr=60
-	}
-	clrmod="alarm"
-	format="octal"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=808
-		y=312
-		width=150
+		x=170
+		y=620
+		width=92
 		height=34
 	}
 	control {
 		chan="tm:compact:1"
-		clr=44
-		bclr=52
+		clr=7
+		bclr=43
 	}
-	clrmod="discrete"
 	format="compact"
 	limits {
 		loprSrc="default"
-		loprDefault=-0.75
 		hoprSrc="default"
-		hoprDefault=0.75
 		precSrc="default"
-		precDefault=4
 	}
 }
 "text entry" {
 	object {
-		x=1000
-		y=316
-		width=174
-		height=32
+		x=500
+		y=620
+		width=92
+		height=34
 	}
 	control {
 		chan="tm:exp:fastA"
-		clr=8
-		bclr=37
+		clr=5
+		bclr=48
 	}
+	clrmod="alarm"
 	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=830
+		y=620
+		width=92
+		height=34
+	}
+	control {
+		chan="tm:hex:count"
+		clr=52
+		bclr=9
+	}
+	clrmod="discrete"
+	format="hexadecimal"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1160
+		y=620
+		width=92
+		height=34
+	}
+	control {
+		chan="tm:sexagesimal:hms"
+		clr=19
+		bclr=10
+	}
+	clrmod="alarm"
+	format="sexagesimal-hms"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1490
+		y=620
+		width=92
+		height=34
+	}
+	control {
+		chan="tm:string:status"
+		clr=47
+		bclr=6
+	}
+	format="string"
 	limits {
 	}
 }
-text {
+"text entry" {
 	object {
-		x=838
-		y=395
-		width=170
-		height=64
+		x=160
+		y=740
+		width=240
+		height=38
 	}
-	"basic attribute" {
-		clr=14
+	control {
+		chan="tm:trunc:edge"
+		clr=33
+		bclr=57
+	}
+	clrmod="discrete"
+	format="truncated"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
-"text update" {
+"text entry" {
 	object {
-		x=1042
-		y=393
-		width=108
-		height=85
+		x=490
+		y=740
+		width=240
+		height=38
 	}
-	monitor {
+	control {
+		chan="tm:engr:mix"
+		clr=60
+		bclr=16
+	}
+	clrmod="alarm"
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=820
+		y=740
+		width=240
+		height=38
+	}
+	control {
+		chan="tm:octal:plc"
 		clr=14
-		bclr=30
+		bclr=4
+	}
+	clrmod="discrete"
+	format="octal"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1150
+		y=740
+		width=250
+		height=38
+	}
+	control {
+		chan="tm:sexagesimal:dms"
+		clr=41
+		bclr=22
+	}
+	clrmod="alarm"
+	format="sexagesimal-dms"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1480
+		y=740
+		width=250
+		height=38
+	}
+	control {
+		chan="tm:decimal:telemetry"
+		clr=9
+		bclr=34
 	}
 	format="compact"
 	limits {
 		loprSrc="default"
-		loprDefault=-72.3
 		hoprSrc="default"
-		hoprDefault=18.6
 		precSrc="default"
-		precDefault=3
 	}
 }
-composite {
+rectangle {
 	object {
-		x=32
-		y=242
-		width=180
-		height=106
+		x=20
+		y=880
+		width=1800
+		height=420
 	}
-	"composite name"=""
-	children {
-		"text entry" {
-			object {
-				x=32
-				y=242
-				width=180
-				height=34
-			}
-			control {
-				chan="channelC_PV"
-				clr=6
-				bclr=58
-			}
-			clrmod="alarm"
-			limits {
-			}
-		}
-		"text entry" {
-			object {
-				x=34
-				y=314
-				width=154
-				height=34
-			}
-			control {
-				chan="channelD_PV"
-				clr=21
-				bclr=33
-			}
-			clrmod="alarm"
-			limits {
-				loprSrc="default"
-				loprDefault=-45.5
-			}
-		}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
 	}
 }
-composite {
+text {
 	object {
-		x=226
-		y=240
-		width=366
-		height=108
+		x=30
+		y=890
+		width=620
+		height=18
 	}
-	"composite name"=""
-	children {
-		composite {
-			object {
-				x=226
-				y=242
-				width=184
-				height=106
-			}
-			"composite name"=""
-			children {
-				"text entry" {
-					object {
-						x=226
-						y=242
-						width=170
-						height=32
-					}
-					control {
-						chan="tm:sexagesimal:az"
-						clr=45
-						bclr=12
-					}
-					clrmod="discrete"
-					format="sexagesimal"
-					limits {
-						loprSrc="default"
-						loprDefault=-90
-						hoprSrc="default"
-						hoprDefault=90
-						precSrc="default"
-						precDefault=1
-					}
-				}
-				"text entry" {
-					object {
-						x=228
-						y=316
-						width=182
-						height=32
-					}
-					control {
-						chan="tm:trunc:edge"
-						clr=13
-						bclr=46
-					}
-					clrmod="discrete"
-					format="truncated"
-					limits {
-						hoprSrc="default"
-						hoprDefault=9999
-						precSrc="default"
-					}
-				}
-			}
-		}
-		composite {
-			object {
-				x=420
-				y=240
-				width=172
-				height=108
-			}
-			"composite name"=""
-			children {
-				"text entry" {
-					object {
-						x=420
-						y=240
-						width=162
-						height=36
-					}
-					control {
-						chan="tm:sexagesimal:hms"
-						clr=11
-						bclr=59
-					}
-					format="sexagesimal-hms"
-					limits {
-					}
-				}
-				"text entry" {
-					object {
-						x=424
-						y=312
-						width=168
-						height=36
-					}
-					control {
-						chan="tm:hex:count"
-						clr=31
-						bclr=18
-					}
-					format="hexadecimal"
-					limits {
-					}
-				}
-			}
-		}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=912
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Writable references: click field, type value, press Enter, and verify written value/readback updates."
+}
+text {
+	object {
+		x=30
+		y=930
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) String behavior: edit tm:string:status with letters/numbers; compare acceptance, redraw, and clipping parity with MEDM."
+}
+text {
+	object {
+		x=30
+		y=948
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Disconnected/no-channel field should stay white/disconnected and avoid stale text after attempted edits."
+}
+text {
+	object {
+		x=30
+		y=966
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Alarm probes: weirdChan and ZzzButton should start UDF/INVALID (metadata initialized only) and render alarm colors consistently."
+}
+text {
+	object {
+		x=62
+		y=984
+		width=540
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Writable reference widgets"
+	align="horiz. centered"
+}
+"text entry" {
+	object {
+		x=60
+		y=1004
+		width=420
+		height=52
+	}
+	control {
+		chan="channelA_PV"
+		clr=28
+		bclr=61
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=500
+		y=1004
+		width=420
+		height=52
+	}
+	control {
+		chan="channelB_PV"
+		clr=24
+		bclr=13
+	}
+	clrmod="discrete"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=940
+		y=1004
+		width=420
+		height=52
+	}
+	control {
+		chan="tm:decimal:slow"
+		clr=58
+		bclr=15
+	}
+	clrmod="alarm"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=62
+		y=1064
+		width=620
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="String + additional writable probes"
+	align="horiz. centered"
+}
+"text entry" {
+	object {
+		x=60
+		y=1084
+		width=440
+		height=36
+	}
+	control {
+		chan="tm:string:status"
+		clr=47
+		bclr=6
+	}
+	format="string"
+	limits {
+	}
+}
+"text entry" {
+	object {
+		x=520
+		y=1084
+		width=200
+		height=36
+	}
+	control {
+		chan="channelC_PV"
+		clr=6
+		bclr=58
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=740
+		y=1084
+		width=200
+		height=36
+	}
+	control {
+		chan="channelD_PV"
+		clr=21
+		bclr=33
+	}
+	clrmod="alarm"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=960
+		y=1064
+		width=380
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Disconnected behavior"
+	align="horiz. centered"
+}
+"text entry" {
+	object {
+		x=960
+		y=1084
+		width=380
+		height=42
+	}
+	control {
+		clr=24
+		bclr=6
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprDefault=-10
+		hoprDefault=10
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=1380
+		y=1064
+		width=410
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm probes from run_local_ioc.sh"
+	align="horiz. centered"
+}
+"text entry" {
+	object {
+		x=1380
+		y=1084
+		width=200
+		height=36
+	}
+	control {
+		chan="weirdChan"
+		clr=23
+		bclr=60
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1590
+		y=1084
+		width=200
+		height=36
+	}
+	control {
+		chan="ZzzButton"
+		clr=44
+		bclr=52
+	}
+	clrmod="alarm"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=62
+		y=1140
+		width=620
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Geometry stress probes"
+	align="horiz. centered"
+}
+"text entry" {
+	object {
+		x=60
+		y=1160
+		width=62
+		height=12
+	}
+	control {
+		chan="tm:hex:count"
+		clr=14
+		bclr=0
+	}
+	clrmod="discrete"
+	format="hexadecimal"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=132
+		y=1160
+		width=82
+		height=12
+	}
+	control {
+		chan="tm:trunc:edge"
+		clr=14
+		bclr=57
+	}
+	clrmod="discrete"
+	format="truncated"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=232
+		y=1160
+		width=430
+		height=78
+	}
+	control {
+		chan="tm:engr:mix"
+		clr=60
+		bclr=16
+	}
+	clrmod="alarm"
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=700
+		y=1204
+		width=1080
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (format); same channel/colors/limits/size"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=730
+		y=1222
+		width=300
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="A: compact"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1150
+		y=1222
+		width=300
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="B: exponential"
+	align="horiz. centered"
+}
+"text entry" {
+	object {
+		x=700
+		y=1242
+		width=360
+		height=48
+	}
+	control {
+		chan="tm:decimal:telemetry"
+		clr=9
+		bclr=34
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1120
+		y=1242
+		width=360
+		height=48
+	}
+	control {
+		chan="tm:decimal:telemetry"
+		clr=9
+		bclr=34
+	}
+	clrmod="alarm"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }

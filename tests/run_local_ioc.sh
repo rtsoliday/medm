@@ -281,6 +281,206 @@ set_meter_test_pvs() {
   return 1
 }
 
+set_byte_test_pvs() {
+  local prefix="$1"
+  local -a byte_init_values=(
+    # pv value lopr hopr prec
+    "byte:test:gamma01      2730         0   2147483647  0"
+    "byte:test:gamma02   16711935        0   2147483647  0"
+    "byte:test:gamma03 2147418112        0   2147483647  0"
+    "byte:test:gamma04       170         0   2147483647  0"
+    "byte:test:gamma05      1024         0   2147483647  0"
+    "byte:test:gamma06   1048575         0   2147483647  0"
+    "byte:test:gamma07    262143         0   2147483647  0"
+    "byte:test:gamma08 2139095040        0   2147483647  0"
+  )
+
+  echo "Initializing byte PVs for tests/test_Byte.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${byte_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Byte PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize byte PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_polygon_test_pvs() {
+  local prefix="$1"
+  local -a polygon_init_values=(
+    # pv value lopr hopr prec
+    "channelA_PV   1.25   -2      3      2"
+    "channelB_PV  -0.75   -5      5      2"
+    "channelC_PV  12      -45.5  45.5    1"
+    "channelD_PV -22      -45.5  45.5    1"
+  )
+
+  echo "Initializing polygon PVs for tests/test_Polygon.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${polygon_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Polygon PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize polygon PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_text_entry_test_pvs() {
+  local prefix="$1"
+  local -a text_entry_numeric_values=(
+    # pv value lopr hopr prec
+    "tm:compact:1          12.345      -72.3      18.6      3"
+    "tm:decimal:slow        0.000031   -0.0001     0.0001   6"
+    "tm:decimal:telemetry 2048           0       4096       1"
+    "tm:engr:mix            0.0025      -0.01       0.01    6"
+    "tm:exp:fastA           0.000042    -0.008      0.009   6"
+    "tm:hex:count         1023        -255       4095       0"
+    "tm:octal:plc          511           0       1024       0"
+    "tm:sexagesimal:az      47.5       -90         90       1"
+    "tm:sexagesimal:dms    -21.345    -180        180       3"
+    "tm:sexagesimal:hms   4321          -0.5     7200       2"
+    "tm:trunc:edge        9876       -1024       1024       0"
+    "channelA_PV            1.25        -2          3       2"
+    "channelB_PV           -0.75        -5          5       2"
+    "channelC_PV           12          -45.5       45.5     1"
+    "channelD_PV          -22          -45.5       45.5     1"
+  )
+  local -a text_entry_string_values=(
+    # pv value
+    "tm:string:status READY"
+  )
+
+  echo "Initializing text entry PVs for tests/test_TextEntry.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${text_entry_numeric_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      for entry in "${text_entry_string_values[@]}"; do
+        read -r pv value <<< "${entry}"
+        full_pv="${prefix}${pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Text entry PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize text entry PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_wheel_switch_test_pvs() {
+  local prefix="$1"
+  local -a wheel_switch_init_values=(
+    # pv value lopr hopr prec
+    "wheel:test:A1          42.75     -17.25    103.5    2"
+    "wheel:test:B7          12.3      -50        47.75   1"
+    "wheel:test:delta       -4.25      -9         9      2"
+    "wheel:test:eta          3.125     -1.25      6.75   3"
+    "wheel:test:kappa      -12.345    -55.75     19.125  3"
+    "wheel:theta            12.875   -150       150      3"
+    "wheel:phi              85.2     -200       250      1"
+    "ws:gamma15              1.2345    -3.5       3.5    4"
+    "ws:zeta               -10.5      -80        80      2"
+    "ws:theta9               0.045     -0.005     0.125  4"
+    "ws:lambda              -0.25      -2         0      3"
+    "ws:mu                   1.4       -2         2      2"
+    "ws:nu                -120       -360       360      1"
+    "ws:xi                 321.09     -99.99    999.99   2"
+    "random:ws:epsilon      77       -120       220      0"
+  )
+
+  echo "Initializing wheel switch PVs for tests/test_WheelSwitch.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${wheel_switch_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Wheel switch PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize wheel switch PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_slider_alarm_probe_pvs() {
   local prefix="$1"
   local -a alarm_probe_fields=(
@@ -289,7 +489,7 @@ set_slider_alarm_probe_pvs() {
     "ZzzButton -5 5 3"
   )
 
-  echo "Configuring alarm probe PV limits for slider/scale monitor tests"
+  echo "Configuring alarm probe PV limits for slider/scale monitor/byte/polygon/text entry/wheel switch tests"
   set_local_ca_env
 
   local retries=20
@@ -337,5 +537,9 @@ ioc_pid="$!"
 set_slider_test_pvs "${PV_PREFIX}" || true
 set_scale_monitor_test_pvs "${PV_PREFIX}" || true
 set_meter_test_pvs "${PV_PREFIX}" || true
+set_byte_test_pvs "${PV_PREFIX}" || true
+set_polygon_test_pvs "${PV_PREFIX}" || true
+set_text_entry_test_pvs "${PV_PREFIX}" || true
+set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 wait "${ioc_pid}"

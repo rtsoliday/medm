@@ -81,10 +81,12 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
   resetState();
   started_ = true;
 
-  /* Check if any channel is specified (mimic MEDM behavior) */
+  /* Check if any channel is specified (mimic MEDM behavior).
+   * Keep whitespace-only channels as explicitly configured so they
+   * render disconnected/white in execute mode (for example, chan=" "). */
   bool hasChannel = false;
   for (int i = 0; i < static_cast<int>(channels_.size()); ++i) {
-    if (!element_->channel(i).trimmed().isEmpty()) {
+    if (!element_->channel(i).isEmpty()) {
       hasChannel = true;
       break;
     }
@@ -92,11 +94,16 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
 
   /* Channels are needed if a channel is specified AND
    * (color mode is dynamic OR visibility mode is dynamic OR
-   *  element has a calc expression that needs channel values) */
+   *  element has a calc expression that needs channel values).
+   *
+   * MEDM parity: polygons with configured PVs should still track
+   * connection state even when color/visibility modes are static,
+   * so disconnected polygons render white. */
   channelsNeeded_ = hasChannel
       && ((element_->colorMode() != TextColorMode::kStatic)
           || (element_->visibilityMode() != TextVisibilityMode::kStatic)
-          || ElementCalcChannelTraits<ElementType>::needsChannelsForCalc(element_));
+          || ElementCalcChannelTraits<ElementType>::needsChannelsForCalc(element_)
+          || std::is_same_v<ElementType, PolygonElement>);
   layeringNeeded_ = channelsNeeded_;
   if (!layeringNeeded_ && hasChannel
       && ElementLayeringTraits<ElementType>::kLayerOnAnyChannel) {
@@ -189,14 +196,20 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::initializeChannels()
   auto &mgr = PvChannelManager::instance();
 
   for (auto &channel : channels_) {
-    channel.name = element_->channel(channel.index).trimmed();
+    const QString configuredName = element_->channel(channel.index);
+    channel.name = configuredName;
     if (channel.name.isEmpty()) {
+      continue;
+    }
+    const QString subscribeName = configuredName.trimmed();
+    if (subscribeName.isEmpty()) {
+      /* Preserve whitespace-only channels as configured but disconnected. */
       continue;
     }
 
     const int idx = channel.index;
     channel.subscription = mgr.subscribe(
-        channel.name,
+        subscribeName,
         DBR_TIME_DOUBLE,  /* Graphic elements use double for visibility calc */
         1,                /* Single element for visibility/color logic */
         [this, idx](const SharedChannelData &data) {

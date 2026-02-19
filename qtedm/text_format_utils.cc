@@ -2,11 +2,30 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include <cvtFast.h>
 
 namespace TextFormatUtils {
+
+namespace {
+
+/* Match MEDM's localCvtDoubleToString behavior used by engineering notation. */
+void localCvtDoubleToString(double value, char *textField,
+    unsigned short precision)
+{
+  if (!textField) {
+    return;
+  }
+  if (precision > kMaxPrecision) {
+    precision = kMaxPrecision;
+  }
+  std::snprintf(textField, kMaxTextField, "%.*f",
+      static_cast<int>(precision), value);
+}
+
+} // namespace
 
 int clampPrecision(int precision)
 {
@@ -23,10 +42,31 @@ int clampPrecision(int precision)
 void localCvtDoubleToExpNotationString(double value, char *textField,
     unsigned short precision)
 {
+  if (!textField) {
+    return;
+  }
+
   double absVal = std::fabs(value);
   bool isNegative = value < 0.0;
   double scaled = absVal;
   int exponent = 0;
+  char buffer[kMaxTextField];
+  int index = 0;
+
+  auto appendChar = [&](char ch) {
+    if (index < kMaxTextField - 1) {
+      textField[index++] = ch;
+    }
+  };
+
+  auto appendString = [&](const char *source) {
+    if (!source) {
+      return;
+    }
+    while (*source != '\0' && index < kMaxTextField - 1) {
+      textField[index++] = *source++;
+    }
+  };
 
   if (absVal < 1.0) {
     if (absVal != 0.0) {
@@ -35,21 +75,15 @@ void localCvtDoubleToExpNotationString(double value, char *textField,
         exponent += 3;
       }
     }
-    char buffer[kMaxTextField];
-    cvtDoubleToString(scaled, buffer, precision);
-    int index = 0;
+    localCvtDoubleToString(scaled, buffer, precision);
     if (isNegative) {
-      textField[index++] = '-';
+      appendChar('-');
     }
-    for (int i = 0; buffer[i] != '\0'; ++i) {
-      textField[index++] = buffer[i];
-    }
-    textField[index++] = 'e';
-    textField[index++] = (exponent == 0) ? '+' : '-';
-    int tens = exponent / 10;
-    int ones = exponent % 10;
-    textField[index++] = static_cast<char>('0' + tens);
-    textField[index++] = static_cast<char>('0' + ones);
+    appendString(buffer);
+    appendChar('e');
+    appendChar((exponent == 0) ? '+' : '-');
+    appendChar(static_cast<char>('0' + exponent / 10));
+    appendChar(static_cast<char>('0' + exponent % 10));
     textField[index] = '\0';
     return;
   }
@@ -59,21 +93,15 @@ void localCvtDoubleToExpNotationString(double value, char *textField,
     exponent += 3;
   }
 
-  char buffer[kMaxTextField];
-  cvtDoubleToString(scaled, buffer, precision);
-  int index = 0;
+  localCvtDoubleToString(scaled, buffer, precision);
   if (isNegative) {
-    textField[index++] = '-';
+    appendChar('-');
   }
-  for (int i = 0; buffer[i] != '\0'; ++i) {
-    textField[index++] = buffer[i];
-  }
-  textField[index++] = 'e';
-  textField[index++] = '+';
-  int tens = exponent / 10;
-  int ones = exponent % 10;
-  textField[index++] = static_cast<char>('0' + tens);
-  textField[index++] = static_cast<char>('0' + ones);
+  appendString(buffer);
+  appendChar('e');
+  appendChar('+');
+  appendChar(static_cast<char>('0' + exponent / 10));
+  appendChar(static_cast<char>('0' + exponent % 10));
   textField[index] = '\0';
 }
 

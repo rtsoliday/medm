@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=96
-		y=69
-		width=1235
-		height=900
+		x=0
+		y=53
+		width=1760
+		height=1040
 	}
 	clr=14
 	bclr=4
@@ -87,397 +87,915 @@ display {
 		1a7309,
 	}
 }
+text {
+	object {
+		x=24
+		y=10
+		width=1700
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Strip Chart Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: trace color order, axis/label layout, title clipping, and redraw behavior across sizes."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="StripChart is monitor-only; use the cavput steps in Section B to drive value changes."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1720
+		height=620
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=900
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (pen count + geometry range + styling)"
+}
+text {
+	object {
+		x=220
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="1 pen"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=600
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="2 pens"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=980
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="3 pens"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1360
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Stress geometry"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=190
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=310
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=450
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
 "strip chart" {
 	object {
-		x=18
-		y=14
-		width=262
-		height=208
+		x=220
+		y=210
+		width=230
+		height=90
 	}
 	plotcom {
-		title="Flux Pulse 327"
-		xlabel="Sampled Seconds"
-		ylabel="Counts"
+		title="Tiny 1 pen"
+		xlabel="Seconds"
+		ylabel="A"
 		clr=47
 		bclr=9
 	}
 	pen[0] {
-		chan="DEV:FLUX:SIG327"
+		chan="strip:test:alpha"
 		clr=23
 		limits {
 			loprSrc="default"
-			loprDefault=-58
-			hoprSrc="default"
-			hoprDefault=212
-		}
-	}
-	pen[1] {
-		chan="DEV:FLUX:RMS011"
-		clr=36
-		limits {
-			loprSrc="default"
-			loprDefault=12
-			hoprSrc="default"
-			hoprDefault=142
-		}
-	}
-	pen[2] {
-		chan="DEV:FLUX:DRIFT901"
-		clr=6
-		limits {
-			loprSrc="default"
-			loprDefault=-14
-			hoprSrc="default"
-			hoprDefault=96
-		}
-	}
-}
-"strip chart" {
-	object {
-		x=310
-		y=18
-		width=248
-		height=205
-	}
-	plotcom {
-		title="Gradient Scan 984"
-		xlabel="Epoch Index"
-		ylabel="Amps"
-		clr=59
-		bclr=13
-	}
-	pen[0] {
-		chan="SYS:GRAD:LOOP32"
-		clr=41
-		limits {
-			loprSrc="default"
-			loprDefault=-34
-			hoprSrc="default"
-			hoprDefault=68
-		}
-	}
-	pen[1] {
-		chan="SYS:GRAD:ERR765"
-		clr=28
-		limits {
-			loprSrc="default"
-			loprDefault=-7
-			hoprSrc="default"
-			hoprDefault=22
-		}
-	}
-	pen[2] {
-		chan="SYS:GRAD:REF492"
-		clr=52
-		limits {
-			loprSrc="default"
-			loprDefault=4
-			hoprSrc="default"
-			hoprDefault=118
-		}
-	}
-}
-"strip chart" {
-	object {
-		x=596
-		y=16
-		width=274
-		height=214
-	}
-	plotcom {
-		title="Cryo Loop 051"
-		xlabel="Elapsed Minutes"
-		ylabel="mTorr"
-		clr=10
-		bclr=44
-	}
-	pen[0] {
-		chan="CRYO:PRESS:HEAD05"
-		clr=12
-		limits {
-			loprSrc="default"
-			hoprSrc="default"
-			hoprDefault=980
-		}
-	}
-	pen[1] {
-		chan="CRYO:PRESS:TAIL33"
-		clr=25
-		limits {
-			loprSrc="default"
-			loprDefault=-45
-			hoprSrc="default"
-			hoprDefault=620
-		}
-	}
-	pen[2] {
-		chan="CRYO:TEMP:LOOP77"
-		clr=2
-		limits {
-			loprSrc="default"
-			loprDefault=34
-			hoprSrc="default"
-			hoprDefault=488
-		}
-	}
-}
-"strip chart" {
-	object {
-		x=910
-		y=20
-		width=262
-		height=209
-	}
-	plotcom {
-		title="Orbit Tuner 411"
-		xlabel="Sweep"
-		ylabel="Delta"
-		clr=21
-		bclr=50
-	}
-	pen[0] {
-		chan="ORB:TUNE:X411"
-		clr=34
-		limits {
-			loprSrc="default"
-			loprDefault=-3
-			hoprSrc="default"
-			hoprDefault=3
-		}
-	}
-	pen[1] {
-		chan="ORB:TUNE:Y901"
-		clr=17
-		limits {
-			loprSrc="default"
-			loprDefault=-2
-			hoprSrc="default"
-			hoprDefault=2
-		}
-	}
-	pen[2] {
-		chan="ORB:TUNE:ENERGY42"
-		clr=8
-		limits {
-			loprSrc="default"
-			loprDefault=-0.5
-			hoprSrc="default"
-			hoprDefault=0.5
-		}
-	}
-}
-"strip chart" {
-	object {
-		x=18
-		y=252
-		width=268
-		height=212
-	}
-	plotcom {
-		title="Vacuum Trend 672"
-		xlabel="Hours"
-		ylabel="Pressure"
-		clr=4
-		bclr=61
-	}
-	pen[0] {
-		chan="VAC:LINE:A672"
-		clr=46
-		limits {
-			hoprDefault=2
-		}
-	}
-	pen[1] {
-		chan="VAC:LINE:B283"
-		clr=32
-		limits {
-			hoprDefault=0
-		}
-	}
-	pen[2] {
-		chan="VAC:LINE:C914"
-		clr=14
-		limits {
-			hoprDefault=0
-		}
-	}
-}
-"strip chart" {
-	object {
-		x=312
-		y=255
-		width=246
-		height=206
-	}
-	plotcom {
-		title="Klystron 552"
-		xlabel="Pulse #"
-		ylabel="kV"
-		clr=38
-		bclr=6
-	}
-	pen[0] {
-		chan="RF:KLY:VOUT552"
-		clr=53
-		limits {
-			loprSrc="default"
-			loprDefault=540
-			hoprSrc="default"
-			hoprDefault=885
-		}
-	}
-	pen[1] {
-		chan="RF:KLY:PHASE37"
-		clr=30
-		limits {
-			loprSrc="default"
-			loprDefault=-16
-			hoprSrc="default"
-			hoprDefault=21
-		}
-	}
-	pen[2] {
-		chan="RF:KLY:TEMP119"
-		clr=57
-		limits {
-			loprSrc="default"
-			loprDefault=18
-			hoprSrc="default"
-			hoprDefault=64
-		}
-	}
-}
-"strip chart" {
-	object {
-		x=598
-		y=254
-		width=270
-		height=210
-	}
-	plotcom {
-		title="Spectrometer 208"
-		xlabel="Bucket"
-		ylabel="Intensity"
-		clr=7
-		bclr=31
-	}
-	pen[0] {
-		chan="SPEC:DET:A208"
-		clr=11
-		limits {
-			loprSrc="default"
-			loprDefault=120
-			hoprSrc="default"
-			hoprDefault=940
-		}
-	}
-	pen[1] {
-		chan="SPEC:DET:B557"
-		clr=19
-		limits {
-			loprSrc="default"
-			loprDefault=90
-			hoprSrc="default"
-			hoprDefault=810
-		}
-	}
-	pen[2] {
-		chan="SPEC:DET:C904"
-		clr=24
-		limits {
-			loprSrc="default"
-			loprDefault=40
-			hoprSrc="default"
-			hoprDefault=610
-		}
-	}
-}
-"strip chart" {
-	object {
-		x=908
-		y=256
-		width=264
-		height=208
-	}
-	plotcom {
-		title="Ion Beam 763"
-		xlabel="Cycle"
-		ylabel="mA"
-		clr=60
-		bclr=15
-	}
-	pen[0] {
-		chan="ION:BEAM:CUR763"
-		clr=5
-		limits {
-			loprSrc="default"
-			loprDefault=-12
-			hoprSrc="default"
-			hoprDefault=128
-		}
-	}
-	pen[1] {
-		chan="ION:BEAM:LOSS041"
-		clr=26
-		limits {
-			loprSrc="default"
+			loprDefault=-20
 			hoprSrc="default"
 			hoprDefault=60
 		}
 	}
-	pen[2] {
-		chan="ION:BEAM:SPREAD88"
-		clr=43
+}
+"strip chart" {
+	object {
+		x=600
+		y=210
+		width=240
+		height=90
+	}
+	plotcom {
+		title="Tiny 2 pens"
+		xlabel="Seconds"
+		ylabel="B"
+		clr=59
+		bclr=13
+	}
+	pen[0] {
+		chan="strip:test:alpha"
+		clr=41
 		limits {
 			loprSrc="default"
-			loprDefault=2
+			loprDefault=-20
 			hoprSrc="default"
-			hoprDefault=39
+			hoprDefault=60
+		}
+	}
+	pen[1] {
+		chan="strip:test:beta"
+		clr=28
+		limits {
+			loprSrc="default"
+			loprDefault=-10
+			hoprSrc="default"
+			hoprDefault=100
 		}
 	}
 }
 "strip chart" {
 	object {
-		x=48
-		y=483
-		width=500
-		height=400
+		x=980
+		y=210
+		width=240
+		height=90
 	}
 	plotcom {
-		title="Orbit Tuner 411"
-		xlabel="Sweep"
-		ylabel="Delta"
+		title="Tiny 3 pens"
+		xlabel="Seconds"
+		ylabel="C"
+		clr=10
+		bclr=44
+	}
+	pen[0] {
+		chan="strip:test:alpha"
+		clr=12
+		limits {
+			loprSrc="default"
+			loprDefault=-20
+			hoprSrc="default"
+			hoprDefault=60
+		}
+	}
+	pen[1] {
+		chan="strip:test:beta"
+		clr=25
+		limits {
+			loprSrc="default"
+			loprDefault=-10
+			hoprSrc="default"
+			hoprDefault=100
+		}
+	}
+	pen[2] {
+		chan="strip:test:gamma"
+		clr=2
+		limits {
+			loprSrc="default"
+			loprDefault=-50
+			hoprSrc="default"
+			hoprDefault=50
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=1360
+		y=210
+		width=160
+		height=90
+	}
+	plotcom {
+		title="Tiny narrow"
+		xlabel="t"
+		ylabel="N"
 		clr=21
 		bclr=50
 	}
 	pen[0] {
-		chan="ORB:TUNE:X411"
+		chan="strip:test:delta"
 		clr=34
 		limits {
 			loprSrc="default"
-			loprDefault=-3
 			hoprSrc="default"
-			hoprDefault=3
+			hoprDefault=200
 		}
 	}
 	pen[1] {
-		chan="ORB:TUNE:Y901"
+		chan="strip:test:epsilon"
 		clr=17
+		limits {
+			loprSrc="default"
+			loprDefault=-25
+			hoprSrc="default"
+			hoprDefault=125
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=220
+		y=330
+		width=250
+		height=120
+	}
+	plotcom {
+		title="Medium 1 pen"
+		xlabel="Seconds"
+		ylabel="D"
+		clr=4
+		bclr=61
+	}
+	pen[0] {
+		chan="strip:test:delta"
+		clr=46
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=200
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=600
+		y=330
+		width=260
+		height=120
+	}
+	plotcom {
+		title="Medium 2 pens"
+		xlabel="Seconds"
+		ylabel="E"
+		clr=38
+		bclr=6
+	}
+	pen[0] {
+		chan="strip:test:delta"
+		clr=53
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=200
+		}
+	}
+	pen[1] {
+		chan="strip:test:epsilon"
+		clr=30
+		limits {
+			loprSrc="default"
+			loprDefault=-25
+			hoprSrc="default"
+			hoprDefault=125
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=980
+		y=330
+		width=260
+		height=120
+	}
+	plotcom {
+		title="Medium 3 pens"
+		xlabel="Seconds"
+		ylabel="F"
+		clr=7
+		bclr=31
+	}
+	pen[0] {
+		chan="strip:test:delta"
+		clr=11
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=200
+		}
+	}
+	pen[1] {
+		chan="strip:test:epsilon"
+		clr=19
+		limits {
+			loprSrc="default"
+			loprDefault=-25
+			hoprSrc="default"
+			hoprDefault=125
+		}
+	}
+	pen[2] {
+		chan="strip:test:zeta"
+		clr=24
+		limits {
+			loprSrc="default"
+			loprDefault=-80
+			hoprSrc="default"
+			hoprDefault=40
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=1320
+		y=330
+		width=360
+		height=120
+	}
+	plotcom {
+		title="Long title geometry stress check"
+		xlabel="Elapsed Seconds"
+		ylabel="Stress"
+		clr=60
+		bclr=15
+	}
+	pen[0] {
+		chan="strip:test:stress:a"
+		clr=5
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=100
+		}
+	}
+	pen[1] {
+		chan="strip:test:stress:b"
+		clr=26
+		limits {
+			loprSrc="default"
+			loprDefault=-40
+			hoprSrc="default"
+			hoprDefault=40
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=220
+		y=470
+		width=300
+		height=150
+	}
+	plotcom {
+		title="Large 1 pen"
+		xlabel="Minutes"
+		ylabel="G"
+		clr=21
+		bclr=50
+	}
+	pen[0] {
+		chan="strip:test:eta"
+		clr=34
+		limits {
+			loprSrc="default"
+			loprDefault=-5
+			hoprSrc="default"
+			hoprDefault=5
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=600
+		y=470
+		width=300
+		height=150
+	}
+	plotcom {
+		title="Large 2 pens"
+		xlabel="Minutes"
+		ylabel="H"
+		clr=38
+		bclr=6
+	}
+	pen[0] {
+		chan="strip:test:eta"
+		clr=53
+		limits {
+			loprSrc="default"
+			loprDefault=-5
+			hoprSrc="default"
+			hoprDefault=5
+		}
+	}
+	pen[1] {
+		chan="strip:test:theta"
+		clr=30
+		limits {
+			loprSrc="default"
+			loprDefault=-1
+			hoprSrc="default"
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=980
+		y=470
+		width=300
+		height=150
+	}
+	plotcom {
+		title="Large 3 pens"
+		xlabel="Minutes"
+		ylabel="I"
+		clr=7
+		bclr=31
+	}
+	pen[0] {
+		chan="strip:test:eta"
+		clr=11
+		limits {
+			loprSrc="default"
+			loprDefault=-5
+			hoprSrc="default"
+			hoprDefault=5
+		}
+	}
+	pen[1] {
+		chan="strip:test:theta"
+		clr=19
+		limits {
+			loprSrc="default"
+			loprDefault=-1
+			hoprSrc="default"
+		}
+	}
+	pen[2] {
+		chan="strip:test:iota"
+		clr=24
 		limits {
 			loprSrc="default"
 			loprDefault=-2
 			hoprSrc="default"
-			hoprDefault=2
+			hoprDefault=8
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=1320
+		y=470
+		width=180
+		height=150
+	}
+	plotcom {
+		title="Large narrow"
+		xlabel="Min"
+		ylabel="J"
+		clr=10
+		bclr=44
+	}
+	pen[0] {
+		chan="strip:test:kappa"
+		clr=12
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=150
+		}
+	}
+	pen[1] {
+		chan="strip:test:lambda"
+		clr=25
+		limits {
+			loprSrc="default"
+			loprDefault=-100
+			hoprSrc="default"
+			hoprDefault=20
 		}
 	}
 	pen[2] {
-		chan="ORB:TUNE:ENERGY42"
-		clr=8
+		chan="strip:test:mu"
+		clr=2
 		limits {
 			loprSrc="default"
-			loprDefault=-0.5
 			hoprSrc="default"
-			hoprDefault=0.5
+			hoprDefault=30
+		}
+	}
+}
+text {
+	object {
+		x=70
+		y=610
+		width=440
+		height=16
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="A/B baseline: one-variable-only pair"
+}
+text {
+	object {
+		x=70
+		y=628
+		width=520
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Both widgets use identical channels/colors; only width differs."
+}
+"strip chart" {
+	object {
+		x=596
+		y=627
+		width=220
+		height=90
+	}
+	plotcom {
+		title="Baseline A"
+		xlabel="Seconds"
+		ylabel="Base"
+		clr=47
+		bclr=9
+	}
+	pen[0] {
+		chan="strip:test:delta"
+		clr=23
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=200
+		}
+	}
+	pen[1] {
+		chan="strip:test:epsilon"
+		clr=36
+		limits {
+			loprSrc="default"
+			loprDefault=-25
+			hoprSrc="default"
+			hoprDefault=125
+		}
+	}
+	pen[2] {
+		chan="strip:test:zeta"
+		clr=6
+		limits {
+			loprSrc="default"
+			loprDefault=-80
+			hoprSrc="default"
+			hoprDefault=40
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=880
+		y=625
+		width=340
+		height=90
+	}
+	plotcom {
+		title="Baseline B"
+		xlabel="Seconds"
+		ylabel="Base"
+		clr=47
+		bclr=9
+	}
+	pen[0] {
+		chan="strip:test:delta"
+		clr=23
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=200
+		}
+	}
+	pen[1] {
+		chan="strip:test:epsilon"
+		clr=36
+		limits {
+			loprSrc="default"
+			loprDefault=-25
+			hoprSrc="default"
+			hoprDefault=125
+		}
+	}
+	pen[2] {
+		chan="strip:test:zeta"
+		clr=6
+		limits {
+			loprSrc="default"
+			loprDefault=-80
+			hoprSrc="default"
+			hoprDefault=40
+		}
+	}
+}
+rectangle {
+	object {
+		x=20
+		y=748
+		width=1720
+		height=272
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=758
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Behavior checks (execute mode)"
+}
+text {
+	object {
+		x=40
+		y=786
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Use cavput to step strip:test:drive:a/b/c and confirm trace updates and axis labels redraw cleanly."
+}
+text {
+	object {
+		x=40
+		y=808
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Flip values across zero (example: cavput strip:test:drive:a -5 then 5) to compare autoscale/zero-line parity."
+}
+text {
+	object {
+		x=40
+		y=830
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Verify the disconnected chart stays visibly empty and shows the same disconnect indicators in both apps."
+}
+text {
+	object {
+		x=40
+		y=852
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Repeatedly resize the window and compare redraw stability (no label overlap or trace color reordering)."
+}
+"strip chart" {
+	object {
+		x=60
+		y=900
+		width=260
+		height=90
+	}
+	plotcom {
+		title="Behavior A"
+		xlabel="Seconds"
+		ylabel="Drive"
+		clr=6
+		bclr=2
+	}
+	pen[0] {
+		chan="strip:test:drive:a"
+		clr=21
+		limits {
+			loprSrc="default"
+			loprDefault=-10
+			hoprSrc="default"
+			hoprDefault=10
+		}
+	}
+	pen[1] {
+		chan="strip:test:drive:b"
+		clr=48
+		limits {
+			loprSrc="default"
+			loprDefault=-20
+			hoprSrc="default"
+			hoprDefault=20
+		}
+	}
+	pen[2] {
+		chan="strip:test:drive:c"
+		clr=9
+		limits {
+			loprSrc="default"
+			loprDefault=-30
+			hoprSrc="default"
+			hoprDefault=30
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=360
+		y=900
+		width=260
+		height=90
+	}
+	plotcom {
+		title="Behavior B"
+		xlabel="Seconds"
+		ylabel="Stress"
+		clr=14
+		bclr=4
+	}
+	pen[0] {
+		chan="strip:test:stress:a"
+		clr=53
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=100
+		}
+	}
+	pen[1] {
+		chan="strip:test:stress:b"
+		clr=30
+		limits {
+			loprSrc="default"
+			loprDefault=-40
+			hoprSrc="default"
+			hoprDefault=40
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=660
+		y=900
+		width=300
+		height=90
+	}
+	plotcom {
+		title="Behavior C"
+		xlabel="Seconds"
+		ylabel="Wide"
+		clr=3
+		bclr=15
+	}
+	pen[0] {
+		chan="strip:test:kappa"
+		clr=44
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+			hoprDefault=150
+		}
+	}
+	pen[1] {
+		chan="strip:test:lambda"
+		clr=6
+		limits {
+			loprSrc="default"
+			loprDefault=-100
+			hoprSrc="default"
+			hoprDefault=20
+		}
+	}
+}
+"strip chart" {
+	object {
+		x=1000
+		y=900
+		width=240
+		height=90
+	}
+	plotcom {
+		title="Disconnected"
+		xlabel="Seconds"
+		ylabel="NA"
+		clr=11
+		bclr=5
+	}
+	pen[0] {
+		chan="strip:test:missing1"
+		clr=21
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
+		}
+	}
+	pen[1] {
+		chan="strip:test:missing2"
+		clr=48
+		limits {
+			loprSrc="default"
+			hoprSrc="default"
 		}
 	}
 }

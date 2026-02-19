@@ -1,14 +1,13 @@
-
 file {
 	name="/home/SOLIDAY/github/medm/tests/test_MessageButton.adl"
 	version=030122
 }
 display {
 	object {
-		x=10
-		y=53
-		width=985
-		height=530
+		x=90
+		y=60
+		width=1800
+		height=1220
 	}
 	clr=14
 	bclr=4
@@ -87,246 +86,860 @@ display {
 		1a7309,
 	}
 }
-"message button" {
+text {
+	object {
+		x=24
+		y=10
+		width=1760
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Message Button Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: press/release put behavior, default label fallback, alarm/discrete color rendering, write access handling, and geometry stress."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Message Button is writable: click/hold/release each probe and verify the readback monitors below update immediately with matching values."
+}
+rectangle {
 	object {
 		x=20
-		y=20
-		width=170
-		height=40
+		y=108
+		width=1760
+		height=690
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (color mode + label behavior + geometry range)"
+}
+text {
+	object {
+		x=240
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Static"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=570
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=900
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Discrete"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1230
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alt/default label"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=222
+		width=150
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=322
+		width=150
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=430
+		width=150
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=56
+		y=562
+		width=150
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow"
+}
+text {
+	object {
+		x=56
+		y=672
+		width=150
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="wide stress"
+}
+"message button" {
+	object {
+		x=240
+		y=200
+		width=160
+		height=24
 	}
 	control {
-		chan="msgTest:randomA3"
+		chan="mb:stat:01"
 		clr=3
+		bclr=48
+	}
+	label="Static tiny"
+	press_msg="1"
+	release_msg="0"
+}
+"message button" {
+	object {
+		x=570
+		y=200
+		width=160
+		height=24
+	}
+	control {
+		chan="mb:alarm:01"
+		clr=30
 		bclr=12
 	}
-	label="Flash Blue"
-	press_msg="TRIG A3"
-	release_msg="hold-release"
+	label="Alarm tiny"
+	press_msg="1"
+	release_msg="0"
+	clrmod="alarm"
 }
 "message button" {
 	object {
-		x=210
-		y=20
+		x=900
+		y=200
 		width=160
-		height=40
+		height=24
 	}
 	control {
-		chan="alpha:btn:90"
-		clr=24
+		chan="mb:disc:01"
+		clr=54
+		bclr=20
+	}
+	label="Discrete tiny"
+	press_msg="1"
+	release_msg="0"
+	clrmod="discrete"
+}
+"message button" {
+	object {
+		x=1230
+		y=200
+		width=160
+		height=24
+	}
+	control {
+		chan="mb:alt:01"
+		clr=0
 		bclr=58
 	}
-	label="Alpha90"
-	press_msg="PUSH 90"
+	press_msg="1"
+	release_msg="0"
 }
 "message button" {
 	object {
-		x=390
-		y=20
+		x=220
+		y=296
 		width=210
-		height=40
+		height=34
 	}
 	control {
-		chan="betaBtn_07"
-		clr=0
-		bclr=15
+		chan="mb:stat:02"
+		clr=3
+		bclr=48
 	}
-	press_msg="Msg >>07"
-	release_msg="rel-07"
+	label="Static medium"
+	press_msg="2"
+	release_msg="0"
 }
 "message button" {
 	object {
-		x=620
-		y=20
-		width=200
+		x=550
+		y=296
+		width=210
+		height=34
+	}
+	control {
+		chan="mb:alarm:02"
+		clr=30
+		bclr=12
+	}
+	label="Alarm medium"
+	press_msg="2"
+	release_msg="0"
+	clrmod="alarm"
+}
+"message button" {
+	object {
+		x=880
+		y=296
+		width=210
+		height=34
+	}
+	control {
+		chan="mb:disc:02"
+		clr=54
+		bclr=20
+	}
+	label="Discrete medium"
+	press_msg="2"
+	release_msg="0"
+	clrmod="discrete"
+}
+"message button" {
+	object {
+		x=1210
+		y=296
+		width=210
+		height=34
+	}
+	control {
+		chan="mb:alt:02"
+		clr=0
+		bclr=58
+	}
+	label="Alt medium"
+	press_msg="2"
+	release_msg="0"
+}
+"message button" {
+	object {
+		x=195
+		y=390
+		width=260
+		height=48
+	}
+	control {
+		chan="mb:stat:03"
+		clr=3
+		bclr=48
+	}
+	label="Static large"
+	press_msg="3"
+	release_msg="-1"
+}
+"message button" {
+	object {
+		x=525
+		y=390
+		width=260
+		height=48
+	}
+	control {
+		chan="mb:alarm:03"
+		clr=30
+		bclr=12
+	}
+	label="Alarm large"
+	press_msg="3"
+	release_msg="-1"
+	clrmod="alarm"
+}
+"message button" {
+	object {
+		x=855
+		y=390
+		width=260
+		height=48
+	}
+	control {
+		chan="mb:disc:03"
+		clr=54
+		bclr=20
+	}
+	label="Discrete large"
+	press_msg="3"
+	release_msg="-1"
+	clrmod="discrete"
+}
+"message button" {
+	object {
+		x=1185
+		y=390
+		width=260
+		height=48
+	}
+	control {
+		chan="mb:alt:03"
+		clr=0
+		bclr=58
+	}
+	press_msg="3"
+	release_msg="-1"
+}
+"message button" {
+	object {
+		x=260
+		y=530
+		width=120
+		height=36
+	}
+	control {
+		chan="mb:stat:04"
+		clr=3
+		bclr=48
+	}
+	label="S narrow"
+	press_msg="4"
+	release_msg="1"
+}
+"message button" {
+	object {
+		x=590
+		y=530
+		width=120
+		height=36
+	}
+	control {
+		chan="mb:alarm:04"
+		clr=30
+		bclr=12
+	}
+	label="A narrow"
+	press_msg="4"
+	release_msg="1"
+	clrmod="alarm"
+}
+"message button" {
+	object {
+		x=920
+		y=530
+		width=120
+		height=36
+	}
+	control {
+		chan="mb:disc:04"
+		clr=54
+		bclr=20
+	}
+	label="D narrow"
+	press_msg="4"
+	release_msg="1"
+	clrmod="discrete"
+}
+"message button" {
+	object {
+		x=1250
+		y=530
+		width=120
+		height=36
+	}
+	control {
+		chan="mb:alt:04"
+		clr=0
+		bclr=58
+	}
+	label="Alt narrow"
+	press_msg="4"
+	release_msg="1"
+}
+"message button" {
+	object {
+		x=165
+		y=640
+		width=320
 		height=40
 	}
 	control {
+		chan="mb:stat:05"
+		clr=3
+		bclr=48
+	}
+	label="Static wide"
+	press_msg="5"
+	release_msg="2"
+}
+"message button" {
+	object {
+		x=495
+		y=640
+		width=320
+		height=40
+	}
+	control {
+		chan="mb:alarm:05"
+		clr=30
+		bclr=12
+	}
+	label="Alarm wide"
+	press_msg="5"
+	release_msg="2"
+	clrmod="alarm"
+}
+"message button" {
+	object {
+		x=825
+		y=640
+		width=320
+		height=40
+	}
+	control {
+		chan="mb:disc:05"
+		clr=54
+		bclr=20
+	}
+	label="Discrete wide"
+	press_msg="5"
+	release_msg="2"
+	clrmod="discrete"
+}
+"message button" {
+	object {
+		x=1155
+		y=640
+		width=320
+		height=40
+	}
+	control {
+		chan="mb:alt:05"
+		clr=0
+		bclr=58
+	}
+	press_msg="5"
+	release_msg="2"
+}
+rectangle {
+	object {
+		x=20
+		y=820
+		width=1760
+		height=360
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=830
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Behavior checks (execute mode actions)"
+}
+text {
+	object {
+		x=30
+		y=852
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Press and release each probe button, then verify readback values below match press_msg/release_msg immediately in both MEDM and QtEDM."
+}
+text {
+	object {
+		x=30
+		y=870
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) A/B baseline: the pair on mb:base:ab differs only by clrmod (static vs alarm); compare idle colors and pressed visuals."
+}
+text {
+	object {
+		x=30
+		y=888
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Keep weirdChan untouched to preserve UDF/INVALID for alarm-color parity, and verify the no-channel button renders disconnected behavior consistently."
+}
+text {
+	object {
+		x=220
+		y=918
+		width=220
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A (static)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=470
+		y=918
+		width=220
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline B (alarm)"
+	align="horiz. centered"
+}
+"message button" {
+	object {
+		x=220
+		y=938
+		width=220
+		height=40
+	}
+	control {
+		chan="mb:base:ab"
+		clr=31
+		bclr=10
+	}
+	label="Base static"
+	press_msg="10"
+	release_msg="0"
+}
+"message button" {
+	object {
+		x=470
+		y=938
+		width=220
+		height=40
+	}
+	control {
+		chan="mb:base:ab"
+		clr=31
+		bclr=10
+	}
+	label="Base alarm"
+	press_msg="10"
+	release_msg="0"
+	clrmod="alarm"
+}
+text {
+	object {
+		x=760
+		y=918
+		width=470
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Press-only vs press+release"
+	align="horiz. centered"
+}
+"message button" {
+	object {
+		x=760
+		y=938
+		width=220
+		height=40
+	}
+	control {
+		chan="mb:beh:press"
+		clr=47
+		bclr=6
+	}
+	label="Press only"
+	press_msg="7"
+}
+"message button" {
+	object {
+		x=1010
+		y=938
+		width=220
+		height=40
+	}
+	control {
+		chan="mb:beh:full"
+		clr=47
+		bclr=6
+	}
+	label="Press + release"
+	press_msg="7"
+	release_msg="-7"
+}
+"message button" {
+	object {
+		x=1260
+		y=938
+		width=220
+		height=40
+	}
+	control {
+		chan=" "
 		clr=62
 		bclr=5
 	}
 	label="No Channel"
-	release_msg="released"
+	press_msg="9"
+	release_msg="0"
+	clrmod="alarm"
 }
 "message button" {
 	object {
-		x=20
-		y=90
-		width=180
-		height=40
-	}
-	control {
-		chan="random:QQ4"
-		clr=10
-		bclr=32
-	}
-	label="QQ4"
-	press_msg="Send|QQ4|99"
-	release_msg="Stop"
-}
-"message button" {
-	object {
-		x=220
-		y=90
-		width=185
-		height=40
-	}
-	control {
-		chan="proto:MB8"
-		clr=48
-		bclr=2
-	}
-	label="proto"
-	press_msg="Activate++"
-}
-"message button" {
-	object {
-		x=420
-		y=90
-		width=190
+		x=1510
+		y=938
+		width=240
 		height=40
 	}
 	control {
 		chan="weirdChan"
-		clr=6
-		bclr=30
+		clr=30
+		bclr=12
 	}
-	label="Symbols!"
-	press_msg="One-Off"
-	release_msg="Return"
+	label="Alarm Probe (UDF)"
+	press_msg="9"
+	release_msg="0"
+	clrmod="alarm"
 }
-"message button" {
-	object {
-		x=620
-		y=90
-		width=210
-		height=40
-	}
-	control {
-		chan="test:random:42"
-		clr=11
-		bclr=1
-	}
-}
-"message button" {
-	object {
-		x=20
-		y=160
-		width=180
-		height=40
-	}
-	control {
-		chan="mix:12:var"
-		clr=19
-		bclr=54
-	}
-	label="Mix12"
-	press_msg="kick 12"
-	release_msg="release 12"
-}
-"message button" {
+"text update" {
 	object {
 		x=220
-		y=160
-		width=180
-		height=40
+		y=988
+		width=220
+		height=22
 	}
-	control {
-		chan="ZzzButton"
-		clr=35
-		bclr=20
+	monitor {
+		chan="mb:base:ab"
+		clr=55
+		bclr=4
 	}
-	label="Sleep"
-	press_msg="..."
-	release_msg="zzz"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
 }
-"message button" {
+"text update" {
 	object {
-		x=420
-		y=160
-		width=200
-		height=40
+		x=760
+		y=988
+		width=220
+		height=22
 	}
-	control {
-		chan="Gamma#12"
-		clr=58
-		bclr=9
+	monitor {
+		chan="mb:beh:press"
+		clr=55
+		bclr=4
 	}
-	label="Gamma#12"
-	press_msg="G-12:Press"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
 }
-"message button" {
+"text update" {
 	object {
-		x=620
-		y=160
-		width=210
-		height=40
+		x=1010
+		y=988
+		width=220
+		height=22
 	}
-	control {
-		chan="2nd:random"
-		clr=8
-		bclr=25
+	monitor {
+		chan="mb:beh:full"
+		clr=55
+		bclr=4
 	}
-	label="Spacing"
-	press_msg="Spacing Press"
-	release_msg="Spacing Release"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
 }
-"message button" {
+"text update" {
 	object {
-		x=20
-		y=230
-		width=185
-		height=40
+		x=1510
+		y=988
+		width=240
+		height=22
 	}
-	control {
-		chan="delta_btn"
-		clr=52
-		bclr=18
+	monitor {
+		chan="weirdChan"
+		clr=55
+		bclr=4
 	}
-	press_msg="DeltaPress"
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
 }
-"message button" {
+text {
+	object {
+		x=30
+		y=1020
+		width=760
+		height=16
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Writable reference widgets (manual put baseline)"
+}
+"text entry" {
 	object {
 		x=220
-		y=230
-		width=200
-		height=40
+		y=1042
+		width=220
+		height=36
 	}
 	control {
-		clr=7
-		bclr=37
+		chan="mb:base:ab"
+		clr=24
+		bclr=61
 	}
-	label="Empty Chan"
-	press_msg="PushIt"
-	release_msg="DropIt"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
 }
-"message button" {
+"text entry" {
 	object {
-		x=430
-		y=230
-		width=190
-		height=40
+		x=760
+		y=1042
+		width=220
+		height=36
 	}
 	control {
-		chan="omega:777"
-		clr=60
-		bclr=16
+		chan="mb:beh:press"
+		clr=24
+		bclr=61
 	}
-	label="Omega"
-	press_msg="777-press"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
 }
-"message button" {
+"text entry" {
 	object {
-		x=630
-		y=230
-		width=210
-		height=40
+		x=1010
+		y=1042
+		width=220
+		height=36
 	}
 	control {
-		chan="button:random:XY"
-		clr=13
-		bclr=41
+		chan="mb:beh:full"
+		clr=24
+		bclr=61
 	}
-	label="Random XY"
-	press_msg="fire XY"
-	release_msg="reset XY"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
 }

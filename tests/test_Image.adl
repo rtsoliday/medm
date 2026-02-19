@@ -1,14 +1,13 @@
-
 file {
 	name="/home/SOLIDAY/github/medm/tests/test_Image.adl"
 	version=030122
 }
 display {
 	object {
-		x=0
-		y=53
-		width=782
-		height=537
+		x=80
+		y=48
+		width=1800
+		height=1300
 	}
 	clr=14
 	bclr=4
@@ -87,126 +86,848 @@ display {
 		1a7309,
 	}
 }
+text {
+	object {
+		x=24
+		y=10
+		width=1760
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Image Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: image scaling and clipping parity, dynamic visibility logic (if zero/if not zero/calc), disconnected behavior, and stress geometry."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Image is monitor-only: drive img:* PVs with text-entry probes below or external cavput, and use ChoiceButtons for quick enum visibility toggles."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1760
+		height=770
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (visibility mode + geometry range)"
+}
+text {
+	object {
+		x=210
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Static"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=530
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm + if not zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=850
+		y=154
+		width=180
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Discrete + if zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1170
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Calc visibility (A>B)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=222
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=318
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=454
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=56
+		y=620
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow/tall"
+}
+text {
+	object {
+		x=56
+		y=792
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="wide stress"
+}
 image {
 	object {
-		x=12
-		y=18
-		width=168
-		height=124
+		x=240
+		y=200
+		width=120
+		height=48
 	}
 	type="gif"
 	"image name"="test.gif"
 }
 image {
 	object {
-		x=214
-		y=36
-		width=196
-		height=136
+		x=560
+		y=200
+		width=120
+		height=48
 	}
 	type="gif"
 	"image name"="test.gif"
-	calc="A+B*3"
 	"dynamic attribute" {
+		clr="alarm"
 		vis="if not zero"
-		chan="channelA_PV"
+		chan="img:vis:a"
 	}
 }
 image {
 	object {
-		x=438
-		y=22
-		width=210
-		height=142
+		x=880
+		y=200
+		width=120
+		height=48
 	}
 	type="gif"
 	"image name"="test.gif"
-	calc="A-(B/2)"
 	"dynamic attribute" {
 		clr="discrete"
 		vis="if zero"
-		chan="channelA_PV"
-		chanB="channelB_PV"
+		chan="img:vis:b"
 	}
 }
 image {
 	object {
-		x=52
-		y=212
-		width=248
-		height=172
+		x=1200
+		y=200
+		width=120
+		height=48
 	}
 	type="gif"
 	"image name"="test.gif"
+	calc="A+B"
 	"dynamic attribute" {
 		clr="alarm"
 		vis="calc"
 		calc="A>B"
-		chan="channelA_PV"
-		chanB="channelB_PV"
-		chanC="channelC_PV"
+		chan="img:vis:a"
+		chanB="img:vis:b"
 	}
 }
 image {
 	object {
-		x=338
-		y=226
-		width=224
-		height=158
+		x=210
+		y=294
+		width=180
+		height=92
 	}
 	type="gif"
 	"image name"="test.gif"
-	calc="A/3"
 }
 image {
 	object {
-		x=596
-		y=198
-		width=164
-		height=144
+		x=530
+		y=294
+		width=180
+		height=92
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="img:vis:a"
+	}
+}
+image {
+	object {
+		x=850
+		y=294
+		width=180
+		height=92
 	}
 	type="gif"
 	"image name"="test.gif"
 	"dynamic attribute" {
 		clr="discrete"
-		vis="if not zero"
-		chan="channelA_PV"
-	}
-}
-image {
-	object {
-		x=128
-		y=396
-		width=312
-		height=128
-	}
-	type="gif"
-	"image name"="test.gif"
-	calc="A*3-B"
-	"dynamic attribute" {
 		vis="if zero"
-		chan="channelA_PV"
-		chanB="channelB_PV"
-		chanC="channelC_PV"
-		chanD="channelD_PV"
+		chan="img:vis:b"
 	}
 }
 image {
 	object {
-		x=476
-		y=402
-		width=198
-		height=118
+		x=1170
+		y=294
+		width=180
+		height=92
 	}
 	type="gif"
 	"image name"="test.gif"
-	calc="A*0.5"
+	calc="A-B"
 	"dynamic attribute" {
 		clr="alarm"
 		vis="calc"
-		calc="A<C"
-		chan="channelA_PV"
-		chanB="channelB_PV"
-		chanC="channelC_PV"
+		calc="A>B"
+		chan="img:vis:a"
+		chanB="img:vis:b"
 	}
+}
+image {
+	object {
+		x=180
+		y=426
+		width=240
+		height=136
+	}
+	type="gif"
+	"image name"="test.gif"
+}
+image {
+	object {
+		x=500
+		y=426
+		width=240
+		height=136
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="img:vis:a"
+	}
+}
+image {
+	object {
+		x=820
+		y=426
+		width=240
+		height=136
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="img:vis:b"
+	}
+}
+image {
+	object {
+		x=1140
+		y=426
+		width=240
+		height=136
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A*2-B"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="img:vis:a"
+		chanB="img:vis:b"
+	}
+}
+image {
+	object {
+		x=256
+		y=574
+		width=88
+		height=168
+	}
+	type="gif"
+	"image name"="test.gif"
+}
+image {
+	object {
+		x=576
+		y=574
+		width=88
+		height=168
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="img:vis:a"
+	}
+}
+image {
+	object {
+		x=896
+		y=574
+		width=88
+		height=168
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="img:vis:b"
+	}
+}
+image {
+	object {
+		x=1216
+		y=574
+		width=88
+		height=168
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A+B*2"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="img:vis:a"
+		chanB="img:vis:b"
+	}
+}
+image {
+	object {
+		x=150
+		y=758
+		width=300
+		height=74
+	}
+	type="gif"
+	"image name"="test.gif"
+}
+image {
+	object {
+		x=470
+		y=758
+		width=300
+		height=74
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="img:vis:a"
+	}
+}
+image {
+	object {
+		x=790
+		y=758
+		width=300
+		height=74
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="img:vis:b"
+	}
+}
+image {
+	object {
+		x=1110
+		y=758
+		width=300
+		height=74
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A-B/2"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="img:vis:a"
+		chanB="img:vis:b"
+	}
+}
+rectangle {
+	object {
+		x=20
+		y=900
+		width=1760
+		height=360
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=910
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Behavior checks (execute mode actions)"
+}
+text {
+	object {
+		x=30
+		y=932
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Use ChoiceButton toggles cb:ctrl:2845 and cb:logic:7319, then confirm if-zero/if-not-zero/calc image visibility transitions match MEDM."
+}
+text {
+	object {
+		x=30
+		y=950
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) A/B baseline below uses the same channel and geometry; only vis mode differs."
+}
+text {
+	object {
+		x=30
+		y=968
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Disconnected probe uses chan=\" \" and should follow MEDM disconnected rendering behavior."
+}
+text {
+	object {
+		x=60
+		y=988
+		width=240
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Toggle A: cb:ctrl:2845"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=340
+		y=988
+		width=240
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Toggle B: cb:logic:7319"
+	align="horiz. centered"
+}
+"choice button" {
+	object {
+		x=60
+		y=1006
+		width=240
+		height=30
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=48
+		bclr=11
+	}
+	clrmod="alarm"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=340
+		y=1006
+		width=240
+		height=30
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=26
+		bclr=60
+	}
+	clrmod="discrete"
+	stacking="row column"
+}
+text {
+	object {
+		x=620
+		y=988
+		width=200
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A: if zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=840
+		y=988
+		width=200
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline B: if not zero"
+	align="horiz. centered"
+}
+image {
+	object {
+		x=620
+		y=1006
+		width=200
+		height=90
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		vis="if zero"
+		chan="cb:ctrl:2845"
+	}
+}
+image {
+	object {
+		x=840
+		y=1006
+		width=200
+		height=90
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		vis="if not zero"
+		chan="cb:ctrl:2845"
+	}
+}
+text {
+	object {
+		x=1060
+		y=988
+		width=200
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Disconnected"
+	align="horiz. centered"
+}
+image {
+	object {
+		x=1060
+		y=1006
+		width=200
+		height=90
+	}
+	type="gif"
+	"image name"="test.gif"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan=" "
+	}
+}
+text {
+	object {
+		x=1280
+		y=988
+		width=220
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Calc probe (A>B)"
+	align="horiz. centered"
+}
+image {
+	object {
+		x=1280
+		y=1006
+		width=220
+		height=90
+	}
+	type="gif"
+	"image name"="test.gif"
+	calc="A+B"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A>B"
+		chan="cb:ctrl:2845"
+		chanB="cb:logic:7319"
+	}
+}
+text {
+	object {
+		x=1520
+		y=988
+		width=220
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="cavput probes"
+	align="horiz. centered"
+}
+"text entry" {
+	object {
+		x=1520
+		y=1006
+		width=105
+		height=34
+	}
+	control {
+		chan="img:vis:a"
+		clr=24
+		bclr=61
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text entry" {
+	object {
+		x=1635
+		y=1006
+		width=105
+		height=34
+	}
+	control {
+		chan="img:vis:b"
+		clr=24
+		bclr=61
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=60
+		y=1120
+		width=240
+		height=22
+	}
+	monitor {
+		chan="cb:ctrl:2845"
+		clr=55
+		bclr=4
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=340
+		y=1120
+		width=240
+		height=22
+	}
+	monitor {
+		chan="cb:logic:7319"
+		clr=55
+		bclr=4
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1520
+		y=1050
+		width=105
+		height=22
+	}
+	monitor {
+		chan="img:vis:a"
+		clr=55
+		bclr=4
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1635
+		y=1050
+		width=105
+		height=22
+	}
+	monitor {
+		chan="img:vis:b"
+		clr=55
+		bclr=4
+	}
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=620
+		y=1120
+		width=1120
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="External drive examples: cavput img:vis:a=0 ; cavput img:vis:b=1 ; cavput cb:ctrl:2845=0 ; cavput cb:logic:7319=2"
 }

@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=0
-		y=53
-		width=859
-		height=534
+		x=260
+		y=48
+		width=1840
+		height=1320
 	}
 	clr=14
 	bclr=4
@@ -87,250 +87,1204 @@ display {
 		1a7309,
 	}
 }
+text {
+	object {
+		x=24
+		y=10
+		width=1790
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Text Monitor Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: numeric/string formatting parity, alignment and clipping, alarm/discrete color changes, and disconnected rendering."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Text monitor is monitor-only: drive PV updates externally (for example, cavput tm:decimal:slow=..., cavput tm:exp:fastA=...)."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1800
+		height=770
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (format/color mode/alignment + geometry range)"
+}
+text {
+	object {
+		x=180
+		y=154
+		width=250
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="decimal (static,left)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=500
+		y=154
+		width=250
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="exponential (alarm,centered)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=820
+		y=154
+		width=250
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="engr. notation (discrete,right)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1140
+		y=154
+		width=250
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="string (static,centered)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1460
+		y=154
+		width=300
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="sexagesimal-hms (alarm,right)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=224
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=324
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=454
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=56
+		y=604
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="banner"
+}
+text {
+	object {
+		x=56
+		y=754
+		width=160
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow clip stress"
+}
 "text update" {
 	object {
-		x=14
-		y=104
-		width=400
-		height=10
+		x=180
+		y=206
+		width=250
+		height=12
 	}
 	monitor {
 		chan="tm:decimal:slow"
-		clr=21
-		bclr=48
+		clr=31
+		bclr=4
 	}
-	clrmod="alarm"
-	align="horiz. centered"
 	limits {
-		loprDefault=-12.7
-		hoprDefault=68.5
-		precDefault=2
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
 "text update" {
 	object {
-		x=431
-		y=114
-		width=400
+		x=500
+		y=206
+		width=250
 		height=12
 	}
 	monitor {
 		chan="tm:exp:fastA"
-		clr=6
-		bclr=56
+		clr=44
+		bclr=4
 	}
-	clrmod="discrete"
-	align="horiz. right"
+	clrmod="alarm"
+	align="horiz. centered"
 	format="exponential"
 	limits {
+		loprSrc="default"
+		hoprSrc="default"
 		precSrc="default"
-		precDefault=4
 	}
 }
 "text update" {
 	object {
-		x=435
-		y=185
-		width=400
-		height=30
+		x=820
+		y=206
+		width=250
+		height=12
 	}
 	monitor {
 		chan="tm:engr:mix"
-		clr=54
-		bclr=10
-	}
-	format="engr. notation"
-	limits {
-		loprSrc="default"
-		loprDefault=-1
-		hoprSrc="default"
-		precDefault=5
-	}
-}
-"text update" {
-	object {
-		x=7
-		y=188
-		width=400
-		height=28
-	}
-	monitor {
-		chan="tm:compact:1"
-		clr=17
-		bclr=60
-	}
-	clrmod="alarm"
-	format="compact"
-	limits {
-		loprDefault=-0.004
-		hoprDefault=0.012
-		precDefault=6
-	}
-}
-"text update" {
-	object {
-		x=434
-		y=273
-		width=400
-		height=15
-	}
-	monitor {
-		chan="tm:trunc:edge"
-		clr=22
-		bclr=35
-	}
-	align="horiz. centered"
-	format="truncated"
-	limits {
-	}
-}
-"text update" {
-	object {
-		x=13
-		y=267
-		width=400
-		height=25
-	}
-	monitor {
-		chan="tm:hex:count"
-		clr=42
-		bclr=14
+		clr=12
+		bclr=4
 	}
 	clrmod="discrete"
 	align="horiz. right"
-	format="hexadecimal"
+	format="engr. notation"
 	limits {
-		hoprDefault=65535
-		precDefault=1
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
 "text update" {
 	object {
-		x=14
-		y=325
-		width=400
-		height=30
-	}
-	monitor {
-		chan="tm:octal:plc"
-		clr=58
-		bclr=5
-	}
-	clrmod="alarm"
-	align="horiz. centered"
-	format="octal"
-	limits {
-		hoprDefault=32767
-	}
-}
-"text update" {
-	object {
-		x=436
-		y=330
-		width=400
-		height=32
+		x=1140
+		y=206
+		width=250
+		height=12
 	}
 	monitor {
 		chan="tm:string:status"
-		clr=12
-		bclr=45
+		clr=55
+		bclr=4
 	}
+	align="horiz. centered"
 	format="string"
 	limits {
 		loprSrc="default"
 		hoprSrc="default"
+		precSrc="default"
 	}
 }
 "text update" {
 	object {
-		x=15
-		y=385
-		width=400
-		height=30
-	}
-	monitor {
-		chan="tm:sexagesimal:az"
-		clr=29
-		bclr=9
-	}
-	clrmod="alarm"
-	align="horiz. centered"
-	format="sexagesimal"
-	limits {
-		loprDefault=-180
-		hoprDefault=180
-		precDefault=4
-	}
-}
-"text update" {
-	object {
-		x=13
-		y=452
-		width=400
-		height=60
+		x=1460
+		y=206
+		width=300
+		height=12
 	}
 	monitor {
 		chan="tm:sexagesimal:hms"
 		clr=25
-		bclr=32
+		bclr=4
 	}
+	clrmod="alarm"
 	align="horiz. right"
 	format="sexagesimal-hms"
 	limits {
 		loprSrc="default"
-		hoprDefault=86400
-		precDefault=3
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
 "text update" {
 	object {
-		x=434
-		y=454
-		width=400
-		height=60
+		x=180
+		y=306
+		width=260
+		height=20
 	}
 	monitor {
-		chan="tm:sexagesimal:dms"
-		clr=47
-		bclr=1
+		chan="tm:decimal:slow"
+		clr=31
+		bclr=4
 	}
-	clrmod="discrete"
-	format="sexagesimal-dms"
 	limits {
-		loprDefault=-90
-		hoprDefault=90
-		precDefault=2
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
 "text update" {
 	object {
-		x=437
-		y=387
-		width=400
+		x=500
+		y=306
+		width=260
+		height=20
+	}
+	monitor {
+		chan="tm:exp:fastA"
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=820
+		y=306
+		width=260
+		height=20
+	}
+	monitor {
+		chan="tm:engr:mix"
+		clr=12
+		bclr=4
+	}
+	clrmod="discrete"
+	align="horiz. right"
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1140
+		y=306
+		width=260
+		height=20
+	}
+	monitor {
+		chan="tm:string:status"
+		clr=55
+		bclr=4
+	}
+	align="horiz. centered"
+	format="string"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1460
+		y=306
+		width=300
+		height=20
+	}
+	monitor {
+		chan="tm:sexagesimal:hms"
+		clr=25
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. right"
+	format="sexagesimal-hms"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=180
+		y=424
+		width=280
 		height=34
 	}
 	monitor {
 		chan="tm:decimal:telemetry"
-		clr=8
-		bclr=52
+		clr=31
+		bclr=4
+	}
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=500
+		y=424
+		width=280
+		height=34
+	}
+	monitor {
+		chan="tm:exp:fastA"
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=820
+		y=424
+		width=280
+		height=34
+	}
+	monitor {
+		chan="tm:engr:mix"
+		clr=12
+		bclr=4
+	}
+	clrmod="discrete"
+	align="horiz. right"
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1140
+		y=424
+		width=280
+		height=34
+	}
+	monitor {
+		chan="tm:string:status"
+		clr=55
+		bclr=4
+	}
+	align="horiz. centered"
+	format="string"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1460
+		y=424
+		width=300
+		height=34
+	}
+	monitor {
+		chan="tm:sexagesimal:hms"
+		clr=25
+		bclr=4
 	}
 	clrmod="alarm"
 	align="horiz. right"
+	format="sexagesimal-hms"
 	limits {
-		loprDefault=-999.9
-		hoprDefault=999.9
-		precDefault=1
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=180
+		y=572
+		width=300
+		height=42
+	}
+	monitor {
+		chan="tm:decimal:telemetry"
+		clr=31
+		bclr=4
+	}
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=500
+		y=572
+		width=300
+		height=42
+	}
+	monitor {
+		chan="tm:exp:fastA"
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=820
+		y=572
+		width=300
+		height=42
+	}
+	monitor {
+		chan="tm:engr:mix"
+		clr=12
+		bclr=4
+	}
+	clrmod="discrete"
+	align="horiz. right"
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1140
+		y=572
+		width=300
+		height=42
+	}
+	monitor {
+		chan="tm:string:status"
+		clr=55
+		bclr=4
+	}
+	align="horiz. centered"
+	format="string"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1460
+		y=572
+		width=300
+		height=42
+	}
+	monitor {
+		chan="tm:sexagesimal:dms"
+		clr=25
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. right"
+	format="sexagesimal-dms"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=180
+		y=730
+		width=160
+		height=22
+	}
+	monitor {
+		chan="tm:decimal:slow"
+		clr=31
+		bclr=4
+	}
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=500
+		y=730
+		width=160
+		height=22
+	}
+	monitor {
+		chan="tm:exp:fastA"
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=820
+		y=730
+		width=160
+		height=22
+	}
+	monitor {
+		chan="tm:engr:mix"
+		clr=12
+		bclr=4
+	}
+	clrmod="discrete"
+	align="horiz. right"
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1140
+		y=730
+		width=160
+		height=22
+	}
+	monitor {
+		chan="tm:string:status"
+		clr=55
+		bclr=4
+	}
+	align="horiz. centered"
+	format="string"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1460
+		y=730
+		width=160
+		height=22
+	}
+	monitor {
+		chan="tm:sexagesimal:az"
+		clr=25
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. right"
+	format="sexagesimal"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }
 rectangle {
 	object {
-		x=422
-		y=80
-		width=425
-		height=73
+		x=20
+		y=900
+		width=1800
+		height=400
 	}
 	"basic attribute" {
-		clr=14
+		clr=7
 		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=910
+		width=700
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=932
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Text monitor is monitor-only: drive channel writes externally (for example, cavput tm:decimal:slow=0.125, cavput tm:exp:fastA=0.00042)."
+}
+text {
+	object {
+		x=30
+		y=950
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Compare alignment and clipping parity across tiny/large/narrow rows; verify centered/right placement matches MEDM."
+}
+text {
+	object {
+		x=30
+		y=968
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Disconnected/no-channel probe should render disconnected-white and not retain stale alarm/discrete colors."
+}
+text {
+	object {
+		x=30
+		y=986
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Alarm probes: weirdChan and ZzzButton should start UDF/INVALID (metadata-only init) and render alarm colors consistently."
+}
+text {
+	object {
+		x=30
+		y=1004
+		width=1760
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="5) Auxiliary ChoiceButtons (right side) can be used for quick repeatable value toggles while validating redraw timing."
+}
+text {
+	object {
+		x=62
+		y=1026
+		width=760
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Reference text monitors fed by external PV writes"
+	align="horiz. centered"
+}
+"text update" {
+	object {
+		x=60
+		y=1048
+		width=250
+		height=30
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=330
+		y=1048
+		width=250
+		height=30
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=12
+		bclr=4
+	}
+	clrmod="discrete"
+	align="horiz. centered"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=600
+		y=1048
+		width=250
+		height=30
+	}
+	monitor {
+		chan="tm:decimal:telemetry"
+		clr=31
+		bclr=4
+	}
+	align="horiz. right"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=880
+		y=1026
+		width=280
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Disconnected PV behavior"
+	align="horiz. centered"
+}
+"text update" {
+	object {
+		x=880
+		y=1048
+		width=280
+		height=34
+	}
+	monitor {
+		chan=" "
+		clr=24
+		bclr=6
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="compact"
+	limits {
+		loprDefault=-10
+		hoprDefault=10
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=1180
+		y=1026
+		width=350
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm probes from run_local_ioc.sh"
+	align="horiz. centered"
+}
+"text update" {
+	object {
+		x=1180
+		y=1048
+		width=170
+		height=30
+	}
+	monitor {
+		chan="weirdChan"
+		clr=23
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1360
+		y=1048
+		width=170
+		height=30
+	}
+	monitor {
+		chan="ZzzButton"
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=1540
+		y=1146
+		width=230
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="ChoiceButton quick probes"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1540
+		y=1162
+		width=230
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Toggle cb:ctrl:2845 / cb:logic:7319"
+	align="horiz. centered"
+}
+"choice button" {
+	object {
+		x=1540
+		y=1048
+		width=230
+		height=44
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	clrmod="discrete"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=1540
+		y=1096
+		width=230
+		height=44
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=48
+		bclr=11
+	}
+	clrmod="alarm"
+	stacking="row column"
+}
+"text update" {
+	object {
+		x=1540
+		y=1180
+		width=110
+		height=30
+	}
+	monitor {
+		chan="cb:ctrl:2845"
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	align="horiz. centered"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1660
+		y=1180
+		width=110
+		height=30
+	}
+	monitor {
+		chan="cb:logic:7319"
+		clr=12
+		bclr=4
+	}
+	clrmod="discrete"
+	align="horiz. centered"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=62
+		y=1120
+		width=620
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Geometry stress probes"
+	align="horiz. centered"
+}
+"text update" {
+	object {
+		x=60
+		y=1140
+		width=62
+		height=12
+	}
+	monitor {
+		chan="tm:hex:count"
+		clr=14
+		bclr=57
+	}
+	clrmod="discrete"
+	format="hexadecimal"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=132
+		y=1140
+		width=82
+		height=12
+	}
+	monitor {
+		chan="tm:trunc:edge"
+		clr=14
+		bclr=57
+	}
+	clrmod="discrete"
+	format="truncated"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=232
+		y=1136
+		width=430
+		height=78
+	}
+	monitor {
+		chan="tm:engr:mix"
+		clr=60
+		bclr=4
+	}
+	clrmod="alarm"
+	format="engr. notation"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=700
+		y=1204
+		width=1080
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (format); same channel/colors/limits/size"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=730
+		y=1222
+		width=300
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="A: compact"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1150
+		y=1222
+		width=300
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="B: exponential"
+	align="horiz. centered"
+}
+"text update" {
+	object {
+		x=700
+		y=1242
+		width=360
+		height=48
+	}
+	monitor {
+		chan="tm:decimal:telemetry"
+		clr=9
+		bclr=34
+	}
+	clrmod="alarm"
+	format="compact"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+"text update" {
+	object {
+		x=1120
+		y=1242
+		width=360
+		height=48
+	}
+	monitor {
+		chan="tm:decimal:telemetry"
+		clr=9
+		bclr=34
+	}
+	clrmod="alarm"
+	format="exponential"
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
 	}
 }

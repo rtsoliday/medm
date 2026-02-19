@@ -497,3 +497,275 @@ rectangle {
 		chan="channelA_PV"
 	}
 }
+
+rectangle {
+	object {
+		x=20
+		y=346
+		width=540
+		height=336
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=356
+		width=520
+		height=16
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Additional layering probes (append-only, existing stacks unchanged)"
+}
+text {
+	object {
+		x=40
+		y=380
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 1A: text on top"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=300
+		y=380
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 1B: fill on top"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=40
+		y=400
+		width=230
+		height=135
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+rectangle {
+	object {
+		x=55
+		y=430
+		width=160
+		height=72
+	}
+	"basic attribute" {
+		clr=51
+	}
+}
+oval {
+	object {
+		x=95
+		y=420
+		width=110
+		height=92
+	}
+	"basic attribute" {
+		clr=20
+		fill="outline"
+		width=3
+	}
+}
+text {
+	object {
+		x=90
+		y=455
+		width=130
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="TOP TEXT"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=300
+		y=400
+		width=230
+		height=135
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+text {
+	object {
+		x=350
+		y=455
+		width=130
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="BACK TEXT"
+	align="horiz. centered"
+}
+oval {
+	object {
+		x=355
+		y=420
+		width=110
+		height=92
+	}
+	"basic attribute" {
+		clr=20
+		fill="outline"
+		width=3
+	}
+}
+rectangle {
+	object {
+		x=315
+		y=430
+		width=160
+		height=72
+	}
+	"basic attribute" {
+		clr=51
+	}
+}
+text {
+	object {
+		x=40
+		y=552
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 2A: sibling below composite"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=300
+		y=552
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 2B: sibling above composite"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=60
+		y=594
+		width=170
+		height=64
+	}
+	"basic attribute" {
+		clr=31
+	}
+}
+composite {
+	object {
+		x=40
+		y=574
+		width=230
+		height=95
+	}
+	"composite name"=""
+	children {
+		rectangle {
+			object {
+				x=70
+				y=585
+				width=170
+				height=60
+			}
+			"basic attribute" {
+				clr=44
+				fill="outline"
+				width=2
+			}
+		}
+		text {
+			object {
+				x=75
+				y=607
+				width=160
+				height=20
+			}
+			"basic attribute" {
+				clr=14
+			}
+			textix="COMPOSITE TOP"
+			align="horiz. centered"
+		}
+	}
+}
+composite {
+	object {
+		x=300
+		y=574
+		width=230
+		height=95
+	}
+	"composite name"=""
+	children {
+		rectangle {
+			object {
+				x=330
+				y=585
+				width=170
+				height=60
+			}
+			"basic attribute" {
+				clr=44
+				fill="outline"
+				width=2
+			}
+		}
+		text {
+			object {
+				x=335
+				y=607
+				width=160
+				height=20
+			}
+			"basic attribute" {
+				clr=14
+			}
+			textix="COMPOSITE MID"
+			align="horiz. centered"
+		}
+	}
+}
+rectangle {
+	object {
+		x=320
+		y=594
+		width=170
+		height=64
+	}
+	"basic attribute" {
+		clr=31
+	}
+}

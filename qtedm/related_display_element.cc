@@ -556,6 +556,7 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
 
   const int activeCount = activeEntryCount();
   const int displayCount = activeCount > 0 ? activeCount : 2;
+  const bool singleButton = (displayCount == 1);
   const int columns = vertical ? 1 : std::max(1, displayCount);
   const int rows = vertical ? std::max(1, displayCount) : 1;
 
@@ -605,13 +606,40 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
       /* Draw text */
       painter.setPen(fg);
       QString text;
-      if (index < activeCount) {
+      bool showIcon = false;
+      if (singleButton) {
+        showIcon = true;
+        text = displayLabel(showIcon);
+      } else if (index < activeCount) {
         text = entryDisplayLabel(entries_[index]);
       }
       if (text.isEmpty()) {
         text = QStringLiteral("Display %1").arg(index + 1);
       }
-      painter.drawText(interior, Qt::AlignCenter, text);
+
+      if (singleButton && showIcon) {
+        const int iconSize = std::min({interior.height(), interior.width(), 24});
+        const QFontMetrics metrics(painter.font());
+        const int textWidth = metrics.horizontalAdvance(text);
+        const int totalWidth = std::min(interior.width(), iconSize + textWidth);
+        const int startX = interior.left() + std::max(0,
+            (interior.width() - totalWidth) / 2);
+
+        QRect iconRect(startX,
+            interior.top() + (interior.height() - iconSize) / 2,
+            iconSize, iconSize);
+
+        const QPixmap iconPixmap = createRelatedDisplayIcon(iconRect.size(), fg);
+        if (!iconPixmap.isNull()) {
+          painter.drawPixmap(iconRect.topLeft(), iconPixmap);
+        }
+
+        QRect textRect(iconRect.right() + 1, interior.top(),
+            interior.right() - iconRect.right() - 1, interior.height());
+        painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+      } else {
+        painter.drawText(interior, Qt::AlignCenter, text);
+      }
       ++index;
     }
   }

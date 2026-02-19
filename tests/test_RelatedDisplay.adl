@@ -1,14 +1,13 @@
-
 file {
 	name="/home/SOLIDAY/github/medm/tests/test_RelatedDisplay.adl"
 	version=030122
 }
 display {
 	object {
-		x=158
-		y=733
-		width=969
-		height=550
+		x=160
+		y=120
+		width=1560
+		height=1040
 	}
 	clr=14
 	bclr=4
@@ -87,505 +86,628 @@ display {
 		1a7309,
 	}
 }
-"related display" {
-	object {
-		x=18
-		y=12
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Sliders"
-		name="test_Slider.adl"
-	}
-	display[1] {
-		name="shufflePanel.adl"
-		args="seed=0x1A"
-	}
-	display[2] {
-		label="Gamma Shift"
-		name="gammaShift.adl"
-	}
-	display[3] {
-		label="Rogue Entry"
-		args="ARM=auto"
-	}
-	display[4] {
-		label="NoArgs"
-		name="blankArgs.adl"
-		policy="replace display"
-	}
-	clr=22
-	bclr=47
-	label="randomMenu1"
-}
-"related display" {
-	object {
-		x=20
-		y=424
-		width=600
-		height=22
-	}
-	display[0] {
-		label="Alpha Byte"
-		name="alphaByte.adl"
-		args="ADDR=0xAE"
-	}
-	display[1] {
-		label="Zig"
-		name="zigzag.adl"
-		args="MODE=zig"
-		policy="replace display"
-	}
-	display[2] {
-		label="Quirk"
-		name="quirkPanel.adl"
-	}
-	display[4] {
-		label="Spare"
-		name="spareLaunch.adl"
-		args="FLAG=random"
-	}
-	clr=35
-	bclr=6
-	label="rowWidget"
-	visual="a row of buttons"
-}
-"related display" {
-	object {
-		x=378
-		y=12
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Night Owl"
-		name="nightOwl.adl"
-		args="SHIFT=graveyard"
-	}
-	display[1] {
-		label="Latitude"
-		name="mapGrid.adl"
-	}
-	display[2] {
-		name="nullEntry.adl"
-		args="SILENT=1"
-	}
-	display[3] {
-		label="Short"
-	}
-	display[4] {
-		label="Echo"
-		name="echoPanel.adl"
-		args="color=seafoam"
-		policy="replace display"
-	}
-	clr=8
-	bclr=52
-	visual="a column of buttons"
-}
-"related display" {
-	object {
-		x=558
-		y=12
-		width=160
-		height=88
-	}
-	display[0] {
-		label="DryRun"
-		name="dryRun.adl"
-	}
-	display[1] {
-		label="Latency Test"
-		name="latencyTest.adl"
-		args="DELAY=37ms"
-	}
-	display[2] {
-		name="ghostScreen.adl"
-	}
-	display[3] {
-		label="Warp"
-		name="warpField.adl"
-		args="COEFF=9.81"
-	}
-	display[4] {
-		label="Reset"
-	}
-	clr=60
-	bclr=12
-	label="hiddenDeck"
-	visual="invisible"
-}
-"related display" {
-	object {
-		x=22
-		y=458
-		width=600
-		height=20
-	}
-	display[0] {
-		label="Nebula"
-		name="nebulaView.adl"
-		args="SPECTRAL=IR"
-	}
-	display[1] {
-		name="randomNebula.adl"
-	}
-	display[2] {
-		label="Cluster"
-		name="clusterPane.adl"
-		args="NODES=7"
-	}
-	display[3] {
-		label="Vacuum"
-		args="LEVEL=5e-9"
-	}
-	display[4] {
-		label="Dust"
-		name="dustMap.adl"
-		policy="replace display"
-	}
-	clr=44
-	bclr=25
-	label="skyButtons"
-	visual="a row of buttons"
-}
-"related display" {
-	object {
-		x=18
-		y=142
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Skyline"
-		name="skylineView.adl"
-		args="FOCUS=west"
-	}
-	display[1] {
-		label="Granite"
-		name="graniteMonitor.adl"
-	}
-	display[2] {
-		name="randomized.adl"
-		args="JITTER=0.003"
-	}
-	display[3] {
-		label="Anomaly"
-		name="anomalyProbe.adl"
-	}
-	display[4] {
-		label="BlankName"
-	}
-	clr=5
-	bclr=33
-	label="MenuSouth"
-}
-"related display" {
-	object {
-		x=20
-		y=397
-		width=600
-		height=20
-	}
-	display[0] {
-		label="Pulse"
-		name="pulseCheck.adl"
-	}
-	display[1] {
-		label="Orbit"
-		name="orbitDiag.adl"
-		args="PHASE=0.75"
-		policy="replace display"
-	}
-	display[2] {
-		label="Note"
-		args="text=random"
-	}
-	display[3] {
-		name="barebones.adl"
-	}
-	display[4] {
-		label="Overflow"
-		name="overflowTrap.adl"
-		args="LIMIT=4096"
-	}
-	clr=18
-	bclr=58
-	label="rowSouth"
-	visual="a row of buttons"
-}
-"related display" {
-	object {
-		x=378
-		y=142
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Frost"
-		name="frostMonitor.adl"
-		args="TEMP=-12C"
-	}
-	display[1] {
-		args="STUB=yes"
-	}
-	display[2] {
-		label="Delta"
-		name="deltaPanel.adl"
-	}
-	display[3] {
-		label="Omega"
-		name="omegaPanel.adl"
-		args="STATE=idle"
-		policy="replace display"
-	}
-	display[4] {
-		label="Minor"
-		name="minorLoop.adl"
-	}
-	clr=42
-	bclr=9
-	label="colSouth"
-	visual="a column of buttons"
-}
-"related display" {
-	object {
-		x=558
-		y=142
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Jigsaw"
-		name="jigsawHub.adl"
-		args="PARTS=64"
-	}
-	display[1] {
-		label="Lo-Fi"
-		name="lofi.adl"
-	}
-	display[2] {
-		name="ghostAgain.adl"
-	}
-	display[3] {
-		label="Reset"
-	}
-	display[4] {
-		label="Portal"
-		name="portal.adl"
-		args="MODE=beta"
-	}
-	clr=27
-	bclr=44
-	visual="invisible"
-}
-"related display" {
-	object {
-		x=738
-		y=142
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Glimmer"
-		name="glimmer.adl"
-		args="BLINK=fast"
-	}
-	display[1] {
-		name="scattershot.adl"
-	}
-	display[2] {
-		label="Beacon"
-		name="beaconLamp.adl"
-		args="LUMEN=900"
-	}
-	display[3] {
-		label="Null"
-	}
-	display[4] {
-		label="Echo"
-		name="echoRepeat.adl"
-		args="CYCLE=3"
-		policy="replace display"
-	}
-	clr=16
-	bclr=36
-	label="flashDeck"
-	visual="a row of buttons"
-}
-"related display" {
-	object {
-		x=18
-		y=272
-		width=76
-		height=20
-	}
-	display[0] {
-		label="Midnight"
-		name="midnightRun.adl"
-	}
-	clr=13
-	bclr=51
-	label="-BOOSTER"
-}
-"related display" {
-	object {
-		x=19
-		y=371
-		width=600
-		height=20
-	}
-	display[0] {
-		label="Sunrise"
-		name="sunriseRun.adl"
-		args="MODE=auto"
-	}
-	display[1] {
-		label="Archive"
-		args="PATH=/tmp/random"
-	}
-	display[2] {
-		name="zeroed.adl"
-	}
-	display[3] {
-		label="Swap"
-		name="swapPanel.adl"
-		policy="replace display"
-	}
-	display[4] {
-		label="Space"
-		name="spacewalk.adl"
-		args="OXY=80"
-	}
-	clr=55
-	bclr=2
-	visual="a row of buttons"
-}
-"related display" {
-	object {
-		x=378
-		y=272
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Flux"
-		name="fluxCap.adl"
-		args="LEVEL=1.21GW"
-	}
-	display[1] {
-		label="Idle"
-		name="idleScreen.adl"
-	}
-	display[3] {
-		label="Tune"
-		name="fineTune.adl"
-		args="STEP=0.125"
-	}
-	display[4] {
-		label="Noise"
-		name="noiseFloor.adl"
-	}
-	clr=9
-	bclr=49
-	label="colThird"
-	visual="a column of buttons"
-}
-"related display" {
-	object {
-		x=558
-		y=272
-		width=160
-		height=88
-	}
-	display[0] {
-		label="Hazard"
-		name="hazardPanel.adl"
-		args="LEVEL=amber"
-	}
-	display[1] {
-		label="Drift"
-		args="DELTA=+0.2"
-	}
-	display[2] {
-		name="fallback.adl"
-	}
-	display[3] {
-		label="Wander"
-		name="wanderer.adl"
-		args="seed=0xFE"
-	}
-	display[4] {
-		label="Mute"
-		name="muteScreen.adl"
-	}
-	clr=31
-	bclr=15
-	label="invisibleThird"
-	visual="invisible"
-}
-"related display" {
-	object {
-		x=738
-		y=272
-		width=160
-		height=88
-	}
-	display[0] {
-		label="PulseTrain"
-		name="pulseTrain.adl"
-		args="COUNT=12"
-	}
-	display[2] {
-		label="Mirror"
-		name="mirrorPane.adl"
-	}
-	display[3] {
-		label="NullArgs"
-		name="nullArgs.adl"
-	}
-	display[4] {
-		label="ArgSpaces"
-		name="argSpaces.adl"
-		args="foo=bar baz=qux"
-	}
-	clr=2
-	bclr=62
-	label="extra"
-}
 text {
 	object {
-		x=640
-		y=400
-		width=300
-		height=20
+		x=24
+		y=10
+		width=1510
+		height=24
 	}
 	"basic attribute" {
-		clr=14
+		clr=54
 	}
-	textix="Hidden Button Test Area"
+	textix="Related Display Parity Harness: MEDM vs QtEDM (visual + behavior)"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=640
-		y=420
+		x=24
+		y=38
+		width=1510
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1510
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: launcher label rendering, row/column/invisible visual styles, argument passing, and replace-display behavior."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1510
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Right-click a related display widget and toggle hidden button markers; confirm invisible launchers become visible in both MEDM and QtEDM."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1520
+		height=510
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=700
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (style variants + geometry range)"
+}
+text {
+	object {
+		x=180
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Default menu"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=500
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Row of buttons"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=820
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Column of buttons"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1140
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Invisible"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=50
+		y=228
+		width=110
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Tiny"
+}
+text {
+	object {
+		x=50
+		y=356
+		width=110
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Medium"
+}
+text {
+	object {
+		x=50
+		y=514
+		width=110
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Large"
+}
+"related display" {
+	object {
+		x=170
+		y=212
+		width=120
+		height=28
+	}
+	display[0] {
+		label="Slider"
+		name="test_Slider.adl"
+	}
+	display[1] {
+		label="Meter"
+		name="test_Meter.adl"
+	}
+	clr=22
+	bclr=47
+	label="tiny_menu"
+}
+"related display" {
+	object {
+		x=490
+		y=212
+		width=240
+		height=28
+	}
+	display[0] {
+		label="Menu"
+		name="test_Menu.adl"
+	}
+	display[1] {
+		label="Choice"
+		name="test_ChoiceButton.adl"
+	}
+	display[2] {
+		label="Text"
+		name="test_Text.adl"
+		args="SCOPE=tiny"
+	}
+	clr=22
+	bclr=47
+	label="tiny_row"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=810
+		y=182
+		width=130
+		height=120
+	}
+	display[0] {
+		label="Bar"
+		name="test_Bar.adl"
+	}
+	display[1] {
+		label="Arc"
+		name="test_Arc.adl"
+	}
+	display[2] {
+		label="Oval"
+		name="test_Oval.adl"
+		args="VIEW=compact"
+	}
+	clr=22
+	bclr=47
+	label="tiny_col"
+	visual="a column of buttons"
+}
+"related display" {
+	object {
+		x=1130
+		y=212
+		width=220
+		height=34
+	}
+	display[0] {
+		label="HiddenSlider"
+		name="test_Slider.adl"
+	}
+	display[1] {
+		label="HiddenMeter"
+		name="test_Meter.adl"
+	}
+	clr=22
+	bclr=47
+	label="tiny_hidden"
+	visual="invisible"
+}
+"related display" {
+	object {
+		x=170
+		y=330
+		width=220
+		height=38
+	}
+	display[0] {
+		label="Line"
+		name="test_Line.adl"
+	}
+	display[1] {
+		label="Strip"
+		name="test_StripChart.adl"
+		args="TRACE=A"
+	}
+	display[2] {
+		label="Plot"
+		name="test_CartesianPlot.adl"
+	}
+	clr=35
+	bclr=6
+	label="medium_menu"
+}
+"related display" {
+	object {
+		x=490
+		y=330
+		width=280
+		height=38
+	}
+	display[0] {
+		label="Rectangle"
+		name="test_rectangle.adl"
+	}
+	display[1] {
+		label="Polygon"
+		name="test_Polygon.adl"
+	}
+	display[2] {
+		label="Shell"
+		name="test_ShellCommand.adl"
+		args="MODE=medium"
+		policy="replace display"
+	}
+	clr=35
+	bclr=6
+	label="medium_row"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=810
+		y=300
+		width=160
+		height=130
+	}
+	display[0] {
+		label="TextEntry"
+		name="test_TextEntry.adl"
+	}
+	display[1] {
+		label="Wheel"
+		name="test_WheelSwitch.adl"
+	}
+	display[2] {
+		label="Image"
+		name="test_Image.adl"
+	}
+	clr=35
+	bclr=6
+	label="medium_col"
+	visual="a column of buttons"
+}
+"related display" {
+	object {
+		x=1130
+		y=330
+		width=260
+		height=38
+	}
+	display[0] {
+		label="HiddenMenu"
+		name="test_Menu.adl"
+	}
+	display[1] {
+		label="HiddenChoice"
+		name="test_ChoiceButton.adl"
+		args="SCOPE=hidden"
+	}
+	clr=35
+	bclr=6
+	label="medium_hidden"
+	visual="invisible"
+}
+"related display" {
+	object {
+		x=170
+		y=470
+		width=300
+		height=50
+	}
+	display[0] {
+		label="Scale"
+		name="test_ScaleMonitor.adl"
+	}
+	display[1] {
+		label="Message"
+		name="test_MessageButton.adl"
+	}
+	display[2] {
+		label="Byte"
+		name="test_Byte.adl"
+		args="WIDTH=wide"
+	}
+	display[3] {
+		label="Fonts"
+		name="test_TextFonts.adl"
+	}
+	clr=18
+	bclr=58
+	label="large_menu"
+}
+"related display" {
+	object {
+		x=490
+		y=470
+		width=360
+		height=52
+	}
+	display[0] {
+		label="Layering"
+		name="test_Layering.adl"
+	}
+	display[1] {
+		label="TextMon"
+		name="test_TextMonitor.adl"
+		args="MODE=watch"
+	}
+	display[2] {
+		label="StripLoad"
+		name="test_StripChartLoad.adl"
+	}
+	display[3] {
+		label="Related"
+		name="test_RelatedDisplay.adl"
+		args="SELF=1"
+	}
+	clr=18
+	bclr=58
+	label="large_row"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=870
+		y=448
+		width=170
+		height=162
+	}
+	display[0] {
+		label="Bar"
+		name="test_Bar.adl"
+	}
+	display[1] {
+		label="Slider"
+		name="test_Slider.adl"
+	}
+	display[2] {
+		label="Menu"
+		name="test_Menu.adl"
+	}
+	display[3] {
+		label="Meter"
+		name="test_Meter.adl"
+		policy="replace display"
+	}
+	clr=18
+	bclr=58
+	label="large_col"
+	visual="a column of buttons"
+}
+"related display" {
+	object {
+		x=1130
+		y=470
+		width=300
+		height=52
+	}
+	display[0] {
+		label="HiddenText"
+		name="test_Text.adl"
+	}
+	display[1] {
+		label="HiddenShell"
+		name="test_ShellCommand.adl"
+	}
+	display[2] {
+		label="HiddenArc"
+		name="test_Arc.adl"
+	}
+	clr=18
+	bclr=58
+	label="large_hidden"
+	visual="invisible"
+}
+rectangle {
+	object {
+		x=20
+		y=640
+		width=1520
+		height=380
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=650
+		width=740
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Behavior checks (manual execute-mode probes)"
+}
+text {
+	object {
+		x=40
+		y=678
+		width=1460
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Left-click each launcher and verify target display opens with matching labels in MEDM and QtEDM."
+}
+text {
+	object {
+		x=40
+		y=698
+		width=1460
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Compare replace-display policy: baseline pair below differs only by display[0] policy setting."
+}
+text {
+	object {
+		x=40
+		y=718
+		width=1460
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Right-click this widget class and toggle hidden button markers; invisible launchers should become selectable and launch correctly."
+}
+text {
+	object {
+		x=40
+		y=738
+		width=1460
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Confirm args passthrough by opening entries tagged ARGS=plain and ARGS=replace (inspect target title or debug logs)."
+}
+text {
+	object {
+		x=40
+		y=758
+		width=1460
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="5) Execute-mode baseline A/B: only one variable changes; all other labels/colors/targets remain the same."
+}
+text {
+	object {
+		x=90
+		y=808
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A: normal policy"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=450
+		y=808
 		width=300
 		height=16
 	}
 	"basic attribute" {
-		clr=14
+		clr=55
 	}
-	textix="Right-click -> Toggle Hidden Button Markers"
+	textix="Baseline B: replace display policy"
+	align="horiz. centered"
+}
+"related display" {
+	object {
+		x=80
+		y=830
+		width=280
+		height=32
+	}
+	display[0] {
+		label="A/B Target"
+		name="test_TextMonitor.adl"
+		args="ARGS=plain"
+	}
+	clr=16
+	bclr=36
+	label="baselineA"
+	visual="a row of buttons"
+}
+"related display" {
+	object {
+		x=440
+		y=830
+		width=280
+		height=32
+	}
+	display[0] {
+		label="A/B Target"
+		name="test_TextMonitor.adl"
+		args="ARGS=replace"
+		policy="replace display"
+	}
+	clr=16
+	bclr=36
+	label="baselineB"
+	visual="a row of buttons"
+}
+text {
+	object {
+		x=820
+		y=808
+		width=670
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Hidden marker probe"
 	align="horiz. centered"
 }
 rectangle {
 	object {
-		x=640
-		y=445
-		width=300
-		height=80
+		x=820
+		y=828
+		width=670
+		height=170
 	}
 	"basic attribute" {
 		clr=6
@@ -595,10 +717,10 @@ rectangle {
 }
 "related display" {
 	object {
-		x=660
-		y=455
-		width=80
-		height=60
+		x=850
+		y=854
+		width=180
+		height=80
 	}
 	display[0] {
 		label="Hidden 1"
@@ -611,10 +733,10 @@ rectangle {
 }
 "related display" {
 	object {
-		x=760
-		y=455
-		width=80
-		height=60
+		x=1060
+		y=854
+		width=180
+		height=80
 	}
 	display[0] {
 		label="Hidden 2"
@@ -627,10 +749,10 @@ rectangle {
 }
 "related display" {
 	object {
-		x=860
-		y=455
-		width=60
-		height=60
+		x=1270
+		y=854
+		width=180
+		height=80
 	}
 	display[0] {
 		label="Hidden 3"

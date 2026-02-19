@@ -74,11 +74,6 @@ QFont medmMessageButtonFont(int widgetHeight)
 }
 
 
-QString defaultLabel()
-{
-  return QStringLiteral("Message Button");
-}
-
 QColor alarmColorForSeverity(short severity)
 {
   switch (severity) {
@@ -143,7 +138,7 @@ MessageButtonElement::MessageButtonElement(QWidget *parent)
   button_->setContextMenuPolicy(Qt::NoContextMenu);
   button_->setCursor(CursorUtils::arrowCursor());
   button_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-  button_->setText(defaultLabel());
+  button_->setText(effectiveLabel());
 
   QObject::connect(button_, &QPushButton::pressed, this,
       [this]() {
@@ -450,8 +445,7 @@ void MessageButtonElement::updateSelectionVisual()
 
 QString MessageButtonElement::effectiveLabel() const
 {
-  const QString trimmed = label_.trimmed();
-  return trimmed.isEmpty() ? defaultLabel() : trimmed;
+  return label_.trimmed();
 }
 
 void MessageButtonElement::updateButtonFont()

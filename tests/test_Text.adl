@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=10
+		x=410
 		y=53
-		width=600
-		height=1355
+		width=1800
+		height=1320
 	}
 	clr=14
 	bclr=4
@@ -89,570 +89,1112 @@ display {
 }
 text {
 	object {
-		x=40
-		y=20
-		width=300
-		height=6
+		x=24
+		y=10
+		width=1760
+		height=24
 	}
 	"basic attribute" {
-		clr=53
+		clr=14
 	}
-	textix="Example Text Height 6"
+	textix="Text Primitive Parity Harness: MEDM vs QtEDM (visual + behavior)"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=30
-		width=300
-		height=7
+		x=24
+		y=38
+		width=1760
+		height=16
 	}
 	"basic attribute" {
-		clr=18
+		clr=14
 	}
-	textix="Example Text Height 7"
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Focus areas: font sizing by widget height, horizontal alignment, clipping, dynamic visibility transitions, and alarm/discrete color behavior."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Text is monitor-only: drive PV updates externally (for example, cavput channelA_PV=..., cavput channelB_PV=...) and compare redraw/visibility transitions."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1760
+		height=780
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Section A: Visual matrix (alignment/color/visibility + geometry range)"
+}
+text {
+	object {
+		x=190
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Static left"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=41
-		width=300
-		height=8
+		x=520
+		y=154
+		width=220
+		height=16
 	}
 	"basic attribute" {
-		clr=24
+		clr=14
 	}
-	textix="Example Text Height 8"
-	align="horiz. right"
+	textix="Static centered"
+	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=53
-		width=300
-		height=9
+		x=850
+		y=154
+		width=220
+		height=16
 	}
 	"basic attribute" {
-		clr=36
+		clr=14
 	}
-	textix="Example Text Height 9"
+	textix="Alarm + if not zero"
+	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=66
-		width=300
-		height=10
+		x=1180
+		y=154
+		width=220
+		height=16
 	}
 	"basic attribute" {
-		clr=23
+		clr=14
 	}
-	textix="Example Text Height 10"
-	align="horiz. right"
+	textix="Discrete + if zero"
+	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=80
-		width=300
-		height=11
+		x=1490
+		y=154
+		width=220
+		height=16
 	}
 	"basic attribute" {
-		clr=34
+		clr=14
 	}
-	textix="Example Text Height 11"
-	align="horiz. right"
+	textix="Calc visibility"
+	align="horiz. centered"
+}
+"choice button" {
+	object {
+		x=1180
+		y=174
+		width=220
+		height=26
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=48
+		bclr=11
+	}
+	clrmod="alarm"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=1490
+		y=174
+		width=220
+		height=26
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	clrmod="discrete"
+	stacking="row column"
 }
 text {
 	object {
-		x=40
-		y=95
-		width=300
+		x=56
+		y=224
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="tiny (h=12)"
+}
+text {
+	object {
+		x=56
+		y=324
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="medium (h=18)"
+}
+text {
+	object {
+		x=56
+		y=454
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="large (h=26)"
+}
+text {
+	object {
+		x=56
+		y=604
+		width=160
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="banner (h=34)"
+}
+text {
+	object {
+		x=56
+		y=754
+		width=180
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="narrow clip stress (h=22)"
+}
+text {
+	object {
+		x=200
+		y=210
+		width=250
 		height=12
 	}
 	"basic attribute" {
-		clr=10
+		clr=14
 	}
-	textix="Example Text Height 12"
+	textix="tiny left align"
+}
+text {
+	object {
+		x=530
+		y=210
+		width=250
+		height=12
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="tiny centered"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=860
+		y=210
+		width=250
+		height=12
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	textix="tiny alarm if not zero"
 	align="horiz. right"
 }
 text {
 	object {
-		x=40
-		y=111
-		width=300
-		height=13
+		x=1190
+		y=210
+		width=250
+		height=12
 	}
 	"basic attribute" {
-		clr=13
+		clr=14
 	}
-	textix="Example Text Height 13"
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="cb:logic:7319"
+	}
+	textix="tiny discrete if zero"
+	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=128
+		x=1520
+		y=210
+		width=220
+		height=12
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A>B"
+		chan="cb:ctrl:2845"
+		chanB="cb:logic:7319"
+	}
+	textix="tiny calc A>B"
+}
+text {
+	object {
+		x=200
+		y=310
+		width=270
+		height=18
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="medium left align"
+}
+text {
+	object {
+		x=530
+		y=310
+		width=270
+		height=18
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="medium centered"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=860
+		y=310
+		width=270
+		height=18
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	textix="medium alarm if not zero"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1190
+		y=310
+		width=270
+		height=18
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="cb:logic:7319"
+	}
+	textix="medium discrete if zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1520
+		y=310
+		width=220
+		height=18
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A>B"
+		chan="cb:ctrl:2845"
+		chanB="cb:logic:7319"
+	}
+	textix="medium calc A>B"
+}
+text {
+	object {
+		x=200
+		y=430
+		width=320
+		height=26
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="large left align"
+}
+text {
+	object {
+		x=530
+		y=430
+		width=320
+		height=26
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="large centered"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=860
+		y=430
+		width=320
+		height=26
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	textix="large alarm if not zero"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1190
+		y=430
+		width=320
+		height=26
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="cb:logic:7319"
+	}
+	textix="large discrete if zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1520
+		y=430
+		width=220
+		height=26
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A>B"
+		chan="cb:ctrl:2845"
+		chanB="cb:logic:7319"
+	}
+	textix="large calc A>B"
+}
+text {
+	object {
+		x=200
+		y=520
+		width=430
+		height=34
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="banner left align text for clipping and baseline checks"
+}
+text {
+	object {
+		x=530
+		y=560
+		width=430
+		height=34
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="banner centered text for clipping and baseline checks"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=860
+		y=600
+		width=430
+		height=34
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	textix="banner alarm if not zero"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1190
+		y=640
+		width=430
+		height=34
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="cb:logic:7319"
+	}
+	textix="banner discrete if zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1520
+		y=680
+		width=220
+		height=34
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A>B"
+		chan="cb:ctrl:2845"
+		chanB="cb:logic:7319"
+	}
+	textix="banner calc A>B"
+}
+text {
+	object {
+		x=200
+		y=730
+		width=160
+		height=22
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="narrow-left-clipping-check"
+}
+text {
+	object {
+		x=516
+		y=770
+		width=160
+		height=22
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="narrow-centered-clipping-check"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=860
+		y=730
+		width=160
+		height=22
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	textix="narrow-alarm-if-not-zero"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1190
+		y=730
+		width=160
+		height=22
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="cb:logic:7319"
+	}
+	textix="narrow-discrete-if-zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1520
+		y=730
+		width=160
+		height=22
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A>B"
+		chan="cb:ctrl:2845"
+		chanB="cb:logic:7319"
+	}
+	textix="narrow-calc-A>B"
+}
+rectangle {
+	object {
+		x=20
+		y=900
+		width=1760
+		height=390
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=910
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=932
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="1) Text is monitor-only: drive channel writes externally (for example, cavput channelA_PV=0, cavput channelA_PV=1.5, cavput channelB_PV=2.5)."
+}
+text {
+	object {
+		x=30
+		y=950
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="2) Verify visibility and color transitions (if-zero/if-not-zero/calc) match MEDM timing and redraw behavior."
+}
+text {
+	object {
+		x=30
+		y=968
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="3) Compare alignment and clipping in tiny/narrow rows; confirm centered/right alignment offsets match MEDM."
+}
+text {
+	object {
+		x=30
+		y=986
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="4) Alarm probes: verify UDF/INVALID channels (weirdChan, ZzzButton) render alarm colors consistently for text dynamic-color mode."
+}
+text {
+	object {
+		x=30
+		y=1004
+		width=1700
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="5) Use tests/test_TextFonts.adl to compare every font height from 8 through 45 in MEDM vs QtEDM."
+}
+text {
+	object {
+		x=70
+		y=1026
+		width=840
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Reference text probes fed by external PV writes"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=70
+		y=1052
+		width=260
+		height=24
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="channelA_PV"
+	}
+	textix="alarm + if not zero"
+}
+text {
+	object {
+		x=350
+		y=1052
+		width=260
+		height=24
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="channelA_PV"
+	}
+	textix="discrete + if zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=630
+		y=1052
+		width=260
+		height=24
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		vis="calc"
+		calc="A<B"
+		chan="channelA_PV"
+		chanB="channelB_PV"
+	}
+	textix="calc A<B"
+	align="horiz. right"
+}
+text {
+	object {
+		x=930
+		y=1026
 		width=300
 		height=14
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
-	textix="Example Text Height 14"
+	textix="Disconnected PV behavior"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=146
-		width=300
-		height=15
-	}
-	"basic attribute" {
-		clr=1
-	}
-	textix="Example Text Height 15"
-	align="horiz. centered"
-}
-text {
-	object {
-		x=40
-		y=165
-		width=300
-		height=16
-	}
-	"basic attribute" {
-		clr=50
-	}
-	textix="Example Text Height 16"
-}
-text {
-	object {
-		x=40
-		y=185
-		width=300
-		height=17
-	}
-	"basic attribute" {
-		clr=7
-	}
-	textix="Example Text Height 17"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=206
-		width=300
-		height=18
-	}
-	"basic attribute" {
-		clr=57
-	}
-	textix="Example Text Height 18"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=228
-		width=300
-		height=19
-	}
-	"basic attribute" {
-		clr=48
-	}
-	textix="Example Text Height 19"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=251
+		x=930
+		y=1052
 		width=300
 		height=20
 	}
 	"basic attribute" {
-		clr=52
+		clr=14
 	}
-	textix="Example Text Height 20"
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan=" "
+	}
+	textix="blank-channel disconnected probe"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=275
-		width=300
-		height=21
+		x=1250
+		y=1026
+		width=280
+		height=14
 	}
 	"basic attribute" {
-		clr=56
+		clr=14
 	}
-	textix="Example Text Height 21"
-}
-text {
-	object {
-		x=40
-		y=300
-		width=300
-		height=22
-	}
-	"basic attribute" {
-		clr=17
-	}
-	textix="Example Text Height 22"
+	textix="Alarm probes (UDF/INVALID expected)"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=326
-		width=300
-		height=23
-	}
-	"basic attribute" {
-		clr=3
-	}
-	textix="Example Text Height 23"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=353
-		width=300
+		x=1250
+		y=1050
+		width=130
 		height=24
 	}
 	"basic attribute" {
-		clr=10
+		clr=14
 	}
-	textix="Example Text Height 24"
-}
-text {
-	object {
-		x=40
-		y=381
-		width=300
-		height=25
+	"dynamic attribute" {
+		clr="alarm"
+		chan="weirdChan"
 	}
-	"basic attribute" {
-		clr=11
-	}
-	textix="Example Text Height 25"
-}
-text {
-	object {
-		x=40
-		y=410
-		width=300
-		height=26
-	}
-	"basic attribute" {
-		clr=4
-	}
-	textix="Example Text Height 26"
+	textix="weirdChan"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=440
-		width=300
-		height=27
+		x=1400
+		y=1050
+		width=130
+		height=24
 	}
 	"basic attribute" {
-		clr=6
+		clr=14
 	}
-	textix="Example Text Height 27"
-}
-text {
-	object {
-		x=40
-		y=471
-		width=300
-		height=28
+	"dynamic attribute" {
+		clr="alarm"
+		chan="ZzzButton"
 	}
-	"basic attribute" {
-		clr=50
-	}
-	textix="Example Text Height 28"
+	textix="ZzzButton"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=503
-		width=300
-		height=29
+		x=1540
+		y=1146
+		width=230
+		height=14
 	}
 	"basic attribute" {
-		clr=44
+		clr=14
 	}
-	textix="Example Text Height 29"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=536
-		width=300
-		height=30
-	}
-	"basic attribute" {
-		clr=40
-	}
-	textix="Example Text Height 30"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=570
-		width=300
-		height=31
-	}
-	"basic attribute" {
-		clr=21
-	}
-	textix="Example Text Height 31"
-}
-text {
-	object {
-		x=40
-		y=605
-		width=300
-		height=32
-	}
-	"basic attribute" {
-		clr=24
-	}
-	textix="Example Text Height 32"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=641
-		width=300
-		height=33
-	}
-	"basic attribute" {
-		clr=36
-	}
-	textix="Example Text Height 33"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=678
-		width=300
-		height=34
-	}
-	"basic attribute" {
-		clr=11
-	}
-	textix="Example Text Height 34"
-}
-text {
-	object {
-		x=40
-		y=716
-		width=300
-		height=35
-	}
-	"basic attribute" {
-		clr=11
-	}
-	textix="Example Text Height 35"
+	textix="ChoiceButton visibility probes"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=755
-		width=300
-		height=36
+		x=1540
+		y=1162
+		width=230
+		height=14
 	}
 	"basic attribute" {
-		clr=35
+		clr=14
 	}
-	textix="Example Text Height 36"
-}
-text {
-	object {
-		x=40
-		y=795
-		width=300
-		height=37
-	}
-	"basic attribute" {
-		clr=10
-	}
-	textix="Example Text Height 37"
-}
-text {
-	object {
-		x=40
-		y=836
-		width=300
-		height=38
-	}
-	"basic attribute" {
-		clr=57
-	}
-	textix="Example Text Height 38"
-}
-text {
-	object {
-		x=40
-		y=878
-		width=300
-		height=39
-	}
-	"basic attribute" {
-		clr=17
-	}
-	textix="Example Text Height 39"
-}
-text {
-	object {
-		x=40
-		y=921
-		width=300
-		height=40
-	}
-	"basic attribute" {
-		clr=51
-	}
-	textix="Example Text Height 40"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=965
-		width=300
-		height=41
-	}
-	"basic attribute" {
-		clr=16
-	}
-	textix="Example Text Height 41"
+	textix="Toggle cb:ctrl:2845 / cb:logic:7319"
 	align="horiz. centered"
 }
-text {
+"choice button" {
 	object {
-		x=40
-		y=1010
-		width=300
-		height=42
-	}
-	"basic attribute" {
-		clr=22
-	}
-	textix="Example Text Height 42"
-}
-text {
-	object {
-		x=40
-		y=1056
-		width=300
-		height=43
-	}
-	"basic attribute" {
-		clr=12
-	}
-	textix="Example Text Height 43"
-}
-text {
-	object {
-		x=40
-		y=1103
-		width=300
+		x=1540
+		y=1048
+		width=230
 		height=44
 	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	clrmod="discrete"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=1540
+		y=1096
+		width=230
+		height=44
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=48
+		bclr=11
+	}
+	clrmod="alarm"
+	stacking="row column"
+}
+text {
+	object {
+		x=1540
+		y=1182
+		width=110
+		height=24
+	}
 	"basic attribute" {
-		clr=62
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
+		chan="cb:ctrl:2845"
+	}
+	textix="if not zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1660
+		y=1182
+		width=110
+		height=24
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="cb:logic:7319"
+	}
+	textix="if zero"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1540
+		y=1212
+		width=230
+		height=24
+	}
+	"basic attribute" {
+		clr=14
 	}
 	"dynamic attribute" {
 		vis="calc"
-		calc="A+B"
-		chan="channelA_PV"
-		chanB="channelB_PV"
+		calc="A>B"
+		chan="cb:ctrl:2845"
+		chanB="cb:logic:7319"
 	}
-	textix="Example Text Height 44"
-	align="horiz. right"
-}
-text {
-	object {
-		x=40
-		y=1151
-		width=300
-		height=45
-	}
-	"basic attribute" {
-		clr=21
-	}
-	"dynamic attribute" {
-		vis="if zero"
-		chan="channelB_PV"
-	}
-	textix="Example Text Height 45"
+	textix="calc A>B"
 	align="horiz. centered"
 }
 text {
 	object {
-		x=40
-		y=1200
-		width=300
-		height=46
+		x=70
+		y=1120
+		width=260
+		height=14
 	}
 	"basic attribute" {
-		clr=48
+		clr=14
+	}
+	textix="Geometry stress probes"
+}
+text {
+	object {
+		x=70
+		y=1140
+		width=120
+		height=10
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="tiny h=10"
+}
+text {
+	object {
+		x=200
+		y=1134
+		width=72
+		height=24
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="narrow"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=340
+		y=1128
+		width=220
+		height=30
+	}
+	"basic attribute" {
+		clr=14
 	}
 	"dynamic attribute" {
+		clr="discrete"
+		vis="if zero"
+		chan="channelA_PV"
+	}
+	textix="geometry + dynamic color"
+}
+text {
+	object {
+		x=980
+		y=1140
+		width=520
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Baseline A/B row: one variable only (alignment)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=980
+		y=1158
+		width=250
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="A: left"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1240
+		y=1158
+		width=250
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="B: centered"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=980
+		y=1180
+		width=240
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	"dynamic attribute" {
+		clr="alarm"
 		vis="if not zero"
 		chan="channelA_PV"
 	}
-	textix="Example Text Height 46"
+	textix="baseline alarm alignment"
 }
 text {
 	object {
-		x=40
-		y=1250
-		width=300
-		height=60
+		x=1240
+		y=1180
+		width=240
+		height=20
 	}
 	"basic attribute" {
-		clr=8
+		clr=14
 	}
 	"dynamic attribute" {
+		clr="alarm"
+		vis="if not zero"
 		chan="channelA_PV"
-		chanB="channelB_PV"
-		chanC="channelC_PV"
-		chanD="channelD_PV"
 	}
-	textix="Example Text Height 60"
-	align="horiz. right"
+	textix="baseline alarm alignment"
+	align="horiz. centered"
 }
 text {
 	object {
-		x=291
-		y=1098
+		x=650
+		y=1180
 		width=300
 		height=20
 	}
 	"basic attribute" {
-		clr=62
+		clr=14
 	}
 	"dynamic attribute" {
-		vis="calc"
-		calc="A&&!B"
-		chan="channelA_PV"
-		chanB="channelB_PV"
+		clr="alarm"
+		vis="if not zero"
+		chan=" "
 	}
-	textix="Example Text Height 44"
-	align="horiz. right"
+	textix="disconnected baseline probe"
+	align="horiz. centered"
 }

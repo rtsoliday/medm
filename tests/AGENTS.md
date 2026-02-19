@@ -37,6 +37,7 @@ Use a two-section layout in each widget test screen.
 - Include at least:
   - writable reference widgets
   - or explicit external PV-write steps when the widget is monitor-only
+  - `ChoiceButton` controls where appropriate for fast visibility/state toggles
   - disconnected/non-connected widget behavior where relevant
   - alarm-rendering probes where relevant
   - stress geometry widgets
@@ -44,6 +45,21 @@ Use a two-section layout in each widget test screen.
   - Example from slider screen: same channel, colors, limits, and precision;
     only `direction` differs.
   - This supports strict visual diffing and isolates regressions.
+
+### ChoiceButton usage (when appropriate)
+
+Use `ChoiceButton` widgets when they improve repeatable execute-mode testing,
+especially for visibility logic (`if zero`, `if not zero`, `calc`) and
+discrete/alarm color transitions.
+
+- Place `ChoiceButton` controls near the behavior probes they drive.
+- Use dedicated control channels (for example, `cb:*`) for toggles instead of
+  overloading unrelated matrix PVs.
+- Add short on-screen text that names the `ChoiceButton` PVs to toggle.
+- Keep manual test instructions explicit about what each toggle validates.
+- For monitor-only widget harnesses, `ChoiceButton` widgets may be added as
+  auxiliary probes when they reduce manual `cavput` churn; document this in
+  Section B text.
 
 ## Manual Test Text Conventions
 
@@ -101,6 +117,8 @@ Any update to a test ADL file in `tests/` must include the matching
 
 - If you add, rename, or remove PVs in `tests/test_*.adl`, update the matching
   widget initialization array in `run_local_ioc.sh`.
+- If you add `ChoiceButton` probe channels, initialize deterministic startup
+  values for those channels in the same widget helper.
 - If you change meter/slider/scale limits or precision defaults in a parity
   harness, update the `LOPR`/`HOPR`/`PREC` initialization values to match.
 - If you add a new widget test ADL, add a corresponding
@@ -132,6 +150,8 @@ For each widget test file:
 
 - Add Section A visual matrix with varied geometry and styles.
 - Add Section B behavior checklist with explicit manual actions.
+- Add `ChoiceButton` toggles when they improve repeatable visibility/state
+  testing and keep their channels synchronized with IOC initialization.
 - Add one-variable-only A/B baseline row.
 - Extend `run_local_ioc.sh` widget init arrays for values/limits/precision.
   This is required for every `tests/test_*.adl` change, not optional.

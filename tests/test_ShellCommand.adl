@@ -7,8 +7,8 @@ display {
 	object {
 		x=10
 		y=53
-		width=991
-		height=509
+		width=1760
+		height=1040
 	}
 	clr=14
 	bclr=4
@@ -87,17 +87,179 @@ display {
 		1a7309,
 	}
 }
-"shell command" {
+text {
 	object {
 		x=24
-		y=13
-		width=200
-		height=30
+		y=10
+		width=1700
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Shell Command Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: button geometry, menu order, command parsing (label/name/args), and behavior for partial command entries."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="All commands are local and non-destructive; open an IOC shell terminal before testing so stdout/stderr differences are easy to compare."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1720
+		height=620
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=860
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (command-list shape + geometry range + color style)"
+}
+text {
+	object {
+		x=220
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Single command"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=580
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Two commands"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=940
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Mixed entries"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1300
+		y=154
+		width=240
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Stress geometry"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=212
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=330
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=474
+		width=130
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+"shell command" {
+	object {
+		x=220
+		y=232
+		width=210
+		height=26
 	}
 	command[0] {
-		label="touch /tmp/test.bob"
-		name="touch"
-		args="/tmp/bob.test"
+		label="Echo tiny"
+		name="echo"
+		args="tiny"
 	}
 	clr=14
 	bclr=4
@@ -105,120 +267,454 @@ display {
 }
 "shell command" {
 	object {
-		x=24
-		y=68
-		width=210
-		height=36
+		x=580
+		y=228
+		width=220
+		height=34
 	}
 	command[0] {
-		label="Echo rnd-9281"
+		label="Echo"
 		name="echo"
-		args="random-9281"
+		args="tiny-two"
 	}
 	command[1] {
-		label="List tmp"
-		name="ls"
-		args="/tmp"
+		label="Whoami"
+		name="whoami"
 	}
 	clr=6
 	bclr=2
-	label="Echo+List"
+	label="Echo+Who"
 }
 "shell command" {
 	object {
-		x=24
-		y=124
-		width=236
-		height=48
+		x=940
+		y=226
+		width=240
+		height=38
 	}
 	command[0] {
-		label="Ping 17"
-		name="ping"
-		args="-c 1 192.0.2.17"
+		label="No args"
+		name="date"
 	}
 	command[1] {
-		name="whoami"
+		label="Args only"
+		args="ignored"
 	}
 	command[2] {
-		label="Sleep"
-		args="0.25"
+		name="id"
 	}
 	clr=9
 	bclr=11
-	label="Mixed Entries"
+	label="Mixed tiny"
 }
 "shell command" {
 	object {
-		x=24
-		y=188
-		width=220
-		height=44
+		x=1300
+		y=236
+		width=120
+		height=18
 	}
 	command[0] {
-		label="Open Hosts"
-		name="xdg-open"
-		args="/etc/hosts"
+		label="U"
+		name="uname"
+		args="-s"
 	}
-	command[1] {
-		label="Nulled Args"
+	clr=14
+	bclr=3
+	label="U"
+}
+"shell command" {
+	object {
+		x=220
+		y=348
+		width=240
+		height=36
+	}
+	command[0] {
+		label="Print"
 		name="printf"
-	}
-	command[2] {
-		name="true"
+		args="medium\\n"
 	}
 	clr=3
 	bclr=15
+	label="Printf"
 }
 "shell command" {
 	object {
-		x=24
-		y=248
-		width=244
-		height=52
+		x=580
+		y=344
+		width=250
+		height=44
 	}
 	command[0] {
-		label="Random tail"
-		name="tail"
-		args="-n 5 /var/log/syslog"
+		label="Echo"
+		name="echo"
+		args="row-medium"
 	}
 	command[1] {
-		label="Scramble"
-		name="python3"
-		args="-c 'print(431*7)'"
-	}
-	command[2] {
-		args=" blank"
-	}
-	clr=12
-	bclr=5
-	label="Tail+Py"
-}
-"shell command" {
-	object {
-		x=24
-		y=312
-		width=252
-		height=54
-	}
-	command[0] {
-		label="Hash beep"
-		name="sha256sum"
-		args="/tmp/random.file"
-	}
-	command[1] {
-		label="Whitespace"
-		name="   "
-	}
-	command[2] {
+		label="Uname"
 		name="uname"
 		args="-a"
 	}
-	command[3] {
-		label="Fuzz"
+	clr=14
+	bclr=8
+	label="TwoCmd"
+}
+"shell command" {
+	object {
+		x=940
+		y=340
+		width=260
+		height=52
+	}
+	command[0] {
+		label="Blank name"
+		name="   "
+	}
+	command[1] {
+		label="True"
+		name="true"
+	}
+	command[2] {
+		label="Env"
 		name="env"
-		args="FOO=bar123"
+		args="TEST_A=1"
 	}
 	clr=4
-	bclr=8
-	label="Hash"
+	bclr=12
+	label="Whitespace"
+}
+"shell command" {
+	object {
+		x=1240
+		y=342
+		width=300
+		height=48
+	}
+	command[0] {
+		label="Echo long args"
+		name="echo"
+		args="this-is-a-medium-width-stress-check"
+	}
+	command[1] {
+		label="Date"
+		name="date"
+	}
+	clr=10
+	bclr=2
+	label="Wide"
+}
+"shell command" {
+	object {
+		x=220
+		y=496
+		width=300
+		height=62
+	}
+	command[0] {
+		label="ID"
+		name="id"
+	}
+	clr=14
+	bclr=4
+	label="Single Large"
+}
+"shell command" {
+	object {
+		x=580
+		y=490
+		width=300
+		height=74
+	}
+	command[0] {
+		label="Echo"
+		name="echo"
+		args="large-two-1"
+	}
+	command[1] {
+		label="Echo2"
+		name="echo"
+		args="large-two-2"
+	}
+	clr=6
+	bclr=1
+	label="Two Large"
+}
+"shell command" {
+	object {
+		x=940
+		y=486
+		width=300
+		height=80
+	}
+	command[0] {
+		label="Sleep"
+		name="sleep"
+		args="0.1"
+	}
+	command[1] {
+		label="No label"
+		name="whoami"
+	}
+	command[2] {
+		args="orphan"
+	}
+	command[3] {
+		name="false"
+	}
+	clr=8
+	bclr=5
+	label="Mixed Large"
+}
+"shell command" {
+	object {
+		x=1240
+		y=486
+		width=120
+		height=80
+	}
+	command[0] {
+		label="Echo"
+		name="echo"
+		args="narrow"
+	}
+	command[1] {
+		label="ID"
+		name="id"
+	}
+	clr=14
+	bclr=3
+	label="Narrow"
+}
+text {
+	object {
+		x=70
+		y=610
+		width=440
+		height=16
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="A/B baseline: one-variable-only pair"
+}
+text {
+	object {
+		x=70
+		y=628
+		width=500
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Both widgets use identical command/color content; only width differs."
+}
+"shell command" {
+	object {
+		x=600
+		y=612
+		width=210
+		height=34
+	}
+	command[0] {
+		label="Baseline"
+		name="echo"
+		args="baseline"
+	}
+	command[1] {
+		label="Whoami"
+		name="whoami"
+	}
+	clr=14
+	bclr=4
+	label="AB-A"
+}
+"shell command" {
+	object {
+		x=860
+		y=612
+		width=320
+		height=34
+	}
+	command[0] {
+		label="Baseline"
+		name="echo"
+		args="baseline"
+	}
+	command[1] {
+		label="Whoami"
+		name="whoami"
+	}
+	clr=14
+	bclr=4
+	label="AB-B"
+}
+rectangle {
+	object {
+		x=20
+		y=748
+		width=1720
+		height=272
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=758
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Behavior checks (execute mode)"
+}
+text {
+	object {
+		x=40
+		y=786
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Click each button and verify the same command/menu item executes in both apps (menu order must match command[] order)."
+}
+text {
+	object {
+		x=40
+		y=808
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) For widgets with partial entries (blank name, args-only), compare whether the row is shown, ignored, or errors in terminal output."
+}
+text {
+	object {
+		x=40
+		y=830
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Repeatedly click small and narrow widgets to check hit-testing parity and ensure button text is clipped/aligned the same way."
+}
+text {
+	object {
+		x=40
+		y=852
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Verify large multi-command widgets keep stable popup geometry and do not reorder labels after repeated use."
+}
+text {
+	object {
+		x=40
+		y=874
+		width=1660
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="5) ShellCommand has no PV connectivity; disconnected/alarm checks are N/A for this harness (visual and execution parity only)."
+}
+"shell command" {
+	object {
+		x=60
+		y=912
+		width=240
+		height=44
+	}
+	command[0] {
+		label="Echo behavior"
+		name="echo"
+		args="behavior-probe"
+	}
+	command[1] {
+		label="Date"
+		name="date"
+	}
+	clr=6
+	bclr=2
+	label="Behavior A"
+}
+"shell command" {
+	object {
+		x=340
+		y=906
+		width=220
+		height=56
+	}
+	command[0] {
+		label="True"
+		name="true"
+	}
+	command[1] {
+		label="False"
+		name="false"
+	}
+	command[2] {
+		label="Whoami"
+		name="whoami"
+	}
+	clr=14
+	bclr=4
+	label="Behavior B"
+}
+"shell command" {
+	object {
+		x=600
+		y=906
+		width=360
+		height=56
+	}
+	command[0] {
+		label="Long argument echo"
+		name="echo"
+		args="1234567890-abcdefghijklmnopqrstuvwxyz"
+	}
+	command[1] {
+		label="ID"
+		name="id"
+	}
+	clr=3
+	bclr=15
+	label="Behavior C"
+}
+"shell command" {
+	object {
+		x=1000
+		y=906
+		width=160
+		height=56
+	}
+	command[0] {
+		label="Echo"
+		name="echo"
+		args="tiny"
+	}
+	command[1] {
+		label="Bad"
+		args="missing-name"
+	}
+	clr=11
+	bclr=5
+	label="Probe"
 }

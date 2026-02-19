@@ -1,0 +1,1127 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_TextFonts.adl"
+	version=030122
+}
+display {
+	object {
+		x=430
+		y=70
+		width=1800
+		height=980
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+text {
+	object {
+		x=24
+		y=10
+		width=1760
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Text Font Height Parity Harness: MEDM vs QtEDM"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Goal: visually compare font rendering for every text-widget height from 8 through 45."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Run this screen in execute mode in both MEDM and QtEDM; compare x-height, ascenders/descenders, baseline placement, and glyph width."
+}
+rectangle {
+	object {
+		x=20
+		y=96
+		width=1760
+		height=860
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=36
+		y=108
+		width=840
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Heights 8-26"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=924
+		y=108
+		width=840
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Heights 27-45"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=36
+		y=132
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=08"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=132
+		width=710
+		height=8
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 08: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=144
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=09"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=144
+		width=710
+		height=9
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 09: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=157
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=10"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=157
+		width=710
+		height=10
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 10: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=171
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=11"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=171
+		width=710
+		height=11
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 11: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=186
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=12"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=186
+		width=710
+		height=12
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 12: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=202
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=13"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=202
+		width=710
+		height=13
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 13: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=219
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=14"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=219
+		width=710
+		height=14
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 14: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=237
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=15"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=237
+		width=710
+		height=15
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 15: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=256
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=16"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=256
+		width=710
+		height=16
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 16: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=276
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=17"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=276
+		width=710
+		height=17
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 17: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=297
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=18"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=297
+		width=710
+		height=18
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 18: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=319
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=19"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=319
+		width=710
+		height=19
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 19: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=342
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=20"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=342
+		width=710
+		height=20
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 20: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=366
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=21"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=366
+		width=710
+		height=21
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 21: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=391
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=22"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=391
+		width=710
+		height=22
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 22: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=417
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=23"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=417
+		width=710
+		height=23
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 23: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=444
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=24"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=444
+		width=710
+		height=24
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 24: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=472
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=25"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=472
+		width=710
+		height=25
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 25: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=501
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=26"
+	align="horiz. right"
+}
+text {
+	object {
+		x=140
+		y=501
+		width=710
+		height=26
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 26: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=132
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=27"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=132
+		width=710
+		height=27
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 27: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=163
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=28"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=163
+		width=710
+		height=28
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 28: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=195
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=29"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=195
+		width=710
+		height=29
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 29: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=228
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=30"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=228
+		width=710
+		height=30
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 30: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=262
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=31"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=262
+		width=710
+		height=31
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 31: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=297
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=32"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=297
+		width=710
+		height=32
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 32: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=333
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=33"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=333
+		width=710
+		height=33
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 33: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=370
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=34"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=370
+		width=710
+		height=34
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 34: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=408
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=35"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=408
+		width=710
+		height=35
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 35: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=447
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=36"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=447
+		width=710
+		height=36
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 36: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=487
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=37"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=487
+		width=710
+		height=37
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 37: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=528
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=38"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=528
+		width=710
+		height=38
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 38: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=570
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=39"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=570
+		width=710
+		height=39
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 39: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=613
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=40"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=613
+		width=710
+		height=40
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 40: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=657
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=41"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=657
+		width=710
+		height=41
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 41: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=702
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=42"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=702
+		width=710
+		height=42
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 42: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=748
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=43"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=748
+		width=710
+		height=43
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 43: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=795
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=44"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=795
+		width=710
+		height=44
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 44: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=924
+		y=843
+		width=90
+		height=12
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="h=45"
+	align="horiz. right"
+}
+text {
+	object {
+		x=1028
+		y=843
+		width=710
+		height=45
+	}
+	"basic attribute" {
+		clr=31
+	}
+	textix="Height 45: 0123456789 AaBbCc XxYyZz"
+}
+text {
+	object {
+		x=36
+		y=930
+		width=1728
+		height=14
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Tip: compare this screen at identical window size/scale in both tools to avoid non-font scaling differences."
+}

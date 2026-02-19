@@ -47,16 +47,16 @@ tmp_out="$(mktemp)"
 trap 'rm -f "${tmp_pvs}" "${tmp_out}"' EXIT
 
 if command -v rg >/dev/null 2>&1; then
-  rg --only-matching --no-filename -P 'chan[A-D]?="[^"]+"' "${SCRIPT_DIR}"/*.adl \
+  rg --only-matching --no-filename -P '(chan[A-D]?|xdata|ydata|trigger|erase|count|countPvName)="[^"]+"' "${SCRIPT_DIR}"/*.adl \
     | sed -E 's/^[^=]+="([^"]+)"$/\1/' \
     | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
-    | awk 'NF' \
+    | awk 'NF && $0 !~ /^[-+]?[0-9]*\.?[0-9]+$/ && $0 !~ /^[A-Za-z][A-Za-z0-9 ._:-]*[[:space:]][A-Za-z0-9 ._:-]*$/' \
     | sort -u > "${tmp_pvs}"
 else
-  grep -hEo 'chan[A-D]?="[^"]+"' "${SCRIPT_DIR}"/*.adl \
+  grep -hEo '(chan[A-D]?|xdata|ydata|trigger|erase|count|countPvName)="[^"]+"' "${SCRIPT_DIR}"/*.adl \
     | sed -E 's/^[^=]+="([^"]+)"$/\1/' \
     | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
-    | awk 'NF' \
+    | awk 'NF && $0 !~ /^[-+]?[0-9]*\.?[0-9]+$/ && $0 !~ /^[A-Za-z][A-Za-z0-9 ._:-]*[[:space:]][A-Za-z0-9 ._:-]*$/' \
     | sort -u > "${tmp_pvs}"
 fi
 

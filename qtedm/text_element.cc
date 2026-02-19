@@ -94,7 +94,7 @@ protected:
     painter.setRenderHint(QPainter::TextAntialiasing, false);
 
     const QString text = owner_->text();
-    if (!text.isEmpty()) {
+    if (!text.isEmpty() && !owner_->shouldSuppressTextForDisconnect()) {
       const QFont font = owner_->font();
       painter.setFont(font);
       painter.setPen(owner_->effectiveForegroundColor());
@@ -490,6 +490,24 @@ QColor TextElement::defaultForegroundColor() const
   return QColor(Qt::black);
 }
 
+bool TextElement::hasConfiguredChannel() const
+{
+  for (const QString &ch : channels_) {
+    /* Keep whitespace-only channels as explicitly configured.
+     * MEDM uses these to force disconnected-white rendering. */
+    if (!ch.isEmpty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool TextElement::shouldSuppressTextForDisconnect() const
+{
+  return executeMode_ && !runtimeConnected_ && allowDisconnectIndication_
+      && hasConfiguredChannel();
+}
+
 void TextElement::applyTextColor()
 {
   const QColor color = effectiveForegroundColor();
@@ -497,31 +515,18 @@ void TextElement::applyTextColor()
   pal.setColor(QPalette::WindowText, color);
   pal.setColor(QPalette::Text, color);
   pal.setColor(QPalette::ButtonText, color);
-  
-  // Set background to white if in execute mode, has a channel defined, 
-  // is disconnected, and past the initial connecting period
-  if (executeMode_ && !runtimeConnected_ && allowDisconnectIndication_) {
-    bool hasChannel = false;
-    for (const QString &ch : channels_) {
-      if (!ch.trimmed().isEmpty()) {
-        hasChannel = true;
-        break;
-      }
-    }
-    if (hasChannel) {
-      setAttribute(Qt::WA_NoSystemBackground, false);
-      setAutoFillBackground(true);
-      pal.setColor(QPalette::Window, Qt::white);
-      pal.setColor(QPalette::Base, Qt::white);
-    } else {
-      setAttribute(Qt::WA_NoSystemBackground, true);
-      setAutoFillBackground(false);
-    }
+
+  // Set background to white for disconnected widgets with configured channels.
+  if (shouldSuppressTextForDisconnect()) {
+    setAttribute(Qt::WA_NoSystemBackground, false);
+    setAutoFillBackground(true);
+    pal.setColor(QPalette::Window, Qt::white);
+    pal.setColor(QPalette::Base, Qt::white);
   } else {
     setAttribute(Qt::WA_NoSystemBackground, true);
     setAutoFillBackground(false);
   }
-  
+
   setPalette(pal);
   requestOverflowRepaint();
 }
@@ -529,16 +534,9 @@ void TextElement::applyTextColor()
 void TextElement::applyTextVisibility()
 {
   if (executeMode_) {
-    // Check if any channel is defined
-    bool hasChannel = false;
-    for (const QString &ch : channels_) {
-      if (!ch.trimmed().isEmpty()) {
-        hasChannel = true;
-        break;
-      }
-    }
+    const bool hasChannel = hasConfiguredChannel();
     // Show if visible and either connected OR (not connected but has a channel defined)
-    const bool visible = designModeVisible_ && runtimeVisible_ && 
+    const bool visible = designModeVisible_ && runtimeVisible_ &&
                         (runtimeConnected_ || hasChannel);
     QLabel::setVisible(visible);
   } else {

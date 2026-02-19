@@ -30,6 +30,17 @@ constexpr qreal kBevelWidth = 2.0;
 constexpr qreal kLayoutPadding = 3.0;
 // Unused: kMinimumLabelPointSize, kFontShrinkFactor, kFontGrowFactor, kLabelTextPadding, kMaxFontSizeIterations
 
+bool useLightOverlayText(const QColor &background)
+{
+  if (!background.isValid()) {
+    return false;
+  }
+  const QColor rgb = background.toRgb();
+  const int luma = (299 * rgb.red() + 587 * rgb.green() + 114 * rgb.blue())
+      / 1000;
+  return luma <= 56;
+}
+
 } // namespace
 
 struct BarMonitorElement::Layout
@@ -771,7 +782,17 @@ void BarMonitorElement::paintFill(QPainter &painter,
 
   // Inset fill by 2 pixels to avoid overlapping the track's sunken bevel
   const qreal bevelInset = (label_ != MeterLabel::kNoDecorations) ? 2.0 : 0.0;
-  fillRect = fillRect.adjusted(bevelInset, bevelInset, -bevelInset, -bevelInset);
+  if (bevelInset > 0.0) {
+    /* Keep thin "from center" fills visible.
+     * For values close to midpoint, the fill can be only a few pixels wide.
+     * Applying a fixed 2 px inset on both sides can collapse it to 0 px. */
+    const qreal horizontalInset = (fillRect.width() > (2.0 * bevelInset + 1.0))
+        ? bevelInset : 0.0;
+    const qreal verticalInset = (fillRect.height() > (2.0 * bevelInset + 1.0))
+        ? bevelInset : 0.0;
+    fillRect = fillRect.adjusted(horizontalInset, verticalInset,
+        -horizontalInset, -verticalInset);
+  }
   
   if (!fillRect.isValid() || fillRect.isEmpty()) {
     return;
@@ -842,7 +863,8 @@ void BarMonitorElement::paintAxis(QPainter &painter, const Layout &layout) const
   }
 
   painter.save();
-  const QColor axisColor(Qt::black);
+  const QColor axisColor = useLightOverlayText(effectiveBackground())
+      ? QColor(Qt::white) : QColor(Qt::black);
   QPen axisPen(axisColor);
   axisPen.setWidth(1);
   painter.setPen(axisPen);
@@ -961,6 +983,8 @@ void BarMonitorElement::paintLabels(QPainter &painter, const Layout &layout) con
   }
 
   painter.save();
+  const QColor overlayTextColor = useLightOverlayText(effectiveBackground())
+      ? QColor(Qt::white) : QColor(Qt::black);
   painter.setPen(Qt::black);
   painter.setBrush(Qt::NoBrush);
 
@@ -975,6 +999,7 @@ void BarMonitorElement::paintLabels(QPainter &painter, const Layout &layout) con
 
   if (layout.showChannel && layout.channelRect.isValid()
       && !layout.channelRect.isEmpty()) {
+    painter.setPen(overlayTextColor);
     painter.drawText(layout.channelRect.adjusted(2.0, 0.0, -2.0, 0.0),
         Qt::AlignHCenter | Qt::AlignVCenter, layout.channelText);
   }
@@ -995,6 +1020,7 @@ void BarMonitorElement::paintLabels(QPainter &painter, const Layout &layout) con
     
     // Paint white background for readback text
     painter.fillRect(bgRect, Qt::white);
+    painter.setPen(Qt::black);
     painter.drawText(layout.readbackRect.adjusted(2.0, 0.0, -2.0, 0.0),
         Qt::AlignHCenter | Qt::AlignVCenter, layout.readbackText);
   }

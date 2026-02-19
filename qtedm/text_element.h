@@ -72,6 +72,8 @@ private:
 
   QColor defaultForegroundColor() const;
   QColor effectiveForegroundColor() const;
+  bool hasConfiguredChannel() const;
+  bool shouldSuppressTextForDisconnect() const;
   void applyTextColor();
   void applyTextVisibility();
   void updateSelectionVisual();

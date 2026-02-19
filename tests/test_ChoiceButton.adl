@@ -5,10 +5,10 @@ file {
 }
 display {
 	object {
-		x=2560
-		y=21
-		width=1343
-		height=503
+		x=0
+		y=53
+		width=1800
+		height=1300
 	}
 	clr=14
 	bclr=4
@@ -87,25 +87,200 @@ display {
 		1a7309,
 	}
 }
+text {
+	object {
+		x=24
+		y=10
+		width=1760
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="ChoiceButton Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: enum label rendering, stacking parity, alarm/discrete color transitions, and clipping at tiny/large/narrow geometries."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="ChoiceButton is writable: click selections repeatedly and verify immediate channel update and visual parity with MEDM."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1760
+		height=770
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (color modes + stacking + geometry range)"
+}
+text {
+	object {
+		x=190
+		y=154
+		width=280
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Static"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=530
+		y=154
+		width=280
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Discrete"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=870
+		y=154
+		width=280
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1210
+		y=154
+		width=280
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Static (alt colors)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=214
+		width=120
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=314
+		width=120
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=454
+		width=120
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=56
+		y=642
+		width=120
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow vertical"
+}
 "choice button" {
 	object {
-		x=32
-		y=24
-		width=21
-		height=27
+		x=190
+		y=234
+		width=280
+		height=26
 	}
 	control {
 		chan="cb:test:4193"
 		clr=14
 		bclr=46
 	}
+	stacking="row column"
 }
 "choice button" {
 	object {
-		x=336
-		y=28
-		width=300
-		height=25
+		x=530
+		y=234
+		width=280
+		height=26
 	}
 	control {
 		chan="cb:sample:9827"
@@ -117,10 +292,10 @@ display {
 }
 "choice button" {
 	object {
-		x=648
-		y=29
-		width=300
-		height=88
+		x=870
+		y=234
+		width=280
+		height=26
 	}
 	control {
 		chan="cb:aux:1574"
@@ -132,23 +307,369 @@ display {
 }
 "choice button" {
 	object {
-		x=962
-		y=34
-		width=300
-		height=94
+		x=1210
+		y=234
+		width=280
+		height=26
 	}
 	control {
 		chan="cb:ops:6410"
 		clr=7
 		bclr=52
 	}
+	stacking="row column"
 }
 "choice button" {
 	object {
-		x=30
-		y=140
+		x=190
+		y=334
+		width=280
+		height=56
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=530
+		y=334
+		width=280
+		height=56
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=48
+		bclr=11
+	}
+	clrmod="discrete"
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=870
+		y=334
+		width=280
+		height=56
+	}
+	control {
+		chan="cb:diag:5930"
+		clr=4
+		bclr=39
+	}
+	clrmod="alarm"
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=1210
+		y=334
+		width=280
+		height=56
+	}
+	control {
+		chan="cb:data:8754"
+		clr=57
+		bclr=2
+	}
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=190
+		y=474
+		width=280
+		height=100
+	}
+	control {
+		chan="cb:eng:1148"
+		clr=21
+		bclr=63
+	}
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=530
+		y=474
+		width=280
+		height=100
+	}
+	control {
+		chan="cb:util:7056"
+		clr=58
+		bclr=13
+	}
+	clrmod="discrete"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=870
+		y=474
+		width=280
+		height=100
+	}
+	control {
+		chan="cb:fast:3472"
+		clr=10
+		bclr=45
+	}
+	clrmod="alarm"
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=1210
+		y=474
+		width=280
+		height=100
+	}
+	control {
+		chan="cb:slow:9210"
+		clr=62
+		bclr=8
+	}
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=250
+		y=662
 		width=300
-		height=50
+		height=160
+	}
+	control {
+		chan="cb:macro:2681"
+		clr=31
+		bclr=56
+	}
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=590
+		y=662
+		width=300
+		height=160
+	}
+	control {
+		chan="cb:scan:8095"
+		clr=45
+		bclr=3
+	}
+	clrmod="discrete"
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=930
+		y=662
+		width=300
+		height=160
+	}
+	control {
+		chan="cb:testbed:5524"
+		clr=14
+		bclr=37
+	}
+	clrmod="alarm"
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=1270
+		y=662
+		width=300
+		height=160
+	}
+	control {
+		chan="cb:proto:6678"
+		clr=52
+		bclr=17
+	}
+	stacking="column"
+}
+rectangle {
+	object {
+		x=20
+		y=890
+		width=1760
+		height=410
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=900
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=922
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Click each row in Section A and compare enum order, selection highlight, and text clipping behavior against MEDM."
+}
+text {
+	object {
+		x=30
+		y=940
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Verify alarm/discrete transitions by toggling values repeatedly and confirming foreground/background updates match MEDM timing and style."
+}
+text {
+	object {
+		x=30
+		y=958
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Write-access check: connected channels must update immediately on click; blank-channel probe should remain disconnected and non-interactive."
+}
+text {
+	object {
+		x=30
+		y=976
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Stress geometry: compare narrow vertical and tiny controls for border/text overlap, row spacing, and hit-area behavior under rapid clicks."
+}
+text {
+	object {
+		x=80
+		y=996
+		width=460
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Writable reference ChoiceButtons"
+	align="horiz. centered"
+}
+"choice button" {
+	object {
+		x=80
+		y=1014
+		width=220
+		height=56
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	clrmod="alarm"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=320
+		y=1014
+		width=220
+		height=56
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=48
+		bclr=11
+	}
+	clrmod="discrete"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=80
+		y=1084
+		width=460
+		height=56
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	stacking="column"
+}
+"choice button" {
+	object {
+		x=80
+		y=1158
+		width=460
+		height=56
+	}
+	control {
+		chan=" "
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+	stacking="row column"
+}
+text {
+	object {
+		x=560
+		y=996
+		width=380
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="ChoiceButton quick probes"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=560
+		y=1012
+		width=380
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Toggle cb:ctrl:2845 / cb:logic:7319"
+	align="horiz. centered"
+}
+"choice button" {
+	object {
+		x=560
+		y=1030
+		width=380
+		height=44
 	}
 	control {
 		chan="cb:ctrl:2845"
@@ -160,10 +681,10 @@ display {
 }
 "choice button" {
 	object {
-		x=343
-		y=147
-		width=300
-		height=80
+		x=560
+		y=1078
+		width=380
+		height=44
 	}
 	control {
 		chan="cb:logic:7319"
@@ -171,148 +692,76 @@ display {
 		bclr=11
 	}
 	clrmod="alarm"
-	stacking="column"
-}
-"choice button" {
-	object {
-		x=652
-		y=144
-		width=300
-		height=86
-	}
-	control {
-		chan="cb:diag:5930"
-		clr=4
-		bclr=39
-	}
-}
-"choice button" {
-	object {
-		x=962
-		y=143
-		width=300
-		height=50
-	}
-	control {
-		chan="cb:data:8754"
-		clr=57
-		bclr=2
-	}
-	clrmod="discrete"
 	stacking="row column"
 }
 "choice button" {
 	object {
-		x=34
-		y=256
-		width=300
-		height=90
+		x=560
+		y=1130
+		width=180
+		height=44
 	}
 	control {
-		chan="cb:eng:1148"
-		clr=21
-		bclr=63
-	}
-	clrmod="alarm"
-	stacking="column"
-}
-"choice button" {
-	object {
-		x=344
-		y=247
-		width=300
-		height=88
-	}
-	control {
-		chan="cb:util:7056"
-		clr=58
-		bclr=13
-	}
-}
-"choice button" {
-	object {
-		x=650
-		y=246
-		width=300
-		height=96
-	}
-	control {
-		chan="cb:fast:3472"
-		clr=10
-		bclr=45
-	}
-	clrmod="discrete"
-	stacking="row column"
-}
-"choice button" {
-	object {
-		x=957
-		y=256
-		width=300
-		height=90
-	}
-	control {
-		chan="cb:slow:9210"
-		clr=62
-		bclr=8
-	}
-	clrmod="alarm"
-	stacking="column"
-}
-"choice button" {
-	object {
-		x=36
-		y=372
-		width=300
-		height=88
-	}
-	control {
-		chan="cb:macro:2681"
-		clr=31
-		bclr=56
-	}
-	stacking="row column"
-}
-"choice button" {
-	object {
-		x=351
-		y=371
-		width=300
-		height=92
-	}
-	control {
-		chan="cb:scan:8095"
-		clr=45
-		bclr=3
-	}
-	clrmod="alarm"
-}
-"choice button" {
-	object {
-		x=658
-		y=367
-		width=300
-		height=84
-	}
-	control {
-		chan="cb:testbed:5524"
+		chan="cb:test:4193"
 		clr=14
-		bclr=37
+		bclr=46
 	}
-	clrmod="discrete"
 	stacking="column"
 }
 "choice button" {
 	object {
-		x=965
-		y=361
-		width=300
-		height=100
+		x=760
+		y=1130
+		width=180
+		height=44
 	}
 	control {
-		chan="cb:proto:6678"
-		clr=52
-		bclr=17
+		chan="cb:sample:9827"
+		clr=33
+		bclr=6
 	}
+	clrmod="discrete"
+	stacking="column"
+}
+text {
+	object {
+		x=980
+		y=1204
+		width=760
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (color mode); same channel/colors/size"
+	align="horiz. centered"
+}
+"choice button" {
+	object {
+		x=1040
+		y=1224
+		width=300
+		height=56
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=1380
+		y=1224
+		width=300
+		height=56
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	clrmod="discrete"
 	stacking="row column"
 }

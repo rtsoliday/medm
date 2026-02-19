@@ -7,8 +7,8 @@ display {
 	object {
 		x=0
 		y=53
-		width=897
-		height=494
+		width=1800
+		height=1300
 	}
 	clr=14
 	bclr=4
@@ -87,54 +87,239 @@ display {
 		1a7309,
 	}
 }
-menu {
+text {
 	object {
 		x=24
-		y=24
-		width=138
-		height=50
+		y=10
+		width=1760
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Menu Parity Harness: MEDM vs QtEDM (visual + behavior)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: compare this display side-by-side in MEDM and QtEDM while in execute mode."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: menu popup behavior, enum label/value parity, alarm/discrete color transitions, write-access handling, and clipping at varied sizes."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1760
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Menu is writable: use each menu to set OFF/ON/AUTO/ERROR and verify immediate readback and color-mode behavior."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1760
+		height=770
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (color modes + geometry range)"
+}
+text {
+	object {
+		x=190
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Static"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=530
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Alarm"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=870
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Discrete"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1210
+		y=154
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Static (alt colors)"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=56
+		y=222
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="tiny"
+}
+text {
+	object {
+		x=56
+		y=322
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="medium"
+}
+text {
+	object {
+		x=56
+		y=452
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="large"
+}
+text {
+	object {
+		x=56
+		y=602
+		width=170
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="narrow/tall"
+}
+text {
+	object {
+		x=56
+		y=752
+		width=170
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="wide stress"
+}
+menu {
+	object {
+		x=235
+		y=206
+		width=170
+		height=28
 	}
 	control {
 		chan="mn:ctrl:8127"
 		clr=12
 		bclr=48
 	}
-	clrmod="alarm"
 }
 menu {
 	object {
-		x=228
-		y=22
-		width=152
-		height=54
+		x=575
+		y=206
+		width=170
+		height=28
 	}
 	control {
 		chan="mn:ops:9365"
 		clr=33
 		bclr=6
 	}
-	clrmod="discrete"
+	clrmod="alarm"
 }
 menu {
 	object {
-		x=432
-		y=28
-		width=146
-		height=58
+		x=915
+		y=206
+		width=170
+		height=28
 	}
 	control {
 		chan="mn:data:4710"
 		clr=55
 		bclr=19
 	}
-	clrmod="alarm"
+	clrmod="discrete"
 }
 menu {
 	object {
-		x=636
-		y=20
+		x=1255
+		y=206
 		width=170
-		height=62
+		height=28
 	}
 	control {
 		chan="mn:diag:2583"
@@ -144,24 +329,23 @@ menu {
 }
 menu {
 	object {
-		x=24
-		y=126
-		width=142
-		height=56
+		x=225
+		y=302
+		width=190
+		height=42
 	}
 	control {
 		chan="mn:scan:3419"
 		clr=26
 		bclr=60
 	}
-	clrmod="discrete"
 }
 menu {
 	object {
-		x=228
-		y=124
-		width=156
-		height=60
+		x=565
+		y=302
+		width=190
+		height=42
 	}
 	control {
 		chan="mn:test:7841"
@@ -172,36 +356,36 @@ menu {
 }
 menu {
 	object {
-		x=432
-		y=132
-		width=150
-		height=64
+		x=905
+		y=302
+		width=190
+		height=42
 	}
 	control {
 		chan="mn:util:5092"
 		clr=4
 		bclr=39
 	}
+	clrmod="discrete"
 }
 menu {
 	object {
-		x=636
-		y=120
-		width=176
-		height=68
+		x=1245
+		y=302
+		width=190
+		height=42
 	}
 	control {
 		chan="mn:fast:6730"
 		clr=57
 		bclr=2
 	}
-	clrmod="alarm"
 }
 menu {
 	object {
-		x=24
-		y=228
-		width=144
+		x=210
+		y=420
+		width=220
 		height=60
 	}
 	control {
@@ -209,14 +393,13 @@ menu {
 		clr=21
 		bclr=63
 	}
-	clrmod="discrete"
 }
 menu {
 	object {
-		x=228
-		y=226
-		width=160
-		height=64
+		x=550
+		y=420
+		width=220
+		height=60
 	}
 	control {
 		chan="mn:macro:1824"
@@ -227,83 +410,401 @@ menu {
 }
 menu {
 	object {
-		x=432
-		y=234
-		width=154
-		height=66
+		x=890
+		y=420
+		width=220
+		height=60
 	}
 	control {
 		chan="mn:aux:3579"
 		clr=10
 		bclr=45
 	}
+	clrmod="discrete"
 }
 menu {
 	object {
-		x=636
-		y=222
-		width=180
-		height=70
+		x=1230
+		y=420
+		width=220
+		height=60
 	}
 	control {
 		chan="mn:proto:6687"
 		clr=62
 		bclr=8
 	}
-	clrmod="discrete"
 }
 menu {
 	object {
-		x=24
-		y=330
-		width=148
-		height=62
+		x=245
+		y=560
+		width=150
+		height=86
 	}
 	control {
 		chan="mn:eng:2950"
 		clr=31
 		bclr=56
 	}
-	clrmod="alarm"
 }
 menu {
 	object {
-		x=228
-		y=328
-		width=164
-		height=66
+		x=585
+		y=560
+		width=150
+		height=86
 	}
 	control {
 		chan="mn:logic:8243"
 		clr=45
 		bclr=3
 	}
-	clrmod="discrete"
+	clrmod="alarm"
 }
 menu {
 	object {
-		x=432
-		y=336
-		width=158
-		height=68
+		x=925
+		y=560
+		width=150
+		height=86
 	}
 	control {
 		chan="mn:bench:5775"
 		clr=14
 		bclr=37
 	}
+	clrmod="discrete"
 }
 menu {
 	object {
-		x=636
-		y=324
-		width=184
-		height=72
+		x=1265
+		y=560
+		width=150
+		height=86
 	}
 	control {
 		chan="mn:pilot:9468"
 		clr=52
 		bclr=17
 	}
+}
+menu {
+	object {
+		x=190
+		y=742
+		width=260
+		height=44
+	}
+	control {
+		chan="mn:ctrl:8127"
+		clr=12
+		bclr=48
+	}
+}
+menu {
+	object {
+		x=530
+		y=742
+		width=260
+		height=44
+	}
+	control {
+		chan="mn:ops:9365"
+		clr=33
+		bclr=6
+	}
 	clrmod="alarm"
+}
+menu {
+	object {
+		x=870
+		y=742
+		width=260
+		height=44
+	}
+	control {
+		chan="mn:data:4710"
+		clr=55
+		bclr=19
+	}
+	clrmod="discrete"
+}
+menu {
+	object {
+		x=1210
+		y=742
+		width=260
+		height=44
+	}
+	control {
+		chan="mn:diag:2583"
+		clr=7
+		bclr=52
+	}
+}
+rectangle {
+	object {
+		x=20
+		y=890
+		width=1760
+		height=410
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=900
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Manual behavior checks (execute mode)"
+}
+text {
+	object {
+		x=30
+		y=922
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) Open each menu and select OFF/ON/AUTO/ERROR; compare popup behavior, selected item text, and immediate channel update parity with MEDM."
+}
+text {
+	object {
+		x=30
+		y=940
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) Verify write behavior: selection should apply only when connected and writable; disconnected menu should stay disabled and not present stale state."
+}
+text {
+	object {
+		x=30
+		y=958
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) Compare alarm/discrete color transitions by changing enum states repeatedly and checking that rendered foreground/background updates match MEDM."
+}
+text {
+	object {
+		x=30
+		y=976
+		width=1710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) Keyboard interaction: tab focus between menus, open with keyboard, choose values, and compare selection commit behavior with MEDM."
+}
+text {
+	object {
+		x=80
+		y=996
+		width=460
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Writable reference menus"
+	align="horiz. centered"
+}
+menu {
+	object {
+		x=80
+		y=1014
+		width=220
+		height=56
+	}
+	control {
+		chan="mn:ctrl:8127"
+		clr=12
+		bclr=48
+	}
+	clrmod="alarm"
+}
+menu {
+	object {
+		x=320
+		y=1014
+		width=220
+		height=56
+	}
+	control {
+		chan="mn:ops:9365"
+		clr=33
+		bclr=6
+	}
+	clrmod="discrete"
+}
+menu {
+	object {
+		x=80
+		y=1084
+		width=460
+		height=56
+	}
+	control {
+		chan="mn:pilot:9468"
+		clr=52
+		bclr=17
+	}
+}
+menu {
+	object {
+		x=80
+		y=1158
+		width=460
+		height=56
+	}
+	control {
+		chan=" "
+		clr=44
+		bclr=4
+	}
+	clrmod="alarm"
+}
+text {
+	object {
+		x=560
+		y=996
+		width=380
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="ChoiceButton quick probes"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=560
+		y=1012
+		width=380
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Toggle cb:ctrl:2845 / cb:logic:7319"
+	align="horiz. centered"
+}
+"choice button" {
+	object {
+		x=560
+		y=1030
+		width=380
+		height=44
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	clrmod="discrete"
+	stacking="row column"
+}
+"choice button" {
+	object {
+		x=560
+		y=1078
+		width=380
+		height=44
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=48
+		bclr=11
+	}
+	clrmod="alarm"
+	stacking="row column"
+}
+menu {
+	object {
+		x=560
+		y=1130
+		width=180
+		height=44
+	}
+	control {
+		chan="cb:ctrl:2845"
+		clr=26
+		bclr=60
+	}
+	clrmod="discrete"
+}
+menu {
+	object {
+		x=760
+		y=1130
+		width=180
+		height=44
+	}
+	control {
+		chan="cb:logic:7319"
+		clr=48
+		bclr=11
+	}
+	clrmod="alarm"
+}
+text {
+	object {
+		x=980
+		y=1204
+		width=760
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Baseline A/B row: one variable only (color mode); same channel/colors/size"
+	align="horiz. centered"
+}
+menu {
+	object {
+		x=1040
+		y=1224
+		width=300
+		height=56
+	}
+	control {
+		chan="mn:ctrl:8127"
+		clr=12
+		bclr=48
+	}
+}
+menu {
+	object {
+		x=1380
+		y=1224
+		width=300
+		height=56
+	}
+	control {
+		chan="mn:ctrl:8127"
+		clr=12
+		bclr=48
+	}
+	clrmod="discrete"
 }

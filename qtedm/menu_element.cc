@@ -7,14 +7,17 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
-#include <QMouseEvent>
 #include <QFont>
 #include <QFontMetrics>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
 #include <QResizeEvent>
 #include <QSignalBlocker>
+#include <QStyle>
+#include <QStyleOptionComboBox>
+#include <QStylePainter>
 
 #include "legacy_fonts.h"
 #include "cursor_utils.h"
@@ -22,6 +25,48 @@
 #include "window_utils.h"
 
 namespace {
+
+class CenteredDisplayComboBox : public QComboBox
+{
+public:
+  explicit CenteredDisplayComboBox(QWidget *parent = nullptr)
+    : QComboBox(parent)
+  {
+  }
+
+protected:
+  void paintEvent(QPaintEvent *event) override
+  {
+    Q_UNUSED(event);
+
+    QStylePainter painter(this);
+    QStyleOptionComboBox option;
+    initStyleOption(&option);
+
+    // Draw frame, arrow and focus as usual, then render centered label text.
+    QStyleOptionComboBox frameOption(option);
+    frameOption.currentText.clear();
+    frameOption.currentIcon = QIcon();
+    painter.drawComplexControl(QStyle::CC_ComboBox, frameOption);
+
+    const QRect textRect = style()->subControlRect(
+        QStyle::CC_ComboBox, &option, QStyle::SC_ComboBoxEditField, this);
+    if (!textRect.isValid()) {
+      return;
+    }
+
+    const bool enabled = option.state & QStyle::State_Enabled;
+    const QColor textColor = enabled
+        ? palette().color(QPalette::ButtonText)
+        : palette().color(QPalette::Disabled, QPalette::ButtonText);
+    painter.setPen(textColor);
+    painter.drawText(
+        textRect,
+        Qt::AlignCenter,
+        fontMetrics().elidedText(
+            option.currentText, Qt::ElideRight, textRect.width()));
+  }
+};
 
 constexpr auto kEditModePlaceholder = "Menu";
 
@@ -66,7 +111,7 @@ QFont medmMenuFontForHeight(int widgetHeight)
 
 MenuElement::MenuElement(QWidget *parent)
   : QWidget(parent)
-  , comboBox_(new QComboBox(this))
+  , comboBox_(new CenteredDisplayComboBox(this))
 {
   setAutoFillBackground(false);
   setAttribute(Qt::WA_OpaquePaintEvent, false);

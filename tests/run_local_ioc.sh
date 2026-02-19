@@ -281,6 +281,187 @@ set_meter_test_pvs() {
   return 1
 }
 
+set_strip_chart_test_pvs() {
+  local prefix="$1"
+  local -a strip_chart_init_values=(
+    # pv value lopr hopr prec
+    "strip:test:alpha       10     -20     60   1"
+    "strip:test:beta        35     -10    100   0"
+    "strip:test:gamma       -5     -50     50   2"
+    "strip:test:delta      120       0    200   0"
+    "strip:test:epsilon     40     -25    125   1"
+    "strip:test:zeta       -12     -80     40   1"
+    "strip:test:eta        2.5      -5      5   2"
+    "strip:test:theta      0.5      -1      1   3"
+    "strip:test:iota         3      -2      8   2"
+    "strip:test:kappa       75       0    150   1"
+    "strip:test:lambda     -30    -100     20   0"
+    "strip:test:mu          15       0     30   1"
+    "strip:test:drive:a      0     -10     10   2"
+    "strip:test:drive:b      5     -20     20   2"
+    "strip:test:drive:c      8     -30     30   1"
+    "strip:test:stress:a    55       0    100   1"
+    "strip:test:stress:b   -15     -40     40   1"
+  )
+
+  echo "Initializing strip chart PVs for tests/test_StripChart.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${strip_chart_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Strip chart PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize strip chart PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_cartesian_plot_test_pvs() {
+  local prefix="$1"
+  local -a cartesian_plot_init_values=(
+    # pv value lopr hopr prec
+    "cartesian:test:alpha:y1         4.75    0.01     160   3"
+    "cartesian:test:alpha:count    120         1      200   0"
+
+    "cartesian:test:beta:y1          8.25    -80      160   3"
+    "cartesian:test:beta:count     100         1      200   0"
+
+    "cartesian:test:gamma:y1         4.20    -10       10   3"
+    "cartesian:test:gamma:count    140         1      200   0"
+
+    "cartesian:test:delta:y1         6.35    -80      160   3"
+    "cartesian:test:delta:count    160         1      200   0"
+
+    "cartesian:test:epsilon:y1      12.50    0.01     950   3"
+    "cartesian:test:epsilon:count  110         1      200   0"
+
+    "cartesian:test:zeta:y1         18.25    -45    155.5   3"
+    "cartesian:test:zeta:count     180         1      200   0"
+
+    "cartesian:test:baselinea:y1     4.20    -10       10   3"
+    "cartesian:test:baselinea:count 130        1      200   0"
+
+    "cartesian:test:baselineb:y1     4.20    -10       10   3"
+    "cartesian:test:baselineb:count 130        1      200   0"
+
+    "cartesian:test:probe:y1         6.75    -80      160   3"
+    "cartesian:test:probe:count    150         1      200   0"
+  )
+
+  echo "Initializing cartesian plot PVs for tests/test_CartesianPlot.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${cartesian_plot_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Cartesian plot PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize cartesian plot PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_bar_test_pvs() {
+  local prefix="$1"
+  local -a bar_init_values=(
+    # pv value lopr hopr prec
+    "bar:test:alpha      24.5      -58.4    139.7   1"
+    "bar:test:alphaa    -12.75     -58.4    139.7   1"
+    "bar:test:beta       18.2      -12.8     64.5   2"
+    "bar:test:gamma     -33.1      -95.3     12.4   1"
+    "bar:test:delta      42.6      -18.6     98.2   2"
+    "bar:test:epsilon     7.125    -42.1     42.1   3"
+    "bar:test:zeta       32.4       -7.3     73.9   2"
+    "bar:test:eta        -6.4      -33.5     55.7   1"
+    "bar:test:theta    -101.7     -120.9      4.3   1"
+    "bar:test:iota       55.5       -8.8     88.8   2"
+    "bar:test:kappa      -9.875    -64.2     24.6   3"
+    "bar:test:lambda     88.2      -15.4    115.4   2"
+    "bar:test:mu         11.5       -2.5     65.1   1"
+    "test_bar_pv          1.4       -2.0      3.0   1"
+  )
+  local -a bar_choice_button_values=(
+    # pv value (enum channels used by Section B quick probes)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing bar monitor PVs for tests/test_Bar.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${bar_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${bar_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Bar monitor PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize bar monitor PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_byte_test_pvs() {
   local prefix="$1"
   local -a byte_init_values=(
@@ -325,6 +506,403 @@ set_byte_test_pvs() {
   return 1
 }
 
+set_arc_test_pvs() {
+  local prefix="$1"
+  local -a arc_init_values=(
+    # pv value lopr hopr prec
+    "channelA_PV   1.25   -2      3      2"
+    "channelB_PV  -0.75   -5      5      2"
+    "channelC_PV  12      -45.5  45.5    1"
+    "channelD_PV -22      -45.5  45.5    1"
+  )
+  local -a arc_choice_button_values=(
+    # pv value (enum channels used by Section A and Section B visibility choice buttons)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing arc PVs for tests/test_Arc.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${arc_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${arc_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Arc PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize arc PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_line_test_pvs() {
+  local prefix="$1"
+  local -a line_init_values=(
+    # pv value lopr hopr prec
+    "channelA_PV   1.25   -2      3      2"
+    "channelB_PV  -0.75   -5      5      2"
+    "channelC_PV  12      -45.5  45.5    1"
+    "channelD_PV -22      -45.5  45.5    1"
+  )
+  local -a line_choice_button_values=(
+    # pv value (enum channels used by Section A and Section B visibility choice buttons)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing line PVs for tests/test_Line.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${line_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${line_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Line PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize line PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_menu_test_pvs() {
+  local prefix="$1"
+  local -a menu_init_values=(
+    # pv value (enum channels used by tests/test_Menu.adl)
+    "mn:ctrl:8127 1"
+    "mn:ops:9365 2"
+    "mn:data:4710 3"
+    "mn:diag:2583 0"
+    "mn:scan:3419 1"
+    "mn:test:7841 2"
+    "mn:util:5092 3"
+    "mn:fast:6730 0"
+    "mn:slow:9126 1"
+    "mn:macro:1824 2"
+    "mn:aux:3579 3"
+    "mn:proto:6687 0"
+    "mn:eng:2950 1"
+    "mn:logic:8243 2"
+    "mn:bench:5775 3"
+    "mn:pilot:9468 0"
+  )
+  local -a menu_choice_button_values=(
+    # pv value (shared enum channels used by Section B quick probes)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing menu PVs for tests/test_Menu.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value full_pv
+    for entry in "${menu_init_values[@]}"; do
+      read -r pv value <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" "-list=${full_pv}=${value}" >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${menu_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Menu PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize menu PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_choice_button_test_pvs() {
+  local prefix="$1"
+  local -a choice_button_init_values=(
+    # pv value (enum channels used by tests/test_ChoiceButton.adl)
+    "cb:test:4193     0"
+    "cb:sample:9827   1"
+    "cb:aux:1574      2"
+    "cb:ops:6410      3"
+    "cb:ctrl:2845     1"
+    "cb:logic:7319    0"
+    "cb:diag:5930     2"
+    "cb:data:8754     3"
+    "cb:eng:1148      1"
+    "cb:util:7056     2"
+    "cb:fast:3472     0"
+    "cb:slow:9210     3"
+    "cb:macro:2681    1"
+    "cb:scan:8095     2"
+    "cb:testbed:5524  0"
+    "cb:proto:6678    3"
+  )
+
+  echo "Initializing choice button PVs for tests/test_ChoiceButton.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value full_pv
+    for entry in "${choice_button_init_values[@]}"; do
+      read -r pv value <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" "-list=${full_pv}=${value}" >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Choice button PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize choice button PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_message_button_test_pvs() {
+  local prefix="$1"
+  local -a message_button_init_values=(
+    # pv value lopr hopr prec
+    "mb:stat:01      0   -20    20   1"
+    "mb:stat:02      0   -20    20   1"
+    "mb:stat:03      0   -20    20   1"
+    "mb:stat:04      1   -20    20   1"
+    "mb:stat:05      2   -20    20   1"
+    "mb:alarm:01     0   -20    20   1"
+    "mb:alarm:02     0   -20    20   1"
+    "mb:alarm:03    -1   -20    20   1"
+    "mb:alarm:04     1   -20    20   1"
+    "mb:alarm:05     2   -20    20   1"
+    "mb:disc:01      0   -20    20   1"
+    "mb:disc:02      1   -20    20   1"
+    "mb:disc:03      2   -20    20   1"
+    "mb:disc:04      3   -20    20   1"
+    "mb:disc:05      0   -20    20   1"
+    "mb:alt:01       0   -20    20   1"
+    "mb:alt:02       0   -20    20   1"
+    "mb:alt:03      -1   -20    20   1"
+    "mb:alt:04       1   -20    20   1"
+    "mb:alt:05       2   -20    20   1"
+    "mb:base:ab      0   -20    20   1"
+    "mb:beh:press    0   -20    20   1"
+    "mb:beh:full     0   -20    20   1"
+  )
+
+  echo "Initializing message button PVs for tests/test_MessageButton.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${message_button_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Message button PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize message button PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_image_test_pvs() {
+  local prefix="$1"
+  local -a image_init_values=(
+    # pv value lopr hopr prec
+    "img:vis:a    1   -5    5   1"
+    "img:vis:b    0   -5    5   1"
+  )
+  local -a image_choice_button_values=(
+    # pv value (enum channels used by Section B quick probes)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing image PVs for tests/test_Image.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${image_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${image_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Image PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize image PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_rectangle_test_pvs() {
+  local prefix="$1"
+  local -a rectangle_init_values=(
+    # pv value lopr hopr prec
+    "channelA_PV   1.25   -2      3      2"
+    "channelB_PV  -0.75   -5      5      2"
+    "channelC_PV  12      -45.5  45.5    1"
+    "channelD_PV -22      -45.5  45.5    1"
+  )
+  local -a rectangle_choice_button_values=(
+    # pv value (enum channels used by Section A and Section B visibility choice buttons)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing rectangle PVs for tests/test_rectangle.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${rectangle_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${rectangle_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Rectangle PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize rectangle PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_polygon_test_pvs() {
   local prefix="$1"
   local -a polygon_init_values=(
@@ -365,6 +943,127 @@ set_polygon_test_pvs() {
   return 1
 }
 
+set_oval_test_pvs() {
+  local prefix="$1"
+  local -a oval_init_values=(
+    # pv value lopr hopr prec
+    "channelA_PV   1.25   -2      3      2"
+    "channelB_PV  -0.75   -5      5      2"
+    "channelC_PV  12      -45.5  45.5    1"
+    "channelD_PV -22      -45.5  45.5    1"
+  )
+  local -a oval_choice_button_values=(
+    # pv value (enum channels used by Section A and Section B visibility choice buttons)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing oval PVs for tests/test_Oval.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${oval_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${oval_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Oval PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize oval PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_text_test_pvs() {
+  local prefix="$1"
+  local -a text_init_values=(
+    # pv value lopr hopr prec
+    "channelA_PV   1.25   -2      3      2"
+    "channelB_PV  -0.75   -5      5      2"
+    "channelC_PV  12      -45.5  45.5    1"
+    "channelD_PV -22      -45.5  45.5    1"
+  )
+  local -a text_choice_button_values=(
+    # pv value (enum channels used by Section A and Section B visibility choice buttons)
+    "cb:ctrl:2845 1"
+    "cb:logic:7319 0"
+  )
+
+  echo "Initializing text PVs for tests/test_Text.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${text_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local enum_entry enum_pv enum_value
+      for enum_entry in "${text_choice_button_values[@]}"; do
+        read -r enum_pv enum_value <<< "${enum_entry}"
+        full_pv="${prefix}${enum_pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${enum_value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Text PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize text PV values after ${retries} retries." >&2
+  return 1
+}
+
+set_text_fonts_test_pvs() {
+  local prefix="$1"
+
+  # tests/test_TextFonts.adl is intentionally static text-only (no PV channels).
+  echo "Text fonts screen tests/test_TextFonts.adl uses static text only; no PV initialization required."
+  : "${prefix}"
+  return 0
+}
+
 set_text_entry_test_pvs() {
   local prefix="$1"
   local -a text_entry_numeric_values=(
@@ -390,7 +1089,7 @@ set_text_entry_test_pvs() {
     "tm:string:status READY"
   )
 
-  echo "Initializing text entry PVs for tests/test_TextEntry.adl"
+  echo "Initializing text/text monitor PVs for tests/test_TextEntry.adl and tests/test_TextMonitor.adl"
   set_local_ca_env
 
   local retries=20
@@ -420,13 +1119,13 @@ set_text_entry_test_pvs() {
       done
     fi
     if [[ "${initialized}" -eq 1 ]]; then
-      echo "Text entry PV initialization complete."
+      echo "Text/text monitor PV initialization complete."
       return 0
     fi
     sleep "${delay}"
   done
 
-  echo "Warning: Failed to initialize text entry PV values after ${retries} retries." >&2
+  echo "Warning: Failed to initialize text/text monitor PV values after ${retries} retries." >&2
   return 1
 }
 
@@ -489,7 +1188,7 @@ set_slider_alarm_probe_pvs() {
     "ZzzButton -5 5 3"
   )
 
-  echo "Configuring alarm probe PV limits for slider/scale monitor/byte/polygon/text entry/wheel switch tests"
+  echo "Configuring alarm probe PV limits for slider/scale monitor/bar/byte/arc/line/rectangle/polygon/oval/text/text entry/wheel switch tests"
   set_local_ca_env
 
   local retries=20
@@ -519,6 +1218,12 @@ set_slider_alarm_probe_pvs() {
   return 1
 }
 
+set_related_display_test_pvs() {
+  local _prefix="$1"
+
+  echo "Related display harness uses launch links only for tests/test_RelatedDisplay.adl (no PV initialization required)."
+}
+
 cleanup() {
   local status=$?
   if [[ -n "${ioc_pid}" ]] && kill -0 "${ioc_pid}" >/dev/null 2>&1; then
@@ -537,8 +1242,22 @@ ioc_pid="$!"
 set_slider_test_pvs "${PV_PREFIX}" || true
 set_scale_monitor_test_pvs "${PV_PREFIX}" || true
 set_meter_test_pvs "${PV_PREFIX}" || true
+set_strip_chart_test_pvs "${PV_PREFIX}" || true
+set_cartesian_plot_test_pvs "${PV_PREFIX}" || true
+set_bar_test_pvs "${PV_PREFIX}" || true
 set_byte_test_pvs "${PV_PREFIX}" || true
+set_arc_test_pvs "${PV_PREFIX}" || true
+set_line_test_pvs "${PV_PREFIX}" || true
+set_menu_test_pvs "${PV_PREFIX}" || true
+set_related_display_test_pvs "${PV_PREFIX}" || true
+set_choice_button_test_pvs "${PV_PREFIX}" || true
+set_message_button_test_pvs "${PV_PREFIX}" || true
+set_image_test_pvs "${PV_PREFIX}" || true
+set_rectangle_test_pvs "${PV_PREFIX}" || true
 set_polygon_test_pvs "${PV_PREFIX}" || true
+set_oval_test_pvs "${PV_PREFIX}" || true
+set_text_test_pvs "${PV_PREFIX}" || true
+set_text_fonts_test_pvs "${PV_PREFIX}" || true
 set_text_entry_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true

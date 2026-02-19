@@ -3128,6 +3128,7 @@ private:
   ImageType parseImageType(const QString &value) const;
   HeatmapDimensionSource parseHeatmapDimensionSource(const QString &value) const;
   HeatmapOrder parseHeatmapOrder(const QString &value) const;
+  bool parseHeatmapInvertGreyscale(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
   Qt::Alignment parseAlignment(const QString &value) const;
@@ -7563,6 +7564,11 @@ private:
         [element]() { return element->order(); },
         [this, element](HeatmapOrder order) {
           element->setOrder(order);
+          markDirty();
+        },
+        [element]() { return element->invertGreyscale(); },
+        [this, element](bool invert) {
+          element->setInvertGreyscale(invert);
           markDirty();
         });
   }
@@ -17034,6 +17040,10 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
             QStringLiteral("order=\"%1\"")
                 .arg(AdlWriter::heatmapOrderString(heatmap->order())));
       }
+      if (!heatmap->invertGreyscale()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("invertGreyscale=\"false\""));
+      }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -17948,6 +17958,10 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("order=\"%1\"")
               .arg(AdlWriter::heatmapOrderString(heatmap->order())));
+    }
+    if (!heatmap->invertGreyscale()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("invertGreyscale=\"false\""));
     }
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
@@ -18899,6 +18913,31 @@ inline HeatmapOrder DisplayWindow::parseHeatmapOrder(
     return HeatmapOrder::kColumnMajor;
   }
   return HeatmapOrder::kRowMajor;
+}
+
+inline bool DisplayWindow::parseHeatmapInvertGreyscale(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.isEmpty()) {
+    return true;
+  }
+  if (normalized == QStringLiteral("1")
+      || normalized == QStringLiteral("true")
+      || normalized == QStringLiteral("yes")
+      || normalized == QStringLiteral("on")
+      || normalized == QStringLiteral("invert")
+      || normalized == QStringLiteral("inverted")) {
+    return true;
+  }
+  if (normalized == QStringLiteral("0")
+      || normalized == QStringLiteral("false")
+      || normalized == QStringLiteral("no")
+      || normalized == QStringLiteral("off")
+      || normalized == QStringLiteral("normal")) {
+    return false;
+  }
+  return true;
 }
 
 inline TextMonitorFormat DisplayWindow::parseTextMonitorFormat(
@@ -22597,6 +22636,18 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
   const QString orderValue = propertyValue(heatmapNode, QStringLiteral("order"));
   if (!orderValue.trimmed().isEmpty()) {
     element->setOrder(parseHeatmapOrder(orderValue));
+  }
+
+  QString invertValue = propertyValue(heatmapNode,
+      QStringLiteral("invertGreyscale"));
+  if (invertValue.trimmed().isEmpty()) {
+    invertValue = propertyValue(heatmapNode, QStringLiteral("invertGrayscale"));
+  }
+  if (invertValue.trimmed().isEmpty()) {
+    invertValue = propertyValue(heatmapNode, QStringLiteral("invertGrayScale"));
+  }
+  if (!invertValue.trimmed().isEmpty()) {
+    element->setInvertGreyscale(parseHeatmapInvertGreyscale(invertValue));
   }
 
   if (currentCompositeOwner_) {

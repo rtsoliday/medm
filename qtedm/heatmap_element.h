@@ -42,6 +42,9 @@ public:
   HeatmapOrder order() const;
   void setOrder(HeatmapOrder order);
 
+  bool invertGreyscale() const;
+  void setInvertGreyscale(bool invert);
+
   void setRuntimeData(const QVector<double> &values);
   void setRuntimeDimensions(int xDim, int yDim);
   void clearRuntimeState();
@@ -68,6 +71,7 @@ private:
   QString xDimensionChannel_;
   QString yDimensionChannel_;
   HeatmapOrder order_ = HeatmapOrder::kRowMajor;
+  bool invertGreyscale_ = true;
 
   QVector<double> runtimeValues_;
   int runtimeXDimension_ = 0;

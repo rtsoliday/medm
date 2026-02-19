@@ -155,6 +155,20 @@ void HeatmapElement::setOrder(HeatmapOrder order)
   invalidateCache();
 }
 
+bool HeatmapElement::invertGreyscale() const
+{
+  return invertGreyscale_;
+}
+
+void HeatmapElement::setInvertGreyscale(bool invert)
+{
+  if (invertGreyscale_ == invert) {
+    return;
+  }
+  invertGreyscale_ = invert;
+  invalidateCache();
+}
+
 void HeatmapElement::setRuntimeData(const QVector<double> &values)
 {
   runtimeValues_ = values;
@@ -254,8 +268,14 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
       -kLegendPadding);
     if (barRect.height() > 4 && barRect.width() > 0) {
       QLinearGradient gradient(barRect.topLeft(), barRect.bottomLeft());
-      gradient.setColorAt(0.0, QColor(0, 0, 0));
-      gradient.setColorAt(1.0, QColor(255, 255, 255));
+      const QColor topColor = invertGreyscale_
+          ? QColor(255, 255, 255)
+          : QColor(0, 0, 0);
+      const QColor bottomColor = invertGreyscale_
+          ? QColor(0, 0, 0)
+          : QColor(255, 255, 255);
+      gradient.setColorAt(0.0, topColor);
+      gradient.setColorAt(1.0, bottomColor);
       painter.fillRect(barRect, gradient);
       painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
       painter.drawRect(barRect.adjusted(0, 0, -1, -1));
@@ -405,7 +425,8 @@ void HeatmapElement::rebuildImage()
         ratio = (value - minValue) / range;
       }
       ratio = std::clamp(ratio, 0.0, 1.0);
-      const int gray = static_cast<int>(std::round((1.0 - ratio) * 255.0));
+      const double intensity = invertGreyscale_ ? ratio : (1.0 - ratio);
+      const int gray = static_cast<int>(std::round(intensity * 255.0));
       const QColor color(gray, gray, gray);
       cachedImage_.setPixelColor(x, y, color);
     }

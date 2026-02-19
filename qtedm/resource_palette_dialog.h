@@ -653,6 +653,19 @@ public:
         }
       });
 
+    heatmapInvertGreyscaleCombo_ = new QComboBox;
+    heatmapInvertGreyscaleCombo_->setFont(valueFont_);
+    heatmapInvertGreyscaleCombo_->setAutoFillBackground(true);
+    heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("No"));
+    heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("Yes"));
+    QObject::connect(heatmapInvertGreyscaleCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapInvertGreyscaleSetter_) {
+          heatmapInvertGreyscaleSetter_(heatmapBoolFromIndex(index));
+        }
+      });
+
     int heatmapRow = 0;
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Title"), heatmapTitleEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Data PV"), heatmapDataChannelEdit_);
@@ -663,6 +676,8 @@ public:
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dimension"), heatmapYDimEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dim PV"), heatmapYDimChannelEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Order"), heatmapOrderCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Invert Greyscale"),
+      heatmapInvertGreyscaleCombo_);
     heatmapLayout->setRowStretch(heatmapRow, 1);
     updateHeatmapDimensionControls();
     entriesLayout->addWidget(heatmapSection_);
@@ -6233,7 +6248,9 @@ public:
       std::function<QString()> yDimChannelGetter,
       std::function<void(const QString &)> yDimChannelSetter,
       std::function<HeatmapOrder()> orderGetter,
-      std::function<void(HeatmapOrder)> orderSetter)
+        std::function<void(HeatmapOrder)> orderSetter,
+        std::function<bool()> invertGreyscaleGetter,
+        std::function<void(bool)> invertGreyscaleSetter)
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kHeatmap;
@@ -6260,6 +6277,8 @@ public:
     heatmapYDimChannelSetter_ = std::move(yDimChannelSetter);
     heatmapOrderGetter_ = std::move(orderGetter);
     heatmapOrderSetter_ = std::move(orderSetter);
+    heatmapInvertGreyscaleGetter_ = std::move(invertGreyscaleGetter);
+    heatmapInvertGreyscaleSetter_ = std::move(invertGreyscaleSetter);
 
     QRect heatmapGeometry = geometryGetter_ ? geometryGetter_() : QRect();
     if (heatmapGeometry.width() <= 0) {
@@ -6334,6 +6353,14 @@ public:
       const HeatmapOrder order = heatmapOrderGetter_ ? heatmapOrderGetter_()
                                                     : HeatmapOrder::kRowMajor;
       heatmapOrderCombo_->setCurrentIndex(heatmapOrderToIndex(order));
+    }
+
+    if (heatmapInvertGreyscaleCombo_) {
+      const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
+      const bool invert = heatmapInvertGreyscaleGetter_
+          ? heatmapInvertGreyscaleGetter_()
+          : true;
+      heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(invert));
     }
 
     updateHeatmapDimensionControls();
@@ -7373,6 +7400,10 @@ public:
       heatmapOrderCombo_->setCurrentIndex(
           heatmapOrderToIndex(HeatmapOrder::kRowMajor));
     }
+    if (heatmapInvertGreyscaleCombo_) {
+      const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
+      heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(true));
+    }
 
     resetLineEdit(heatmapTitleEdit_);
     resetLineEdit(heatmapDataChannelEdit_);
@@ -7422,6 +7453,8 @@ public:
     heatmapYDimChannelSetter_ = {};
     heatmapOrderGetter_ = {};
     heatmapOrderSetter_ = {};
+    heatmapInvertGreyscaleGetter_ = {};
+    heatmapInvertGreyscaleSetter_ = {};
 
     textMonitorPrecisionSourceGetter_ = {};
     textMonitorPrecisionSourceSetter_ = {};
@@ -9499,6 +9532,16 @@ private:
     return order == HeatmapOrder::kColumnMajor ? 1 : 0;
   }
 
+  bool heatmapBoolFromIndex(int index) const
+  {
+    return index == 1;
+  }
+
+  int heatmapBoolToIndex(bool value) const
+  {
+    return value ? 1 : 0;
+  }
+
   MeterLabel meterLabelFromIndex(int index) const
   {
     switch (index) {
@@ -10021,6 +10064,7 @@ private:
   QLineEdit *heatmapXDimChannelEdit_ = nullptr;
   QLineEdit *heatmapYDimChannelEdit_ = nullptr;
   QComboBox *heatmapOrderCombo_ = nullptr;
+  QComboBox *heatmapInvertGreyscaleCombo_ = nullptr;
   QWidget *textMonitorSection_ = nullptr;
   QPushButton *textMonitorForegroundButton_ = nullptr;
   QPushButton *textMonitorBackgroundButton_ = nullptr;
@@ -10861,6 +10905,8 @@ private:
   std::function<void(const QString &)> heatmapYDimChannelSetter_;
   std::function<HeatmapOrder()> heatmapOrderGetter_;
   std::function<void(HeatmapOrder)> heatmapOrderSetter_;
+  std::function<bool()> heatmapInvertGreyscaleGetter_;
+  std::function<void(bool)> heatmapInvertGreyscaleSetter_;
   std::function<QColor()> lineColorGetter_;
   std::function<void(const QColor &)> lineColorSetter_;
   std::function<RectangleLineStyle()> lineLineStyleGetter_;

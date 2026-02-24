@@ -413,6 +413,7 @@ set_bar_test_pvs() {
     "bar:test:kappa      -9.875    -64.2     24.6   3"
     "bar:test:lambda     88.2      -15.4    115.4   2"
     "bar:test:mu         11.5       -2.5     65.1   1"
+    "bar:test:limit_source 25.0      0.001    50.0   2"
     "test_bar_pv          1.4       -2.0      3.0   1"
   )
   local -a bar_choice_button_values=(

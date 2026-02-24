@@ -756,6 +756,68 @@ text {
 }
 text {
 	object {
+		x=960
+		y=996
+		width=360
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Limit-source regression probe"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=960
+		y=1012
+		width=360
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Expected channel limits from PV Info: LOPR=0.001, HOPR=50"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=960
+		y=1028
+		width=360
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="If range collapses/pins near zero in QtEDM, this bug likely regressed"
+	align="horiz. centered"
+}
+bar {
+	object {
+		x=1028
+		y=1048
+		width=220
+		height=74
+	}
+	monitor {
+		chan="bar:test:limit_source"
+		clr=21
+		bclr=48
+	}
+	label="limits"
+	clrmod="alarm"
+	limits {
+		loprSrc="channel"
+		hoprSrc="channel"
+		precSrc="channel"
+		loprDefault=-999
+		hoprDefault=999
+		precDefault=2
+	}
+}
+text {
+	object {
 		x=76
 		y=996
 		width=420

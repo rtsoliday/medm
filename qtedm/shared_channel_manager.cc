@@ -989,8 +989,22 @@ void SharedChannelManager::handleControlInfo(SharedChannel *channel,
   switch (args.type) {
   case DBR_CTRL_DOUBLE: {
     const auto *info = static_cast<const dbr_ctrl_double *>(args.dbr);
-    data.hopr = info->upper_ctrl_limit;
-    data.lopr = info->lower_ctrl_limit;
+    double low = info->lower_disp_limit;
+    double high = info->upper_disp_limit;
+
+    if (!std::isfinite(low) || !std::isfinite(high)) {
+      low = info->lower_ctrl_limit;
+      high = info->upper_ctrl_limit;
+    }
+
+    const double orderedLow = std::min(low, high);
+    double orderedHigh = std::max(low, high);
+    if (orderedHigh == orderedLow) {
+      orderedHigh = orderedLow + 1.0;
+    }
+
+    data.lopr = orderedLow;
+    data.hopr = orderedHigh;
     data.precision = info->precision;
     data.hasPrecision = (info->precision >= 0);
     data.units = QString::fromLatin1(info->units);

@@ -173,12 +173,16 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
   /* Apply limits from control info if available and not yet done */
   if (!hasControlInfo_ && (data.hasControlInfo || data.lopr != 0.0 || data.hopr != 0.0)) {
     hasControlInfo_ = true;
-    const double low = data.lopr;
-    const double high = data.hopr;
+    const double low = std::min(data.lopr, data.hopr);
+    double high = std::max(data.lopr, data.hopr);
     const int precision = data.precision;
 
+    if (high == low) {
+      high = low + 1.0;
+    }
+
     /* Only apply if we got reasonable limits */
-    if (low != high || low != 0.0) {
+    if (std::isfinite(low) && std::isfinite(high)) {
       invokeOnElement([low, high, precision](ElementType *element) {
         element->setRuntimeLimits(low, high);
         element->setRuntimePrecision(precision);

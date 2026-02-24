@@ -290,6 +290,16 @@ void PvaChannelManager::updateCachedData(PvaChannel *channel)
     data.hasControlInfo = true;
   }
 
+  if (data.hasControlInfo) {
+    const double low = std::min(data.lopr, data.hopr);
+    double high = std::max(data.lopr, data.hopr);
+    if (high == low) {
+      high = low + 1.0;
+    }
+    data.lopr = low;
+    data.hopr = high;
+  }
+
   if (reading.hasPrecision) {
     data.precision = static_cast<short>(reading.displayPrecision);
     data.hasPrecision = true;

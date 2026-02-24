@@ -9460,8 +9460,15 @@ private:
       if (status == ECA_NORMAL) {
         status = ca_pend_io(kPvInfoTimeoutSeconds);
         if (status == ECA_NORMAL) {
-          details.hopr = ctrl.upper_ctrl_limit;
-          details.lopr = ctrl.lower_ctrl_limit;
+          const double low = std::min(static_cast<double>(ctrl.lower_disp_limit),
+              static_cast<double>(ctrl.upper_disp_limit));
+          double high = std::max(static_cast<double>(ctrl.lower_disp_limit),
+              static_cast<double>(ctrl.upper_disp_limit));
+          if (high == low) {
+            high = low + 1.0;
+          }
+          details.lopr = low;
+          details.hopr = high;
           details.hasLimits = true;
           details.precision = ctrl.precision;
           details.hasPrecision = (ctrl.precision >= 0);

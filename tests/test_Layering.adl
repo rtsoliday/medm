@@ -8,7 +8,7 @@ display {
 		x=1795
 		y=118
 		width=583
-		height=697
+		height=860
 	}
 	clr=14
 	bclr=4
@@ -768,4 +768,90 @@ rectangle {
 	"basic attribute" {
 		clr=31
 	}
+}
+
+text {
+	object {
+		x=44
+		y=706
+		width=500
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 3: Execute layering regression (indicator must be above text update)"
+}
+
+rectangle {
+	object {
+		x=40
+		y=724
+		width=500
+		height=118
+	}
+	"basic attribute" {
+		clr=44
+		fill="outline"
+		width=2
+	}
+}
+
+text {
+	object {
+		x=56
+		y=730
+		width=468
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Expected in execute mode: indicator overlays the overlapping text update (MEDM parity)."
+}
+
+indicator {
+	object {
+		x=60
+		y=760
+		width=230
+		height=26
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=14
+		bclr=3
+	}
+	limits {
+	}
+}
+
+"text update" {
+	object {
+		x=56
+		y=766
+		width=50
+		height=14
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=10
+		bclr=4
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+
+text {
+	object {
+		x=306
+		y=764
+		width=222
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Overlap probe: (56,766) under (60,760)"
 }

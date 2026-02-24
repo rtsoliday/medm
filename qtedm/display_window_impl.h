@@ -3074,6 +3074,7 @@ private:
   QRect widgetGeometryForSerialization(const QWidget *widget) const;
   bool isControlWidget(const QWidget *widget) const;
   bool isStaticGraphicWidget(const QWidget *widget) const;
+  bool isExecuteMonitorWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
   void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
@@ -18797,6 +18798,11 @@ inline bool DisplayWindow::isControlWidget(const QWidget *widget) const
       || dynamic_cast<const RelatedDisplayElement *>(widget);
 }
 
+inline bool DisplayWindow::isExecuteMonitorWidget(const QWidget *widget) const
+{
+  return dynamic_cast<const ScaleMonitorElement *>(widget);
+}
+
 inline QStringList DisplayWindow::buildDisplaySearchPaths() const
 {
   QStringList searchPaths;
@@ -19291,6 +19297,7 @@ inline void DisplayWindow::refreshStackingOrder()
   stackingOrderInternallyUpdating_ = true;
   QList<QWidget *> staticWidgets;
   QList<QWidget *> dynamicWidgets;
+  QList<QWidget *> executeMonitorWidgets;
   QList<QWidget *> interactiveWidgets;
 
   for (auto it = elementStack_.begin(); it != elementStack_.end();) {
@@ -19302,6 +19309,8 @@ inline void DisplayWindow::refreshStackingOrder()
     }
     if (isStaticGraphicWidget(widget)) {
       staticWidgets.append(widget);
+    } else if (executeModeActive_ && isExecuteMonitorWidget(widget)) {
+      executeMonitorWidgets.append(widget);
     } else if (isControlWidget(widget)) {
       interactiveWidgets.append(widget);
     } else {
@@ -19317,6 +19326,11 @@ inline void DisplayWindow::refreshStackingOrder()
   }
   /* Raise dynamic widgets (monitors, dynamic graphics, etc.). */
   for (QWidget *widget : dynamicWidgets) {
+    widget->raise();
+  }
+  /* In execute mode, raise monitor widgets that MEDM realizes above
+   * text update drawing (for example, indicator widgets). */
+  for (QWidget *widget : executeMonitorWidgets) {
     widget->raise();
   }
   /* Then raise interactive controls. */

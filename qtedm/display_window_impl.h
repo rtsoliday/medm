@@ -14618,6 +14618,11 @@ private:
   void showFindPvDialog() const
   {
     if (auto state = state_.lock()) {
+      if (!state->findPvDialog) {
+        state->findPvDialog = new FindPvDialog(palette(), labelFont_,
+            std::weak_ptr<DisplayState>(state),
+            const_cast<DisplayWindow *>(this));
+      }
       if (auto *dialog = state->findPvDialog.data()) {
         dialog->showAndRaise();
       }

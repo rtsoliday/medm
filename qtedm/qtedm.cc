@@ -1175,8 +1175,6 @@ int main(int argc, char *argv[])
   win.installEventFilter(mainWindowController);
   auto updateMenus = std::make_shared<std::function<void()>>();
   state->updateMenus = updateMenus;
-  QPointer<DisplayListDialog> displayListDialog;
-  QPointer<FindPvDialog> findPvDialog;
   QTEDM_TIMING_MARK("Display state created");
 
 // ===========================================================================
@@ -1244,25 +1242,23 @@ int main(int argc, char *argv[])
 
   QObject::connect(viewDisplayListAct, &QAction::triggered, &win,
       [&, palette, fixed13Font]() {
-        if (!displayListDialog) {
-          displayListDialog = new DisplayListDialog(palette, fixed13Font,
+        if (!state->displayListDialog) {
+          state->displayListDialog = new DisplayListDialog(palette, fixed13Font,
               std::weak_ptr<DisplayState>(state), &win);
-          state->displayListDialog = displayListDialog;
         }
-        if (displayListDialog) {
-          displayListDialog->showAndRaise();
+        if (auto *dialog = state->displayListDialog.data()) {
+          dialog->showAndRaise();
         }
       });
 
   QObject::connect(findPvAct, &QAction::triggered, &win,
       [&, palette, fixed13Font]() {
-        if (!findPvDialog) {
-          findPvDialog = new FindPvDialog(palette, fixed13Font,
+        if (!state->findPvDialog) {
+          state->findPvDialog = new FindPvDialog(palette, fixed13Font,
               std::weak_ptr<DisplayState>(state), &win);
-          state->findPvDialog = findPvDialog;
         }
-        if (findPvDialog) {
-          findPvDialog->showAndRaise();
+        if (auto *dialog = state->findPvDialog.data()) {
+          dialog->showAndRaise();
         }
       });
 
@@ -1594,7 +1590,7 @@ int main(int argc, char *argv[])
     flipHorizontalAct, flipVerticalAct, rotateClockwiseAct,
     rotateCounterclockwiseAct, sameSizeAct, textToContentsAct, toggleGridAct, toggleSnapAct,
     gridSpacingAct, unselectAct, selectAllAct, selectDisplayAct,
-    findOutliersAct, refreshAct, editSummaryAct, &displayListDialog,
+    findOutliersAct, refreshAct, editSummaryAct,
     &objectPaletteDialog]() {
     auto &displays = state->displays;
     for (auto it = displays.begin(); it != displays.end();) {
@@ -1733,8 +1729,8 @@ int main(int argc, char *argv[])
     refreshAct->setEnabled(canOperateSelection);
     editSummaryAct->setEnabled(canOperateSelection);
 
-    if (displayListDialog) {
-      displayListDialog->handleStateChanged();
+    if (auto *dialog = state->displayListDialog.data()) {
+      dialog->handleStateChanged();
     }
     if (objectPaletteDialog) {
       objectPaletteDialog->refreshSelectionFromState();

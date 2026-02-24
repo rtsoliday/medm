@@ -8,6 +8,7 @@
 #include <QtGlobal>
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <QEvent>
 #include <QFontDatabase>
@@ -53,6 +54,44 @@ constexpr int kLateThresholdMs = 100;
 constexpr int kLateCountThreshold = 5;
 constexpr int kOnTimeCountThreshold = 20;
 constexpr int kIntervalIncrementMs = 100;
+
+QString cartesianTimeFormatPattern(CartesianPlotTimeFormat format)
+{
+  switch (format) {
+  case CartesianPlotTimeFormat::kHhMm:
+    return QStringLiteral("hh:mm");
+  case CartesianPlotTimeFormat::kHh00:
+    return QStringLiteral("hh:00");
+  case CartesianPlotTimeFormat::kMonthDayYear:
+    return QStringLiteral("MMM dd yyyy");
+  case CartesianPlotTimeFormat::kMonthDay:
+    return QStringLiteral("MMM dd");
+  case CartesianPlotTimeFormat::kMonthDayHour00:
+    return QStringLiteral("MMM dd hh:00");
+  case CartesianPlotTimeFormat::kWeekdayHour00:
+    return QStringLiteral("ddd hh:00");
+  case CartesianPlotTimeFormat::kHhMmSs:
+  default:
+    return QStringLiteral("hh:mm:ss");
+  }
+}
+
+QString formatCartesianAxisValue(double value, CartesianPlotAxisStyle style,
+    CartesianPlotTimeFormat timeFormat)
+{
+  if (style != CartesianPlotAxisStyle::kTime) {
+    return QString::number(value, 'g', 6);
+  }
+  if (!std::isfinite(value)) {
+    return QString();
+  }
+  const qint64 epochSeconds = static_cast<qint64>(std::llround(value));
+  const QDateTime timestamp = QDateTime::fromSecsSinceEpoch(epochSeconds);
+  if (!timestamp.isValid()) {
+    return QString::number(value, 'g', 6);
+  }
+  return timestamp.toString(cartesianTimeFormatPattern(timeFormat));
+}
 
 QString labelTextOrSpace(const QString &text)
 {
@@ -877,6 +916,7 @@ void CartesianPlotElement::setAxisTimeFormat(int axisIndex,
     return;
   }
   axisTimeFormats_[axisIndex] = format;
+  invalidateStaticCache();
   update();
 }
 
@@ -1760,8 +1800,9 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
                        QPointF(x, rect.bottom() + majorTickSize));
       
-      // Major tick label - use 'g', 6 to match MEDM's %.6g format
-      QString label = QString::number(majorValue, 'g', 6);
+        // Major tick label
+        QString label = formatCartesianAxisValue(majorValue, xAxisStyle,
+          axisTimeFormats_[xAxisIndex]);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
       const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
@@ -1795,7 +1836,8 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       // Axis number - map from normalized position to actual value
       const double normalizedValue = static_cast<double>(i) / numMajorTicks;
       const double value = xAxisMin + normalizedValue * (xAxisMax - xAxisMin);
-      QString label = QString::number(value, 'g', 6);
+        QString label = formatCartesianAxisValue(value, xAxisStyle,
+          axisTimeFormats_[xAxisIndex]);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
       const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
@@ -2413,6 +2455,13 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
       maximum = autoMaximums[axisIndex];
       valid = (maximum > minimum)
           && std::isfinite(minimum) && std::isfinite(maximum);
+      if (!valid
+          && std::isfinite(minimum) && std::isfinite(maximum)
+          && qFuzzyIsNull(minimum) && qFuzzyIsNull(maximum)) {
+        minimum = -0.5;
+        maximum = 0.5;
+        valid = true;
+      }
     } else if (axisRuntimeValid_[axisIndex]) {
       minimum = axisRuntimeMinimums_[axisIndex];
       maximum = axisRuntimeMaximums_[axisIndex];

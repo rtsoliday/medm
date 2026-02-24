@@ -28,6 +28,7 @@ public:
 private:
   void refresh();
   void updateButtonStates();
+  void updateClipboardFromSelection();
   QList<QPointer<DisplayWindow>> selectedDisplays() const;
   QString labelForDisplay(DisplayWindow *display) const;
   void handleRaiseRequested();

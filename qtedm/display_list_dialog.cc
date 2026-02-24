@@ -1,10 +1,13 @@
 #include "display_list_dialog.h"
 
 #include <QAbstractItemView>
+#include <QClipboard>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QListWidget>
 #include <QPushButton>
+#include <QStringList>
 #include <QVBoxLayout>
 
 #include <utility>
@@ -83,6 +86,7 @@ DisplayListDialog::DisplayListDialog(const QPalette &basePalette,
 
   connect(listWidget_, &QListWidget::itemSelectionChanged, this,
       [this]() {
+        updateClipboardFromSelection();
         updateButtonStates();
       });
   connect(listWidget_, &QListWidget::itemDoubleClicked, this,
@@ -172,6 +176,31 @@ void DisplayListDialog::updateButtonStates()
   }
   raiseButton_->setEnabled(hasValidSelection);
   closeButton_->setEnabled(hasValidSelection);
+}
+
+void DisplayListDialog::updateClipboardFromSelection()
+{
+  QStringList selectedPaths;
+  for (const auto &display : selectedDisplays()) {
+    if (display.isNull()) {
+      continue;
+    }
+    const QString path = display->filePath().trimmed();
+    if (!path.isEmpty()) {
+      selectedPaths.append(path);
+    }
+  }
+
+  if (selectedPaths.isEmpty()) {
+    return;
+  }
+
+  selectedPaths.removeDuplicates();
+  const QString clipboardText = selectedPaths.join(QStringLiteral("\n"));
+  if (QClipboard *clipboard = QGuiApplication::clipboard()) {
+    clipboard->setText(clipboardText, QClipboard::Clipboard);
+    clipboard->setText(clipboardText, QClipboard::Selection);
+  }
 }
 
 QList<QPointer<DisplayWindow>> DisplayListDialog::selectedDisplays() const

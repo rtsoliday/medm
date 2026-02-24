@@ -69,6 +69,7 @@ namespace {
 constexpr double kChannelRetryTimeoutSeconds = 1.0;
 constexpr double kPvInfoTimeoutSeconds = 1.0;
 constexpr qint64 kEpicsEpochOffsetSeconds = 631152000; // 1990-01-01 -> 1970-01-01
+constexpr int kResizeDebounceMs = 80;
 constexpr char kWidgetHasDynamicAttributeProperty[] =
     "_adlHasDynamicAttribute";
 constexpr char kOriginalAdlGeometryProperty[] = "_adlOriginalGeometry";
@@ -441,6 +442,15 @@ public:
     QObject::connect(undoStack_, &QUndoStack::undoTextChanged, this,
         [this]() {
           notifyMenus();
+        });
+
+    resizeDebounceTimer_ = new QTimer(this);
+    resizeDebounceTimer_->setSingleShot(true);
+    resizeDebounceTimer_->setInterval(kResizeDebounceMs);
+    QObject::connect(resizeDebounceTimer_, &QTimer::timeout, this,
+        [this]() {
+          applyExecuteResizeScale(pendingResizeAreaSize_.width(),
+              pendingResizeAreaSize_.height());
         });
 
     resize(kDefaultDisplayWidth, kDefaultDisplayHeight);
@@ -2993,6 +3003,7 @@ protected:
 private:
   bool writeAdlFile(const QString &filePath) const;
   void clearAllElements();
+  void applyExecuteResizeScale(int newWidth, int newHeight);
   void scaleAllElements(int oldWidth, int oldHeight, int newWidth, int newHeight);
   void handleDroppedAdlFiles(const QStringList &filePaths);
   QString convertLegacyAdlFormat(const QString &adlText, int fileVersion) const;
@@ -3172,6 +3183,9 @@ private:
   int originalDisplayWidth_ = 0;
   int originalDisplayHeight_ = 0;
   bool resizeScalingEnabled_ = true;
+  QTimer *resizeDebounceTimer_ = nullptr;
+  QSize pendingResizeAreaSize_ = QSize(0, 0);
+  QSize lastScaledAreaSize_ = QSize(0, 0);
   QPoint lastContextMenuGlobalPos_;
   struct ExecuteMenuEntry {
     QString label;
@@ -15408,28 +15422,32 @@ inline void DisplayWindow::resizeEvent(QResizeEvent *event)
   if (originalDisplayWidth_ <= 0 || originalDisplayHeight_ <= 0) {
     originalDisplayWidth_ = newWidth;
     originalDisplayHeight_ = newHeight;
+    pendingResizeAreaSize_ = newAreaSize;
+    lastScaledAreaSize_ = newAreaSize;
     return;
   }
 
-  /* Check if actual size changed */
-  if (newWidth == originalDisplayWidth_ && newHeight == originalDisplayHeight_) {
+  if (newWidth <= 0 || newHeight <= 0) {
     return;
   }
-
-  /* Get the old dimensions before the resize */
-  const int oldWidth = originalDisplayWidth_;
-  const int oldHeight = originalDisplayHeight_;
 
   /* In EXECUTE mode - scale all elements proportionally like medm does.
    * In EDIT mode - only resize selected elements (handled elsewhere).
    * For now, we scale all elements in execute mode only. */
   auto state = state_.lock();
   if (state && !state->editMode && executeModeActive_) {
+    if (newWidth == pendingResizeAreaSize_.width()
+        && newHeight == pendingResizeAreaSize_.height()
+        && !resizeDebounceTimer_->isActive()) {
+      return;
+    }
+
     /* Check for Shift key - if held, maintain aspect ratio like medm */
     const Qt::KeyboardModifiers modifiers = QGuiApplication::keyboardModifiers();
     if (modifiers & Qt::ShiftModifier) {
       /* Maintain aspect ratio - snap to correct dimensions */
-      const float aspectRatio = static_cast<float>(oldWidth) / static_cast<float>(oldHeight);
+      const float aspectRatio = static_cast<float>(originalDisplayWidth_)
+          / static_cast<float>(originalDisplayHeight_);
       const float newAspectRatio = static_cast<float>(newWidth) / static_cast<float>(newHeight);
       int goodWidth = newWidth;
       int goodHeight = newHeight;
@@ -15455,13 +15473,38 @@ inline void DisplayWindow::resizeEvent(QResizeEvent *event)
       }
     }
 
-    /* Scale all elements */
-    scaleAllElements(oldWidth, oldHeight, newWidth, newHeight);
+    pendingResizeAreaSize_ = newAreaSize;
+    resizeDebounceTimer_->start();
+  } else {
+    if (resizeDebounceTimer_->isActive()) {
+      resizeDebounceTimer_->stop();
+    }
+    pendingResizeAreaSize_ = newAreaSize;
+    lastScaledAreaSize_ = newAreaSize;
+  }
+}
+
+inline void DisplayWindow::applyExecuteResizeScale(int newWidth, int newHeight)
+{
+  if (!displayArea_ || !resizeScalingEnabled_) {
+    return;
+  }
+  if (originalDisplayWidth_ <= 0 || originalDisplayHeight_ <= 0
+      || newWidth <= 0 || newHeight <= 0) {
+    return;
+  }
+  auto state = state_.lock();
+  if (!state || state->editMode || !executeModeActive_) {
+    return;
+  }
+  if (newWidth == lastScaledAreaSize_.width()
+      && newHeight == lastScaledAreaSize_.height()) {
+    return;
   }
 
-  /* Update the original dimensions to the new size */
-  originalDisplayWidth_ = newWidth;
-  originalDisplayHeight_ = newHeight;
+  scaleAllElements(originalDisplayWidth_, originalDisplayHeight_,
+      newWidth, newHeight);
+  lastScaledAreaSize_ = QSize(newWidth, newHeight);
 }
 
 inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
@@ -15471,20 +15514,35 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     return;
   }
 
-  const float scaleX = static_cast<float>(newWidth) / static_cast<float>(oldWidth);
-  const float scaleY = static_cast<float>(newHeight) / static_cast<float>(oldHeight);
+  const qreal scaleX = static_cast<qreal>(newWidth) / static_cast<qreal>(oldWidth);
+  const qreal scaleY = static_cast<qreal>(newHeight) / static_cast<qreal>(oldHeight);
 
   /* Helper lambda to scale a widget's geometry */
-  auto scaleWidget = [scaleX, scaleY](QWidget *widget) {
+  auto scaleWidget = [this, scaleX, scaleY](QWidget *widget) {
     if (!widget) {
       return;
     }
-    const QRect oldRect = widget->geometry();
-    const int newX = static_cast<int>(static_cast<float>(oldRect.x()) * scaleX + 0.5f);
-    const int newY = static_cast<int>(static_cast<float>(oldRect.y()) * scaleY + 0.5f);
-    const int newW = static_cast<int>(static_cast<float>(oldRect.width()) * scaleX + 0.5f);
-    const int newH = static_cast<int>(static_cast<float>(oldRect.height()) * scaleY + 0.5f);
-    widget->setGeometry(newX, newY, std::max(1, newW), std::max(1, newH));
+    QRect sourceRect = widget->geometry();
+    auto sourceIt = originalAdlGeometries_.find(widget);
+    if (sourceIt != originalAdlGeometries_.end()) {
+      sourceRect = sourceIt.value();
+    } else {
+      const QVariant original = widget->property(kOriginalAdlGeometryProperty);
+      if (original.isValid() && original.canConvert<QRect>()) {
+        sourceRect = original.toRect();
+      }
+    }
+    const int newX = static_cast<int>(std::lround(static_cast<double>(sourceRect.x())
+        * static_cast<double>(scaleX)));
+    const int newY = static_cast<int>(std::lround(static_cast<double>(sourceRect.y())
+        * static_cast<double>(scaleY)));
+    const int newW = std::max(1, static_cast<int>(
+        std::lround(static_cast<double>(sourceRect.width())
+        * static_cast<double>(scaleX))));
+    const int newH = std::max(1, static_cast<int>(
+        std::lround(static_cast<double>(sourceRect.height())
+        * static_cast<double>(scaleY))));
+    widget->setGeometry(newX, newY, newW, newH);
   };
 
   /* Helper lambda to scale polyline/polygon points */
@@ -15492,8 +15550,10 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     QVector<QPoint> scaled;
     scaled.reserve(points.size());
     for (const QPoint &pt : points) {
-      const int newX = static_cast<int>(static_cast<float>(pt.x()) * scaleX + 0.5f);
-      const int newY = static_cast<int>(static_cast<float>(pt.y()) * scaleY + 0.5f);
+      const int newX = static_cast<int>(std::lround(
+          static_cast<double>(pt.x()) * static_cast<double>(scaleX)));
+      const int newY = static_cast<int>(std::lround(
+          static_cast<double>(pt.y()) * static_cast<double>(scaleY)));
       scaled.append(QPoint(newX, newY));
     }
     return scaled;
@@ -15570,7 +15630,12 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     if (e) {
       scaleWidget(e);
       /* Also scale the individual points */
-      QVector<QPoint> scaledPoints = scalePolyPoints(e->absolutePoints());
+      QVector<QPoint> sourcePoints = e->absolutePoints();
+      auto pointsIt = originalPolylinePoints_.find(e);
+      if (pointsIt != originalPolylinePoints_.end()) {
+        sourcePoints = pointsIt.value();
+      }
+      QVector<QPoint> scaledPoints = scalePolyPoints(sourcePoints);
       e->setAbsolutePoints(scaledPoints);
     }
   }
@@ -15578,7 +15643,12 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     if (e) {
       scaleWidget(e);
       /* Also scale the individual points */
-      QVector<QPoint> scaledPoints = scalePolyPoints(e->absolutePoints());
+      QVector<QPoint> sourcePoints = e->absolutePoints();
+      auto pointsIt = originalPolylinePoints_.find(e);
+      if (pointsIt != originalPolylinePoints_.end()) {
+        sourcePoints = pointsIt.value();
+      }
+      QVector<QPoint> scaledPoints = scalePolyPoints(sourcePoints);
       e->setAbsolutePoints(scaledPoints);
     }
   }
@@ -18185,6 +18255,11 @@ inline void DisplayWindow::clearAllElements()
   /* Reset original display dimensions so they get reinitialized on next load */
   originalDisplayWidth_ = 0;
   originalDisplayHeight_ = 0;
+  pendingResizeAreaSize_ = QSize(0, 0);
+  lastScaledAreaSize_ = QSize(0, 0);
+  if (resizeDebounceTimer_ && resizeDebounceTimer_->isActive()) {
+    resizeDebounceTimer_->stop();
+  }
   displaySelected_ = false;
   if (displayArea_) {
     displayArea_->setSelected(false);
@@ -18228,6 +18303,8 @@ inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
     /* Initialize original display dimensions for resize scaling */
     originalDisplayWidth_ = targetWidth;
     originalDisplayHeight_ = targetHeight;
+    pendingResizeAreaSize_ = QSize(targetWidth, targetHeight);
+    lastScaledAreaSize_ = QSize(targetWidth, targetHeight);
     QPoint targetPos = pos();
     if (hasXProperty) {
       targetPos.setX(geometry.x());

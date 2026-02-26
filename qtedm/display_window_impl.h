@@ -14232,10 +14232,12 @@ private:
     for (int i = 0; i < list.size(); ++i) {
       const QChar ch = list.at(i);
       if (ch == QLatin1Char(':')) {
+#ifdef Q_OS_WIN
         if ((i + 1) < list.size() && list.at(i + 1) == QLatin1Char('\\')) {
           currentItem.append(ch);
           continue;
         }
+#endif
         if (!currentItem.isEmpty()) {
           items.append(currentItem);
           currentItem.clear();
@@ -14253,7 +14255,11 @@ private:
 
     for (const QString &item : items) {
       const int separator = item.indexOf(QLatin1Char(';'));
-      if (separator <= 0 || separator >= item.size() - 1) {
+      if (separator < 0) {
+        qWarning() << "Missing semi-colon in MEDM_EXEC_LIST item:" << item;
+        break;
+      }
+      if (separator == 0 || separator >= item.size() - 1) {
         continue;
       }
       const QString label = item.left(separator).trimmed();
@@ -14600,7 +14606,17 @@ private:
       QMenu *executeMenu = menu.addMenu(QStringLiteral("Execute"));
       for (const ExecuteMenuEntry &entry : executeMenuEntries_) {
         QAction *action = executeMenu->addAction(entry.label);
-        action->setData(entry.command);
+        QObject::connect(action, &QAction::triggered, this,
+            [this, entry]() {
+              QString resolved;
+              if (!buildShellCommandString(entry.command, &resolved)) {
+                return;
+              }
+              if (resolved.trimmed().isEmpty()) {
+                return;
+              }
+              runShellCommand(resolved);
+            });
       }
     }
 

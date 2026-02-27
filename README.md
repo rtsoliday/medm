@@ -1,6 +1,60 @@
-# MEDM - Motif Editor and Display Manager
+# MEDM / QtEDM - Display Manager Suite
 
-## Overview
+## QtEDM (Qt-based EDM)
+
+QtEDM is the modern Qt implementation in this repository (`qtedm/`).
+It uses EPICS Channel Access / PVAccess and reads the same `.adl` display
+format used by MEDM.
+
+### Linux Prerequisites
+
+- Build tools: `gcc`, `g++`, `make`, `pkg-config`
+- EPICS Base (required): the build expects an EPICS Base checkout in one of
+	these locations, such as `../../epics-base` or `$HOME/epics/base-7.0`
+- Qt development packages (required):
+	- Qt6 preferred (`Qt6Core`, `Qt6Widgets`, `Qt6PrintSupport`, `Qt6Svg`)
+	- Qt5 fallback (`Qt5Core`, `Qt5Widgets`, `Qt5PrintSupport`, `Qt5Svg`)
+	- `moc` and `rcc` must be available
+- SDDS source tree (required for building shared support libraries used by QtEDM)
+
+Typical Debian/Ubuntu packages:
+
+```bash
+sudo apt-get install build-essential pkg-config qt6-base-dev qt6-svg-dev
+```
+
+Optional for legacy MEDM build as well:
+
+```bash
+sudo apt-get install libmotif-dev libxmu-dev
+```
+
+### Build QtEDM
+
+1. Clone dependencies next to this repository:
+
+```bash
+git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git
+git clone https://github.com/rtsoliday/SDDS.git
+```
+
+2. Build EPICS Base and SDDS (see each project README for details).
+
+3. From this repository root, build:
+
+```bash
+make
+```
+
+Notes:
+- On Linux, `qtedm` can be built without Motif, but full top-level builds
+	and support libraries may still require SDDS and/or prebuilt local libs.
+- If Qt is missing, the top-level build exits with an error after dependency
+	checks.
+
+## MEDM (Motif/X11)
+
+MEDM is the legacy Motif/X11 implementation in this repository (`medm/`).
 
 MEDM is a graphical user interface for designing and operating control screens in EPICS-based control systems. Each display contains graphical objects that can present and/or modify EPICS process variables over Channel Access. Typical widgets include buttons, meters, sliders, text fields, and time plots.
 

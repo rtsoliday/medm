@@ -9,8 +9,13 @@ format used by MEDM.
 ### Linux Prerequisites
 
 - Build tools: `gcc`, `g++`, `make`, `pkg-config`
-- EPICS Base (required): the build expects an EPICS Base checkout in one of
-	these locations, such as `../../epics-base` or `$HOME/epics/base-7.0`
+- EPICS Base (required): place an `epics-base` checkout at the same directory
+	level as this repository (for example, `../epics-base` when you are in
+	`medm/`).
+	
+	Note: the build system also checks `../../epics-base` from subdirectories
+	such as `qtedm/` and `medm/`; this is an internal relative path and can look
+	confusing in error messages.
 - Qt development packages (required):
 	- Qt6 preferred (`Qt6Core`, `Qt6Widgets`, `Qt6PrintSupport`, `Qt6Svg`)
 	- Qt5 fallback (`Qt5Core`, `Qt5Widgets`, `Qt5PrintSupport`, `Qt5Svg`)

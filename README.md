@@ -43,9 +43,24 @@ git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git
 git clone https://github.com/rtsoliday/SDDS.git
 ```
 
-2. Build EPICS Base and SDDS (see each project README for details).
+2. Build EPICS Base (see EPICS Base docs for full options):
 
-3. From this repository root, build:
+```bash
+cd ../epics-base
+make -j4
+```
+
+3. Build SDDS:
+
+```bash
+cd ../SDDS
+make -j4
+```
+
+If your SDDS checkout does not build out of the box on your platform, follow
+the SDDS README/build notes and then rerun `make`.
+
+4. From this repository root, build:
 
 ```bash
 make

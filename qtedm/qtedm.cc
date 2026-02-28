@@ -416,7 +416,6 @@ void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
       if (spec.hasHeight && spec.height > 0) {
         targetHeight = spec.height;
       }
-      displayArea->setMinimumSize(targetWidth, targetHeight);
       displayArea->resize(targetWidth, targetHeight);
       window->resize(targetWidth + extraWidth, targetHeight + extraHeight);
     } else {

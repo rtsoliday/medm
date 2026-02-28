@@ -14467,6 +14467,11 @@ private:
   {
     ensureExecuteContextMenuEntriesLoaded();
 
+    const bool canResetSize = displayArea_
+      && originalDisplayWidth_ > 0 && originalDisplayHeight_ > 0
+      && displayArea_->size()
+        != QSize(originalDisplayWidth_, originalDisplayHeight_);
+
     // Detect if user clicked on a strip chart or cartesian plot
     const QPoint windowPos = mapFromGlobal(globalPos);
     QWidget *clickedWidget = elementAt(windowPos);
@@ -14595,6 +14600,24 @@ private:
         [this]() {
           refreshDisplayView();
         });
+    if (canResetSize) {
+      QAction *resetSizeAction = menu.addAction(QStringLiteral("Reset Size"));
+      QObject::connect(resetSizeAction, &QAction::triggered, this,
+          [this]() {
+            if (!displayArea_ || originalDisplayWidth_ <= 0
+                || originalDisplayHeight_ <= 0) {
+              return;
+            }
+            const QSize currentWindowSize = size();
+            const QSize currentAreaSize = displayArea_->size();
+            const int extraWidth =
+                currentWindowSize.width() - currentAreaSize.width();
+            const int extraHeight =
+                currentWindowSize.height() - currentAreaSize.height();
+            resize(originalDisplayWidth_ + extraWidth,
+                originalDisplayHeight_ + extraHeight);
+          });
+    }
     QAction *retryAction =
       menu.addAction(QStringLiteral("Retry Connections"));
     QObject::connect(retryAction, &QAction::triggered, this,
@@ -15552,12 +15575,15 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
         * static_cast<double>(scaleX)));
     const int newY = static_cast<int>(std::lround(static_cast<double>(sourceRect.y())
         * static_cast<double>(scaleY)));
-    const int newW = std::max(1, static_cast<int>(
-        std::lround(static_cast<double>(sourceRect.width())
-        * static_cast<double>(scaleX))));
-    const int newH = std::max(1, static_cast<int>(
-        std::lround(static_cast<double>(sourceRect.height())
-        * static_cast<double>(scaleY))));
+    const QSize minimumSize = widget->minimumSize();
+    const int minWidth = std::max(1, minimumSize.width());
+    const int minHeight = std::max(1, minimumSize.height());
+    const int newW = std::max(minWidth, static_cast<int>(
+      std::lround(static_cast<double>(sourceRect.width())
+      * static_cast<double>(scaleX))));
+    const int newH = std::max(minHeight, static_cast<int>(
+      std::lround(static_cast<double>(sourceRect.height())
+      * static_cast<double>(scaleY))));
     widget->setGeometry(newX, newY, newW, newH);
   };
 
@@ -15962,7 +15988,9 @@ inline bool DisplayWindow::loadFromFile(const QString &filePath,
    * This is particularly noticeable for Related Display "Replace" when the
    * target display is smaller than the current window. */
   if (displayArea_) {
-    const QSize desiredAreaSize = displayArea_->minimumSize();
+    const QSize desiredAreaSize(
+        std::max(originalDisplayWidth_, kMinimumDisplayWidth),
+        std::max(originalDisplayHeight_, kMinimumDisplayHeight));
     QPointer<DisplayWindow> self(this);
     auto applyLoadedSize = [self, desiredAreaSize]() {
       DisplayWindow *window = self.data();
@@ -18311,7 +18339,7 @@ inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
     const int targetHeight = std::max(hasHeightProperty ? geometry.height()
                                                        : currentAreaSize.height(),
         kMinimumDisplayHeight);
-    displayArea_->setMinimumSize(targetWidth, targetHeight);
+    displayArea_->setMinimumSize(kMinimumDisplayWidth, kMinimumDisplayHeight);
     displayArea_->resize(targetWidth, targetHeight);
     if (hasWidthProperty || hasHeightProperty) {
       resize(targetWidth + extraWidth, targetHeight + extraHeight);
@@ -18331,6 +18359,45 @@ inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
     if ((hasXProperty || hasYProperty) && !preserveNextLoadPosition_) {
       // Preserve unspecified axes so partial geometry in the ADL stays intact.
       move(targetPos);
+
+      QRect visibleFrame = frameGeometry();
+      if (!visibleFrame.isValid() || visibleFrame.isEmpty()) {
+        QSize frameSize = size();
+        if (frameSize.isEmpty()) {
+          frameSize = QSize(targetWidth, targetHeight);
+        }
+        visibleFrame = QRect(pos(), frameSize);
+      }
+
+      bool intersectsScreen = false;
+      const QList<QScreen *> screens = QGuiApplication::screens();
+      for (QScreen *screen : screens) {
+        if (screen && screen->availableGeometry().intersects(visibleFrame)) {
+          intersectsScreen = true;
+          break;
+        }
+      }
+
+      if (!intersectsScreen) {
+        QScreen *screen = this->screen();
+        if (!screen) {
+          screen = QGuiApplication::primaryScreen();
+        }
+        if (screen) {
+          const QRect available = screen->availableGeometry();
+          QSize frameSize = frameGeometry().size();
+          if (frameSize.isEmpty()) {
+            frameSize = size();
+          }
+          const int maxX = std::max(available.left(),
+              available.right() - frameSize.width() + 1);
+          const int maxY = std::max(available.top(),
+              available.bottom() - frameSize.height() + 1);
+          const int clampedX = qBound(available.left(), pos().x(), maxX);
+          const int clampedY = qBound(available.top(), pos().y(), maxY);
+          move(clampedX, clampedY);
+        }
+      }
     }
     const QString clrStr = propertyValue(displayNode, QStringLiteral("clr"));
     const QString bclrStr = propertyValue(displayNode, QStringLiteral("bclr"));

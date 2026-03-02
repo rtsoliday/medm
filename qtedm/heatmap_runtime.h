@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -18,6 +19,9 @@ public:
 
   void start();
   void stop();
+
+  static void setGlobalUpdatesPaused(bool paused);
+  static bool isGlobalUpdatesPaused();
 
 private:
   struct ChannelState
@@ -48,6 +52,8 @@ private:
   short lastSeverity_ = -1;
   int runtimeXDimension_ = 0;
   int runtimeYDimension_ = 0;
+
+  static std::atomic<bool> globalUpdatesPaused_;
 };
 
 template <typename Func>

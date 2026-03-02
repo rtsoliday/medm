@@ -11,6 +11,7 @@
 
 #include "audit_logger.h"
 #include "channel_access_context.h"
+#include "heatmap_runtime.h"
 #include "startup_timing.h"
 #include "statistics_tracker.h"
 
@@ -376,6 +377,10 @@ void SharedChannelManager::valueCallback(event_handler_args args)
 {
   auto *channel = static_cast<SharedChannel *>(args.usr);
   if (!channel) {
+    return;
+  }
+  
+  if (args.count > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
     return;
   }
   
@@ -782,10 +787,12 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     data.hasTimestamp = true;
     if (args.count > 1) {
       data.isArray = true;
-      data.arrayValues.resize(args.count);
-      const double *src = &val->value;
-      for (long i = 0; i < args.count; ++i) {
-        data.arrayValues[i] = src[i];
+      if (args.count > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
+        data.arrayValues.clear();
+      } else {
+        data.arrayValues.resize(args.count);
+        const double *src = &val->value;
+        std::memcpy(data.arrayValues.data(), src, args.count * sizeof(double));
       }
       data.numericValue = val->value;
     } else {
@@ -802,10 +809,15 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     data.hasTimestamp = true;
     if (args.count > 1) {
       data.isArray = true;
-      data.arrayValues.resize(args.count);
-      const float *src = &val->value;
-      for (long i = 0; i < args.count; ++i) {
-        data.arrayValues[i] = static_cast<double>(src[i]);
+      if (args.count > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
+        data.arrayValues.clear();
+      } else {
+        data.arrayValues.resize(args.count);
+        const float *src = &val->value;
+        double *dst = data.arrayValues.data();
+        for (long i = 0; i < args.count; ++i) {
+          dst[i] = static_cast<double>(src[i]);
+        }
       }
       data.numericValue = static_cast<double>(val->value);
     } else {
@@ -822,10 +834,15 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     data.hasTimestamp = true;
     if (args.count > 1) {
       data.isArray = true;
-      data.arrayValues.resize(args.count);
-      const dbr_long_t *src = &val->value;
-      for (long i = 0; i < args.count; ++i) {
-        data.arrayValues[i] = static_cast<double>(src[i]);
+      if (args.count > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
+        data.arrayValues.clear();
+      } else {
+        data.arrayValues.resize(args.count);
+        const dbr_long_t *src = &val->value;
+        double *dst = data.arrayValues.data();
+        for (long i = 0; i < args.count; ++i) {
+          dst[i] = static_cast<double>(src[i]);
+        }
       }
       data.numericValue = static_cast<double>(val->value);
     } else {
@@ -842,10 +859,15 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     data.hasTimestamp = true;
     if (args.count > 1) {
       data.isArray = true;
-      data.arrayValues.resize(args.count);
-      const dbr_short_t *src = &val->value;
-      for (long i = 0; i < args.count; ++i) {
-        data.arrayValues[i] = static_cast<double>(src[i]);
+      if (args.count > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
+        data.arrayValues.clear();
+      } else {
+        data.arrayValues.resize(args.count);
+        const dbr_short_t *src = &val->value;
+        double *dst = data.arrayValues.data();
+        for (long i = 0; i < args.count; ++i) {
+          dst[i] = static_cast<double>(src[i]);
+        }
       }
       data.numericValue = static_cast<double>(val->value);
     } else {

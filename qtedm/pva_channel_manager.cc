@@ -1,4 +1,6 @@
 #include "pva_channel_manager.h"
+#include "heatmap_runtime.h"
+#include <cstring>
 
 #include <algorithm>
 
@@ -241,9 +243,11 @@ void PvaChannelManager::updateCachedData(PvaChannel *channel)
     data.hasValue = true;
     if (elementCount > 1) {
       data.isArray = true;
-      data.arrayValues.resize(static_cast<int>(elementCount));
-      for (int i = 0; i < static_cast<int>(elementCount); ++i) {
-        data.arrayValues[i] = source[0].values[i];
+      if (elementCount > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
+        data.arrayValues.clear();
+      } else {
+        data.arrayValues.resize(static_cast<int>(elementCount));
+        std::memcpy(data.arrayValues.data(), source[0].values, elementCount * sizeof(double));
       }
     }
   }

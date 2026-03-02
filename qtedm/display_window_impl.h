@@ -14516,7 +14516,9 @@ private:
               clickedCartesianPlot->resetZoom();
             });
       }
+      HeatmapRuntime::setGlobalUpdatesPaused(true);
       menu.exec(globalPos);
+      HeatmapRuntime::setGlobalUpdatesPaused(false);
       return;
     }
 
@@ -14653,7 +14655,9 @@ private:
       }
     }
 
+    HeatmapRuntime::setGlobalUpdatesPaused(true);
     menu.exec(globalPos);
+    HeatmapRuntime::setGlobalUpdatesPaused(false);
   }
 
   void focusMainWindow() const

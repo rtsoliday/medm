@@ -17,6 +17,18 @@ using RuntimeUtils::isNumericFieldType;
 using RuntimeUtils::kInvalidSeverity;
 }
 
+std::atomic<bool> HeatmapRuntime::globalUpdatesPaused_{false};
+
+void HeatmapRuntime::setGlobalUpdatesPaused(bool paused)
+{
+  globalUpdatesPaused_.store(paused, std::memory_order_relaxed);
+}
+
+bool HeatmapRuntime::isGlobalUpdatesPaused()
+{
+  return globalUpdatesPaused_.load(std::memory_order_relaxed);
+}
+
 HeatmapRuntime::HeatmapRuntime(HeatmapElement *element)
   : QObject(element)
   , element_(element)
@@ -190,6 +202,9 @@ void HeatmapRuntime::handleDataValue(const SharedChannelData &data)
   if (!started_) {
     return;
   }
+  if (globalUpdatesPaused_.load(std::memory_order_relaxed)) {
+    return;
+  }
   if (!data.isNumeric) {
     return;
   }
@@ -228,6 +243,9 @@ void HeatmapRuntime::handleDimensionConnection(ChannelState &state,
 void HeatmapRuntime::handleDimensionValue(ChannelState &state, int value)
 {
   if (!started_) {
+    return;
+  }
+  if (globalUpdatesPaused_.load(std::memory_order_relaxed)) {
     return;
   }
   if (value <= 0) {

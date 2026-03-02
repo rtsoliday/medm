@@ -58,6 +58,8 @@ protected:
 private:
   void invalidateCache();
   void rebuildImage();
+  QImage maxPoolDownsample(const QImage &source,
+      const QSize &targetSize) const;
   QSize effectiveDimensions() const;
   QColor backgroundColor() const;
   QColor borderColor() const;
@@ -84,4 +86,6 @@ private:
 
   QImage cachedImage_;
   bool cacheValid_ = false;
+  QImage downsampledCachedImage_;
+  QSize downsampledTargetSize_;
 };

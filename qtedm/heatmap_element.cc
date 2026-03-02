@@ -248,7 +248,24 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
   }
 
   if (!cachedImage_.isNull()) {
-    painter.drawImage(heatmapRect, cachedImage_);
+    QImage imageToDraw = cachedImage_;
+    const QSize targetSize = heatmapRect.size();
+    if (targetSize.width() > 0 && targetSize.height() > 0
+        && (cachedImage_.width() > targetSize.width()
+            || cachedImage_.height() > targetSize.height())) {
+      if (downsampledCachedImage_.isNull() || downsampledTargetSize_ != targetSize) {
+        downsampledCachedImage_ = maxPoolDownsample(cachedImage_, targetSize);
+        downsampledTargetSize_ = targetSize;
+      }
+      imageToDraw = downsampledCachedImage_;
+    }
+
+    if (!imageToDraw.isNull()
+        && imageToDraw.size() == targetSize) {
+      painter.drawImage(heatmapRect.topLeft(), imageToDraw);
+    } else {
+      painter.drawImage(heatmapRect, imageToDraw);
+    }
   } else {
     painter.fillRect(heatmapRect, backgroundColor());
     painter.setPen(QPen(borderColor(), 1, Qt::DashLine));
@@ -323,6 +340,8 @@ void HeatmapElement::onRuntimeSeverityChanged()
 void HeatmapElement::invalidateCache()
 {
   cacheValid_ = false;
+  downsampledCachedImage_ = QImage();
+  downsampledTargetSize_ = QSize();
   update();
 }
 
@@ -431,6 +450,59 @@ void HeatmapElement::rebuildImage()
       cachedImage_.setPixelColor(x, y, color);
     }
   }
+}
+
+QImage HeatmapElement::maxPoolDownsample(const QImage &source,
+    const QSize &targetSize) const
+{
+  if (source.isNull() || targetSize.isEmpty()) {
+    return QImage();
+  }
+
+  const int srcWidth = source.width();
+  const int srcHeight = source.height();
+  const int dstWidth = targetSize.width();
+  const int dstHeight = targetSize.height();
+
+  if (dstWidth <= 0 || dstHeight <= 0) {
+    return QImage();
+  }
+
+  if (dstWidth >= srcWidth && dstHeight >= srcHeight) {
+    return source;
+  }
+
+  QImage pooled(dstWidth, dstHeight, QImage::Format_RGB32);
+
+  for (int y = 0; y < dstHeight; ++y) {
+    const int yStart = (y * srcHeight) / dstHeight;
+    int yEnd = ((y + 1) * srcHeight) / dstHeight;
+    yEnd = std::max(yStart + 1, yEnd);
+    yEnd = std::min(yEnd, srcHeight);
+
+    for (int x = 0; x < dstWidth; ++x) {
+      const int xStart = (x * srcWidth) / dstWidth;
+      int xEnd = ((x + 1) * srcWidth) / dstWidth;
+      xEnd = std::max(xStart + 1, xEnd);
+      xEnd = std::min(xEnd, srcWidth);
+
+      int extremeGray = invertGreyscale_ ? 0 : 255;
+      for (int srcY = yStart; srcY < yEnd; ++srcY) {
+        for (int srcX = xStart; srcX < xEnd; ++srcX) {
+          const int gray = qGray(source.pixel(srcX, srcY));
+          if (invertGreyscale_) {
+            extremeGray = std::max(extremeGray, gray);
+          } else {
+            extremeGray = std::min(extremeGray, gray);
+          }
+        }
+      }
+
+      pooled.setPixelColor(x, y, QColor(extremeGray, extremeGray, extremeGray));
+    }
+  }
+
+  return pooled;
 }
 
 QColor HeatmapElement::backgroundColor() const

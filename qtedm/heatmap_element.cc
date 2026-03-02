@@ -364,7 +364,6 @@ QSize HeatmapElement::effectiveDimensions() const
 void HeatmapElement::rebuildImage()
 {
   cacheValid_ = true;
-  runtimeRangeValid_ = false;
 
   const QSize dims = effectiveDimensions();
   if (dims.isEmpty()) {

@@ -433,6 +433,7 @@ void HeatmapElement::rebuildImage()
   };
 
   for (int y = 0; y < height; ++y) {
+    QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(y));
     for (int x = 0; x < width; ++x) {
       const int index = indexFor(x, y);
       if (index < 0 || index >= available) {
@@ -446,8 +447,7 @@ void HeatmapElement::rebuildImage()
       ratio = std::clamp(ratio, 0.0, 1.0);
       const double intensity = invertGreyscale_ ? ratio : (1.0 - ratio);
       const int gray = static_cast<int>(std::round(intensity * 255.0));
-      const QColor color(gray, gray, gray);
-      cachedImage_.setPixelColor(x, y, color);
+      scanLine[x] = qRgb(gray, gray, gray);
     }
   }
 }
@@ -480,6 +480,8 @@ QImage HeatmapElement::maxPoolDownsample(const QImage &source,
     yEnd = std::max(yStart + 1, yEnd);
     yEnd = std::min(yEnd, srcHeight);
 
+    QRgb *dstScanLine = reinterpret_cast<QRgb*>(pooled.scanLine(y));
+
     for (int x = 0; x < dstWidth; ++x) {
       const int xStart = (x * srcWidth) / dstWidth;
       int xEnd = ((x + 1) * srcWidth) / dstWidth;
@@ -488,8 +490,9 @@ QImage HeatmapElement::maxPoolDownsample(const QImage &source,
 
       int extremeGray = invertGreyscale_ ? 0 : 255;
       for (int srcY = yStart; srcY < yEnd; ++srcY) {
+        const QRgb *srcScanLine = reinterpret_cast<const QRgb*>(source.scanLine(srcY));
         for (int srcX = xStart; srcX < xEnd; ++srcX) {
-          const int gray = qGray(source.pixel(srcX, srcY));
+          const int gray = qGray(srcScanLine[srcX]);
           if (invertGreyscale_) {
             extremeGray = std::max(extremeGray, gray);
           } else {
@@ -498,7 +501,7 @@ QImage HeatmapElement::maxPoolDownsample(const QImage &source,
         }
       }
 
-      pooled.setPixelColor(x, y, QColor(extremeGray, extremeGray, extremeGray));
+      dstScanLine[x] = qRgb(extremeGray, extremeGray, extremeGray);
     }
   }
 

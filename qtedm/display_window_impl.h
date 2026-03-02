@@ -7585,6 +7585,16 @@ private:
         [this, element](bool invert) {
           element->setInvertGreyscale(invert);
           markDirty();
+        },
+        [element]() { return element->showTopProfile(); },
+        [this, element](bool show) {
+          element->setShowTopProfile(show);
+          markDirty();
+        },
+        [element]() { return element->showRightProfile(); },
+        [this, element](bool show) {
+          element->setShowRightProfile(show);
+          markDirty();
         });
   }
 
@@ -17167,6 +17177,12 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
             QStringLiteral("order=\"%1\"")
                 .arg(AdlWriter::heatmapOrderString(heatmap->order())));
       }
+      if (heatmap->showTopProfile()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showTopProfile=\"yes\""));
+      }
+      if (heatmap->showRightProfile()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showRightProfile=\"yes\""));
+      }
       if (!heatmap->invertGreyscale()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("invertGreyscale=\"false\""));
@@ -18085,6 +18101,12 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("order=\"%1\"")
               .arg(AdlWriter::heatmapOrderString(heatmap->order())));
+    }
+    if (heatmap->showTopProfile()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("showTopProfile=\"yes\""));
+    }
+    if (heatmap->showRightProfile()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("showRightProfile=\"yes\""));
     }
     if (!heatmap->invertGreyscale()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -22834,6 +22856,14 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
   }
   if (!invertValue.trimmed().isEmpty()) {
     element->setInvertGreyscale(parseHeatmapInvertGreyscale(invertValue));
+  }
+  QString showTopProfileValue = propertyValue(heatmapNode, QStringLiteral("showTopProfile"));
+  if (!showTopProfileValue.isEmpty()) {
+    element->setShowTopProfile(parseHeatmapInvertGreyscale(showTopProfileValue));
+  }
+  QString showRightProfileValue = propertyValue(heatmapNode, QStringLiteral("showRightProfile"));
+  if (!showRightProfileValue.isEmpty()) {
+    element->setShowRightProfile(parseHeatmapInvertGreyscale(showRightProfileValue));
   }
 
   if (currentCompositeOwner_) {

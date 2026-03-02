@@ -666,6 +666,32 @@ public:
         }
       });
 
+    heatmapShowTopProfileCombo_ = new QComboBox;
+    heatmapShowTopProfileCombo_->setFont(valueFont_);
+    heatmapShowTopProfileCombo_->setAutoFillBackground(true);
+    heatmapShowTopProfileCombo_->addItem(QStringLiteral("No"));
+    heatmapShowTopProfileCombo_->addItem(QStringLiteral("Yes"));
+    QObject::connect(heatmapShowTopProfileCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapShowTopProfileSetter_) {
+          heatmapShowTopProfileSetter_(heatmapBoolFromIndex(index));
+        }
+      });
+
+    heatmapShowRightProfileCombo_ = new QComboBox;
+    heatmapShowRightProfileCombo_->setFont(valueFont_);
+    heatmapShowRightProfileCombo_->setAutoFillBackground(true);
+    heatmapShowRightProfileCombo_->addItem(QStringLiteral("No"));
+    heatmapShowRightProfileCombo_->addItem(QStringLiteral("Yes"));
+    QObject::connect(heatmapShowRightProfileCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapShowRightProfileSetter_) {
+          heatmapShowRightProfileSetter_(heatmapBoolFromIndex(index));
+        }
+      });
+
     int heatmapRow = 0;
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Title"), heatmapTitleEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Data PV"), heatmapDataChannelEdit_);
@@ -678,6 +704,10 @@ public:
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Order"), heatmapOrderCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Invert Greyscale"),
       heatmapInvertGreyscaleCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Top Profile"),
+      heatmapShowTopProfileCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Right Profile"),
+      heatmapShowRightProfileCombo_);
     heatmapLayout->setRowStretch(heatmapRow, 1);
     updateHeatmapDimensionControls();
     entriesLayout->addWidget(heatmapSection_);
@@ -6250,7 +6280,11 @@ public:
       std::function<HeatmapOrder()> orderGetter,
         std::function<void(HeatmapOrder)> orderSetter,
         std::function<bool()> invertGreyscaleGetter,
-        std::function<void(bool)> invertGreyscaleSetter)
+        std::function<void(bool)> invertGreyscaleSetter,
+      std::function<bool()> showTopProfileGetter,
+      std::function<void(bool)> showTopProfileSetter,
+      std::function<bool()> showRightProfileGetter,
+      std::function<void(bool)> showRightProfileSetter)
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kHeatmap;
@@ -6279,6 +6313,10 @@ public:
     heatmapOrderSetter_ = std::move(orderSetter);
     heatmapInvertGreyscaleGetter_ = std::move(invertGreyscaleGetter);
     heatmapInvertGreyscaleSetter_ = std::move(invertGreyscaleSetter);
+    heatmapShowTopProfileGetter_ = std::move(showTopProfileGetter);
+    heatmapShowTopProfileSetter_ = std::move(showTopProfileSetter);
+    heatmapShowRightProfileGetter_ = std::move(showRightProfileGetter);
+    heatmapShowRightProfileSetter_ = std::move(showRightProfileSetter);
 
     QRect heatmapGeometry = geometryGetter_ ? geometryGetter_() : QRect();
     if (heatmapGeometry.width() <= 0) {
@@ -6361,6 +6399,20 @@ public:
           ? heatmapInvertGreyscaleGetter_()
           : true;
       heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(invert));
+    }
+    if (heatmapShowTopProfileCombo_) {
+      const QSignalBlocker blocker(heatmapShowTopProfileCombo_);
+      const bool show = heatmapShowTopProfileGetter_
+          ? heatmapShowTopProfileGetter_()
+          : false;
+      heatmapShowTopProfileCombo_->setCurrentIndex(heatmapBoolToIndex(show));
+    }
+    if (heatmapShowRightProfileCombo_) {
+      const QSignalBlocker blocker(heatmapShowRightProfileCombo_);
+      const bool show = heatmapShowRightProfileGetter_
+          ? heatmapShowRightProfileGetter_()
+          : false;
+      heatmapShowRightProfileCombo_->setCurrentIndex(heatmapBoolToIndex(show));
     }
 
     updateHeatmapDimensionControls();
@@ -7403,6 +7455,14 @@ public:
     if (heatmapInvertGreyscaleCombo_) {
       const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
       heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(true));
+    }
+    if (heatmapShowTopProfileCombo_) {
+      const QSignalBlocker blocker(heatmapShowTopProfileCombo_);
+      heatmapShowTopProfileCombo_->setCurrentIndex(heatmapBoolToIndex(false));
+    }
+    if (heatmapShowRightProfileCombo_) {
+      const QSignalBlocker blocker(heatmapShowRightProfileCombo_);
+      heatmapShowRightProfileCombo_->setCurrentIndex(heatmapBoolToIndex(false));
     }
 
     resetLineEdit(heatmapTitleEdit_);
@@ -10065,6 +10125,8 @@ private:
   QLineEdit *heatmapYDimChannelEdit_ = nullptr;
   QComboBox *heatmapOrderCombo_ = nullptr;
   QComboBox *heatmapInvertGreyscaleCombo_ = nullptr;
+  QComboBox *heatmapShowTopProfileCombo_ = nullptr;
+  QComboBox *heatmapShowRightProfileCombo_ = nullptr;
   QWidget *textMonitorSection_ = nullptr;
   QPushButton *textMonitorForegroundButton_ = nullptr;
   QPushButton *textMonitorBackgroundButton_ = nullptr;
@@ -10907,6 +10969,10 @@ private:
   std::function<void(HeatmapOrder)> heatmapOrderSetter_;
   std::function<bool()> heatmapInvertGreyscaleGetter_;
   std::function<void(bool)> heatmapInvertGreyscaleSetter_;
+  std::function<bool()> heatmapShowTopProfileGetter_;
+  std::function<void(bool)> heatmapShowTopProfileSetter_;
+  std::function<bool()> heatmapShowRightProfileGetter_;
+  std::function<void(bool)> heatmapShowRightProfileSetter_;
   std::function<QColor()> lineColorGetter_;
   std::function<void(const QColor &)> lineColorSetter_;
   std::function<RectangleLineStyle()> lineLineStyleGetter_;

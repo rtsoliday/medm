@@ -1,3 +1,4 @@
+#include <QPainterPath>
 #include "heatmap_element.h"
 
 #include <algorithm>
@@ -247,6 +248,21 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
         drawRect.right() - heatmapRect.right(), heatmapRect.height());
   }
 
+  const int profileSize = std::min(40, std::min(heatmapRect.width() / 4, heatmapRect.height() / 4));
+  QRect topProfileRect;
+  QRect rightProfileRect;
+
+  if (showTopProfile_ && profileSize > 0) {
+    topProfileRect = QRect(heatmapRect.left(), heatmapRect.top(), heatmapRect.width(), profileSize);
+    heatmapRect.setTop(heatmapRect.top() + profileSize + 2);
+  }
+  if (showRightProfile_ && profileSize > 0) {
+    rightProfileRect = QRect(heatmapRect.right() - profileSize + 1, heatmapRect.top(), profileSize, heatmapRect.height());
+    heatmapRect.setRight(heatmapRect.right() - profileSize - 2);
+    if (showTopProfile_) {
+      topProfileRect.setWidth(heatmapRect.width());
+    }
+  }
   if (!cachedImage_.isNull()) {
     QImage imageToDraw = cachedImage_;
     const QSize targetSize = heatmapRect.size();
@@ -275,6 +291,57 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
     painter.drawLine(heatmapRect.topRight(), heatmapRect.bottomLeft());
   }
 
+  if (!topProfileRect.isEmpty() && !topProfileData_.isEmpty()) {
+    painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
+    painter.drawRect(topProfileRect);
+    
+    QPainterPath path;
+    bool hasStart = false;
+    double range = topProfileMax_ - topProfileMin_;
+    double y_scale = range > 0 ? (topProfileRect.height() - 4.0) / range : 0;
+    for (int i = 0; i < topProfileData_.size(); ++i) {
+      double v = topProfileData_[i];
+      if (std::isnan(v)) continue;
+      double x = topProfileRect.left() + 1 + (i + 0.5) * (topProfileRect.width() - 2) / topProfileData_.size();
+      double y = topProfileRect.bottom() - 1 - (v - topProfileMin_) * y_scale;
+      if (!hasStart) {
+        path.moveTo(x, y);
+        hasStart = true;
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    if (hasStart) {
+      painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
+      painter.drawPath(path);
+    }
+  }
+
+  if (!rightProfileRect.isEmpty() && !rightProfileData_.isEmpty()) {
+    painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
+    painter.drawRect(rightProfileRect);
+    
+    QPainterPath path;
+    bool hasStart = false;
+    double range = rightProfileMax_ - rightProfileMin_;
+    double x_scale = range > 0 ? (rightProfileRect.width() - 4.0) / range : 0;
+    for (int i = 0; i < rightProfileData_.size(); ++i) {
+      double v = rightProfileData_[i];
+      if (std::isnan(v)) continue;
+      double y = rightProfileRect.top() + 1 + (i + 0.5) * (rightProfileRect.height() - 2) / rightProfileData_.size();
+      double x = rightProfileRect.left() + 1 + (v - rightProfileMin_) * x_scale;
+      if (!hasStart) {
+        path.moveTo(x, y);
+        hasStart = true;
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    if (hasStart) {
+      painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
+      painter.drawPath(path);
+    }
+  }
   if (!legendRect.isEmpty()) {
     painter.fillRect(legendRect, backgroundColor());
     painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
@@ -421,6 +488,81 @@ void HeatmapElement::rebuildImage()
 
   const double range = maxValue - minValue;
 
+  if (showTopProfile_ || showRightProfile_) {
+    topProfileData_.clear();
+    rightProfileData_.clear();
+    
+    if (showTopProfile_) {
+      topProfileData_.resize(width);
+      topProfileData_.fill(0.0);
+    }
+    if (showRightProfile_) {
+      rightProfileData_.resize(height);
+      rightProfileData_.fill(0.0);
+    }
+
+    QVector<int> topCounts(width, 0);
+    QVector<int> rightCounts(height, 0);
+
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
+        if (index < available) {
+          const double v = values[index];
+          if (!std::isnan(v) && !std::isinf(v)) {
+            if (showTopProfile_) {
+              topProfileData_[x] += v;
+              topCounts[x]++;
+            }
+            if (showRightProfile_) {
+              rightProfileData_[y] += v;
+              rightCounts[y]++;
+            }
+          }
+        }
+      }
+    }
+    
+    if (showTopProfile_) {
+      bool haveTop = false;
+      for (int x = 0; x < width; ++x) {
+        if (topCounts[x] > 0) {
+          topProfileData_[x] /= topCounts[x];
+          if (!haveTop) {
+            topProfileMin_ = topProfileData_[x];
+            topProfileMax_ = topProfileData_[x];
+            haveTop = true;
+          } else {
+            topProfileMin_ = std::min(topProfileMin_, topProfileData_[x]);
+            topProfileMax_ = std::max(topProfileMax_, topProfileData_[x]);
+          }
+        } else {
+          topProfileData_[x] = std::numeric_limits<double>::quiet_NaN();
+        }
+      }
+      if (!haveTop) { topProfileMin_ = 0.0; topProfileMax_ = 0.0; }
+    }
+
+    if (showRightProfile_) {
+      bool haveRight = false;
+      for (int y = 0; y < height; ++y) {
+        if (rightCounts[y] > 0) {
+          rightProfileData_[y] /= rightCounts[y];
+          if (!haveRight) {
+            rightProfileMin_ = rightProfileData_[y];
+            rightProfileMax_ = rightProfileData_[y];
+            haveRight = true;
+          } else {
+            rightProfileMin_ = std::min(rightProfileMin_, rightProfileData_[y]);
+            rightProfileMax_ = std::max(rightProfileMax_, rightProfileData_[y]);
+          }
+        } else {
+          rightProfileData_[y] = std::numeric_limits<double>::quiet_NaN();
+        }
+      }
+      if (!haveRight) { rightProfileMin_ = 0.0; rightProfileMax_ = 0.0; }
+    }
+  }
   cachedImage_ = QImage(width, height, QImage::Format_RGB32);
   cachedImage_.fill(backgroundColor());
 
@@ -561,4 +703,29 @@ QColor HeatmapElement::backgroundColor() const
 QColor HeatmapElement::borderColor() const
 {
   return effectiveForegroundColor();
+}
+bool HeatmapElement::showTopProfile() const
+{
+  return showTopProfile_;
+}
+
+void HeatmapElement::setShowTopProfile(bool show)
+{
+  if (showTopProfile_ != show) {
+    showTopProfile_ = show;
+    update();
+  }
+}
+
+bool HeatmapElement::showRightProfile() const
+{
+  return showRightProfile_;
+}
+
+void HeatmapElement::setShowRightProfile(bool show)
+{
+  if (showRightProfile_ != show) {
+    showRightProfile_ = show;
+    update();
+  }
 }

@@ -42,6 +42,12 @@ public:
   HeatmapOrder order() const;
   void setOrder(HeatmapOrder order);
 
+  bool showTopProfile() const;
+  void setShowTopProfile(bool show);
+
+  bool showRightProfile() const;
+  void setShowRightProfile(bool show);
+
   bool invertGreyscale() const;
   void setInvertGreyscale(bool invert);
 
@@ -74,6 +80,14 @@ private:
   QString yDimensionChannel_;
   HeatmapOrder order_ = HeatmapOrder::kRowMajor;
   bool invertGreyscale_ = true;
+  QVector<double> topProfileData_;
+  double topProfileMin_ = 0.0;
+  double topProfileMax_ = 0.0;
+  QVector<double> rightProfileData_;
+  double rightProfileMin_ = 0.0;
+  double rightProfileMax_ = 0.0;
+  bool showTopProfile_ = false;
+  bool showRightProfile_ = false;
 
   QVector<double> runtimeValues_;
   int runtimeXDimension_ = 0;

@@ -21230,7 +21230,9 @@ inline void DisplayWindow::handleRelatedDisplayActivation(
         return;
       }
 
-      const QSize targetAreaSize = area->minimumSize();
+      const QSize targetAreaSize(
+          std::max(window->originalDisplayWidth_, kMinimumDisplayWidth),
+          std::max(window->originalDisplayHeight_, kMinimumDisplayHeight));
       if (targetAreaSize.width() <= 0 || targetAreaSize.height() <= 0) {
         return;
       }

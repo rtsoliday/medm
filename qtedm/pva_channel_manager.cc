@@ -1,5 +1,7 @@
 #include "pva_channel_manager.h"
 #include "heatmap_runtime.h"
+#include <pv/pvData.h>
+#include <pv/pvData.h>
 #include <cstring>
 
 #include <algorithm>
@@ -10,7 +12,13 @@
 #include <QStringList>
 
 
+extern "C" bool pvaIsGlobalUpdatesPaused() {
+    return HeatmapRuntime::isGlobalUpdatesPaused();
+}
+
 namespace {
+
+
 constexpr qint64 kMinNotifyIntervalMs = 100;
 constexpr int kPollIntervalMs = 100;
 constexpr double kConnectTimeoutSeconds = 1.0;
@@ -197,8 +205,10 @@ void PvaChannelManager::updateAccessRights(PvaChannel *channel)
   channel->canWrite = HaveWriteAccess(channel->pva, 0);
 }
 
+
 void PvaChannelManager::updateCachedData(PvaChannel *channel)
 {
+  
   if (!channel || !channel->pva) {
     return;
   }
@@ -244,6 +254,12 @@ void PvaChannelManager::updateCachedData(PvaChannel *channel)
     if (elementCount > 1) {
       data.isArray = true;
       if (elementCount > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
+        data.arrayValues.clear();
+      } else if (reading.monitorOpaqueVector != nullptr) {
+        auto srcVec = static_cast<epics::pvData::shared_vector<const double>*>(reading.monitorOpaqueVector);
+        auto keptVec = new epics::pvData::shared_vector<const double>(*srcVec);
+        data.sharedArrayData = std::shared_ptr<const double>(keptVec->data(), [keptVec](const double*) { delete keptVec; });
+        data.sharedArraySize = static_cast<size_t>(elementCount);
         data.arrayValues.clear();
       } else {
         data.arrayValues.resize(static_cast<int>(elementCount));
@@ -392,7 +408,7 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
 
 void PvaChannelManager::notifySubscribers(PvaChannel *channel)
 {
-  if (!channel) {
+    if (!channel) {
     return;
   }
 
@@ -412,13 +428,39 @@ void PvaChannelManager::notifySubscribers(PvaChannel *channel)
     }
   }
   channel->updateCount++;
+
+      
 }
 
+
+
+#include <chrono>
 void PvaChannelManager::pollChannels()
 {
+  
+
   if (channels_.isEmpty()) {
     return;
   }
+
+  bool isPaused = HeatmapRuntime::isGlobalUpdatesPaused();
+  static bool wasPaused = false;
+
+  if (isPaused && !wasPaused) {
+    for (auto *channel : channels_) {
+      if (channel->pva && channel->cachedData.nativeElementCount > 1000) {
+        PausePVAMonitoring(channel->pva);
+      }
+    }
+  } else if (!isPaused && wasPaused) {
+    for (auto *channel : channels_) {
+      if (channel->pva && channel->cachedData.nativeElementCount > 1000) {
+        ResumePVAMonitoring(channel->pva);
+      }
+    }
+  }
+  wasPaused = isPaused;
+
 
   for (auto *channel : channels_) {
     if (!channel || !channel->pva) {
@@ -426,7 +468,9 @@ void PvaChannelManager::pollChannels()
     }
 
     const bool wasConnected = channel->connected;
+    
     int events = PollMonitoredPVA(channel->pva);
+
     if (channel->pva->isConnected.size() > 0) {
       channel->connected = channel->pva->isConnected[0];
     }

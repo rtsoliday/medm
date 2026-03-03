@@ -92,6 +92,7 @@ void allocPVA(PVA_OVERALL *pva, long PVs, long repeats) {
     pva->pvaData[j].putData[0].stringValues = NULL;
     pva->pvaData[j].monitorData[0].values = NULL;
     pva->pvaData[j].monitorData[0].stringValues = NULL;
+    pva->pvaData[j].monitorOpaqueVector = NULL;
   }
   for (j = 0; j < pva->numPVs; j++) {
     pva->pvaData[j].numGetElements = 0;
@@ -171,6 +172,7 @@ void reallocPVA(PVA_OVERALL *pva, long PVs, long repeats) {
     pva->pvaData[j].putData[0].stringValues = NULL;
     pva->pvaData[j].monitorData[0].values = NULL;
     pva->pvaData[j].monitorData[0].stringValues = NULL;
+    pva->pvaData[j].monitorOpaqueVector = NULL;
   }
   for (j = pva->prevNumPVs; j < pva->numPVs; j++) {
     pva->pvaData[j].numGetElements = 0;
@@ -234,9 +236,15 @@ void freePVA(PVA_OVERALL *pva) {
       }
     }
     //monitor variables
-    if (pva->pvaData[i].monitorData[0].values) {
+    
+    if (pva->pvaData[i].monitorOpaqueVector) {
+      delete (epics::pvData::shared_vector<const double> *)pva->pvaData[i].monitorOpaqueVector;
+      pva->pvaData[i].monitorOpaqueVector = NULL;
+      pva->pvaData[i].monitorData[0].values = NULL;
+    } else if (pva->pvaData[i].monitorData[0].values) {
       free(pva->pvaData[i].monitorData[0].values);
     }
+    
     if (pva->pvaData[i].monitorData[0].stringValues) {
       for (k = 0; k < pva->pvaData[i].numMonitorElements; k++) {
         if (pva->pvaData[i].monitorData[0].stringValues[k])
@@ -326,10 +334,16 @@ void freePVAMonitorReadings(PVA_OVERALL *pva) {
     if (pva->pvaData[i].skip == true) {
       continue;
     }
-    if (pva->pvaData[i].monitorData[0].values) {
+    
+    if (pva->pvaData[i].monitorOpaqueVector) {
+      delete (epics::pvData::shared_vector<const double> *)pva->pvaData[i].monitorOpaqueVector;
+      pva->pvaData[i].monitorOpaqueVector = NULL;
+      pva->pvaData[i].monitorData[0].values = NULL;
+    } else if (pva->pvaData[i].monitorData[0].values) {
       free(pva->pvaData[i].monitorData[0].values);
       pva->pvaData[i].monitorData[0].values = NULL;
     }
+    
     if (pva->pvaData[i].monitorData[0].stringValues) {
       for (k = 0; k < pva->pvaData[i].numMonitorElements; k++) {
         if (pva->pvaData[i].monitorData[0].stringValues[k])
@@ -865,18 +879,14 @@ long ExtractScalarArrayValue(PVA_OVERALL *pva, long index, epics::pvData::PVFiel
     epics::pvData::PVDoubleArray::const_svector dataVector;
     pvScalarArrayPtr->PVScalarArray::getAs<double>(dataVector);
     if (monitorMode) {
-      if (pva->pvaData[index].monitorData[0].values == NULL) {
-        pva->pvaData[index].monitorData[0].values = (double *)malloc(sizeof(double) * pva->pvaData[index].numMonitorElements);
-        pva->pvaData[index].numeric = true;
+      if (pva->pvaData[index].monitorOpaqueVector) {
+        delete (epics::pvData::shared_vector<const double> *)pva->pvaData[index].monitorOpaqueVector;
       }
-      long count = pva->pvaData[index].numMonitorElements;
-      long have = dataVector.size();
-      long copyCount = (count < have ? count : have);
-      if (copyCount > 0)
-        std::copy(dataVector.begin(), dataVector.begin() + copyCount, pva->pvaData[index].monitorData[0].values);
-      for (long k = copyCount; k < count; k++) {
-        pva->pvaData[index].monitorData[0].values[k] = 0;
-      }
+      auto newVec = new epics::pvData::shared_vector<const double>(dataVector);
+      pva->pvaData[index].monitorOpaqueVector = (void *)newVec;
+      pva->pvaData[index].monitorData[0].values = (double *)newVec->data();
+      pva->pvaData[index].numeric = true;
+      pva->pvaData[index].numMonitorElements = newVec->size();
     } else {
       if (pva->pvaData[index].getData[i].values == NULL) {
         pva->pvaData[index].getData[i].values = (double *)malloc(sizeof(double) * pva->pvaData[index].numGetElements);
@@ -2521,7 +2531,13 @@ long MonitorPVAValues(PVA_OVERALL *pva) {
     pva->isConnected[i] = pva->isInternalConnected[pva->pvaData[i].L2Ptr];
     if (pva->isConnected[i]) {
       if (pva->pvaData[i].haveMonitorPtr == false) {
-        pva->pvaClientMonitorPtr[i] = pvaClientChannelArray[pva->pvaData[i].L2Ptr]->createMonitor(pva->pvaChannelNamesSub[i]);
+        std::string request = "record[queueSize=2]field("; 
+        if (pva->pvaChannelNamesSub[i].empty()) {
+          request += "value,alarm,timeStamp)";
+        } else {
+          request += pva->pvaChannelNamesSub[i] + ")";
+        }
+        pva->pvaClientMonitorPtr[i] = pvaClientChannelArray[pva->pvaData[i].L2Ptr]->createMonitor(request);
         pva->pvaData[i].haveMonitorPtr = true;
         if (pva->useMonitorCallbacks) {
           pva->pvaClientMonitorPtr[i]->setRequester((epics::pvaClient::PvaClientMonitorRequesterPtr)pva->monitorReqPtr);

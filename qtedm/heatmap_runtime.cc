@@ -199,7 +199,7 @@ void HeatmapRuntime::handleDataConnection(bool connected,
 
 void HeatmapRuntime::handleDataValue(const SharedChannelData &data)
 {
-  if (!started_) {
+    if (!started_) {
     return;
   }
   if (globalUpdatesPaused_.load(std::memory_order_relaxed)) {
@@ -223,15 +223,25 @@ void HeatmapRuntime::handleDataValue(const SharedChannelData &data)
     });
   }
 
-  QVector<double> values;
-  if (data.isArray && !data.arrayValues.isEmpty()) {
-    values = data.arrayValues;
+  if (data.isArray && data.sharedArrayData) {
+    auto sharedData = data.sharedArrayData;
+    size_t sharedSize = data.sharedArraySize;
+    invokeOnElement([sharedData, sharedSize](HeatmapElement *element) {
+      element->setRuntimeSharedData(sharedData, sharedSize);
+    });
   } else {
-    values.append(data.numericValue);
+    QVector<double> values;
+    if (data.isArray && !data.arrayValues.isEmpty()) {
+      values = data.arrayValues;
+    } else {
+      values.append(data.numericValue);
+    }
+    invokeOnElement([values](HeatmapElement *element) {
+      element->setRuntimeData(values);
+    });
   }
-  invokeOnElement([values](HeatmapElement *element) {
-    element->setRuntimeData(values);
-  });
+
+      
 }
 
 void HeatmapRuntime::handleDimensionConnection(ChannelState &state,

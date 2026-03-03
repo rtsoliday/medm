@@ -71,6 +71,8 @@ struct SharedChannelData
   dbr_enum_t enumValue = 0;
   QVector<double> arrayValues;
   QByteArray charArrayValue;
+  std::shared_ptr<const double> sharedArrayData;
+  size_t sharedArraySize = 0;
 
   /* Alarm information */
   short severity = 0;

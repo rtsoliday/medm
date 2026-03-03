@@ -185,6 +185,7 @@ typedef struct
   int L1Ptr;
   int L2Ptr;
   bool skip;
+  void *monitorOpaqueVector;
 } PVA_DATA_ALL_READINGS;
 
 typedef struct

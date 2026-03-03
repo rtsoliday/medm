@@ -170,9 +170,21 @@ void HeatmapElement::setInvertGreyscale(bool invert)
   invalidateCache();
 }
 
+
+void HeatmapElement::setRuntimeSharedData(std::shared_ptr<const double> sharedData, size_t size)
+{
+  runtimeSharedValues_ = sharedData;
+  runtimeSharedSize_ = size;
+  runtimeValues_.clear();
+  invalidateCache();
+  update();
+}
+
 void HeatmapElement::setRuntimeData(const QVector<double> &values)
 {
   runtimeValues_ = values;
+  runtimeSharedValues_.reset();
+  runtimeSharedSize_ = 0;
   runtimeDataValid_ = !runtimeValues_.isEmpty();
   invalidateCache();
 }
@@ -446,12 +458,20 @@ void HeatmapElement::rebuildImage()
     return;
   }
 
-  QVector<double> values = runtimeValues_;
-  if (!isExecuteMode()) {
-    values.clear();
+  const double* dataValues = nullptr;
+  int dataCount = 0;
+
+  if (isExecuteMode()) {
+    if (runtimeSharedValues_) {
+      dataValues = runtimeSharedValues_.get();
+      dataCount = runtimeSharedSize_;
+    } else {
+      dataValues = runtimeValues_.constData();
+      dataCount = runtimeValues_.size();
+    }
   }
 
-  const int available = std::min(values.size(), totalCells);
+  const int available = std::min(dataCount, totalCells);
   if (available <= 0) {
     cachedImage_ = QImage();
     return;
@@ -461,7 +481,7 @@ void HeatmapElement::rebuildImage()
   double minValue = 0.0;
   double maxValue = 0.0;
   for (int i = 0; i < available; ++i) {
-    const double v = values[i];
+    const double v = dataValues[i];
     if (std::isnan(v) || std::isinf(v)) {
       continue;
     }
@@ -508,7 +528,7 @@ void HeatmapElement::rebuildImage()
       for (int x = 0; x < width; ++x) {
         int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
         if (index < available) {
-          const double v = values[index];
+          const double v = dataValues[index];
           if (!std::isnan(v) && !std::isinf(v)) {
             if (showTopProfile_) {
               topProfileData_[x] += v;
@@ -563,49 +583,47 @@ void HeatmapElement::rebuildImage()
       if (!haveRight) { rightProfileMin_ = 0.0; rightProfileMax_ = 0.0; }
     }
   }
-  cachedImage_ = QImage(width, height, QImage::Format_Indexed8);
-  cachedImage_.fill(0);
-
-  QVector<QRgb> colorTable;
-  colorTable.reserve(256);
-  for (int i = 0; i < 256; ++i) {
-    int v = invertGreyscale_ ? i : (255 - i);
-    colorTable.append(qRgb(v, v, v));
-  }
-  cachedImage_.setColorTable(colorTable);
+  cachedImage_ = QImage(width, height, QImage::Format_RGB32);
+  cachedImage_.fill(backgroundColor());
 
   const double scale = (range > 0.0) ? (255.0 / range) : 0.0;
 
   if (order_ == HeatmapOrder::kRowMajor) {
     for (int y = 0; y < height; ++y) {
-      uchar *scanLine = cachedImage_.scanLine(y);
+      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(y));
       int index = y * width;
       for (int x = 0; x < width; ++x) {
         if (index < available) {
-          const double value = values[index];
+          const double value = dataValues[index];
           double offset = value - minValue;
           if (offset < 0.0) offset = 0.0;
           else if (offset > range) offset = range;
 
           int gray = static_cast<int>(offset * scale);
-          scanLine[x] = static_cast<uchar>(gray);
+          if (!invertGreyscale_) {
+            gray = 255 - gray;
+          }
+          scanLine[x] = qRgb(gray, gray, gray);
         }
         ++index;
       }
     }
   } else {
     for (int y = 0; y < height; ++y) {
-      uchar *scanLine = cachedImage_.scanLine(y);
+      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(y));
       int index = y;
       for (int x = 0; x < width; ++x) {
         if (index < available) {
-          const double value = values[index];
+          const double value = dataValues[index];
           double offset = value - minValue;
           if (offset < 0.0) offset = 0.0;
           else if (offset > range) offset = range;
 
           int gray = static_cast<int>(offset * scale);
-          scanLine[x] = static_cast<uchar>(gray);
+          if (!invertGreyscale_) {
+            gray = 255 - gray;
+          }
+          scanLine[x] = qRgb(gray, gray, gray);
         }
         index += height;
       }
@@ -633,34 +651,61 @@ QImage HeatmapElement::maxPoolDownsample(const QImage &source,
     return source;
   }
 
-  QImage pooled(dstWidth, dstHeight, QImage::Format_Indexed8);
-  pooled.setColorTable(source.colorTable());
-  const int srcStride = source.bytesPerLine();
-  const uchar* srcBits = source.constBits();
+  QImage pooled(dstWidth, dstHeight, QImage::Format_RGB32);
+  const int srcStride = source.bytesPerLine() / sizeof(QRgb);
+  const QRgb* srcBits = reinterpret_cast<const QRgb*>(source.constBits());
 
-  for (int y = 0; y < dstHeight; ++y) {
-    const int yStart = (y * srcHeight) / dstHeight;
-    int yEnd = ((y + 1) * srcHeight) / dstHeight;
-    yEnd = std::max(yStart + 1, yEnd);
-    yEnd = std::min(yEnd, srcHeight);
+  if (invertGreyscale_) {
+    for (int y = 0; y < dstHeight; ++y) {
+      const int yStart = (y * srcHeight) / dstHeight;
+      int yEnd = ((y + 1) * srcHeight) / dstHeight;
+      yEnd = std::max(yStart + 1, yEnd);
+      yEnd = std::min(yEnd, srcHeight);
 
-    uchar *dstScanLine = pooled.scanLine(y);
+      QRgb *dstScanLine = reinterpret_cast<QRgb*>(pooled.scanLine(y));
 
-    for (int x = 0; x < dstWidth; ++x) {
-      const int xStart = (x * srcWidth) / dstWidth;
-      int xEnd = ((x + 1) * srcWidth) / dstWidth;
-      xEnd = std::max(xStart + 1, xEnd);
-      xEnd = std::min(xEnd, srcWidth);
+      for (int x = 0; x < dstWidth; ++x) {
+        const int xStart = (x * srcWidth) / dstWidth;
+        int xEnd = ((x + 1) * srcWidth) / dstWidth;
+        xEnd = std::max(xStart + 1, xEnd);
+        xEnd = std::min(xEnd, srcWidth);
 
-      int extremeGray = 0;
-      for (int srcY = yStart; srcY < yEnd; ++srcY) {
-        const uchar *srcRow = srcBits + srcY * srcStride;
-        for (int srcX = xStart; srcX < xEnd; ++srcX) {
-          const int gray = srcRow[srcX];
-          if (gray > extremeGray) extremeGray = gray;
+        int extremeGray = 0;
+        for (int srcY = yStart; srcY < yEnd; ++srcY) {
+          const QRgb *srcRow = srcBits + srcY * srcStride;
+          for (int srcX = xStart; srcX < xEnd; ++srcX) {
+            const int gray = qGray(srcRow[srcX]);
+            if (gray > extremeGray) extremeGray = gray;
+          }
         }
+        dstScanLine[x] = qRgb(extremeGray, extremeGray, extremeGray);
       }
-      dstScanLine[x] = static_cast<uchar>(extremeGray);
+    }
+  } else {
+    for (int y = 0; y < dstHeight; ++y) {
+      const int yStart = (y * srcHeight) / dstHeight;
+      int yEnd = ((y + 1) * srcHeight) / dstHeight;
+      yEnd = std::max(yStart + 1, yEnd);
+      yEnd = std::min(yEnd, srcHeight);
+
+      QRgb *dstScanLine = reinterpret_cast<QRgb*>(pooled.scanLine(y));
+
+      for (int x = 0; x < dstWidth; ++x) {
+        const int xStart = (x * srcWidth) / dstWidth;
+        int xEnd = ((x + 1) * srcWidth) / dstWidth;
+        xEnd = std::max(xStart + 1, xEnd);
+        xEnd = std::min(xEnd, srcWidth);
+
+        int extremeGray = 255;
+        for (int srcY = yStart; srcY < yEnd; ++srcY) {
+          const QRgb *srcRow = srcBits + srcY * srcStride;
+          for (int srcX = xStart; srcX < xEnd; ++srcX) {
+            const int gray = qGray(srcRow[srcX]);
+            if (gray < extremeGray) extremeGray = gray;
+          }
+        }
+        dstScanLine[x] = qRgb(extremeGray, extremeGray, extremeGray);
+      }
     }
   }
 

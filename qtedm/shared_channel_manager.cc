@@ -375,7 +375,7 @@ void SharedChannelManager::connectionCallback(connection_handler_args args)
 
 void SharedChannelManager::valueCallback(event_handler_args args)
 {
-  auto *channel = static_cast<SharedChannel *>(args.usr);
+    auto *channel = static_cast<SharedChannel *>(args.usr);
   if (!channel) {
     return;
   }
@@ -712,7 +712,7 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
 void SharedChannelManager::handleValue(SharedChannel *channel,
     const event_handler_args &args)
 {
-  if (!channel || !args.dbr || args.status != ECA_NORMAL) {
+    if (!channel || !args.dbr || args.status != ECA_NORMAL) {
     return;
   }
 
@@ -997,6 +997,8 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
       sub.valueCallback(data);
     }
   }
+
+      
 }
 
 void SharedChannelManager::handleControlInfo(SharedChannel *channel,

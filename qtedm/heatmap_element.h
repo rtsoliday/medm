@@ -1,3 +1,4 @@
+#include <memory>
 #pragma once
 
 #include <QColor>
@@ -52,6 +53,7 @@ public:
   void setInvertGreyscale(bool invert);
 
   void setRuntimeData(const QVector<double> &values);
+  void setRuntimeSharedData(std::shared_ptr<const double> sharedData, size_t size);
   void setRuntimeDimensions(int xDim, int yDim);
   void clearRuntimeState();
 
@@ -90,6 +92,8 @@ private:
   bool showRightProfile_ = false;
 
   QVector<double> runtimeValues_;
+  std::shared_ptr<const double> runtimeSharedValues_;
+  size_t runtimeSharedSize_ = 0;
   int runtimeXDimension_ = 0;
   int runtimeYDimension_ = 0;
   bool runtimeDimensionsValid_ = false;

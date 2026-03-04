@@ -3142,7 +3142,7 @@ private:
   HeatmapOrder parseHeatmapOrder(const QString &value) const;
   HeatmapRotation parseHeatmapRotation(const QString &value) const;
   HeatmapColorMap parseHeatmapColorMap(const QString &value) const;
-  bool parseHeatmapInvertGreyscale(const QString &value) const;
+  bool parseHeatmapBool(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
   Qt::Alignment parseAlignment(const QString &value) const;
@@ -19226,7 +19226,7 @@ inline HeatmapColorMap DisplayWindow::parseHeatmapColorMap(
   return HeatmapColorMap::kGrayscale;
 }
 
-inline bool DisplayWindow::parseHeatmapInvertGreyscale(
+inline bool DisplayWindow::parseHeatmapBool(
     const QString &value) const
 {
   const QString normalized = value.trimmed().toLower();
@@ -22973,19 +22973,19 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
     invertValue = propertyValue(heatmapNode, QStringLiteral("invertGrayScale"));
   }
   if (!invertValue.trimmed().isEmpty()) {
-    element->setInvertGreyscale(parseHeatmapInvertGreyscale(invertValue));
+    element->setInvertGreyscale(parseHeatmapBool(invertValue));
   }
   QString preserveAspectRatioValue = propertyValue(heatmapNode, QStringLiteral("preserveAspectRatio"));
   if (!preserveAspectRatioValue.isEmpty()) {
-    element->setPreserveAspectRatio(parseHeatmapInvertGreyscale(preserveAspectRatioValue));
+    element->setPreserveAspectRatio(parseHeatmapBool(preserveAspectRatioValue));
   }
   QString flipHorizontalValue = propertyValue(heatmapNode, QStringLiteral("flipHorizontal"));
   if (!flipHorizontalValue.isEmpty()) {
-    element->setFlipHorizontal(parseHeatmapInvertGreyscale(flipHorizontalValue));
+    element->setFlipHorizontal(parseHeatmapBool(flipHorizontalValue));
   }
   QString flipVerticalValue = propertyValue(heatmapNode, QStringLiteral("flipVertical"));
   if (!flipVerticalValue.isEmpty()) {
-    element->setFlipVertical(parseHeatmapInvertGreyscale(flipVerticalValue));
+    element->setFlipVertical(parseHeatmapBool(flipVerticalValue));
   }
   QString rotationValue = propertyValue(heatmapNode, QStringLiteral("rotation"));
   if (!rotationValue.isEmpty()) {
@@ -22993,11 +22993,11 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
   }
   QString showTopProfileValue = propertyValue(heatmapNode, QStringLiteral("showTopProfile"));
   if (!showTopProfileValue.isEmpty()) {
-    element->setShowTopProfile(parseHeatmapInvertGreyscale(showTopProfileValue));
+    element->setShowTopProfile(parseHeatmapBool(showTopProfileValue));
   }
   QString showRightProfileValue = propertyValue(heatmapNode, QStringLiteral("showRightProfile"));
   if (!showRightProfileValue.isEmpty()) {
-    element->setShowRightProfile(parseHeatmapInvertGreyscale(showRightProfileValue));
+    element->setShowRightProfile(parseHeatmapBool(showRightProfileValue));
   }
 
   if (currentCompositeOwner_) {

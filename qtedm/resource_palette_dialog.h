@@ -733,7 +733,7 @@ public:
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dim PV"), heatmapYDimChannelEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Order"), heatmapOrderCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Color Map"), heatmapColorMapCombo_);
-    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Invert Greyscale"),
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Invert Color Scale"),
       heatmapInvertGreyscaleCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Preserve Aspect Ratio"),
       heatmapPreserveAspectRatioCombo_);

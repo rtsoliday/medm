@@ -140,6 +140,20 @@ QString heatmapOrderString(HeatmapOrder order)
   }
 }
 
+QString heatmapColorMapString(HeatmapColorMap map)
+{
+  switch (map) {
+  case HeatmapColorMap::kJet: return QStringLiteral("jet");
+  case HeatmapColorMap::kHot: return QStringLiteral("hot");
+  case HeatmapColorMap::kCool: return QStringLiteral("cool");
+  case HeatmapColorMap::kRainbow: return QStringLiteral("rainbow");
+  case HeatmapColorMap::kTurbo: return QStringLiteral("turbo");
+  case HeatmapColorMap::kGrayscale:
+  default:
+    return QStringLiteral("grayscale");
+  }
+}
+
 QString meterLabelString(MeterLabel label)
 {
   switch (label) {

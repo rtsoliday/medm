@@ -55,6 +55,9 @@ public:
   bool showRightProfile() const;
   void setShowRightProfile(bool show);
 
+  bool preserveAspectRatio() const;
+  void setPreserveAspectRatio(bool preserve);
+
   bool invertGreyscale() const;
   void setInvertGreyscale(bool invert);
 
@@ -100,6 +103,7 @@ private:
   HeatmapOrder order_ = HeatmapOrder::kRowMajor;
   HeatmapColorMap colorMap_ = HeatmapColorMap::kGrayscale;
   bool invertGreyscale_ = true;
+  bool preserveAspectRatio_ = false;
   QVector<double> topProfileData_;
   double topProfileMin_ = 0.0;
   double topProfileMax_ = 0.0;

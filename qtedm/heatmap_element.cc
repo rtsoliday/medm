@@ -229,6 +229,20 @@ void HeatmapElement::setColorMap(HeatmapColorMap colorMap)
   invalidateCache();
 }
 
+
+bool HeatmapElement::preserveAspectRatio() const
+{
+  return preserveAspectRatio_;
+}
+
+void HeatmapElement::setPreserveAspectRatio(bool preserve)
+{
+  if (preserveAspectRatio_ != preserve) {
+    preserveAspectRatio_ = preserve;
+    update();
+  }
+}
+
 bool HeatmapElement::invertGreyscale() const
 {
   return invertGreyscale_;
@@ -310,7 +324,6 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
 
   QRect heatmapRect = drawRect;
   QRect legendRect;
-  lastHeatmapRect_ = heatmapRect;
 
   const QString titleText = title_.trimmed();
   if (!titleText.isEmpty()) {
@@ -349,6 +362,34 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
       topProfileRect.setWidth(heatmapRect.width());
     }
   }
+
+  if (preserveAspectRatio_ && !cachedImage_.isNull()) {
+    int iw = cachedImage_.width();
+    int ih = cachedImage_.height();
+    if (iw > 0 && ih > 0) {
+      double imgAspect = static_cast<double>(iw) / ih;
+      double rectAspect = static_cast<double>(heatmapRect.width()) / heatmapRect.height();
+      int newW = heatmapRect.width();
+      int newH = heatmapRect.height();
+
+      if (imgAspect > rectAspect) {
+        newH = qRound(heatmapRect.width() / imgAspect);
+      } else {
+        newW = qRound(heatmapRect.height() * imgAspect);
+      }
+      
+      heatmapRect = QRect(
+          heatmapRect.left() + (heatmapRect.width() - newW) / 2,
+          heatmapRect.top() + (heatmapRect.height() - newH) / 2,
+          newW,
+          newH
+      );
+    }
+  }
+
+
+  lastHeatmapRect_ = heatmapRect;
+
   if (!cachedImage_.isNull()) {
     QImage imageToDraw = cachedImage_;
     const QSize targetSize = heatmapRect.size();

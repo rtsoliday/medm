@@ -673,13 +673,26 @@ public:
     heatmapInvertGreyscaleCombo_ = new QComboBox;
     heatmapInvertGreyscaleCombo_->setFont(valueFont_);
     heatmapInvertGreyscaleCombo_->setAutoFillBackground(true);
-    heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("No"));
-    heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("Yes"));
+    heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("False"));
+    heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("True"));
     QObject::connect(heatmapInvertGreyscaleCombo_,
       static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
       this, [this](int index) {
         if (heatmapInvertGreyscaleSetter_) {
-          heatmapInvertGreyscaleSetter_(heatmapBoolFromIndex(index));
+          heatmapInvertGreyscaleSetter_(index == 1);
+        }
+      });
+
+    heatmapPreserveAspectRatioCombo_ = new QComboBox;
+    heatmapPreserveAspectRatioCombo_->setFont(valueFont_);
+    heatmapPreserveAspectRatioCombo_->setAutoFillBackground(true);
+    heatmapPreserveAspectRatioCombo_->addItem(QStringLiteral("False"));
+    heatmapPreserveAspectRatioCombo_->addItem(QStringLiteral("True"));
+    QObject::connect(heatmapPreserveAspectRatioCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapPreserveAspectRatioSetter_) {
+          heatmapPreserveAspectRatioSetter_(index == 1);
         }
       });
 
@@ -722,6 +735,8 @@ public:
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Color Map"), heatmapColorMapCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Invert Greyscale"),
       heatmapInvertGreyscaleCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Preserve Aspect Ratio"),
+      heatmapPreserveAspectRatioCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Top Profile"),
       heatmapShowTopProfileCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Right Profile"),
@@ -6296,15 +6311,17 @@ public:
       std::function<QString()> yDimChannelGetter,
       std::function<void(const QString &)> yDimChannelSetter,
       std::function<HeatmapOrder()> orderGetter,
-        std::function<void(HeatmapOrder)> orderSetter,
-        std::function<HeatmapColorMap()> colorMapGetter,
-        std::function<void(HeatmapColorMap)> colorMapSetter,
-        std::function<bool()> invertGreyscaleGetter,
-        std::function<void(bool)> invertGreyscaleSetter,
+      std::function<void(HeatmapOrder)> orderSetter,
+      std::function<HeatmapColorMap()> colorMapGetter,
+      std::function<void(HeatmapColorMap)> colorMapSetter,
+      std::function<bool()> invertGreyscaleGetter,
+      std::function<void(bool)> invertGreyscaleSetter,
       std::function<bool()> showTopProfileGetter,
       std::function<void(bool)> showTopProfileSetter,
       std::function<bool()> showRightProfileGetter,
-      std::function<void(bool)> showRightProfileSetter)
+      std::function<void(bool)> showRightProfileSetter,
+      std::function<bool()> preserveAspectRatioGetter,
+      std::function<void(bool)> preserveAspectRatioSetter)
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kHeatmap;
@@ -6335,6 +6352,8 @@ public:
     heatmapColorMapSetter_ = std::move(colorMapSetter);
     heatmapInvertGreyscaleGetter_ = std::move(invertGreyscaleGetter);
     heatmapInvertGreyscaleSetter_ = std::move(invertGreyscaleSetter);
+    heatmapPreserveAspectRatioGetter_ = std::move(preserveAspectRatioGetter);
+    heatmapPreserveAspectRatioSetter_ = std::move(preserveAspectRatioSetter);
     heatmapShowTopProfileGetter_ = std::move(showTopProfileGetter);
     heatmapShowTopProfileSetter_ = std::move(showTopProfileSetter);
     heatmapShowRightProfileGetter_ = std::move(showRightProfileGetter);
@@ -6424,10 +6443,11 @@ public:
 
     if (heatmapInvertGreyscaleCombo_) {
       const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
-      const bool invert = heatmapInvertGreyscaleGetter_
-          ? heatmapInvertGreyscaleGetter_()
-          : true;
-      heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(invert));
+      heatmapInvertGreyscaleCombo_->setCurrentIndex(1);
+    }
+    if (heatmapPreserveAspectRatioCombo_) {
+      const QSignalBlocker blocker(heatmapPreserveAspectRatioCombo_);
+      heatmapPreserveAspectRatioCombo_->setCurrentIndex(0);
     }
     if (heatmapShowTopProfileCombo_) {
       const QSignalBlocker blocker(heatmapShowTopProfileCombo_);
@@ -7488,7 +7508,11 @@ public:
     }
     if (heatmapInvertGreyscaleCombo_) {
       const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
-      heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(true));
+      heatmapInvertGreyscaleCombo_->setCurrentIndex(1);
+    }
+    if (heatmapPreserveAspectRatioCombo_) {
+      const QSignalBlocker blocker(heatmapPreserveAspectRatioCombo_);
+      heatmapPreserveAspectRatioCombo_->setCurrentIndex(0);
     }
     if (heatmapShowTopProfileCombo_) {
       const QSignalBlocker blocker(heatmapShowTopProfileCombo_);
@@ -7551,6 +7575,8 @@ public:
     heatmapColorMapSetter_ = {};
     heatmapInvertGreyscaleGetter_ = {};
     heatmapInvertGreyscaleSetter_ = {};
+    heatmapPreserveAspectRatioGetter_ = {};
+    heatmapPreserveAspectRatioSetter_ = {};
 
     textMonitorPrecisionSourceGetter_ = {};
     textMonitorPrecisionSourceSetter_ = {};
@@ -10162,6 +10188,7 @@ private:
   QComboBox *heatmapOrderCombo_ = nullptr;
   QComboBox *heatmapColorMapCombo_ = nullptr;
   QComboBox *heatmapInvertGreyscaleCombo_ = nullptr;
+  QComboBox *heatmapPreserveAspectRatioCombo_ = nullptr;
   QComboBox *heatmapShowTopProfileCombo_ = nullptr;
   QComboBox *heatmapShowRightProfileCombo_ = nullptr;
   QWidget *textMonitorSection_ = nullptr;
@@ -11008,6 +11035,8 @@ private:
   std::function<void(HeatmapColorMap)> heatmapColorMapSetter_;
   std::function<bool()> heatmapInvertGreyscaleGetter_;
   std::function<void(bool)> heatmapInvertGreyscaleSetter_;
+  std::function<bool()> heatmapPreserveAspectRatioGetter_;
+  std::function<void(bool)> heatmapPreserveAspectRatioSetter_;
   std::function<bool()> heatmapShowTopProfileGetter_;
   std::function<void(bool)> heatmapShowTopProfileSetter_;
   std::function<bool()> heatmapShowRightProfileGetter_;

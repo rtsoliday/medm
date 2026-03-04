@@ -7601,6 +7601,11 @@ private:
         [this, element](bool show) {
           element->setShowRightProfile(show);
           markDirty();
+        },
+        [element]() { return element->preserveAspectRatio(); },
+        [this, element](bool preserve) {
+          element->setPreserveAspectRatio(preserve);
+          markDirty();
         });
   }
 
@@ -17201,6 +17206,15 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
             QStringLiteral("order=\"%1\"")
                 .arg(AdlWriter::heatmapOrderString(heatmap->order())));
       }
+      if (heatmap->colorMap() != HeatmapColorMap::kGrayscale) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("colorMap=\"%1\"")
+                .arg(AdlWriter::heatmapColorMapString(heatmap->colorMap())));
+      }
+      if (heatmap->preserveAspectRatio()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("preserveAspectRatio=\"true\""));
+      }
       if (heatmap->showTopProfile()) {
         AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showTopProfile=\"yes\""));
       }
@@ -18125,6 +18139,15 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("order=\"%1\"")
               .arg(AdlWriter::heatmapOrderString(heatmap->order())));
+    }
+    if (heatmap->colorMap() != HeatmapColorMap::kGrayscale) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("colorMap=\"%1\"")
+              .arg(AdlWriter::heatmapColorMapString(heatmap->colorMap())));
+    }
+    if (heatmap->preserveAspectRatio()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("preserveAspectRatio=\"true\""));
     }
     if (heatmap->showTopProfile()) {
       AdlWriter::writeIndentedLine(stream, next, QStringLiteral("showTopProfile=\"yes\""));
@@ -22899,6 +22922,10 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
   }
   if (!invertValue.trimmed().isEmpty()) {
     element->setInvertGreyscale(parseHeatmapInvertGreyscale(invertValue));
+  }
+  QString preserveAspectRatioValue = propertyValue(heatmapNode, QStringLiteral("preserveAspectRatio"));
+  if (!preserveAspectRatioValue.isEmpty()) {
+    element->setPreserveAspectRatio(parseHeatmapInvertGreyscale(preserveAspectRatioValue));
   }
   QString showTopProfileValue = propertyValue(heatmapNode, QStringLiteral("showTopProfile"));
   if (!showTopProfileValue.isEmpty()) {

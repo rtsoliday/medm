@@ -151,6 +151,14 @@ enum class HeatmapColorMap
   kTurbo,
 };
 
+enum class HeatmapRotation
+{
+  kNone,
+  k90,
+  k180,
+  k270,
+};
+
 enum class TimeUnits
 {
   kMilliseconds,

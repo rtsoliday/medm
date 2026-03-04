@@ -737,6 +737,53 @@ public:
       heatmapInvertGreyscaleCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Preserve Aspect Ratio"),
       heatmapPreserveAspectRatioCombo_);
+
+    heatmapFlipHorizontalCombo_ = new QComboBox;
+    heatmapFlipHorizontalCombo_->setFont(valueFont_);
+    heatmapFlipHorizontalCombo_->setAutoFillBackground(true);
+    heatmapFlipHorizontalCombo_->addItem(QStringLiteral("False"));
+    heatmapFlipHorizontalCombo_->addItem(QStringLiteral("True"));
+    QObject::connect(heatmapFlipHorizontalCombo_,
+                     QOverload<int>::of(&QComboBox::currentIndexChanged),
+                     [this](int index) {
+                       if (heatmapFlipHorizontalSetter_) {
+                         heatmapFlipHorizontalSetter_(index == 1);
+                       }
+                     });
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Flip Horizontal"),
+           heatmapFlipHorizontalCombo_);
+
+    heatmapFlipVerticalCombo_ = new QComboBox;
+    heatmapFlipVerticalCombo_->setFont(valueFont_);
+    heatmapFlipVerticalCombo_->setAutoFillBackground(true);
+    heatmapFlipVerticalCombo_->addItem(QStringLiteral("False"));
+    heatmapFlipVerticalCombo_->addItem(QStringLiteral("True"));
+    QObject::connect(heatmapFlipVerticalCombo_,
+                     QOverload<int>::of(&QComboBox::currentIndexChanged),
+                     [this](int index) {
+                       if (heatmapFlipVerticalSetter_) {
+                         heatmapFlipVerticalSetter_(index == 1);
+                       }
+                     });
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Flip Vertical"),
+           heatmapFlipVerticalCombo_);
+
+    heatmapRotationCombo_ = new QComboBox;
+    heatmapRotationCombo_->setFont(valueFont_);
+    heatmapRotationCombo_->setAutoFillBackground(true);
+    heatmapRotationCombo_->addItem(QStringLiteral("None"));
+    heatmapRotationCombo_->addItem(QStringLiteral("90"));
+    heatmapRotationCombo_->addItem(QStringLiteral("180"));
+    heatmapRotationCombo_->addItem(QStringLiteral("270"));
+    QObject::connect(heatmapRotationCombo_,
+                     QOverload<int>::of(&QComboBox::currentIndexChanged),
+                     [this](int index) {
+                       if (heatmapRotationSetter_) {
+                         heatmapRotationSetter_(static_cast<HeatmapRotation>(index));
+                       }
+                     });
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Rotation"),
+           heatmapRotationCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Top Profile"),
       heatmapShowTopProfileCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Right Profile"),
@@ -6321,7 +6368,13 @@ public:
       std::function<bool()> showRightProfileGetter,
       std::function<void(bool)> showRightProfileSetter,
       std::function<bool()> preserveAspectRatioGetter,
-      std::function<void(bool)> preserveAspectRatioSetter)
+      std::function<void(bool)> preserveAspectRatioSetter,
+      std::function<bool()> flipHorizontalGetter,
+      std::function<void(bool)> flipHorizontalSetter,
+      std::function<bool()> flipVerticalGetter,
+      std::function<void(bool)> flipVerticalSetter,
+      std::function<HeatmapRotation()> rotationGetter,
+      std::function<void(HeatmapRotation)> rotationSetter)
   {
     clearSelectionState();
     selectionKind_ = SelectionKind::kHeatmap;
@@ -6354,6 +6407,12 @@ public:
     heatmapInvertGreyscaleSetter_ = std::move(invertGreyscaleSetter);
     heatmapPreserveAspectRatioGetter_ = std::move(preserveAspectRatioGetter);
     heatmapPreserveAspectRatioSetter_ = std::move(preserveAspectRatioSetter);
+    heatmapFlipHorizontalGetter_ = std::move(flipHorizontalGetter);
+    heatmapFlipHorizontalSetter_ = std::move(flipHorizontalSetter);
+    heatmapFlipVerticalGetter_ = std::move(flipVerticalGetter);
+    heatmapFlipVerticalSetter_ = std::move(flipVerticalSetter);
+    heatmapRotationGetter_ = std::move(rotationGetter);
+    heatmapRotationSetter_ = std::move(rotationSetter);
     heatmapShowTopProfileGetter_ = std::move(showTopProfileGetter);
     heatmapShowTopProfileSetter_ = std::move(showTopProfileSetter);
     heatmapShowRightProfileGetter_ = std::move(showRightProfileGetter);
@@ -6443,11 +6502,28 @@ public:
 
     if (heatmapInvertGreyscaleCombo_) {
       const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
-      heatmapInvertGreyscaleCombo_->setCurrentIndex(1);
+      const bool invert = heatmapInvertGreyscaleGetter_ ? heatmapInvertGreyscaleGetter_() : false;
+      heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(invert));
     }
     if (heatmapPreserveAspectRatioCombo_) {
       const QSignalBlocker blocker(heatmapPreserveAspectRatioCombo_);
-      heatmapPreserveAspectRatioCombo_->setCurrentIndex(0);
+      const bool preserve = heatmapPreserveAspectRatioGetter_ ? heatmapPreserveAspectRatioGetter_() : true;
+      heatmapPreserveAspectRatioCombo_->setCurrentIndex(heatmapBoolToIndex(preserve));
+    }
+    if (heatmapFlipHorizontalCombo_) {
+      const QSignalBlocker blocker(heatmapFlipHorizontalCombo_);
+      const bool flip = heatmapFlipHorizontalGetter_ ? heatmapFlipHorizontalGetter_() : false;
+      heatmapFlipHorizontalCombo_->setCurrentIndex(heatmapBoolToIndex(flip));
+    }
+    if (heatmapFlipVerticalCombo_) {
+      const QSignalBlocker blocker(heatmapFlipVerticalCombo_);
+      const bool flip = heatmapFlipVerticalGetter_ ? heatmapFlipVerticalGetter_() : false;
+      heatmapFlipVerticalCombo_->setCurrentIndex(heatmapBoolToIndex(flip));
+    }
+    if (heatmapRotationCombo_) {
+      const QSignalBlocker blocker(heatmapRotationCombo_);
+      const HeatmapRotation rot = heatmapRotationGetter_ ? heatmapRotationGetter_() : HeatmapRotation::kNone;
+      heatmapRotationCombo_->setCurrentIndex(static_cast<int>(rot));
     }
     if (heatmapShowTopProfileCombo_) {
       const QSignalBlocker blocker(heatmapShowTopProfileCombo_);
@@ -7514,6 +7590,18 @@ public:
       const QSignalBlocker blocker(heatmapPreserveAspectRatioCombo_);
       heatmapPreserveAspectRatioCombo_->setCurrentIndex(0);
     }
+    if (heatmapFlipHorizontalCombo_) {
+      const QSignalBlocker blocker(heatmapFlipHorizontalCombo_);
+      heatmapFlipHorizontalCombo_->setCurrentIndex(0);
+    }
+    if (heatmapFlipVerticalCombo_) {
+      const QSignalBlocker blocker(heatmapFlipVerticalCombo_);
+      heatmapFlipVerticalCombo_->setCurrentIndex(0);
+    }
+    if (heatmapRotationCombo_) {
+      const QSignalBlocker blocker(heatmapRotationCombo_);
+      heatmapRotationCombo_->setCurrentIndex(0);
+    }
     if (heatmapShowTopProfileCombo_) {
       const QSignalBlocker blocker(heatmapShowTopProfileCombo_);
       heatmapShowTopProfileCombo_->setCurrentIndex(heatmapBoolToIndex(false));
@@ -7577,6 +7665,12 @@ public:
     heatmapInvertGreyscaleSetter_ = {};
     heatmapPreserveAspectRatioGetter_ = {};
     heatmapPreserveAspectRatioSetter_ = {};
+    heatmapFlipHorizontalGetter_ = {};
+    heatmapFlipHorizontalSetter_ = {};
+    heatmapFlipVerticalGetter_ = {};
+    heatmapFlipVerticalSetter_ = {};
+    heatmapRotationGetter_ = {};
+    heatmapRotationSetter_ = {};
 
     textMonitorPrecisionSourceGetter_ = {};
     textMonitorPrecisionSourceSetter_ = {};
@@ -10189,6 +10283,9 @@ private:
   QComboBox *heatmapColorMapCombo_ = nullptr;
   QComboBox *heatmapInvertGreyscaleCombo_ = nullptr;
   QComboBox *heatmapPreserveAspectRatioCombo_ = nullptr;
+  QComboBox *heatmapFlipHorizontalCombo_ = nullptr;
+  QComboBox *heatmapFlipVerticalCombo_ = nullptr;
+  QComboBox *heatmapRotationCombo_ = nullptr;
   QComboBox *heatmapShowTopProfileCombo_ = nullptr;
   QComboBox *heatmapShowRightProfileCombo_ = nullptr;
   QWidget *textMonitorSection_ = nullptr;
@@ -11037,6 +11134,12 @@ private:
   std::function<void(bool)> heatmapInvertGreyscaleSetter_;
   std::function<bool()> heatmapPreserveAspectRatioGetter_;
   std::function<void(bool)> heatmapPreserveAspectRatioSetter_;
+  std::function<bool()> heatmapFlipHorizontalGetter_;
+  std::function<void(bool)> heatmapFlipHorizontalSetter_;
+  std::function<bool()> heatmapFlipVerticalGetter_;
+  std::function<void(bool)> heatmapFlipVerticalSetter_;
+  std::function<HeatmapRotation()> heatmapRotationGetter_;
+  std::function<void(HeatmapRotation)> heatmapRotationSetter_;
   std::function<bool()> heatmapShowTopProfileGetter_;
   std::function<void(bool)> heatmapShowTopProfileSetter_;
   std::function<bool()> heatmapShowRightProfileGetter_;

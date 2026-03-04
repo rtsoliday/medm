@@ -243,6 +243,45 @@ void HeatmapElement::setPreserveAspectRatio(bool preserve)
   }
 }
 
+bool HeatmapElement::flipHorizontal() const
+{
+  return flipHorizontal_;
+}
+
+void HeatmapElement::setFlipHorizontal(bool flip)
+{
+  if (flipHorizontal_ != flip) {
+    flipHorizontal_ = flip;
+    invalidateCache();
+  }
+}
+
+bool HeatmapElement::flipVertical() const
+{
+  return flipVertical_;
+}
+
+void HeatmapElement::setFlipVertical(bool flip)
+{
+  if (flipVertical_ != flip) {
+    flipVertical_ = flip;
+    invalidateCache();
+  }
+}
+
+HeatmapRotation HeatmapElement::rotation() const
+{
+  return rotation_;
+}
+
+void HeatmapElement::setRotation(HeatmapRotation rotation)
+{
+  if (rotation_ != rotation) {
+    rotation_ = rotation;
+    invalidateCache();
+  }
+}
+
 bool HeatmapElement::invertGreyscale() const
 {
   return invertGreyscale_;
@@ -656,77 +695,117 @@ void HeatmapElement::rebuildImage()
     topProfileData_.clear();
     rightProfileData_.clear();
     
-    if (showTopProfile_) {
+    bool computeProfiles = showTopProfile_ || showRightProfile_;
+    if (computeProfiles) {
       topProfileData_.resize(zoomedWidth);
       topProfileData_.fill(0.0);
-    }
-    if (showRightProfile_) {
       rightProfileData_.resize(zoomedHeight);
       rightProfileData_.fill(0.0);
-    }
 
-    QVector<int> topCounts(zoomedWidth, 0);
-    QVector<int> rightCounts(zoomedHeight, 0);
+      QVector<int> topCounts(zoomedWidth, 0);
+      QVector<int> rightCounts(zoomedHeight, 0);
 
-    for (int y = yStart; y < yEnd; ++y) {
-      for (int x = xStart; x < xEnd; ++x) {
-        int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
-        if (index < available) {
-          const double v = dataValues[index];
-          if (!std::isnan(v) && !std::isinf(v)) {
-            const int zx = x - xStart;
-            const int zy = y - yStart;
-            if (showTopProfile_ && zx >= 0 && zx < zoomedWidth) {
-              topProfileData_[zx] += v;
-              topCounts[zx]++;
-            }
-            if (showRightProfile_ && zy >= 0 && zy < zoomedHeight) {
-              rightProfileData_[zy] += v;
-              rightCounts[zy]++;
+      for (int y = yStart; y < yEnd; ++y) {
+        for (int x = xStart; x < xEnd; ++x) {
+          int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
+          if (index < available) {
+            const double v = dataValues[index];
+            if (!std::isnan(v) && !std::isinf(v)) {
+              const int zx = x - xStart;
+              const int zy = y - yStart;
+              if (zx >= 0 && zx < zoomedWidth) {
+                topProfileData_[zx] += v;
+                topCounts[zx]++;
+              }
+              if (zy >= 0 && zy < zoomedHeight) {
+                rightProfileData_[zy] += v;
+                rightCounts[zy]++;
+              }
             }
           }
         }
       }
-    }
-    
-    if (showTopProfile_) {
-      bool haveTop = false;
+      
       for (int x = 0; x < zoomedWidth; ++x) {
         if (topCounts[x] > 0) {
           topProfileData_[x] /= topCounts[x];
-          if (!haveTop) {
-            topProfileMin_ = topProfileData_[x];
-            topProfileMax_ = topProfileData_[x];
-            haveTop = true;
-          } else {
-            topProfileMin_ = std::min(topProfileMin_, topProfileData_[x]);
-            topProfileMax_ = std::max(topProfileMax_, topProfileData_[x]);
-          }
         } else {
           topProfileData_[x] = std::numeric_limits<double>::quiet_NaN();
         }
       }
-      if (!haveTop) { topProfileMin_ = 0.0; topProfileMax_ = 0.0; }
-    }
-
-    if (showRightProfile_) {
-      bool haveRight = false;
       for (int y = 0; y < zoomedHeight; ++y) {
         if (rightCounts[y] > 0) {
           rightProfileData_[y] /= rightCounts[y];
-          if (!haveRight) {
-            rightProfileMin_ = rightProfileData_[y];
-            rightProfileMax_ = rightProfileData_[y];
-            haveRight = true;
-          } else {
-            rightProfileMin_ = std::min(rightProfileMin_, rightProfileData_[y]);
-            rightProfileMax_ = std::max(rightProfileMax_, rightProfileData_[y]);
-          }
         } else {
           rightProfileData_[y] = std::numeric_limits<double>::quiet_NaN();
         }
       }
-      if (!haveRight) { rightProfileMin_ = 0.0; rightProfileMax_ = 0.0; }
+      
+      // Apply flips
+      if (flipHorizontal_) {
+        std::reverse(topProfileData_.begin(), topProfileData_.end());
+      }
+      if (flipVertical_) {
+        std::reverse(rightProfileData_.begin(), rightProfileData_.end());
+      }
+      
+      // Apply rotations
+      if (rotation_ == HeatmapRotation::k90) {
+        QVector<double> newTop = rightProfileData_;
+        std::reverse(newTop.begin(), newTop.end());
+        QVector<double> newRight = topProfileData_;
+        topProfileData_ = newTop;
+        rightProfileData_ = newRight;
+      } else if (rotation_ == HeatmapRotation::k180) {
+        std::reverse(topProfileData_.begin(), topProfileData_.end());
+        std::reverse(rightProfileData_.begin(), rightProfileData_.end());
+      } else if (rotation_ == HeatmapRotation::k270) {
+        QVector<double> newTop = rightProfileData_;
+        QVector<double> newRight = topProfileData_;
+        std::reverse(newRight.begin(), newRight.end());
+        topProfileData_ = newTop;
+        rightProfileData_ = newRight;
+      }
+
+      if (showTopProfile_) {
+        bool haveTop = false;
+        for (int x = 0; x < topProfileData_.size(); ++x) {
+          double v = topProfileData_[x];
+          if (!std::isnan(v)) {
+            if (!haveTop) {
+              topProfileMin_ = v;
+              topProfileMax_ = v;
+              haveTop = true;
+            } else {
+              topProfileMin_ = std::min(topProfileMin_, v);
+              topProfileMax_ = std::max(topProfileMax_, v);
+            }
+          }
+        }
+        if (!haveTop) { topProfileMin_ = 0.0; topProfileMax_ = 0.0; }
+      } else {
+        topProfileData_.clear();
+      }
+
+      if (showRightProfile_) {
+        bool haveRight = false;
+        for (int y = 0; y < rightProfileData_.size(); ++y) {
+          double v = rightProfileData_[y];
+          if (!std::isnan(v)) {
+            if (!haveRight) {
+              rightProfileMin_ = v;
+              rightProfileMax_ = v;
+              haveRight = true;
+            } else {
+              rightProfileMin_ = std::min(rightProfileMin_, v);
+              rightProfileMax_ = std::max(rightProfileMax_, v);
+            }
+          }
+        }
+        if (!haveRight) { rightProfileMin_ = 0.0; rightProfileMax_ = 0.0; }
+      } else {
+        rightProfileData_.clear();
+      }
     }
   }
   
@@ -778,6 +857,22 @@ void HeatmapElement::rebuildImage()
         }
       }
     }
+  }
+  
+  if (flipHorizontal_ || flipVertical_) {
+    cachedImage_ = cachedImage_.mirrored(flipHorizontal_, flipVertical_);
+  }
+  
+  if (rotation_ != HeatmapRotation::kNone) {
+    QTransform transform;
+    if (rotation_ == HeatmapRotation::k90) {
+      transform.rotate(90);
+    } else if (rotation_ == HeatmapRotation::k180) {
+      transform.rotate(180);
+    } else if (rotation_ == HeatmapRotation::k270) {
+      transform.rotate(270);
+    }
+    cachedImage_ = cachedImage_.transformed(transform);
   }
 }
 QImage HeatmapElement::maxPoolDownsample(const QImage &source,
@@ -1006,15 +1101,20 @@ void HeatmapElement::mouseMoveEvent(QMouseEvent *event)
 #else
     const QPointF pos = event->localPos();
 #endif
-    const double dx = pos.x() - panStartPos_.x();
-    const double dy = pos.y() - panStartPos_.y();
+    double dx = pos.x() - panStartPos_.x();
+    double dy = pos.y() - panStartPos_.y();
+    
+    double normDx = dx / lastHeatmapRect_.width();
+    double normDy = dy / lastHeatmapRect_.height();
+    
+    mapVisualToDataDelta(normDx, normDy);
     
     // Convert dx, dy to normalized coordinates [0, 1] relative to zoomed area
     const double currentRangeX = panStartXMax_ - panStartXMin_;
     const double currentRangeY = panStartYMax_ - panStartYMin_;
     
-    const double normDx = (dx / lastHeatmapRect_.width()) * currentRangeX;
-    const double normDy = (dy / lastHeatmapRect_.height()) * currentRangeY;
+    normDx *= currentRangeX;
+    normDy *= currentRangeY;
     
     double newXMin = panStartXMin_ - normDx;
     double newXMax = panStartXMax_ - normDx;
@@ -1084,11 +1184,14 @@ void HeatmapElement::wheelEvent(QWheelEvent *event)
   const double steps = degrees / 15.0;
   const double factor = std::pow(0.9, steps);
   
-  const bool zoomX = !event->modifiers().testFlag(Qt::ControlModifier);
-  const bool zoomY = !event->modifiers().testFlag(Qt::ShiftModifier);
+  bool zoomX = !event->modifiers().testFlag(Qt::ControlModifier);
+  bool zoomY = !event->modifiers().testFlag(Qt::ShiftModifier);
   
-  const double chartX = (pos.x() - lastHeatmapRect_.left()) / lastHeatmapRect_.width();
-  const double chartY = (pos.y() - lastHeatmapRect_.top()) / lastHeatmapRect_.height();
+  double chartX = (pos.x() - lastHeatmapRect_.left()) / lastHeatmapRect_.width();
+  double chartY = (pos.y() - lastHeatmapRect_.top()) / lastHeatmapRect_.height();
+  
+  mapVisualToDataZoomFlags(zoomX, zoomY);
+  mapVisualToDataFraction(chartX, chartY);
   
   if (zoomX) {
     const double xCenter = zoomXMin_ + chartX * (zoomXMax_ - zoomXMin_);
@@ -1123,4 +1226,70 @@ void HeatmapElement::wheelEvent(QWheelEvent *event)
   
   invalidateCache();
   update();
+}
+
+
+void HeatmapElement::mapVisualToDataFraction(double& x, double& y) const
+{
+  double nx = x;
+  double ny = y;
+  
+  // Undo rotation
+  if (rotation_ == HeatmapRotation::k90) {
+    double tx = ny;
+    double ty = 1.0 - nx;
+    nx = tx; ny = ty;
+  } else if (rotation_ == HeatmapRotation::k180) {
+    nx = 1.0 - nx;
+    ny = 1.0 - ny;
+  } else if (rotation_ == HeatmapRotation::k270) {
+    double tx = 1.0 - ny;
+    double ty = nx;
+    nx = tx; ny = ty;
+  }
+  
+  // Undo flip
+  if (flipHorizontal_) {
+    nx = 1.0 - nx;
+  }
+  if (flipVertical_) {
+    ny = 1.0 - ny;
+  }
+  
+  x = nx;
+  y = ny;
+}
+
+void HeatmapElement::mapVisualToDataDelta(double& dx, double& dy) const
+{
+  double nx = dx;
+  double ny = dy;
+  
+  if (rotation_ == HeatmapRotation::k90) {
+    double tx = ny;
+    double ty = -nx;
+    nx = tx; ny = ty;
+  } else if (rotation_ == HeatmapRotation::k180) {
+    nx = -nx;
+    ny = -ny;
+  } else if (rotation_ == HeatmapRotation::k270) {
+    double tx = -ny;
+    double ty = nx;
+    nx = tx; ny = ty;
+  }
+  
+  if (flipHorizontal_) nx = -nx;
+  if (flipVertical_) ny = -ny;
+  
+  dx = nx;
+  dy = ny;
+}
+
+void HeatmapElement::mapVisualToDataZoomFlags(bool& zoomX, bool& zoomY) const
+{
+  if (rotation_ == HeatmapRotation::k90 || rotation_ == HeatmapRotation::k270) {
+    bool temp = zoomX;
+    zoomX = zoomY;
+    zoomY = temp;
+  }
 }

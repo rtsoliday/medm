@@ -154,6 +154,18 @@ QString heatmapColorMapString(HeatmapColorMap map)
   }
 }
 
+QString heatmapRotationString(HeatmapRotation rot)
+{
+  switch (rot) {
+  case HeatmapRotation::k90: return QStringLiteral("90");
+  case HeatmapRotation::k180: return QStringLiteral("180");
+  case HeatmapRotation::k270: return QStringLiteral("270");
+  case HeatmapRotation::kNone:
+  default:
+    return QStringLiteral("none");
+  }
+}
+
 QString meterLabelString(MeterLabel label)
 {
   switch (label) {

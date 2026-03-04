@@ -58,6 +58,15 @@ public:
   bool preserveAspectRatio() const;
   void setPreserveAspectRatio(bool preserve);
 
+  bool flipHorizontal() const;
+  void setFlipHorizontal(bool flip);
+
+  bool flipVertical() const;
+  void setFlipVertical(bool flip);
+
+  HeatmapRotation rotation() const;
+  void setRotation(HeatmapRotation rotation);
+
   bool invertGreyscale() const;
   void setInvertGreyscale(bool invert);
 
@@ -70,7 +79,14 @@ public:
   bool isZoomed() const;
   void resetZoom();
 
+
+  // Coordinate mappers
+  void mapVisualToDataFraction(double& x, double& y) const;
+  void mapVisualToDataDelta(double& dx, double& dy) const;
+  void mapVisualToDataZoomFlags(bool& zoomX, bool& zoomY) const;
+
 protected:
+
   void paintEvent(QPaintEvent *event) override;
   void onRuntimeStateReset() override;
   void onRuntimeConnectedChanged() override;
@@ -104,6 +120,9 @@ private:
   HeatmapColorMap colorMap_ = HeatmapColorMap::kGrayscale;
   bool invertGreyscale_ = true;
   bool preserveAspectRatio_ = false;
+  bool flipHorizontal_ = false;
+  bool flipVertical_ = false;
+  HeatmapRotation rotation_ = HeatmapRotation::kNone;
   QVector<double> topProfileData_;
   double topProfileMin_ = 0.0;
   double topProfileMax_ = 0.0;

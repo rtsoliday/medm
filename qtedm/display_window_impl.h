@@ -14489,6 +14489,8 @@ private:
         dynamic_cast<StripChartElement *>(clickedWidget);
     CartesianPlotElement *clickedCartesianPlot =
         dynamic_cast<CartesianPlotElement *>(clickedWidget);
+    HeatmapElement *clickedHeatmap =
+        dynamic_cast<HeatmapElement *>(clickedWidget);
 
     QMenu menu(this);
     menu.setObjectName(QStringLiteral("executeModeContextMenu"));
@@ -14565,6 +14567,18 @@ private:
       menu.addSeparator();
     }
     
+    // Heatmap specific options
+    if (clickedHeatmap) {
+      if (clickedHeatmap->isZoomed()) {
+        QAction *resetZoomAction = menu.addAction(QStringLiteral("Reset Zoom"));
+        QObject::connect(resetZoomAction, &QAction::triggered, this,
+            [clickedHeatmap]() {
+              clickedHeatmap->resetZoom();
+            });
+        menu.addSeparator();
+      }
+    }
+
     QAction *closeAction = menu.addAction(QStringLiteral("Close"));
     QObject::connect(closeAction, &QAction::triggered, this,
         [this]() {

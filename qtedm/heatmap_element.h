@@ -7,6 +7,9 @@
 #include <QString>
 #include <QVector>
 #include <QWidget>
+#include <QMouseEvent>
+#include <QWheelEvent>
+#include <QTimer>
 
 #include "display_properties.h"
 #include "graphic_shape_element.h"
@@ -57,11 +60,22 @@ public:
   void setRuntimeDimensions(int xDim, int yDim);
   void clearRuntimeState();
 
+  // Zoom/pan support (execute mode only)
+  bool isZoomed() const;
+  void resetZoom();
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void onRuntimeStateReset() override;
   void onRuntimeConnectedChanged() override;
   void onRuntimeSeverityChanged() override;
+  void onExecuteStateApplied() override;
+
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void wheelEvent(QWheelEvent *event) override;
+  bool event(QEvent *event) override;
 
 private:
   void invalidateCache();
@@ -106,4 +120,23 @@ private:
   bool cacheValid_ = false;
   QImage downsampledCachedImage_;
   QSize downsampledTargetSize_;
+
+  bool forwardMouseEventToParent(QMouseEvent *event) const;
+
+  // Zoom/pan state (execute mode only)
+  bool zoomed_ = false;
+  double zoomXMin_ = 0.0;
+  double zoomXMax_ = 1.0;
+  double zoomYMin_ = 0.0;
+  double zoomYMax_ = 1.0;
+
+  bool panning_ = false;
+  QPointF panStartPos_;
+  double panStartXMin_ = 0.0;
+  double panStartXMax_ = 1.0;
+  double panStartYMin_ = 0.0;
+  double panStartYMax_ = 1.0;
+
+  QRectF lastHeatmapRect_;
+  QTimer interactionTimer_;
 };

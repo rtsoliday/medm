@@ -1,6 +1,12 @@
 #include <QPainterPath>
 #include "heatmap_element.h"
 
+#include <QCoreApplication>
+#include <QMouseEvent>
+#include <QWheelEvent>
+#include "window_utils.h"
+#include "heatmap_runtime.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -28,6 +34,12 @@ HeatmapElement::HeatmapElement(QWidget *parent)
   setAttribute(Qt::WA_NoSystemBackground, true);
   xDimension_ = kDefaultDimension;
   yDimension_ = kDefaultDimension;
+
+  interactionTimer_.setSingleShot(true);
+  interactionTimer_.setInterval(2000);
+  QObject::connect(&interactionTimer_, &QTimer::timeout, [this]() {
+    HeatmapRuntime::setGlobalUpdatesPaused(false);
+  });
 }
 
 QString HeatmapElement::dataChannel() const
@@ -237,6 +249,7 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
 
   QRect heatmapRect = drawRect;
   QRect legendRect;
+  lastHeatmapRect_ = heatmapRect;
 
   const QString titleText = title_.trimmed();
   if (!titleText.isEmpty()) {
@@ -477,27 +490,60 @@ void HeatmapElement::rebuildImage()
     return;
   }
 
+  int xStart = 0;
+  int xEnd = width;
+  int yStart = 0;
+  int yEnd = height;
+  
+  if (zoomed_) {
+    xStart = std::floor(zoomXMin_ * width);
+    xEnd = std::ceil(zoomXMax_ * width);
+    yStart = std::floor(zoomYMin_ * height);
+    yEnd = std::ceil(zoomYMax_ * height);
+    
+    if (xStart < 0) xStart = 0;
+    if (xEnd > width) xEnd = width;
+    if (yStart < 0) yStart = 0;
+    if (yEnd > height) yEnd = height;
+    
+    if (xEnd <= xStart) xEnd = xStart + 1;
+    if (yEnd <= yStart) yEnd = yStart + 1;
+  }
+  
+  const int zoomedWidth = xEnd - xStart;
+  const int zoomedHeight = yEnd - yStart;
+
   bool haveValue = false;
   double minValue = 0.0;
   double maxValue = 0.0;
-  for (int i = 0; i < available; ++i) {
-    const double v = dataValues[i];
-    if (std::isnan(v) || std::isinf(v)) {
-      continue;
-    }
-    if (!haveValue) {
-      minValue = v;
-      maxValue = v;
-      haveValue = true;
-    } else {
-      minValue = std::min(minValue, v);
-      maxValue = std::max(maxValue, v);
+  
+  // Calculate min/max over the visible zoomed range
+  for (int y = yStart; y < yEnd; ++y) {
+    for (int x = xStart; x < xEnd; ++x) {
+      int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
+      if (index < available) {
+        const double v = dataValues[index];
+        if (std::isnan(v) || std::isinf(v)) {
+          continue;
+        }
+        if (!haveValue) {
+          minValue = v;
+          maxValue = v;
+          haveValue = true;
+        } else {
+          minValue = std::min(minValue, v);
+          maxValue = std::max(maxValue, v);
+        }
+      }
     }
   }
+  
   if (!haveValue) {
     cachedImage_ = QImage();
     return;
   }
+  
+  // Apply standard runtime range logic
   if (runtimeRangeValid_) {
     minValue = std::min(minValue, runtimeMinValue_);
     maxValue = std::max(maxValue, runtimeMaxValue_);
@@ -513,30 +559,32 @@ void HeatmapElement::rebuildImage()
     rightProfileData_.clear();
     
     if (showTopProfile_) {
-      topProfileData_.resize(width);
+      topProfileData_.resize(zoomedWidth);
       topProfileData_.fill(0.0);
     }
     if (showRightProfile_) {
-      rightProfileData_.resize(height);
+      rightProfileData_.resize(zoomedHeight);
       rightProfileData_.fill(0.0);
     }
 
-    QVector<int> topCounts(width, 0);
-    QVector<int> rightCounts(height, 0);
+    QVector<int> topCounts(zoomedWidth, 0);
+    QVector<int> rightCounts(zoomedHeight, 0);
 
-    for (int y = 0; y < height; ++y) {
-      for (int x = 0; x < width; ++x) {
+    for (int y = yStart; y < yEnd; ++y) {
+      for (int x = xStart; x < xEnd; ++x) {
         int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
         if (index < available) {
           const double v = dataValues[index];
           if (!std::isnan(v) && !std::isinf(v)) {
-            if (showTopProfile_) {
-              topProfileData_[x] += v;
-              topCounts[x]++;
+            const int zx = x - xStart;
+            const int zy = y - yStart;
+            if (showTopProfile_ && zx >= 0 && zx < zoomedWidth) {
+              topProfileData_[zx] += v;
+              topCounts[zx]++;
             }
-            if (showRightProfile_) {
-              rightProfileData_[y] += v;
-              rightCounts[y]++;
+            if (showRightProfile_ && zy >= 0 && zy < zoomedHeight) {
+              rightProfileData_[zy] += v;
+              rightCounts[zy]++;
             }
           }
         }
@@ -545,7 +593,7 @@ void HeatmapElement::rebuildImage()
     
     if (showTopProfile_) {
       bool haveTop = false;
-      for (int x = 0; x < width; ++x) {
+      for (int x = 0; x < zoomedWidth; ++x) {
         if (topCounts[x] > 0) {
           topProfileData_[x] /= topCounts[x];
           if (!haveTop) {
@@ -565,7 +613,7 @@ void HeatmapElement::rebuildImage()
 
     if (showRightProfile_) {
       bool haveRight = false;
-      for (int y = 0; y < height; ++y) {
+      for (int y = 0; y < zoomedHeight; ++y) {
         if (rightCounts[y] > 0) {
           rightProfileData_[y] /= rightCounts[y];
           if (!haveRight) {
@@ -583,16 +631,19 @@ void HeatmapElement::rebuildImage()
       if (!haveRight) { rightProfileMin_ = 0.0; rightProfileMax_ = 0.0; }
     }
   }
-  cachedImage_ = QImage(width, height, QImage::Format_RGB32);
+  
+  cachedImage_ = QImage(zoomedWidth, zoomedHeight, QImage::Format_RGB32);
   cachedImage_.fill(backgroundColor());
 
   const double scale = (range > 0.0) ? (255.0 / range) : 0.0;
 
   if (order_ == HeatmapOrder::kRowMajor) {
-    for (int y = 0; y < height; ++y) {
-      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(y));
-      int index = y * width;
-      for (int x = 0; x < width; ++x) {
+    for (int y = yStart; y < yEnd; ++y) {
+      const int zy = y - yStart;
+      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(zy));
+      int index = y * width + xStart;
+      for (int x = xStart; x < xEnd; ++x) {
+        const int zx = x - xStart;
         if (index < available) {
           const double value = dataValues[index];
           double offset = value - minValue;
@@ -603,16 +654,19 @@ void HeatmapElement::rebuildImage()
           if (!invertGreyscale_) {
             gray = 255 - gray;
           }
-          scanLine[x] = qRgb(gray, gray, gray);
+          scanLine[zx] = qRgb(gray, gray, gray);
         }
         ++index;
       }
     }
   } else {
-    for (int y = 0; y < height; ++y) {
-      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(y));
-      int index = y;
-      for (int x = 0; x < width; ++x) {
+    for (int y = yStart; y < yEnd; ++y) {
+      const int zy = y - yStart;
+      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(zy));
+      // index for col-major: x * height + y
+      for (int x = xStart; x < xEnd; ++x) {
+        const int zx = x - xStart;
+        int index = x * height + y;
         if (index < available) {
           const double value = dataValues[index];
           double offset = value - minValue;
@@ -623,14 +677,12 @@ void HeatmapElement::rebuildImage()
           if (!invertGreyscale_) {
             gray = 255 - gray;
           }
-          scanLine[x] = qRgb(gray, gray, gray);
+          scanLine[zx] = qRgb(gray, gray, gray);
         }
-        index += height;
       }
     }
   }
 }
-
 QImage HeatmapElement::maxPoolDownsample(const QImage &source,
     const QSize &targetSize) const
 {
@@ -748,4 +800,226 @@ void HeatmapElement::setShowRightProfile(bool show)
     showRightProfile_ = show;
     update();
   }
+}
+
+bool HeatmapElement::isZoomed() const
+{
+  return zoomed_;
+}
+
+void HeatmapElement::resetZoom()
+{
+  zoomed_ = false;
+  zoomXMin_ = 0.0;
+  zoomXMax_ = 1.0;
+  zoomYMin_ = 0.0;
+  zoomYMax_ = 1.0;
+  panning_ = false;
+  invalidateCache();
+  update();
+}
+
+void HeatmapElement::onExecuteStateApplied()
+{
+  GraphicShapeElement::onExecuteStateApplied();
+  
+  if (isExecuteMode()) {
+    setAttribute(Qt::WA_TransparentForMouseEvents, false);
+  } else {
+    setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    resetZoom();
+  }
+}
+
+bool HeatmapElement::event(QEvent *event)
+{
+  return QWidget::event(event);
+}
+
+bool HeatmapElement::forwardMouseEventToParent(QMouseEvent *event) const
+{
+  if (!event) return false;
+  QWidget *target = window();
+  if (!target) return false;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPointF globalPosF = event->globalPosition();
+  const QPoint globalPoint = globalPosF.toPoint();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos, globalPosF,
+      event->button(), event->buttons(), event->modifiers());
+#else
+  const QPoint globalPoint = event->globalPos();
+  const QPointF localPos = target->mapFromGlobal(globalPoint);
+  QMouseEvent forwarded(event->type(), localPos, localPos,
+      QPointF(globalPoint), event->button(), event->buttons(),
+      event->modifiers());
+#endif
+  QCoreApplication::sendEvent(target, &forwarded);
+  return true;
+}
+
+void HeatmapElement::mousePressEvent(QMouseEvent *event)
+{
+  if (isExecuteMode()) {
+    if (event->button() == Qt::MiddleButton) {
+      if (forwardMouseEventToParent(event)) return;
+    }
+    if (event->button() == Qt::LeftButton && isParentWindowInPvInfoMode(this)) {
+      if (forwardMouseEventToParent(event)) return;
+    }
+    if (event->button() == Qt::LeftButton) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+      const QPointF pos = event->localPos();
+#else
+      const QPointF pos = event->localPos();
+#endif
+      if (lastHeatmapRect_.contains(pos) && runtimeDataValid_) {
+        panning_ = true;
+        panStartPos_ = pos;
+        panStartXMin_ = zoomXMin_;
+        panStartXMax_ = zoomXMax_;
+        panStartYMin_ = zoomYMin_;
+        panStartYMax_ = zoomYMax_;
+      }
+    }
+  }
+  QWidget::mousePressEvent(event);
+}
+
+void HeatmapElement::mouseReleaseEvent(QMouseEvent *event)
+{
+  if (event->button() == Qt::LeftButton && panning_) {
+    panning_ = false;
+  }
+  QWidget::mouseReleaseEvent(event);
+}
+
+void HeatmapElement::mouseMoveEvent(QMouseEvent *event)
+{
+  if (panning_) {
+    HeatmapRuntime::setGlobalUpdatesPaused(true);
+    interactionTimer_.start();
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    const QPointF pos = event->localPos();
+#else
+    const QPointF pos = event->localPos();
+#endif
+    const double dx = pos.x() - panStartPos_.x();
+    const double dy = pos.y() - panStartPos_.y();
+    
+    // Convert dx, dy to normalized coordinates [0, 1] relative to zoomed area
+    const double currentRangeX = panStartXMax_ - panStartXMin_;
+    const double currentRangeY = panStartYMax_ - panStartYMin_;
+    
+    const double normDx = (dx / lastHeatmapRect_.width()) * currentRangeX;
+    const double normDy = (dy / lastHeatmapRect_.height()) * currentRangeY;
+    
+    double newXMin = panStartXMin_ - normDx;
+    double newXMax = panStartXMax_ - normDx;
+    double newYMin = panStartYMin_ - normDy;
+    double newYMax = panStartYMax_ - normDy;
+    
+    // Clamp to [0, 1]
+    if (newXMin < 0.0) {
+      newXMin = 0.0;
+      newXMax = currentRangeX;
+    } else if (newXMax > 1.0) {
+      newXMax = 1.0;
+      newXMin = 1.0 - currentRangeX;
+    }
+    
+    if (newYMin < 0.0) {
+      newYMin = 0.0;
+      newYMax = currentRangeY;
+    } else if (newYMax > 1.0) {
+      newYMax = 1.0;
+      newYMin = 1.0 - currentRangeY;
+    }
+    
+    zoomXMin_ = newXMin;
+    zoomXMax_ = newXMax;
+    zoomYMin_ = newYMin;
+    zoomYMax_ = newYMax;
+    
+    invalidateCache();
+    update();
+  }
+  QWidget::mouseMoveEvent(event);
+}
+
+void HeatmapElement::wheelEvent(QWheelEvent *event)
+{
+  if (!isExecuteMode() || !runtimeDataValid_) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+  
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+  const QPointF pos = event->position();
+#elif QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+  const QPointF pos = event->position();
+#else
+  const QPointF pos = event->localPos();
+#endif
+
+  if (!lastHeatmapRect_.contains(pos) || lastHeatmapRect_.width() <= 0 || lastHeatmapRect_.height() <= 0) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+
+  HeatmapRuntime::setGlobalUpdatesPaused(true);
+  interactionTimer_.start();
+  
+  if (!zoomed_) {
+    zoomed_ = true;
+    zoomXMin_ = 0.0;
+    zoomXMax_ = 1.0;
+    zoomYMin_ = 0.0;
+    zoomYMax_ = 1.0;
+  }
+  
+  const double degrees = event->angleDelta().y() / 8.0;
+  const double steps = degrees / 15.0;
+  const double factor = std::pow(0.9, steps);
+  
+  const bool zoomX = !event->modifiers().testFlag(Qt::ControlModifier);
+  const bool zoomY = !event->modifiers().testFlag(Qt::ShiftModifier);
+  
+  const double chartX = (pos.x() - lastHeatmapRect_.left()) / lastHeatmapRect_.width();
+  const double chartY = (pos.y() - lastHeatmapRect_.top()) / lastHeatmapRect_.height();
+  
+  if (zoomX) {
+    const double xCenter = zoomXMin_ + chartX * (zoomXMax_ - zoomXMin_);
+    double range = (zoomXMax_ - zoomXMin_) * factor;
+    // Limit min zoom to a small fraction, e.g. 0.01 (1%)
+    if (range < 0.01) range = 0.01;
+    if (range > 1.0) range = 1.0;
+    
+    zoomXMin_ = xCenter - chartX * range;
+    zoomXMax_ = zoomXMin_ + range;
+    
+    if (zoomXMin_ < 0.0) { zoomXMin_ = 0.0; zoomXMax_ = range; }
+    if (zoomXMax_ > 1.0) { zoomXMax_ = 1.0; zoomXMin_ = 1.0 - range; }
+  }
+  
+  if (zoomY) {
+    const double yCenter = zoomYMin_ + chartY * (zoomYMax_ - zoomYMin_);
+    double range = (zoomYMax_ - zoomYMin_) * factor;
+    if (range < 0.01) range = 0.01;
+    if (range > 1.0) range = 1.0;
+    
+    zoomYMin_ = yCenter - chartY * range;
+    zoomYMax_ = zoomYMin_ + range;
+    
+    if (zoomYMin_ < 0.0) { zoomYMin_ = 0.0; zoomYMax_ = range; }
+    if (zoomYMax_ > 1.0) { zoomYMax_ = 1.0; zoomYMin_ = 1.0 - range; }
+  }
+  
+  if (zoomXMin_ <= 0.0 && zoomXMax_ >= 1.0 && zoomYMin_ <= 0.0 && zoomYMax_ >= 1.0) {
+    zoomed_ = false;
+  }
+  
+  invalidateCache();
+  update();
 }

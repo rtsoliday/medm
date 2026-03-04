@@ -17231,6 +17231,19 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("preserveAspectRatio=\"true\""));
       }
+      if (heatmap->flipHorizontal()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("flipHorizontal=\"true\""));
+      }
+      if (heatmap->flipVertical()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("flipVertical=\"true\""));
+      }
+      if (heatmap->rotation() != HeatmapRotation::kNone) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("rotation=\"%1\"")
+                .arg(AdlWriter::heatmapRotationString(heatmap->rotation())));
+      }
       if (heatmap->showTopProfile()) {
         AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showTopProfile=\"yes\""));
       }
@@ -18164,6 +18177,19 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (heatmap->preserveAspectRatio()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("preserveAspectRatio=\"true\""));
+    }
+    if (heatmap->flipHorizontal()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("flipHorizontal=\"true\""));
+    }
+    if (heatmap->flipVertical()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("flipVertical=\"true\""));
+    }
+    if (heatmap->rotation() != HeatmapRotation::kNone) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("rotation=\"%1\"")
+              .arg(AdlWriter::heatmapRotationString(heatmap->rotation())));
     }
     if (heatmap->showTopProfile()) {
       AdlWriter::writeIndentedLine(stream, next, QStringLiteral("showTopProfile=\"yes\""));

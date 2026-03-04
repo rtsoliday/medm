@@ -3140,6 +3140,7 @@ private:
   ImageType parseImageType(const QString &value) const;
   HeatmapDimensionSource parseHeatmapDimensionSource(const QString &value) const;
   HeatmapOrder parseHeatmapOrder(const QString &value) const;
+  HeatmapColorMap parseHeatmapColorMap(const QString &value) const;
   bool parseHeatmapInvertGreyscale(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
@@ -7579,6 +7580,11 @@ private:
         [element]() { return element->order(); },
         [this, element](HeatmapOrder order) {
           element->setOrder(order);
+          markDirty();
+        },
+        [element]() { return element->colorMap(); },
+        [this, element](HeatmapColorMap map) {
+          element->setColorMap(map);
           markDirty();
         },
         [element]() { return element->invertGreyscale(); },
@@ -19133,6 +19139,18 @@ inline HeatmapOrder DisplayWindow::parseHeatmapOrder(
   return HeatmapOrder::kRowMajor;
 }
 
+inline HeatmapColorMap DisplayWindow::parseHeatmapColorMap(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("jet")) return HeatmapColorMap::kJet;
+  if (normalized == QStringLiteral("hot")) return HeatmapColorMap::kHot;
+  if (normalized == QStringLiteral("cool")) return HeatmapColorMap::kCool;
+  if (normalized == QStringLiteral("rainbow")) return HeatmapColorMap::kRainbow;
+  if (normalized == QStringLiteral("turbo")) return HeatmapColorMap::kTurbo;
+  return HeatmapColorMap::kGrayscale;
+}
+
 inline bool DisplayWindow::parseHeatmapInvertGreyscale(
     const QString &value) const
 {
@@ -22864,6 +22882,11 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
   const QString orderValue = propertyValue(heatmapNode, QStringLiteral("order"));
   if (!orderValue.trimmed().isEmpty()) {
     element->setOrder(parseHeatmapOrder(orderValue));
+  }
+
+  const QString colorMapValue = propertyValue(heatmapNode, QStringLiteral("colorMap"));
+  if (!colorMapValue.trimmed().isEmpty()) {
+    element->setColorMap(parseHeatmapColorMap(colorMapValue));
   }
 
   QString invertValue = propertyValue(heatmapNode,

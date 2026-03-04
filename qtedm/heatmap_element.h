@@ -46,6 +46,9 @@ public:
   HeatmapOrder order() const;
   void setOrder(HeatmapOrder order);
 
+  HeatmapColorMap colorMap() const;
+  void setColorMap(HeatmapColorMap colorMap);
+
   bool showTopProfile() const;
   void setShowTopProfile(bool show);
 
@@ -95,6 +98,7 @@ private:
   QString xDimensionChannel_;
   QString yDimensionChannel_;
   HeatmapOrder order_ = HeatmapOrder::kRowMajor;
+  HeatmapColorMap colorMap_ = HeatmapColorMap::kGrayscale;
   bool invertGreyscale_ = true;
   QVector<double> topProfileData_;
   double topProfileMin_ = 0.0;

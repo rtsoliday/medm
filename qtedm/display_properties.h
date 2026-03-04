@@ -141,6 +141,16 @@ enum class HeatmapOrder
   kColumnMajor,
 };
 
+enum class HeatmapColorMap
+{
+  kGrayscale,
+  kJet,
+  kHot,
+  kCool,
+  kRainbow,
+  kTurbo,
+};
+
 enum class TimeUnits
 {
   kMilliseconds,

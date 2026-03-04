@@ -24,6 +24,53 @@ constexpr int kLegendPadding = 6;
 constexpr int kLegendNumberPadding = 12;
 constexpr int kTitleFontHeight = 24;
 constexpr int kLegendFontHeight = 12;
+
+QVector<QRgb> getHeatmapPalette(HeatmapColorMap map, bool invert) {
+  QVector<QRgb> palette(256);
+  for (int i = 0; i < 256; ++i) {
+    int idx;
+    if (map == HeatmapColorMap::kGrayscale) {
+      idx = invert ? i : (255 - i);
+    } else {
+      idx = invert ? (255 - i) : i;
+    }
+    double t = idx / 255.0;
+    int r = 0, g = 0, b = 0;
+    switch (map) {
+      case HeatmapColorMap::kGrayscale:
+        r = g = b = idx;
+        break;
+      case HeatmapColorMap::kJet:
+        r = std::clamp(static_cast<int>(255 * std::min(4 * t - 1.5, -4 * t + 4.5)), 0, 255);
+        g = std::clamp(static_cast<int>(255 * std::min(4 * t - 0.5, -4 * t + 3.5)), 0, 255);
+        b = std::clamp(static_cast<int>(255 * std::min(4 * t + 0.5, -4 * t + 2.5)), 0, 255);
+        break;
+      case HeatmapColorMap::kHot:
+        r = std::clamp(static_cast<int>(255 * (3 * t)), 0, 255);
+        g = std::clamp(static_cast<int>(255 * (3 * t - 1)), 0, 255);
+        b = std::clamp(static_cast<int>(255 * (3 * t - 2)), 0, 255);
+        break;
+      case HeatmapColorMap::kCool:
+        r = std::clamp(static_cast<int>(255 * t), 0, 255);
+        g = std::clamp(static_cast<int>(255 * (1 - t)), 0, 255);
+        b = 255;
+        break;
+      case HeatmapColorMap::kRainbow:
+        t = t * 0.8;
+        r = std::clamp(static_cast<int>(255 * std::min({4 * t - 1.5, -4 * t + 4.5, 1.0})), 0, 255);
+        g = std::clamp(static_cast<int>(255 * std::min({4 * t - 0.5, -4 * t + 3.5, 1.0})), 0, 255);
+        b = std::clamp(static_cast<int>(255 * std::min({4 * t + 0.5, -4 * t + 2.5, 1.0})), 0, 255);
+        break;
+      case HeatmapColorMap::kTurbo:
+        r = std::clamp(static_cast<int>(255 * std::sin(M_PI * t)), 0, 255);
+        g = std::clamp(static_cast<int>(255 * std::sin(M_PI * (t + 0.3))), 0, 255);
+        b = std::clamp(static_cast<int>(255 * std::sin(M_PI * (t + 0.6))), 0, 255);
+        break;
+    }
+    palette[i] = qRgb(r, g, b);
+  }
+  return palette;
+}
 }
 
 HeatmapElement::HeatmapElement(QWidget *parent)
@@ -165,6 +212,20 @@ void HeatmapElement::setOrder(HeatmapOrder order)
     return;
   }
   order_ = order;
+  invalidateCache();
+}
+
+HeatmapColorMap HeatmapElement::colorMap() const
+{
+  return colorMap_;
+}
+
+void HeatmapElement::setColorMap(HeatmapColorMap colorMap)
+{
+  if (colorMap_ == colorMap) {
+    return;
+  }
+  colorMap_ = colorMap;
   invalidateCache();
 }
 
@@ -377,14 +438,10 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
       -kLegendPadding);
     if (barRect.height() > 4 && barRect.width() > 0) {
       QLinearGradient gradient(barRect.topLeft(), barRect.bottomLeft());
-      const QColor topColor = invertGreyscale_
-          ? QColor(255, 255, 255)
-          : QColor(0, 0, 0);
-      const QColor bottomColor = invertGreyscale_
-          ? QColor(0, 0, 0)
-          : QColor(255, 255, 255);
-      gradient.setColorAt(0.0, topColor);
-      gradient.setColorAt(1.0, bottomColor);
+      QVector<QRgb> palette = getHeatmapPalette(colorMap_, invertGreyscale_);
+      for (int i = 0; i <= 255; ++i) {
+        gradient.setColorAt(1.0 - (i / 255.0), QColor(palette[i]));
+      }
       painter.fillRect(barRect, gradient);
       painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
       painter.drawRect(barRect.adjusted(0, 0, -1, -1));
@@ -636,6 +693,7 @@ void HeatmapElement::rebuildImage()
   cachedImage_.fill(backgroundColor());
 
   const double scale = (range > 0.0) ? (255.0 / range) : 0.0;
+  QVector<QRgb> palette = getHeatmapPalette(colorMap_, invertGreyscale_);
 
   if (order_ == HeatmapOrder::kRowMajor) {
     for (int y = yStart; y < yEnd; ++y) {
@@ -650,11 +708,10 @@ void HeatmapElement::rebuildImage()
           if (offset < 0.0) offset = 0.0;
           else if (offset > range) offset = range;
 
-          int gray = static_cast<int>(offset * scale);
-          if (!invertGreyscale_) {
-            gray = 255 - gray;
-          }
-          scanLine[zx] = qRgb(gray, gray, gray);
+          int colorIdx = static_cast<int>(offset * scale);
+          if (colorIdx < 0) colorIdx = 0;
+          if (colorIdx > 255) colorIdx = 255;
+          scanLine[zx] = palette[colorIdx];
         }
         ++index;
       }
@@ -673,11 +730,10 @@ void HeatmapElement::rebuildImage()
           if (offset < 0.0) offset = 0.0;
           else if (offset > range) offset = range;
 
-          int gray = static_cast<int>(offset * scale);
-          if (!invertGreyscale_) {
-            gray = 255 - gray;
-          }
-          scanLine[zx] = qRgb(gray, gray, gray);
+          int colorIdx = static_cast<int>(offset * scale);
+          if (colorIdx < 0) colorIdx = 0;
+          if (colorIdx > 255) colorIdx = 255;
+          scanLine[zx] = palette[colorIdx];
         }
       }
     }
@@ -701,6 +757,10 @@ QImage HeatmapElement::maxPoolDownsample(const QImage &source,
 
   if (dstWidth >= srcWidth && dstHeight >= srcHeight) {
     return source;
+  }
+
+  if (colorMap_ != HeatmapColorMap::kGrayscale) {
+    return source.scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
   }
 
   QImage pooled(dstWidth, dstHeight, QImage::Format_RGB32);

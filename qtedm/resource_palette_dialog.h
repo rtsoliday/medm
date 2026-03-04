@@ -653,6 +653,23 @@ public:
         }
       });
 
+    heatmapColorMapCombo_ = new QComboBox;
+    heatmapColorMapCombo_->setFont(valueFont_);
+    heatmapColorMapCombo_->setAutoFillBackground(true);
+    heatmapColorMapCombo_->addItem(QStringLiteral("Grayscale"));
+    heatmapColorMapCombo_->addItem(QStringLiteral("Jet"));
+    heatmapColorMapCombo_->addItem(QStringLiteral("Hot"));
+    heatmapColorMapCombo_->addItem(QStringLiteral("Cool"));
+    heatmapColorMapCombo_->addItem(QStringLiteral("Rainbow"));
+    heatmapColorMapCombo_->addItem(QStringLiteral("Turbo"));
+    QObject::connect(heatmapColorMapCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapColorMapSetter_) {
+          heatmapColorMapSetter_(static_cast<HeatmapColorMap>(index));
+        }
+      });
+
     heatmapInvertGreyscaleCombo_ = new QComboBox;
     heatmapInvertGreyscaleCombo_->setFont(valueFont_);
     heatmapInvertGreyscaleCombo_->setAutoFillBackground(true);
@@ -702,6 +719,7 @@ public:
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dimension"), heatmapYDimEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Y Dim PV"), heatmapYDimChannelEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Order"), heatmapOrderCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Color Map"), heatmapColorMapCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Invert Greyscale"),
       heatmapInvertGreyscaleCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Top Profile"),
@@ -6279,6 +6297,8 @@ public:
       std::function<void(const QString &)> yDimChannelSetter,
       std::function<HeatmapOrder()> orderGetter,
         std::function<void(HeatmapOrder)> orderSetter,
+        std::function<HeatmapColorMap()> colorMapGetter,
+        std::function<void(HeatmapColorMap)> colorMapSetter,
         std::function<bool()> invertGreyscaleGetter,
         std::function<void(bool)> invertGreyscaleSetter,
       std::function<bool()> showTopProfileGetter,
@@ -6311,6 +6331,8 @@ public:
     heatmapYDimChannelSetter_ = std::move(yDimChannelSetter);
     heatmapOrderGetter_ = std::move(orderGetter);
     heatmapOrderSetter_ = std::move(orderSetter);
+    heatmapColorMapGetter_ = std::move(colorMapGetter);
+    heatmapColorMapSetter_ = std::move(colorMapSetter);
     heatmapInvertGreyscaleGetter_ = std::move(invertGreyscaleGetter);
     heatmapInvertGreyscaleSetter_ = std::move(invertGreyscaleSetter);
     heatmapShowTopProfileGetter_ = std::move(showTopProfileGetter);
@@ -6391,6 +6413,13 @@ public:
       const HeatmapOrder order = heatmapOrderGetter_ ? heatmapOrderGetter_()
                                                     : HeatmapOrder::kRowMajor;
       heatmapOrderCombo_->setCurrentIndex(heatmapOrderToIndex(order));
+    }
+
+    if (heatmapColorMapCombo_) {
+      const QSignalBlocker blocker(heatmapColorMapCombo_);
+      const HeatmapColorMap colorMap = heatmapColorMapGetter_ ? heatmapColorMapGetter_()
+                                                              : HeatmapColorMap::kGrayscale;
+      heatmapColorMapCombo_->setCurrentIndex(static_cast<int>(colorMap));
     }
 
     if (heatmapInvertGreyscaleCombo_) {
@@ -7452,6 +7481,11 @@ public:
       heatmapOrderCombo_->setCurrentIndex(
           heatmapOrderToIndex(HeatmapOrder::kRowMajor));
     }
+    if (heatmapColorMapCombo_) {
+      const QSignalBlocker blocker(heatmapColorMapCombo_);
+      heatmapColorMapCombo_->setCurrentIndex(
+          static_cast<int>(HeatmapColorMap::kGrayscale));
+    }
     if (heatmapInvertGreyscaleCombo_) {
       const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
       heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(true));
@@ -7513,6 +7547,8 @@ public:
     heatmapYDimChannelSetter_ = {};
     heatmapOrderGetter_ = {};
     heatmapOrderSetter_ = {};
+    heatmapColorMapGetter_ = {};
+    heatmapColorMapSetter_ = {};
     heatmapInvertGreyscaleGetter_ = {};
     heatmapInvertGreyscaleSetter_ = {};
 
@@ -10124,6 +10160,7 @@ private:
   QLineEdit *heatmapXDimChannelEdit_ = nullptr;
   QLineEdit *heatmapYDimChannelEdit_ = nullptr;
   QComboBox *heatmapOrderCombo_ = nullptr;
+  QComboBox *heatmapColorMapCombo_ = nullptr;
   QComboBox *heatmapInvertGreyscaleCombo_ = nullptr;
   QComboBox *heatmapShowTopProfileCombo_ = nullptr;
   QComboBox *heatmapShowRightProfileCombo_ = nullptr;
@@ -10967,6 +11004,8 @@ private:
   std::function<void(const QString &)> heatmapYDimChannelSetter_;
   std::function<HeatmapOrder()> heatmapOrderGetter_;
   std::function<void(HeatmapOrder)> heatmapOrderSetter_;
+  std::function<HeatmapColorMap()> heatmapColorMapGetter_;
+  std::function<void(HeatmapColorMap)> heatmapColorMapSetter_;
   std::function<bool()> heatmapInvertGreyscaleGetter_;
   std::function<void(bool)> heatmapInvertGreyscaleSetter_;
   std::function<bool()> heatmapShowTopProfileGetter_;

@@ -50,7 +50,18 @@ void HeatmapRuntime::start()
   }
 
   const QString initialChannel = element_->dataChannel().trimmed();
-  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  if (!needsCa && element_->xDimensionSource() == HeatmapDimensionSource::kChannel) {
+    if (parsePvName(element_->xDimensionChannel().trimmed()).protocol == PvProtocol::kCa) {
+      needsCa = true;
+    }
+  }
+  if (!needsCa && element_->yDimensionSource() == HeatmapDimensionSource::kChannel) {
+    if (parsePvName(element_->yDimensionChannel().trimmed()).protocol == PvProtocol::kCa) {
+      needsCa = true;
+    }
+  }
+
   if (needsCa) {
     ChannelAccessContext &context = ChannelAccessContext::instance();
     context.ensureInitializedForProtocol(PvProtocol::kCa);

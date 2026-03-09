@@ -38,6 +38,7 @@ enum class CreateTool {
   kRelatedDisplay,
   kMeter,
   kBarMonitor,
+  kThermometer,
   kByteMonitor,
   kScaleMonitor,
   kStripChart,

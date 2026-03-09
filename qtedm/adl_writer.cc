@@ -615,7 +615,8 @@ QString pvLimitSourceString(PvLimitSource source)
 void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
   bool includeChannelDefaults, bool forceEmptyBlock,
   bool includePrecisionDefaults,
-  bool includeLowChannelDefault, bool includeHighChannelDefault)
+  bool includeLowChannelDefault, bool includeHighChannelDefault,
+  bool preserveUserSources)
 {
   const bool hasLow = limits.lowSource != PvLimitSource::kChannel;
   const bool hasHigh = limits.highSource != PvLimitSource::kChannel;
@@ -643,7 +644,8 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
 
   writeIndentedLine(stream, level, QStringLiteral("limits {"));
   if (hasLow) {
-    const PvLimitSource source = limits.lowSource == PvLimitSource::kUser
+    const PvLimitSource source = !preserveUserSources
+            && limits.lowSource == PvLimitSource::kUser
         ? PvLimitSource::kDefault
         : limits.lowSource;
     writeIndentedLine(stream, level + 1,
@@ -660,7 +662,8 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
             .arg(QString::number(limits.lowDefault, 'g', 6)));
   }
   if (hasHigh) {
-    const PvLimitSource source = limits.highSource == PvLimitSource::kUser
+    const PvLimitSource source = !preserveUserSources
+            && limits.highSource == PvLimitSource::kUser
         ? PvLimitSource::kDefault
         : limits.highSource;
     writeIndentedLine(stream, level + 1,
@@ -677,7 +680,8 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
             .arg(QString::number(limits.highDefault, 'g', 6)));
   }
   if (hasPrecision) {
-    const PvLimitSource source = limits.precisionSource == PvLimitSource::kUser
+    const PvLimitSource source = !preserveUserSources
+            && limits.precisionSource == PvLimitSource::kUser
         ? PvLimitSource::kDefault
         : limits.precisionSource;
     writeIndentedLine(stream, level + 1,

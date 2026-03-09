@@ -2049,6 +2049,188 @@ public:
     barLayout->setRowStretch(8, 1);
     entriesLayout->addWidget(barSection_);
 
+    thermometerSection_ = new QWidget(entriesWidget_);
+    auto *thermometerLayout = new QGridLayout(thermometerSection_);
+    thermometerLayout->setContentsMargins(0, 0, 0, 0);
+    thermometerLayout->setHorizontalSpacing(12);
+    thermometerLayout->setVerticalSpacing(6);
+
+    thermometerForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(thermometerForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(thermometerForegroundButton_,
+              QStringLiteral("Thermometer Foreground"),
+              thermometerForegroundSetter_);
+        });
+
+    thermometerBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(thermometerBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(thermometerBackgroundButton_,
+              QStringLiteral("Thermometer Background"),
+              thermometerBackgroundSetter_);
+        });
+
+    thermometerTextButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(thermometerTextButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(thermometerTextButton_,
+              QStringLiteral("Thermometer Text"),
+              thermometerTextSetter_);
+        });
+
+    thermometerLabelCombo_ = new QComboBox;
+    thermometerLabelCombo_->setFont(valueFont_);
+    thermometerLabelCombo_->setAutoFillBackground(true);
+    thermometerLabelCombo_->addItem(QStringLiteral("None"));
+    thermometerLabelCombo_->addItem(QStringLiteral("No Decorations"));
+    thermometerLabelCombo_->addItem(QStringLiteral("Outline"));
+    thermometerLabelCombo_->addItem(QStringLiteral("Limits"));
+    thermometerLabelCombo_->addItem(QStringLiteral("Channel"));
+    QObject::connect(thermometerLabelCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (thermometerLabelSetter_) {
+            thermometerLabelSetter_(meterLabelFromIndex(index));
+          }
+        });
+
+    thermometerColorModeCombo_ = new QComboBox;
+    thermometerColorModeCombo_->setFont(valueFont_);
+    thermometerColorModeCombo_->setAutoFillBackground(true);
+    thermometerColorModeCombo_->addItem(QStringLiteral("Static"));
+    thermometerColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    thermometerColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(thermometerColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (thermometerColorModeSetter_) {
+            thermometerColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    thermometerFormatCombo_ = new QComboBox;
+    thermometerFormatCombo_->setFont(valueFont_);
+    thermometerFormatCombo_->setAutoFillBackground(true);
+    thermometerFormatCombo_->addItem(QStringLiteral("Decimal"));
+    thermometerFormatCombo_->addItem(QStringLiteral("Exponential"));
+    thermometerFormatCombo_->addItem(QStringLiteral("Engineering"));
+    thermometerFormatCombo_->addItem(QStringLiteral("Compact"));
+    thermometerFormatCombo_->addItem(QStringLiteral("Truncated"));
+    QObject::connect(thermometerFormatCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (thermometerFormatSetter_) {
+            thermometerFormatSetter_(textMonitorFormatFromIndex(index));
+          }
+        });
+
+    thermometerShowValueCombo_ = new QComboBox;
+    thermometerShowValueCombo_->setFont(valueFont_);
+    thermometerShowValueCombo_->setAutoFillBackground(true);
+    thermometerShowValueCombo_->addItem(QStringLiteral("Off"));
+    thermometerShowValueCombo_->addItem(QStringLiteral("On"));
+    QObject::connect(thermometerShowValueCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (thermometerShowValueSetter_) {
+            thermometerShowValueSetter_(index != 0);
+          }
+        });
+
+    thermometerVisibilityCombo_ = new QComboBox;
+    thermometerVisibilityCombo_->setFont(valueFont_);
+    thermometerVisibilityCombo_->setAutoFillBackground(true);
+    thermometerVisibilityCombo_->addItem(QStringLiteral("Static"));
+    thermometerVisibilityCombo_->addItem(QStringLiteral("If Not Zero"));
+    thermometerVisibilityCombo_->addItem(QStringLiteral("If Zero"));
+    thermometerVisibilityCombo_->addItem(QStringLiteral("Calc"));
+    QObject::connect(thermometerVisibilityCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (thermometerVisibilityModeSetter_) {
+            thermometerVisibilityModeSetter_(visibilityModeFromIndex(index));
+          }
+        });
+
+    thermometerVisibilityCalcEdit_ = createLineEdit();
+    committedTexts_.insert(thermometerVisibilityCalcEdit_,
+        thermometerVisibilityCalcEdit_->text());
+    thermometerVisibilityCalcEdit_->installEventFilter(this);
+    QObject::connect(thermometerVisibilityCalcEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitThermometerVisibilityCalc(); });
+    QObject::connect(thermometerVisibilityCalcEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitThermometerVisibilityCalc(); });
+
+    thermometerChannelEdit_ = createLineEdit();
+    committedTexts_.insert(thermometerChannelEdit_,
+        thermometerChannelEdit_->text());
+    thermometerChannelEdit_->installEventFilter(this);
+    QObject::connect(thermometerChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitThermometerChannel(); });
+    QObject::connect(thermometerChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitThermometerChannel(); });
+    for (int i = 0;
+         i < static_cast<int>(thermometerVisibilityChannelEdits_.size()); ++i) {
+      thermometerVisibilityChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(thermometerVisibilityChannelEdits_[i],
+          thermometerVisibilityChannelEdits_[i]->text());
+      thermometerVisibilityChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(thermometerVisibilityChannelEdits_[i],
+          &QLineEdit::returnPressed, this,
+          [this, i]() { commitThermometerVisibilityChannel(i); });
+      QObject::connect(thermometerVisibilityChannelEdits_[i],
+          &QLineEdit::editingFinished, this,
+          [this, i]() { commitThermometerVisibilityChannel(i); });
+      if (i == 0) {
+        QObject::connect(thermometerVisibilityChannelEdits_[i],
+            &QLineEdit::textChanged, this,
+            [this]() { updateThermometerChannelDependentControls(); });
+      }
+    }
+
+    thermometerPvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    thermometerPvLimitsButton_->setEnabled(false);
+    QObject::connect(thermometerPvLimitsButton_, &QPushButton::clicked, this,
+        [this]() { openThermometerPvLimitsDialog(); });
+
+    addRow(thermometerLayout, 0, QStringLiteral("Foreground"),
+        thermometerForegroundButton_);
+    addRow(thermometerLayout, 1, QStringLiteral("Background"),
+        thermometerBackgroundButton_);
+    addRow(thermometerLayout, 2, QStringLiteral("Text Color"),
+        thermometerTextButton_);
+    addRow(thermometerLayout, 3, QStringLiteral("Label"),
+        thermometerLabelCombo_);
+    addRow(thermometerLayout, 4, QStringLiteral("Color Mode"),
+        thermometerColorModeCombo_);
+    addRow(thermometerLayout, 5, QStringLiteral("Format"),
+        thermometerFormatCombo_);
+    addRow(thermometerLayout, 6, QStringLiteral("Value Overlay"),
+        thermometerShowValueCombo_);
+    addRow(thermometerLayout, 7, QStringLiteral("Visibility"),
+        thermometerVisibilityCombo_);
+    addRow(thermometerLayout, 8, QStringLiteral("Vis Calc"),
+        thermometerVisibilityCalcEdit_);
+    addRow(thermometerLayout, 9, QStringLiteral("Channel"),
+        thermometerChannelEdit_);
+    addRow(thermometerLayout, 10, QStringLiteral("Channel A"),
+        thermometerVisibilityChannelEdits_[0]);
+    addRow(thermometerLayout, 11, QStringLiteral("Channel B"),
+        thermometerVisibilityChannelEdits_[1]);
+    addRow(thermometerLayout, 12, QStringLiteral("Channel C"),
+        thermometerVisibilityChannelEdits_[2]);
+    addRow(thermometerLayout, 13, QStringLiteral("Channel D"),
+        thermometerVisibilityChannelEdits_[3]);
+    addRow(thermometerLayout, 14, QStringLiteral("Channel Limits"),
+        thermometerPvLimitsButton_);
+    thermometerLayout->setRowStretch(15, 1);
+    entriesLayout->addWidget(thermometerSection_);
+
     scaleSection_ = new QWidget(entriesWidget_);
     auto *scaleLayout = new QGridLayout(scaleSection_);
     scaleLayout->setContentsMargins(0, 0, 0, 0);
@@ -2564,6 +2746,7 @@ public:
   textMonitorSection_->setVisible(false);
   meterSection_->setVisible(false);
   barSection_->setVisible(false);
+  thermometerSection_->setVisible(false);
   scaleSection_->setVisible(false);
   byteSection_->setVisible(false);
   updateSectionVisibility(selectionKind_);
@@ -4850,6 +5033,190 @@ public:
     showPaletteWithoutActivating();
   }
 
+  void showForThermometer(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<QColor()> textGetter,
+      std::function<void(const QColor &)> textSetter,
+      std::function<MeterLabel()> labelGetter,
+      std::function<void(MeterLabel)> labelSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<TextVisibilityMode()> visibilityModeGetter,
+      std::function<void(TextVisibilityMode)> visibilityModeSetter,
+      std::function<QString()> visibilityCalcGetter,
+      std::function<void(const QString &)> visibilityCalcSetter,
+      std::array<std::function<QString()>, 4> visibilityChannelGetters,
+      std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters,
+      std::function<TextMonitorFormat()> formatGetter,
+      std::function<void(TextMonitorFormat)> formatSetter,
+      std::function<bool()> showValueGetter,
+      std::function<void(bool)> showValueSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kThermometer;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+
+    thermometerForegroundGetter_ = std::move(foregroundGetter);
+    thermometerForegroundSetter_ = std::move(foregroundSetter);
+    thermometerBackgroundGetter_ = std::move(backgroundGetter);
+    thermometerBackgroundSetter_ = std::move(backgroundSetter);
+    thermometerTextGetter_ = std::move(textGetter);
+    thermometerTextSetter_ = std::move(textSetter);
+    thermometerLabelGetter_ = std::move(labelGetter);
+    thermometerLabelSetter_ = std::move(labelSetter);
+    thermometerColorModeGetter_ = std::move(colorModeGetter);
+    thermometerColorModeSetter_ = std::move(colorModeSetter);
+    thermometerVisibilityModeGetter_ = std::move(visibilityModeGetter);
+    thermometerVisibilityModeSetter_ = std::move(visibilityModeSetter);
+    thermometerVisibilityCalcGetter_ = std::move(visibilityCalcGetter);
+    thermometerVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
+    thermometerVisibilityChannelGetters_ = std::move(visibilityChannelGetters);
+    thermometerVisibilityChannelSetters_ = std::move(visibilityChannelSetters);
+    thermometerFormatGetter_ = std::move(formatGetter);
+    thermometerFormatSetter_ = std::move(formatSetter);
+    thermometerShowValueGetter_ = std::move(showValueGetter);
+    thermometerShowValueSetter_ = std::move(showValueSetter);
+    thermometerChannelGetter_ = std::move(channelGetter);
+    thermometerChannelSetter_ = std::move(channelSetter);
+    thermometerLimitsGetter_ = std::move(limitsGetter);
+    thermometerLimitsSetter_ = std::move(limitsSetter);
+
+    QRect thermometerGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (thermometerGeometry.width() <= 0) {
+      thermometerGeometry.setWidth(kMinimumThermometerSize);
+    }
+    if (thermometerGeometry.height() <= 0) {
+      thermometerGeometry.setHeight(kMinimumThermometerSize);
+    }
+    lastCommittedGeometry_ = thermometerGeometry;
+    updateGeometryEdits(thermometerGeometry);
+
+    if (thermometerForegroundButton_) {
+      const QColor color = thermometerForegroundGetter_
+              ? thermometerForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(thermometerForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (thermometerBackgroundButton_) {
+      const QColor color = thermometerBackgroundGetter_
+              ? thermometerBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(thermometerBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (thermometerTextButton_) {
+      QColor color = thermometerTextGetter_ ? thermometerTextGetter_() : QColor();
+      if (!color.isValid()) {
+        color = thermometerForegroundGetter_ ? thermometerForegroundGetter_()
+                                            : palette().color(QPalette::WindowText);
+      }
+      setColorButtonColor(thermometerTextButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (thermometerLabelCombo_) {
+      const QSignalBlocker blocker(thermometerLabelCombo_);
+      const MeterLabel label = thermometerLabelGetter_ ? thermometerLabelGetter_()
+                                                       : MeterLabel::kNone;
+      thermometerLabelCombo_->setCurrentIndex(meterLabelToIndex(label));
+    }
+
+    if (thermometerColorModeCombo_) {
+      const QSignalBlocker blocker(thermometerColorModeCombo_);
+      const TextColorMode mode = thermometerColorModeGetter_
+              ? thermometerColorModeGetter_()
+              : TextColorMode::kStatic;
+      thermometerColorModeCombo_->setCurrentIndex(colorModeToIndex(mode));
+    }
+
+    if (thermometerVisibilityCombo_) {
+      const QSignalBlocker blocker(thermometerVisibilityCombo_);
+      const TextVisibilityMode mode = thermometerVisibilityModeGetter_
+              ? thermometerVisibilityModeGetter_()
+              : TextVisibilityMode::kStatic;
+      thermometerVisibilityCombo_->setCurrentIndex(visibilityModeToIndex(mode));
+    }
+
+    if (thermometerVisibilityCalcEdit_) {
+      const QString calc = thermometerVisibilityCalcGetter_
+              ? thermometerVisibilityCalcGetter_()
+              : QString();
+      const QSignalBlocker blocker(thermometerVisibilityCalcEdit_);
+      thermometerVisibilityCalcEdit_->setText(calc);
+      committedTexts_[thermometerVisibilityCalcEdit_]
+          = thermometerVisibilityCalcEdit_->text();
+    }
+
+    if (thermometerFormatCombo_) {
+      const QSignalBlocker blocker(thermometerFormatCombo_);
+      const TextMonitorFormat format = thermometerFormatGetter_
+              ? thermometerFormatGetter_()
+              : TextMonitorFormat::kDecimal;
+      int index = textMonitorFormatToIndex(format);
+      if (index < 0 || index >= thermometerFormatCombo_->count()) {
+        index = textMonitorFormatToIndex(TextMonitorFormat::kDecimal);
+      }
+      thermometerFormatCombo_->setCurrentIndex(index);
+    }
+
+    if (thermometerShowValueCombo_) {
+      const QSignalBlocker blocker(thermometerShowValueCombo_);
+      const bool showValue = thermometerShowValueGetter_
+          ? thermometerShowValueGetter_()
+          : false;
+      thermometerShowValueCombo_->setCurrentIndex(showValue ? 1 : 0);
+    }
+
+    if (thermometerChannelEdit_) {
+      const QString channel = thermometerChannelGetter_
+          ? thermometerChannelGetter_()
+          : QString();
+      const QSignalBlocker blocker(thermometerChannelEdit_);
+      thermometerChannelEdit_->setText(channel);
+      committedTexts_[thermometerChannelEdit_] = channel;
+    }
+
+    for (int i = 0;
+         i < static_cast<int>(thermometerVisibilityChannelEdits_.size()); ++i) {
+      QLineEdit *edit = thermometerVisibilityChannelEdits_[i];
+      if (!edit) {
+        continue;
+      }
+      const QString value = thermometerVisibilityChannelGetters_[i]
+          ? thermometerVisibilityChannelGetters_[i]()
+          : QString();
+      const QSignalBlocker blocker(edit);
+      edit->setText(value);
+      committedTexts_[edit] = edit->text();
+    }
+
+    updateThermometerChannelDependentControls();
+    updateThermometerLimitsFromDialog();
+
+    if (thermometerPvLimitsButton_) {
+      thermometerPvLimitsButton_->setEnabled(
+          static_cast<bool>(thermometerLimitsSetter_));
+    }
+
+    elementLabel_->setText(QStringLiteral("Thermometer"));
+
+    showPaletteWithoutActivating();
+  }
+
   void showForScaleMonitor(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> foregroundGetter,
@@ -7039,6 +7406,37 @@ public:
     if (barPvLimitsButton_) {
       barPvLimitsButton_->setEnabled(false);
     }
+    thermometerForegroundGetter_ = {};
+    thermometerForegroundSetter_ = {};
+    thermometerBackgroundGetter_ = {};
+    thermometerBackgroundSetter_ = {};
+    thermometerTextGetter_ = {};
+    thermometerTextSetter_ = {};
+    thermometerLabelGetter_ = {};
+    thermometerLabelSetter_ = {};
+    thermometerColorModeGetter_ = {};
+    thermometerColorModeSetter_ = {};
+    thermometerVisibilityModeGetter_ = {};
+    thermometerVisibilityModeSetter_ = {};
+    thermometerVisibilityCalcGetter_ = {};
+    thermometerVisibilityCalcSetter_ = {};
+    for (auto &getter : thermometerVisibilityChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : thermometerVisibilityChannelSetters_) {
+      setter = {};
+    }
+    thermometerFormatGetter_ = {};
+    thermometerFormatSetter_ = {};
+    thermometerShowValueGetter_ = {};
+    thermometerShowValueSetter_ = {};
+    thermometerChannelGetter_ = {};
+    thermometerChannelSetter_ = {};
+    thermometerLimitsGetter_ = {};
+    thermometerLimitsSetter_ = {};
+    if (thermometerPvLimitsButton_) {
+      thermometerPvLimitsButton_->setEnabled(false);
+    }
     scaleForegroundGetter_ = {};
     scaleForegroundSetter_ = {};
     scaleBackgroundGetter_ = {};
@@ -7346,6 +7744,12 @@ public:
       resetLineEdit(edit);
     }
     resetLineEdit(barChannelEdit_);
+    resetLineEdit(thermometerChannelEdit_);
+    resetLineEdit(thermometerVisibilityCalcEdit_);
+    for (QLineEdit *edit : thermometerVisibilityChannelEdits_) {
+      resetLineEdit(edit);
+    }
+    updateThermometerChannelDependentControls();
     resetLineEdit(scaleChannelEdit_);
     resetLineEdit(rectangleLineWidthEdit_);
     resetLineEdit(rectangleVisibilityCalcEdit_);
@@ -7401,6 +7805,9 @@ public:
     resetColorButton(meterBackgroundButton_);
     resetColorButton(barForegroundButton_);
     resetColorButton(barBackgroundButton_);
+    resetColorButton(thermometerForegroundButton_);
+    resetColorButton(thermometerBackgroundButton_);
+    resetColorButton(thermometerTextButton_);
     resetColorButton(scaleForegroundButton_);
     resetColorButton(scaleBackgroundButton_);
     resetColorButton(stripForegroundButton_);
@@ -7483,6 +7890,30 @@ public:
     if (barColorModeCombo_) {
       const QSignalBlocker blocker(barColorModeCombo_);
       barColorModeCombo_->setCurrentIndex(colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (thermometerLabelCombo_) {
+      const QSignalBlocker blocker(thermometerLabelCombo_);
+      thermometerLabelCombo_->setCurrentIndex(
+          meterLabelToIndex(MeterLabel::kNone));
+    }
+    if (thermometerColorModeCombo_) {
+      const QSignalBlocker blocker(thermometerColorModeCombo_);
+      thermometerColorModeCombo_->setCurrentIndex(
+          colorModeToIndex(TextColorMode::kStatic));
+    }
+    if (thermometerFormatCombo_) {
+      const QSignalBlocker blocker(thermometerFormatCombo_);
+      thermometerFormatCombo_->setCurrentIndex(
+          textMonitorFormatToIndex(TextMonitorFormat::kDecimal));
+    }
+    if (thermometerShowValueCombo_) {
+      const QSignalBlocker blocker(thermometerShowValueCombo_);
+      thermometerShowValueCombo_->setCurrentIndex(0);
+    }
+    if (thermometerVisibilityCombo_) {
+      const QSignalBlocker blocker(thermometerVisibilityCombo_);
+      thermometerVisibilityCombo_->setCurrentIndex(
+          visibilityModeToIndex(TextVisibilityMode::kStatic));
     }
     if (scaleLabelCombo_) {
       const QSignalBlocker blocker(scaleLabelCombo_);
@@ -7779,6 +8210,7 @@ private:
     kTextMonitor,
     kMeter,
     kBarMonitor,
+    kThermometer,
     kScaleMonitor,
     kStripChart,
     kCartesianPlot,
@@ -7855,9 +8287,13 @@ private:
         const bool isImageChannelEdit = std::find(
             imageChannelEdits_.begin(), imageChannelEdits_.end(), edit)
             != imageChannelEdits_.end();
-    const bool isCompositeChannelEdit = std::find(
-      compositeChannelEdits_.begin(), compositeChannelEdits_.end(), edit)
-      != compositeChannelEdits_.end();
+        const bool isCompositeChannelEdit = std::find(
+            compositeChannelEdits_.begin(), compositeChannelEdits_.end(), edit)
+            != compositeChannelEdits_.end();
+        const bool isThermometerVisibilityChannelEdit = std::find(
+            thermometerVisibilityChannelEdits_.begin(),
+            thermometerVisibilityChannelEdits_.end(), edit)
+            != thermometerVisibilityChannelEdits_.end();
         const bool isRelatedLabelEdit = std::find(
             relatedDisplayEntryLabelEdits_.begin(),
             relatedDisplayEntryLabelEdits_.end(), edit)
@@ -7878,17 +8314,20 @@ private:
             || edit == compositeVisibilityCalcEdit_
             || edit == imageNameEdit_ || edit == imageCalcEdit_
             || edit == imageVisibilityCalcEdit_
+            || edit == thermometerVisibilityCalcEdit_
             || edit == lineLineWidthEdit_
             || edit == lineVisibilityCalcEdit_
             || isRectangleChannelEdit || isLineChannelEdit
             || isImageChannelEdit || isCompositeChannelEdit
+            || isThermometerVisibilityChannelEdit
             || isRelatedLabelEdit
             || isRelatedNameEdit || isRelatedArgsEdit
             || edit == relatedDisplayLabelEdit_) {
           revertLineEdit(edit);
         }
         if (edit == textMonitorChannelEdit_
-            || edit == meterChannelEdit_ || edit == sliderIncrementEdit_
+            || edit == meterChannelEdit_ || edit == thermometerChannelEdit_
+            || edit == sliderIncrementEdit_
             || edit == sliderChannelEdit_) {
           revertLineEdit(edit);
         }
@@ -8067,6 +8506,11 @@ private:
       barSection_->setVisible(barVisible);
       barSection_->setEnabled(barVisible);
     }
+    if (thermometerSection_) {
+      const bool thermometerVisible = kind == SelectionKind::kThermometer;
+      thermometerSection_->setVisible(thermometerVisible);
+      thermometerSection_->setEnabled(thermometerVisible);
+    }
     if (scaleSection_) {
       const bool scaleVisible = kind == SelectionKind::kScaleMonitor;
       scaleSection_->setVisible(scaleVisible);
@@ -8233,6 +8677,31 @@ private:
     setFieldEnabled(rectangleColorModeCombo_, hasChannelA);
     setFieldEnabled(rectangleVisibilityCombo_, hasChannelA);
     setFieldEnabled(rectangleVisibilityCalcEdit_, hasChannelA);
+  }
+
+  void updateThermometerChannelDependentControls()
+  {
+    bool hasChannelA = false;
+    if (thermometerChannelGetter_) {
+      const QString value = thermometerChannelGetter_();
+      hasChannelA = !value.trimmed().isEmpty();
+    }
+    if (!hasChannelA && thermometerChannelEdit_) {
+      hasChannelA = !thermometerChannelEdit_->text().trimmed().isEmpty();
+    }
+    if (!hasChannelA && thermometerVisibilityChannelGetters_[0]) {
+      const QString value = thermometerVisibilityChannelGetters_[0]();
+      hasChannelA = !value.trimmed().isEmpty();
+    }
+    if (!hasChannelA) {
+      QLineEdit *channelEdit = thermometerVisibilityChannelEdits_[0];
+      if (channelEdit) {
+        hasChannelA = !channelEdit->text().trimmed().isEmpty();
+      }
+    }
+
+    setFieldEnabled(thermometerVisibilityCombo_, hasChannelA);
+    setFieldEnabled(thermometerVisibilityCalcEdit_, hasChannelA);
   }
 
   void updateCompositeChannelDependentControls()
@@ -8635,6 +9104,58 @@ private:
     barChannelSetter_(value);
     committedTexts_[barChannelEdit_] = value;
     updateBarLimitsFromDialog();
+  }
+
+  void commitThermometerChannel()
+  {
+    if (!thermometerChannelEdit_) {
+      return;
+    }
+    if (!thermometerChannelSetter_) {
+      revertLineEdit(thermometerChannelEdit_);
+      return;
+    }
+    const QString value = thermometerChannelEdit_->text();
+    thermometerChannelSetter_(value);
+    committedTexts_[thermometerChannelEdit_] = value;
+    updateThermometerChannelDependentControls();
+    updateThermometerLimitsFromDialog();
+  }
+
+  void commitThermometerVisibilityCalc()
+  {
+    if (!thermometerVisibilityCalcEdit_) {
+      return;
+    }
+    if (!thermometerVisibilityCalcSetter_) {
+      revertLineEdit(thermometerVisibilityCalcEdit_);
+      return;
+    }
+    const QString value = thermometerVisibilityCalcEdit_->text();
+    thermometerVisibilityCalcSetter_(value);
+    committedTexts_[thermometerVisibilityCalcEdit_] = value;
+  }
+
+  void commitThermometerVisibilityChannel(int index)
+  {
+    if (index < 0
+        || index >= static_cast<int>(thermometerVisibilityChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = thermometerVisibilityChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!thermometerVisibilityChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    thermometerVisibilityChannelSetters_[index](value);
+    committedTexts_[edit] = value;
+    if (index == 0) {
+      updateThermometerChannelDependentControls();
+    }
   }
 
   void commitScaleChannel()
@@ -9247,6 +9768,23 @@ private:
                                                      : QString();
       pvLimitsDialog_->setBarCallbacks(channelLabel, barLimitsGetter_,
           barLimitsSetter_, [this]() { updateBarLimitsFromDialog(); });
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
+  }
+
+  void updateThermometerLimitsFromDialog()
+  {
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (thermometerLimitsGetter_ && thermometerLimitsSetter_) {
+      const QString channelLabel = thermometerChannelGetter_
+          ? thermometerChannelGetter_()
+          : QString();
+      pvLimitsDialog_->setThermometerCallbacks(channelLabel,
+          thermometerLimitsGetter_, thermometerLimitsSetter_,
+          [this]() { updateThermometerLimitsFromDialog(); });
     } else {
       pvLimitsDialog_->clearTargets();
     }
@@ -10373,6 +10911,19 @@ private:
   QComboBox *barFillCombo_ = nullptr;
   QLineEdit *barChannelEdit_ = nullptr;
   QPushButton *barPvLimitsButton_ = nullptr;
+  QWidget *thermometerSection_ = nullptr;
+  QPushButton *thermometerForegroundButton_ = nullptr;
+  QPushButton *thermometerBackgroundButton_ = nullptr;
+  QPushButton *thermometerTextButton_ = nullptr;
+  QComboBox *thermometerLabelCombo_ = nullptr;
+  QComboBox *thermometerColorModeCombo_ = nullptr;
+  QComboBox *thermometerFormatCombo_ = nullptr;
+  QComboBox *thermometerShowValueCombo_ = nullptr;
+  QComboBox *thermometerVisibilityCombo_ = nullptr;
+  QLineEdit *thermometerVisibilityCalcEdit_ = nullptr;
+  QLineEdit *thermometerChannelEdit_ = nullptr;
+  std::array<QLineEdit *, 4> thermometerVisibilityChannelEdits_{};
+  QPushButton *thermometerPvLimitsButton_ = nullptr;
   QWidget *scaleSection_ = nullptr;
   QPushButton *scaleForegroundButton_ = nullptr;
   QPushButton *scaleBackgroundButton_ = nullptr;
@@ -10648,6 +11199,15 @@ private:
     if (meterChannelEdit_) {
       committedTexts_[meterChannelEdit_] = meterChannelEdit_->text();
     }
+    if (thermometerVisibilityCalcEdit_) {
+      committedTexts_[thermometerVisibilityCalcEdit_]
+          = thermometerVisibilityCalcEdit_->text();
+    }
+    for (QLineEdit *edit : thermometerVisibilityChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
     if (stripTitleEdit_) {
       committedTexts_[stripTitleEdit_] = stripTitleEdit_->text();
     }
@@ -10700,6 +11260,9 @@ private:
     }
     if (barChannelEdit_) {
       committedTexts_[barChannelEdit_] = barChannelEdit_->text();
+    }
+    if (thermometerChannelEdit_) {
+      committedTexts_[thermometerChannelEdit_] = thermometerChannelEdit_->text();
     }
     if (byteChannelEdit_) {
       committedTexts_[byteChannelEdit_] = byteChannelEdit_->text();
@@ -10971,6 +11534,30 @@ private:
   std::function<void(const QString &)> barChannelSetter_;
   std::function<PvLimits()> barLimitsGetter_;
   std::function<void(const PvLimits &)> barLimitsSetter_;
+  std::function<QColor()> thermometerForegroundGetter_;
+  std::function<void(const QColor &)> thermometerForegroundSetter_;
+  std::function<QColor()> thermometerBackgroundGetter_;
+  std::function<void(const QColor &)> thermometerBackgroundSetter_;
+  std::function<QColor()> thermometerTextGetter_;
+  std::function<void(const QColor &)> thermometerTextSetter_;
+  std::function<MeterLabel()> thermometerLabelGetter_;
+  std::function<void(MeterLabel)> thermometerLabelSetter_;
+  std::function<TextColorMode()> thermometerColorModeGetter_;
+  std::function<void(TextColorMode)> thermometerColorModeSetter_;
+  std::function<TextVisibilityMode()> thermometerVisibilityModeGetter_;
+  std::function<void(TextVisibilityMode)> thermometerVisibilityModeSetter_;
+  std::function<QString()> thermometerVisibilityCalcGetter_;
+  std::function<void(const QString &)> thermometerVisibilityCalcSetter_;
+  std::array<std::function<QString()>, 4> thermometerVisibilityChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4> thermometerVisibilityChannelSetters_{};
+  std::function<TextMonitorFormat()> thermometerFormatGetter_;
+  std::function<void(TextMonitorFormat)> thermometerFormatSetter_;
+  std::function<bool()> thermometerShowValueGetter_;
+  std::function<void(bool)> thermometerShowValueSetter_;
+  std::function<QString()> thermometerChannelGetter_;
+  std::function<void(const QString &)> thermometerChannelSetter_;
+  std::function<PvLimits()> thermometerLimitsGetter_;
+  std::function<void(const PvLimits &)> thermometerLimitsSetter_;
   std::function<QColor()> scaleForegroundGetter_;
   std::function<void(const QColor &)> scaleForegroundSetter_;
   std::function<QColor()> scaleBackgroundGetter_;
@@ -11492,6 +12079,30 @@ private:
         [this]() { updateBarLimitsFromDialog(); });
     positionPvLimitsDialog(dialog);
     dialog->showForBarMonitor();
+  }
+
+  void openThermometerPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!thermometerLimitsGetter_ || !thermometerLimitsSetter_) {
+      dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = thermometerChannelGetter_
+        ? thermometerChannelGetter_()
+        : QString();
+    dialog->setThermometerCallbacks(channelLabel, thermometerLimitsGetter_,
+        thermometerLimitsSetter_,
+        [this]() { updateThermometerLimitsFromDialog(); });
+    positionPvLimitsDialog(dialog);
+    dialog->showForThermometer();
   }
 
   void openScaleMonitorPvLimitsDialog()

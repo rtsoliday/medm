@@ -76,6 +76,8 @@ qtedm_SRC = qtedm.cc \
             byte_monitor_runtime.cc \
             bar_monitor_element.cc \
             bar_monitor_runtime.cc \
+            thermometer_element.cc \
+            thermometer_runtime.cc \
             channel_access_context.cc \
             shared_channel_manager.cc \
             pvaSDDS.cc \

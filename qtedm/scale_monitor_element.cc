@@ -1,7 +1,5 @@
 #include "scale_monitor_element.h"
 
-#include "update_coordinator.h"
-
 #include <algorithm>
 #include <cmath>
 
@@ -286,7 +284,7 @@ void ScaleMonitorElement::setRuntimeConnected(bool connected)
     runtimeHigh_ = limits_.highDefault;
     runtimeValue_ = defaultSampleValue();
   }
-  UpdateCoordinator::instance().requestUpdate(this);
+  update();
 }
 
 void ScaleMonitorElement::setRuntimeSeverity(short severity)
@@ -302,7 +300,7 @@ void ScaleMonitorElement::setRuntimeSeverity(short severity)
   }
   runtimeSeverity_ = severity;
   if (colorMode_ == TextColorMode::kAlarm) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -318,7 +316,7 @@ void ScaleMonitorElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (runtimeConnected_ && changed) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -335,7 +333,7 @@ void ScaleMonitorElement::setRuntimeLimits(double low, double high)
   runtimeLimitsValid_ = true;
   if (executeMode_) {
     runtimeValue_ = clampToLimits(runtimeValue_);
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -347,7 +345,7 @@ void ScaleMonitorElement::setRuntimePrecision(int precision)
   }
   runtimePrecision_ = clamped;
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -362,7 +360,7 @@ void ScaleMonitorElement::clearRuntimeState()
   runtimeValue_ = defaultSampleValue();
   runtimeSeverity_ = kInvalidSeverity;
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   } else {
     update();
   }

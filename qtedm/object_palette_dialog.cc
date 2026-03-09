@@ -408,6 +408,8 @@ ObjectPaletteDialog::monitorButtons()
           CreateTool::kMeter},
       {QStringLiteral("Bar Monitor"), bar25_bits, bar25_width,
           bar25_height, CreateTool::kBarMonitor},
+      {QStringLiteral("Thermometer"), bar25_bits, bar25_width,
+          bar25_height, CreateTool::kThermometer},
       {QStringLiteral("Heatmap"), heatmap25_bits, heatmap25_width,
         heatmap25_height, CreateTool::kHeatmap},
       {QStringLiteral("Strip Chart"), stripChart25_bits, stripChart25_width,

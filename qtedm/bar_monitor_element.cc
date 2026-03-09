@@ -1,7 +1,6 @@
 #include "bar_monitor_element.h"
 
 #include "medm_colors.h"
-#include "update_coordinator.h"
 #include "pv_name_utils.h"
 
 #include <algorithm>
@@ -289,7 +288,7 @@ void BarMonitorElement::setRuntimeConnected(bool connected)
     hasRuntimeValue_ = false;
   }
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -301,7 +300,7 @@ void BarMonitorElement::setRuntimeSeverity(short severity)
   }
   runtimeSeverity_ = clamped;
   if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -310,14 +309,13 @@ void BarMonitorElement::setRuntimeValue(double value)
   if (!std::isfinite(value)) {
     return;
   }
-  const double clamped = clampToLimits(value);
   const bool firstValue = !hasRuntimeValue_;
   const bool changed = firstValue
-      || std::abs(clamped - runtimeValue_) > valueEpsilon();
-  runtimeValue_ = clamped;
+      || std::abs(value - runtimeValue_) > valueEpsilon();
+  runtimeValue_ = value;
   hasRuntimeValue_ = true;
   if (executeMode_ && runtimeConnected_ && changed) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -333,8 +331,7 @@ void BarMonitorElement::setRuntimeLimits(double low, double high)
   runtimeHigh_ = high;
   runtimeLimitsValid_ = true;
   if (executeMode_) {
-    runtimeValue_ = clampToLimits(runtimeValue_);
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -346,7 +343,7 @@ void BarMonitorElement::setRuntimePrecision(int precision)
   }
   runtimePrecision_ = clamped;
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -361,7 +358,7 @@ void BarMonitorElement::clearRuntimeState()
   runtimeValue_ = defaultSampleValue();
   runtimeSeverity_ = kInvalidSeverity;
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   } else {
     update();
   }
@@ -1113,7 +1110,7 @@ QString BarMonitorElement::formattedSampleValue() const
       return QStringLiteral("--");
     }
   }
-  return formatValue(sampleValue());
+  return formatValue(currentValue());
 }
 
 double BarMonitorElement::effectiveLowLimit() const

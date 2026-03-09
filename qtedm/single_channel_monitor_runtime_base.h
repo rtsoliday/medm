@@ -3,8 +3,10 @@
 #include <QObject>
 #include <QPointer>
 #include <QMetaObject>
+#include <QByteArray>
 #include <QString>
 
+#include <array>
 #include <type_traits>
 #include <utility>
 
@@ -37,6 +39,10 @@ protected:
   void resetRuntimeState();
   void handleChannelConnection(bool connected, const SharedChannelData &data);
   void handleChannelData(const SharedChannelData &data);
+  bool hasConfiguredVisibilityChannels() const;
+  bool allVisibilityChannelsConnected() const;
+  bool evaluateVisibility();
+  void updateRuntimeVisibility();
 
   template <typename Func>
   void invokeOnElement(Func &&func);
@@ -51,6 +57,20 @@ protected:
   short lastSeverity_ = 3;
   bool hasControlInfo_ = false;
   bool initialUpdateTracked_ = false;
+
+  struct VisibilityChannelRuntime
+  {
+    int index = 0;
+    QString name;
+    SubscriptionHandle subscription;
+    bool connected = false;
+    bool hasValue = false;
+    double value = 0.0;
+  };
+
+  std::array<VisibilityChannelRuntime, 5> visibilityChannels_{};
+  QByteArray visibilityCalcPostfix_;
+  bool visibilityCalcValid_ = false;
 };
 
 template <typename ElementType>

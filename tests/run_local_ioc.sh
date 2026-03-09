@@ -463,6 +463,53 @@ set_bar_test_pvs() {
   return 1
 }
 
+set_thermometer_test_pvs() {
+  local prefix="$1"
+  local -a thermometer_init_values=(
+    # pv value lopr hopr prec
+    "thermometer:test:alpha        24.5     -58.4   139.7   1"
+    "thermometer:test:beta         18.2     -12.8    64.5   2"
+    "thermometer:test:gamma       -33.1     -95.3    12.4   1"
+    "thermometer:test:delta        42.6     -18.6    98.2   2"
+    "thermometer:test:epsilon       7.125   -42.1    42.1   3"
+    "thermometer:test:zeta         32.4      -7.3    73.9   2"
+    "thermometer:test:eta          -6.4     -33.5    55.7   1"
+    "thermometer:test:theta      -101.7    -120.9     4.3   1"
+    "thermometer:test:baselinea    25.0       0.0    50.0   2"
+    "thermometer:test:baselineb    25.0       0.0    50.0   2"
+    "thermometer:test:limit_source 25.0       0.001  50.0   2"
+  )
+
+  echo "Initializing thermometer PVs for tests/test_Thermometer.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${thermometer_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Thermometer PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize thermometer PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_byte_test_pvs() {
   local prefix="$1"
   local -a byte_init_values=(
@@ -1246,6 +1293,7 @@ set_meter_test_pvs "${PV_PREFIX}" || true
 set_strip_chart_test_pvs "${PV_PREFIX}" || true
 set_cartesian_plot_test_pvs "${PV_PREFIX}" || true
 set_bar_test_pvs "${PV_PREFIX}" || true
+set_thermometer_test_pvs "${PV_PREFIX}" || true
 set_byte_test_pvs "${PV_PREFIX}" || true
 set_arc_test_pvs "${PV_PREFIX}" || true
 set_line_test_pvs "${PV_PREFIX}" || true

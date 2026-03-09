@@ -1,6 +1,5 @@
 #include "meter_element.h"
 
-#include "update_coordinator.h"
 #include "pv_name_utils.h"
 
 #include <algorithm>
@@ -378,7 +377,7 @@ void MeterElement::setRuntimeConnected(bool connected)
     hasRuntimeValue_ = false;
   }
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -390,7 +389,7 @@ void MeterElement::setRuntimeSeverity(short severity)
   }
   runtimeSeverity_ = clamped;
   if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -405,7 +404,7 @@ void MeterElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (executeMode_ && runtimeConnected_ && changed) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -422,7 +421,7 @@ void MeterElement::setRuntimeLimits(double low, double high)
   runtimeLimitsValid_ = true;
   if (executeMode_) {
     runtimeValue_ = clampToLimits(runtimeValue_);
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -434,7 +433,7 @@ void MeterElement::setRuntimePrecision(int precision)
   }
   runtimePrecision_ = clamped;
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   }
 }
 
@@ -449,7 +448,7 @@ void MeterElement::clearRuntimeState()
   runtimeValue_ = defaultSampleValue();
   runtimeSeverity_ = kInvalidSeverity;
   if (executeMode_) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    update();
   } else {
     update();
   }

@@ -72,6 +72,34 @@ QLineEdit *createValueEdit(const QFont &font)
 
 } // namespace
 
+bool PvLimitsDialog::userSourcesAllowed() const
+{
+  return mode_ == Mode::kThermometer;
+}
+
+bool PvLimitsDialog::modeSupportsPrecision() const
+{
+  return mode_ == Mode::kTextMonitor
+      || mode_ == Mode::kMeter
+      || mode_ == Mode::kSlider
+      || mode_ == Mode::kWheelSwitch
+      || mode_ == Mode::kBarMonitor
+      || mode_ == Mode::kThermometer
+      || mode_ == Mode::kScaleMonitor;
+}
+
+bool PvLimitsDialog::modeSupportsLimits() const
+{
+  return mode_ == Mode::kTextMonitor
+      || mode_ == Mode::kMeter
+      || mode_ == Mode::kStripChart
+      || mode_ == Mode::kSlider
+      || mode_ == Mode::kWheelSwitch
+      || mode_ == Mode::kBarMonitor
+      || mode_ == Mode::kThermometer
+      || mode_ == Mode::kScaleMonitor;
+}
+
 PvLimitsDialog::PvLimitsDialog(const QPalette &basePalette,
     const QFont &labelFont, const QFont &valueFont, QWidget *parent)
   : QDialog(parent)
@@ -634,6 +662,85 @@ void PvLimitsDialog::showForBarMonitor()
   activateWindow();
 }
 
+void PvLimitsDialog::setThermometerCallbacks(const QString &channelName,
+    std::function<PvLimits()> limitsGetter,
+    std::function<void(const PvLimits &)> limitsSetter,
+    std::function<void()> changeNotifier)
+{
+  mode_ = Mode::kThermometer;
+  meterLimitsGetter_ = std::move(limitsGetter);
+  meterLimitsSetter_ = std::move(limitsSetter);
+  onChangedCallback_ = std::move(changeNotifier);
+  channelLabel_ = channelName;
+  if (titleLabel_) {
+    if (channelLabel_.trimmed().isEmpty()) {
+      titleLabel_->setText(QStringLiteral("Edit Mode Limits"));
+    } else {
+      titleLabel_->setText(channelLabel_.trimmed());
+    }
+  }
+  setPrecisionRowVisible(true);
+  setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, true);
+  setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, true);
+  if (loprSourceCombo_) {
+    loprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+  }
+  if (hoprSourceCombo_) {
+    hoprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+  }
+  if (precisionSourceCombo_) {
+    precisionSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+  }
+
+  if (meterLimitsGetter_ && meterLimitsSetter_) {
+    precisionSourceGetter_ = [this]() {
+      if (!meterLimitsGetter_) {
+        return PvLimitSource::kChannel;
+      }
+      return meterLimitsGetter_().precisionSource;
+    };
+    precisionSourceSetter_ = [this](PvLimitSource source) {
+      if (!meterLimitsGetter_ || !meterLimitsSetter_) {
+        return;
+      }
+      PvLimits limits = meterLimitsGetter_();
+      limits.precisionSource = source;
+      meterLimitsSetter_(limits);
+    };
+    precisionDefaultGetter_ = [this]() {
+      return meterLimitsGetter_ ? meterLimitsGetter_().precisionDefault : 0;
+    };
+    precisionDefaultSetter_ = [this](int value) {
+      if (!meterLimitsGetter_ || !meterLimitsSetter_) {
+        return;
+      }
+      PvLimits limits = meterLimitsGetter_();
+      limits.precisionDefault = std::clamp(value, 0, 17);
+      meterLimitsSetter_(limits);
+    };
+  } else {
+    precisionSourceGetter_ = {};
+    precisionSourceSetter_ = {};
+    precisionDefaultGetter_ = {};
+    precisionDefaultSetter_ = {};
+  }
+
+  updateMeterControls();
+  updatePrecisionControls();
+}
+
+void PvLimitsDialog::showForThermometer()
+{
+  if (mode_ != Mode::kThermometer) {
+    return;
+  }
+  updateMeterControls();
+  updatePrecisionControls();
+  show();
+  raise();
+  activateWindow();
+}
+
 void PvLimitsDialog::setScaleCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
@@ -718,11 +825,7 @@ void PvLimitsDialog::showForScaleMonitor()
 
 void PvLimitsDialog::updatePrecisionControls()
 {
-  const bool hasPrecision = (mode_ == Mode::kTextMonitor
-      || mode_ == Mode::kMeter || mode_ == Mode::kSlider
-      || mode_ == Mode::kWheelSwitch
-      || mode_ == Mode::kBarMonitor
-      || mode_ == Mode::kScaleMonitor)
+  const bool hasPrecision = modeSupportsPrecision()
       && static_cast<bool>(precisionSourceGetter_);
   if (precisionLabel_) {
     precisionLabel_->setEnabled(hasPrecision);
@@ -746,7 +849,7 @@ void PvLimitsDialog::updatePrecisionControls()
     return;
   }
 
-  if (source == PvLimitSource::kDefault) {
+  if (source == PvLimitSource::kDefault || source == PvLimitSource::kUser) {
     const int value = precisionDefaultGetter_ ? precisionDefaultGetter_() : 0;
     precisionEdit_->setText(QString::number(std::clamp(value, 0, 17)));
     precisionEdit_->setEnabled(true);
@@ -758,11 +861,7 @@ void PvLimitsDialog::updatePrecisionControls()
 
 void PvLimitsDialog::updateMeterControls()
 {
-  const bool hasLimits = (mode_ == Mode::kTextMonitor
-      || mode_ == Mode::kMeter || mode_ == Mode::kStripChart
-      || mode_ == Mode::kSlider
-      || mode_ == Mode::kWheelSwitch || mode_ == Mode::kBarMonitor
-      || mode_ == Mode::kScaleMonitor)
+  const bool hasLimits = modeSupportsLimits()
       && static_cast<bool>(meterLimitsGetter_)
       && static_cast<bool>(meterLimitsSetter_);
   PvLimits limits{};
@@ -819,7 +918,7 @@ void PvLimitsDialog::handlePrecisionSourceChanged(int index)
   }
 
   const PvLimitSource selected = sourceForIndex(index);
-  if (selected == PvLimitSource::kUser) {
+  if (selected == PvLimitSource::kUser && !userSourcesAllowed()) {
     updatePrecisionControls();
     return;
   }
@@ -869,17 +968,14 @@ void PvLimitsDialog::handleLowSourceChanged(int index)
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
-          && mode_ != Mode::kWheelSwitch
-          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
+  if (!modeSupportsLimits()
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;
   }
 
   PvLimitSource selected = sourceForIndex(index);
-  if (selected == PvLimitSource::kUser) {
+  if (selected == PvLimitSource::kUser && !userSourcesAllowed()) {
     selected = PvLimitSource::kDefault;
   }
 
@@ -897,17 +993,14 @@ void PvLimitsDialog::handleHighSourceChanged(int index)
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
-          && mode_ != Mode::kWheelSwitch
-          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
+  if (!modeSupportsLimits()
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;
   }
 
   PvLimitSource selected = sourceForIndex(index);
-  if (selected == PvLimitSource::kUser) {
+  if (selected == PvLimitSource::kUser && !userSourcesAllowed()) {
     selected = PvLimitSource::kDefault;
   }
 
@@ -925,10 +1018,7 @@ void PvLimitsDialog::commitLowValue()
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
-          && mode_ != Mode::kWheelSwitch
-          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
+  if (!modeSupportsLimits()
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;
@@ -966,10 +1056,7 @@ void PvLimitsDialog::commitHighValue()
   if (updating_) {
     return;
   }
-  if ((mode_ != Mode::kTextMonitor && mode_ != Mode::kMeter
-          && mode_ != Mode::kStripChart && mode_ != Mode::kSlider
-          && mode_ != Mode::kWheelSwitch
-          && mode_ != Mode::kBarMonitor && mode_ != Mode::kScaleMonitor)
+  if (!modeSupportsLimits()
       || !meterLimitsGetter_ || !meterLimitsSetter_) {
     updateMeterControls();
     return;

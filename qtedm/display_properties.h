@@ -248,6 +248,7 @@ constexpr int kMinimumWheelSwitchHeight = 30;
 constexpr int kMinimumRectangleSize = 1;
 constexpr int kMinimumMeterSize = 60;
 constexpr int kMinimumBarSize = 5;
+constexpr int kMinimumThermometerSize = 5;
 constexpr int kMinimumByteSize = 5;
 constexpr int kMinimumScaleSize = 20;
 constexpr int kMinimumStripChartWidth = 60;

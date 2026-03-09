@@ -635,6 +635,7 @@ public:
     appendVisible(textMonitorElements_);
     appendVisible(meterElements_);
     appendVisible(barMonitorElements_);
+    appendVisible(thermometerElements_);
     appendVisible(scaleMonitorElements_);
     appendVisible(stripChartElements_);
     appendVisible(cartesianPlotElements_);
@@ -768,6 +769,9 @@ public:
       if (dynamic_cast<BarMonitorElement *>(widget)) {
         return QStringLiteral("Bar Monitor");
       }
+      if (dynamic_cast<ThermometerElement *>(widget)) {
+        return QStringLiteral("Thermometer");
+      }
       if (dynamic_cast<ScaleMonitorElement *>(widget)) {
         return QStringLiteral("Scale Monitor");
       }
@@ -847,6 +851,7 @@ public:
     considerList(textMonitorElements_);
     considerList(meterElements_);
     considerList(barMonitorElements_);
+    considerList(thermometerElements_);
     considerList(scaleMonitorElements_);
     considerList(stripChartElements_);
     considerList(cartesianPlotElements_);
@@ -2699,6 +2704,7 @@ protected:
             || state->createTool == CreateTool::kShellCommand
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
+            || state->createTool == CreateTool::kThermometer
             || state->createTool == CreateTool::kByteMonitor
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
@@ -3020,6 +3026,7 @@ private:
   RelatedDisplayElement *loadRelatedDisplayElement(const AdlNode &relatedNode);
   MeterElement *loadMeterElement(const AdlNode &meterNode);
   BarMonitorElement *loadBarMonitorElement(const AdlNode &barNode);
+  ThermometerElement *loadThermometerElement(const AdlNode &thermometerNode);
   ScaleMonitorElement *loadScaleMonitorElement(const AdlNode &indicatorNode);
   CartesianPlotElement *loadCartesianPlotElement(const AdlNode &cartesianNode);
   StripChartElement *loadStripChartElement(const AdlNode &stripNode);
@@ -3273,6 +3280,9 @@ private:
   QList<BarMonitorElement *> barMonitorElements_;
   QHash<BarMonitorElement *, BarMonitorRuntime *> barMonitorRuntimes_;
   BarMonitorElement *selectedBarMonitorElement_ = nullptr;
+  QList<ThermometerElement *> thermometerElements_;
+  QHash<ThermometerElement *, ThermometerRuntime *> thermometerRuntimes_;
+  ThermometerElement *selectedThermometerElement_ = nullptr;
   QList<ScaleMonitorElement *> scaleMonitorElements_;
   QHash<ScaleMonitorElement *, ScaleMonitorRuntime *> scaleMonitorRuntimes_;
   ScaleMonitorElement *selectedScaleMonitorElement_ = nullptr;
@@ -3522,10 +3532,21 @@ private:
   void clearBarMonitorSelection()
   {
     if (!selectedBarMonitorElement_) {
+      clearThermometerSelection();
       return;
     }
     selectedBarMonitorElement_->setSelected(false);
     selectedBarMonitorElement_ = nullptr;
+    clearThermometerSelection();
+  }
+
+  void clearThermometerSelection()
+  {
+    if (!selectedThermometerElement_) {
+      return;
+    }
+    selectedThermometerElement_->setSelected(false);
+    selectedThermometerElement_ = nullptr;
   }
 
   void clearByteMonitorSelection()
@@ -3673,6 +3694,10 @@ private:
     }
     if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
       bar->setSelected(selected);
+      return;
+    }
+    if (auto *thermometer = dynamic_cast<ThermometerElement *>(widget)) {
+      thermometer->setSelected(selected);
       return;
     }
     if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
@@ -3848,6 +3873,12 @@ private:
     if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
       if (selectedBarMonitorElement_ == bar) {
         selectedBarMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *thermometer = dynamic_cast<ThermometerElement *>(widget)) {
+      if (selectedThermometerElement_ == thermometer) {
+        selectedThermometerElement_ = nullptr;
       }
       return;
     }
@@ -4039,6 +4070,12 @@ private:
         return;
       }
     }
+    if (auto *thermometer = dynamic_cast<ThermometerElement *>(widget)) {
+      if (selectedThermometerElement_ == thermometer) {
+        clearThermometerSelection();
+        return;
+      }
+    }
     if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
       if (selectedScaleMonitorElement_ == scale) {
         clearScaleMonitorSelection();
@@ -4187,6 +4224,7 @@ private:
     appendUnique(selectedTextMonitorElement_);
     appendUnique(selectedMeterElement_);
     appendUnique(selectedBarMonitorElement_);
+    appendUnique(selectedThermometerElement_);
     appendUnique(selectedScaleMonitorElement_);
     appendUnique(selectedStripChartElement_);
     appendUnique(selectedCartesianPlotElement_);
@@ -4280,6 +4318,7 @@ private:
     clearStripChartSelection();
     clearCartesianPlotSelection();
     clearBarMonitorSelection();
+    clearThermometerSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
     clearImageSelection();
@@ -4309,6 +4348,7 @@ private:
   void removePolygonRuntime(PolygonElement *element);
   void removeMeterRuntime(MeterElement *element);
   void removeBarMonitorRuntime(BarMonitorElement *element);
+  void removeThermometerRuntime(ThermometerElement *element);
   void removeScaleMonitorRuntime(ScaleMonitorElement *element);
   void removeStripChartRuntime(StripChartElement *element);
   void removeCartesianPlotRuntime(CartesianPlotElement *element);
@@ -4342,6 +4382,8 @@ private:
       removeMeterRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, BarMonitorElement>) {
       removeBarMonitorRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, ThermometerElement>) {
+      removeThermometerRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ScaleMonitorElement>) {
       removeScaleMonitorRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, StripChartElement>) {
@@ -4936,6 +4978,85 @@ private:
       });
       if (removeOriginal) {
         cutSelectedElement(barMonitorElements_, selectedBarMonitorElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedThermometerElement_) {
+      ThermometerElement *element = selectedThermometerElement_;
+      const QRect geometry = widgetDisplayRect(element);
+      const QColor foreground = element->foregroundColor();
+      const QColor background = element->backgroundColor();
+      const QColor textColor = element->textColor();
+      const TextColorMode colorMode = element->colorMode();
+      const TextVisibilityMode visibilityMode = element->visibilityMode();
+      const QString visibilityCalc = element->visibilityCalc();
+      const auto visibilityChannels = AdlWriter::collectChannels(element);
+      const MeterLabel label = element->label();
+      const BarDirection direction = element->direction();
+      const TextMonitorFormat format = element->format();
+      const bool showValue = element->showValue();
+      const PvLimits limits = element->limits();
+      const bool hasExplicitLimitsBlock = element->hasExplicitLimitsBlock();
+      const bool hasExplicitLimitsData = element->hasExplicitLimitsData();
+      const bool hasExplicitLowLimitData = element->hasExplicitLowLimitData();
+      const bool hasExplicitHighLimitData = element->hasExplicitHighLimitData();
+      const bool hasExplicitPrecisionData =
+          element->hasExplicitPrecisionData();
+      const QString channel = element->channel();
+      prepareClipboard([geometry, foreground, background, textColor, colorMode,
+                           visibilityMode, visibilityCalc, visibilityChannels,
+                           label, direction, format, showValue, limits,
+                           hasExplicitLimitsBlock, hasExplicitLimitsData,
+                           hasExplicitLowLimitData, hasExplicitHighLimitData,
+                           hasExplicitPrecisionData, channel](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect rect = target.translateRectForPaste(geometry, offset);
+        auto *newElement = new ThermometerElement(target.displayArea_);
+        newElement->setGeometry(rect);
+        newElement->setForegroundColor(foreground);
+        newElement->setBackgroundColor(background);
+        newElement->setTextColor(textColor);
+        newElement->setColorMode(colorMode);
+        newElement->setVisibilityMode(visibilityMode);
+        newElement->setVisibilityCalc(visibilityCalc);
+        for (int i = 0; i < static_cast<int>(visibilityChannels.size()); ++i) {
+          if (!visibilityChannels[static_cast<std::size_t>(i)].isEmpty()) {
+            newElement->setChannel(i,
+                visibilityChannels[static_cast<std::size_t>(i)]);
+          }
+        }
+        newElement->setLabel(label);
+        newElement->setDirection(direction);
+        newElement->setFormat(format);
+        newElement->setShowValue(showValue);
+        newElement->setLimits(limits);
+        newElement->setHasExplicitLimitsBlock(hasExplicitLimitsBlock);
+        newElement->setHasExplicitLimitsData(hasExplicitLimitsData);
+        newElement->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+        newElement->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+        newElement->setHasExplicitPrecisionData(hasExplicitPrecisionData);
+        newElement->setChannel(channel);
+        newElement->show();
+        target.ensureElementInStack(newElement);
+        target.thermometerElements_.append(newElement);
+        if (target.executeModeActive_) {
+          newElement->setExecuteMode(true);
+          if (!target.thermometerRuntimes_.contains(newElement)) {
+            auto *runtime = new ThermometerRuntime(newElement);
+            target.thermometerRuntimes_.insert(newElement, runtime);
+            runtime->start();
+          }
+        }
+        target.selectThermometerElement(newElement);
+        target.markDirty();
+      });
+      if (removeOriginal) {
+        cutSelectedElement(thermometerElements_, selectedThermometerElement_);
         finalizeCut();
       }
       return true;
@@ -5633,6 +5754,7 @@ private:
         || selectedMessageButtonElement_ || selectedShellCommandElement_
         || selectedRelatedDisplayElement_ || selectedTextMonitorElement_
         || selectedMeterElement_ || selectedBarMonitorElement_
+        || selectedThermometerElement_
         || selectedScaleMonitorElement_ || selectedStripChartElement_
         || selectedCartesianPlotElement_ || selectedByteMonitorElement_
         || selectedRectangle_ || selectedImage_ || selectedHeatmap_ || selectedOval_
@@ -5653,6 +5775,7 @@ private:
         || !messageButtonElements_.isEmpty() || !shellCommandElements_.isEmpty()
         || !relatedDisplayElements_.isEmpty() || !textMonitorElements_.isEmpty()
         || !meterElements_.isEmpty() || !barMonitorElements_.isEmpty()
+        || !thermometerElements_.isEmpty()
         || !scaleMonitorElements_.isEmpty() || !stripChartElements_.isEmpty()
         || !cartesianPlotElements_.isEmpty() || !byteMonitorElements_.isEmpty()
         || !rectangleElements_.isEmpty() || !imageElements_.isEmpty()
@@ -7094,6 +7217,136 @@ private:
         });
   }
 
+  void showResourcePaletteForThermometer(ThermometerElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    std::array<std::function<QString()>, 4> visibilityChannelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters{{
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
+    }};
+    dialog->showForThermometer(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumThermometerSize) {
+            adjusted.setWidth(kMinimumThermometerSize);
+          }
+          if (adjusted.height() < kMinimumThermometerSize) {
+            adjusted.setHeight(kMinimumThermometerSize);
+          }
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->textColor();
+        },
+        [this, element](const QColor &color) {
+          element->setTextColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->label();
+        },
+        [this, element](MeterLabel label) {
+          element->setLabel(label);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [this, element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [this, element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+          markDirty();
+        },
+        std::move(visibilityChannelGetters),
+        std::move(visibilityChannelSetters),
+        [element]() {
+          return element->format();
+        },
+        [this, element](TextMonitorFormat format) {
+          element->setFormat(format);
+          markDirty();
+        },
+        [element]() {
+          return element->showValue();
+        },
+        [this, element](bool showValue) {
+          element->setShowValue(showValue);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
+          markDirty();
+        });
+  }
+
   void showResourcePaletteForScale(ScaleMonitorElement *element)
   {
     if (!element) {
@@ -8304,6 +8557,8 @@ private:
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
       appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<ThermometerElement *>(widget)) {
+      appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
@@ -8375,6 +8630,7 @@ public:
     appendList(messageButtonElements_);
     appendList(meterElements_);
     appendList(barMonitorElements_);
+    appendList(thermometerElements_);
     appendList(scaleMonitorElements_);
     appendList(byteMonitorElements_);
     appendList(stripChartElements_);
@@ -8706,6 +8962,21 @@ private:
       return;
     }
 
+    if (auto *element = dynamic_cast<ThermometerElement *>(widget)) {
+      if (auto *runtime = thermometerRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setThermometerCallbacks(
+          channelName,
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { element->update(); });
+      dialog->showForThermometer();
+      return;
+    }
+
     if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
       if (auto *runtime = scaleMonitorRuntimes_.value(element, nullptr)) {
         channelName = runtime->channelName_;
@@ -8860,6 +9131,9 @@ private:
     if (dynamic_cast<BarMonitorElement *>(widget)) {
       return QStringLiteral("Bar Monitor");
     }
+    if (dynamic_cast<ThermometerElement *>(widget)) {
+      return QStringLiteral("Thermometer");
+    }
     if (dynamic_cast<ScaleMonitorElement *>(widget)) {
       return QStringLiteral("Scale Monitor");
     }
@@ -8986,6 +9260,12 @@ private:
       }
     } else if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
       if (auto *runtime = barMonitorRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_);
+      } else {
+        addRef(element->channel());
+      }
+    } else if (auto *element = dynamic_cast<ThermometerElement *>(widget)) {
+      if (auto *runtime = thermometerRuntimes_.value(element, nullptr)) {
         addRef(runtime->channelName_);
       } else {
         addRef(element->channel());
@@ -10232,6 +10512,7 @@ private:
     clearStripChartSelection();
     clearCartesianPlotSelection();
     clearBarMonitorSelection();
+    clearThermometerSelection();
     clearByteMonitorSelection();
     clearRectangleSelection();
     clearImageSelection();
@@ -10243,6 +10524,43 @@ private:
     clearCompositeSelection();
     selectedBarMonitorElement_ = element;
     selectedBarMonitorElement_->setSelected(true);
+  }
+
+  void selectThermometerElement(ThermometerElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedThermometerElement_) {
+      selectedThermometerElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearThermometerSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedThermometerElement_ = element;
+    selectedThermometerElement_->setSelected(true);
   }
 
   void selectByteMonitorElement(ByteMonitorElement *element)
@@ -10638,6 +10956,9 @@ private:
     if (selectedBarMonitorElement_) {
       return selectedBarMonitorElement_;
     }
+    if (selectedThermometerElement_) {
+      return selectedThermometerElement_;
+    }
     if (selectedScaleMonitorElement_) {
       return selectedScaleMonitorElement_;
     }
@@ -10746,6 +11067,10 @@ private:
     } else if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
       selectBarMonitorElement(bar);
       showResourcePaletteForBar(bar);
+      handled = true;
+    } else if (auto *thermometer = dynamic_cast<ThermometerElement *>(widget)) {
+      selectThermometerElement(thermometer);
+      showResourcePaletteForThermometer(thermometer);
       handled = true;
     } else if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       selectByteMonitorElement(byte);
@@ -12361,6 +12686,7 @@ private:
     considerList(textMonitorElements_);
     considerList(meterElements_);
     considerList(barMonitorElements_);
+    considerList(thermometerElements_);
     considerList(scaleMonitorElements_);
     considerList(stripChartElements_);
     considerList(cartesianPlotElements_);
@@ -12592,6 +12918,16 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createBarMonitorElement(rect);
+      break;
+    case CreateTool::kThermometer:
+      if (rect.width() < kMinimumThermometerSize) {
+        rect.setWidth(kMinimumThermometerSize);
+      }
+      if (rect.height() < kMinimumThermometerSize) {
+        rect.setHeight(kMinimumThermometerSize);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createThermometerElement(rect);
       break;
     case CreateTool::kByteMonitor:
       if (rect.width() < kMinimumByteSize) {
@@ -13648,6 +13984,43 @@ private:
     markDirty();
   }
 
+  void createThermometerElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create Thermometer"));
+    QRect target = rect;
+    if (target.width() < kMinimumThermometerSize) {
+      target.setWidth(kMinimumThermometerSize);
+    }
+    if (target.height() < kMinimumThermometerSize) {
+      target.setHeight(kMinimumThermometerSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new ThermometerElement(displayArea_);
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    thermometerElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!thermometerRuntimes_.contains(element)) {
+        auto *runtime = new ThermometerRuntime(element);
+        thermometerRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectThermometerElement(element);
+    showResourcePaletteForThermometer(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createScaleMonitorElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -14167,6 +14540,7 @@ private:
             || state->createTool == CreateTool::kShellCommand
             || state->createTool == CreateTool::kMeter
             || state->createTool == CreateTool::kBarMonitor
+            || state->createTool == CreateTool::kThermometer
             || state->createTool == CreateTool::kByteMonitor
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
@@ -14855,6 +15229,7 @@ private:
         attemptSingleChannelRuntime(textMonitorRuntimes_) ||
         attemptSingleChannelRuntime(meterRuntimes_) ||
         attemptSingleChannelRuntime(barMonitorRuntimes_) ||
+        attemptSingleChannelRuntime(thermometerRuntimes_) ||
         attemptSingleChannelRuntime(scaleMonitorRuntimes_) ||
         attemptSingleChannelRuntime(byteMonitorRuntimes_)) {
       return true;
@@ -15052,6 +15427,14 @@ private:
     auto *barAction = addMenuAction(monitorsMenu, QStringLiteral("Bar Monitor"));
     QObject::connect(barAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kBarMonitor);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
+    auto *thermometerAction =
+        addMenuAction(monitorsMenu, QStringLiteral("Thermometer"));
+    QObject::connect(thermometerAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kThermometer);
       if (!lastContextMenuGlobalPos_.isNull()) {
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
@@ -15691,6 +16074,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     scaleWidget(e);
   }
   for (BarMonitorElement *e : barMonitorElements_) {
+    scaleWidget(e);
+  }
+  for (ThermometerElement *e : thermometerElements_) {
     scaleWidget(e);
   }
   for (ScaleMonitorElement *e : scaleMonitorElements_) {
@@ -16892,6 +17278,63 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       continue;
     }
 
+    if (auto *thermometer = dynamic_cast<ThermometerElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("thermometer {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(thermometer));
+      const QColor thermometerForeground = resolvedForegroundColor(thermometer,
+          thermometer->foregroundColor());
+      const QColor thermometerBackground = resolvedBackgroundColor(thermometer,
+          thermometer->backgroundColor());
+      AdlWriter::writeMonitorSection(stream, 1, thermometer->channel(),
+          AdlWriter::medmColorIndex(thermometerForeground),
+          AdlWriter::medmColorIndex(thermometerBackground));
+      const auto thermometerChannels = AdlWriter::channelsForMedmFourValues(
+          AdlWriter::collectChannelsWithPrimaryFallback(
+              thermometer, thermometer->channel(),
+              thermometer->visibilityMode() != TextVisibilityMode::kStatic
+                  || !thermometer->visibilityCalc().trimmed().isEmpty()));
+      AdlWriter::writeDynamicAttributeSection(stream, 1,
+          TextColorMode::kStatic, thermometer->visibilityMode(),
+          thermometer->visibilityCalc(), thermometerChannels);
+      if (thermometer->label() != MeterLabel::kNone) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::meterLabelString(thermometer->label())));
+      }
+      if (thermometer->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(thermometer->colorMode())));
+      }
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("direction=\"up\""));
+      const QColor thermometerText = thermometer->textColor();
+      if (thermometerText.isValid() && thermometerText != thermometerForeground) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("textclr=%1")
+                .arg(AdlWriter::medmColorIndex(thermometerText)));
+      }
+      if (thermometer->format() != TextMonitorFormat::kDecimal) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("format=\"%1\"")
+                .arg(AdlWriter::textMonitorFormatString(
+                    thermometer->format())));
+      }
+      if (thermometer->showValue()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("showValue=1"));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, thermometer->limits(),
+          thermometer->hasExplicitLimitsData(),
+          thermometer->hasExplicitLimitsBlock(),
+          thermometer->hasExplicitPrecisionData(),
+          thermometer->hasExplicitLowLimitData(),
+          thermometer->hasExplicitHighLimitData(),
+          true);
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *scale = dynamic_cast<ScaleMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("indicator {"));
@@ -17796,10 +18239,10 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
-    if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
-      AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
-      AdlWriter::writeObjectSection(stream, next,
-          serializedGeometry(bar));
+  if (auto *bar = dynamic_cast<BarMonitorElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("bar {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(bar));
     const QColor barForeground = resolveForeground(bar,
         bar->foregroundColor());
     const QColor barBackground = resolveBackground(bar,
@@ -17831,6 +18274,64 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       bar->hasExplicitLimitsData(), bar->hasExplicitLimitsBlock(),
       bar->hasExplicitPrecisionData(),
       bar->hasExplicitLowLimitData(), bar->hasExplicitHighLimitData());
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *thermometer = dynamic_cast<ThermometerElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("thermometer {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(thermometer));
+    const QColor thermometerForeground = resolveForeground(thermometer,
+        thermometer->foregroundColor());
+    const QColor thermometerBackground = resolveBackground(thermometer,
+        thermometer->backgroundColor());
+    AdlWriter::writeMonitorSection(stream, next, thermometer->channel(),
+        AdlWriter::medmColorIndex(thermometerForeground),
+        AdlWriter::medmColorIndex(thermometerBackground));
+    const auto thermometerChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannelsWithPrimaryFallback(
+            thermometer, thermometer->channel(),
+            thermometer->visibilityMode() != TextVisibilityMode::kStatic
+                || !thermometer->visibilityCalc().trimmed().isEmpty()));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        TextColorMode::kStatic, thermometer->visibilityMode(),
+        thermometer->visibilityCalc(), thermometerChannels);
+    if (thermometer->label() != MeterLabel::kNone) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::meterLabelString(thermometer->label())));
+    }
+    if (thermometer->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(thermometer->colorMode())));
+    }
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("direction=\"up\""));
+    const QColor thermometerText = thermometer->textColor();
+    if (thermometerText.isValid() && thermometerText != thermometerForeground) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("textclr=%1")
+              .arg(AdlWriter::medmColorIndex(thermometerText)));
+    }
+    if (thermometer->format() != TextMonitorFormat::kDecimal) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("format=\"%1\"")
+              .arg(AdlWriter::textMonitorFormatString(
+                  thermometer->format())));
+    }
+    if (thermometer->showValue()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("showValue=1"));
+    }
+    AdlWriter::writeLimitsSection(stream, next, thermometer->limits(),
+      thermometer->hasExplicitLimitsData(),
+      thermometer->hasExplicitLimitsBlock(),
+      thermometer->hasExplicitPrecisionData(),
+      thermometer->hasExplicitLowLimitData(),
+      thermometer->hasExplicitHighLimitData(),
+      true);
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }
@@ -18330,6 +18831,8 @@ inline void DisplayWindow::clearAllElements()
           removeMeterRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, BarMonitorElement *>) {
           removeBarMonitorRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, ThermometerElement *>) {
+          removeThermometerRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ScaleMonitorElement *>) {
           removeScaleMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, StripChartElement *>) {
@@ -18379,6 +18882,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(textMonitorElements_);
   clearList(meterElements_);
   clearList(barMonitorElements_);
+  clearList(thermometerElements_);
   clearList(scaleMonitorElements_);
   clearList(stripChartElements_);
   clearList(cartesianPlotElements_);
@@ -21927,6 +22431,257 @@ inline BarMonitorElement *DisplayWindow::loadBarMonitorElement(const AdlNode &ba
   return element;
 }
 
+inline ThermometerElement *DisplayWindow::loadThermometerElement(
+    const AdlNode &thermometerNode)
+{
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(thermometerNode);
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(effectiveNode);
+  QRect originalGeometry = geometry;
+  if (geometry.width() < kMinimumThermometerSize) {
+    geometry.setWidth(kMinimumThermometerSize);
+  }
+  if (geometry.height() < kMinimumThermometerSize) {
+    geometry.setHeight(kMinimumThermometerSize);
+  }
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new ThermometerElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+  element->setHasExplicitLimitsBlock(false);
+  element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
+
+  if (const AdlNode *monitor = ::findChild(effectiveNode,
+          QStringLiteral("monitor"))) {
+    QString channel = channelValueWithLegacyFallback(*monitor);
+    if (channel.isEmpty()) {
+      channel = propertyValue(*monitor, QStringLiteral("rdbk"));
+    }
+    if (!channel.isEmpty()) {
+      element->setChannel(channel);
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*monitor, QStringLiteral("clr"));
+    int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*monitor, QStringLiteral("bclr"));
+    int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString labelValue = propertyValue(effectiveNode,
+      QStringLiteral("label"));
+  if (!labelValue.trimmed().isEmpty()) {
+    element->setLabel(parseMeterLabel(labelValue));
+  }
+
+  const QString colorModeValue = propertyValue(effectiveNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString directionValue = propertyValue(effectiveNode,
+      QStringLiteral("direction"));
+  if (!directionValue.isEmpty()) {
+    element->setDirection(parseBarDirection(directionValue));
+  }
+
+  const QString textColorValue = propertyValue(effectiveNode,
+      QStringLiteral("textclr"));
+  if (!textColorValue.isEmpty()) {
+    bool ok = false;
+    const int colorIndex = textColorValue.toInt(&ok);
+    if (ok) {
+      element->setTextColor(colorForIndex(colorIndex));
+    }
+  }
+
+  const QString formatValue = propertyValue(effectiveNode,
+      QStringLiteral("format"));
+  if (!formatValue.isEmpty()) {
+    element->setFormat(parseTextMonitorFormat(formatValue));
+  }
+
+  const QString showValueValue = propertyValue(effectiveNode,
+      QStringLiteral("showValue"));
+  if (!showValueValue.isEmpty()) {
+    const QString normalized = showValueValue.trimmed().toLower();
+    const bool showValue = !(normalized == QStringLiteral("0")
+        || normalized == QStringLiteral("false")
+        || normalized == QStringLiteral("no")
+        || normalized == QStringLiteral("off"));
+    element->setShowValue(showValue);
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(effectiveNode,
+          QStringLiteral("limits"))) {
+    element->setHasExplicitLimitsBlock(true);
+    PvLimits limits = element->limits();
+
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+    bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
+      hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.lowDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
+      hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool ok = false;
+      const double value = prop->value.toDouble(&ok);
+      if (ok) {
+        limits.highDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+      hasExplicitPrecisionData = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+        hasExplicitPrecisionData = true;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool ok = false;
+      const int value = prop->value.toInt(&ok);
+      if (ok) {
+        limits.precisionDefault = value;
+        hasExplicitPrecisionData = true;
+      }
+    }
+
+    element->setLimits(limits);
+    element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
+  }
+
+  const auto setVisibilityChannel = [element](int index, const QString &value) {
+    constexpr int kChannelCount = 5;
+    if (index < 0 || index >= kChannelCount) {
+      return;
+    }
+    element->setChannel(index, value);
+  };
+
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
+          QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(element);
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString visibility = propertyValue(modeSource, QStringLiteral("vis"));
+    if (!visibility.isEmpty()) {
+      element->setVisibilityMode(parseVisibilityMode(visibility));
+    }
+    const QString calc = propertyValue(modeSource, QStringLiteral("calc"));
+    if (!calc.isEmpty()) {
+      element->setVisibilityCalc(calc);
+    }
+    applyChannelProperties(*dyn, setVisibilityChannel, 0, 0);
+  }
+
+  applyChannelProperties(effectiveNode, setVisibilityChannel, 0, 0);
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  thermometerElements_.append(element);
+  ensureElementInStack(element);
+  return element;
+}
+
 inline ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
     const AdlNode &indicatorNode)
 {
@@ -24065,6 +24820,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadMeterElement(node) != nullptr;
   } else if (name == QStringLiteral("bar")) {
     loaded = loadBarMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("thermometer")) {
+    loaded = loadThermometerElement(node) != nullptr;
   } else if (name == QStringLiteral("indicator")) {
     loaded = loadScaleMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("cartesian plot")) {
@@ -24279,6 +25036,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(stripChartRuntimes_, stripChartElements_.size());
   reserveRuntime(cartesianPlotRuntimes_, cartesianPlotElements_.size());
   reserveRuntime(barMonitorRuntimes_, barMonitorElements_.size());
+  reserveRuntime(thermometerRuntimes_, thermometerElements_.size());
   reserveRuntime(byteMonitorRuntimes_, byteMonitorElements_.size());
   reserveRuntime(sliderRuntimes_, sliderElements_.size());
   reserveRuntime(wheelSwitchRuntimes_, wheelSwitchElements_.size());
@@ -24294,7 +25052,8 @@ inline void DisplayWindow::enterExecuteMode()
       lineElements_.size() + polylineElements_.size() + polygonElements_.size() +
       meterElements_.size() + scaleMonitorElements_.size() +
       stripChartElements_.size() + cartesianPlotElements_.size() +
-      barMonitorElements_.size() + byteMonitorElements_.size() +
+      barMonitorElements_.size() + thermometerElements_.size() +
+      byteMonitorElements_.size() +
       sliderElements_.size() + wheelSwitchElements_.size() +
       textMonitorElements_.size() + choiceButtonElements_.size() +
       menuElements_.size() + messageButtonElements_.size() +
@@ -24453,6 +25212,7 @@ inline void DisplayWindow::enterExecuteMode()
   }
   int monitorCount = scaleMonitorElements_.size() + stripChartElements_.size() +
       cartesianPlotElements_.size() + barMonitorElements_.size() +
+      thermometerElements_.size() +
       byteMonitorElements_.size() + heatmapElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating monitor runtimes", monitorCount);
   for (ScaleMonitorElement *element : scaleMonitorElements_) {
@@ -24499,6 +25259,18 @@ inline void DisplayWindow::enterExecuteMode()
     if (!barMonitorRuntimes_.contains(element)) {
       auto *runtime = new BarMonitorRuntime(element);
       barMonitorRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
+  for (ThermometerElement *element : thermometerElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!thermometerRuntimes_.contains(element)) {
+      auto *runtime = new ThermometerRuntime(element);
+      thermometerRuntimes_.insert(element, runtime);
       runtime->start();
 
     }
@@ -24697,6 +25469,13 @@ inline void DisplayWindow::enterExecuteMode()
   for (auto it = barMonitorRuntimes_.constBegin();
       it != barMonitorRuntimes_.constEnd(); ++it) {
     /* BarMonitor always needs channels, so always raise */
+    if (it.key()) {
+      it.key()->raise();
+    }
+  }
+  for (auto it = thermometerRuntimes_.constBegin();
+      it != thermometerRuntimes_.constEnd(); ++it) {
+    /* Thermometer always needs channels, so always raise */
     if (it.key()) {
       it.key()->raise();
     }
@@ -24999,6 +25778,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = thermometerRuntimes_.begin(); it != thermometerRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  thermometerRuntimes_.clear();
+  for (ThermometerElement *element : thermometerElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = byteMonitorRuntimes_.begin(); it != byteMonitorRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -25222,6 +26013,17 @@ inline void DisplayWindow::removeBarMonitorRuntime(BarMonitorElement *element)
     return;
   }
   if (auto *runtime = barMonitorRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeThermometerRuntime(ThermometerElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = thermometerRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

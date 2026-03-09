@@ -54,6 +54,11 @@ public:
       std::function<void(const PvLimits &)> limitsSetter,
       std::function<void()> changeNotifier);
   void showForBarMonitor();
+  void setThermometerCallbacks(const QString &channelName,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter,
+      std::function<void()> changeNotifier);
+  void showForThermometer();
   void setScaleCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
@@ -69,9 +74,13 @@ private:
     kSlider,
     kWheelSwitch,
     kBarMonitor,
+    kThermometer,
     kScaleMonitor
   };
 
+  bool userSourcesAllowed() const;
+  bool modeSupportsPrecision() const;
+  bool modeSupportsLimits() const;
   void updatePrecisionControls();
   void updateMeterControls();
   void handlePrecisionSourceChanged(int index);

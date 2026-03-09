@@ -70,7 +70,8 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
     bool forceEmptyBlock = false,
     bool includePrecisionDefaults = false,
     bool includeLowChannelDefault = false,
-    bool includeHighChannelDefault = false);
+    bool includeHighChannelDefault = false,
+    bool preserveUserSources = false);
 void writeStripChartPenSection(QTextStream &stream, int level, int index,
     const QString &channel, int colorIndex, const PvLimits &limits);
 void writePointsSection(
@@ -97,6 +98,21 @@ std::array<QString, 5> collectChannels(const Element *element)
   }
   for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
     channels[i] = element->channel(i);
+  }
+  return channels;
+}
+
+template <typename Element>
+std::array<QString, 5> collectChannelsWithPrimaryFallback(
+    const Element *element, const QString &primaryChannel,
+    bool applyPrimaryFallback)
+{
+  std::array<QString, 5> channels = collectChannels(element);
+  if (applyPrimaryFallback && channels[0].trimmed().isEmpty()) {
+    const QString trimmedPrimary = primaryChannel.trimmed();
+    if (!trimmedPrimary.isEmpty()) {
+      channels[0] = trimmedPrimary;
+    }
   }
   return channels;
 }

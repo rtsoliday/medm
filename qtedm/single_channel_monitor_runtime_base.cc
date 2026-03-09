@@ -1,6 +1,7 @@
 #include "single_channel_monitor_runtime_base.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include <QByteArray>
@@ -11,12 +12,20 @@
 #include "bar_monitor_element.h"
 #include "meter_element.h"
 #include "scale_monitor_element.h"
+#include "thermometer_element.h"
 #include "channel_access_context.h"
 #include "runtime_utils.h"
 #include "statistics_tracker.h"
 
+extern "C" {
+long calcPerform(double *parg, double *presult, char *post);
+long postfix(char *pinfix, char *ppostfix, short *perror);
+}
+
 namespace {
 using RuntimeUtils::kInvalidSeverity;
+using RuntimeUtils::kVisibilityEpsilon;
+using RuntimeUtils::kCalcInputCount;
 
 } // namespace
 
@@ -28,12 +37,128 @@ SingleChannelMonitorRuntimeBase<ElementType>::SingleChannelMonitorRuntimeBase(El
   if (element_) {
     channelName_ = element_->channel().trimmed();
   }
+  for (int i = 0; i < static_cast<int>(visibilityChannels_.size()); ++i) {
+    visibilityChannels_[static_cast<std::size_t>(i)].index = i;
+  }
 }
 
 template <typename ElementType>
 SingleChannelMonitorRuntimeBase<ElementType>::~SingleChannelMonitorRuntimeBase()
 {
   stop();
+}
+
+template <typename ElementType>
+bool SingleChannelMonitorRuntimeBase<ElementType>::hasConfiguredVisibilityChannels() const
+{
+  if constexpr (!ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    return false;
+  }
+
+  for (const auto &channel : visibilityChannels_) {
+    if (!channel.name.isEmpty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template <typename ElementType>
+bool SingleChannelMonitorRuntimeBase<ElementType>::allVisibilityChannelsConnected() const
+{
+  if constexpr (!ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    return true;
+  }
+
+  for (const auto &channel : visibilityChannels_) {
+    if (!channel.name.isEmpty() && !channel.connected) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <typename ElementType>
+bool SingleChannelMonitorRuntimeBase<ElementType>::evaluateVisibility()
+{
+  if constexpr (!ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    return true;
+  } else {
+    if (!element_ || !connected_) {
+      return true;
+    }
+
+    const bool anyVisibilityChannels = hasConfiguredVisibilityChannels();
+    if (anyVisibilityChannels && !allVisibilityChannelsConnected()) {
+      return true;
+    }
+
+    switch (element_->visibilityMode()) {
+    case TextVisibilityMode::kStatic:
+      return true;
+    case TextVisibilityMode::kIfNotZero: {
+      double primaryValue = 0.0;
+      if (anyVisibilityChannels) {
+        const auto &primary = visibilityChannels_.front();
+        if (primary.hasValue && std::isfinite(primary.value)) {
+          primaryValue = primary.value;
+        }
+      } else if (hasLastValue_ && std::isfinite(lastValue_)) {
+        primaryValue = lastValue_;
+      }
+      return std::fabs(primaryValue) > kVisibilityEpsilon;
+    }
+    case TextVisibilityMode::kIfZero: {
+      double primaryValue = 0.0;
+      if (anyVisibilityChannels) {
+        const auto &primary = visibilityChannels_.front();
+        if (primary.hasValue && std::isfinite(primary.value)) {
+          primaryValue = primary.value;
+        }
+      } else if (hasLastValue_ && std::isfinite(lastValue_)) {
+        primaryValue = lastValue_;
+      }
+      return std::fabs(primaryValue) <= kVisibilityEpsilon;
+    }
+    case TextVisibilityMode::kCalc: {
+      if (!visibilityCalcValid_ || visibilityCalcPostfix_.isEmpty()) {
+        return false;
+      }
+      std::array<double, kCalcInputCount> args{};
+      if (anyVisibilityChannels) {
+        for (int i = 0; i < static_cast<int>(visibilityChannels_.size()); ++i) {
+          const auto &channel = visibilityChannels_[static_cast<std::size_t>(i)];
+          if (channel.hasValue && std::isfinite(channel.value)) {
+            args[static_cast<std::size_t>(i)] = channel.value;
+          }
+        }
+      } else if (hasLastValue_ && std::isfinite(lastValue_)) {
+        args[0] = lastValue_;
+      }
+      RuntimeUtils::appendNullTerminator(visibilityCalcPostfix_);
+      double result = 0.0;
+      const long status = calcPerform(args.data(), &result,
+          visibilityCalcPostfix_.data());
+      return (status == 0) && std::isfinite(result)
+          && std::fabs(result) > kVisibilityEpsilon;
+    }
+    }
+  }
+
+  return true;
+}
+
+template <typename ElementType>
+void SingleChannelMonitorRuntimeBase<ElementType>::updateRuntimeVisibility()
+{
+  if constexpr (!ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    return;
+  } else {
+    const bool visible = evaluateVisibility();
+    invokeOnElement([visible](ElementType *element) {
+      element->setRuntimeVisible(visible);
+    });
+  }
 }
 
 template <typename ElementType>
@@ -44,7 +169,20 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
   }
 
   const QString initialChannel = element_->channel().trimmed();
-  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  bool needsCa = (!initialChannel.isEmpty()
+      && parsePvName(initialChannel).protocol == PvProtocol::kCa);
+  if constexpr (ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    if (!needsCa) {
+      for (int i = 0; i < 5; ++i) {
+        const QString visibilityChannel = element_->channel(i).trimmed();
+        if (!visibilityChannel.isEmpty()
+            && parsePvName(visibilityChannel).protocol == PvProtocol::kCa) {
+          needsCa = true;
+          break;
+        }
+      }
+    }
+  }
   if (needsCa) {
     ChannelAccessContext &context = ChannelAccessContext::instance();
     context.ensureInitializedForProtocol(PvProtocol::kCa);
@@ -59,21 +197,77 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
   StatisticsTracker::instance().registerDisplayObjectStarted();
 
   channelName_ = element_->channel().trimmed();
-  if (channelName_.isEmpty()) {
-    return;
+  if (!channelName_.isEmpty()) {
+    /* Use SharedChannelManager for connection sharing.
+     * These monitors all use DBR_TIME_DOUBLE with element count 1. */
+    auto &mgr = PvChannelManager::instance();
+    subscription_ = mgr.subscribe(
+        channelName_,
+        DBR_TIME_DOUBLE,
+        1,  /* Single element */
+        [this](const SharedChannelData &data) { handleChannelData(data); },
+        [this](bool connected, const SharedChannelData &data) {
+          handleChannelConnection(connected, data);
+        });
   }
 
-  /* Use SharedChannelManager for connection sharing.
-   * These monitors all use DBR_TIME_DOUBLE with element count 1. */
-  auto &mgr = PvChannelManager::instance();
-  subscription_ = mgr.subscribe(
-      channelName_,
-      DBR_TIME_DOUBLE,
-      1,  /* Single element */
-      [this](const SharedChannelData &data) { handleChannelData(data); },
-      [this](bool connected, const SharedChannelData &data) {
-        handleChannelConnection(connected, data);
-      });
+  if constexpr (ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    visibilityCalcPostfix_.clear();
+    visibilityCalcValid_ = false;
+
+    const TextVisibilityMode mode = element_->visibilityMode();
+    if (mode == TextVisibilityMode::kCalc) {
+      const QString calcExpr = element_->visibilityCalc().trimmed();
+      if (!calcExpr.isEmpty()) {
+        const QString normalized = RuntimeUtils::normalizeCalcExpression(calcExpr);
+        QByteArray infix = normalized.toLatin1();
+        visibilityCalcPostfix_.resize(512);
+        visibilityCalcPostfix_.fill('\0');
+        short error = 0;
+        long status = postfix(infix.data(), visibilityCalcPostfix_.data(), &error);
+        if (status == 0) {
+          visibilityCalcValid_ = true;
+        } else {
+          qWarning() << "Invalid visibility calc expression for thermometer:"
+                     << calcExpr << "(error" << error << ')';
+        }
+      }
+    }
+
+    auto &mgr = PvChannelManager::instance();
+    for (auto &channel : visibilityChannels_) {
+      channel.name = element_->channel(channel.index);
+      channel.subscription.reset();
+      channel.connected = false;
+      channel.hasValue = false;
+      channel.value = 0.0;
+      if (channel.name.isEmpty()) {
+        continue;
+      }
+      const QString subscribeName = channel.name.trimmed();
+      if (subscribeName.isEmpty()) {
+        continue;
+      }
+      const int idx = channel.index;
+      channel.subscription = mgr.subscribe(
+          subscribeName,
+          DBR_TIME_DOUBLE,
+          1,
+          [this, idx](const SharedChannelData &data) {
+            auto &channelRef = visibilityChannels_[static_cast<std::size_t>(idx)];
+            channelRef.hasValue = data.hasValue;
+            channelRef.value = data.numericValue;
+            updateRuntimeVisibility();
+          },
+          [this, idx](bool channelConnected, const SharedChannelData &) {
+            auto &channelRef = visibilityChannels_[static_cast<std::size_t>(idx)];
+            channelRef.connected = channelConnected;
+            channelRef.hasValue = false;
+            channelRef.value = 0.0;
+            updateRuntimeVisibility();
+          });
+    }
+  }
 }
 
 template <typename ElementType>
@@ -88,6 +282,11 @@ void SingleChannelMonitorRuntimeBase<ElementType>::stop()
 
   /* SubscriptionHandle automatically unsubscribes on reset */
   subscription_.reset();
+  if constexpr (ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    for (auto &channel : visibilityChannels_) {
+      channel.subscription.reset();
+    }
+  }
 
   resetRuntimeState();
 }
@@ -101,11 +300,25 @@ void SingleChannelMonitorRuntimeBase<ElementType>::resetRuntimeState()
   lastSeverity_ = kInvalidSeverity;
   hasControlInfo_ = false;
   initialUpdateTracked_ = false;
+  visibilityCalcPostfix_.clear();
+  visibilityCalcValid_ = false;
+  if constexpr (ElementTraits::HasVisibilityInterface<ElementType>::value) {
+    for (auto &channel : visibilityChannels_) {
+      channel.name.clear();
+      channel.subscription.reset();
+      channel.connected = false;
+      channel.hasValue = false;
+      channel.value = 0.0;
+    }
+  }
 
   invokeOnElement([](ElementType *element) {
     element->clearRuntimeState();
     element->setRuntimeConnected(false);
     element->setRuntimeSeverity(kInvalidSeverity);
+    if constexpr (ElementTraits::HasVisibilityInterface<ElementType>::value) {
+      element->setRuntimeVisible(true);
+    }
   });
 }
 
@@ -137,6 +350,7 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelConnection(
       element->setRuntimeConnected(true);
       element->setRuntimeSeverity(initialSeverity);
     });
+    updateRuntimeVisibility();
   } else {
     const bool wasConnected = connected_;
     connected_ = false;
@@ -148,6 +362,9 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelConnection(
     invokeOnElement([](ElementType *element) {
       element->setRuntimeConnected(false);
       element->setRuntimeSeverity(kInvalidSeverity);
+      if constexpr (ElementTraits::HasVisibilityInterface<ElementType>::value) {
+        element->setRuntimeVisible(true);
+      }
     });
   }
 }
@@ -225,9 +442,12 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
       initialUpdateTracked_ = true;
     }
   }
+
+  updateRuntimeVisibility();
 }
 
 // Explicit template instantiations
 template class SingleChannelMonitorRuntimeBase<BarMonitorElement>;
 template class SingleChannelMonitorRuntimeBase<MeterElement>;
 template class SingleChannelMonitorRuntimeBase<ScaleMonitorElement>;
+template class SingleChannelMonitorRuntimeBase<ThermometerElement>;

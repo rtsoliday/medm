@@ -17289,10 +17289,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
           AdlWriter::medmColorIndex(thermometerForeground),
           AdlWriter::medmColorIndex(thermometerBackground));
       const auto thermometerChannels = AdlWriter::channelsForMedmFourValues(
-          AdlWriter::collectChannelsWithPrimaryFallback(
-              thermometer, thermometer->channel(),
-              thermometer->visibilityMode() != TextVisibilityMode::kStatic
-                  || !thermometer->visibilityCalc().trimmed().isEmpty()));
+          AdlWriter::collectChannels(thermometer));
       AdlWriter::writeDynamicAttributeSection(stream, 1,
           TextColorMode::kStatic, thermometer->visibilityMode(),
           thermometer->visibilityCalc(), thermometerChannels);
@@ -18290,10 +18287,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         AdlWriter::medmColorIndex(thermometerForeground),
         AdlWriter::medmColorIndex(thermometerBackground));
     const auto thermometerChannels = AdlWriter::channelsForMedmFourValues(
-        AdlWriter::collectChannelsWithPrimaryFallback(
-            thermometer, thermometer->channel(),
-            thermometer->visibilityMode() != TextVisibilityMode::kStatic
-                || !thermometer->visibilityCalc().trimmed().isEmpty()));
+        AdlWriter::collectChannels(thermometer));
     AdlWriter::writeDynamicAttributeSection(stream, next,
         TextColorMode::kStatic, thermometer->visibilityMode(),
         thermometer->visibilityCalc(), thermometerChannels);

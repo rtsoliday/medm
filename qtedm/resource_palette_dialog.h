@@ -8682,14 +8682,7 @@ private:
   void updateThermometerChannelDependentControls()
   {
     bool hasChannelA = false;
-    if (thermometerChannelGetter_) {
-      const QString value = thermometerChannelGetter_();
-      hasChannelA = !value.trimmed().isEmpty();
-    }
-    if (!hasChannelA && thermometerChannelEdit_) {
-      hasChannelA = !thermometerChannelEdit_->text().trimmed().isEmpty();
-    }
-    if (!hasChannelA && thermometerVisibilityChannelGetters_[0]) {
+    if (thermometerVisibilityChannelGetters_[0]) {
       const QString value = thermometerVisibilityChannelGetters_[0]();
       hasChannelA = !value.trimmed().isEmpty();
     }

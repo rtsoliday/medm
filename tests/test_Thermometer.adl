@@ -428,7 +428,7 @@ text {
 	"basic attribute" {
 		clr=30
 	}
-	textix="Manual execute-mode checks: 1) cavput thermometer:test:alpha and thermometer:test:eta across LOPR/HOPR and confirm smooth fill redraw. 2) Save/reload the ADL and verify showValue and user limit sources persist. 3) Confirm disconnected and UDF/INVALID probes remain drawable."
+	textix="Manual execute-mode checks: 1) cavput thermometer:test:alpha and thermometer:test:eta across LOPR/HOPR and confirm smooth fill redraw. 2) Save/reload the ADL and verify showValue and user limit sources persist. 3) Confirm disconnected probes draw solid white in execute mode, and UDF/INVALID probes still render with alarm coloring."
 }
 text {
 	object {

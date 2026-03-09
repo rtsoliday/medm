@@ -687,7 +687,8 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
     writeIndentedLine(stream, level + 1,
         QStringLiteral("precSrc=\"%1\"")
             .arg(pvLimitSourceString(source)));
-    if (source == PvLimitSource::kDefault && limits.precisionDefault != 0) {
+    if (limits.precisionDefault != 0
+        || limits.precisionSource != PvLimitSource::kChannel) {
       writeIndentedLine(stream, level + 1,
           QStringLiteral("precDefault=%1").arg(limits.precisionDefault));
     }

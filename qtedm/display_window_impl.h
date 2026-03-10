@@ -9565,8 +9565,7 @@ private:
         + static_cast<qint64>(stamp.nsec) / 1000000;
     const int fractional =
         static_cast<int>((stamp.nsec % 1000000000) / 1000000);
-    QDateTime dateTime =
-        QDateTime::fromMSecsSinceEpoch(msecs, Qt::LocalTime);
+    QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(msecs);
     const QString base =
         dateTime.toString(QStringLiteral("ddd MMM dd, yyyy HH:mm:ss"));
     const QString fraction =

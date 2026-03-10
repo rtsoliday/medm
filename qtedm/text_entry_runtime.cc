@@ -707,10 +707,11 @@ bool TextEntryRuntime::parseCharArrayInput(const QString &text,
   }
   bytes.resize(count);
   std::memset(bytes.data(), 0, static_cast<size_t>(count));
-  const int copyLen = std::min(count, latin.size());
+  const qsizetype copyLen = std::min<qsizetype>(
+      static_cast<qsizetype>(count), latin.size());
   std::memcpy(bytes.data(), latin.constData(), static_cast<size_t>(copyLen));
   if (copyLen < count) {
-    bytes[copyLen] = '\0';
+    bytes[static_cast<int>(copyLen)] = '\0';
   }
   return true;
 }

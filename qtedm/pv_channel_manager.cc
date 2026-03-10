@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "channel_access_context.h"
+#include "pva_channel_manager.h"
 
 PvChannelManager &PvChannelManager::instance()
 {

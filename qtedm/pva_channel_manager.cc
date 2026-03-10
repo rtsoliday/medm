@@ -1,28 +1,57 @@
 #include "pva_channel_manager.h"
+
+#include "pva_bridge.h"
 #include "heatmap_runtime.h"
-#include <pv/pvData.h>
-#include <pv/pvData.h>
-#include <cstring>
 
 #include <algorithm>
 
 #include <QCoreApplication>
 #include <QDateTime>
-#include <QDebug>
 #include <QStringList>
-
-
-extern "C" bool pvaIsGlobalUpdatesPaused() {
-    return HeatmapRuntime::isGlobalUpdatesPaused();
-}
+#include <QVector>
 
 namespace {
 
-
 constexpr qint64 kMinNotifyIntervalMs = 100;
 constexpr int kPollIntervalMs = 100;
-constexpr double kConnectTimeoutSeconds = 1.0;
+
+static SharedChannelData toSharedChannelData(const PvaBridgeData &bridgeData)
+{
+  SharedChannelData data;
+  data.connected = bridgeData.connected;
+  data.nativeFieldType = static_cast<short>(bridgeData.nativeFieldType);
+  data.nativeElementCount = bridgeData.nativeElementCount;
+  data.numericValue = bridgeData.numericValue;
+  data.stringValue = QString::fromUtf8(bridgeData.stringValue.c_str());
+  data.enumValue = static_cast<dbr_enum_t>(bridgeData.enumValue);
+  data.arrayValues = QVector<double>(bridgeData.arrayValues.begin(),
+      bridgeData.arrayValues.end());
+  data.sharedArrayData = bridgeData.sharedArrayData;
+  data.sharedArraySize = bridgeData.sharedArraySize;
+  data.severity = bridgeData.severity;
+  data.status = bridgeData.status;
+  data.timestamp = epicsTimeStamp{};
+  data.hasTimestamp = false;
+  data.hopr = bridgeData.hopr;
+  data.lopr = bridgeData.lopr;
+  data.precision = bridgeData.precision;
+  data.units = QString::fromUtf8(bridgeData.units.c_str());
+  for (const std::string &entry : bridgeData.enumStrings) {
+    data.enumStrings.append(QString::fromUtf8(entry.c_str()));
+  }
+  data.hasControlInfo = bridgeData.hasControlInfo;
+  data.hasUnits = bridgeData.hasUnits;
+  data.hasPrecision = bridgeData.hasPrecision;
+  data.hasValue = bridgeData.hasValue;
+  data.isNumeric = bridgeData.isNumeric;
+  data.isString = bridgeData.isString;
+  data.isEnum = bridgeData.isEnum;
+  data.isCharArray = bridgeData.isCharArray;
+  data.isArray = bridgeData.isArray;
+  return data;
 }
+
+} // namespace
 
 PvaChannelManager &PvaChannelManager::instance()
 {
@@ -46,11 +75,8 @@ PvaChannelManager::~PvaChannelManager()
 {
   pollTimer_.stop();
   for (auto *channel : channels_) {
-    if (channel->pva) {
-      freePVA(channel->pva);
-      delete channel->pva;
-      channel->pva = nullptr;
-    }
+    pvaBridgeDestroyChannel(channel->bridge);
+    channel->bridge = nullptr;
     delete channel;
   }
   channels_.clear();
@@ -154,27 +180,13 @@ PvaChannelManager::PvaChannel *PvaChannelManager::findOrCreateChannel(
   channel->key = key;
   channel->rawName = rawName.trimmed();
   channel->pvName = pvName.trimmed();
-
-  channel->pva = new PVA_OVERALL();
-  allocPVA(channel->pva, 1);
-  channel->pva->includeAlarmSeverity = true;
-
-  epics::pvData::shared_vector<std::string> names(1);
-  names[0] = channel->pvName.toStdString();
-  channel->pva->pvaChannelNames = freeze(names);
-
-  epics::pvData::shared_vector<std::string> providers(1);
-  providers[0] = "pva";
-  channel->pva->pvaProvider = freeze(providers);
-
-  ConnectPVA(channel->pva, kConnectTimeoutSeconds);
-  GetPVAValues(channel->pva);
-  MonitorPVAValues(channel->pva);
-
-  if (channel->pva->isConnected.size() > 0) {
-    channel->connected = channel->pva->isConnected[0];
+  channel->bridge = pvaBridgeCreateChannel(channel->rawName.toStdString(),
+      channel->pvName.toStdString(), key.requestedType, key.elementCount);
+  if (!channel->bridge) {
+    delete channel;
+    return nullptr;
   }
-  updateAccessRights(channel);
+
   updateCachedData(channel);
 
   channels_.insert(key, channel);
@@ -188,161 +200,36 @@ void PvaChannelManager::destroyChannelIfUnused(PvaChannel *channel)
   }
 
   channels_.remove(channel->key);
-  if (channel->pva) {
-    freePVA(channel->pva);
-    delete channel->pva;
-    channel->pva = nullptr;
-  }
+  pvaBridgeDestroyChannel(channel->bridge);
+  channel->bridge = nullptr;
   delete channel;
 }
 
 void PvaChannelManager::updateAccessRights(PvaChannel *channel)
 {
-  if (!channel || !channel->pva) {
-    return;
-  }
-  channel->canRead = HaveReadAccess(channel->pva, 0);
-  channel->canWrite = HaveWriteAccess(channel->pva, 0);
+  updateCachedData(channel);
 }
-
 
 void PvaChannelManager::updateCachedData(PvaChannel *channel)
 {
-  
-  if (!channel || !channel->pva) {
+  if (!channel || !channel->bridge) {
     return;
   }
 
-  if (channel->connected) {
-    ExtractPVAUnits(channel->pva);
-    ExtractPVAControlInfo(channel->pva);
+  if (!pvaBridgeRefresh(channel->bridge,
+          HeatmapRuntime::isGlobalUpdatesPaused())) {
+    return;
   }
 
-  SharedChannelData data = channel->cachedData;
-  data.connected = channel->connected;
-  data.severity = channel->pva->pvaData[0].alarmSeverity;
-  data.status = 0;
-  data.hasTimestamp = false;
-  data.hasControlInfo = false;
-  data.hasUnits = false;
-  data.hasPrecision = false;
-  data.hasValue = false;
-  data.isNumeric = false;
-  data.isString = false;
-  data.isEnum = false;
-  data.isCharArray = false;
-  data.isArray = false;
-  data.arrayValues.clear();
-  data.charArrayValue.clear();
-
-  const PVA_DATA_ALL_READINGS &reading = channel->pva->pvaData[0];
-  const PVA_DATA *source = nullptr;
-  long elementCount = 0;
-
-  if (reading.numMonitorReadings > 0) {
-    source = reading.monitorData;
-    elementCount = reading.numMonitorElements;
-  } else if (reading.numGetReadings > 0) {
-    source = reading.getData;
-    elementCount = reading.numGetElements;
+  PvaBridgeData bridgeData;
+  if (!pvaBridgeGetData(channel->bridge, &bridgeData)) {
+    return;
   }
 
-  if (source && reading.numeric && source[0].values) {
-    data.numericValue = source[0].values[0];
-    data.isNumeric = true;
-    data.hasValue = true;
-    if (elementCount > 1) {
-      data.isArray = true;
-      if (elementCount > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
-        data.arrayValues.clear();
-      } else if (reading.monitorOpaqueVector != nullptr) {
-        auto srcVec = static_cast<epics::pvData::shared_vector<const double>*>(reading.monitorOpaqueVector);
-        auto keptVec = new epics::pvData::shared_vector<const double>(*srcVec);
-        data.sharedArrayData = std::shared_ptr<const double>(keptVec->data(), [keptVec](const double*) { delete keptVec; });
-        data.sharedArraySize = static_cast<size_t>(elementCount);
-        data.arrayValues.clear();
-      } else {
-        data.arrayValues.resize(static_cast<int>(elementCount));
-        std::memcpy(data.arrayValues.data(), source[0].values, elementCount * sizeof(double));
-      }
-    }
-  }
-
-  if (source && reading.nonnumeric && source[0].stringValues) {
-    const char *text = source[0].stringValues[0];
-    data.stringValue = text ? QString::fromUtf8(text) : QString();
-    data.isString = true;
-    data.hasValue = true;
-  }
-
-  if (IsEnumFieldType(channel->pva, 0)) {
-    char **choices = nullptr;
-    const uint32_t count = GetEnumChoices(channel->pva, 0, &choices);
-    if (count > 0 && choices) {
-      QStringList list;
-      list.reserve(static_cast<int>(count));
-      for (uint32_t i = 0; i < count; ++i) {
-        QString choice = QString::fromUtf8(choices[i]);
-        if (choice.startsWith('{') && choice.endsWith('}') && choice.size() > 1) {
-          choice = choice.mid(1, choice.size() - 2);
-        }
-        list.append(choice);
-        free(choices[i]);
-      }
-      free(choices);
-      data.enumStrings = list;
-      data.isEnum = true;
-      data.enumValue = static_cast<dbr_enum_t>(data.numericValue);
-      data.hasControlInfo = true;
-    }
-  }
-
-  data.units = QString::fromStdString(GetUnits(channel->pva, 0));
-  data.hasUnits = !data.units.trimmed().isEmpty();
-
-  if (reading.hasDisplayLimits) {
-    data.lopr = reading.displayLimitLow;
-    data.hopr = reading.displayLimitHigh;
-    data.hasControlInfo = true;
-  } else if (reading.hasControlLimits) {
-    data.lopr = reading.controlLimitLow;
-    data.hopr = reading.controlLimitHigh;
-    data.hasControlInfo = true;
-  }
-
-  if (data.hasControlInfo) {
-    const double low = std::min(data.lopr, data.hopr);
-    double high = std::max(data.lopr, data.hopr);
-    if (high == low) {
-      high = low + 1.0;
-    }
-    data.lopr = low;
-    data.hopr = high;
-  }
-
-  if (reading.hasPrecision) {
-    data.precision = static_cast<short>(reading.displayPrecision);
-    data.hasPrecision = true;
-    data.hasControlInfo = true;
-  }
-
-  if (IsEnumFieldType(channel->pva, 0)) {
-    data.nativeFieldType = DBF_ENUM;
-  } else if (reading.nonnumeric) {
-    data.nativeFieldType = DBF_STRING;
-  } else {
-    data.nativeFieldType = DBF_DOUBLE;
-  }
-
-  if (elementCount <= 0) {
-    elementCount = 1;
-  }
-  data.nativeElementCount = static_cast<long>(GetElementCount(channel->pva, 0));
-  if (data.nativeElementCount <= 0) {
-    data.nativeElementCount = elementCount;
-  }
-
-  channel->cachedData = data;
+  channel->connected = bridgeData.connected;
+  channel->canRead = bridgeData.canRead;
+  channel->canWrite = bridgeData.canWrite;
+  channel->cachedData = toSharedChannelData(bridgeData);
 }
 
 bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
@@ -365,8 +252,12 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
     return false;
   }
 
-  updateAccessRights(channel);
   updateCachedData(channel);
+
+  PvaBridgeData bridgeData;
+  if (!pvaBridgeGetData(channel->bridge, &bridgeData)) {
+    return false;
+  }
 
   const SharedChannelData &data = channel->cachedData;
   snapshot.pvName = parsed.rawName.trimmed();
@@ -375,7 +266,7 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
   snapshot.canWrite = channel->canWrite;
   snapshot.fieldType = data.nativeFieldType;
   snapshot.elementCount = static_cast<unsigned long>(data.nativeElementCount);
-  snapshot.host = QString::fromStdString(GetRemoteAddress(channel->pva, 0));
+  snapshot.host = QString::fromUtf8(bridgeData.host.c_str());
   snapshot.units = data.units;
   snapshot.hasUnits = data.hasUnits;
   snapshot.severity = data.severity;
@@ -408,7 +299,7 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
 
 void PvaChannelManager::notifySubscribers(PvaChannel *channel)
 {
-    if (!channel) {
+  if (!channel) {
     return;
   }
 
@@ -428,17 +319,10 @@ void PvaChannelManager::notifySubscribers(PvaChannel *channel)
     }
   }
   channel->updateCount++;
-
-      
 }
 
-
-
-#include <chrono>
 void PvaChannelManager::pollChannels()
 {
-  
-
   if (channels_.isEmpty()) {
     return;
   }
@@ -448,35 +332,28 @@ void PvaChannelManager::pollChannels()
 
   if (isPaused && !wasPaused) {
     for (auto *channel : channels_) {
-      if (channel->pva && channel->cachedData.nativeElementCount > 1000) {
-        PausePVAMonitoring(channel->pva);
+      if (channel->bridge && channel->cachedData.nativeElementCount > 1000) {
+        pvaBridgeSetMonitoringPaused(channel->bridge, true);
       }
     }
   } else if (!isPaused && wasPaused) {
     for (auto *channel : channels_) {
-      if (channel->pva && channel->cachedData.nativeElementCount > 1000) {
-        ResumePVAMonitoring(channel->pva);
+      if (channel->bridge && channel->cachedData.nativeElementCount > 1000) {
+        pvaBridgeSetMonitoringPaused(channel->bridge, false);
       }
     }
   }
   wasPaused = isPaused;
 
-
   for (auto *channel : channels_) {
-    if (!channel || !channel->pva) {
+    if (!channel || !channel->bridge) {
       continue;
     }
 
-    const bool wasConnected = channel->connected;
-    
-    int events = PollMonitoredPVA(channel->pva);
+    bool connectionChanged = false;
+    int events = pvaBridgePoll(channel->bridge, &connectionChanged, isPaused);
 
-    if (channel->pva->isConnected.size() > 0) {
-      channel->connected = channel->pva->isConnected[0];
-    }
-
-    if (channel->connected != wasConnected) {
-      updateAccessRights(channel);
+    if (connectionChanged) {
       updateCachedData(channel);
       for (const Subscriber &sub : channel->subscribers) {
         if (sub.connectionCallback) {
@@ -508,12 +385,11 @@ bool PvaChannelManager::putValue(const QString &pvName, double value)
   key.elementCount = 1;
 
   PvaChannel *channel = findOrCreateChannel(key, parsed.rawName, parsed.pvName);
-  if (!channel || !channel->pva || !channel->connected) {
+  if (!channel || !channel->bridge || !channel->connected) {
     return false;
   }
 
-  PrepPut(channel->pva, 0, value);
-  return PutPVAValues(channel->pva) == 0;
+  return pvaBridgePutDouble(channel->bridge, value);
 }
 
 bool PvaChannelManager::putValue(const QString &pvName, const QString &value)
@@ -529,13 +405,11 @@ bool PvaChannelManager::putValue(const QString &pvName, const QString &value)
   key.elementCount = 1;
 
   PvaChannel *channel = findOrCreateChannel(key, parsed.rawName, parsed.pvName);
-  if (!channel || !channel->pva || !channel->connected) {
+  if (!channel || !channel->bridge || !channel->connected) {
     return false;
   }
 
-  QByteArray bytes = value.toUtf8();
-  PrepPut(channel->pva, 0, bytes.data());
-  return PutPVAValues(channel->pva) == 0;
+  return pvaBridgePutString(channel->bridge, value.toStdString());
 }
 
 bool PvaChannelManager::putValue(const QString &pvName, dbr_enum_t value)
@@ -543,7 +417,8 @@ bool PvaChannelManager::putValue(const QString &pvName, dbr_enum_t value)
   return putValue(pvName, static_cast<double>(value));
 }
 
-bool PvaChannelManager::putArrayValue(const QString &pvName, const QVector<double> &values)
+bool PvaChannelManager::putArrayValue(const QString &pvName,
+    const QVector<double> &values)
 {
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.pvName.isEmpty()) {
@@ -556,12 +431,12 @@ bool PvaChannelManager::putArrayValue(const QString &pvName, const QVector<doubl
   key.elementCount = values.size();
 
   PvaChannel *channel = findOrCreateChannel(key, parsed.rawName, parsed.pvName);
-  if (!channel || !channel->pva || !channel->connected) {
+  if (!channel || !channel->bridge || !channel->connected) {
     return false;
   }
 
-  PrepPut(channel->pva, 0, const_cast<double *>(values.data()), values.size());
-  return PutPVAValues(channel->pva) == 0;
+  return pvaBridgePutDoubleArray(channel->bridge, values.constData(),
+      static_cast<size_t>(values.size()));
 }
 
 int PvaChannelManager::uniqueChannelCount() const

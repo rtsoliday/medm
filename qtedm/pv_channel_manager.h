@@ -1,7 +1,6 @@
 #pragma once
 
 #include "pv_protocol.h"
-#include "pva_channel_manager.h"
 #include "shared_channel_manager.h"
 
 class PvChannelManager

@@ -16,32 +16,47 @@ include ../Makefile.rules
 
 PROD_LIBS :=
 
-# Detect Qt version: prefer Qt6, fallback to Qt5
-QT6_AVAILABLE := $(shell pkg-config --exists Qt6Core 2>/dev/null && echo 1)
-ifeq ($(QT6_AVAILABLE),1)
+ifeq ($(OS), Windows)
   QT_VERSION := 6
-  QT_WIDGETS_PKG := Qt6Widgets
-  QT_PRINT_PKG := Qt6PrintSupport
-  QT_SVG_PKG := Qt6Svg
   QT_CORE_PKG := Qt6Core
+  QT_DIR ?= C:\\Qt\\6.8.2\\msvc2022_64
+  QT_DIR_FWD := $(subst \\,/,$(QT_DIR))
+  QT_WIDGETS_CFLAGS := -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg"
 else
-  QT5_AVAILABLE := $(shell pkg-config --exists Qt5Core 2>/dev/null && echo 1)
-  ifeq ($(QT5_AVAILABLE),1)
-    QT_VERSION := 5
-    QT_WIDGETS_PKG := Qt5Widgets
-    QT_PRINT_PKG := Qt5PrintSupport
-    QT_SVG_PKG := Qt5Svg
-    QT_CORE_PKG := Qt5Core
+  # Detect Qt version: prefer Qt6, fallback to Qt5
+  QT6_AVAILABLE := $(shell pkg-config --exists Qt6Core 2>/dev/null && echo 1)
+  ifeq ($(QT6_AVAILABLE),1)
+    QT_VERSION := 6
+    QT_WIDGETS_PKG := Qt6Widgets
+    QT_PRINT_PKG := Qt6PrintSupport
+    QT_SVG_PKG := Qt6Svg
+    QT_CORE_PKG := Qt6Core
   else
-    $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
+    QT5_AVAILABLE := $(shell pkg-config --exists Qt5Core 2>/dev/null && echo 1)
+    ifeq ($(QT5_AVAILABLE),1)
+      QT_VERSION := 5
+      QT_WIDGETS_PKG := Qt5Widgets
+      QT_PRINT_PKG := Qt5PrintSupport
+      QT_SVG_PKG := Qt5Svg
+      QT_CORE_PKG := Qt5Core
+    else
+      $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
+    endif
   endif
+  QT_WIDGETS_CFLAGS := $(shell pkg-config --cflags $(QT_WIDGETS_PKG))
 endif
 
-QT_RCC_DIR := $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
-ifeq ($(QT_RCC_DIR),)
-  QT_RCC := rcc
+ifeq ($(OS), Windows)
+  QT_RCC := "$(QT_DIR_FWD)/bin/rcc.exe"
+  RCC_OBJ_OUT := /Fo
 else
-  QT_RCC := $(QT_RCC_DIR)/rcc
+  QT_RCC_DIR := $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
+  ifeq ($(QT_RCC_DIR),)
+    QT_RCC := rcc
+  else
+    QT_RCC := $(QT_RCC_DIR)/rcc
+  endif
+  RCC_OBJ_OUT := -o 
 endif
 
 ifneq ($(OS), Windows)
@@ -81,7 +96,9 @@ qtedm_SRC = qtedm.cc \
             channel_access_context.cc \
             shared_channel_manager.cc \
             pvaSDDS.cc \
+            pva_bridge.cc \
             pva_channel_manager.cc \
+            pva_info_snapshot.cc \
             pv_channel_manager.cc \
             slider_element.cc \
             slider_runtime.cc \
@@ -140,8 +157,8 @@ qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
 CFLAGS += -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 CCFLAGS += -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 ifeq ($(OS), Windows)
- CCFLAGS += /std:c++17 /Zc:__cplusplus /permissive- -I"C:\\Qt\\6.8.2\\msvc2022_64\\include" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtCore" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtGui" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtWidgets" -I"C:\\Qt\\6.8.2\\msvc2022_64\\include\\QtSvg"
- LDFLAGS += /LIBPATH:"C:\\Qt\\6.8.2\\msvc2022_64\\lib" Qt6PrintSupport.lib Qt6Svg.lib Qt6Widgets.lib Qt6Gui.lib Qt6Core.lib
+ CCFLAGS += /std:c++20 /Zc:__cplusplus /permissive- $(QT_WIDGETS_CFLAGS)
+ LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt6PrintSupport.lib Qt6Svg.lib Qt6Widgets.lib Qt6Gui.lib Qt6Core.lib
 else
  CCFLAGS += $(shell pkg-config --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
  LDFLAGS += $(shell pkg-config --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
@@ -235,58 +252,62 @@ endif
 
 ifeq ($(OS), Windows)
   NO_DLL = 1
-  CFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL
-  CCFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL
+  CFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL -DNOMINMAX
+  CCFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL -DNOMINMAX
   PROD_LIBS += gsl.lib gslcblas.lib ws2_32.lib \
                pvaClient.lib nt.lib pvAccessCA.lib pvAccess.lib pvData.lib pvDatabase.lib ca.lib Com.lib
   LIB_LINK_DIRS += -LIBPATH:$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)
-  MOC = moc.exe
+  MOC = "$(QT_DIR_FWD)/bin/moc.exe"
+
+  PVA_CXX17_OBJS = $(OBJ_DIR)/pvaSDDS.$(OBJEXT) \
+                   $(OBJ_DIR)/pva_bridge.$(OBJEXT)
+
+$(PVA_CXX17_OBJS): CCFLAGS := $(filter-out /std:c++20 /permissive-,$(CCFLAGS)) /std:c++17
 endif
 
 include ../Makefile.build
+
+.RECIPEPREFIX := >
 
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
 
 $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | $(OBJ_DIR)
-	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
-	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp -o $@
+>$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
+>$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp $(RCC_OBJ_OUT)$@
 
-HELP_RESOURCE_FILES = resources/help.qrc ../docs/QtEDM.html \
-                      $(wildcard ../docs/images/qtedm-widgets/*.png)
-
-$(OBJ_DIR)/help_rcc.$(OBJEXT): $(HELP_RESOURCE_FILES) | $(OBJ_DIR)
-	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
-	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp -o $@
+$(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html | $(OBJ_DIR)
+>$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
+>$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/moc_cartesian_plot_element.cpp: cartesian_plot_element.h | $(OBJ_DIR)
-	$(MOC) $(shell pkg-config --cflags $(QT_WIDGETS_PKG)) $< -o $@
+>$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/cartesian_plot_element.$(OBJEXT): $(OBJ_DIR)/moc_cartesian_plot_element.cpp
 
 $(OBJ_DIR)/moc_find_pv_dialog.cpp: find_pv_dialog.h | $(OBJ_DIR)
-	$(MOC) $(shell pkg-config --cflags $(QT_WIDGETS_PKG)) $< -o $@
+>$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/find_pv_dialog.$(OBJEXT): $(OBJ_DIR)/moc_find_pv_dialog.cpp
 
 $(OBJ_DIR)/moc_shared_channel_manager.cpp: shared_channel_manager.h | $(OBJ_DIR)
-	$(MOC) $(shell pkg-config --cflags $(QT_WIDGETS_PKG)) $< -o $@
+>$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/shared_channel_manager.$(OBJEXT): $(OBJ_DIR)/moc_shared_channel_manager.cpp
 
 $(OBJ_DIR)/moc_memory_tracker.cpp: memory_tracker.h | $(OBJ_DIR)
-	$(MOC) $(shell pkg-config --cflags $(QT_WIDGETS_PKG)) $< -o $@
+>$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/memory_tracker.$(OBJEXT): $(OBJ_DIR)/moc_memory_tracker.cpp
 
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
-	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
-	cp -f $@ $(BIN_DIR)/
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
+>$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
+>cp -f $@ $(BIN_DIR)/
+>@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
+>@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
 
 $(OBJ_DIR)/medm$(EXEEXT): $(medm_OBJS) $(PROD_DEPS)
-	$(LINKEXE) $(OUTPUTEXE) $(medm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
-	cp -f $@ $(BIN_DIR)/
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
+>$(LINKEXE) $(OUTPUTEXE) $(medm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
+>cp -f $@ $(BIN_DIR)/
+>@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
+>@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi

@@ -149,13 +149,13 @@ public:
   }
 };
 
-typedef struct
+typedef struct PVA_DATA
 {
   double *values;
   char **stringValues;
 } PVA_DATA;
 
-typedef struct
+typedef struct PVA_DATA_ALL_READINGS
 {
   long numGetElements;
   long numPutElements;
@@ -188,7 +188,7 @@ typedef struct
   void *monitorOpaqueVector;
 } PVA_DATA_ALL_READINGS;
 
-typedef struct
+typedef struct PVA_OVERALL
 {
   epics::pvaClient::PvaClientPtr pvaClientPtr;
   std::vector<epics::pvaClient::PvaClientMultiChannelPtr> pvaClientMultiChannelPtr;

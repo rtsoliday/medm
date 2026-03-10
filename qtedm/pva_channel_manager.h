@@ -8,7 +8,9 @@
 
 #include "pv_protocol.h"
 #include "shared_channel_manager.h"
-#include "pvaSDDS.h"
+
+struct PVA_OVERALL;
+struct PvaBridgeChannel;
 
 class PvaChannelManager : public QObject, public SubscriptionOwner
 {
@@ -79,7 +81,7 @@ private:
     SharedChannelKey key;
     QString rawName;
     QString pvName;
-    PVA_OVERALL *pva = nullptr;
+    PvaBridgeChannel *bridge = nullptr;
     bool connected = false;
     bool canRead = false;
     bool canWrite = false;

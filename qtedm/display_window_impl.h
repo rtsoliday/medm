@@ -61,7 +61,7 @@
 #include "pv_protocol.h"
 #include "pv_info_dialog.h"
 #include "pv_limits_dialog.h"
-#include "pva_channel_manager.h"
+#include "pva_info_snapshot.h"
 #include "strip_chart_data_dialog.h"
 #include "cursor_utils.h"
 
@@ -9658,8 +9658,8 @@ private:
 
     ParsedPvName parsed = parsePvName(channelName);
     if (parsed.protocol == PvProtocol::kPva) {
-      PvaChannelManager::PvaInfoSnapshot snapshot;
-      if (!PvaChannelManager::instance().getInfoSnapshot(channelName, snapshot)) {
+      PvaInfoSnapshot snapshot;
+      if (!getPvaInfoSnapshot(channelName, snapshot)) {
         details.error = QStringLiteral("Unable to create PVA channel.");
         return false;
       }

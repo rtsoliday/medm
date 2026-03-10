@@ -9,7 +9,7 @@
       font-family: "Times New Roman", Times, serif;
       font-size: 12pt;
       line-height: 1.5;
-      max-width: 800px;
+      max-width: 960px;
       margin: 0 auto;
       padding: 20px;
       color: #000;
@@ -35,6 +35,13 @@
       font-weight: bold;
       margin-top: 20px;
       margin-bottom: 10px;
+    }
+    h4 {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 18px;
+      margin-bottom: 8px;
     }
     .author {
       font-family: Arial, sans-serif;
@@ -77,6 +84,10 @@
     a:visited {
       color: purple;
     }
+    img {
+      max-width: 100%;
+      height: auto;
+    }
     table {
       border-collapse: collapse;
       margin-left: 0.5in;
@@ -105,6 +116,40 @@
       background-color: #ffffcc;
       border-left: 4px solid #ffcc00;
     }
+    .noindent {
+      text-indent: 0;
+    }
+    .widget-nav {
+      margin-left: 0.5in;
+      margin-bottom: 20px;
+      padding: 12px;
+      border: 1px solid #999;
+      background-color: #f8f8f8;
+    }
+    .widget-nav p {
+      text-indent: 0;
+      margin: 0 0 6px 0;
+    }
+    .widget-entry {
+      margin-left: 0.5in;
+      margin-bottom: 24px;
+      padding-top: 8px;
+      border-top: 1px solid #bbb;
+    }
+    .widget-entry p {
+      text-indent: 0;
+    }
+    .widget-figure {
+      margin: 10px 0 12px 0;
+    }
+    .widget-figure img {
+      border: 1px solid #777;
+      background-color: #fff;
+    }
+    .figcaption {
+      font-size: 10pt;
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -112,7 +157,7 @@
 <h1>QtEDM Reference Manual</h1>
 
 <p class="author">Robert Soliday</p>
-<p class="date">November 2025</p>
+<p class="date">March 2026</p>
 <p class="affiliation">Advanced Photon Source</p>
 <p class="affiliation">Argonne National Laboratory</p>
 
@@ -295,47 +340,476 @@ qtedm -x display.adl</pre>
 
 <h2><a name="Widgets"></a>Supported Widgets</h2>
 
-<p>QtEDM supports the following widget types. Most match MEDM directly; qtedm-only extensions are noted explicitly.</p>
+<p class="noindent">QtEDM supports the complete MEDM widget set plus QtEDM-specific
+extensions. The sections below expand the brief object list into a practical
+reference: what each widget is for, the properties that matter most, and a
+representative screenshot.</p>
+
+<p class="noindent">The screenshots in this section were captured from dedicated
+documentation ADL example files in <code>docs/images/adl</code>, rendered in
+EDIT mode. They are intended to show geometry, styling, labeling, and
+available variants even when no live IOC is running.</p>
+
+<h3>Common Widget Concepts</h3>
+
+<ul>
+  <li><strong>Geometry and stacking</strong> &ndash; Every widget has an ADL object rectangle. In EDIT mode this rectangle controls selection, resizing, and stacking order.</li>
+  <li><strong>Channels</strong> &ndash; Monitor widgets subscribe to one or more PVs. Controller widgets write to PVs. Graphics widgets can also use channels for dynamic color and visibility.</li>
+  <li><strong>Dynamic attributes</strong> &ndash; Many widgets support alarm-sensitive colors, discrete color rules, and visibility driven by a PV or a calculation.</li>
+  <li><strong>Limits and precision</strong> &ndash; Numeric widgets can use display/alarm/control limits from the PV, or explicit values stored in the ADL.</li>
+  <li><strong>Macros and protocols</strong> &ndash; PV names may contain macro substitutions such as <code>$(P)</code>. QtEDM also accepts <code>pva://</code> PV prefixes when PVAccess is required.</li>
+  <li><strong>Audit logging</strong> &ndash; When logging is enabled, writes from Text Entry, Slider, Wheel Switch, Menu, Choice Button, and Message Button are recorded in the audit log.</li>
+</ul>
+
+<div class="widget-nav">
+  <p><strong>Graphics:</strong> <a href="#WidgetRectangle">Rectangle</a>,
+  <a href="#WidgetOval">Oval</a>, <a href="#WidgetArc">Arc</a>,
+  <a href="#WidgetLine">Line</a>, <a href="#WidgetPolyline">Polyline</a>,
+  <a href="#WidgetPolygon">Polygon</a>, <a href="#WidgetText">Text</a>,
+  <a href="#WidgetImage">Image</a>, <a href="#WidgetComposite">Composite</a></p>
+  <p><strong>Monitors:</strong> <a href="#WidgetTextMonitor">Text Monitor</a>,
+  <a href="#WidgetBarMonitor">Bar Monitor</a>,
+  <a href="#WidgetThermometer">Thermometer</a>,
+  <a href="#WidgetByteMonitor">Byte Monitor</a>,
+  <a href="#WidgetHeatmap">Heatmap</a>,
+  <a href="#WidgetScaleMonitor">Scale Monitor</a>,
+  <a href="#WidgetMeter">Meter</a>, <a href="#WidgetStripChart">Strip Chart</a>,
+  <a href="#WidgetCartesianPlot">Cartesian Plot</a></p>
+  <p><strong>Controllers:</strong> <a href="#WidgetTextEntry">Text Entry</a>,
+  <a href="#WidgetSlider">Slider</a>,
+  <a href="#WidgetWheelSwitch">Wheel Switch</a>,
+  <a href="#WidgetChoiceButton">Choice Button</a>,
+  <a href="#WidgetMenu">Menu</a>,
+  <a href="#WidgetMessageButton">Message Button</a>,
+  <a href="#WidgetRelatedDisplay">Related Display</a>,
+  <a href="#WidgetShellCommand">Shell Command</a></p>
+</div>
 
 <h3>Graphics</h3>
-<ul>
-  <li><strong>Rectangle</strong> &ndash; Filled or outlined rectangles</li>
-  <li><strong>Oval</strong> &ndash; Filled or outlined ellipses and circles</li>
-  <li><strong>Arc</strong> &ndash; Partial ellipses (pie slices or arcs)</li>
-  <li><strong>Line</strong> &ndash; Straight lines with optional arrows</li>
-  <li><strong>Polyline</strong> &ndash; Connected line segments</li>
-  <li><strong>Polygon</strong> &ndash; Filled multi-sided shapes</li>
-  <li><strong>Text</strong> &ndash; Static text labels</li>
-  <li><strong>Image</strong> &ndash; GIF and other image formats</li>
-  <li><strong>Composite</strong> &ndash; Groups of widgets treated as a unit</li>
-</ul>
+
+<div class="widget-entry">
+  <h4><a name="WidgetRectangle"></a>Rectangle</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/rectangle.png" alt="Rectangle widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Rectangle examples showing filled, outlined, dashed, and dynamically visible variants.</p>
+  </div>
+  <p>Rectangles are the basic building block for panels, frames, alarm tiles,
+  background fills, and simple status regions. In EXECUTE mode they are
+  monitor-only; any behavior comes from dynamic color or visibility rules.</p>
+  <ul>
+    <li><strong>Configure:</strong> Fill or outline, line width, line style, and foreground color.</li>
+    <li><strong>Use when:</strong> You need borders, grouping panels, color blocks, or a simple dynamic alarm indicator.</li>
+    <li><strong>Dynamic support:</strong> Color and visibility can follow alarm state, discrete PV values, or a visibility calculation.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetOval"></a>Oval</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/oval.png" alt="Oval widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Oval examples showing circles, stretched ellipses, and outline versus filled styles.</p>
+  </div>
+  <p>Ovals provide circular or elliptical graphics with the same styling model as
+  rectangles. They are commonly used for lamps, indicator bodies, and
+  schematic symbols that should respond to process state.</p>
+  <ul>
+    <li><strong>Configure:</strong> Fill, outline width, dash style, and color.</li>
+    <li><strong>Use when:</strong> A round or elliptical symbol reads more clearly than a rectangular region.</li>
+    <li><strong>Dynamic support:</strong> Alarm/discrete color and visibility handling matches the other graphic primitives.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetArc"></a>Arc</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/arc.png" alt="Arc widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Arc examples covering open arcs, pie-slice fills, angle ranges, and dynamic variants.</p>
+  </div>
+  <p>Arcs draw partial ellipses. They can be open outlines or filled wedge-style
+  shapes and are useful for gauges, directional annotations, and process
+  diagrams that need something more specific than a full oval.</p>
+  <ul>
+    <li><strong>Configure:</strong> Begin angle, path angle, fill mode, line width, and line style.</li>
+    <li><strong>Use when:</strong> You need sweep indicators, partial rings, or filled sectors.</li>
+    <li><strong>Dynamic support:</strong> The same color and visibility rules available to other graphic widgets also apply here.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetLine"></a>Line</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/line.png" alt="Line widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">The documentation example shows straight line segments with default and dashed styles.</p>
+  </div>
+  <p>Use a Line when you need a straight connection segment, pointer, or border
+  detail. A simple line is the two-point case of the polyline data model, so
+  line and polyline styling stay consistent.</p>
+  <ul>
+    <li><strong>Configure:</strong> Endpoints, line width, dash style, and arrow decorations.</li>
+    <li><strong>Use when:</strong> You need simple directional marks, separators, or wiring runs on a schematic.</li>
+    <li><strong>Dynamic support:</strong> Color and visibility can still be driven by PV state.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetPolyline"></a>Polyline</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/polyline.png" alt="Polyline widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">The documentation example shows multi-segment polyline paths with default and dashed styles.</p>
+  </div>
+  <p>Polylines are connected line segments with arbitrarily many vertices. They
+  are the right choice for piping runs, beam lines, and other paths that must
+  bend without becoming filled areas.</p>
+  <ul>
+    <li><strong>Configure:</strong> A vertex list, line width, dash style, and optional arrow heads.</li>
+    <li><strong>Use when:</strong> The path is not straight but should remain an open line rather than a closed polygon.</li>
+    <li><strong>Edit behavior:</strong> In EDIT mode individual vertices can be repositioned to reshape the path.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetPolygon"></a>Polygon</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/polygon.png" alt="Polygon widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Polygon examples showing filled and outlined multi-sided shapes across several vertex layouts.</p>
+  </div>
+  <p>Polygons represent closed multi-sided shapes. They are useful for arrows,
+  custom equipment outlines, filled regions with irregular boundaries, and
+  symbols that cannot be expressed as rectangles or ovals.</p>
+  <ul>
+    <li><strong>Configure:</strong> Vertex list, fill mode, line width, line style, and color.</li>
+    <li><strong>Use when:</strong> You need a closed custom shape with either fill or outline rendering.</li>
+    <li><strong>Dynamic support:</strong> Visibility and color rules work the same way as for the other graphic primitives.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetText"></a>Text</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/text.png" alt="Text widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Static text examples covering alignment, font sizes, labels, and decorative uses.</p>
+  </div>
+  <p>Text widgets provide static labels, titles, engineering notes, and screen
+  annotations. They are not tied to PV updates and are intended for fixed
+  wording that helps operators interpret the rest of the display.</p>
+  <ul>
+    <li><strong>Configure:</strong> String content, alignment, color, and font sizing through the display font model.</li>
+    <li><strong>Use when:</strong> You need headings, units, labels, instructions, or other non-changing text.</li>
+    <li><strong>Tip:</strong> Static text is often paired with monitor widgets so the label remains stable while the readback changes.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetImage"></a>Image</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/image.png" alt="Image widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Image examples showing file-backed graphics, scaling, and animated/static image usage.</p>
+  </div>
+  <p>The Image widget displays file-backed graphics such as GIFs and other Qt
+  image formats. It is useful for logos, equipment symbols, and any case where
+  a drawn primitive would be too limited.</p>
+  <ul>
+    <li><strong>Configure:</strong> Image file name, image type, optional dynamic visibility, and optional calculation support.</li>
+    <li><strong>Use when:</strong> A raster image or animated GIF communicates state more effectively than basic shapes.</li>
+    <li><strong>Practical note:</strong> Keep referenced image files on the display path or use an explicit file path so operators see the same asset everywhere.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetComposite"></a>Composite</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/composite.png" alt="Composite widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">The graphics example includes a composite containing child widgets that move and render as one object.</p>
+  </div>
+  <p>A Composite groups multiple child widgets into a single higher-level object.
+  This is useful when a display repeatedly reuses the same local assembly of
+  labels, indicators, and controls.</p>
+  <ul>
+    <li><strong>Configure:</strong> Composite bounds, optional dynamic attributes, and the child widget list.</li>
+    <li><strong>Use when:</strong> Several widgets should move, copy, stack, or be shown/hidden together.</li>
+    <li><strong>Layering note:</strong> QtEDM preserves each composite's internal child stacking while also treating the composite itself as one top-level object.</li>
+  </ul>
+</div>
 
 <h3>Monitors</h3>
-<ul>
-  <li><strong>Text Monitor</strong> &ndash; Displays PV value as text</li>
-  <li><strong>Bar Monitor</strong> &ndash; Horizontal or vertical bar graph</li>
-  <li><strong>Thermometer</strong> &ndash; qtedm-only linear thermometer monitor with value overlay and editable limit sources</li>
-  <li><strong>Byte Monitor</strong> &ndash; Displays individual bits of an integer PV</li>
-  <li><strong>Heatmap</strong> &ndash; qtedm-only 2-D array/image-style monitor</li>
-  <li><strong>Scale Monitor</strong> &ndash; Linear or logarithmic scale indicator</li>
-  <li><strong>Meter</strong> &ndash; Analog meter display</li>
-  <li><strong>Strip Chart</strong> &ndash; Time-based trending of PV values</li>
-  <li><strong>Cartesian Plot</strong> &ndash; X-Y plotting with multiple traces</li>
-</ul>
 
-<p><strong>qtedm-only note:</strong> The <code>heatmap</code> and <code>thermometer</code> ADL blocks are extensions implemented only in QtEDM. MEDM does not provide parser or runtime support for these widget types.</p>
+<div class="widget-entry">
+  <h4><a name="WidgetTextMonitor"></a>Text Monitor</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/text-monitor.png" alt="Text Monitor widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Text Monitor examples showing numeric formatting, string readback, alignment, and alarm-driven color changes.</p>
+  </div>
+  <p>Text Monitor is the standard readback widget for scalar or string PVs. It
+  displays the current value as text and can format the value for operator
+  readability without allowing writes.</p>
+  <ul>
+    <li><strong>Configure:</strong> Channel, display format, alignment, foreground/background colors, and optional limits handling.</li>
+    <li><strong>Use when:</strong> The exact PV value matters more than a graphical metaphor.</li>
+    <li><strong>Runtime behavior:</strong> Text and color update as new monitor events arrive; no operator interaction is accepted.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetBarMonitor"></a>Bar Monitor</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/bar-monitor.png" alt="Bar Monitor widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Bar Monitor examples covering horizontal and vertical bars, different scales, and color modes.</p>
+  </div>
+  <p>Bar Monitor turns a scalar PV into a filled bar graph. It is one of the
+  clearest ways to show level, percentage, position, or any value that should
+  be interpreted relative to a range.</p>
+  <ul>
+    <li><strong>Configure:</strong> Orientation, fill direction, colors, labels, and operating limits.</li>
+    <li><strong>Use when:</strong> Operators should judge magnitude at a glance rather than read precise numbers.</li>
+    <li><strong>Runtime behavior:</strong> The filled region follows the monitored value but the widget remains read-only.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetThermometer"></a>Thermometer</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/thermometer.png" alt="Thermometer widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Thermometer examples showing vertical fill, value overlays, and several limit configurations.</p>
+  </div>
+  <p>Thermometer is a QtEDM-only monitor widget that presents a scalar PV as a
+  thermometer-style fill. It provides a more literal physical metaphor than a
+  generic bar graph.</p>
+  <ul>
+    <li><strong>Configure:</strong> Value channel, visual styling, displayed value text, and static or PV-sourced limits.</li>
+    <li><strong>Use when:</strong> A long vertical readout matches the process concept better than a bar or text field.</li>
+    <li><strong>Compatibility:</strong> Thermometer is a QtEDM extension and is not backward compatible with MEDM.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetByteMonitor"></a>Byte Monitor</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/byte-monitor.png" alt="Byte Monitor widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Byte Monitor examples displaying individual bits and grouped status patterns from integer PVs.</p>
+  </div>
+  <p>Byte Monitor breaks an integer PV into visible bit states. It is especially
+  useful for status words, interlocks, mode fields, and hardware flags where
+  individual bits are meaningful to operators.</p>
+  <ul>
+    <li><strong>Configure:</strong> Channel, bit orientation, start/end bit range, and colors.</li>
+    <li><strong>Use when:</strong> The operator needs to inspect multiple boolean states encoded inside one PV.</li>
+    <li><strong>Runtime behavior:</strong> Bit cells update independently as the underlying integer value changes.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetHeatmap"></a>Heatmap</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/heatmap.png" alt="Heatmap widget example in QtEDM" loading="lazy">
+    <p class="figcaption">Heatmap example showing the widget layout with title area, plot area, and optional profile regions.</p>
+  </div>
+  <p>Heatmap is a QtEDM-only 2-D array monitor. It renders a waveform or array PV
+  as a color image and can derive the X and Y dimensions from either fixed
+  values or additional PVs.</p>
+  <ul>
+    <li><strong>Configure:</strong> Data PV, X/Y dimensions, dimension source, color map, flips, rotation, aspect ratio, and optional top/right profiles.</li>
+    <li><strong>Use when:</strong> A 2-D image or matrix communicates structure that would be lost in a 1-D plot.</li>
+    <li><strong>Runtime behavior:</strong> In EXECUTE mode QtEDM supports zooming, panning, and profile displays; MEDM does not support this widget.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetScaleMonitor"></a>Scale Monitor</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/scale-monitor.png" alt="Scale Monitor widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Scale Monitor examples showing pointer direction, labels, and mixed geometry ranging from tiny to large.</p>
+  </div>
+  <p>Scale Monitor is a compact analog-style readback widget combining a ruler,
+  tick marks, and a moving indicator. It works well when a bar monitor feels
+  too heavy but text alone is not visual enough.</p>
+  <ul>
+    <li><strong>Configure:</strong> Orientation, pointer direction, labels, limits, logarithmic or linear behavior, and colors.</li>
+    <li><strong>Use when:</strong> You need a compact gauge that still shows position relative to a scale.</li>
+    <li><strong>Runtime behavior:</strong> The indicator and optional numeric text move with the monitored value.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetMeter"></a>Meter</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/meter.png" alt="Meter widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Meter examples showing analog needle displays, scale labeling, and size-dependent layout.</p>
+  </div>
+  <p>Meter presents a scalar PV as an analog dial. It is useful for displays that
+  benefit from a familiar instrument-panel look or when operators prefer to
+  recognize direction and magnitude from needle position.</p>
+  <ul>
+    <li><strong>Configure:</strong> Channel, dial range, labels, colors, and limits.</li>
+    <li><strong>Use when:</strong> A needle gauge is the clearest mental model for the operator community using the screen.</li>
+    <li><strong>Runtime behavior:</strong> The meter is monitor-only and redraws the needle as values change.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetStripChart"></a>Strip Chart</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/strip-chart.png" alt="Strip Chart widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Strip Chart examples showing multi-trace time histories, axes, and chart layout variations.</p>
+  </div>
+  <p>Strip Chart trends one or more PVs against time. It is the standard widget
+  for short-term history, quick diagnostics, and operator displays that need to
+  show whether a signal is stable, drifting, or oscillating.</p>
+  <ul>
+    <li><strong>Configure:</strong> Trace PVs, colors, update rate, time span, trigger/erase behavior, and axis labels.</li>
+    <li><strong>Use when:</strong> Recent history matters more than the current value alone.</li>
+    <li><strong>QtEDM additions:</strong> The EXECUTE-mode context menu supports data export to SDDS or CSV.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetCartesianPlot"></a>Cartesian Plot</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/cartesian-plot.png" alt="Cartesian Plot widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Cartesian Plot examples with multiple traces, axis combinations, scatter-style displays, and overlaid lines.</p>
+  </div>
+  <p>Cartesian Plot is the most flexible plotting widget in QtEDM. It can show
+  Y-only traces against sample index or true X-Y data, and it supports multiple
+  traces with independent axis assignments.</p>
+  <ul>
+    <li><strong>Configure:</strong> X and Y PVs, trace colors, symbols, line styles, axis ranges, and labels.</li>
+    <li><strong>Use when:</strong> The display needs waveform, orbit, scan, or correlation data rather than simple time history.</li>
+    <li><strong>QtEDM additions:</strong> EXECUTE mode supports mouse-wheel zoom, drag pan, axis editing, and data export.</li>
+  </ul>
+</div>
+
+<p class="noindent"><strong>QtEDM-only note:</strong> The <code>heatmap</code> and
+<code>thermometer</code> ADL blocks are extensions implemented only in QtEDM.
+MEDM does not provide parser or runtime support for these widget types.</p>
 
 <h3>Controllers</h3>
-<ul>
-  <li><strong>Text Entry</strong> &ndash; Text input for setting PV values</li>
-  <li><strong>Slider</strong> &ndash; Horizontal or vertical slider control</li>
-  <li><strong>Wheel Switch</strong> &ndash; Digit-by-digit numeric input</li>
-  <li><strong>Choice Button</strong> &ndash; Radio button or menu selection</li>
-  <li><strong>Menu</strong> &ndash; Dropdown menu for enumerated PVs</li>
-  <li><strong>Message Button</strong> &ndash; Button that writes a value to a PV</li>
-  <li><strong>Related Display</strong> &ndash; Button to open other ADL displays</li>
-  <li><strong>Shell Command</strong> &ndash; Button to execute shell commands</li>
-</ul>
+
+<div class="widget-entry">
+  <h4><a name="WidgetTextEntry"></a>Text Entry</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/text-entry.png" alt="Text Entry widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Text Entry examples showing editable numeric and string fields with different sizes and color modes.</p>
+  </div>
+  <p>Text Entry allows an operator to type a value and write it to a PV. It is
+  the most direct control widget when precise numeric or string input matters
+  more than constrained stepwise adjustment.</p>
+  <ul>
+    <li><strong>Configure:</strong> Control PV, colors, alignment, font sizing, and limits/format behavior.</li>
+    <li><strong>Use when:</strong> Operators need exact typed input rather than a gesture-based control.</li>
+    <li><strong>Runtime behavior:</strong> The widget accepts keyboard entry only in EXECUTE mode and its writes are audit logged when logging is enabled.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetSlider"></a>Slider</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/slider.png" alt="Slider widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Slider examples showing horizontal and vertical layouts, label regions, and value ranges.</p>
+  </div>
+  <p>Slider provides a drag-based numeric control. It is well suited to setpoints
+  and analog adjustments where the operator thinks in terms of moving a value
+  within a bounded range.</p>
+  <ul>
+    <li><strong>Configure:</strong> Orientation, channel, limits, labels, colors, and scale appearance.</li>
+    <li><strong>Use when:</strong> Smooth adjustment is more natural than typing a number.</li>
+    <li><strong>Runtime behavior:</strong> Interaction is live in EXECUTE mode and writes are included in audit logs.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetWheelSwitch"></a>Wheel Switch</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/wheel-switch.png" alt="Wheel Switch widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Wheel Switch examples showing digit-by-digit editing across different widths and precisions.</p>
+  </div>
+  <p>Wheel Switch is a precision numeric entry widget in which each digit can be
+  incremented or decremented independently. It is ideal for control rooms where
+  operators want explicit control over significant digits.</p>
+  <ul>
+    <li><strong>Configure:</strong> Channel, number of digits, precision, colors, and limits.</li>
+    <li><strong>Use when:</strong> Fine-grained numeric entry is common and accidental large jumps must be avoided.</li>
+    <li><strong>Runtime behavior:</strong> Digits can be stepped interactively in EXECUTE mode; writes are audit logged.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetChoiceButton"></a>Choice Button</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/choice-button.png" alt="Choice Button widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Choice Button examples with discrete states rendered as always-visible buttons in several styles.</p>
+  </div>
+  <p>Choice Button presents a small fixed set of states as visible buttons rather
+  than hiding them in a drop-down. It is most useful for enum-like PVs where
+  the operator should always see the available choices.</p>
+  <ul>
+    <li><strong>Configure:</strong> Control PV, button labels from the underlying enum/discrete mapping, color mode, and geometry.</li>
+    <li><strong>Use when:</strong> Immediate visibility of the valid states matters more than conserving space.</li>
+    <li><strong>Runtime behavior:</strong> Clicking a choice writes the selected state and the action is audit logged.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetMenu"></a>Menu</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/menu.png" alt="Menu widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Menu examples showing compact drop-down selection for enumerated and discrete values.</p>
+  </div>
+  <p>Menu is the compact alternative to Choice Button. It exposes the current
+  value in a drop-down control and is appropriate when the state list is longer
+  or screen real estate is limited.</p>
+  <ul>
+    <li><strong>Configure:</strong> Control PV, colors, labels, and the geometry of the menu control.</li>
+    <li><strong>Use when:</strong> The operator needs selection capability but the display should stay visually compact.</li>
+    <li><strong>Runtime behavior:</strong> Selecting an item writes the new value and the write is audit logged.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetMessageButton"></a>Message Button</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/message-button.png" alt="Message Button widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Message Button examples showing command-style controls with different labels and value mappings.</p>
+  </div>
+  <p>Message Button writes a predefined value when activated. It is the right
+  widget for command actions such as Start, Stop, Reset, Open, Close, or
+  acknowledgement operations.</p>
+  <ul>
+    <li><strong>Configure:</strong> Target PV, button label, and the value written on activation.</li>
+    <li><strong>Use when:</strong> The control action is semantic rather than numeric and should look like a button.</li>
+    <li><strong>Runtime behavior:</strong> EXECUTE-mode clicks perform writes immediately and are included in the audit log.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetRelatedDisplay"></a>Related Display</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/related-display.png" alt="Related Display widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Related Display examples showing buttons that open additional ADL screens with operator-friendly labels.</p>
+  </div>
+  <p>Related Display is a navigation widget rather than a direct PV writer. It
+  opens one or more ADL files and can pass macro substitutions so downstream
+  displays inherit the current device or subsystem context.</p>
+  <ul>
+    <li><strong>Configure:</strong> Target display files, button label, open/replace behavior, and macro strings.</li>
+    <li><strong>Use when:</strong> A high-level display needs drill-down links to more detailed screens.</li>
+    <li><strong>Runtime behavior:</strong> Clicking opens the configured display set; no PV write is performed by the widget itself.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetShellCommand"></a>Shell Command</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/shell-command.png" alt="Shell Command widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">Shell Command examples showing command-launch buttons with multiple labels and action rows.</p>
+  </div>
+  <p>Shell Command launches external commands from a display button. It is useful
+  for opening helper tools, diagnostic scripts, or file viewers that sit
+  outside the ADL display itself.</p>
+  <ul>
+    <li><strong>Configure:</strong> Button label plus one or more commands and arguments.</li>
+    <li><strong>Use when:</strong> The operator workflow needs to hand off to an external program instead of writing a PV.</li>
+    <li><strong>Operational note:</strong> Prefer explicit paths and predictable environment setup because commands run in the operator's local session context.</li>
+  </ul>
+</div>
 
 <h2><a name="Environment"></a>Environment Variables</h2>
 
@@ -458,9 +932,13 @@ Both versions remain fully readable by QtEDM.</p>
 
 <p>QtEDM is built as part of the MEDM source distribution. From the repository root:</p>
 
-<pre>make</pre>
+<pre>make -j4</pre>
 
 <p>This builds both MEDM and QtEDM. The QtEDM binary is installed to <code>bin/&lt;arch&gt;/qtedm</code>.</p>
+
+<p>On a clean tree, a full build can take several minutes. If you are trying to
+diagnose a warning or an error and want less interleaved output, rerun the same
+build without <code>-j4</code>.</p>
 
 <p>Build requirements:</p>
 <ul>

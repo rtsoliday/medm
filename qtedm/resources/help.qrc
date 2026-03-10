@@ -1,5 +1,31 @@
 <RCC>
   <qresource prefix="/help">
     <file alias="QtEDM.html">../../docs/QtEDM.html</file>
+    <file alias="images/qtedm-widgets/arc.png">../../docs/images/qtedm-widgets/arc.png</file>
+    <file alias="images/qtedm-widgets/bar-monitor.png">../../docs/images/qtedm-widgets/bar-monitor.png</file>
+    <file alias="images/qtedm-widgets/byte-monitor.png">../../docs/images/qtedm-widgets/byte-monitor.png</file>
+    <file alias="images/qtedm-widgets/cartesian-plot.png">../../docs/images/qtedm-widgets/cartesian-plot.png</file>
+    <file alias="images/qtedm-widgets/choice-button.png">../../docs/images/qtedm-widgets/choice-button.png</file>
+    <file alias="images/qtedm-widgets/composite.png">../../docs/images/qtedm-widgets/composite.png</file>
+    <file alias="images/qtedm-widgets/heatmap.png">../../docs/images/qtedm-widgets/heatmap.png</file>
+    <file alias="images/qtedm-widgets/image.png">../../docs/images/qtedm-widgets/image.png</file>
+    <file alias="images/qtedm-widgets/line.png">../../docs/images/qtedm-widgets/line.png</file>
+    <file alias="images/qtedm-widgets/menu.png">../../docs/images/qtedm-widgets/menu.png</file>
+    <file alias="images/qtedm-widgets/message-button.png">../../docs/images/qtedm-widgets/message-button.png</file>
+    <file alias="images/qtedm-widgets/meter.png">../../docs/images/qtedm-widgets/meter.png</file>
+    <file alias="images/qtedm-widgets/oval.png">../../docs/images/qtedm-widgets/oval.png</file>
+    <file alias="images/qtedm-widgets/polygon.png">../../docs/images/qtedm-widgets/polygon.png</file>
+    <file alias="images/qtedm-widgets/polyline.png">../../docs/images/qtedm-widgets/polyline.png</file>
+    <file alias="images/qtedm-widgets/rectangle.png">../../docs/images/qtedm-widgets/rectangle.png</file>
+    <file alias="images/qtedm-widgets/related-display.png">../../docs/images/qtedm-widgets/related-display.png</file>
+    <file alias="images/qtedm-widgets/scale-monitor.png">../../docs/images/qtedm-widgets/scale-monitor.png</file>
+    <file alias="images/qtedm-widgets/shell-command.png">../../docs/images/qtedm-widgets/shell-command.png</file>
+    <file alias="images/qtedm-widgets/slider.png">../../docs/images/qtedm-widgets/slider.png</file>
+    <file alias="images/qtedm-widgets/strip-chart.png">../../docs/images/qtedm-widgets/strip-chart.png</file>
+    <file alias="images/qtedm-widgets/text-entry.png">../../docs/images/qtedm-widgets/text-entry.png</file>
+    <file alias="images/qtedm-widgets/text-monitor.png">../../docs/images/qtedm-widgets/text-monitor.png</file>
+    <file alias="images/qtedm-widgets/text.png">../../docs/images/qtedm-widgets/text.png</file>
+    <file alias="images/qtedm-widgets/thermometer.png">../../docs/images/qtedm-widgets/thermometer.png</file>
+    <file alias="images/qtedm-widgets/wheel-switch.png">../../docs/images/qtedm-widgets/wheel-switch.png</file>
   </qresource>
 </RCC>

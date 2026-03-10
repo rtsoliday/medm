@@ -3,6 +3,7 @@
 #include <QCursor>
 #include <QDialog>
 #include <QFile>
+#include <QFileInfo>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -13,6 +14,7 @@
 #include <QScreen>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QString>
 
@@ -25,6 +27,16 @@ namespace {
 void centerDialog(QDialog *dialog)
 {
   centerWindowOnScreen(dialog);
+}
+
+QUrl helpBaseUrlForPath(const QString &htmlFilePath)
+{
+  if (htmlFilePath.startsWith(QStringLiteral(":/"))) {
+    return QUrl(QStringLiteral("qrc%1").arg(htmlFilePath));
+  }
+
+  const QFileInfo info(htmlFilePath);
+  return QUrl::fromLocalFile(info.absoluteFilePath());
 }
 
 } // namespace
@@ -242,6 +254,7 @@ void showHelpBrowser(QWidget *parent, const QString &title,
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
       QString html = QString::fromUtf8(file.readAll());
       file.close();
+      browser->document()->setBaseUrl(helpBaseUrlForPath(htmlFilePath));
       browser->setHtml(html);
     } else {
       browser->setHtml(QStringLiteral(

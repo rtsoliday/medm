@@ -252,7 +252,10 @@ $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | 
 	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp -o $@
 
-$(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html | $(OBJ_DIR)
+HELP_RESOURCE_FILES = resources/help.qrc ../docs/QtEDM.html \
+                      $(wildcard ../docs/images/qtedm-widgets/*.png)
+
+$(OBJ_DIR)/help_rcc.$(OBJEXT): $(HELP_RESOURCE_FILES) | $(OBJ_DIR)
 	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp -o $@
 

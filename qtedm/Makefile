@@ -267,47 +267,45 @@ endif
 
 include ../Makefile.build
 
-.RECIPEPREFIX := >
-
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
 
 $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | $(OBJ_DIR)
->$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
->$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp $(RCC_OBJ_OUT)$@
+	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
+	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html | $(OBJ_DIR)
->$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
->$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
+	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
+	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/moc_cartesian_plot_element.cpp: cartesian_plot_element.h | $(OBJ_DIR)
->$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
+	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/cartesian_plot_element.$(OBJEXT): $(OBJ_DIR)/moc_cartesian_plot_element.cpp
 
 $(OBJ_DIR)/moc_find_pv_dialog.cpp: find_pv_dialog.h | $(OBJ_DIR)
->$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
+	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/find_pv_dialog.$(OBJEXT): $(OBJ_DIR)/moc_find_pv_dialog.cpp
 
 $(OBJ_DIR)/moc_shared_channel_manager.cpp: shared_channel_manager.h | $(OBJ_DIR)
->$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
+	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/shared_channel_manager.$(OBJEXT): $(OBJ_DIR)/moc_shared_channel_manager.cpp
 
 $(OBJ_DIR)/moc_memory_tracker.cpp: memory_tracker.h | $(OBJ_DIR)
->$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
+	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
 $(OBJ_DIR)/memory_tracker.$(OBJEXT): $(OBJ_DIR)/moc_memory_tracker.cpp
 
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
->$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
->cp -f $@ $(BIN_DIR)/
->@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
->@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
+	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
+	cp -f $@ $(BIN_DIR)/
+	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
+	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
 
 $(OBJ_DIR)/medm$(EXEEXT): $(medm_OBJS) $(PROD_DEPS)
->$(LINKEXE) $(OUTPUTEXE) $(medm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
->cp -f $@ $(BIN_DIR)/
->@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
->@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
+	$(LINKEXE) $(OUTPUTEXE) $(medm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
+	cp -f $@ $(BIN_DIR)/
+	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
+	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi

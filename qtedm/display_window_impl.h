@@ -18301,8 +18301,6 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
           QStringLiteral("clrmod=\"%1\"")
               .arg(AdlWriter::colorModeString(thermometer->colorMode())));
     }
-    AdlWriter::writeIndentedLine(stream, next,
-        QStringLiteral("direction=\"up\""));
     const QColor thermometerText = thermometer->textColor();
     if (thermometerText.isValid() && thermometerText != thermometerForeground) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -22489,12 +22487,6 @@ inline ThermometerElement *DisplayWindow::loadThermometerElement(
       QStringLiteral("clrmod"));
   if (!colorModeValue.isEmpty()) {
     element->setColorMode(parseTextColorMode(colorModeValue));
-  }
-
-  const QString directionValue = propertyValue(effectiveNode,
-      QStringLiteral("direction"));
-  if (!directionValue.isEmpty()) {
-    element->setDirection(parseBarDirection(directionValue));
   }
 
   const QString textColorValue = propertyValue(effectiveNode,

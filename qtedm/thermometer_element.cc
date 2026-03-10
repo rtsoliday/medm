@@ -599,7 +599,9 @@ ThermometerElement::Layout ThermometerElement::calculateLayout(
   layout.showAxis = (label_ == MeterLabel::kOutline
       || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
   layout.showLimits = layout.showAxis;
-  layout.showReadback = showValue_;
+  layout.showReadback = showValue_
+      && label_ != MeterLabel::kNone
+      && label_ != MeterLabel::kNoDecorations;
   layout.channelText = (label_ == MeterLabel::kChannel)
       ? channel_.trimmed() : QString();
   layout.showChannel = !layout.channelText.isEmpty();

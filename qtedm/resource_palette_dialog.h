@@ -2212,6 +2212,10 @@ public:
         thermometerFormatCombo_);
     addRow(thermometerLayout, 6, QStringLiteral("Value Overlay"),
         thermometerShowValueCombo_);
+    thermometerShowValueCombo_->setVisible(false);
+    if (QLabel *label = fieldLabels_.value(thermometerShowValueCombo_, nullptr)) {
+      label->setVisible(false);
+    }
     addRow(thermometerLayout, 7, QStringLiteral("Visibility"),
         thermometerVisibilityCombo_);
     addRow(thermometerLayout, 8, QStringLiteral("Vis Calc"),

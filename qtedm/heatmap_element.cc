@@ -84,7 +84,7 @@ HeatmapElement::HeatmapElement(QWidget *parent)
 
   interactionTimer_.setSingleShot(true);
   interactionTimer_.setInterval(2000);
-  QObject::connect(&interactionTimer_, &QTimer::timeout, [this]() {
+  QObject::connect(&interactionTimer_, &QTimer::timeout, []() {
     HeatmapRuntime::setGlobalUpdatesPaused(false);
   });
 }

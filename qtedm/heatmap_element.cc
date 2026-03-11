@@ -1262,8 +1262,8 @@ void HeatmapElement::mousePressEvent(QMouseEvent *event)
       if (forwardMouseEventToParent(event)) return;
     }
     if (event->button() == Qt::LeftButton) {
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-      const QPointF pos = event->localPos();
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+      const QPointF pos = event->position();
 #else
       const QPointF pos = event->localPos();
 #endif
@@ -1294,8 +1294,8 @@ void HeatmapElement::mouseMoveEvent(QMouseEvent *event)
     HeatmapRuntime::setGlobalUpdatesPaused(true);
     interactionTimer_.start();
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-    const QPointF pos = event->localPos();
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const QPointF pos = event->position();
 #else
     const QPointF pos = event->localPos();
 #endif

@@ -100,13 +100,19 @@ protected:
   bool event(QEvent *event) override;
 
 private:
-  void invalidateCache();
-  void rebuildImage();
+  void requestVisualUpdate(bool immediate = false);
+  void invalidateCache(bool immediate = false);
+  void invalidatePaletteCache();
+  void rebuildImage(const QSize &targetSize);
   QImage maxPoolDownsample(const QImage &source,
       const QSize &targetSize) const;
   QSize effectiveDimensions() const;
+  QSize visibleDataSize() const;
+  QSize renderTargetSize(const QSize &availableSize) const;
   QColor backgroundColor() const;
   QColor borderColor() const;
+  const QVector<QRgb> &cachedPalette();
+  const QImage &legendBarImage(const QSize &size);
 
   QString dataChannel_;
   QString title_;
@@ -145,6 +151,11 @@ private:
 
   QImage cachedImage_;
   bool cacheValid_ = false;
+  QSize cachedRenderSize_;
+  QVector<QRgb> cachedPalette_;
+  bool paletteCacheValid_ = false;
+  QImage cachedLegendBarImage_;
+  QSize cachedLegendBarSize_;
   QImage downsampledCachedImage_;
   QSize downsampledTargetSize_;
 

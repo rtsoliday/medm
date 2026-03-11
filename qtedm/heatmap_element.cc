@@ -6,9 +6,11 @@
 #include <QWheelEvent>
 #include "window_utils.h"
 #include "heatmap_runtime.h"
+#include "update_coordinator.h"
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 #include <QFontMetrics>
 #include <QPainter>
@@ -24,6 +26,15 @@ constexpr int kLegendPadding = 6;
 constexpr int kLegendNumberPadding = 12;
 constexpr int kTitleFontHeight = 24;
 constexpr int kLegendFontHeight = 12;
+
+struct HeatmapLayout
+{
+  QRect titleRect;
+  QRect heatmapRect;
+  QRect legendRect;
+  QRect topProfileRect;
+  QRect rightProfileRect;
+};
 
 QVector<QRgb> getHeatmapPalette(HeatmapColorMap map, bool invert) {
   QVector<QRgb> palette(256);
@@ -226,6 +237,7 @@ void HeatmapElement::setColorMap(HeatmapColorMap colorMap)
     return;
   }
   colorMap_ = colorMap;
+  invalidatePaletteCache();
   invalidateCache();
 }
 
@@ -239,7 +251,7 @@ void HeatmapElement::setPreserveAspectRatio(bool preserve)
 {
   if (preserveAspectRatio_ != preserve) {
     preserveAspectRatio_ = preserve;
-    update();
+    requestVisualUpdate();
   }
 }
 
@@ -293,6 +305,7 @@ void HeatmapElement::setInvertGreyscale(bool invert)
     return;
   }
   invertGreyscale_ = invert;
+  invalidatePaletteCache();
   invalidateCache();
 }
 
@@ -302,8 +315,8 @@ void HeatmapElement::setRuntimeSharedData(std::shared_ptr<const double> sharedDa
   runtimeSharedValues_ = sharedData;
   runtimeSharedSize_ = size;
   runtimeValues_.clear();
+  runtimeDataValid_ = (runtimeSharedValues_ && runtimeSharedSize_ > 0);
   invalidateCache();
-  update();
 }
 
 void HeatmapElement::setRuntimeData(const QVector<double> &values)
@@ -344,63 +357,105 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
 
   const QRect drawRect = rect().adjusted(0, 0, -1, -1);
-  if (!cacheValid_) {
-    rebuildImage();
-  }
-
-    const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
-    const QFont legendFont = medmTextFieldFont(kLegendFontHeight);
-    const QFontMetrics legendMetrics(legendFont.family().isEmpty()
+  const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
+  const QFont titleFontToUse = titleFont.family().isEmpty()
       ? font()
-      : legendFont);
-    const bool canShowLegend = isExecuteMode() && runtimeDataValid_ && runtimeRangeValid_;
+      : titleFont;
+  const QFont legendFont = medmTextFieldFont(kLegendFontHeight);
+  const QFont legendFontToUse = legendFont.family().isEmpty()
+      ? font()
+      : legendFont;
+  const QFontMetrics legendMetrics(legendFontToUse);
+  const QString titleText = title_.trimmed();
+  auto computeLayout = [&](int legendWidth, bool canShowLegend) {
+    HeatmapLayout layout;
+    layout.heatmapRect = drawRect;
+
+    if (!titleText.isEmpty()) {
+      const QFontMetrics titleMetrics(titleFontToUse);
+      const int titleHeight = titleMetrics.height();
+      layout.titleRect = QRect(drawRect.left(), drawRect.top(),
+          drawRect.width(), titleHeight);
+      layout.heatmapRect.setTop(layout.titleRect.bottom() + 2);
+    }
+
+    if (canShowLegend && layout.heatmapRect.width() > (legendWidth + 10)) {
+      layout.heatmapRect.setRight(drawRect.right() - legendWidth);
+      layout.legendRect = QRect(layout.heatmapRect.right() + 1,
+          layout.heatmapRect.top(),
+          drawRect.right() - layout.heatmapRect.right(),
+          layout.heatmapRect.height());
+    }
+
+    const int profileSize = std::min(40, std::min(layout.heatmapRect.width() / 4,
+        layout.heatmapRect.height() / 4));
+    if (showTopProfile_ && profileSize > 0) {
+      layout.topProfileRect = QRect(layout.heatmapRect.left(),
+          layout.heatmapRect.top(), layout.heatmapRect.width(), profileSize);
+      layout.heatmapRect.setTop(layout.heatmapRect.top() + profileSize + 2);
+    }
+    if (showRightProfile_ && profileSize > 0) {
+      layout.rightProfileRect = QRect(layout.heatmapRect.right() - profileSize + 1,
+          layout.heatmapRect.top(), profileSize, layout.heatmapRect.height());
+      layout.heatmapRect.setRight(layout.heatmapRect.right() - profileSize - 2);
+      if (showTopProfile_) {
+        layout.topProfileRect.setWidth(layout.heatmapRect.width());
+      }
+    }
+
+    return layout;
+  };
+
+  auto computeLegendMetrics = [&]() {
+    const bool canShowLegend = isExecuteMode() && runtimeDataValid_
+        && runtimeRangeValid_;
     const QString minLabel = QString::number(runtimeMinValue_, 'g', 6);
     const QString maxLabel = QString::number(runtimeMaxValue_, 'g', 6);
     const int labelWidth = std::max(legendMetrics.horizontalAdvance(minLabel),
-      legendMetrics.horizontalAdvance(maxLabel));
-    const int legendWidth = kLegendBarWidth + kLegendPadding + labelWidth
-      + kLegendPadding + kLegendNumberPadding;
+        legendMetrics.horizontalAdvance(maxLabel));
+    return std::tuple<bool, QString, QString, int>(canShowLegend, minLabel,
+        maxLabel, labelWidth);
+  };
 
-  QRect heatmapRect = drawRect;
-  QRect legendRect;
+  auto [canShowLegend, minLabel, maxLabel, labelWidth] = computeLegendMetrics();
+  HeatmapLayout layout = computeLayout(
+      kLegendBarWidth + kLegendPadding + labelWidth + kLegendPadding
+          + kLegendNumberPadding,
+      canShowLegend);
 
-  const QString titleText = title_.trimmed();
-  if (!titleText.isEmpty()) {
-    const QFont titleFontToUse = titleFont.family().isEmpty()
-        ? font()
-        : titleFont;
+  QSize desiredRenderSize = renderTargetSize(layout.heatmapRect.size());
+  if (!cacheValid_ || cachedRenderSize_ != desiredRenderSize) {
+    rebuildImage(desiredRenderSize);
+    std::tie(canShowLegend, minLabel, maxLabel, labelWidth) =
+        computeLegendMetrics();
+    layout = computeLayout(
+        kLegendBarWidth + kLegendPadding + labelWidth + kLegendPadding
+            + kLegendNumberPadding,
+        canShowLegend);
+    desiredRenderSize = renderTargetSize(layout.heatmapRect.size());
+    if (cachedRenderSize_ != desiredRenderSize) {
+      rebuildImage(desiredRenderSize);
+      std::tie(canShowLegend, minLabel, maxLabel, labelWidth) =
+          computeLegendMetrics();
+      layout = computeLayout(
+          kLegendBarWidth + kLegendPadding + labelWidth + kLegendPadding
+              + kLegendNumberPadding,
+          canShowLegend);
+    }
+  }
+
+  if (!layout.titleRect.isEmpty()) {
     painter.setFont(titleFontToUse);
-    const QFontMetrics titleMetrics(titleFontToUse);
-    const int titleHeight = titleMetrics.height();
-    const QRect titleRect(drawRect.left(), drawRect.top(),
-        drawRect.width(), titleHeight);
     painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
-    painter.drawText(titleRect, Qt::AlignHCenter | Qt::AlignVCenter, titleText);
-    heatmapRect.setTop(titleRect.bottom() + 2);
+    painter.drawText(layout.titleRect, Qt::AlignHCenter | Qt::AlignVCenter,
+        titleText);
     painter.setFont(font());
   }
 
-  if (canShowLegend && heatmapRect.width() > (legendWidth + 10)) {
-    heatmapRect.setRight(drawRect.right() - legendWidth);
-    legendRect = QRect(heatmapRect.right() + 1, heatmapRect.top(),
-        drawRect.right() - heatmapRect.right(), heatmapRect.height());
-  }
-
-  const int profileSize = std::min(40, std::min(heatmapRect.width() / 4, heatmapRect.height() / 4));
-  QRect topProfileRect;
-  QRect rightProfileRect;
-
-  if (showTopProfile_ && profileSize > 0) {
-    topProfileRect = QRect(heatmapRect.left(), heatmapRect.top(), heatmapRect.width(), profileSize);
-    heatmapRect.setTop(heatmapRect.top() + profileSize + 2);
-  }
-  if (showRightProfile_ && profileSize > 0) {
-    rightProfileRect = QRect(heatmapRect.right() - profileSize + 1, heatmapRect.top(), profileSize, heatmapRect.height());
-    heatmapRect.setRight(heatmapRect.right() - profileSize - 2);
-    if (showTopProfile_) {
-      topProfileRect.setWidth(heatmapRect.width());
-    }
-  }
+  QRect heatmapRect = layout.heatmapRect;
+  const QRect legendRect = layout.legendRect;
+  const QRect topProfileRect = layout.topProfileRect;
+  const QRect rightProfileRect = layout.rightProfileRect;
 
   if (preserveAspectRatio_ && !cachedImage_.isNull()) {
     int iw = cachedImage_.width();
@@ -430,23 +485,10 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
   lastHeatmapRect_ = heatmapRect;
 
   if (!cachedImage_.isNull()) {
-    QImage imageToDraw = cachedImage_;
-    const QSize targetSize = heatmapRect.size();
-    if (targetSize.width() > 0 && targetSize.height() > 0
-        && (cachedImage_.width() > targetSize.width()
-            || cachedImage_.height() > targetSize.height())) {
-      if (downsampledCachedImage_.isNull() || downsampledTargetSize_ != targetSize) {
-        downsampledCachedImage_ = maxPoolDownsample(cachedImage_, targetSize);
-        downsampledTargetSize_ = targetSize;
-      }
-      imageToDraw = downsampledCachedImage_;
-    }
-
-    if (!imageToDraw.isNull()
-        && imageToDraw.size() == targetSize) {
-      painter.drawImage(heatmapRect.topLeft(), imageToDraw);
+    if (cachedImage_.size() == heatmapRect.size()) {
+      painter.drawImage(heatmapRect.topLeft(), cachedImage_);
     } else {
-      painter.drawImage(heatmapRect, imageToDraw);
+      painter.drawImage(heatmapRect, cachedImage_);
     }
   } else {
     painter.fillRect(heatmapRect, backgroundColor());
@@ -517,12 +559,10 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
       kLegendPadding, -kLegendPadding - labelWidth - kLegendNumberPadding,
       -kLegendPadding);
     if (barRect.height() > 4 && barRect.width() > 0) {
-      QLinearGradient gradient(barRect.topLeft(), barRect.bottomLeft());
-      QVector<QRgb> palette = getHeatmapPalette(colorMap_, invertGreyscale_);
-      for (int i = 0; i <= 255; ++i) {
-        gradient.setColorAt(1.0 - (i / 255.0), QColor(palette[i]));
+      const QImage &barImage = legendBarImage(barRect.size());
+      if (!barImage.isNull()) {
+        painter.drawImage(barRect.topLeft(), barImage);
       }
-      painter.fillRect(barRect, gradient);
       painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
       painter.drawRect(barRect.adjusted(0, 0, -1, -1));
     }
@@ -566,12 +606,29 @@ void HeatmapElement::onRuntimeSeverityChanged()
   }
 }
 
-void HeatmapElement::invalidateCache()
+void HeatmapElement::requestVisualUpdate(bool immediate)
+{
+  if (immediate || !isExecuteMode()) {
+    update();
+    return;
+  }
+  UpdateCoordinator::instance().requestUpdate(this);
+}
+
+void HeatmapElement::invalidateCache(bool immediate)
 {
   cacheValid_ = false;
+  cachedRenderSize_ = QSize();
   downsampledCachedImage_ = QImage();
   downsampledTargetSize_ = QSize();
-  update();
+  requestVisualUpdate(immediate);
+}
+
+void HeatmapElement::invalidatePaletteCache()
+{
+  paletteCacheValid_ = false;
+  cachedLegendBarImage_ = QImage();
+  cachedLegendBarSize_ = QSize();
 }
 
 QSize HeatmapElement::effectiveDimensions() const
@@ -590,12 +647,67 @@ QSize HeatmapElement::effectiveDimensions() const
   return QSize(effectiveX, effectiveY);
 }
 
-void HeatmapElement::rebuildImage()
+QSize HeatmapElement::visibleDataSize() const
+{
+  const QSize dims = effectiveDimensions();
+  if (dims.isEmpty()) {
+    return QSize();
+  }
+
+  int width = dims.width();
+  int height = dims.height();
+
+  if (!zoomed_) {
+    return dims;
+  }
+
+  int xStart = std::floor(zoomXMin_ * width);
+  int xEnd = std::ceil(zoomXMax_ * width);
+  int yStart = std::floor(zoomYMin_ * height);
+  int yEnd = std::ceil(zoomYMax_ * height);
+
+  if (xStart < 0) xStart = 0;
+  if (xEnd > width) xEnd = width;
+  if (yStart < 0) yStart = 0;
+  if (yEnd > height) yEnd = height;
+  if (xEnd <= xStart) xEnd = xStart + 1;
+  if (yEnd <= yStart) yEnd = yStart + 1;
+
+  return QSize(xEnd - xStart, yEnd - yStart);
+}
+
+QSize HeatmapElement::renderTargetSize(const QSize &availableSize) const
+{
+  if (availableSize.isEmpty()) {
+    return QSize();
+  }
+
+  QSize desired = availableSize;
+  if (rotation_ == HeatmapRotation::k90
+      || rotation_ == HeatmapRotation::k270) {
+    desired.transpose();
+  }
+
+  const QSize visibleSize = visibleDataSize();
+  if (!visibleSize.isEmpty()) {
+    desired.setWidth(std::min(desired.width(), visibleSize.width()));
+    desired.setHeight(std::min(desired.height(), visibleSize.height()));
+  }
+
+  desired.setWidth(std::max(1, desired.width()));
+  desired.setHeight(std::max(1, desired.height()));
+  return desired;
+}
+
+void HeatmapElement::rebuildImage(const QSize &targetSize)
 {
   cacheValid_ = true;
+  downsampledCachedImage_ = QImage();
+  downsampledTargetSize_ = QSize();
 
   const QSize dims = effectiveDimensions();
   if (dims.isEmpty()) {
+    cachedRenderSize_ = QSize();
     cachedImage_ = QImage();
     return;
   }
@@ -604,6 +716,7 @@ void HeatmapElement::rebuildImage()
   const int height = dims.height();
   const int totalCells = width * height;
   if (totalCells <= 0) {
+    cachedRenderSize_ = QSize();
     cachedImage_ = QImage();
     return;
   }
@@ -623,6 +736,7 @@ void HeatmapElement::rebuildImage()
 
   const int available = std::min(dataCount, totalCells);
   if (available <= 0) {
+    cachedRenderSize_ = QSize();
     cachedImage_ = QImage();
     return;
   }
@@ -653,12 +767,33 @@ void HeatmapElement::rebuildImage()
   bool haveValue = false;
   double minValue = 0.0;
   double maxValue = 0.0;
-  
-  // Calculate min/max over the visible zoomed range
+
+  topProfileData_.clear();
+  rightProfileData_.clear();
+  QVector<int> topCounts;
+  QVector<int> rightCounts;
+  const bool computeProfiles = showTopProfile_ || showRightProfile_;
+  if (computeProfiles) {
+    topProfileData_.resize(zoomedWidth);
+    topProfileData_.fill(0.0);
+    rightProfileData_.resize(zoomedHeight);
+    rightProfileData_.fill(0.0);
+    topCounts.resize(zoomedWidth);
+    topCounts.fill(0);
+    rightCounts.resize(zoomedHeight);
+    rightCounts.fill(0);
+  }
+
+  // Calculate min/max and accumulate profile data over the visible zoomed
+  // range in a single source-data traversal.
   for (int y = yStart; y < yEnd; ++y) {
-    for (int x = xStart; x < xEnd; ++x) {
-      int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
-      if (index < available) {
+    const int zy = y - yStart;
+    if (order_ == HeatmapOrder::kRowMajor) {
+      int index = y * width + xStart;
+      for (int x = xStart; x < xEnd; ++x, ++index) {
+        if (index >= available) {
+          continue;
+        }
         const double v = dataValues[index];
         if (std::isnan(v) || std::isinf(v)) {
           continue;
@@ -671,11 +806,45 @@ void HeatmapElement::rebuildImage()
           minValue = std::min(minValue, v);
           maxValue = std::max(maxValue, v);
         }
+        if (computeProfiles) {
+          const int zx = x - xStart;
+          topProfileData_[zx] += v;
+          topCounts[zx]++;
+          rightProfileData_[zy] += v;
+          rightCounts[zy]++;
+        }
+      }
+    } else {
+      for (int x = xStart; x < xEnd; ++x) {
+        const int index = x * height + y;
+        if (index >= available) {
+          continue;
+        }
+        const double v = dataValues[index];
+        if (std::isnan(v) || std::isinf(v)) {
+          continue;
+        }
+        if (!haveValue) {
+          minValue = v;
+          maxValue = v;
+          haveValue = true;
+        } else {
+          minValue = std::min(minValue, v);
+          maxValue = std::max(maxValue, v);
+        }
+        if (computeProfiles) {
+          const int zx = x - xStart;
+          topProfileData_[zx] += v;
+          topCounts[zx]++;
+          rightProfileData_[zy] += v;
+          rightCounts[zy]++;
+        }
       }
     }
   }
   
   if (!haveValue) {
+    cachedRenderSize_ = QSize();
     cachedImage_ = QImage();
     return;
   }
@@ -691,171 +860,164 @@ void HeatmapElement::rebuildImage()
 
   const double range = maxValue - minValue;
 
-  if (showTopProfile_ || showRightProfile_) {
-    topProfileData_.clear();
-    rightProfileData_.clear();
-    
-    bool computeProfiles = showTopProfile_ || showRightProfile_;
-    if (computeProfiles) {
-      topProfileData_.resize(zoomedWidth);
-      topProfileData_.fill(0.0);
-      rightProfileData_.resize(zoomedHeight);
-      rightProfileData_.fill(0.0);
-
-      QVector<int> topCounts(zoomedWidth, 0);
-      QVector<int> rightCounts(zoomedHeight, 0);
-
-      for (int y = yStart; y < yEnd; ++y) {
-        for (int x = xStart; x < xEnd; ++x) {
-          int index = (order_ == HeatmapOrder::kRowMajor) ? (y * width + x) : (x * height + y);
-          if (index < available) {
-            const double v = dataValues[index];
-            if (!std::isnan(v) && !std::isinf(v)) {
-              const int zx = x - xStart;
-              const int zy = y - yStart;
-              if (zx >= 0 && zx < zoomedWidth) {
-                topProfileData_[zx] += v;
-                topCounts[zx]++;
-              }
-              if (zy >= 0 && zy < zoomedHeight) {
-                rightProfileData_[zy] += v;
-                rightCounts[zy]++;
-              }
-            }
-          }
-        }
-      }
-      
-      for (int x = 0; x < zoomedWidth; ++x) {
-        if (topCounts[x] > 0) {
-          topProfileData_[x] /= topCounts[x];
-        } else {
-          topProfileData_[x] = std::numeric_limits<double>::quiet_NaN();
-        }
-      }
-      for (int y = 0; y < zoomedHeight; ++y) {
-        if (rightCounts[y] > 0) {
-          rightProfileData_[y] /= rightCounts[y];
-        } else {
-          rightProfileData_[y] = std::numeric_limits<double>::quiet_NaN();
-        }
-      }
-      
-      // Apply flips
-      if (flipHorizontal_) {
-        std::reverse(topProfileData_.begin(), topProfileData_.end());
-      }
-      if (flipVertical_) {
-        std::reverse(rightProfileData_.begin(), rightProfileData_.end());
-      }
-      
-      // Apply rotations
-      if (rotation_ == HeatmapRotation::k90) {
-        QVector<double> newTop = rightProfileData_;
-        std::reverse(newTop.begin(), newTop.end());
-        QVector<double> newRight = topProfileData_;
-        topProfileData_ = newTop;
-        rightProfileData_ = newRight;
-      } else if (rotation_ == HeatmapRotation::k180) {
-        std::reverse(topProfileData_.begin(), topProfileData_.end());
-        std::reverse(rightProfileData_.begin(), rightProfileData_.end());
-      } else if (rotation_ == HeatmapRotation::k270) {
-        QVector<double> newTop = rightProfileData_;
-        QVector<double> newRight = topProfileData_;
-        std::reverse(newRight.begin(), newRight.end());
-        topProfileData_ = newTop;
-        rightProfileData_ = newRight;
-      }
-
-      if (showTopProfile_) {
-        bool haveTop = false;
-        for (int x = 0; x < topProfileData_.size(); ++x) {
-          double v = topProfileData_[x];
-          if (!std::isnan(v)) {
-            if (!haveTop) {
-              topProfileMin_ = v;
-              topProfileMax_ = v;
-              haveTop = true;
-            } else {
-              topProfileMin_ = std::min(topProfileMin_, v);
-              topProfileMax_ = std::max(topProfileMax_, v);
-            }
-          }
-        }
-        if (!haveTop) { topProfileMin_ = 0.0; topProfileMax_ = 0.0; }
+  if (computeProfiles) {
+    for (int x = 0; x < zoomedWidth; ++x) {
+      if (topCounts[x] > 0) {
+        topProfileData_[x] /= topCounts[x];
       } else {
-        topProfileData_.clear();
+        topProfileData_[x] = std::numeric_limits<double>::quiet_NaN();
       }
+    }
+    for (int y = 0; y < zoomedHeight; ++y) {
+      if (rightCounts[y] > 0) {
+        rightProfileData_[y] /= rightCounts[y];
+      } else {
+        rightProfileData_[y] = std::numeric_limits<double>::quiet_NaN();
+      }
+    }
 
-      if (showRightProfile_) {
-        bool haveRight = false;
-        for (int y = 0; y < rightProfileData_.size(); ++y) {
-          double v = rightProfileData_[y];
-          if (!std::isnan(v)) {
-            if (!haveRight) {
-              rightProfileMin_ = v;
-              rightProfileMax_ = v;
-              haveRight = true;
-            } else {
-              rightProfileMin_ = std::min(rightProfileMin_, v);
-              rightProfileMax_ = std::max(rightProfileMax_, v);
-            }
+    // Apply flips
+    if (flipHorizontal_) {
+      std::reverse(topProfileData_.begin(), topProfileData_.end());
+    }
+    if (flipVertical_) {
+      std::reverse(rightProfileData_.begin(), rightProfileData_.end());
+    }
+
+    // Apply rotations
+    if (rotation_ == HeatmapRotation::k90) {
+      QVector<double> newTop = rightProfileData_;
+      std::reverse(newTop.begin(), newTop.end());
+      QVector<double> newRight = topProfileData_;
+      topProfileData_ = newTop;
+      rightProfileData_ = newRight;
+    } else if (rotation_ == HeatmapRotation::k180) {
+      std::reverse(topProfileData_.begin(), topProfileData_.end());
+      std::reverse(rightProfileData_.begin(), rightProfileData_.end());
+    } else if (rotation_ == HeatmapRotation::k270) {
+      QVector<double> newTop = rightProfileData_;
+      QVector<double> newRight = topProfileData_;
+      std::reverse(newRight.begin(), newRight.end());
+      topProfileData_ = newTop;
+      rightProfileData_ = newRight;
+    }
+
+    if (showTopProfile_) {
+      bool haveTop = false;
+      for (int x = 0; x < topProfileData_.size(); ++x) {
+        double v = topProfileData_[x];
+        if (!std::isnan(v)) {
+          if (!haveTop) {
+            topProfileMin_ = v;
+            topProfileMax_ = v;
+            haveTop = true;
+          } else {
+            topProfileMin_ = std::min(topProfileMin_, v);
+            topProfileMax_ = std::max(topProfileMax_, v);
           }
         }
-        if (!haveRight) { rightProfileMin_ = 0.0; rightProfileMax_ = 0.0; }
-      } else {
-        rightProfileData_.clear();
       }
+      if (!haveTop) { topProfileMin_ = 0.0; topProfileMax_ = 0.0; }
+    } else {
+      topProfileData_.clear();
+    }
+
+    if (showRightProfile_) {
+      bool haveRight = false;
+      for (int y = 0; y < rightProfileData_.size(); ++y) {
+        double v = rightProfileData_[y];
+        if (!std::isnan(v)) {
+          if (!haveRight) {
+            rightProfileMin_ = v;
+            rightProfileMax_ = v;
+            haveRight = true;
+          } else {
+            rightProfileMin_ = std::min(rightProfileMin_, v);
+            rightProfileMax_ = std::max(rightProfileMax_, v);
+          }
+        }
+      }
+      if (!haveRight) { rightProfileMin_ = 0.0; rightProfileMax_ = 0.0; }
+    } else {
+      rightProfileData_.clear();
     }
   }
   
-  cachedImage_ = QImage(zoomedWidth, zoomedHeight, QImage::Format_RGB32);
+  QSize renderSize = targetSize;
+  if (renderSize.isEmpty()) {
+    renderSize = QSize(zoomedWidth, zoomedHeight);
+  }
+  renderSize.setWidth(std::min(renderSize.width(), zoomedWidth));
+  renderSize.setHeight(std::min(renderSize.height(), zoomedHeight));
+  renderSize.setWidth(std::max(1, renderSize.width()));
+  renderSize.setHeight(std::max(1, renderSize.height()));
+  cachedRenderSize_ = renderSize;
+
+  cachedImage_ = QImage(renderSize, QImage::Format_RGB32);
   cachedImage_.fill(backgroundColor());
 
   const double scale = (range > 0.0) ? (255.0 / range) : 0.0;
-  QVector<QRgb> palette = getHeatmapPalette(colorMap_, invertGreyscale_);
+  const QVector<QRgb> &palette = cachedPalette();
 
-  if (order_ == HeatmapOrder::kRowMajor) {
-    for (int y = yStart; y < yEnd; ++y) {
-      const int zy = y - yStart;
-      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(zy));
-      int index = y * width + xStart;
-      for (int x = xStart; x < xEnd; ++x) {
-        const int zx = x - xStart;
-        if (index < available) {
-          const double value = dataValues[index];
-          double offset = value - minValue;
-          if (offset < 0.0) offset = 0.0;
-          else if (offset > range) offset = range;
+  for (int dy = 0; dy < renderSize.height(); ++dy) {
+    const int srcYStart = yStart + (dy * zoomedHeight) / renderSize.height();
+    int srcYEnd = yStart + ((dy + 1) * zoomedHeight) / renderSize.height();
+    srcYEnd = std::max(srcYStart + 1, srcYEnd);
+    srcYEnd = std::min(srcYEnd, yEnd);
 
-          int colorIdx = static_cast<int>(offset * scale);
-          if (colorIdx < 0) colorIdx = 0;
-          if (colorIdx > 255) colorIdx = 255;
-          scanLine[zx] = palette[colorIdx];
+    QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(dy));
+    for (int dx = 0; dx < renderSize.width(); ++dx) {
+      const int srcXStart = xStart + (dx * zoomedWidth) / renderSize.width();
+      int srcXEnd = xStart + ((dx + 1) * zoomedWidth) / renderSize.width();
+      srcXEnd = std::max(srcXStart + 1, srcXEnd);
+      srcXEnd = std::min(srcXEnd, xEnd);
+
+      double sum = 0.0;
+      int count = 0;
+
+      for (int srcY = srcYStart; srcY < srcYEnd; ++srcY) {
+        if (order_ == HeatmapOrder::kRowMajor) {
+          int index = srcY * width + srcXStart;
+          for (int srcX = srcXStart; srcX < srcXEnd; ++srcX, ++index) {
+            if (index >= available) {
+              continue;
+            }
+            const double value = dataValues[index];
+            if (std::isnan(value) || std::isinf(value)) {
+              continue;
+            }
+            sum += value;
+            ++count;
+          }
+        } else {
+          for (int srcX = srcXStart; srcX < srcXEnd; ++srcX) {
+            const int index = srcX * height + srcY;
+            if (index >= available) {
+              continue;
+            }
+            const double value = dataValues[index];
+            if (std::isnan(value) || std::isinf(value)) {
+              continue;
+            }
+            sum += value;
+            ++count;
+          }
         }
-        ++index;
       }
-    }
-  } else {
-    for (int y = yStart; y < yEnd; ++y) {
-      const int zy = y - yStart;
-      QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(zy));
-      // index for col-major: x * height + y
-      for (int x = xStart; x < xEnd; ++x) {
-        const int zx = x - xStart;
-        int index = x * height + y;
-        if (index < available) {
-          const double value = dataValues[index];
-          double offset = value - minValue;
-          if (offset < 0.0) offset = 0.0;
-          else if (offset > range) offset = range;
 
-          int colorIdx = static_cast<int>(offset * scale);
-          if (colorIdx < 0) colorIdx = 0;
-          if (colorIdx > 255) colorIdx = 255;
-          scanLine[zx] = palette[colorIdx];
-        }
+      if (count <= 0) {
+        scanLine[dx] = backgroundColor().rgb();
+        continue;
       }
+
+      double offset = (sum / count) - minValue;
+      if (offset < 0.0) offset = 0.0;
+      else if (offset > range) offset = range;
+
+      int colorIdx = static_cast<int>(offset * scale);
+      if (colorIdx < 0) colorIdx = 0;
+      if (colorIdx > 255) colorIdx = 255;
+      scanLine[dx] = palette[colorIdx];
     }
   }
   
@@ -972,6 +1134,43 @@ QColor HeatmapElement::borderColor() const
 {
   return effectiveForegroundColor();
 }
+
+const QVector<QRgb> &HeatmapElement::cachedPalette()
+{
+  if (!paletteCacheValid_) {
+    cachedPalette_ = getHeatmapPalette(colorMap_, invertGreyscale_);
+    paletteCacheValid_ = true;
+    cachedLegendBarImage_ = QImage();
+    cachedLegendBarSize_ = QSize();
+  }
+  return cachedPalette_;
+}
+
+const QImage &HeatmapElement::legendBarImage(const QSize &size)
+{
+  if (size.isEmpty()) {
+    cachedLegendBarImage_ = QImage();
+    cachedLegendBarSize_ = QSize();
+    return cachedLegendBarImage_;
+  }
+
+  if (cachedLegendBarImage_.isNull() || cachedLegendBarSize_ != size) {
+    cachedLegendBarImage_ = QImage(size, QImage::Format_RGB32);
+    cachedLegendBarSize_ = size;
+
+    QPainter painter(&cachedLegendBarImage_);
+    QLinearGradient gradient(QPointF(0.0, 0.0),
+        QPointF(0.0, static_cast<double>(size.height())));
+    const QVector<QRgb> &palette = cachedPalette();
+    for (int i = 0; i <= 255; ++i) {
+      gradient.setColorAt(1.0 - (i / 255.0), QColor(palette[i]));
+    }
+    painter.fillRect(QRect(QPoint(0, 0), size), gradient);
+  }
+
+  return cachedLegendBarImage_;
+}
+
 bool HeatmapElement::showTopProfile() const
 {
   return showTopProfile_;
@@ -981,7 +1180,7 @@ void HeatmapElement::setShowTopProfile(bool show)
 {
   if (showTopProfile_ != show) {
     showTopProfile_ = show;
-    update();
+    requestVisualUpdate();
   }
 }
 
@@ -994,7 +1193,7 @@ void HeatmapElement::setShowRightProfile(bool show)
 {
   if (showRightProfile_ != show) {
     showRightProfile_ = show;
-    update();
+    requestVisualUpdate();
   }
 }
 
@@ -1011,8 +1210,7 @@ void HeatmapElement::resetZoom()
   zoomYMin_ = 0.0;
   zoomYMax_ = 1.0;
   panning_ = false;
-  invalidateCache();
-  update();
+  invalidateCache(true);
 }
 
 void HeatmapElement::onExecuteStateApplied()
@@ -1143,8 +1341,7 @@ void HeatmapElement::mouseMoveEvent(QMouseEvent *event)
     zoomYMin_ = newYMin;
     zoomYMax_ = newYMax;
     
-    invalidateCache();
-    update();
+    invalidateCache(true);
   }
   QWidget::mouseMoveEvent(event);
 }
@@ -1224,8 +1421,7 @@ void HeatmapElement::wheelEvent(QWheelEvent *event)
     zoomed_ = false;
   }
   
-  invalidateCache();
-  update();
+  invalidateCache(true);
 }
 
 

@@ -30,6 +30,8 @@ constexpr int kTickCount = 11;
 constexpr short kInvalidSeverity = 3;
 constexpr double kValueEpsilonFactor = 1e-6;
 constexpr double kHorizontalLabelSpacing = 4.0;
+constexpr qreal kMinimumTrackTravel = 1.0;
+constexpr qreal kPreferredMinimumThumbExtent = 30.0;
 
 QColor alarmColorForSeverity(short severity)
 {
@@ -45,6 +47,19 @@ QColor alarmColorForSeverity(short severity)
   default:
     return QColor(204, 204, 204);
   }
+}
+
+qreal boundedThumbExtent(qreal availableExtent)
+{
+  if (!std::isfinite(availableExtent) || availableExtent <= 0.0) {
+    return 0.0;
+  }
+
+  const qreal desiredExtent = std::max<qreal>(availableExtent * 0.10,
+      kPreferredMinimumThumbExtent);
+  const qreal maxExtent = std::max<qreal>(1.0,
+      availableExtent - kMinimumTrackTravel);
+  return std::clamp(desiredExtent, 1.0, maxExtent);
 }
 
 QFont shrinkFontToFit(const QFont &baseFont, const QStringList &texts,
@@ -554,15 +569,16 @@ void SliderElement::mousePressEvent(QMouseEvent *event)
 
   QRectF limitRect;
   QRectF channelRect;
+  qreal thumbExtent = 0.0;
   const QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0,
-      -2.0, -2.0), limitRect, channelRect);
+      -2.0, -2.0), limitRect, channelRect, &thumbExtent);
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     QWidget::mousePressEvent(event);
     return;
   }
 
-  const QRectF thumbRect = thumbRectForTrack(trackRect).adjusted(-1.0, -1.0,
-      1.0, 1.0);
+  const QRectF thumbRect = thumbRectForTrack(trackRect, thumbExtent).adjusted(
+      -1.0, -1.0, 1.0, 1.0);
 
   if (thumbRect.contains(pos)) {
     beginDrag(currentDisplayedValue(), false);
@@ -645,13 +661,14 @@ void SliderElement::mouseReleaseEvent(QMouseEvent *event)
 #endif
   QRectF limitRect;
   QRectF channelRect;
+  qreal thumbExtent = 0.0;
   const QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0,
-      -2.0, -2.0), limitRect, channelRect);
+      -2.0, -2.0), limitRect, channelRect, &thumbExtent);
 
   bool releaseOnThumb = false;
   if (trackRect.isValid() && !trackRect.isEmpty()) {
-    QRectF thumbRect = thumbRectForTrack(trackRect).adjusted(-1.0, -1.0,
-        1.0, 1.0);
+    QRectF thumbRect = thumbRectForTrack(trackRect, thumbExtent).adjusted(
+        -1.0, -1.0, 1.0, 1.0);
     releaseOnThumb = thumbRect.contains(pos);
   }
 
@@ -728,8 +745,9 @@ void SliderElement::paintEvent(QPaintEvent *event)
 
   QRectF limitRect;
   QRectF channelRect;
+  qreal thumbExtent = 0.0;
   QRectF trackRect = trackRectForPainting(rect().adjusted(0.0, 0.0, 0.0, 0.0),
-      limitRect, channelRect);
+      limitRect, channelRect, &thumbExtent);
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);
@@ -740,7 +758,7 @@ void SliderElement::paintEvent(QPaintEvent *event)
   paintTrack(painter, trackRect);
   /* Ticks removed per user request */
   /* paintTicks(painter, trackRect); */
-  paintThumb(painter, trackRect);
+  paintThumb(painter, trackRect, thumbExtent);
   paintLabels(painter, trackRect, limitRect, channelRect);
 
   if (selected_) {
@@ -749,10 +767,13 @@ void SliderElement::paintEvent(QPaintEvent *event)
 }
 
 QRectF SliderElement::trackRectForPainting(QRectF contentRect,
-    QRectF &limitRect, QRectF &channelRect) const
+    QRectF &limitRect, QRectF &channelRect, qreal *thumbExtent) const
 {
   limitRect = QRectF();
   channelRect = QRectF();
+  if (thumbExtent) {
+    *thumbExtent = 0.0;
+  }
 
   QRectF workingRect = contentRect;
   const bool vertical = isVertical();
@@ -845,37 +866,49 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   if (vertical) {
     const qreal trackWidth = std::max<qreal>(9.0,
         contentRect.width() / heightDivisor);
-  const qreal trackRight = contentRect.right() + 1.0;
-  const qreal availableWidth = std::max<qreal>(0.0,
-    trackRight - workingRect.left());
-  if (availableWidth <= 0.0) {
-    return QRectF();
-  }
-  const qreal clampedTrackWidth = std::min(trackWidth, availableWidth);
-  const qreal trackLeft = trackRight - clampedTrackWidth;
-  if (showLimits && limitRect.isValid()) {
-    const qreal adjustedRight = trackLeft - 1.0;
-    limitRect.setRight(adjustedRight);
-    if (limitRect.right() < limitRect.left()) {
-      limitRect.setRight(limitRect.left());
+    const qreal trackRight = contentRect.right() + 1.0;
+    const qreal availableWidth = std::max<qreal>(0.0,
+        trackRight - workingRect.left());
+    if (availableWidth <= 0.0) {
+      return QRectF();
     }
-  }
-    /* Reduce track height to prevent thumb from extending beyond edges */
-    const qreal thumbHeight = std::max(workingRect.height() * 0.10, 30.0);
-    const qreal reducedHeight = std::max(0.0, workingRect.height() - thumbHeight);
-  return QRectF(trackLeft,
-    workingRect.top() + thumbHeight / 2.0, clampedTrackWidth, reducedHeight);
+    const qreal clampedTrackWidth = std::min(trackWidth, availableWidth);
+    const qreal trackLeft = trackRight - clampedTrackWidth;
+    if (showLimits && limitRect.isValid()) {
+      const qreal adjustedRight = trackLeft - 1.0;
+      limitRect.setRight(adjustedRight);
+      if (limitRect.right() < limitRect.left()) {
+        limitRect.setRight(limitRect.left());
+      }
+    }
+    const qreal computedThumbExtent = boundedThumbExtent(workingRect.height());
+    if (computedThumbExtent <= 0.0) {
+      return QRectF();
+    }
+    if (thumbExtent) {
+      *thumbExtent = computedThumbExtent;
+    }
+    const qreal reducedHeight = std::max<qreal>(kMinimumTrackTravel,
+        workingRect.height() - computedThumbExtent);
+    return QRectF(trackLeft, workingRect.top() + computedThumbExtent / 2.0,
+        clampedTrackWidth, reducedHeight);
   }
 
   const qreal trackHeight = std::max<qreal>(9.0,
       contentRect.height() / heightDivisor);
-  /* Ensure track doesn't extend beyond workingRect to avoid overlapping labels */
-  const qreal clampedTrackHeight = std::max(9.0, std::min(trackHeight, workingRect.height()));
+  const qreal clampedTrackHeight = std::max<qreal>(1.0,
+      std::min(trackHeight, workingRect.height()));
   const qreal centerY = workingRect.center().y();
-  /* Reduce track width to prevent thumb from extending beyond edges */
-  const qreal thumbWidth = std::max(workingRect.width() * 0.10, 30.0);
-  const qreal reducedWidth = std::max(0.0, workingRect.width() - thumbWidth);
-  return QRectF(workingRect.left() + thumbWidth / 2.0,
+  const qreal computedThumbExtent = boundedThumbExtent(workingRect.width());
+  if (computedThumbExtent <= 0.0) {
+    return QRectF();
+  }
+  if (thumbExtent) {
+    *thumbExtent = computedThumbExtent;
+  }
+  const qreal reducedWidth = std::max<qreal>(kMinimumTrackTravel,
+      workingRect.width() - computedThumbExtent);
+  return QRectF(workingRect.left() + computedThumbExtent / 2.0,
       centerY - clampedTrackHeight / 2.0, reducedWidth, clampedTrackHeight);
 }
 
@@ -975,7 +1008,8 @@ void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const
   //painter.restore();
 }
 
-void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
+void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect,
+    qreal thumbExtent) const
 {
   painter.save();
   
@@ -990,7 +1024,7 @@ void SliderElement::paintThumb(QPainter &painter, const QRectF &trackRect) const
   const bool isVeryDark = luminance < 40.0;
   
   /* Calculate thumb position, ensuring it stays within track bounds (minus bevel) */
-  QRectF thumbRect = thumbRectForTrack(trackRect);
+  QRectF thumbRect = thumbRectForTrack(trackRect, thumbExtent);
   
   /* Draw main thumb body */
   painter.setPen(Qt::NoPen);
@@ -1454,7 +1488,8 @@ double SliderElement::valueFromPosition(const QPointF &pos) const
   return low + normalized * span;
 }
 
-QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect) const
+QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect,
+    qreal thumbExtent) const
 {
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     return QRectF();
@@ -1462,9 +1497,10 @@ QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect) const
 
   QRectF thumbRect = trackRect;
   const qreal bevelSize = 2.0;
+  const qreal clampedThumbExtent = std::max<qreal>(1.0, thumbExtent);
 
   if (isVertical()) {
-    const qreal thumbHeight = std::max(trackRect.height() * 0.10, 30.0);
+    const qreal thumbHeight = clampedThumbExtent;
     const qreal center = isDirectionInverted()
         ? trackRect.top() + normalizedValue() * trackRect.height()
         : trackRect.bottom() - normalizedValue() * trackRect.height();
@@ -1473,7 +1509,7 @@ QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect) const
     thumbRect.setLeft(trackRect.left() + bevelSize);
     thumbRect.setRight(trackRect.right() - bevelSize);
   } else {
-    const qreal thumbWidth = std::max(trackRect.width() * 0.10, 30.0);
+    const qreal thumbWidth = clampedThumbExtent;
     const qreal center = isDirectionInverted()
         ? trackRect.right() - normalizedValue() * trackRect.width()
         : trackRect.left() + normalizedValue() * trackRect.width();

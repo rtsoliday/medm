@@ -79,9 +79,10 @@ protected:
 
 private:
   QRectF trackRectForPainting(QRectF contentRect, QRectF &limitRect,
-      QRectF &channelRect) const;
+      QRectF &channelRect, qreal *thumbExtent = nullptr) const;
   void paintTrack(QPainter &painter, const QRectF &trackRect) const;
-  void paintThumb(QPainter &painter, const QRectF &trackRect) const;
+  void paintThumb(QPainter &painter, const QRectF &trackRect,
+      qreal thumbExtent) const;
   void paintTicks(QPainter &painter, const QRectF &trackRect) const;
   void paintLabels(QPainter &painter, const QRectF &trackRect,
       const QRectF &limitRect, const QRectF &channelRect) const;
@@ -99,7 +100,7 @@ private:
   int effectivePrecision() const;
   double clampToLimits(double value) const;
   double valueFromPosition(const QPointF &pos) const;
-  QRectF thumbRectForTrack(const QRectF &trackRect) const;
+  QRectF thumbRectForTrack(const QRectF &trackRect, qreal thumbExtent) const;
   void beginDrag(double value, bool sendInitial);
   void updateDrag(double value, bool force);
   void endDrag(double value, bool force);

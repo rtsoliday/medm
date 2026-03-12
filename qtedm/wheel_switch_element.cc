@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QFocusEvent>
 #include <QFontMetricsF>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -20,6 +21,7 @@
 #include <QPaintEvent>
 #include <QPalette>
 #include <QTimer>
+#include <QWheelEvent>
 
 #include "legacy_fonts.h"
 #include "medm_colors.h"
@@ -35,6 +37,21 @@ constexpr int kRepeatInitialDelayMs = 350;
 constexpr int kRepeatIntervalMs = 90;
 constexpr double kValueEpsilonFactor = 1e-9;
 constexpr short kInvalidSeverity = 3;
+constexpr int kWheelSwitchDefaultFormatWidth = 6;
+constexpr int kWheelSwitchDefaultFormatPrecision = 2;
+constexpr char kWheelSwitchDefaultFormat[] = "% 6.2f";
+
+struct WheelSwitchFormatInfo
+{
+  QString formatString;
+  QString zeroString;
+  int prefixSize = 0;
+  int postfixSize = 0;
+  int digitSize = 0;
+  int pointPosition = 0;
+  int precision = 0;
+  bool pointValid = false;
+};
 
 const std::array<QString, 16> kWheelSwitchFontAliases = {
   QStringLiteral("widgetDM_4"), QStringLiteral("widgetDM_6"),
@@ -102,6 +119,215 @@ QColor blendedColor(const QColor &base, int factor)
   adjusted = factor > 100 ? adjusted.lighter(factor) : adjusted.darker(200 - factor);
 
   return adjusted;
+}
+
+QString calculatedWheelSwitchFormat(double low, double high, int precision)
+{
+  if (precision < 0) {
+    precision = 0;
+  }
+
+  const double maxAbsLimit = std::max(std::abs(low), std::abs(high));
+  int width = 2 + precision;
+  if (maxAbsLimit > 1.0 && std::isfinite(maxAbsLimit)) {
+    width = static_cast<int>(std::log10(maxAbsLimit)) + 3 + precision;
+  }
+
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%% %d.%df", width, precision);
+  return QString::fromLatin1(buffer);
+}
+
+QString sanitizeExplicitWheelSwitchFormat(const QString &format)
+{
+  const QString trimmed = format.trimmed();
+  if (trimmed.isEmpty()) {
+    return QString();
+  }
+
+  const int percentPos = trimmed.indexOf(QLatin1Char('%'));
+  int fPos = -1;
+  if (percentPos >= 0) {
+    for (int i = percentPos + 1; i < trimmed.size(); ++i) {
+      if (trimmed.at(i) == QLatin1Char('f')
+          || trimmed.at(i) == QLatin1Char('F')) {
+        fPos = i;
+        break;
+      }
+    }
+  }
+  if (percentPos < 0 || fPos < 0) {
+    return QString::fromLatin1(kWheelSwitchDefaultFormat);
+  }
+
+  const QString prefix = trimmed.left(percentPos);
+  const QString spec = trimmed.mid(percentPos + 1, fPos - percentPos - 1);
+  const QString suffix = trimmed.mid(fPos + 1);
+
+  int pos = 0;
+  QChar signFlag = QLatin1Char(' ');
+  while (pos < spec.size()) {
+    const QChar ch = spec.at(pos);
+    if (ch == QLatin1Char('+')) {
+      signFlag = ch;
+      ++pos;
+      continue;
+    }
+    if (ch == QLatin1Char(' ') || ch == QLatin1Char('#')
+        || ch == QLatin1Char('0') || ch == QLatin1Char('-')) {
+      ++pos;
+      continue;
+    }
+    break;
+  }
+
+  int width = kWheelSwitchDefaultFormatWidth;
+  int precision = kWheelSwitchDefaultFormatPrecision;
+  bool parsed = false;
+  const QString numeric = spec.mid(pos);
+  const int dotPos = numeric.indexOf(QLatin1Char('.'));
+  if (dotPos < 0) {
+    bool ok = false;
+    const int parsedWidth = numeric.toInt(&ok);
+    if (ok) {
+      width = parsedWidth;
+      precision = 0;
+      parsed = true;
+    }
+  } else {
+    bool widthOk = false;
+    bool precisionOk = false;
+    const int parsedWidth = numeric.left(dotPos).toInt(&widthOk);
+    const int parsedPrecision = numeric.mid(dotPos + 1).toInt(&precisionOk);
+    if (widthOk && precisionOk) {
+      width = parsedWidth;
+      precision = parsedPrecision;
+      parsed = true;
+    }
+  }
+
+  if (!parsed || width < 0) {
+    width = kWheelSwitchDefaultFormatWidth;
+    precision = kWheelSwitchDefaultFormatPrecision;
+  } else {
+    if (precision < 0) {
+      precision = kWheelSwitchDefaultFormatPrecision;
+    }
+    if (precision > width - 1) {
+      precision = width - 1;
+    }
+    if (precision < 0) {
+      precision = 0;
+    }
+  }
+
+  return prefix + QLatin1Char('%') + signFlag
+      + QString::number(width)
+      + QLatin1Char('.')
+      + QString::number(precision)
+      + QLatin1Char('f')
+      + suffix;
+}
+
+WheelSwitchFormatInfo wheelSwitchFormatInfo(const QString &format,
+    double lowLimit, double highLimit, int precision)
+{
+  WheelSwitchFormatInfo info;
+  if (format.trimmed().isEmpty()) {
+    info.formatString = calculatedWheelSwitchFormat(lowLimit, highLimit, precision);
+  } else {
+    info.formatString = sanitizeExplicitWheelSwitchFormat(format);
+  }
+
+  const QByteArray formatBytes = info.formatString.toLatin1();
+  char buffer[256];
+  std::snprintf(buffer, sizeof(buffer), formatBytes.constData(), 0.0);
+  info.zeroString = QString::fromLatin1(buffer);
+
+  info.prefixSize = info.formatString.indexOf(QLatin1Char('%'));
+  if (info.prefixSize < 0) {
+    info.prefixSize = 0;
+  }
+
+  const int fPos = info.formatString.indexOf(QLatin1Char('f'), info.prefixSize);
+  if (fPos >= 0) {
+    info.postfixSize = info.formatString.size() - fPos - 1;
+  }
+
+  info.digitSize = std::max(0,
+      info.zeroString.size() - info.prefixSize - info.postfixSize);
+  for (int i = 0; i < info.digitSize; ++i) {
+    if (info.zeroString.at(info.prefixSize + info.digitSize - 1 - i)
+        == QLatin1Char('.')) {
+      info.pointPosition = i;
+      info.pointValid = true;
+      break;
+    }
+  }
+  info.precision = info.pointValid ? info.pointPosition : 0;
+  return info;
+}
+
+QString formattedWheelSwitchValue(double value, double lowLimit, double highLimit,
+    const WheelSwitchFormatInfo &info, bool *overflow = nullptr)
+{
+  if (overflow) {
+    *overflow = false;
+  }
+
+  const int digitSlots = info.digitSize - 1 - (info.pointValid ? 1 : 0);
+  double minmin = 0.0;
+  double maxmax = 0.0;
+  double smallestIncrement = 0.0;
+  if (digitSlots > 0) {
+    double increment = 1.0;
+    for (int i = 0; i < info.pointPosition; ++i) {
+      increment /= 10.0;
+    }
+    smallestIncrement = increment;
+    for (int i = 0; i < digitSlots; ++i) {
+      minmin -= increment * 9.0;
+      maxmax += increment * 9.0;
+      increment *= 10.0;
+    }
+  }
+
+  const double formatMin = std::max(lowLimit, minmin);
+  const double formatMax = std::min(highLimit, maxmax);
+  const double roundoff = smallestIncrement * 0.1;
+
+  const QByteArray formatBytes = info.formatString.toLatin1();
+  if (value < formatMax + roundoff && value > formatMin - roundoff) {
+    char buffer[256];
+    std::snprintf(buffer, sizeof(buffer), formatBytes.constData(), value);
+    return QString::fromLatin1(buffer);
+  }
+
+  if (overflow) {
+    *overflow = true;
+  }
+
+  QString result = info.zeroString;
+  const int imin = info.prefixSize;
+  const int imax = info.prefixSize + info.digitSize;
+  int pointIndex = -1;
+  if (info.pointValid && info.pointPosition != 0) {
+    pointIndex = imax - info.pointPosition - 1;
+  }
+
+  if (info.digitSize > 0 && imax <= result.size()) {
+    if (value < 0.0) {
+      result[imin] = QLatin1Char('-');
+    }
+    for (int i = imin + 1; i < imax; ++i) {
+      result[i] = QLatin1Char('*');
+    }
+    if (pointIndex >= imin && pointIndex < imax) {
+      result[pointIndex] = QLatin1Char('.');
+    }
+  }
+
+  return result;
 }
 
 } // namespace
@@ -220,6 +446,9 @@ QString WheelSwitchElement::format() const
 void WheelSwitchElement::setFormat(const QString &format)
 {
   QString trimmed = format.trimmed();
+  if (!trimmed.isEmpty()) {
+    trimmed = sanitizeExplicitWheelSwitchFormat(trimmed);
+  }
   if (format_ == trimmed) {
 
     return;
@@ -431,6 +660,9 @@ void WheelSwitchElement::clearRuntimeState()
   pressedDirection_ = RepeatDirection::kNone;
   repeatDirection_ = RepeatDirection::kNone;
   repeatStep_ = 0.0;
+  selectedSlotIndex_ = -1;
+  keyboardEntryActive_ = false;
+  keyboardEntryText_.clear();
   if (repeatTimer_) {
     repeatTimer_->stop();
     repeatTimer_->setSingleShot(true);
@@ -561,6 +793,65 @@ void WheelSwitchElement::leaveEvent(QEvent *event)
   QWidget::leaveEvent(event);
 }
 
+void WheelSwitchElement::focusInEvent(QFocusEvent *event)
+{
+  if (isInteractive()) {
+    const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
+    const Layout layout = layoutForRect(outer);
+    if (selectedSlotIndex_ < 0 || selectedSlotIndex_ >= static_cast<int>(layout.columns.size())
+        || !layout.columns.at(selectedSlotIndex_).hasButtons) {
+      selectedSlotIndex_ = defaultSlotIndex(layout);
+    }
+  }
+  update();
+  QWidget::focusInEvent(event);
+}
+
+void WheelSwitchElement::focusOutEvent(QFocusEvent *event)
+{
+  stopRepeating();
+  cancelKeyboardEntry();
+  update();
+  QWidget::focusOutEvent(event);
+}
+
+void WheelSwitchElement::wheelEvent(QWheelEvent *event)
+{
+  if (!isInteractive() || keyboardEntryActive_) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+
+  const int delta = event->angleDelta().y();
+  if (delta == 0) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+
+  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
+  const Layout layout = layoutForRect(outer);
+  int slotIndex = -1;
+  double step = 0.0;
+  if (!selectedSlotStep(layout, event->modifiers(), &slotIndex, &step)) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+
+  selectedSlotIndex_ = slotIndex;
+  if (delta > 0) {
+    if (layout.columns.at(slotIndex).showUpButton) {
+      activateValue(displayedValue() + step, true);
+    }
+  } else {
+    if (layout.columns.at(slotIndex).showDownButton) {
+      activateValue(displayedValue() - step, true);
+    }
+  }
+
+  update();
+  event->accept();
+}
+
 void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
 {
   if (!isInteractive()) {
@@ -573,21 +864,51 @@ void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
     return;
   }
 
+  if (keyboardEntryActive_) {
+    if (handleKeyboardEntryKey(event)) {
+      return;
+    }
+    QWidget::keyPressEvent(event);
+    return;
+  }
+
   const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
   const Layout layout = layoutForRect(outer);
 
+  const QString text = event->text();
+  if (!(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier
+          | Qt::MetaModifier))
+      && !text.isEmpty()) {
+    const QChar ch = text.at(0);
+    if (ch.isDigit() || ch == QLatin1Char('.') || ch == QLatin1Char('-')
+        || ch == QLatin1Char('+')) {
+      beginKeyboardEntry();
+      if (handleKeyboardEntryKey(event)) {
+        return;
+      }
+    }
+  }
+
   switch (event->key()) {
-  case Qt::Key_Up:
+  case Qt::Key_Left: {
+    if (moveSelectedSlot(layout, -1) >= 0) {
+      event->accept();
+      return;
+    }
+    break;
+  }
   case Qt::Key_Right: {
-    double step = valueStep(event->modifiers());
-    if (!std::isfinite(step) || step <= 0.0) {
-      step = 1.0;
+    if (moveSelectedSlot(layout, 1) >= 0) {
+      event->accept();
+      return;
     }
-    int slotIndex = slotIndexForStep(layout, step);
-    if (slotIndex < 0) {
-      slotIndex = defaultSlotIndex(layout);
-    }
-    if (slotIndex >= 0) {
+    break;
+  }
+  case Qt::Key_Up: {
+    int slotIndex = -1;
+    double step = 0.0;
+    if (selectedSlotStep(layout, event->modifiers(), &slotIndex, &step)
+        && layout.columns.at(slotIndex).showUpButton) {
       startRepeating(RepeatDirection::kUp, step, slotIndex);
       update();
       event->accept();
@@ -595,17 +916,11 @@ void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
     }
     break;
   }
-  case Qt::Key_Down:
-  case Qt::Key_Left: {
-    double step = valueStep(event->modifiers());
-    if (!std::isfinite(step) || step <= 0.0) {
-      step = 1.0;
-    }
-    int slotIndex = slotIndexForStep(layout, step);
-    if (slotIndex < 0) {
-      slotIndex = defaultSlotIndex(layout);
-    }
-    if (slotIndex >= 0) {
+  case Qt::Key_Down: {
+    int slotIndex = -1;
+    double step = 0.0;
+    if (selectedSlotStep(layout, event->modifiers(), &slotIndex, &step)
+        && layout.columns.at(slotIndex).showDownButton) {
       startRepeating(RepeatDirection::kDown, step, slotIndex);
       update();
       event->accept();
@@ -654,9 +969,7 @@ void WheelSwitchElement::keyReleaseEvent(QKeyEvent *event)
 
   switch (event->key()) {
   case Qt::Key_Up:
-  case Qt::Key_Right:
   case Qt::Key_Down:
-  case Qt::Key_Left:
     stopRepeating();
     event->accept();
     return;
@@ -699,6 +1012,8 @@ void WheelSwitchElement::paintEvent(QPaintEvent *event)
         && pressedDirection_ == RepeatDirection::kUp);
     const bool downPressed = (pressedSlotIndex_ == i
         && pressedDirection_ == RepeatDirection::kDown);
+    const bool slotSelected = hasFocus() && !keyboardEntryActive_
+        && selectedSlotIndex_ == i;
 
   const bool upHovered = (hoveredSlotIndex_ == i
     && hoveredDirection_ == RepeatDirection::kUp);
@@ -706,11 +1021,12 @@ void WheelSwitchElement::paintEvent(QPaintEvent *event)
     && hoveredDirection_ == RepeatDirection::kDown);
 
   if (column.showUpButton) {
-    paintButton(painter, column.upButton, true, upPressed, enabled, upHovered);
+    paintButton(painter, column.upButton, true, upPressed, enabled,
+      upHovered || slotSelected);
   }
   if (column.showDownButton) {
     paintButton(painter, column.downButton, false, downPressed, enabled,
-      downHovered);
+      downHovered || slotSelected);
   }
   }
 
@@ -767,106 +1083,16 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
 {
   Layout layout{};
   layout.outer = bounds;
-
-  // Format zero to determine the structure, just like MEDM does.
-  // This gives us the baseline format structure with all positions.
-  QString templateText;
-  QString trimmed = format_.trimmed();
-  
-  // If no format specified, calculate one like MEDM does
-  if (trimmed.isEmpty()) {
-    const double low = effectiveLowLimit();
-    const double high = effectiveHighLimit();
-    const double maxAbsHoprLopr = std::max(std::abs(low), std::abs(high));
-    int precision = effectivePrecision();
-    if (precision < 0) precision = 0;
-    
-    int width;
-    if (maxAbsHoprLopr > 1.0) {
-      width = static_cast<int>(std::log10(maxAbsHoprLopr)) + 3 + precision;
-    } else {
-      width = 2 + precision;
-    }
-    
-    // Create format string with space for sign like MEDM: "% <width>.<precision>f"
-    char formatBuf[64];
-    snprintf(formatBuf, sizeof(formatBuf), "%% %d.%df", width, precision);
-    trimmed = QString::fromLatin1(formatBuf);
-  }
-  
-  if (!trimmed.isEmpty()) {
-    char buffer[256];
-    // Format zero to reveal the format structure (matching MEDM)
-    const QByteArray formatBytes = trimmed.toLatin1();
-    snprintf(buffer, sizeof(buffer), formatBytes.constData(), 0.0);
-    templateText = QString::fromLatin1(buffer);
-  } else {
-    // Fallback - use Qt's number formatting with effective precision
-    int digits = effectivePrecision();
-    templateText = QString::number(0.0, 'f', digits);
-  }
-
-  // Now format the actual display value
+  const WheelSwitchFormatInfo formatInfo = wheelSwitchFormatInfo(format_,
+      effectiveLowLimit(), effectiveHighLimit(), effectivePrecision());
+  const QString templateText = formatInfo.zeroString;
   layout.text = displayText();
-
-  // Calculate prefix_size, format_size, and postfix_size like MEDM does
-  // This allows us to identify which characters are part of the actual number vs postfix units
-  int prefixSize = 0;
-  int formatSize = 0;
-  int postfixSize = 0;
-  
-  QString formatStr = format_.trimmed();
-  if (formatStr.isEmpty()) {
-    // Use the calculated format
-    const double low = effectiveLowLimit();
-    const double high = effectiveHighLimit();
-    const double maxAbsHoprLopr = std::max(std::abs(low), std::abs(high));
-    int precision = effectivePrecision();
-    if (precision < 0) precision = 0;
-    
-    int width;
-    if (maxAbsHoprLopr > 1.0) {
-      width = static_cast<int>(std::log10(maxAbsHoprLopr)) + 3 + precision;
-    } else {
-      width = 2 + precision;
-    }
-    
-    char formatBuf[64];
-    snprintf(formatBuf, sizeof(formatBuf), "%% %d.%df", width, precision);
-    formatStr = QString::fromLatin1(formatBuf);
-  }
-  
-  // Find prefix size (characters before '%')
-  int percentPos = formatStr.indexOf('%');
-  if (percentPos >= 0) {
-    prefixSize = percentPos;
-    
-    // Find format size (from '%' to 'f' inclusive)
-    int fPos = formatStr.indexOf('f', percentPos);
-    if (fPos >= 0) {
-      formatSize = fPos - percentPos + 1;
-      postfixSize = formatStr.length() - prefixSize - formatSize;
-    }
-  }
-  
-  // digit_size is the number of characters in the formatted number (excluding prefix and postfix)
-  int digitSize = templateText.size() - prefixSize - postfixSize;
-
-  // Calculate digit_number following medm's logic:
-  // digit_number = formatted_zero_size - 1 (sign/space) - 1 (decimal if present)
-  // This matches MEDM's compute_format_size() function
-  int digitNumber = templateText.size();
-  bool templateHasDecimal = templateText.contains('.');
-  if (templateHasDecimal) {
-    digitNumber--;  // Do not count the decimal point
-  }
-  if (digitNumber > 0) {
-    digitNumber--;  // Do not count the sign/space (first character)
-  }
 
   // Find decimal positions in both template and current text
   // The decimal is within the digit area (excluding prefix and postfix)
   int templateDecimalIndex = -1;
+  const int prefixSize = formatInfo.prefixSize;
+  const int digitSize = formatInfo.digitSize;
   for (int i = prefixSize; i < prefixSize + digitSize; ++i) {
     if (i < templateText.size() && templateText.at(i) == '.') {
       templateDecimalIndex = i;
@@ -984,7 +1210,8 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
       templatePos = templateDecimalIndex + offsetFromDecimal;
     }
     
-    if (templatePos >= 0 && templatePos < templateText.size() && templateIsDigit[templatePos]) {
+    if (!keyboardEntryActive_ && templatePos >= 0
+        && templatePos < templateText.size() && templateIsDigit[templatePos]) {
       // This character will have buttons
       const double charWidth = (static_cast<size_t>(i) < charWidths.size()) ? charWidths[i] : minimalWidth;
       // Button extends beyond character on both sides
@@ -1343,6 +1570,10 @@ void WheelSwitchElement::paintSelectionOverlay(QPainter &painter) const
 
 QString WheelSwitchElement::displayText() const
 {
+  if (keyboardEntryActive_) {
+    return keyboardEntryDisplayText();
+  }
+
   if (executeMode_) {
     if (!runtimeConnected_ || !hasRuntimeValue_) {
       return QString();
@@ -1350,142 +1581,10 @@ QString WheelSwitchElement::displayText() const
   }
 
   const double value = displayedValue();
-  QString trimmed = format_.trimmed();
-  
-  // If no format specified, calculate one like MEDM does
-  if (trimmed.isEmpty()) {
-    const double low = effectiveLowLimit();
-    const double high = effectiveHighLimit();
-    const double maxAbsHoprLopr = std::max(std::abs(low), std::abs(high));
-    int precision = effectivePrecision();
-    if (precision < 0) precision = 0;
-    
-    int width;
-    if (maxAbsHoprLopr > 1.0) {
-      width = static_cast<int>(std::log10(maxAbsHoprLopr)) + 3 + precision;
-    } else {
-      width = 2 + precision;
-    }
-    
-    // Create format string with space for sign like MEDM: "% <width>.<precision>f"
-    char formatBuf[64];
-    snprintf(formatBuf, sizeof(formatBuf), "%% %d.%df", width, precision);
-    trimmed = QString::fromLatin1(formatBuf);
-  }
-  
-  if (!trimmed.isEmpty()) {
-    const QByteArray formatBytes = trimmed.toLatin1();
-    char zeroBuffer[256];
-    snprintf(zeroBuffer, sizeof(zeroBuffer), formatBytes.constData(), 0.0);
-    QString zeroString = QString::fromLatin1(zeroBuffer);
-
-    int prefixLen = 0;
-    int postfixLen = 0;
-    QString numericTemplate;
-    bool numericTemplateValid = false;
-
-    const int percentIndex = trimmed.indexOf(QLatin1Char('%'));
-    if (percentIndex >= 0) {
-      for (int i = percentIndex + 1; i < trimmed.size(); ++i) {
-        const QChar conv = trimmed.at(i);
-        if (conv == QLatin1Char('%') && i + 1 < trimmed.size()
-            && trimmed.at(i + 1) == QLatin1Char('%')) {
-          ++i;
-          continue;
-        }
-        if (conv == QLatin1Char('e') || conv == QLatin1Char('E')
-            || conv == QLatin1Char('f') || conv == QLatin1Char('F')
-            || conv == QLatin1Char('g') || conv == QLatin1Char('G')) {
-          const int conversionIndex = i;
-          prefixLen = percentIndex;
-          postfixLen = trimmed.size() - conversionIndex - 1;
-          const int available = zeroString.size() - prefixLen - postfixLen;
-          if (available > 0) {
-            numericTemplate = zeroString.mid(prefixLen, available);
-            numericTemplateValid = true;
-          }
-          break;
-        }
-      }
-    }
-
-    if (!numericTemplateValid) {
-      prefixLen = 0;
-      postfixLen = 0;
-      numericTemplate = zeroString;
-    }
-
-    const int digitSize = numericTemplate.size();
-    int pointPosition = 0;
-    bool pointValid = false;
-    for (int i = 0; i < digitSize; ++i) {
-      if (numericTemplate.at(digitSize - 1 - i) == QLatin1Char('.')) {
-        pointPosition = i;
-        pointValid = true;
-        break;
-      }
-    }
-
-    int digitSlots = digitSize > 0 ? digitSize - 1 : 0;
-    if (pointValid && pointPosition != 0 && digitSlots > 0) {
-      digitSlots -= 1;
-    }
-
-    double minmin = 0.0;
-    double maxmax = 0.0;
-    double smallestIncrement = 0.0;
-    if (digitSlots > 0) {
-      double baseIncrement = 1.0;
-      for (int i = 0; i < pointPosition; ++i) {
-        baseIncrement /= 10.0;
-      }
-      smallestIncrement = baseIncrement;
-      double currentIncrement = baseIncrement;
-      for (int i = 0; i < digitSlots; ++i) {
-        minmin -= currentIncrement * 9.0;
-        maxmax += currentIncrement * 9.0;
-        currentIncrement *= 10.0;
-      }
-    }
-
-    const double lowLimit = effectiveLowLimit();
-    const double highLimit = effectiveHighLimit();
-    double formatMin = std::max(lowLimit, minmin);
-    double formatMax = std::min(highLimit, maxmax);
-    const double roff = (digitSlots > 0) ? 0.1 * smallestIncrement : 0.0;
-
-    if (value < formatMax + roff && value > formatMin - roff) {
-      char buffer[256];
-      snprintf(buffer, sizeof(buffer), formatBytes.constData(), value);
-      return QString::fromLatin1(buffer);
-    }
-
-    QString result = zeroString;
-    const int imin = prefixLen;
-    const int imax = prefixLen + digitSize;
-    int ipoint = -1;
-    if (pointValid && pointPosition != 0) {
-      ipoint = imax - pointPosition - 1;
-    }
-
-    if (digitSize > 0 && imax <= result.size()) {
-      if (value < 0.0) {
-        result[imin] = QLatin1Char('-');
-      }
-      for (int idx = imin + 1; idx < imax; ++idx) {
-        result[idx] = QLatin1Char('*');
-      }
-      if (ipoint >= imin && ipoint < imax) {
-        result[ipoint] = QLatin1Char('.');
-      }
-    }
-
-    return result;
-  }
-
-  // Fallback
-  int digits = effectivePrecision();
-  return QString::number(value, 'f', digits);
+  const WheelSwitchFormatInfo info = wheelSwitchFormatInfo(format_,
+      effectiveLowLimit(), effectiveHighLimit(), effectivePrecision());
+  return formattedWheelSwitchValue(value, effectiveLowLimit(),
+      effectiveHighLimit(), info);
 }
 
 int WheelSwitchElement::formatDecimals() const
@@ -1494,12 +1593,9 @@ int WheelSwitchElement::formatDecimals() const
   if (trimmed.isEmpty()) {
     return -1;
   }
-  const int dotIndex = trimmed.indexOf(QLatin1Char('.'));
-  if (dotIndex < 0) {
-    return 0;
-  }
-  const int decimals = trimmed.size() - dotIndex - 1;
-  return std::clamp(decimals, 0, 17);
+  const WheelSwitchFormatInfo info = wheelSwitchFormatInfo(trimmed,
+      effectiveLowLimit(), effectiveHighLimit(), effectivePrecision());
+  return std::clamp(info.precision, 0, 17);
 }
 
 double WheelSwitchElement::displayedValue() const
@@ -1668,11 +1764,13 @@ void WheelSwitchElement::startRepeating(RepeatDirection direction, double step,
     return;
   }
 
+  cancelKeyboardEntry();
   repeatDirection_ = direction;
   repeatStep_ = std::abs(step);
   if (!std::isfinite(repeatStep_) || repeatStep_ <= 0.0) {
     repeatStep_ = 1.0;
   }
+  selectedSlotIndex_ = slotIndex;
   pressedSlotIndex_ = slotIndex;
   pressedDirection_ = direction;
 
@@ -1731,6 +1829,263 @@ void WheelSwitchElement::activateValue(double value, bool forceSend)
     lastSentValue_ = clamped;
     hasLastSentValue_ = true;
   }
+}
+
+void WheelSwitchElement::beginKeyboardEntry()
+{
+  if (!isInteractive()) {
+    return;
+  }
+  stopRepeating();
+  keyboardEntryActive_ = true;
+  keyboardEntryText_.clear();
+  update();
+}
+
+void WheelSwitchElement::cancelKeyboardEntry()
+{
+  if (!keyboardEntryActive_ && keyboardEntryText_.isEmpty()) {
+    return;
+  }
+  keyboardEntryActive_ = false;
+  keyboardEntryText_.clear();
+  update();
+}
+
+void WheelSwitchElement::commitKeyboardEntry()
+{
+  if (!keyboardEntryActive_) {
+    return;
+  }
+
+  bool ok = false;
+  const double value = keyboardEntryValue(&ok);
+  if (!ok) {
+    QApplication::beep();
+    return;
+  }
+
+  keyboardEntryActive_ = false;
+  keyboardEntryText_.clear();
+  activateValue(value, true);
+}
+
+bool WheelSwitchElement::handleKeyboardEntryKey(QKeyEvent *event)
+{
+  if (!keyboardEntryActive_ || !event) {
+    return false;
+  }
+
+  switch (event->key()) {
+  case Qt::Key_Return:
+  case Qt::Key_Enter:
+    commitKeyboardEntry();
+    event->accept();
+    return true;
+  case Qt::Key_Escape:
+    cancelKeyboardEntry();
+    event->accept();
+    return true;
+  case Qt::Key_Backspace:
+  case Qt::Key_Delete: {
+    QString updated = keyboardEntryText_;
+    if (!updated.isEmpty()) {
+      updated.chop(1);
+    }
+    keyboardEntryText_ = updated;
+    update();
+    event->accept();
+    return true;
+  }
+  default:
+    break;
+  }
+
+  if (event->modifiers() & (Qt::ControlModifier | Qt::AltModifier
+          | Qt::MetaModifier)) {
+    return false;
+  }
+
+  const QString text = event->text();
+  if (text.isEmpty()) {
+    return false;
+  }
+
+  const QChar ch = text.at(0);
+  QString updated = keyboardEntryText_;
+  if (ch.isDigit()) {
+    updated += ch;
+  } else if (ch == QLatin1Char('.')) {
+    if (updated.contains(QLatin1Char('.'))) {
+      QApplication::beep();
+      event->accept();
+      return true;
+    }
+    if (updated.isEmpty()) {
+      updated = QStringLiteral("0.");
+    } else if (updated == QStringLiteral("-")) {
+      updated = QStringLiteral("-0.");
+    } else {
+      updated += ch;
+    }
+  } else if (ch == QLatin1Char('-')) {
+    if (updated.startsWith(QLatin1Char('-'))) {
+      updated.remove(0, 1);
+    } else {
+      updated.prepend(QLatin1Char('-'));
+    }
+  } else if (ch == QLatin1Char('+')) {
+    if (updated.startsWith(QLatin1Char('-'))) {
+      updated.remove(0, 1);
+    }
+  } else {
+    return false;
+  }
+
+  if (!updateKeyboardEntryText(updated)) {
+    QApplication::beep();
+  }
+  event->accept();
+  return true;
+}
+
+bool WheelSwitchElement::updateKeyboardEntryText(const QString &text)
+{
+  const QString candidate = text;
+  if (candidate.isEmpty() || candidate == QStringLiteral("-")
+      || candidate == QStringLiteral("+") || candidate == QStringLiteral(".")
+      || candidate == QStringLiteral("-.")
+      || candidate == QStringLiteral("+.")) {
+    keyboardEntryText_ = candidate;
+    update();
+    return true;
+  }
+
+  bool ok = false;
+  const double value = candidate.toDouble(&ok);
+  if (!ok || !std::isfinite(value)) {
+    return false;
+  }
+  if (std::abs(clampToLimits(value) - value) > valueEpsilon()) {
+    return false;
+  }
+
+  const WheelSwitchFormatInfo info = wheelSwitchFormatInfo(format_,
+      effectiveLowLimit(), effectiveHighLimit(), effectivePrecision());
+  bool overflow = false;
+  formattedWheelSwitchValue(value, effectiveLowLimit(), effectiveHighLimit(),
+      info, &overflow);
+  if (overflow) {
+    return false;
+  }
+
+  keyboardEntryText_ = candidate;
+  update();
+  return true;
+}
+
+double WheelSwitchElement::keyboardEntryValue(bool *ok) const
+{
+  if (ok) {
+    *ok = false;
+  }
+
+  const QString trimmed = keyboardEntryText_.trimmed();
+  if (trimmed.isEmpty() || trimmed == QStringLiteral("-")
+      || trimmed == QStringLiteral("+") || trimmed == QStringLiteral(".")
+      || trimmed == QStringLiteral("-.")
+      || trimmed == QStringLiteral("+.")) {
+    return 0.0;
+  }
+
+  bool parsed = false;
+  const double value = trimmed.toDouble(&parsed);
+  if (!parsed || !std::isfinite(value)) {
+    return 0.0;
+  }
+
+  if (std::abs(clampToLimits(value) - value) > valueEpsilon()) {
+    return 0.0;
+  }
+
+  const WheelSwitchFormatInfo info = wheelSwitchFormatInfo(format_,
+      effectiveLowLimit(), effectiveHighLimit(), effectivePrecision());
+  bool overflow = false;
+  formattedWheelSwitchValue(value, effectiveLowLimit(), effectiveHighLimit(),
+      info, &overflow);
+  if (overflow) {
+    return 0.0;
+  }
+
+  if (ok) {
+    *ok = true;
+  }
+  return value;
+}
+
+QString WheelSwitchElement::keyboardEntryDisplayText() const
+{
+  return keyboardEntryText_;
+}
+
+bool WheelSwitchElement::selectedSlotStep(const Layout &layout,
+    Qt::KeyboardModifiers mods, int *slotIndex, double *step) const
+{
+  int index = selectedSlotIndex_;
+  if (index < 0 || index >= static_cast<int>(layout.columns.size())
+      || !layout.columns.at(index).hasButtons) {
+    index = defaultSlotIndex(layout);
+  }
+  if (index < 0 || index >= static_cast<int>(layout.columns.size())) {
+    return false;
+  }
+
+  double selectedStep = layout.columns.at(index).step;
+  selectedStep = applyModifiersToStep(selectedStep, mods);
+  if (!std::isfinite(selectedStep) || selectedStep <= 0.0) {
+    return false;
+  }
+
+  if (slotIndex) {
+    *slotIndex = index;
+  }
+  if (step) {
+    *step = selectedStep;
+  }
+  return true;
+}
+
+int WheelSwitchElement::moveSelectedSlot(const Layout &layout, int direction)
+{
+  if (direction == 0) {
+    return selectedSlotIndex_;
+  }
+
+  int current = selectedSlotIndex_;
+  if (current < 0 || current >= static_cast<int>(layout.columns.size())
+      || !layout.columns.at(current).hasButtons) {
+    current = defaultSlotIndex(layout);
+  }
+  if (current < 0) {
+    return -1;
+  }
+
+  int next = current;
+  while (true) {
+    next += direction;
+    if (next < 0 || next >= static_cast<int>(layout.columns.size())) {
+      break;
+    }
+    if (layout.columns.at(next).hasButtons) {
+      selectedSlotIndex_ = next;
+      update();
+      return next;
+    }
+  }
+
+  selectedSlotIndex_ = current;
+  update();
+  return current;
 }
 
 void WheelSwitchElement::handleRepeatTimeout()

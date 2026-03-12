@@ -15,7 +15,9 @@
 
 class QMouseEvent;
 class QKeyEvent;
+class QFocusEvent;
 class QTimer;
+class QWheelEvent;
 
 class WheelSwitchElement : public QWidget
 {
@@ -77,6 +79,9 @@ protected:
   void keyReleaseEvent(QKeyEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void leaveEvent(QEvent *event) override;
+  void focusInEvent(QFocusEvent *event) override;
+  void focusOutEvent(QFocusEvent *event) override;
+  void wheelEvent(QWheelEvent *event) override;
 
 private:
   enum class RepeatDirection
@@ -133,6 +138,16 @@ private:
   void stopRepeating();
   void performStep(RepeatDirection direction, double step, bool forceSend);
   void activateValue(double value, bool forceSend);
+  void beginKeyboardEntry();
+  void cancelKeyboardEntry();
+  void commitKeyboardEntry();
+  bool handleKeyboardEntryKey(QKeyEvent *event);
+  bool updateKeyboardEntryText(const QString &text);
+  double keyboardEntryValue(bool *ok = nullptr) const;
+  QString keyboardEntryDisplayText() const;
+  bool selectedSlotStep(const Layout &layout, Qt::KeyboardModifiers mods,
+      int *slotIndex, double *step) const;
+  int moveSelectedSlot(const Layout &layout, int direction);
   void updateCursor();
   bool isInteractive() const;
   double valueEpsilon() const;
@@ -177,4 +192,7 @@ private:
   bool hasLastSentValue_ = false;
   int hoveredSlotIndex_ = -1;
   RepeatDirection hoveredDirection_ = RepeatDirection::kNone;
+  int selectedSlotIndex_ = -1;
+  bool keyboardEntryActive_ = false;
+  QString keyboardEntryText_;
 };

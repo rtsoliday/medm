@@ -47,7 +47,8 @@ private:
   QString formatNumeric(double value, int precision) const;
   QString formatEnumValue(short value) const;
   QString formatCharArray(const QByteArray &bytes) const;
-  chtype determineSubscriptionType(short nativeFieldType) const;
+  chtype determineSubscriptionType(short nativeFieldType,
+      long elementCount) const;
 
   TextMonitorElement *element_ = nullptr;
   QString channelName_;

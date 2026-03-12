@@ -4864,13 +4864,22 @@ private:
       const PvLimitSource precisionSource = element->precisionSource();
       const int precisionDefault = element->precisionDefault();
       const PvLimits limits = element->limits();
+      const bool hasExplicitLimitsBlock = element->hasExplicitLimitsBlock();
+      const bool hasExplicitLimitsData = element->hasExplicitLimitsData();
+      const bool hasExplicitLowLimitData = element->hasExplicitLowLimitData();
+      const bool hasExplicitHighLimitData = element->hasExplicitHighLimitData();
+      const bool hasExplicitPrecisionData =
+          element->hasExplicitPrecisionData();
       std::array<QString, 5> channels{};
       for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
         channels[static_cast<std::size_t>(i)] = element->channel(i);
       }
       prepareClipboard([geometry, text, foreground, background, alignment,
                            colorMode, format, precision, precisionSource,
-                           precisionDefault, limits, channels](
+                           precisionDefault, limits, hasExplicitLimitsBlock,
+                           hasExplicitLimitsData, hasExplicitLowLimitData,
+                           hasExplicitHighLimitData,
+                           hasExplicitPrecisionData, channels](
                            DisplayWindow &target, const QPoint &offset) {
         if (!target.displayArea_) {
           return;
@@ -4889,6 +4898,11 @@ private:
         newElement->setPrecisionSource(precisionSource);
         newElement->setPrecisionDefault(precisionDefault);
         newElement->setLimits(limits);
+        newElement->setHasExplicitLimitsBlock(hasExplicitLimitsBlock);
+        newElement->setHasExplicitLimitsData(hasExplicitLimitsData);
+        newElement->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+        newElement->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+        newElement->setHasExplicitPrecisionData(hasExplicitPrecisionData);
         for (int i = 0; i < static_cast<int>(channels.size()); ++i) {
           newElement->setChannel(i, channels[static_cast<std::size_t>(i)]);
         }

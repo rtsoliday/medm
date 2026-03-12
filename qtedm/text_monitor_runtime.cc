@@ -118,7 +118,8 @@ void TextMonitorRuntime::resetRuntimeState()
   }
 }
 
-chtype TextMonitorRuntime::determineSubscriptionType(short nativeFieldType) const
+chtype TextMonitorRuntime::determineSubscriptionType(short nativeFieldType,
+    long elementCount) const
 {
   switch (nativeFieldType) {
   case DBR_STRING:
@@ -126,7 +127,7 @@ chtype TextMonitorRuntime::determineSubscriptionType(short nativeFieldType) cons
   case DBR_ENUM:
     return DBR_TIME_ENUM;
   case DBR_CHAR:
-    return DBR_TIME_CHAR;
+    return elementCount > 1 ? DBR_TIME_CHAR : DBR_TIME_DOUBLE;
   default:
     return DBR_TIME_DOUBLE;
   }
@@ -151,7 +152,8 @@ void TextMonitorRuntime::handleChannelConnection(bool connected,
       nativeFieldType_ = data.nativeFieldType;
       elementCount_ = data.nativeElementCount;
 
-      chtype neededType = determineSubscriptionType(nativeFieldType_);
+      chtype neededType = determineSubscriptionType(nativeFieldType_,
+          elementCount_);
       if (neededType != DBR_TIME_DOUBLE) {
         /* Resubscribe with the appropriate type */
         auto &mgr = PvChannelManager::instance();
@@ -207,7 +209,8 @@ void TextMonitorRuntime::handleChannelData(const SharedChannelData &data)
     valueKind_ = ValueKind::kEnum;
     break;
   case DBR_CHAR:
-    valueKind_ = ValueKind::kCharArray;
+    valueKind_ = elementCount_ > 1 ? ValueKind::kCharArray
+                                   : ValueKind::kNumeric;
     break;
   default:
     valueKind_ = ValueKind::kNumeric;

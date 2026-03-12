@@ -346,6 +346,9 @@ void StripChartElement::setPeriod(double period)
   sampleHistoryLength_ = 0;
   for (Pen &pen : pens_) {
     pen.samples.clear();
+    pen.minSamples.clear();
+    pen.maxSamples.clear();
+    pen.hasIntervalRange = false;
   }
   updateSamplingGeometry(chartRect().width());
   invalidateStaticCache();
@@ -373,6 +376,9 @@ void StripChartElement::setUnits(TimeUnits units)
   sampleHistoryLength_ = 0;
   for (Pen &pen : pens_) {
     pen.samples.clear();
+    pen.minSamples.clear();
+    pen.maxSamples.clear();
+    pen.hasIntervalRange = false;
   }
   updateSamplingGeometry(chartRect().width());
   invalidateStaticCache();
@@ -510,6 +516,7 @@ void StripChartElement::setRuntimeConnected(int index, bool connected)
     pen.runtimeLow = pen.limits.lowDefault;
     pen.runtimeHigh = pen.limits.highDefault;
     pen.hasRuntimeValue = false;
+    pen.hasIntervalRange = false;
   }
   updateRefreshTimer();
   update();
@@ -551,6 +558,14 @@ void StripChartElement::addRuntimeSample(int index, double value, qint64 timesta
 
   pen.runtimeValue = value;
   pen.hasRuntimeValue = true;
+  if (pen.hasIntervalRange) {
+    pen.intervalLow = std::min(pen.intervalLow, value);
+    pen.intervalHigh = std::max(pen.intervalHigh, value);
+  } else {
+    pen.intervalLow = value;
+    pen.intervalHigh = value;
+    pen.hasIntervalRange = true;
+  }
 }
 
 void StripChartElement::clearRuntimeState()
@@ -580,8 +595,11 @@ void StripChartElement::clearRuntimeState()
     pen.runtimeLow = pen.limits.lowDefault;
     pen.runtimeHigh = pen.limits.highDefault;
     pen.samples.clear();
+    pen.minSamples.clear();
+    pen.maxSamples.clear();
     pen.runtimeValue = 0.0;
     pen.hasRuntimeValue = false;
+    pen.hasIntervalRange = false;
   }
   invalidatePenCache();
   updateRefreshTimer();
@@ -600,11 +618,19 @@ void StripChartElement::clearPenRuntimeState(int index)
   pen.runtimeHigh = pen.limits.highDefault;
   pen.runtimeValue = 0.0;
   pen.hasRuntimeValue = false;
+  pen.hasIntervalRange = false;
+  const double missingValue = std::numeric_limits<double>::quiet_NaN();
   if (sampleHistoryLength_ > 0) {
     pen.samples.assign(static_cast<std::size_t>(sampleHistoryLength_),
-        std::numeric_limits<double>::quiet_NaN());
+        missingValue);
+    pen.minSamples.assign(static_cast<std::size_t>(sampleHistoryLength_),
+        missingValue);
+    pen.maxSamples.assign(static_cast<std::size_t>(sampleHistoryLength_),
+        missingValue);
   } else {
     pen.samples.clear();
+    pen.minSamples.clear();
+    pen.maxSamples.clear();
   }
 }
 
@@ -1544,11 +1570,10 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
       continue;
     }
     const double range = std::max(std::abs(high - low), kMinimumRangeEpsilon);
-
-    QPainterPath path;
-    bool segmentStarted = false;
-    bool singlePointPending = false;
-    QPointF singlePoint;
+    QPen penColor(effectivePenColor(i));
+    penColor.setWidth(1);
+    painter.setPen(penColor);
+    painter.setBrush(Qt::NoBrush);
 
     const int sampleCount = static_cast<int>(pen.samples.size());
     // Only draw the most recent 'capacity' samples to fit the content width
@@ -1563,39 +1588,36 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
     for (int s = startSample; s < sampleCount; ++s) {
       const double sampleValue = pen.samples[static_cast<std::size_t>(s)];
       if (!std::isfinite(sampleValue)) {
-        segmentStarted = false;
         continue;
+      }
+      double sampleLow = sampleValue;
+      double sampleHigh = sampleValue;
+      if (static_cast<std::size_t>(s) < pen.minSamples.size()
+          && std::isfinite(pen.minSamples[static_cast<std::size_t>(s)])) {
+        sampleLow = pen.minSamples[static_cast<std::size_t>(s)];
+      }
+      if (static_cast<std::size_t>(s) < pen.maxSamples.size()
+          && std::isfinite(pen.maxSamples[static_cast<std::size_t>(s)])) {
+        sampleHigh = pen.maxSamples[static_cast<std::size_t>(s)];
+      }
+      if (sampleLow > sampleHigh) {
+        std::swap(sampleLow, sampleHigh);
       }
       // When zoomed, allow values outside the visible range to be drawn
       // (they will extend beyond the chart area but get clipped by Qt)
-      const double normalized = (sampleValue - low) / range;
+      const double normalizedLow = (sampleLow - low) / range;
+      const double normalizedHigh = (sampleHigh - low) / range;
       const int renderIndex = s - startSample;
       const double x = content.left()
           + (static_cast<double>(offsetColumns + renderIndex) / denominator) * (width - 1.0);
-      const double y = content.top() + (height - 1.0) * (1.0 - normalized);
+      const double yLow = content.top() + (height - 1.0) * (1.0 - normalizedLow);
+      const double yHigh = content.top() + (height - 1.0) * (1.0 - normalizedHigh);
 
-      if (!segmentStarted) {
-        path.moveTo(x, y);
-        segmentStarted = true;
-        singlePointPending = true;
-        singlePoint = QPointF(x, y);
+      if (std::abs(yLow - yHigh) < 0.5) {
+        painter.drawPoint(QPointF(x, yLow));
       } else {
-        path.lineTo(x, y);
-        singlePointPending = false;
+        painter.drawLine(QPointF(x, yLow), QPointF(x, yHigh));
       }
-    }
-
-    if (path.elementCount() >= 2) {
-      QPen penColor(effectivePenColor(i));
-      penColor.setWidth(1);
-      painter.setPen(penColor);
-      painter.setBrush(Qt::NoBrush);
-      painter.drawPath(path);
-    } else if (singlePointPending) {
-      QPen penColor(effectivePenColor(i));
-      penColor.setWidth(1);
-      painter.setPen(penColor);
-      painter.drawPoint(singlePoint);
     }
   }
 }
@@ -1850,6 +1872,12 @@ void StripChartElement::enforceSampleCapacity(int capacity)
     while (static_cast<int>(pen.samples.size()) > capacity) {
       pen.samples.pop_front();
     }
+    while (static_cast<int>(pen.minSamples.size()) > capacity) {
+      pen.minSamples.pop_front();
+    }
+    while (static_cast<int>(pen.maxSamples.size()) > capacity) {
+      pen.maxSamples.pop_front();
+    }
     newLength = std::max(newLength, static_cast<int>(pen.samples.size()));
   }
   sampleHistoryLength_ = newLength;
@@ -1925,12 +1953,36 @@ void StripChartElement::appendSampleColumn()
   const double missingValue = std::numeric_limits<double>::quiet_NaN();
   for (Pen &pen : pens_) {
     double sampleValue = missingValue;
+    double sampleLow = missingValue;
+    double sampleHigh = missingValue;
     if (pen.runtimeConnected && pen.hasRuntimeValue) {
       sampleValue = pen.runtimeValue;
+      if (pen.hasIntervalRange) {
+        sampleLow = pen.intervalLow;
+        sampleHigh = pen.intervalHigh;
+      } else {
+        sampleLow = sampleValue;
+        sampleHigh = sampleValue;
+      }
     }
     pen.samples.push_back(sampleValue);
+    pen.minSamples.push_back(sampleLow);
+    pen.maxSamples.push_back(sampleHigh);
     if (static_cast<int>(pen.samples.size()) > capacity) {
       pen.samples.pop_front();
+    }
+    if (static_cast<int>(pen.minSamples.size()) > capacity) {
+      pen.minSamples.pop_front();
+    }
+    if (static_cast<int>(pen.maxSamples.size()) > capacity) {
+      pen.maxSamples.pop_front();
+    }
+    if (pen.runtimeConnected && pen.hasRuntimeValue) {
+      pen.intervalLow = pen.runtimeValue;
+      pen.intervalHigh = pen.runtimeValue;
+      pen.hasIntervalRange = true;
+    } else {
+      pen.hasIntervalRange = false;
     }
   }
 
@@ -2157,31 +2209,35 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
           if (!std::isfinite(value)) {
             continue;
           }
+          double sampleLow = value;
+          double sampleHigh = value;
+          if (static_cast<std::size_t>(sampleIdx) < pen.minSamples.size()
+              && std::isfinite(pen.minSamples[static_cast<std::size_t>(sampleIdx)])) {
+            sampleLow = pen.minSamples[static_cast<std::size_t>(sampleIdx)];
+          }
+          if (static_cast<std::size_t>(sampleIdx) < pen.maxSamples.size()
+              && std::isfinite(pen.maxSamples[static_cast<std::size_t>(sampleIdx)])) {
+            sampleHigh = pen.maxSamples[static_cast<std::size_t>(sampleIdx)];
+          }
+          if (sampleLow > sampleHigh) {
+            std::swap(sampleLow, sampleHigh);
+          }
 
           // When zoomed, allow values outside the visible range
-          const double normalized = (value - low) / range;
-          const int y = static_cast<int>((height - 1) * (1.0 - normalized));
-
-          // Draw a vertical line for this sample (or point)
-          // Check previous sample for line continuity
-          int prevY = y;
-          if (sampleIdx > 0 && static_cast<std::size_t>(sampleIdx - 1) < pen.samples.size()) {
-            const double prevValue = pen.samples[static_cast<std::size_t>(sampleIdx - 1)];
-            if (std::isfinite(prevValue)) {
-              const double prevNorm = (prevValue - low) / range;
-              prevY = static_cast<int>((height - 1) * (1.0 - prevNorm));
-            }
-          }
+          const double normalizedLow = (sampleLow - low) / range;
+          const double normalizedHigh = (sampleHigh - low) / range;
+          const int yLow = static_cast<int>((height - 1) * (1.0 - normalizedLow));
+          const int yHigh = static_cast<int>((height - 1) * (1.0 - normalizedHigh));
 
           QPen penColor(effectivePenColor(i));
           penColor.setWidth(1);
           cachePainter.setPen(penColor);
 
-          // Draw vertical line from prevY to y (like MEDM does for min/max)
-          if (prevY != y) {
-            cachePainter.drawLine(writeX, std::min(y, prevY), writeX, std::max(y, prevY));
+          if (yLow != yHigh) {
+            cachePainter.drawLine(writeX, std::min(yLow, yHigh), writeX,
+                std::max(yLow, yHigh));
           } else {
-            cachePainter.drawPoint(writeX, y);
+            cachePainter.drawPoint(writeX, yLow);
           }
         }
       }

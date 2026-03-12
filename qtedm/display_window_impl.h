@@ -23247,6 +23247,7 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
   }
 
   bool ok = false;
+  bool convertedLegacyDelay = false;
   const QString periodStr = propertyValue(stripNode, QStringLiteral("period"));
   double periodValue = periodStr.toDouble(&ok);
   if (ok) {
@@ -23279,11 +23280,14 @@ inline StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &st
       linearScale(dummy1, 0.0, 2, &val, &dummy2, &dummy3);
       periodValue = -val;
       element->setPeriod(periodValue);
+      convertedLegacyDelay = true;
     }
   }
 
   const QString unitsStr = propertyValue(stripNode, QStringLiteral("units"));
-  if (!unitsStr.trimmed().isEmpty()) {
+  if (convertedLegacyDelay) {
+    element->setUnits(TimeUnits::kSeconds);
+  } else if (!unitsStr.trimmed().isEmpty()) {
     element->setUnits(parseTimeUnits(unitsStr));
   }
 

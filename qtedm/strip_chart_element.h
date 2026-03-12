@@ -115,8 +115,13 @@ private:
     double runtimeLow = 0.0;
     double runtimeHigh = 0.0;
     std::deque<double> samples;
+    std::deque<double> minSamples;
+    std::deque<double> maxSamples;
     double runtimeValue = 0.0;
     bool hasRuntimeValue = false;
+    double intervalLow = 0.0;
+    double intervalHigh = 0.0;
+    bool hasIntervalRange = false;
   };
 
   QColor effectiveForeground() const;

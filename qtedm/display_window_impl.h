@@ -5403,9 +5403,20 @@ private:
       const QString xDimChannel = element->xDimensionChannel();
       const QString yDimChannel = element->yDimensionChannel();
       const HeatmapOrder order = element->order();
+      const HeatmapColorMap colorMap = element->colorMap();
+      const bool invertGreyscale = element->invertGreyscale();
+      const bool preserveAspectRatio = element->preserveAspectRatio();
+      const bool flipHorizontal = element->flipHorizontal();
+      const bool flipVertical = element->flipVertical();
+      const HeatmapRotation rotation = element->rotation();
+      const bool showTopProfile = element->showTopProfile();
+      const bool showRightProfile = element->showRightProfile();
       prepareClipboard([geometry, title, dataChannel, xSource, ySource, xDim,
-                           yDim, xDimChannel, yDimChannel, order](DisplayWindow &target,
-                           const QPoint &offset) {
+                           yDim, xDimChannel, yDimChannel, order, colorMap,
+                           invertGreyscale, preserveAspectRatio,
+                           flipHorizontal, flipVertical, rotation,
+                           showTopProfile, showRightProfile](
+                           DisplayWindow &target, const QPoint &offset) {
         if (!target.displayArea_) {
           return;
         }
@@ -5421,6 +5432,14 @@ private:
         newElement->setXDimensionChannel(xDimChannel);
         newElement->setYDimensionChannel(yDimChannel);
         newElement->setOrder(order);
+        newElement->setColorMap(colorMap);
+        newElement->setInvertGreyscale(invertGreyscale);
+        newElement->setPreserveAspectRatio(preserveAspectRatio);
+        newElement->setFlipHorizontal(flipHorizontal);
+        newElement->setFlipVertical(flipVertical);
+        newElement->setRotation(rotation);
+        newElement->setShowTopProfile(showTopProfile);
+        newElement->setShowRightProfile(showRightProfile);
         newElement->show();
         target.ensureElementInStack(newElement);
         target.heatmapElements_.append(newElement);

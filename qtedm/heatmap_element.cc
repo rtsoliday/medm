@@ -339,6 +339,8 @@ void HeatmapElement::setRuntimeDimensions(int xDim, int yDim)
 void HeatmapElement::clearRuntimeState()
 {
   runtimeValues_.clear();
+  runtimeSharedValues_.reset();
+  runtimeSharedSize_ = 0;
   runtimeDataValid_ = false;
   runtimeXDimension_ = 0;
   runtimeYDimension_ = 0;
@@ -346,6 +348,12 @@ void HeatmapElement::clearRuntimeState()
   runtimeRangeValid_ = false;
   runtimeMinValue_ = 0.0;
   runtimeMaxValue_ = 0.0;
+  topProfileData_.clear();
+  topProfileMin_ = 0.0;
+  topProfileMax_ = 0.0;
+  rightProfileData_.clear();
+  rightProfileMin_ = 0.0;
+  rightProfileMax_ = 0.0;
   invalidateCache();
 }
 

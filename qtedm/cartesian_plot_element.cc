@@ -859,13 +859,7 @@ void CartesianPlotElement::setAxisMinimum(int axisIndex, double value)
     return;
   }
   axisMinimums_[axisIndex] = value;
-  
-  // Also update runtime minimum if in execute mode
-  if (executeMode_) {
-    axisRuntimeMinimums_[axisIndex] = value;
-    axisRuntimeValid_[axisIndex] = true;
-  }
-  
+
   invalidateStaticCache();
   update();
 }
@@ -887,13 +881,7 @@ void CartesianPlotElement::setAxisMaximum(int axisIndex, double value)
     return;
   }
   axisMaximums_[axisIndex] = value;
-  
-  // Also update runtime maximum if in execute mode
-  if (executeMode_) {
-    axisRuntimeMaximums_[axisIndex] = value;
-    axisRuntimeValid_[axisIndex] = true;
-  }
-  
+
   invalidateStaticCache();
   update();
 }

@@ -5173,6 +5173,19 @@ private:
       const QString triggerChannel = element->triggerChannel();
       const QString eraseChannel = element->eraseChannel();
       const QString countChannel = element->countChannel();
+      std::array<CartesianPlotAxisStyle, kCartesianAxisCount> axisStyles{};
+      std::array<CartesianPlotRangeStyle, kCartesianAxisCount> axisRangeStyles{};
+      std::array<double, kCartesianAxisCount> axisMinimums{};
+      std::array<double, kCartesianAxisCount> axisMaximums{};
+      std::array<CartesianPlotTimeFormat, kCartesianAxisCount> axisTimeFormats{};
+      for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+        const std::size_t idx = static_cast<std::size_t>(axis);
+        axisStyles[idx] = element->axisStyle(axis);
+        axisRangeStyles[idx] = element->axisRangeStyle(axis);
+        axisMinimums[idx] = element->axisMinimum(axis);
+        axisMaximums[idx] = element->axisMaximum(axis);
+        axisTimeFormats[idx] = element->axisTimeFormat(axis);
+      }
       const int traceCount = element->traceCount();
       std::array<QString, kCartesianPlotTraceCount> traceX{};
       std::array<QString, kCartesianPlotTraceCount> traceY{};
@@ -5191,8 +5204,10 @@ private:
       }
       prepareClipboard([geometry, foreground, background, title, xLabel, yLabels,
                            style, eraseOldest, count, eraseMode, triggerChannel,
-                           eraseChannel, countChannel, traceCount, traceX,
-                           traceY, traceColors, traceAxes, traceRight,
+                           eraseChannel, countChannel, axisStyles,
+                           axisRangeStyles, axisMinimums, axisMaximums,
+                           axisTimeFormats, traceCount, traceX, traceY,
+                           traceColors, traceAxes, traceRight,
                            traceSideExplicit](
                            DisplayWindow &target, const QPoint &offset) {
         if (!target.displayArea_) {
@@ -5215,6 +5230,14 @@ private:
         newElement->setTriggerChannel(triggerChannel);
         newElement->setEraseChannel(eraseChannel);
         newElement->setCountChannel(countChannel);
+        for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+          const std::size_t idx = static_cast<std::size_t>(axis);
+          newElement->setAxisStyle(axis, axisStyles[idx]);
+          newElement->setAxisRangeStyle(axis, axisRangeStyles[idx]);
+          newElement->setAxisMinimum(axis, axisMinimums[idx]);
+          newElement->setAxisMaximum(axis, axisMaximums[idx]);
+          newElement->setAxisTimeFormat(axis, axisTimeFormats[idx]);
+        }
         for (int i = 0; i < traceCount && i < kCartesianPlotTraceCount; ++i) {
           const std::size_t idx = static_cast<std::size_t>(i);
           newElement->setTraceXChannel(i, traceX[idx]);

@@ -9329,7 +9329,11 @@ private:
       return;
     }
     cartesianCountSetter_(value);
-    cartesianCountEdit_->setText(QString::number(std::max(value, 1)));
+    const int effectiveCount = cartesianCountGetter_ ? cartesianCountGetter_()
+                                                     : value;
+    const QSignalBlocker blocker(cartesianCountEdit_);
+    cartesianCountEdit_->setText(
+        QString::number(std::max(effectiveCount, 1)));
     committedTexts_[cartesianCountEdit_] = cartesianCountEdit_->text();
   }
 

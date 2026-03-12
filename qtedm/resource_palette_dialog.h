@@ -9709,6 +9709,22 @@ private:
 
   void updateTextEntryLimitsFromDialog()
   {
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (textEntryPrecisionSourceGetter_) {
+      const QString channelLabel = textEntryChannelGetter_
+              ? textEntryChannelGetter_()
+              : QString();
+      pvLimitsDialog_->setTextEntryCallbacks(channelLabel,
+          textEntryPrecisionSourceGetter_, textEntryPrecisionSourceSetter_,
+          textEntryPrecisionDefaultGetter_,
+          textEntryPrecisionDefaultSetter_,
+          [this]() { updateTextEntryLimitsFromDialog(); },
+          textEntryLimitsGetter_, textEntryLimitsSetter_);
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
   }
 
   void updateSliderLimitsFromDialog()
@@ -11958,13 +11974,13 @@ private:
     }
     const QString channelLabel = textEntryChannelGetter_ ? textEntryChannelGetter_()
                                                          : QString();
-    dialog->setTextMonitorCallbacks(channelLabel, textEntryPrecisionSourceGetter_,
+    dialog->setTextEntryCallbacks(channelLabel, textEntryPrecisionSourceGetter_,
         textEntryPrecisionSourceSetter_, textEntryPrecisionDefaultGetter_,
         textEntryPrecisionDefaultSetter_,
         [this]() { updateTextEntryLimitsFromDialog(); }, textEntryLimitsGetter_,
         textEntryLimitsSetter_);
     positionPvLimitsDialog(dialog);
-    dialog->showForTextMonitor();
+    dialog->showForTextEntry();
   }
 
   void openTextMonitorPvLimitsDialog()

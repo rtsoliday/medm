@@ -65,7 +65,7 @@ TextEntryElement::TextEntryElement(QWidget *parent)
         hasPendingRuntimeText_ = false;
       });
 
-  connect(lineEdit_, &QLineEdit::editingFinished, this,
+  connect(lineEdit_, &QLineEdit::returnPressed, this,
       [this]() {
         if (!executeMode_) {
           return;
@@ -75,9 +75,7 @@ TextEntryElement::TextEntryElement(QWidget *parent)
         if (hadEdits && activationCallback_) {
           activationCallback_(lineEdit_->text());
         }
-        if (hasPendingRuntimeText_) {
-          applyRuntimeTextToLineEdit();
-        }
+        hasPendingRuntimeText_ = false;
       });
 }
 
@@ -151,7 +149,7 @@ void TextEntryElement::setFormat(TextMonitorFormat format)
 
 int TextEntryElement::precision() const
 {
-  if (limits_.precisionSource == PvLimitSource::kDefault) {
+  if (limits_.precisionSource != PvLimitSource::kChannel) {
     return limits_.precisionDefault;
   }
   return -1;
@@ -177,17 +175,7 @@ PvLimitSource TextEntryElement::precisionSource() const
 
 void TextEntryElement::setPrecisionSource(PvLimitSource source)
 {
-  switch (source) {
-  case PvLimitSource::kChannel:
-    limits_.precisionSource = PvLimitSource::kChannel;
-    break;
-  case PvLimitSource::kDefault:
-    limits_.precisionSource = PvLimitSource::kDefault;
-    break;
-  case PvLimitSource::kUser:
-    limits_.precisionSource = PvLimitSource::kDefault;
-    break;
-  }
+  limits_.precisionSource = source;
 }
 
 int TextEntryElement::precisionDefault() const
@@ -209,9 +197,6 @@ void TextEntryElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;
   limits_.precisionDefault = std::clamp(limits_.precisionDefault, 0, 17);
-  if (limits_.precisionSource == PvLimitSource::kUser) {
-    limits_.precisionSource = PvLimitSource::kDefault;
-  }
 }
 
 bool TextEntryElement::hasExplicitLimitsBlock() const
@@ -615,6 +600,12 @@ bool TextEntryElement::eventFilter(QObject *watched, QEvent *event)
     };
 
     switch (event->type()) {
+    case QEvent::FocusOut:
+      if (!updateAllowed_) {
+        updateAllowed_ = true;
+        applyRuntimeTextToLineEdit();
+      }
+      break;
     case QEvent::MouseButtonPress:
     case QEvent::MouseButtonRelease: {
       auto *mouseEvent = static_cast<QMouseEvent *>(event);

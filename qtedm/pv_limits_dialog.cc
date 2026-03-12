@@ -74,12 +74,13 @@ QLineEdit *createValueEdit(const QFont &font)
 
 bool PvLimitsDialog::userSourcesAllowed() const
 {
-  return mode_ == Mode::kThermometer;
+  return mode_ == Mode::kThermometer || allowUserSources_;
 }
 
 bool PvLimitsDialog::modeSupportsPrecision() const
 {
   return mode_ == Mode::kTextMonitor
+      || mode_ == Mode::kTextEntry
       || mode_ == Mode::kMeter
       || mode_ == Mode::kSlider
       || mode_ == Mode::kWheelSwitch
@@ -91,6 +92,7 @@ bool PvLimitsDialog::modeSupportsPrecision() const
 bool PvLimitsDialog::modeSupportsLimits() const
 {
   return mode_ == Mode::kTextMonitor
+      || mode_ == Mode::kTextEntry
       || mode_ == Mode::kMeter
       || mode_ == Mode::kStripChart
       || mode_ == Mode::kSlider
@@ -212,7 +214,9 @@ void PvLimitsDialog::clearTargets()
   meterLimitsGetter_ = {};
   meterLimitsSetter_ = {};
   onChangedCallback_ = {};
+  allowUserSources_ = false;
   channelLabel_.clear();
+  setLimitsRowsVisible(true);
   setPrecisionRowVisible(true);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, false);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, false);
@@ -227,7 +231,8 @@ void PvLimitsDialog::setTextMonitorCallbacks(const QString &channelName,
     std::function<void(int)> precisionDefaultSetter,
     std::function<void()> changeNotifier,
     std::function<PvLimits()> limitsGetter,
-    std::function<void(const PvLimits &)> limitsSetter)
+    std::function<void(const PvLimits &)> limitsSetter,
+    bool allowUserSources)
 {
   mode_ = Mode::kTextMonitor;
   precisionSourceGetter_ = std::move(precisionSourceGetter);
@@ -237,6 +242,7 @@ void PvLimitsDialog::setTextMonitorCallbacks(const QString &channelName,
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
+  allowUserSources_ = allowUserSources;
   channelLabel_ = channelName;
   if (titleLabel_) {
     if (channelLabel_.trimmed().isEmpty()) {
@@ -245,21 +251,25 @@ void PvLimitsDialog::setTextMonitorCallbacks(const QString &channelName,
       titleLabel_->setText(channelLabel_.trimmed());
     }
   }
+  setLimitsRowsVisible(true);
   setPrecisionRowVisible(true);
   const bool hasLimits = static_cast<bool>(meterLimitsGetter_)
       && static_cast<bool>(meterLimitsSetter_);
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, hasLimits);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, hasLimits);
   if (loprSourceCombo_) {
-    loprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    loprSourceCombo_->setItemData(2, allowUserSources_ ? 1 : 0,
+        Qt::UserRole - 1);
     loprSourceCombo_->setEnabled(hasLimits);
   }
   if (hoprSourceCombo_) {
-    hoprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    hoprSourceCombo_->setItemData(2, allowUserSources_ ? 1 : 0,
+        Qt::UserRole - 1);
     hoprSourceCombo_->setEnabled(hasLimits);
   }
   if (precisionSourceCombo_) {
-    precisionSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    precisionSourceCombo_->setItemData(2, allowUserSources_ ? 1 : 0,
+        Qt::UserRole - 1);
   }
   updatePrecisionControls();
   updateMeterControls();
@@ -276,12 +286,41 @@ void PvLimitsDialog::showForTextMonitor()
   activateWindow();
 }
 
+void PvLimitsDialog::setTextEntryCallbacks(const QString &channelName,
+    std::function<PvLimitSource()> precisionSourceGetter,
+    std::function<void(PvLimitSource)> precisionSourceSetter,
+    std::function<int()> precisionDefaultGetter,
+    std::function<void(int)> precisionDefaultSetter,
+    std::function<void()> changeNotifier,
+    std::function<PvLimits()> limitsGetter,
+    std::function<void(const PvLimits &)> limitsSetter)
+{
+  setTextMonitorCallbacks(channelName, std::move(precisionSourceGetter),
+      std::move(precisionSourceSetter), std::move(precisionDefaultGetter),
+      std::move(precisionDefaultSetter), std::move(changeNotifier),
+      std::move(limitsGetter), std::move(limitsSetter), true);
+  mode_ = Mode::kTextEntry;
+  setLimitsRowsVisible(false);
+}
+
+void PvLimitsDialog::showForTextEntry()
+{
+  if (mode_ != Mode::kTextEntry) {
+    return;
+  }
+  updatePrecisionControls();
+  show();
+  raise();
+  activateWindow();
+}
+
 void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kMeter;
+  allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -368,6 +407,7 @@ void PvLimitsDialog::setStripChartCallbacks(const QString &channelName,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kStripChart;
+  allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -422,6 +462,7 @@ void PvLimitsDialog::setSliderCallbacks(const QString &channelName,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kSlider;
+  allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -504,6 +545,7 @@ void PvLimitsDialog::setWheelSwitchCallbacks(const QString &channelName,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kWheelSwitch;
+  allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -586,6 +628,7 @@ void PvLimitsDialog::setBarCallbacks(const QString &channelName,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kBarMonitor;
+  allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -668,6 +711,7 @@ void PvLimitsDialog::setThermometerCallbacks(const QString &channelName,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kThermometer;
+  allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -747,6 +791,7 @@ void PvLimitsDialog::setScaleCallbacks(const QString &channelName,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kScaleMonitor;
+  allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -939,7 +984,8 @@ void PvLimitsDialog::commitPrecisionValue()
     updatePrecisionControls();
     return;
   }
-  if (precisionSourceGetter_ && precisionSourceGetter_() != PvLimitSource::kDefault) {
+  if (precisionSourceGetter_
+      && precisionSourceGetter_() == PvLimitSource::kChannel) {
     updatePrecisionControls();
     return;
   }
@@ -1107,6 +1153,28 @@ void PvLimitsDialog::setRowEnabled(QLabel *label, QComboBox *combo,
   }
   if (edit) {
     edit->setEnabled(enabled);
+  }
+}
+
+void PvLimitsDialog::setLimitsRowsVisible(bool visible)
+{
+  if (loprLabel_) {
+    loprLabel_->setVisible(visible);
+  }
+  if (loprSourceCombo_) {
+    loprSourceCombo_->setVisible(visible);
+  }
+  if (loprEdit_) {
+    loprEdit_->setVisible(visible);
+  }
+  if (hoprLabel_) {
+    hoprLabel_->setVisible(visible);
+  }
+  if (hoprSourceCombo_) {
+    hoprSourceCombo_->setVisible(visible);
+  }
+  if (hoprEdit_) {
+    hoprEdit_->setVisible(visible);
   }
 }
 

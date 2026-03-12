@@ -887,6 +887,9 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
       data.isCharArray = true;
       const char *src = reinterpret_cast<const char *>(&val->value);
       data.charArrayValue = QByteArray(src, args.count);
+      data.numericValue = static_cast<double>(
+          static_cast<unsigned char>(val->value));
+      data.isNumeric = true;
       /* Also provide as string (null-terminated) */
       int len = 0;
       for (int i = 0; i < args.count; ++i) {

@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
 
 #include <QByteArray>
 #include <QDebug>
@@ -27,6 +29,57 @@ using TextFormatUtils::kMaxTextField;
 using TextFormatUtils::kPi;
 using TextFormatUtils::localCvtDoubleToExpNotationString;
 using TextFormatUtils::makeSexagesimal;
+
+bool parseSexagesimalField(const char *text, char delimiter, int &sign,
+    const char *&next, double &value)
+{
+  sign = 0;
+  value = 0.0;
+  next = text;
+
+  while (*next == ' ' || *next == '\t') {
+    ++next;
+  }
+
+  if (*next == '+' || *next == '-') {
+    sign = (*next == '-') ? -1 : 1;
+    ++next;
+    while (*next == ' ' || *next == '\t') {
+      ++next;
+    }
+    if (*next == '+' || *next == '-') {
+      return false;
+    }
+  }
+
+  if (*next == delimiter) {
+    ++next;
+    while (*next == ' ' || *next == '\t') {
+      ++next;
+    }
+    return true;
+  }
+
+  char *end = nullptr;
+  value = std::strtod(next, &end);
+  if (end == next) {
+    return false;
+  }
+  value = std::abs(value);
+  next = end;
+
+  while (*next == ' ' || *next == '\t') {
+    ++next;
+  }
+  if (*next == delimiter) {
+    ++next;
+    while (*next == ' ' || *next == '\t') {
+      ++next;
+    }
+  }
+
+  return true;
+}
 
 } // namespace
 
@@ -267,9 +320,9 @@ void TextEntryRuntime::handleChannelData(const SharedChannelData &data)
   } else if (data.isCharArray) {
     lastStringValue_ = formatCharArray(data.charArrayValue);
     hasStringValue_ = !lastStringValue_.isEmpty();
-    if (data.isNumeric) {
+    hasNumericValue_ = data.isNumeric;
+    if (hasNumericValue_) {
       lastNumericValue_ = data.numericValue;
-      hasNumericValue_ = true;
     }
     lastSeverity_ = data.severity;
   } else if (data.isNumeric) {
@@ -335,37 +388,34 @@ void TextEntryRuntime::handleActivation(const QString &text)
     return;
   }
 
-  QString trimmed = text.trimmed();
+  const QString rawText = text;
+  const QString trimmed = text.trimmed();
 
   switch (valueKind_) {
   case ValueKind::kString: {
-    QByteArray bytes = trimmed.toLatin1();
-    if (bytes.size() >= MAX_STRING_SIZE) {
-      bytes.truncate(MAX_STRING_SIZE - 1);
-    }
-    if (!PvChannelManager::instance().putValue(channelName_, trimmed)) {
-      qWarning() << "Failed to write Text Entry value" << trimmed << "to"
+    if (!PvChannelManager::instance().putValue(channelName_, rawText)) {
+      qWarning() << "Failed to write Text Entry value" << rawText << "to"
                  << channelName_;
       return;
     }
-    AuditLogger::instance().logPut(channelName_, trimmed,
+    AuditLogger::instance().logPut(channelName_, rawText,
         QStringLiteral("TextEntry"));
     break;
   }
   case ValueKind::kCharArray: {
     if (element_ && element_->format() == TextMonitorFormat::kString) {
       QByteArray bytes;
-      if (!parseCharArrayInput(trimmed, bytes)) {
+      if (!parseCharArrayInput(rawText, bytes)) {
         qWarning() << "Text Entry char array parse failed for" << channelName_
-                   << "value" << trimmed;
+                   << "value" << rawText;
         return;
       }
       if (!PvChannelManager::instance().putCharArrayValue(channelName_, bytes)) {
-        qWarning() << "Failed to write Text Entry value" << trimmed << "to"
+        qWarning() << "Failed to write Text Entry value" << rawText << "to"
                    << channelName_;
         return;
       }
-      AuditLogger::instance().logPut(channelName_, trimmed,
+      AuditLogger::instance().logPut(channelName_, rawText,
           QStringLiteral("TextEntry"));
     } else {
       double numeric = 0.0;
@@ -614,52 +664,71 @@ bool TextEntryRuntime::parseNumericInput(const QString &text,
 bool TextEntryRuntime::parseSexagesimal(const QString &text,
     double &value) const
 {
-  QString trimmed = text.trimmed();
-  if (trimmed.isEmpty()) {
+  const QByteArray bytes = text.toLatin1();
+  const char *ptr = bytes.constData();
+  if (!ptr) {
     return false;
   }
 
-  bool negative = false;
-  if (trimmed.startsWith('-')) {
-    negative = true;
-    trimmed = trimmed.mid(1);
-  } else if (trimmed.startsWith('+')) {
-    trimmed = trimmed.mid(1);
+  while (*ptr == ' ' || *ptr == '\t') {
+    ++ptr;
   }
-  trimmed = trimmed.trimmed();
-
-  const QStringList parts = trimmed.split(':');
-  if (parts.isEmpty()) {
-    bool ok = false;
-    double numeric = trimmed.toDouble(&ok);
-    if (!ok) {
-      return false;
-    }
-    value = negative ? -numeric : numeric;
-    return true;
+  if (*ptr == '\0') {
+    return false;
   }
 
+  int sign = 0;
+  int newSign = 0;
   double total = 0.0;
-  double divisor = 1.0;
-  for (int i = 0; i < parts.size(); ++i) {
-    const QString part = parts.at(i).trimmed();
-    if (part.isEmpty()) {
+  double minutes = 0.0;
+  double seconds = 0.0;
+
+  if (!parseSexagesimalField(ptr, ':', sign, ptr, total)) {
+    return false;
+  }
+
+  if (total == std::floor(total)
+      && parseSexagesimalField(ptr, ':', newSign, ptr, minutes)) {
+    if ((newSign != 0) && ((sign != 0) || (total != 0.0))) {
       return false;
     }
-    bool ok = false;
-    double numeric = part.toDouble(&ok);
-    if (!ok) {
+    if (sign == 0) {
+      sign = newSign;
+    }
+    if (minutes >= 60.0) {
       return false;
     }
-    if (i == 0) {
-      total = numeric;
-    } else {
-      divisor *= 60.0;
-      total += numeric / divisor;
+    total += minutes / 60.0;
+
+    if (minutes == std::floor(minutes)
+        && parseSexagesimalField(ptr, ' ', newSign, ptr, seconds)) {
+      if ((newSign != 0) && ((sign != 0) || (total != 0.0))) {
+        return false;
+      }
+      if (sign == 0) {
+        sign = newSign;
+      }
+      if (seconds >= 60.0) {
+        return false;
+      }
+      total += seconds / 3600.0;
     }
   }
 
-  value = negative ? -total : total;
+  while (*ptr == ' ' || *ptr == '\t') {
+    ++ptr;
+  }
+  if (*ptr != '\0') {
+    return false;
+  }
+
+  value = (sign < 0) ? -total : total;
+  if (hasControlLimits_) {
+    const double range = controlHigh_ - controlLow_;
+    if (std::abs(range - 24.0) < 1e-12 || std::abs(range - 360.0) < 1e-12) {
+      value -= std::floor((value - controlLow_) / range) * range;
+    }
+  }
   return true;
 }
 
@@ -678,23 +747,34 @@ bool TextEntryRuntime::parseEnumInput(const QString &text, short &value) const
   }
 
   bool ok = false;
+  qlonglong parsed = 0;
   auto format = element_ ? element_->format() : TextMonitorFormat::kDecimal;
   switch (format) {
   case TextMonitorFormat::kHexadecimal:
-    value = static_cast<short>(trimmed.toLongLong(&ok, 16));
+    parsed = trimmed.toLongLong(&ok, 16);
     break;
   case TextMonitorFormat::kOctal:
-    value = static_cast<short>(trimmed.toLongLong(&ok, 8));
+    parsed = trimmed.toLongLong(&ok, 8);
     break;
   default:
-    value = static_cast<short>(trimmed.toLongLong(&ok, 10));
+    parsed = trimmed.toLongLong(&ok, 10);
     if (!ok && trimmed.startsWith(QStringLiteral("0x"),
             Qt::CaseInsensitive)) {
-      value = static_cast<short>(trimmed.mid(2).toLongLong(&ok, 16));
+      parsed = trimmed.mid(2).toLongLong(&ok, 16);
     }
     break;
   }
-  return ok;
+  if (!ok || parsed < 0
+      || parsed > std::numeric_limits<dbr_enum_t>::max()) {
+    return false;
+  }
+  if (!enumStrings_.isEmpty()
+      && parsed >= static_cast<qlonglong>(enumStrings_.size())) {
+    return false;
+  }
+
+  value = static_cast<short>(parsed);
+  return true;
 }
 
 bool TextEntryRuntime::parseCharArrayInput(const QString &text,

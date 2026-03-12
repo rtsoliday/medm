@@ -27,8 +27,18 @@ public:
       std::function<void(int)> precisionDefaultSetter,
       std::function<void()> changeNotifier = {},
       std::function<PvLimits()> limitsGetter = {},
-      std::function<void(const PvLimits &)> limitsSetter = {});
+      std::function<void(const PvLimits &)> limitsSetter = {},
+      bool allowUserSources = false);
   void showForTextMonitor();
+  void setTextEntryCallbacks(const QString &channelName,
+      std::function<PvLimitSource()> precisionSourceGetter,
+      std::function<void(PvLimitSource)> precisionSourceSetter,
+      std::function<int()> precisionDefaultGetter,
+      std::function<void(int)> precisionDefaultSetter,
+      std::function<void()> changeNotifier = {},
+      std::function<PvLimits()> limitsGetter = {},
+      std::function<void(const PvLimits &)> limitsSetter = {});
+  void showForTextEntry();
   void setMeterCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
@@ -69,6 +79,7 @@ private:
   enum class Mode {
     kNone,
     kTextMonitor,
+    kTextEntry,
     kMeter,
     kStripChart,
     kSlider,
@@ -92,6 +103,7 @@ private:
   void notifyChanged();
   void setRowEnabled(QLabel *label, QComboBox *combo, QLineEdit *edit,
       bool enabled);
+  void setLimitsRowsVisible(bool visible);
   void setPrecisionRowVisible(bool visible);
 
   Mode mode_ = Mode::kNone;
@@ -116,6 +128,7 @@ private:
   std::function<PvLimits()> meterLimitsGetter_;
   std::function<void(const PvLimits &)> meterLimitsSetter_;
   std::function<void()> onChangedCallback_;
+  bool allowUserSources_ = false;
   bool updating_ = false;
   QString channelLabel_;
 };

@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QEvent>
 #include <QFont>
 #include <QFontMetrics>
 #include <QMouseEvent>
@@ -24,14 +25,21 @@
 #include "pv_name_utils.h"
 #include "window_utils.h"
 
-namespace {
-
 class CenteredDisplayComboBox : public QComboBox
 {
 public:
   explicit CenteredDisplayComboBox(QWidget *parent = nullptr)
     : QComboBox(parent)
   {
+  }
+
+  void setDisplayTextOverride(const QString &text)
+  {
+    if (displayTextOverride_ == text) {
+      return;
+    }
+    displayTextOverride_ = text;
+    update();
   }
 
 protected:
@@ -59,16 +67,40 @@ protected:
     const QColor textColor = enabled
         ? palette().color(QPalette::ButtonText)
         : palette().color(QPalette::Disabled, QPalette::ButtonText);
+    const QString displayText = displayTextOverride_.isEmpty()
+        ? option.currentText
+        : displayTextOverride_;
     painter.setPen(textColor);
     painter.drawText(
         textRect,
         Qt::AlignCenter,
         fontMetrics().elidedText(
-            option.currentText, Qt::ElideRight, textRect.width()));
+            displayText, Qt::ElideRight, textRect.width()));
   }
+
+private:
+  QString displayTextOverride_;
 };
 
+namespace {
+
 constexpr auto kEditModePlaceholder = "Menu";
+
+QColor alarmColorForSeverity(short severity)
+{
+  switch (severity) {
+  case 0:
+    return QColor(0, 205, 0);
+  case 1:
+    return QColor(255, 255, 0);
+  case 2:
+    return QColor(255, 0, 0);
+  case 3:
+    return QColor(255, 255, 255);
+  default:
+    return QColor(204, 204, 204);
+  }
+}
 
 const std::array<QString, 16> &menuFontAliases()
 {
@@ -122,6 +154,7 @@ MenuElement::MenuElement(QWidget *parent)
   comboBox_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   comboBox_->setAutoFillBackground(true);
   comboBox_->setCursor(CursorUtils::arrowCursor());
+  comboBox_->installEventFilter(this);
 
   QObject::connect(comboBox_, QOverload<int>::of(&QComboBox::activated),
       this, [this](int index) {
@@ -133,11 +166,7 @@ MenuElement::MenuElement(QWidget *parent)
             QApplication::beep();
           }
           QSignalBlocker blocker(comboBox_);
-          if (runtimeValue_ >= 0 && runtimeValue_ < comboBox_->count()) {
-            comboBox_->setCurrentIndex(runtimeValue_);
-          } else {
-            comboBox_->setCurrentIndex(-1);
-          }
+          updateDisplayedRuntimeValue();
           return;
         }
         if (activationCallback_) {
@@ -231,9 +260,7 @@ void MenuElement::setChannel(const QString &channel)
     return;
   }
   channel_ = normalized;
-  if (comboBox_) {
-    comboBox_->setToolTip(channel_);
-  }
+  updateToolTip();
 }
 
 void MenuElement::setExecuteMode(bool execute)
@@ -246,6 +273,7 @@ void MenuElement::setExecuteMode(bool execute)
     comboBox_->setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
     QSignalBlocker blocker(comboBox_);
     comboBox_->clear();
+    comboBox_->setDisplayTextOverride(QString());
     if (!executeMode_) {
       populateSampleItems();
     }
@@ -255,6 +283,7 @@ void MenuElement::setExecuteMode(bool execute)
   runtimeReadAccessKnown_ = false;
   runtimeReadAccess_ = false;
   runtimeWriteAccess_ = false;
+  runtimeValueOutOfRange_ = false;
   runtimeSeverity_ = 0;
   runtimeValue_ = -1;
   if (!executeMode_) {
@@ -266,6 +295,7 @@ void MenuElement::setExecuteMode(bool execute)
   applyPaletteColors();
   updateSelectionVisual();
   updateComboBoxFont();
+  updateToolTip();
   update();
 }
 
@@ -361,16 +391,11 @@ void MenuElement::setRuntimeLabels(const QStringList &labels)
   QSignalBlocker blocker(comboBox_);
   comboBox_->clear();
   comboBox_->addItems(runtimeLabels_);
-  if (runtimeValue_ >= 0 && runtimeValue_ < comboBox_->count()) {
-    comboBox_->setCurrentIndex(runtimeValue_);
-  } else {
-    comboBox_->setCurrentIndex(-1);
-  }
+  updateDisplayedRuntimeValue();
   updateComboBoxEnabledState();
   updateComboBoxCursor();
   applyPaletteColors();
   updateComboBoxFont();
-  comboBox_->update();
   update();
 }
 
@@ -381,12 +406,7 @@ void MenuElement::setRuntimeValue(int value)
     return;
   }
   QSignalBlocker blocker(comboBox_);
-  if (value >= 0 && value < comboBox_->count()) {
-    comboBox_->setCurrentIndex(value);
-  } else {
-    comboBox_->setCurrentIndex(-1);
-  }
-  comboBox_->update();
+  updateDisplayedRuntimeValue();
 }
 
 void MenuElement::setActivationCallback(const std::function<void(int)> &callback)
@@ -432,6 +452,9 @@ void MenuElement::paintEvent(QPaintEvent *event)
 
 QColor MenuElement::effectiveForegroundColor() const
 {
+  if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    return alarmColorForSeverity(runtimeSeverity_);
+  }
   if (foregroundColor_.isValid()) {
     return foregroundColor_;
   }
@@ -494,8 +517,38 @@ void MenuElement::populateSampleItems()
     return;
   }
   comboBox_->addItem(QString::fromLatin1(kEditModePlaceholder));
+  comboBox_->setDisplayTextOverride(QString());
   comboBox_->setCurrentIndex(0);
   updateComboBoxFont();
+  updateToolTip();
+}
+
+QString MenuElement::invalidRuntimeValueText() const
+{
+  return QStringLiteral("Invalid (%1)").arg(runtimeValue_);
+}
+
+void MenuElement::updateDisplayedRuntimeValue()
+{
+  if (!comboBox_) {
+    return;
+  }
+
+  runtimeValueOutOfRange_ = executeMode_ && runtimeValue_ >= 0
+      && !runtimeLabels_.isEmpty()
+      && runtimeValue_ >= comboBox_->count();
+
+  if (runtimeValue_ >= 0 && runtimeValue_ < comboBox_->count()) {
+    comboBox_->setDisplayTextOverride(QString());
+    comboBox_->setCurrentIndex(runtimeValue_);
+  } else {
+    comboBox_->setCurrentIndex(-1);
+    comboBox_->setDisplayTextOverride(
+        runtimeValueOutOfRange_ ? invalidRuntimeValueText() : QString());
+  }
+
+  comboBox_->update();
+  updateToolTip();
 }
 
 void MenuElement::updateComboBoxEnabledState()
@@ -542,6 +595,26 @@ void MenuElement::updateComboBoxFont()
   }
 }
 
+void MenuElement::updateToolTip()
+{
+  if (!comboBox_) {
+    return;
+  }
+
+  QString toolTip = channel_;
+  if (runtimeValueOutOfRange_) {
+    const QString detail = QStringLiteral(
+        "Current enum value %1 is outside the available state range (0-%2).")
+                               .arg(runtimeValue_)
+                               .arg(std::max(0, runtimeLabels_.size() - 1));
+    if (!toolTip.isEmpty()) {
+      toolTip.append(QLatin1Char('\n'));
+    }
+    toolTip.append(detail);
+  }
+  comboBox_->setToolTip(toolTip);
+}
+
 void MenuElement::mousePressEvent(QMouseEvent *event)
 {
   // Forward middle button and right-click events to parent window for PV info functionality
@@ -557,6 +630,28 @@ void MenuElement::mousePressEvent(QMouseEvent *event)
     }
   }
   QWidget::mousePressEvent(event);
+}
+
+bool MenuElement::eventFilter(QObject *watched, QEvent *event)
+{
+  if (watched == comboBox_ && executeMode_ && event
+      && (event->type() == QEvent::MouseButtonPress
+          || event->type() == QEvent::MouseButtonRelease)) {
+    auto *mouseEvent = static_cast<QMouseEvent *>(event);
+    if (mouseEvent->button() == Qt::MiddleButton
+        || mouseEvent->button() == Qt::RightButton) {
+      if (forwardMouseEventToParent(mouseEvent)) {
+        return true;
+      }
+    }
+    if (mouseEvent->button() == Qt::LeftButton
+        && isParentWindowInPvInfoMode(this)) {
+      if (forwardMouseEventToParent(mouseEvent)) {
+        return true;
+      }
+    }
+  }
+  return QWidget::eventFilter(watched, event);
 }
 
 bool MenuElement::forwardMouseEventToParent(QMouseEvent *event) const

@@ -97,6 +97,7 @@ void MenuRuntime::resetRuntimeState()
   lastReadAccessKnown_ = false;
   lastReadAccess_ = false;
   lastWriteAccess_ = false;
+  lastValueOutOfRange_ = false;
   enumStrings_.clear();
 
   if (element_) {
@@ -125,6 +126,7 @@ void MenuRuntime::handleChannelConnection(bool connected,
     }
     enumStrings_.clear();
     lastValue_ = -1;
+    lastValueOutOfRange_ = false;
     if (element_) {
       const short severity = std::clamp<short>(data.severity, 0, kInvalidSeverity);
       const bool readAccessKnown = lastReadAccessKnown_;
@@ -152,6 +154,7 @@ void MenuRuntime::handleChannelConnection(bool connected,
     lastWriteAccess_ = false;
     enumStrings_.clear();
     lastValue_ = -1;
+    lastValueOutOfRange_ = false;
     if (element_) {
       invokeOnElement([](MenuElement *element) {
         element->setRuntimeConnected(false);
@@ -176,6 +179,7 @@ void MenuRuntime::handleChannelData(const SharedChannelData &data)
     if (!enumStrings_.isEmpty() || lastValue_ != -1) {
       enumStrings_.clear();
       lastValue_ = -1;
+      lastValueOutOfRange_ = false;
       invokeOnElement([](MenuElement *element) {
         element->setRuntimeLabels(QStringList());
         element->setRuntimeValue(-1);
@@ -222,8 +226,20 @@ void MenuRuntime::handleChannelData(const SharedChannelData &data)
     });
   }
 
-  if (enumValue != lastValue_) {
+  const int stateCount = enumStrings_.size();
+  const bool valueOutOfRange = stateCount > 0
+      && (enumValue < 0 || enumValue >= stateCount);
+
+  if (valueOutOfRange
+      && (!lastValueOutOfRange_ || enumValue != lastValue_)) {
+    qWarning() << "Menu PV" << channelName_
+               << "reported enum value" << enumValue
+               << "outside available state range 0-" << (stateCount - 1);
+  }
+
+  if (enumValue != lastValue_ || valueOutOfRange != lastValueOutOfRange_) {
     lastValue_ = enumValue;
+    lastValueOutOfRange_ = valueOutOfRange;
     if (element_) {
       invokeOnElement([enumValue](MenuElement *element) {
         element->setRuntimeValue(enumValue);
@@ -258,6 +274,7 @@ void MenuRuntime::handleAccessRights(bool canRead, bool canWrite)
   if (!canRead) {
     enumStrings_.clear();
     lastValue_ = -1;
+    lastValueOutOfRange_ = false;
   }
 }
 

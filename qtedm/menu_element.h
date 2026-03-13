@@ -9,9 +9,13 @@
 
 #include "display_properties.h"
 
-class QComboBox;
 class QPaintEvent;
 class QResizeEvent;
+class QMouseEvent;
+class QObject;
+class QEvent;
+
+class CenteredDisplayComboBox;
 
 class MenuElement : public QWidget
 {
@@ -50,21 +54,25 @@ protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
+  QString invalidRuntimeValueText() const;
   QColor effectiveForegroundColor() const;
   QColor effectiveBackgroundColor() const;
   bool shouldShowRuntimeComboBox() const;
   void applyPaletteColors();
   void updateSelectionVisual();
   void populateSampleItems();
+  void updateDisplayedRuntimeValue();
   void updateComboBoxEnabledState();
   void updateComboBoxCursor();
   void updateComboBoxFont();
+  void updateToolTip();
   bool forwardMouseEventToParent(QMouseEvent *event) const;
 
   bool selected_ = false;
-  QComboBox *comboBox_ = nullptr;
+  CenteredDisplayComboBox *comboBox_ = nullptr;
   QColor foregroundColor_;
   QColor backgroundColor_;
   TextColorMode colorMode_ = TextColorMode::kStatic;
@@ -74,6 +82,7 @@ private:
   bool runtimeReadAccessKnown_ = false;
   bool runtimeReadAccess_ = false;
   bool runtimeWriteAccess_ = false;
+  bool runtimeValueOutOfRange_ = false;
   short runtimeSeverity_ = 0;
   int runtimeValue_ = -1;
   QStringList runtimeLabels_;

@@ -25,25 +25,17 @@ namespace {
 QString sanitizedLabel(const QString &value, bool &showIcon)
 {
   showIcon = true;
-  QString trimmed = value;
-  if (trimmed.startsWith(QLatin1Char('-'))) {
+  QString label = value;
+  if (label.startsWith(QLatin1Char('-'))) {
     showIcon = false;
-    trimmed.remove(0, 1);
+    label.remove(0, 1);
   }
-  return trimmed.trimmed();
+  return label;
 }
 
 QString entryDisplayLabel(const ShellCommandEntry &entry)
 {
-  QString label = entry.label.trimmed();
-  if (!label.isEmpty()) {
-    return label;
-  }
-  QString command = entry.command.trimmed();
-  if (!command.isEmpty()) {
-    return command;
-  }
-  return QString();
+  return entry.label;
 }
 
 int messageButtonPixelLimit(int height)
@@ -270,8 +262,7 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
     text = QStringLiteral("!") + text;
   }
 
-  const int activeCount = activeEntryCount();
-  const bool singleEntry = activeCount == 1;
+  const bool singleEntry = labeledEntryCount() <= 1;
 
   // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
   // Search from largest to smallest font, return first that fits
@@ -327,12 +318,12 @@ QString ShellCommandElement::displayLabel(bool &showIcon) const
   return base;
 }
 
-int ShellCommandElement::activeEntryCount() const
+int ShellCommandElement::labeledEntryCount() const
 {
   int count = 0;
-  for (const auto &entry : entries_) {
-    if (!entry.label.trimmed().isEmpty() || !entry.command.trimmed().isEmpty()
-        || !entry.args.trimmed().isEmpty()) {
+  const int total = entryCount();
+  for (int i = 0; i < total; ++i) {
+    if (entryHasLabel(i)) {
       ++count;
     }
   }
@@ -351,19 +342,31 @@ int ShellCommandElement::activatableEntryCount() const
   return count;
 }
 
+bool ShellCommandElement::entryHasLabel(int index) const
+{
+  if (index < 0 || index >= static_cast<int>(entries_.size())) {
+    return false;
+  }
+  return !entries_[index].label.isEmpty();
+}
+
 bool ShellCommandElement::entryHasCommand(int index) const
 {
   if (index < 0 || index >= static_cast<int>(entries_.size())) {
     return false;
   }
-  return !entries_[index].command.trimmed().isEmpty();
+  return !entries_[index].command.isEmpty();
 }
 
-int ShellCommandElement::firstActivatableEntry() const
+int ShellCommandElement::firstSingleActionEntry() const
 {
+  if (labeledEntryCount() > 1) {
+    return -1;
+  }
+
   const int total = entryCount();
   for (int i = 0; i < total; ++i) {
-    if (entryHasCommand(i)) {
+    if (entryHasLabel(i)) {
       return i;
     }
   }
@@ -452,14 +455,15 @@ void ShellCommandElement::mousePressEvent(QMouseEvent *event)
   }
 
   pressedEntryIndex_ = -1;
-  const int count = activatableEntryCount();
-  if (count <= 0) {
+  const int labelCount = labeledEntryCount();
+  if (labelCount <= 1) {
+    pressedEntryIndex_ = firstSingleActionEntry();
     event->accept();
     return;
   }
 
-  if (count == 1) {
-    pressedEntryIndex_ = firstActivatableEntry();
+  const int count = activatableEntryCount();
+  if (count <= 0) {
     event->accept();
     return;
   }
@@ -493,18 +497,12 @@ void ShellCommandElement::mouseReleaseEvent(QMouseEvent *event)
 void ShellCommandElement::showMenu(Qt::KeyboardModifiers modifiers)
 {
   QMenu menu(this);
-  int labelIndex = 0;
   for (int i = 0; i < entryCount(); ++i) {
     if (!entryHasCommand(i)) {
       continue;
     }
-    QString label = entryDisplayLabel(entries_[i]);
-    if (label.isEmpty()) {
-      label = QStringLiteral("Command %1").arg(labelIndex + 1);
-    }
-    QAction *action = menu.addAction(label);
+    QAction *action = menu.addAction(entryDisplayLabel(entries_[i]));
     action->setData(i);
-    ++labelIndex;
   }
 
   if (menu.actions().isEmpty()) {

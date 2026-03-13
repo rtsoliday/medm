@@ -59,10 +59,11 @@ private:
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QString displayLabel(bool &showIcon) const;
-  int activeEntryCount() const;
+  int labeledEntryCount() const;
   int activatableEntryCount() const;
+  bool entryHasLabel(int index) const;
   bool entryHasCommand(int index) const;
-  int firstActivatableEntry() const;
+  int firstSingleActionEntry() const;
   void showMenu(Qt::KeyboardModifiers modifiers);
   void paintIcon(QPainter &painter, const QRect &rect) const;
   void paintSelectionOverlay(QPainter &painter) const;

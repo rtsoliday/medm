@@ -17186,9 +17186,9 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
         const QString entryLabel = shell->entryLabel(i);
         const QString entryCommand = shell->entryCommand(i);
         const QString entryArgs = shell->entryArgs(i);
-        const bool labelEmpty = entryLabel.trimmed().isEmpty();
-        const bool commandEmpty = entryCommand.trimmed().isEmpty();
-        const bool argsEmpty = entryArgs.trimmed().isEmpty();
+        const bool labelEmpty = entryLabel.isEmpty();
+        const bool commandEmpty = entryCommand.isEmpty();
+        const bool argsEmpty = entryArgs.isEmpty();
         if (labelEmpty && commandEmpty && argsEmpty) {
           continue;
         }
@@ -17222,7 +17222,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       QStringLiteral("bclr=%1")
         .arg(AdlWriter::medmColorIndex(shellBackground)));
       const QString shellLabel = shell->label();
-      if (!shellLabel.trimmed().isEmpty()) {
+      if (!shellLabel.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(shellLabel)));
@@ -18181,9 +18181,9 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       const QString entryLabel = shell->entryLabel(i);
       const QString entryCommand = shell->entryCommand(i);
       const QString entryArgs = shell->entryArgs(i);
-      const bool labelEmpty = entryLabel.trimmed().isEmpty();
-      const bool commandEmpty = entryCommand.trimmed().isEmpty();
-      const bool argsEmpty = entryArgs.trimmed().isEmpty();
+      const bool labelEmpty = entryLabel.isEmpty();
+      const bool commandEmpty = entryCommand.isEmpty();
+      const bool argsEmpty = entryArgs.isEmpty();
       if (labelEmpty && commandEmpty && argsEmpty) {
         continue;
       }
@@ -18217,7 +18217,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         QStringLiteral("bclr=%1")
             .arg(AdlWriter::medmColorIndex(shellBackground)));
     const QString shellLabel = shell->label();
-    if (!shellLabel.trimmed().isEmpty()) {
+    if (!shellLabel.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("label=\"%1\"")
               .arg(AdlWriter::escapeAdlString(shellLabel)));
@@ -21383,12 +21383,12 @@ inline void DisplayWindow::handleShellCommandActivation(
   }
 
   ShellCommandEntry entry = element->entry(entryIndex);
-  QString commandTemplate = entry.command.trimmed();
+  QString commandTemplate = entry.command;
   if (commandTemplate.isEmpty()) {
     return;
   }
 
-  const QString args = entry.args.trimmed();
+  const QString args = entry.args;
   if (!args.isEmpty()) {
     commandTemplate.append(QLatin1Char(' '));
     commandTemplate.append(args);

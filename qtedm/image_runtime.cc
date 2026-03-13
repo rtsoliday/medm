@@ -31,6 +31,7 @@ void ImageRuntime::onBeforeFirstEvaluation()
   const QString imageCalcExpr = element()->calc().trimmed();
   hasImageCalcExpression_ = !imageCalcExpr.isEmpty();
   animate_ = imageCalcExpr.isEmpty() && element()->frameCount() > 1;
+  element()->setRuntimeInvalidCalc(false);
 
   if (hasImageCalcExpression_) {
     /* Normalize expression: convert == to = and != to # for MEDM calc engine */
@@ -44,6 +45,7 @@ void ImageRuntime::onBeforeFirstEvaluation()
       imageCalcValid_ = true;
     } else {
       imageCalcValid_ = false;
+      element()->setRuntimeInvalidCalc(true);
       qWarning() << "Invalid image calc expression:" << imageCalcExpr
                  << "(error" << error << ')';
     }
@@ -66,6 +68,7 @@ void ImageRuntime::onStop()
   if (element()) {
     element()->setRuntimeAnimate(false);
     element()->setRuntimeFrameValid(element()->frameCount() > 0);
+    element()->setRuntimeInvalidCalc(false);
     element()->setRuntimeFrameIndex(0);
   }
 }
@@ -126,23 +129,27 @@ void ImageRuntime::evaluateFrameSelection()
 
   const int count = element()->frameCount();
   if (count <= 0) {
+    element()->setRuntimeInvalidCalc(false);
     element()->setRuntimeFrameValid(false);
     return;
   }
 
   if (!hasImageCalcExpression_) {
+    element()->setRuntimeInvalidCalc(false);
     element()->setRuntimeFrameIndex(0);
     element()->setRuntimeFrameValid(true);
     return;
   }
 
   if (!imageCalcValid_) {
+    element()->setRuntimeInvalidCalc(true);
     element()->setRuntimeFrameValid(false);
     return;
   }
 
   double result = 0.0;
   if (!evaluateImageCalc(result)) {
+    element()->setRuntimeInvalidCalc(true);
     element()->setRuntimeFrameValid(false);
     return;
   }
@@ -152,6 +159,7 @@ void ImageRuntime::evaluateFrameSelection()
   int frameIndex = static_cast<int>(std::floor(clamped + 0.5));
   frameIndex = std::max(0, std::min(frameIndex, count - 1));
 
+  element()->setRuntimeInvalidCalc(false);
   element()->setRuntimeFrameIndex(frameIndex);
   element()->setRuntimeFrameValid(true);
 }

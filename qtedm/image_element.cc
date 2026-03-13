@@ -161,10 +161,20 @@ void ImageElement::setRuntimeFrameValid(bool valid)
 	update();
 }
 
+void ImageElement::setRuntimeInvalidCalc(bool invalid)
+{
+  if (runtimeInvalidCalc_ == invalid) {
+    return;
+  }
+  runtimeInvalidCalc_ = invalid;
+  update();
+}
+
 void ImageElement::onRuntimeStateReset()
 {
   runtimeAnimate_ = false;
   runtimeFrameValid_ = !pixmap_.isNull();
+  runtimeInvalidCalc_ = false;
   runtimeFrameIndex_ = kDefaultFrameIndex;
   if (movie_) {
     /* QMovie::jumpToFrame() requires the movie to be started first */
@@ -231,15 +241,19 @@ void ImageElement::paintEvent(QPaintEvent *event)
   if (showImage) {
     painter.drawPixmap(drawRect, pixmap_);
   } else {
-    const QColor bgColor = (executeMode_ && !runtimeConnected_)
+    const bool disconnected = executeMode_ && !runtimeConnected_;
+    const bool invalidCalc = executeMode_ && runtimeConnected_ && runtimeInvalidCalc_;
+    const QColor bgColor = disconnected
         ? QColor(255, 255, 255)
-        : backgroundColor();
+        : (invalidCalc ? QColor(Qt::black) : backgroundColor());
     painter.fillRect(drawRect, bgColor);
-    painter.setPen(QPen(foregroundColor(), 1, Qt::DashLine));
-    painter.drawRect(drawRect);
-    painter.setPen(QPen(foregroundColor(), 1, Qt::SolidLine));
-    painter.drawLine(drawRect.topLeft(), drawRect.bottomRight());
-    painter.drawLine(drawRect.topRight(), drawRect.bottomLeft());
+    if (!invalidCalc) {
+      painter.setPen(QPen(foregroundColor(), 1, Qt::DashLine));
+      painter.drawRect(drawRect);
+      painter.setPen(QPen(foregroundColor(), 1, Qt::SolidLine));
+      painter.drawLine(drawRect.topLeft(), drawRect.bottomRight());
+      painter.drawLine(drawRect.topRight(), drawRect.bottomLeft());
+    }
   }
 
   if (isSelected()) {

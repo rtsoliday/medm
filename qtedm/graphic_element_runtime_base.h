@@ -31,6 +31,12 @@ struct ElementLayeringTraits
   static constexpr bool kLayerOnAnyChannel = false;
 };
 
+template <typename ElementType>
+struct ElementDynamicColorTraits
+{
+  static constexpr bool kSupportsDynamicColor = true;
+};
+
 /* Trait to check if an element needs channels for a calc expression
  * (beyond visibility/color mode). Override for ImageElement to check
  * for image-specific calc expression used for frame selection. */
@@ -160,6 +166,12 @@ template <>
 struct ElementLayeringTraits<ImageElement>
 {
   static constexpr bool kLayerOnAnyChannel = true;
+};
+
+template <>
+struct ElementDynamicColorTraits<ImageElement>
+{
+  static constexpr bool kSupportsDynamicColor = false;
 };
 
 template <>

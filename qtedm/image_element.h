@@ -27,6 +27,7 @@ public:
   void setRuntimeAnimate(bool animate);
   void setRuntimeFrameIndex(int index);
   void setRuntimeFrameValid(bool valid);
+  void setRuntimeInvalidCalc(bool invalid);
 
   int frameCount() const;
 
@@ -53,5 +54,6 @@ private:
   int cachedFrameCount_ = 0;
   bool runtimeAnimate_ = false;
   bool runtimeFrameValid_ = true;
+  bool runtimeInvalidCalc_ = false;
   int runtimeFrameIndex_ = 0;
 };

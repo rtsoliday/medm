@@ -100,7 +100,8 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
    * connection state even when color/visibility modes are static,
    * so disconnected polygons render white. */
   channelsNeeded_ = hasChannel
-      && ((element_->colorMode() != TextColorMode::kStatic)
+      && (((ElementDynamicColorTraits<ElementType>::kSupportsDynamicColor
+                && element_->colorMode() != TextColorMode::kStatic))
           || (element_->visibilityMode() != TextVisibilityMode::kStatic)
           || ElementCalcChannelTraits<ElementType>::needsChannelsForCalc(element_)
           || std::is_same_v<ElementType, PolygonElement>);

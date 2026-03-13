@@ -1068,7 +1068,8 @@ public:
       QList<RelatedDisplayElement *> &result)
   {
     for (RelatedDisplayElement *element : elements) {
-      if (element && element->visual() == RelatedDisplayVisual::kHiddenButton) {
+      if (element && element->visual() == RelatedDisplayVisual::kHiddenButton
+          && !result.contains(element)) {
         result.append(element);
       }
     }
@@ -1083,7 +1084,8 @@ public:
     const QList<QWidget *> children = composite->childWidgets();
     for (QWidget *child : children) {
       if (auto *relatedDisplay = dynamic_cast<RelatedDisplayElement *>(child)) {
-        if (relatedDisplay->visual() == RelatedDisplayVisual::kHiddenButton) {
+        if (relatedDisplay->visual() == RelatedDisplayVisual::kHiddenButton
+            && !result.contains(relatedDisplay)) {
           result.append(relatedDisplay);
         }
       } else if (auto *nestedComposite = dynamic_cast<CompositeElement *>(child)) {

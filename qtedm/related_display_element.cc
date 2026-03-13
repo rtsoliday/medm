@@ -137,6 +137,22 @@ QPixmap createRelatedDisplayIcon(const QSize &size, const QColor &color)
   return pixmap;
 }
 
+QPixmap createHiddenStippleTile(const QColor &foreground,
+    const QColor &background)
+{
+  QPixmap tile(4, 4);
+  tile.fill(background);
+
+  QPainter painter(&tile);
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(foreground);
+  painter.drawRect(0, 0, 2, 2);
+  painter.drawRect(2, 2, 2, 2);
+  painter.end();
+
+  return tile;
+}
+
 } // namespace
 
 RelatedDisplayElement::RelatedDisplayElement(QWidget *parent)
@@ -217,12 +233,6 @@ void RelatedDisplayElement::setVisual(RelatedDisplayVisual visual)
     return;
   }
   visual_ = visual;
-  
-  /* Update widget attributes based on execute mode and visual type */
-  const bool shouldBeTransparent =
-      visual_ == RelatedDisplayVisual::kHiddenButton && executeMode_;
-  setAttribute(Qt::WA_OpaquePaintEvent, !shouldBeTransparent);
-  
   update();
 }
 
@@ -335,12 +345,6 @@ void RelatedDisplayElement::setExecuteMode(bool execute)
   }
   executeMode_ = execute;
   pressedEntryIndex_ = -1;
-  
-  /* Update widget attributes based on execute mode and visual type */
-  const bool shouldBeTransparent =
-      visual_ == RelatedDisplayVisual::kHiddenButton && executeMode_;
-  setAttribute(Qt::WA_OpaquePaintEvent, !shouldBeTransparent);
-  
   update();
 }
 
@@ -364,37 +368,33 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
 
   const QRect canvas = rect();
 
-  const bool suppressHiddenVisual =
-      visual_ == RelatedDisplayVisual::kHiddenButton && executeMode_;
-
-  if (!suppressHiddenVisual) {
-    painter.fillRect(canvas, effectiveBackground());
-    QRect content;
-    switch (visual_) {
-    case RelatedDisplayVisual::kRowOfButtons:
-    case RelatedDisplayVisual::kColumnOfButtons:
-      /* For button visuals, use the full canvas with no margins to match MEDM */
-      content = canvas;
-      break;
-    default:
-      content = canvas.adjusted(1, 1, -1, -1);
-      break;
-    }
-    switch (visual_) {
-    case RelatedDisplayVisual::kRowOfButtons:
-      paintButtonVisual(painter, content, false);
-      break;
-    case RelatedDisplayVisual::kColumnOfButtons:
-      paintButtonVisual(painter, content, true);
-      break;
-    case RelatedDisplayVisual::kHiddenButton:
-      paintHiddenVisual(painter, content);
-      break;
-    case RelatedDisplayVisual::kMenu:
-    default:
-      paintMenuVisual(painter, content);
-      break;
-    }
+  painter.fillRect(canvas, effectiveBackground());
+  QRect content;
+  switch (visual_) {
+  case RelatedDisplayVisual::kRowOfButtons:
+  case RelatedDisplayVisual::kColumnOfButtons:
+  case RelatedDisplayVisual::kHiddenButton:
+    /* Match MEDM sizing for button and hidden visuals. */
+    content = canvas;
+    break;
+  default:
+    content = canvas.adjusted(1, 1, -1, -1);
+    break;
+  }
+  switch (visual_) {
+  case RelatedDisplayVisual::kRowOfButtons:
+    paintButtonVisual(painter, content, false);
+    break;
+  case RelatedDisplayVisual::kColumnOfButtons:
+    paintButtonVisual(painter, content, true);
+    break;
+  case RelatedDisplayVisual::kHiddenButton:
+    paintHiddenVisual(painter, content);
+    break;
+  case RelatedDisplayVisual::kMenu:
+  default:
+    paintMenuVisual(painter, content);
+    break;
   }
 
   if (selected_) {
@@ -430,17 +430,23 @@ QString RelatedDisplayElement::displayLabel(bool &showIcon) const
   return QStringLiteral("Related Display");
 }
 
-int RelatedDisplayElement::activeEntryCount() const
+QVector<int> RelatedDisplayElement::buttonEntryIndices() const
 {
-  int count = 0;
-  for (const auto &entry : entries_) {
-    /* Match MEDM behavior: only count entries with non-empty labels.
-     * Entries with just a name but no label are not shown as buttons. */
-    if (!entry.label.trimmed().isEmpty()) {
-      ++count;
+  QVector<int> indices;
+  indices.reserve(entryCount());
+  for (int i = 0; i < entryCount(); ++i) {
+    if (!entries_[i].label.trimmed().isEmpty()) {
+      indices.append(i);
     }
   }
-  return count;
+  return indices;
+}
+
+int RelatedDisplayElement::activeEntryCount() const
+{
+  /* Match MEDM behavior: only count entries with non-empty labels.
+   * Entries with just a name but no label are not shown as buttons. */
+  return buttonEntryIndices().size();
 }
 
 void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
@@ -554,7 +560,8 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   painter.setBrush(bg);
   painter.drawRect(content);
 
-  const int activeCount = activeEntryCount();
+  const QVector<int> buttonIndices = buttonEntryIndices();
+  const int activeCount = buttonIndices.size();
   const int displayCount = activeCount > 0 ? activeCount : 2;
   const bool singleButton = (displayCount == 1);
   const int columns = vertical ? 1 : std::max(1, displayCount);
@@ -611,7 +618,7 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
         showIcon = true;
         text = displayLabel(showIcon);
       } else if (index < activeCount) {
-        text = entryDisplayLabel(entries_[index]);
+        text = entryDisplayLabel(entries_[buttonIndices[index]]);
       }
       if (text.isEmpty()) {
         text = QStringLiteral("Display %1").arg(index + 1);
@@ -653,42 +660,8 @@ void RelatedDisplayElement::paintHiddenVisual(QPainter &painter,
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
 
-  /* Compute Motif-style shadow colors for proper bevel visibility
-   * even with very dark backgrounds like black */
-  QColor topShadow, bottomShadow;
-  MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
-
   painter.save();
-  QRect hiddenOuter = content.adjusted(-1, -1, 1, 1);
-  painter.setPen(QPen(topShadow, 1));
-  painter.drawLine(hiddenOuter.topLeft(), hiddenOuter.topRight());
-  painter.drawLine(hiddenOuter.topLeft(), hiddenOuter.bottomLeft());
-  painter.setPen(QPen(bottomShadow, 1));
-  painter.drawLine(hiddenOuter.bottomLeft(), hiddenOuter.bottomRight());
-  painter.drawLine(hiddenOuter.topRight(), hiddenOuter.bottomRight());
-
-  QRect hiddenInner = content;
-  painter.setPen(QPen(topShadow.lighter(110), 1));
-  painter.drawLine(hiddenInner.topLeft(), hiddenInner.topRight());
-  painter.drawLine(hiddenInner.topLeft(), hiddenInner.bottomLeft());
-  painter.setPen(QPen(bottomShadow.darker(115), 1));
-  painter.drawLine(hiddenInner.bottomLeft(), hiddenInner.bottomRight());
-  painter.drawLine(hiddenInner.topRight(), hiddenInner.bottomRight());
-
-  QRect inner = content.adjusted(1, 1, -1, -1);
-  painter.fillRect(inner, bg);
-
-  bool showIcon = false;
-  const QString text = displayLabel(showIcon);
-  
-  // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
-  // Search from largest to smallest font, return first that fits
-  const int fontLimit = messageButtonPixelLimit(height());
-  const QFont labelFont = medmMessageButtonFont(fontLimit);
-  painter.setFont(labelFont);
-  painter.setPen(fg);
-  painter.drawText(inner.adjusted(4, 0, -4, 0), Qt::AlignCenter, text);
-
+  painter.fillRect(content, QBrush(createHiddenStippleTile(fg, bg)));
   painter.restore();
 }
 
@@ -835,7 +808,8 @@ int RelatedDisplayElement::buttonEntryIndexAt(const QPoint &pos) const
     return -1;
   }
 
-  const int activeCount = activeEntryCount();
+  const QVector<int> buttonIndices = buttonEntryIndices();
+  const int activeCount = buttonIndices.size();
   const int displayCount = activeCount > 0 ? activeCount : 2;
   if (displayCount <= 0) {
     return -1;
@@ -856,8 +830,11 @@ int RelatedDisplayElement::buttonEntryIndexAt(const QPoint &pos) const
       QRect buttonRect(content.left() + column * buttonWidth,
           content.top() + row * buttonHeight, buttonWidth, buttonHeight);
       if (buttonRect.contains(pos)) {
-        if (index < entryCount() && entryHasTarget(index)) {
-          return index;
+        if (index < activeCount) {
+          const int entryIndex = buttonIndices[index];
+          if (entryHasTarget(entryIndex)) {
+            return entryIndex;
+          }
         }
         return -1;
       }

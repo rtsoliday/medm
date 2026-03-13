@@ -5,6 +5,7 @@
 
 #include <QColor>
 #include <QString>
+#include <QVector>
 #include <QWidget>
 
 #include "display_properties.h"
@@ -64,6 +65,7 @@ private:
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QString displayLabel(bool &showIcon) const;
+  QVector<int> buttonEntryIndices() const;
   int activeEntryCount() const;
   void paintMenuVisual(QPainter &painter, const QRect &content) const;
   void paintButtonVisual(QPainter &painter, const QRect &content,

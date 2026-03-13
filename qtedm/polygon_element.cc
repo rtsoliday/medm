@@ -5,6 +5,8 @@
 
 #include <QApplication>
 #include <QPainter>
+#include <QPainterPath>
+#include <QPainterPathStroker>
 #include <QPalette>
 #include <QPen>
 
@@ -161,11 +163,26 @@ QVector<QPoint> PolygonElement::absolutePoints() const
 
 bool PolygonElement::containsGlobalPoint(const QPoint &point) const
 {
-  if (localPolygon_.isEmpty()) {
+  if (localPolygon_.size() < 2 || !geometry().contains(point)) {
     return false;
   }
+
   const QPoint localPoint = point - geometry().topLeft();
-  return localPolygon_.containsPoint(localPoint, Qt::OddEvenFill);
+  QPainterPath polygonPath;
+  polygonPath.addPolygon(localPolygon_);
+  polygonPath.closeSubpath();
+
+  if (fill_ == RectangleFill::kSolid
+      && polygonPath.contains(QPointF(localPoint))) {
+    return true;
+  }
+
+  const qreal pickRadius = std::max<qreal>(3.0, static_cast<qreal>(lineWidth_));
+  QPainterPathStroker stroker;
+  stroker.setWidth(pickRadius * 2.0);
+  stroker.setCapStyle(Qt::SquareCap);
+  stroker.setJoinStyle(Qt::MiterJoin);
+  return stroker.createStroke(polygonPath).contains(QPointF(localPoint));
 }
 
 void PolygonElement::paintEvent(QPaintEvent *event)

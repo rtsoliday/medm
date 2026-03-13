@@ -4,6 +4,8 @@
 
 #include <QApplication>
 #include <QPainter>
+#include <QPainterPath>
+#include <QPainterPathStroker>
 #include <QPalette>
 #include <QPen>
 
@@ -65,6 +67,45 @@ void OvalElement::setLineWidth(int width)
   update();
 }
 
+bool OvalElement::containsGlobalPoint(const QPoint &point) const
+{
+  if (!geometry().contains(point)) {
+    return false;
+  }
+
+  const QRect drawRect = rect().adjusted(0, 0, -1, -1);
+  if (drawRect.width() <= 0 || drawRect.height() <= 0) {
+    return false;
+  }
+
+  const QPointF localPoint = QPointF(point - geometry().topLeft());
+  auto ellipsePathForRect = [](const QRect &ellipseRect) {
+    QPainterPath path;
+    if (ellipseRect.width() > 0 && ellipseRect.height() > 0) {
+      path.addEllipse(QRectF(ellipseRect));
+    }
+    return path;
+  };
+
+  if (fill_ == RectangleFill::kSolid) {
+    return ellipsePathForRect(drawRect).contains(localPoint);
+  }
+
+  QRect outlineRect = drawRect;
+  const int offset = (lineWidth_ + 1) / 2;
+  outlineRect.adjust(offset, offset, -offset, -offset);
+  if (outlineRect.width() <= 0 || outlineRect.height() <= 0) {
+    return false;
+  }
+
+  QPainterPathStroker stroker;
+  const qreal pickRadius = std::max<qreal>(3.0, static_cast<qreal>(lineWidth_));
+  stroker.setWidth(pickRadius * 2.0);
+  stroker.setCapStyle(Qt::RoundCap);
+  stroker.setJoinStyle(Qt::RoundJoin);
+  return stroker.createStroke(ellipsePathForRect(outlineRect)).contains(localPoint);
+}
+
 void OvalElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
@@ -87,10 +128,8 @@ void OvalElement::paintEvent(QPaintEvent *event)
                                                          : Qt::SolidLine);
     painter.setPen(pen);
     QRect outlineRect = drawRect;
-    if (lineWidth_ > 1) {
-      const int offset = lineWidth_ / 2;
-      outlineRect.adjust(offset, offset, -offset, -offset);
-    }
+    const int offset = (lineWidth_ + 1) / 2;
+    outlineRect.adjust(offset, offset, -offset, -offset);
     if (outlineRect.width() > 0 && outlineRect.height() > 0) {
       painter.drawEllipse(outlineRect);
     }

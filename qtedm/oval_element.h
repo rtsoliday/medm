@@ -21,6 +21,7 @@ public:
 
   int lineWidth() const;
   void setLineWidth(int width);
+  bool containsGlobalPoint(const QPoint &point) const;
 
 protected:
   void paintEvent(QPaintEvent *event) override;

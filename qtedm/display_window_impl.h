@@ -8531,6 +8531,10 @@ private:
         if (!polyline->containsGlobalPoint(areaPos)) {
           return nullptr;
         }
+      } else if (auto *oval = dynamic_cast<OvalElement *>(candidate)) {
+        if (!oval->containsGlobalPoint(areaPos)) {
+          return nullptr;
+        }
       } else if (auto *polygon = dynamic_cast<PolygonElement *>(candidate)) {
         if (!polygon->containsGlobalPoint(areaPos)) {
           return nullptr;

@@ -1124,6 +1124,9 @@ public:
 
   void pasteSelection()
   {
+    if (executeModeActive_) {
+      return;
+    }
     setNextUndoLabel(QStringLiteral("Paste Selection"));
     pasteFromClipboard();
   }
@@ -1838,7 +1841,8 @@ public:
   bool canPaste() const
   {
     auto state = state_.lock();
-    return state && state->editMode && state->clipboard && state->clipboard->isValid();
+    return state && state->editMode && !executeModeActive_
+        && state->clipboard && state->clipboard->isValid();
   }
 
   bool save(QWidget *dialogParent = nullptr);
@@ -5085,9 +5089,19 @@ private:
       const MeterLabel label = element->label();
       const BarDirection direction = element->direction();
       const PvLimits limits = element->limits();
+      const bool hasExplicitLimitsBlock = element->hasExplicitLimitsBlock();
+      const bool hasExplicitLimitsData = element->hasExplicitLimitsData();
+      const bool hasExplicitLowLimitData = element->hasExplicitLowLimitData();
+      const bool hasExplicitHighLimitData = element->hasExplicitHighLimitData();
+      const bool hasExplicitPrecisionData =
+          element->hasExplicitPrecisionData();
       const QString channel = element->channel();
       prepareClipboard([geometry, foreground, background, colorMode, label,
-                           direction, limits, channel](DisplayWindow &target,
+                           direction, limits, hasExplicitLimitsBlock,
+                           hasExplicitLimitsData, hasExplicitLowLimitData,
+                           hasExplicitHighLimitData,
+                           hasExplicitPrecisionData, channel](
+                           DisplayWindow &target,
                            const QPoint &offset) {
         if (!target.displayArea_) {
           return;
@@ -5101,6 +5115,11 @@ private:
         newElement->setLabel(label);
         newElement->setDirection(direction);
         newElement->setLimits(limits);
+        newElement->setHasExplicitLimitsBlock(hasExplicitLimitsBlock);
+        newElement->setHasExplicitLimitsData(hasExplicitLimitsData);
+        newElement->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+        newElement->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+        newElement->setHasExplicitPrecisionData(hasExplicitPrecisionData);
         newElement->setChannel(channel);
         newElement->show();
         target.ensureElementInStack(newElement);
@@ -5789,7 +5808,8 @@ private:
   {
     setAsActiveDisplay();
     auto state = state_.lock();
-    if (!state || !state->editMode || !state->clipboard
+    if (!state || !state->editMode || executeModeActive_
+        || !state->clipboard
         || !state->clipboard->isValid()) {
       return;
     }

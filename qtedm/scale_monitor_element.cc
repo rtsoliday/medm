@@ -147,8 +147,16 @@ BarDirection ScaleMonitorElement::direction() const
 
 void ScaleMonitorElement::setDirection(BarDirection direction)
 {
-  if (direction != BarDirection::kUp && direction != BarDirection::kRight) {
+  switch (direction) {
+  case BarDirection::kDown:
+    direction = BarDirection::kUp;
+    break;
+  case BarDirection::kLeft:
     direction = BarDirection::kRight;
+    break;
+  case BarDirection::kUp:
+  case BarDirection::kRight:
+    break;
   }
   if (direction_ == direction) {
     return;

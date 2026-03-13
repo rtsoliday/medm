@@ -47,6 +47,7 @@ public:
 
   void setRuntimeConnected(bool connected);
   void setRuntimeSeverity(short severity);
+  void setRuntimeReadAccess(bool readAccess);
   void setRuntimeWriteAccess(bool writeAccess);
 
   void setPressCallback(const std::function<void()> &callback);
@@ -81,6 +82,7 @@ private:
   QString channel_;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
+  bool runtimeReadAccess_ = false;
   bool runtimeWriteAccess_ = false;
   short runtimeSeverity_ = 0;
   std::function<void()> pressCallback_;

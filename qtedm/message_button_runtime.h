@@ -49,6 +49,7 @@ private:
   bool connected_ = false;
   short fieldType_ = -1;
   long elementCount_ = 1;
+  bool lastReadAccess_ = false;
   bool lastWriteAccess_ = false;
   short lastSeverity_ = 0;
   QStringList enumStrings_;

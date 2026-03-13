@@ -283,6 +283,7 @@ void MessageButtonElement::setExecuteMode(bool execute)
   }
   executeMode_ = execute;
   runtimeConnected_ = false;
+  runtimeReadAccess_ = false;
   runtimeWriteAccess_ = false;
   runtimeSeverity_ = 0;
   if (button_) {
@@ -306,6 +307,9 @@ void MessageButtonElement::setRuntimeConnected(bool connected)
     return;
   }
   runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeReadAccess_ = false;
+  }
   if (!executeMode_) {
     return;
   }
@@ -325,6 +329,20 @@ void MessageButtonElement::setRuntimeSeverity(short severity)
     applyPaletteColors();
     update();
   }
+}
+
+void MessageButtonElement::setRuntimeReadAccess(bool readAccess)
+{
+  if (runtimeReadAccess_ == readAccess) {
+    return;
+  }
+  runtimeReadAccess_ = readAccess;
+  if (!executeMode_) {
+    return;
+  }
+  updateButtonState();
+  applyPaletteColors();
+  update();
 }
 
 void MessageButtonElement::setRuntimeWriteAccess(bool writeAccess)
@@ -373,10 +391,13 @@ void MessageButtonElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
   
-  /* Paint solid white background when disconnected or no PV defined in execute mode */
+  /* Match MEDM execute-mode fallback states when the widget cannot be shown. */
   if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     QPainter painter(this);
     painter.fillRect(rect(), Qt::white);
+  } else if (executeMode_ && !runtimeReadAccess_) {
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::black);
   }
 }
 
@@ -386,8 +407,9 @@ void MessageButtonElement::applyPaletteColors()
     return;
   }
   
-  /* Hide button when disconnected or no PV defined in execute mode */
-  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
+  /* Hide the button when execute-mode fallback rectangles should show instead. */
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty()
+          || !runtimeReadAccess_)) {
     button_->hide();
     return;
   } else {
@@ -427,7 +449,11 @@ void MessageButtonElement::applyPaletteColors()
       "QPushButton { background-color: %1; color: %2; "
       "border-width: 2px; border-style: solid; "
       "border-top-color: %3; border-left-color: %3; "
-      "border-bottom-color: %4; border-right-color: %4; }")
+      "border-bottom-color: %4; border-right-color: %4; }"
+      "QPushButton:pressed { "
+      "border-top-color: %4; border-left-color: %4; "
+      "border-bottom-color: %3; border-right-color: %3; "
+      "padding-top: 1px; padding-left: 1px; }")
       .arg(bgName, fgName, topColor, bottomColor);
   button_->setStyleSheet(stylesheet);
 
@@ -502,9 +528,9 @@ void MessageButtonElement::updateButtonState()
     return;
   }
 
-  const bool enable = runtimeConnected_;
+  const bool enable = runtimeConnected_ && runtimeReadAccess_;
   button_->setEnabled(enable);
-  if (runtimeConnected_ && runtimeWriteAccess_) {
+  if (enable && runtimeWriteAccess_) {
     button_->setCursor(CursorUtils::arrowCursor());
   } else {
     button_->setCursor(CursorUtils::forbiddenCursor());

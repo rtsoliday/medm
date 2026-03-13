@@ -101,12 +101,14 @@ void MessageButtonRuntime::resetRuntimeState()
   connected_ = false;
   fieldType_ = -1;
   elementCount_ = 1;
+  lastReadAccess_ = false;
   lastWriteAccess_ = false;
   lastSeverity_ = 0;
   enumStrings_.clear();
 
   invokeOnElement([](MessageButtonElement *element) {
     element->setRuntimeConnected(false);
+    element->setRuntimeReadAccess(false);
     element->setRuntimeWriteAccess(false);
     element->setRuntimeSeverity(0);
   });
@@ -128,11 +130,13 @@ void MessageButtonRuntime::handleChannelConnection(bool connected,
     enumStrings_ = data.enumStrings;
     invokeOnElement([](MessageButtonElement *element) {
       element->setRuntimeConnected(true);
+      element->setRuntimeReadAccess(false);
       element->setRuntimeSeverity(0);
     });
   } else {
     const bool wasConnected = connected_;
     connected_ = false;
+    lastReadAccess_ = false;
     if (wasConnected) {
       stats.registerChannelDisconnected();
     }
@@ -140,6 +144,7 @@ void MessageButtonRuntime::handleChannelConnection(bool connected,
     enumStrings_.clear();
     invokeOnElement([](MessageButtonElement *element) {
       element->setRuntimeConnected(false);
+      element->setRuntimeReadAccess(false);
       element->setRuntimeWriteAccess(false);
       element->setRuntimeSeverity(kInvalidSeverity);
     });
@@ -171,16 +176,18 @@ void MessageButtonRuntime::handleChannelData(const SharedChannelData &data)
     enumStrings_ = data.enumStrings;
   }
 }
-void MessageButtonRuntime::handleAccessRights(bool /*canRead*/, bool canWrite)
+void MessageButtonRuntime::handleAccessRights(bool canRead, bool canWrite)
 {
   if (!started_) {
     return;
   }
-  if (canWrite == lastWriteAccess_) {
+  if (canRead == lastReadAccess_ && canWrite == lastWriteAccess_) {
     return;
   }
+  lastReadAccess_ = canRead;
   lastWriteAccess_ = canWrite;
-  invokeOnElement([canWrite](MessageButtonElement *element) {
+  invokeOnElement([canRead, canWrite](MessageButtonElement *element) {
+    element->setRuntimeReadAccess(canRead);
     element->setRuntimeWriteAccess(canWrite);
   });
 }

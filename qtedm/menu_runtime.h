@@ -26,7 +26,7 @@ public:
 
 private:
   void resetRuntimeState();
-  void handleChannelConnection(bool connected);
+  void handleChannelConnection(bool connected, const SharedChannelData &data);
   void handleChannelData(const SharedChannelData &data);
   void handleAccessRights(bool canRead, bool canWrite);
   void handleActivation(int value);
@@ -41,6 +41,8 @@ private:
   bool connected_ = false;
   short lastSeverity_ = 0;
   short lastValue_ = -1;
+  bool lastReadAccessKnown_ = false;
+  bool lastReadAccess_ = false;
   bool lastWriteAccess_ = false;
   QStringList enumStrings_;
 };

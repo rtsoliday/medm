@@ -38,6 +38,8 @@ public:
 
   void setRuntimeConnected(bool connected);
   void setRuntimeSeverity(short severity);
+  void setRuntimeReadAccessKnown(bool known);
+  void setRuntimeReadAccess(bool readAccess);
   void setRuntimeWriteAccess(bool writeAccess);
   void setRuntimeLabels(const QStringList &labels);
   void setRuntimeValue(int value);
@@ -52,6 +54,7 @@ protected:
 private:
   QColor effectiveForegroundColor() const;
   QColor effectiveBackgroundColor() const;
+  bool shouldShowRuntimeComboBox() const;
   void applyPaletteColors();
   void updateSelectionVisual();
   void populateSampleItems();
@@ -68,10 +71,11 @@ private:
   QString channel_;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
+  bool runtimeReadAccessKnown_ = false;
+  bool runtimeReadAccess_ = false;
   bool runtimeWriteAccess_ = false;
   short runtimeSeverity_ = 0;
   int runtimeValue_ = -1;
   QStringList runtimeLabels_;
   std::function<void(int)> activationCallback_;
 };
-

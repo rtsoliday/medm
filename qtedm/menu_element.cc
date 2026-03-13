@@ -252,6 +252,8 @@ void MenuElement::setExecuteMode(bool execute)
   }
 
   runtimeConnected_ = false;
+  runtimeReadAccessKnown_ = false;
+  runtimeReadAccess_ = false;
   runtimeWriteAccess_ = false;
   runtimeSeverity_ = 0;
   runtimeValue_ = -1;
@@ -278,6 +280,25 @@ void MenuElement::setRuntimeConnected(bool connected)
     return;
   }
   runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeReadAccessKnown_ = false;
+    runtimeReadAccess_ = false;
+  }
+  if (!executeMode_) {
+    return;
+  }
+  updateComboBoxEnabledState();
+  updateComboBoxCursor();
+  applyPaletteColors();
+  update();
+}
+
+void MenuElement::setRuntimeReadAccessKnown(bool known)
+{
+  if (runtimeReadAccessKnown_ == known) {
+    return;
+  }
+  runtimeReadAccessKnown_ = known;
   if (!executeMode_) {
     return;
   }
@@ -298,6 +319,21 @@ void MenuElement::setRuntimeSeverity(short severity)
     applyPaletteColors();
     update();
   }
+}
+
+void MenuElement::setRuntimeReadAccess(bool readAccess)
+{
+  if (runtimeReadAccess_ == readAccess) {
+    return;
+  }
+  runtimeReadAccess_ = readAccess;
+  if (!executeMode_) {
+    return;
+  }
+  updateComboBoxEnabledState();
+  updateComboBoxCursor();
+  applyPaletteColors();
+  update();
 }
 
 void MenuElement::setRuntimeWriteAccess(bool writeAccess)
@@ -330,8 +366,12 @@ void MenuElement::setRuntimeLabels(const QStringList &labels)
   } else {
     comboBox_->setCurrentIndex(-1);
   }
+  updateComboBoxEnabledState();
+  updateComboBoxCursor();
+  applyPaletteColors();
   updateComboBoxFont();
   comboBox_->update();
+  update();
 }
 
 void MenuElement::setRuntimeValue(int value)
@@ -367,6 +407,15 @@ void MenuElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
 
+  if (executeMode_ && !shouldShowRuntimeComboBox()) {
+    QPainter painter(this);
+    const QColor fallback = (runtimeConnected_ && runtimeReadAccessKnown_
+            && !runtimeReadAccess_)
+        ? QColor(Qt::black)
+        : QColor(Qt::white);
+    painter.fillRect(rect(), fallback);
+  }
+
   if (!selected_) {
     return;
   }
@@ -391,7 +440,7 @@ QColor MenuElement::effectiveForegroundColor() const
 
 QColor MenuElement::effectiveBackgroundColor() const
 {
-  if (executeMode_ && !runtimeConnected_) {
+  if (executeMode_ && !shouldShowRuntimeComboBox()) {
     return QColor(Qt::white);
   }
   if (backgroundColor_.isValid()) {
@@ -400,11 +449,27 @@ QColor MenuElement::effectiveBackgroundColor() const
   return palette().color(QPalette::Window);
 }
 
+bool MenuElement::shouldShowRuntimeComboBox() const
+{
+  if (!executeMode_) {
+    return true;
+  }
+  if (channel_.trimmed().isEmpty()) {
+    return false;
+  }
+  return runtimeConnected_ && !runtimeLabels_.isEmpty();
+}
+
 void MenuElement::applyPaletteColors()
 {
   if (!comboBox_) {
     return;
   }
+  if (!shouldShowRuntimeComboBox()) {
+    comboBox_->hide();
+    return;
+  }
+  comboBox_->show();
   QPalette pal = comboBox_->palette();
   const QColor fg = effectiveForegroundColor();
   const QColor bg = effectiveBackgroundColor();
@@ -439,7 +504,7 @@ void MenuElement::updateComboBoxEnabledState()
     return;
   }
   if (executeMode_) {
-    comboBox_->setEnabled(runtimeConnected_);
+    comboBox_->setEnabled(runtimeConnected_ && runtimeReadAccess_);
   } else {
     comboBox_->setEnabled(true);
   }

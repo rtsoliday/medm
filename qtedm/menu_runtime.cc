@@ -68,8 +68,8 @@ void MenuRuntime::start()
       DBR_TIME_ENUM,
       1,
       [this](const SharedChannelData &data) { handleChannelData(data); },
-      [this](bool connected, const SharedChannelData &) {
-        handleChannelConnection(connected);
+      [this](bool connected, const SharedChannelData &data) {
+        handleChannelConnection(connected, data);
       },
       [this](bool canRead, bool canWrite) { handleAccessRights(canRead, canWrite); });
 }
@@ -94,12 +94,16 @@ void MenuRuntime::resetRuntimeState()
   connected_ = false;
   lastSeverity_ = 0;
   lastValue_ = -1;
+  lastReadAccessKnown_ = false;
+  lastReadAccess_ = false;
   lastWriteAccess_ = false;
   enumStrings_.clear();
 
   if (element_) {
     invokeOnElement([](MenuElement *element) {
       element->setRuntimeConnected(false);
+      element->setRuntimeReadAccessKnown(false);
+      element->setRuntimeReadAccess(false);
       element->setRuntimeWriteAccess(false);
       element->setRuntimeSeverity(0);
       element->setRuntimeValue(-1);
@@ -108,7 +112,8 @@ void MenuRuntime::resetRuntimeState()
   }
 }
 
-void MenuRuntime::handleChannelConnection(bool connected)
+void MenuRuntime::handleChannelConnection(bool connected,
+    const SharedChannelData &data)
 {
   auto &stats = StatisticsTracker::instance();
 
@@ -118,24 +123,44 @@ void MenuRuntime::handleChannelConnection(bool connected)
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
+    enumStrings_.clear();
+    lastValue_ = -1;
     if (element_) {
-      invokeOnElement([](MenuElement *element) {
+      const short severity = std::clamp<short>(data.severity, 0, kInvalidSeverity);
+      const bool readAccessKnown = lastReadAccessKnown_;
+      const bool readAccess = lastReadAccess_;
+      const bool writeAccess = lastWriteAccess_;
+      invokeOnElement([severity, readAccessKnown, readAccess, writeAccess](
+                          MenuElement *element) {
         element->setRuntimeConnected(true);
+        element->setRuntimeReadAccessKnown(readAccessKnown);
+        element->setRuntimeReadAccess(readAccessKnown && readAccess);
+        element->setRuntimeWriteAccess(readAccessKnown && writeAccess);
+        element->setRuntimeSeverity(severity);
+        element->setRuntimeValue(-1);
+        element->setRuntimeLabels(QStringList());
       });
     }
   } else {
     const bool wasConnected = connected_;
     connected_ = false;
+    lastReadAccessKnown_ = false;
+    lastReadAccess_ = false;
     if (wasConnected) {
       stats.registerChannelDisconnected();
     }
     lastWriteAccess_ = false;
+    enumStrings_.clear();
+    lastValue_ = -1;
     if (element_) {
       invokeOnElement([](MenuElement *element) {
         element->setRuntimeConnected(false);
+        element->setRuntimeReadAccessKnown(false);
+        element->setRuntimeReadAccess(false);
         element->setRuntimeWriteAccess(false);
         element->setRuntimeSeverity(kInvalidSeverity);
         element->setRuntimeValue(-1);
+        element->setRuntimeLabels(QStringList());
       });
     }
   }
@@ -148,6 +173,14 @@ void MenuRuntime::handleChannelData(const SharedChannelData &data)
   }
 
   if (!data.isEnum) {
+    if (!enumStrings_.isEmpty() || lastValue_ != -1) {
+      enumStrings_.clear();
+      lastValue_ = -1;
+      invokeOnElement([](MenuElement *element) {
+        element->setRuntimeLabels(QStringList());
+        element->setRuntimeValue(-1);
+      });
+    }
     return;
   }
 
@@ -159,6 +192,17 @@ void MenuRuntime::handleChannelData(const SharedChannelData &data)
     stats.registerCaEvent();
     stats.registerUpdateRequest(true);
     stats.registerUpdateExecuted();
+  }
+
+  if (!lastReadAccessKnown_ || !lastReadAccess_) {
+    lastReadAccessKnown_ = true;
+    lastReadAccess_ = true;
+    if (element_) {
+      invokeOnElement([](MenuElement *element) {
+        element->setRuntimeReadAccessKnown(true);
+        element->setRuntimeReadAccess(true);
+      });
+    }
   }
 
   if (severity != lastSeverity_) {
@@ -188,19 +232,32 @@ void MenuRuntime::handleChannelData(const SharedChannelData &data)
   }
 }
 
-void MenuRuntime::handleAccessRights(bool /*canRead*/, bool canWrite)
+void MenuRuntime::handleAccessRights(bool canRead, bool canWrite)
 {
   if (!started_) {
     return;
   }
-  if (canWrite == lastWriteAccess_) {
+  if (lastReadAccessKnown_ && canRead == lastReadAccess_
+      && canWrite == lastWriteAccess_) {
     return;
   }
+  lastReadAccessKnown_ = true;
+  lastReadAccess_ = canRead;
   lastWriteAccess_ = canWrite;
   if (element_) {
-    invokeOnElement([canWrite](MenuElement *element) {
+    invokeOnElement([canRead, canWrite](MenuElement *element) {
+      element->setRuntimeReadAccessKnown(true);
+      element->setRuntimeReadAccess(canRead);
       element->setRuntimeWriteAccess(canWrite);
+      if (!canRead) {
+        element->setRuntimeValue(-1);
+        element->setRuntimeLabels(QStringList());
+      }
     });
+  }
+  if (!canRead) {
+    enumStrings_.clear();
+    lastValue_ = -1;
   }
 }
 

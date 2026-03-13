@@ -320,7 +320,7 @@ void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
     std::function<void()> changeNotifier)
 {
   mode_ = Mode::kMeter;
-  allowUserSources_ = false;
+  allowUserSources_ = true;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
   onChangedCallback_ = std::move(changeNotifier);
@@ -338,15 +338,15 @@ void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
   setRowEnabled(loprLabel_, loprSourceCombo_, loprEdit_, hasLimits);
   setRowEnabled(hoprLabel_, hoprSourceCombo_, hoprEdit_, hasLimits);
   if (loprSourceCombo_) {
-    loprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    loprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
     loprSourceCombo_->setEnabled(hasLimits);
   }
   if (hoprSourceCombo_) {
-    hoprSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    hoprSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
     hoprSourceCombo_->setEnabled(hasLimits);
   }
   if (precisionSourceCombo_) {
-    precisionSourceCombo_->setItemData(2, 0, Qt::UserRole - 1);
+    precisionSourceCombo_->setItemData(2, 1, Qt::UserRole - 1);
   }
 
   if (meterLimitsGetter_ && meterLimitsSetter_) {
@@ -361,9 +361,6 @@ void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
         return;
       }
       PvLimits limits = meterLimitsGetter_();
-      if (source == PvLimitSource::kUser) {
-        source = PvLimitSource::kDefault;
-      }
       limits.precisionSource = source;
       meterLimitsSetter_(limits);
     };

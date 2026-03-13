@@ -17327,7 +17327,8 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     AdlWriter::writeLimitsSection(stream, 1, meter->limits(),
       meter->hasExplicitLimitsData(), meter->hasExplicitLimitsBlock(),
       meter->hasExplicitPrecisionData(),
-      meter->hasExplicitLowLimitData(), meter->hasExplicitHighLimitData());
+      meter->hasExplicitLowLimitData(), meter->hasExplicitHighLimitData(),
+      true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -18330,7 +18331,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeLimitsSection(stream, next, meter->limits(),
       meter->hasExplicitLimitsData(), meter->hasExplicitLimitsBlock(),
       meter->hasExplicitPrecisionData(),
-      meter->hasExplicitLowLimitData(), meter->hasExplicitHighLimitData());
+      meter->hasExplicitLowLimitData(), meter->hasExplicitHighLimitData(),
+      true);
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
   }

@@ -117,6 +117,22 @@ protected:
     painter.drawRect(rect().adjusted(0, 0, -1, -1));
   }
 
+  void mousePressEvent(QMouseEvent *event) override
+  {
+    if (owner_ && owner_->handleChildMouseEvent(event)) {
+      return;
+    }
+    QPushButton::mousePressEvent(event);
+  }
+
+  void mouseReleaseEvent(QMouseEvent *event) override
+  {
+    if (owner_ && owner_->handleChildMouseEvent(event)) {
+      return;
+    }
+    QPushButton::mouseReleaseEvent(event);
+  }
+
 private:
   MessageButtonElement *owner_ = nullptr;
 };
@@ -391,13 +407,10 @@ void MessageButtonElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
   
-  /* Match MEDM execute-mode fallback states when the widget cannot be shown. */
+  /* Paint a white fallback only when the control has no connected channel. */
   if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     QPainter painter(this);
     painter.fillRect(rect(), Qt::white);
-  } else if (executeMode_ && !runtimeReadAccess_) {
-    QPainter painter(this);
-    painter.fillRect(rect(), Qt::black);
   }
 }
 
@@ -407,9 +420,8 @@ void MessageButtonElement::applyPaletteColors()
     return;
   }
   
-  /* Hide the button when execute-mode fallback rectangles should show instead. */
-  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty()
-          || !runtimeReadAccess_)) {
+  /* Hide the button only when there is no connected channel to drive it. */
+  if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     button_->hide();
     return;
   } else {
@@ -528,7 +540,7 @@ void MessageButtonElement::updateButtonState()
     return;
   }
 
-  const bool enable = runtimeConnected_ && runtimeReadAccess_;
+  const bool enable = runtimeConnected_;
   button_->setEnabled(enable);
   if (enable && runtimeWriteAccess_) {
     button_->setCursor(CursorUtils::arrowCursor());
@@ -588,6 +600,23 @@ void MessageButtonElement::mousePressEvent(QMouseEvent *event)
     }
   }
   QWidget::mousePressEvent(event);
+}
+
+bool MessageButtonElement::handleChildMouseEvent(QMouseEvent *event) const
+{
+  if (!event || !executeMode_) {
+    return false;
+  }
+
+  if (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton) {
+    return forwardMouseEventToParent(event);
+  }
+
+  if (event->button() == Qt::LeftButton && isParentWindowInPvInfoMode(button_)) {
+    return forwardMouseEventToParent(event);
+  }
+
+  return false;
 }
 
 bool MessageButtonElement::forwardMouseEventToParent(QMouseEvent *event) const

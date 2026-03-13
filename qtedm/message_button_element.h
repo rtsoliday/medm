@@ -12,6 +12,7 @@ class QPushButton;
 class QPaintEvent;
 class QResizeEvent;
 class QEvent;
+class QMouseEvent;
 
 class MessageButtonElement : public QWidget
 {
@@ -52,6 +53,7 @@ public:
 
   void setPressCallback(const std::function<void()> &callback);
   void setReleaseCallback(const std::function<void()> &callback);
+  bool handleChildMouseEvent(QMouseEvent *event) const;
 
 protected:
   void resizeEvent(QResizeEvent *event) override;

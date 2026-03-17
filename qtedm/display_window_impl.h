@@ -20246,6 +20246,21 @@ inline void DisplayWindow::refreshStackingOrder()
       /* No widget to remove from set - already null */
       continue;
     }
+    if (executeModeActive_) {
+      if (const auto *related =
+              dynamic_cast<const RelatedDisplayElement *>(widget)) {
+        if (related->visual() == RelatedDisplayVisual::kHiddenButton) {
+          /*
+           * MEDM keeps hidden related displays underneath later graphics.
+           * Treat them like static content so overlays can hide the stipple
+           * while transparent graphics still allow clicks through.
+           */
+          staticWidgets.append(widget);
+          ++it;
+          continue;
+        }
+      }
+    }
     if (isStaticGraphicWidget(widget)) {
       staticWidgets.append(widget);
     } else if (executeModeActive_ && isExecuteMonitorWidget(widget)) {

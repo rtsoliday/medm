@@ -93,6 +93,10 @@ protected:
     painter.setRenderHint(QPainter::Antialiasing, false);
     painter.setRenderHint(QPainter::TextAntialiasing, false);
 
+    QRegion clipRegion(rect());
+    clipRegion -= QRect(ownerLeft, ownerTop, ownerRect.width(), ownerRect.height());
+    painter.setClipRegion(clipRegion);
+
     const QString text = owner_->text();
     if (!text.isEmpty() && !owner_->shouldSuppressTextForDisconnect()) {
       const QFont font = owner_->font();
@@ -115,17 +119,6 @@ protected:
         break;
       }
       painter.drawText(textX, baseline, text);
-    }
-
-    if (owner_->isSelected()) {
-      QPen pen(Qt::black);
-      pen.setStyle(Qt::DashLine);
-      pen.setWidth(1);
-      painter.setPen(pen);
-      painter.setBrush(Qt::NoBrush);
-      QRect border(ownerLeft, ownerTop, ownerRect.width(), ownerRect.height());
-      border.adjust(0, 0, -1, -1);
-      painter.drawRect(border);
     }
   }
 
@@ -436,6 +429,46 @@ void TextElement::resizeEvent(QResizeEvent *event)
 void TextElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);
+
+  QPainter painter(this);
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  painter.setRenderHint(QPainter::TextAntialiasing, false);
+
+  if (!testAttribute(Qt::WA_NoSystemBackground) || autoFillBackground()) {
+    painter.fillRect(rect(), palette().color(QPalette::Window));
+  }
+
+  const QString currentText = text();
+  if (!currentText.isEmpty() && !shouldSuppressTextForDisconnect()) {
+    const QFont currentFont = font();
+    painter.setFont(currentFont);
+    painter.setPen(effectiveForegroundColor());
+
+    const QFontMetrics metrics(currentFont);
+    const int baseline = metrics.ascent();
+    int textX = 0;
+    const int textWidth = textPixelWidth(metrics, currentText);
+    switch (alignment_ & Qt::AlignHorizontal_Mask) {
+    case Qt::AlignHCenter:
+      textX = (width() - textWidth) / 2;
+      break;
+    case Qt::AlignRight:
+      textX = width() - textWidth;
+      break;
+    default:
+      break;
+    }
+    painter.drawText(textX, baseline, currentText);
+  }
+
+  if (isSelected()) {
+    QPen pen(Qt::black);
+    pen.setStyle(Qt::DashLine);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  }
 }
 
 bool TextElement::event(QEvent *event)
@@ -547,8 +580,7 @@ void TextElement::applyTextVisibility()
 
 void TextElement::updateSelectionVisual()
 {
-  // Keep the configured foreground color even when selected; the overflow
-  // widget handles the dashed selection border.
+  // Keep the configured foreground color even when selected.
   applyTextColor();
   requestOverflowRepaint();
 }
@@ -680,7 +712,7 @@ void TextElement::updateOverflowVisibility()
     overflowWidget_->hide();
     return;
   }
-  const bool visible = isVisible();
+  const bool visible = isVisible() && hasVisualOverflow();
   if (overflowWidget_->isVisible() != visible) {
     if (visible) {
       overflowWidget_->show();
@@ -695,7 +727,8 @@ void TextElement::updateOverflowStacking()
   if (!overflowWidget_) {
     return;
   }
-  if (overflowWidget_->parentWidget() == parentWidget()) {
+  if (overflowWidget_->parentWidget() == parentWidget()
+      && hasVisualOverflow()) {
     overflowWidget_->raise();
   }
 }
@@ -711,4 +744,22 @@ void TextElement::requestOverflowRepaint()
       overflowWidget_->update();
     }
   }
+}
+
+bool TextElement::hasVisualOverflow() const
+{
+  if (!parentWidget()) {
+    return false;
+  }
+
+  const QRect ownerRect = geometry();
+  if (!ownerRect.isValid()) {
+    return false;
+  }
+
+  const QRect visualRect = visualBoundsRelativeToParent();
+  return visualRect.left() < ownerRect.left()
+      || visualRect.top() < ownerRect.top()
+      || visualRect.right() > ownerRect.right()
+      || visualRect.bottom() > ownerRect.bottom();
 }

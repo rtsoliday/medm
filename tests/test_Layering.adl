@@ -333,7 +333,7 @@ rectangle {
 }
 text {
 	object {
-		x=296
+		x=294
 		y=168
 		width=20
 		height=15

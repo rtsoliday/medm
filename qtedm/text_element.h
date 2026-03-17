@@ -85,6 +85,7 @@ private:
   void updateOverflowVisibility();
   void updateOverflowStacking();
   void requestOverflowRepaint();
+  bool hasVisualOverflow() const;
 
   bool selected_ = false;
   QColor foregroundColor_;

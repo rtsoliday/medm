@@ -824,6 +824,21 @@ void CompositeElement::refreshChildStackingOrder()
       continue;
     }
 
+    /*
+     * MEDM hidden related displays are effectively part of the background draw
+     * order in execute mode. Keep them below later child graphics so overlay
+     * shapes can hide the stipple.
+     */
+    if (executeMode_) {
+      if (const auto *related =
+              dynamic_cast<const RelatedDisplayElement *>(child)) {
+        if (related->visual() == RelatedDisplayVisual::kHiddenButton) {
+          staticWidgets.append(child);
+          continue;
+        }
+      }
+    }
+
     /* Controls (buttons, text entries, etc.) always go to interactive layer */
     if (isControlChildWidget(child)) {
       interactiveWidgets.append(child);

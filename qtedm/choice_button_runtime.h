@@ -41,7 +41,10 @@ private:
   bool connected_ = false;
   short lastSeverity_ = 0;
   short lastValue_ = -1;
+  bool lastReadAccessKnown_ = false;
+  bool lastReadAccess_ = false;
   bool lastWriteAccess_ = false;
+  bool lastValueOutOfRange_ = false;
   QStringList enumStrings_;
 };
 

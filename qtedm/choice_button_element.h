@@ -42,6 +42,8 @@ public:
 
   void setRuntimeConnected(bool connected);
   void setRuntimeSeverity(short severity);
+  void setRuntimeReadAccessKnown(bool known);
+  void setRuntimeReadAccess(bool readAccess);
   void setRuntimeWriteAccess(bool writeAccess);
   void setRuntimeLabels(const QStringList &labels);
   void setRuntimeValue(int value);
@@ -61,6 +63,7 @@ private:
   void clearButtons();
   void rebuildButtons();
   void layoutButtons();
+  bool shouldShowRuntimeButtons() const;
   void updateButtonPalettes();
   void updateButtonEnabledState();
   void applyButtonFont(QAbstractButton *button, const QRect &bounds) const;
@@ -74,6 +77,8 @@ private:
   QString channel_;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
+  bool runtimeReadAccessKnown_ = false;
+  bool runtimeReadAccess_ = false;
   bool runtimeWriteAccess_ = false;
   short runtimeSeverity_ = 0;
   int runtimeValue_ = -1;

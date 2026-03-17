@@ -442,6 +442,8 @@ void ChoiceButtonElement::setExecuteMode(bool execute)
   } else {
     clearButtons();
     runtimeConnected_ = false;
+    runtimeReadAccessKnown_ = false;
+    runtimeReadAccess_ = false;
     runtimeWriteAccess_ = false;
     runtimeSeverity_ = 0;
     runtimeValue_ = -1;
@@ -461,7 +463,23 @@ void ChoiceButtonElement::setRuntimeConnected(bool connected)
   }
   runtimeConnected_ = connected;
   if (!runtimeConnected_) {
+    runtimeReadAccessKnown_ = false;
+    runtimeReadAccess_ = false;
     runtimeWriteAccess_ = false;
+  }
+  updateButtonEnabledState();
+  updateButtonPalettes();
+  update();
+}
+
+void ChoiceButtonElement::setRuntimeReadAccessKnown(bool known)
+{
+  if (runtimeReadAccessKnown_ == known) {
+    return;
+  }
+  runtimeReadAccessKnown_ = known;
+  if (!executeMode_) {
+    return;
   }
   updateButtonEnabledState();
   updateButtonPalettes();
@@ -484,6 +502,20 @@ void ChoiceButtonElement::setRuntimeSeverity(short severity)
   if (executeMode_) {
     updateButtonPalettes();
   }
+  update();
+}
+
+void ChoiceButtonElement::setRuntimeReadAccess(bool readAccess)
+{
+  if (runtimeReadAccess_ == readAccess) {
+    return;
+  }
+  runtimeReadAccess_ = readAccess;
+  if (!executeMode_) {
+    return;
+  }
+  updateButtonEnabledState();
+  updateButtonPalettes();
   update();
 }
 
@@ -521,20 +553,22 @@ void ChoiceButtonElement::setRuntimeValue(int value)
   }
 
   QSignalBlocker blocker(buttonGroup_);
-  bool matched = false;
-  if (value >= 0) {
-    if (QAbstractButton *button = buttonGroup_->button(value)) {
-      button->setChecked(true);
-      matched = true;
-    }
-  }
-  if (!matched) {
+  if (value < 0) {
     for (QAbstractButton *candidate : buttons_) {
       if (candidate) {
         candidate->setChecked(false);
       }
     }
+    update();
+    return;
   }
+
+  if (QAbstractButton *button = buttonGroup_->button(value)) {
+    button->setChecked(true);
+    update();
+    return;
+  }
+
   update();
 }
 
@@ -547,6 +581,9 @@ void ChoiceButtonElement::setActivationCallback(
 QColor ChoiceButtonElement::effectiveForeground() const
 {
   if (executeMode_) {
+    if (runtimeConnected_ && runtimeReadAccessKnown_ && !runtimeReadAccess_) {
+      return QColor(Qt::black);
+    }
     if (!runtimeConnected_ || channel_.trimmed().isEmpty()) {
       return QColor(204, 204, 204);
     }
@@ -565,6 +602,10 @@ QColor ChoiceButtonElement::effectiveForeground() const
 
 QColor ChoiceButtonElement::effectiveBackground() const
 {
+  if (executeMode_ && runtimeConnected_ && runtimeReadAccessKnown_
+      && !runtimeReadAccess_) {
+    return QColor(Qt::black);
+  }
   if (executeMode_ && (!runtimeConnected_ || channel_.trimmed().isEmpty())) {
     return QColor(Qt::white);
   }
@@ -601,8 +642,8 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
   }
 
   // In execute mode, skip painting sample buttons if disconnected or no channel
-  const bool shouldShowButtons = !executeMode_ || 
-      (buttons_.isEmpty() && runtimeConnected_ && !channel_.trimmed().isEmpty());
+  const bool shouldShowButtons = !executeMode_
+      || (buttons_.isEmpty() && shouldShowRuntimeButtons());
   
   if (shouldShowButtons && (!executeMode_ || buttons_.isEmpty())) {
     int rows = 1;
@@ -876,6 +917,17 @@ void ChoiceButtonElement::layoutButtons()
   }
 }
 
+bool ChoiceButtonElement::shouldShowRuntimeButtons() const
+{
+  if (!executeMode_) {
+    return true;
+  }
+  if (!runtimeConnected_ || channel_.trimmed().isEmpty()) {
+    return false;
+  }
+  return !runtimeReadAccessKnown_ || runtimeReadAccess_;
+}
+
 void ChoiceButtonElement::updateButtonPalettes()
 {
   if (!executeMode_) {
@@ -885,15 +937,13 @@ void ChoiceButtonElement::updateButtonPalettes()
 
   const QColor fg = effectiveForeground();
   const QColor bg = effectiveBackground();
-  
-  // Hide buttons when disconnected or no channel defined
-  const bool shouldHideButtons = !runtimeConnected_ || channel_.trimmed().isEmpty();
-  
+  const bool shouldHideButtons = !shouldShowRuntimeButtons();
+
   for (QAbstractButton *button : buttons_) {
     if (!button) {
       continue;
     }
-    
+
     if (shouldHideButtons) {
       button->hide();
     } else {
@@ -918,7 +968,8 @@ void ChoiceButtonElement::updateButtonPalettes()
 
 void ChoiceButtonElement::updateButtonEnabledState()
 {
-  const bool enabled = runtimeConnected_;
+  const bool enabled = runtimeConnected_
+      && (!runtimeReadAccessKnown_ || runtimeReadAccess_);
   const QCursor &cursor = runtimeWriteAccess_ ? CursorUtils::arrowCursor()
                                               : CursorUtils::forbiddenCursor();
   for (QAbstractButton *button : buttons_) {

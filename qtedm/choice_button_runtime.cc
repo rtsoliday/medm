@@ -93,12 +93,17 @@ void ChoiceButtonRuntime::resetRuntimeState()
   connected_ = false;
   lastSeverity_ = 0;
   lastValue_ = -1;
+  lastReadAccessKnown_ = false;
+  lastReadAccess_ = false;
   lastWriteAccess_ = false;
+  lastValueOutOfRange_ = false;
   enumStrings_.clear();
 
   if (element_) {
     invokeOnElement([](ChoiceButtonElement *element) {
       element->setRuntimeConnected(false);
+      element->setRuntimeReadAccessKnown(false);
+      element->setRuntimeReadAccess(false);
       element->setRuntimeWriteAccess(false);
       element->setRuntimeSeverity(0);
       element->setRuntimeValue(-1);
@@ -117,9 +122,19 @@ void ChoiceButtonRuntime::handleChannelConnection(bool connected)
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
+    enumStrings_.clear();
+    lastValue_ = -1;
+    lastValueOutOfRange_ = false;
     if (element_) {
-      invokeOnElement([](ChoiceButtonElement *element) {
+      const bool readAccessKnown = lastReadAccessKnown_;
+      const bool readAccess = lastReadAccess_;
+      const bool writeAccess = lastWriteAccess_;
+      invokeOnElement([readAccessKnown, readAccess, writeAccess](
+                          ChoiceButtonElement *element) {
         element->setRuntimeConnected(true);
+        element->setRuntimeReadAccessKnown(readAccessKnown);
+        element->setRuntimeReadAccess(readAccessKnown && readAccess);
+        element->setRuntimeWriteAccess(readAccessKnown && writeAccess);
       });
     }
   } else {
@@ -128,10 +143,15 @@ void ChoiceButtonRuntime::handleChannelConnection(bool connected)
     if (wasConnected) {
       stats.registerChannelDisconnected();
     }
+    lastReadAccessKnown_ = false;
+    lastReadAccess_ = false;
     lastWriteAccess_ = false;
+    lastValueOutOfRange_ = false;
     if (element_) {
       invokeOnElement([](ChoiceButtonElement *element) {
         element->setRuntimeConnected(false);
+        element->setRuntimeReadAccessKnown(false);
+        element->setRuntimeReadAccess(false);
         element->setRuntimeWriteAccess(false);
         element->setRuntimeSeverity(kInvalidSeverity);
         element->setRuntimeValue(-1);
@@ -177,29 +197,61 @@ void ChoiceButtonRuntime::handleChannelData(const SharedChannelData &data)
     });
   }
 
-  if (enumValue != lastValue_) {
+  const int stateCount = enumStrings_.size();
+  const bool valueOutOfRange = stateCount > 0
+      && (enumValue < 0 || enumValue >= stateCount);
+
+  if (valueOutOfRange
+      && (!lastValueOutOfRange_ || enumValue != lastValue_)) {
+    qWarning() << "Choice Button PV" << channelName_
+               << "reported enum value" << enumValue
+               << "outside available state range 0-" << (stateCount - 1);
+  }
+
+  if (!valueOutOfRange && (enumValue != lastValue_ || lastValueOutOfRange_)) {
     lastValue_ = enumValue;
+    lastValueOutOfRange_ = false;
     if (element_) {
       invokeOnElement([enumValue](ChoiceButtonElement *element) {
         element->setRuntimeValue(enumValue);
       });
     }
+    return;
+  }
+
+  if (valueOutOfRange) {
+    lastValue_ = enumValue;
+    lastValueOutOfRange_ = true;
   }
 }
 
-void ChoiceButtonRuntime::handleAccessRights(bool /*canRead*/, bool canWrite)
+void ChoiceButtonRuntime::handleAccessRights(bool canRead, bool canWrite)
 {
   if (!started_) {
     return;
   }
-  if (canWrite == lastWriteAccess_) {
+  if (lastReadAccessKnown_ && canRead == lastReadAccess_
+      && canWrite == lastWriteAccess_) {
     return;
   }
+  lastReadAccessKnown_ = true;
+  lastReadAccess_ = canRead;
   lastWriteAccess_ = canWrite;
   if (element_) {
-    invokeOnElement([canWrite](ChoiceButtonElement *element) {
+    invokeOnElement([canRead, canWrite](ChoiceButtonElement *element) {
+      element->setRuntimeReadAccessKnown(true);
+      element->setRuntimeReadAccess(canRead);
       element->setRuntimeWriteAccess(canWrite);
+      if (!canRead) {
+        element->setRuntimeValue(-1);
+        element->setRuntimeLabels(QStringList());
+      }
     });
+  }
+  if (!canRead) {
+    enumStrings_.clear();
+    lastValue_ = -1;
+    lastValueOutOfRange_ = false;
   }
 }
 

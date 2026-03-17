@@ -137,11 +137,10 @@ QPixmap createRelatedDisplayIcon(const QSize &size, const QColor &color)
   return pixmap;
 }
 
-QPixmap createHiddenStippleTile(const QColor &foreground,
-    const QColor &background)
+QPixmap createHiddenStippleTile(const QColor &foreground)
 {
   QPixmap tile(4, 4);
-  tile.fill(background);
+  tile.fill(Qt::transparent);
 
   QPainter painter(&tile);
   painter.setPen(Qt::NoPen);
@@ -233,6 +232,8 @@ void RelatedDisplayElement::setVisual(RelatedDisplayVisual visual)
     return;
   }
   visual_ = visual;
+  setAttribute(Qt::WA_OpaquePaintEvent,
+      visual_ != RelatedDisplayVisual::kHiddenButton);
   update();
 }
 
@@ -367,14 +368,20 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QRect canvas = rect();
+  if (visual_ == RelatedDisplayVisual::kHiddenButton) {
+    paintHiddenVisual(painter, canvas);
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
 
   painter.fillRect(canvas, effectiveBackground());
   QRect content;
   switch (visual_) {
   case RelatedDisplayVisual::kRowOfButtons:
   case RelatedDisplayVisual::kColumnOfButtons:
-  case RelatedDisplayVisual::kHiddenButton:
-    /* Match MEDM sizing for button and hidden visuals. */
+    /* Match MEDM sizing for button visuals. */
     content = canvas;
     break;
   default:
@@ -387,9 +394,6 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
     break;
   case RelatedDisplayVisual::kColumnOfButtons:
     paintButtonVisual(painter, content, true);
-    break;
-  case RelatedDisplayVisual::kHiddenButton:
-    paintHiddenVisual(painter, content);
     break;
   case RelatedDisplayVisual::kMenu:
   default:
@@ -658,10 +662,9 @@ void RelatedDisplayElement::paintHiddenVisual(QPainter &painter,
     const QRect &content) const
 {
   const QColor fg = effectiveForeground();
-  const QColor bg = effectiveBackground();
 
   painter.save();
-  painter.fillRect(content, QBrush(createHiddenStippleTile(fg, bg)));
+  painter.fillRect(content, QBrush(createHiddenStippleTile(fg)));
   painter.restore();
 }
 

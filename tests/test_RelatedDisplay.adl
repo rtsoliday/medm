@@ -339,6 +339,21 @@ text {
 }
 "related display" {
 	object {
+		x=1130
+		y=252
+		width=135
+		height=15
+	}
+	display[0] {
+		name="asdops/screens/beamEnergy.adl"
+	}
+	clr=55
+	bclr=4
+	visual="invisible"
+}
+
+"related display" {
+	object {
 		x=170
 		y=330
 		width=220

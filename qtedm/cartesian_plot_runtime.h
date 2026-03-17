@@ -64,6 +64,7 @@ private:
     bool hasXScalar = false;
     bool hasYScalar = false;
     bool pendingTrigger = false;
+    bool initialSnapshotPending = true;
     int yAxisIndex = 1;
   };
 
@@ -120,6 +121,7 @@ private:
   void invokeOnElement(Func &&func);
 
   void logConfiguredAxisState();
+  static bool areAxisLimitsUsable(double low, double high);
 
   static QVector<double> extractValues(const SharedChannelData &data);
 

@@ -193,6 +193,8 @@ private:
   bool mapPointToChart(const QPointF &value, const AxisRange &xRange,
       const AxisRange &yRange, const QRectF &rect, QPointF *mapped) const;
   int axisIndexForTrace(int traceIndex) const;
+  void applySideToAxis(CartesianPlotYAxis axis, bool usesRightAxis,
+      bool explicitSide);
   bool isYAxisOnRight(int yAxisIndex) const;
   bool isYAxisVisible(int yAxisIndex) const;
   bool shouldPaintYAxisCue(int yAxisIndex) const;

@@ -2514,7 +2514,8 @@ public:
         this, [this](int index) { handleCartesianEraseOldestChanged(index); });
 
     cartesianCountEdit_ = createLineEdit();
-    cartesianCountEdit_->setValidator(new QIntValidator(1, 100000,
+    cartesianCountEdit_->setValidator(new QIntValidator(1,
+        kCartesianPlotMaximumSampleCount,
         cartesianCountEdit_));
     committedTexts_.insert(cartesianCountEdit_, cartesianCountEdit_->text());
     cartesianCountEdit_->installEventFilter(this);
@@ -2555,6 +2556,24 @@ public:
         [this]() { commitCartesianCountPv(); });
     QObject::connect(cartesianCountPvEdit_, &QLineEdit::editingFinished, this,
         [this]() { commitCartesianCountPv(); });
+
+    cartesianDrawMajorCombo_ = createBooleanComboBox();
+    QObject::connect(cartesianDrawMajorCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (cartesianDrawMajorSetter_) {
+            cartesianDrawMajorSetter_(index == 1);
+          }
+        });
+
+    cartesianDrawMinorCombo_ = createBooleanComboBox();
+    QObject::connect(cartesianDrawMinorCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (cartesianDrawMinorSetter_) {
+            cartesianDrawMinorSetter_(index == 1);
+          }
+        });
 
     auto *cartesianTraceWidget = new QWidget(cartesianSection_);
     auto *cartesianTraceLayout = new QGridLayout(cartesianTraceWidget);
@@ -2627,22 +2646,24 @@ public:
     addRow(cartesianLayout, 5, QStringLiteral("Y4 Label"), cartesianYLabelEdits_[3]);
     addRow(cartesianLayout, 6, QStringLiteral("Foreground"), cartesianForegroundButton_);
     addRow(cartesianLayout, 7, QStringLiteral("Background"), cartesianBackgroundButton_);
-    addRow(cartesianLayout, 8, QStringLiteral("Style"), cartesianStyleCombo_);
-    addRow(cartesianLayout, 9, QStringLiteral("Erase Oldest"), cartesianEraseOldestCombo_);
-    addRow(cartesianLayout, 10, QStringLiteral("Count"), cartesianCountEdit_);
-    addRow(cartesianLayout, 11, QStringLiteral("Erase Mode"), cartesianEraseModeCombo_);
-    addRow(cartesianLayout, 12, QStringLiteral("Trigger"), cartesianTriggerEdit_);
-    addRow(cartesianLayout, 13, QStringLiteral("Erase"), cartesianEraseEdit_);
-    addRow(cartesianLayout, 14, QStringLiteral("Count PV"), cartesianCountPvEdit_);
+    addRow(cartesianLayout, 8, QStringLiteral("Draw Major Grid"), cartesianDrawMajorCombo_);
+    addRow(cartesianLayout, 9, QStringLiteral("Draw Minor Grid"), cartesianDrawMinorCombo_);
+    addRow(cartesianLayout, 10, QStringLiteral("Style"), cartesianStyleCombo_);
+    addRow(cartesianLayout, 11, QStringLiteral("Erase Oldest"), cartesianEraseOldestCombo_);
+    addRow(cartesianLayout, 12, QStringLiteral("Count"), cartesianCountEdit_);
+    addRow(cartesianLayout, 13, QStringLiteral("Erase Mode"), cartesianEraseModeCombo_);
+    addRow(cartesianLayout, 14, QStringLiteral("Trigger"), cartesianTriggerEdit_);
+    addRow(cartesianLayout, 15, QStringLiteral("Erase"), cartesianEraseEdit_);
+    addRow(cartesianLayout, 16, QStringLiteral("Count PV"), cartesianCountPvEdit_);
 
     cartesianAxisButton_ = createActionButton(QStringLiteral("Axis Data..."));
     cartesianAxisButton_->setEnabled(false);
     QObject::connect(cartesianAxisButton_, &QPushButton::clicked, this,
         [this]() { openCartesianAxisDialog(); });
 
-    addRow(cartesianLayout, 15, QStringLiteral("Axis Data"), cartesianAxisButton_);
-    addRow(cartesianLayout, 16, QStringLiteral("Traces"), cartesianTraceWidget);
-    cartesianLayout->setRowStretch(17, 1);
+    addRow(cartesianLayout, 17, QStringLiteral("Axis Data"), cartesianAxisButton_);
+    addRow(cartesianLayout, 18, QStringLiteral("Traces"), cartesianTraceWidget);
+    cartesianLayout->setRowStretch(19, 1);
     entriesLayout->addWidget(cartesianSection_);
 
     byteSection_ = new QWidget(entriesWidget_);
@@ -3837,6 +3858,10 @@ public:
     }
     cartesianStyleGetter_ = {};
     cartesianStyleSetter_ = {};
+    cartesianDrawMajorGetter_ = {};
+    cartesianDrawMajorSetter_ = {};
+    cartesianDrawMinorGetter_ = {};
+    cartesianDrawMinorSetter_ = {};
     cartesianEraseOldestGetter_ = {};
     cartesianEraseOldestSetter_ = {};
     cartesianCountGetter_ = {};
@@ -5675,6 +5700,10 @@ public:
       std::function<void(const QColor &)> foregroundSetter,
       std::function<QColor()> backgroundGetter,
       std::function<void(const QColor &)> backgroundSetter,
+      std::function<bool()> drawMajorGetter,
+      std::function<void(bool)> drawMajorSetter,
+      std::function<bool()> drawMinorGetter,
+      std::function<void(bool)> drawMinorSetter,
       std::array<std::function<CartesianPlotAxisStyle()>, kCartesianAxisCount> axisStyleGetters,
       std::array<std::function<void(CartesianPlotAxisStyle)>, kCartesianAxisCount> axisStyleSetters,
       std::array<std::function<CartesianPlotRangeStyle()>, kCartesianAxisCount> axisRangeGetters,
@@ -5865,6 +5894,10 @@ public:
     cartesianForegroundSetter_ = std::move(foregroundSetter);
     cartesianBackgroundGetter_ = std::move(backgroundGetter);
     cartesianBackgroundSetter_ = std::move(backgroundSetter);
+    cartesianDrawMajorGetter_ = std::move(drawMajorGetter);
+    cartesianDrawMajorSetter_ = std::move(drawMajorSetter);
+    cartesianDrawMinorGetter_ = std::move(drawMinorGetter);
+    cartesianDrawMinorSetter_ = std::move(drawMinorSetter);
     cartesianAxisStyleGetters_ = std::move(axisStyleGetters);
     cartesianAxisStyleSetters_ = std::move(axisStyleSetters);
     cartesianAxisRangeGetters_ = std::move(axisRangeGetters);
@@ -5953,6 +5986,24 @@ public:
       setColorButtonColor(cartesianBackgroundButton_,
           color.isValid() ? color : palette().color(QPalette::Window));
       cartesianBackgroundButton_->setEnabled(static_cast<bool>(cartesianBackgroundSetter_));
+    }
+
+    if (cartesianDrawMajorCombo_) {
+      const QSignalBlocker blocker(cartesianDrawMajorCombo_);
+      const bool drawMajor = cartesianDrawMajorGetter_
+              ? cartesianDrawMajorGetter_()
+              : true;
+      cartesianDrawMajorCombo_->setCurrentIndex(drawMajor ? 1 : 0);
+      cartesianDrawMajorCombo_->setEnabled(static_cast<bool>(cartesianDrawMajorSetter_));
+    }
+
+    if (cartesianDrawMinorCombo_) {
+      const QSignalBlocker blocker(cartesianDrawMinorCombo_);
+      const bool drawMinor = cartesianDrawMinorGetter_
+              ? cartesianDrawMinorGetter_()
+              : false;
+      cartesianDrawMinorCombo_->setCurrentIndex(drawMinor ? 1 : 0);
+      cartesianDrawMinorCombo_->setEnabled(static_cast<bool>(cartesianDrawMinorSetter_));
     }
 
     if (cartesianStyleCombo_) {
@@ -7565,6 +7616,16 @@ public:
       cartesianStyleCombo_->setCurrentIndex(cartesianPlotStyleToIndex(
           CartesianPlotStyle::kLine));
       cartesianStyleCombo_->setEnabled(false);
+    }
+    if (cartesianDrawMajorCombo_) {
+      const QSignalBlocker blocker(cartesianDrawMajorCombo_);
+      cartesianDrawMajorCombo_->setCurrentIndex(1);
+      cartesianDrawMajorCombo_->setEnabled(false);
+    }
+    if (cartesianDrawMinorCombo_) {
+      const QSignalBlocker blocker(cartesianDrawMinorCombo_);
+      cartesianDrawMinorCombo_->setCurrentIndex(0);
+      cartesianDrawMinorCombo_->setEnabled(false);
     }
     if (cartesianEraseOldestCombo_) {
       const QSignalBlocker blocker(cartesianEraseOldestCombo_);
@@ -9536,6 +9597,16 @@ private:
       cartesianTraceAxisCombos_[index]->setCurrentIndex(
           cartesianAxisToIndex(cartesianTraceAxisGetters_[index]()));
     }
+    for (int i = 0; i < static_cast<int>(cartesianTraceSideCombos_.size()); ++i) {
+      if (!cartesianTraceSideCombos_[i]) {
+        continue;
+      }
+      const QSignalBlocker blocker(cartesianTraceSideCombos_[i]);
+      const bool usesRight = cartesianTraceSideGetters_[i]
+              ? cartesianTraceSideGetters_[i]()
+              : false;
+      cartesianTraceSideCombos_[i]->setCurrentIndex(usesRight ? 1 : 0);
+    }
   }
 
   void handleCartesianTraceSideChanged(int index, int comboIndex)
@@ -9556,10 +9627,16 @@ private:
     }
     const bool usesRight = (comboIndex != 0);
     cartesianTraceSideSetters_[index](usesRight);
-    if (cartesianTraceSideGetters_[index]) {
-      const QSignalBlocker blocker(cartesianTraceSideCombos_[index]);
-      cartesianTraceSideCombos_[index]->setCurrentIndex(
-          cartesianTraceSideGetters_[index]() ? 1 : 0);
+    for (int i = 0; i < static_cast<int>(cartesianTraceSideCombos_.size()); ++i) {
+      if (!cartesianTraceSideCombos_[i]) {
+        continue;
+      }
+      const QSignalBlocker blocker(cartesianTraceSideCombos_[i]);
+      const bool currentUsesRight = cartesianTraceSideGetters_[i]
+              ? cartesianTraceSideGetters_[i]()
+              : false;
+      cartesianTraceSideCombos_[i]->setCurrentIndex(
+          currentUsesRight ? 1 : 0);
     }
   }
 
@@ -10966,6 +11043,8 @@ private:
   std::array<QLineEdit *, 4> cartesianYLabelEdits_{};
   QPushButton *cartesianForegroundButton_ = nullptr;
   QPushButton *cartesianBackgroundButton_ = nullptr;
+  QComboBox *cartesianDrawMajorCombo_ = nullptr;
+  QComboBox *cartesianDrawMinorCombo_ = nullptr;
   QComboBox *cartesianStyleCombo_ = nullptr;
   QComboBox *cartesianEraseOldestCombo_ = nullptr;
   QLineEdit *cartesianCountEdit_ = nullptr;
@@ -11619,6 +11698,10 @@ private:
   std::function<void(const QColor &)> cartesianForegroundSetter_;
   std::function<QColor()> cartesianBackgroundGetter_;
   std::function<void(const QColor &)> cartesianBackgroundSetter_;
+  std::function<bool()> cartesianDrawMajorGetter_;
+  std::function<void(bool)> cartesianDrawMajorSetter_;
+  std::function<bool()> cartesianDrawMinorGetter_;
+  std::function<void(bool)> cartesianDrawMinorSetter_;
   std::function<CartesianPlotStyle()> cartesianStyleGetter_;
   std::function<void(CartesianPlotStyle)> cartesianStyleSetter_;
   std::function<bool()> cartesianEraseOldestGetter_;

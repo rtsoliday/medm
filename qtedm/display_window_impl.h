@@ -5208,6 +5208,8 @@ private:
       const QString triggerChannel = element->triggerChannel();
       const QString eraseChannel = element->eraseChannel();
       const QString countChannel = element->countChannel();
+      const bool drawMajorGrid = element->drawMajorGrid();
+      const bool drawMinorGrid = element->drawMinorGrid();
       std::array<CartesianPlotAxisStyle, kCartesianAxisCount> axisStyles{};
       std::array<CartesianPlotRangeStyle, kCartesianAxisCount> axisRangeStyles{};
       std::array<double, kCartesianAxisCount> axisMinimums{};
@@ -5239,7 +5241,8 @@ private:
       }
       prepareClipboard([geometry, foreground, background, title, xLabel, yLabels,
                            style, eraseOldest, count, eraseMode, triggerChannel,
-                           eraseChannel, countChannel, axisStyles,
+                           eraseChannel, countChannel, drawMajorGrid,
+                           drawMinorGrid, axisStyles,
                            axisRangeStyles, axisMinimums, axisMaximums,
                            axisTimeFormats, traceCount, traceX, traceY,
                            traceColors, traceAxes, traceRight,
@@ -5265,6 +5268,8 @@ private:
         newElement->setTriggerChannel(triggerChannel);
         newElement->setEraseChannel(eraseChannel);
         newElement->setCountChannel(countChannel);
+        newElement->setDrawMajorGrid(drawMajorGrid);
+        newElement->setDrawMinorGrid(drawMinorGrid);
         for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
           const std::size_t idx = static_cast<std::size_t>(axis);
           newElement->setAxisStyle(axis, axisStyles[idx]);
@@ -7149,6 +7154,20 @@ private:
         },
         [this, element](const QColor &color) {
           element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->drawMajorGrid();
+        },
+        [this, element](bool draw) {
+          element->setDrawMajorGrid(draw);
+          markDirty();
+        },
+        [element]() {
+          return element->drawMinorGrid();
+        },
+        [this, element](bool draw) {
+          element->setDrawMinorGrid(draw);
           markDirty();
         },
         std::move(axisStyleGetters), std::move(axisStyleSetters),
@@ -17581,6 +17600,14 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
           cartesian->xLabel(), yLabels,
           AdlWriter::medmColorIndex(cartesianForeground),
           AdlWriter::medmColorIndex(cartesianBackground));
+      if (!cartesian->drawMajorGrid()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("drawMajor=0"));
+      }
+      if (cartesian->drawMinorGrid()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("drawMinor=1"));
+      }
       if (cartesian->style() != CartesianPlotStyle::kPoint) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("style=\"%1\"")
@@ -17592,7 +17619,12 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
                 .arg(AdlWriter::cartesianEraseOldestString(
                     cartesian->eraseOldest())));
       }
-      if (cartesian->count() > 1) {
+      const QString countPv = cartesian->countChannel().trimmed();
+      if (!countPv.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("count=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(countPv)));
+      } else if (cartesian->count() > 1) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("count=\"%1\"")
                 .arg(QString::number(cartesian->count())));
@@ -17639,7 +17671,6 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
             QStringLiteral("erase=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(erase)));
       }
-      const QString countPv = cartesian->countChannel().trimmed();
       if (!countPv.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("countPvName=\"%1\"")
@@ -18586,6 +18617,14 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         cartesian->xLabel(), yLabels,
         AdlWriter::medmColorIndex(cartesianForeground),
         AdlWriter::medmColorIndex(cartesianBackground));
+    if (!cartesian->drawMajorGrid()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("drawMajor=0"));
+    }
+    if (cartesian->drawMinorGrid()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("drawMinor=1"));
+    }
     if (cartesian->style() != CartesianPlotStyle::kPoint) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("style=\"%1\"")
@@ -18597,7 +18636,12 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::cartesianEraseOldestString(
                   cartesian->eraseOldest())));
     }
-    if (cartesian->count() > 1) {
+    const QString countPv = cartesian->countChannel().trimmed();
+    if (!countPv.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("count=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(countPv)));
+    } else if (cartesian->count() > 1) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("count=\"%1\"")
               .arg(QString::number(cartesian->count())));
@@ -18644,7 +18688,6 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
           QStringLiteral("erase=\"%1\"")
               .arg(AdlWriter::escapeAdlString(erase)));
     }
-    const QString countPv = cartesian->countChannel().trimmed();
     if (!countPv.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("countPvName=\"%1\"")
@@ -23152,6 +23195,16 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     }
   };
 
+  std::array<QString, kCartesianPlotTraceCount> loadedTraceX{};
+  std::array<QString, kCartesianPlotTraceCount> loadedTraceY{};
+  std::array<QColor, kCartesianPlotTraceCount> loadedTraceColors{};
+  std::array<bool, kCartesianPlotTraceCount> loadedTraceColorDefined{};
+  std::array<CartesianPlotYAxis, kCartesianPlotTraceCount> loadedTraceAxes{};
+  std::array<bool, kCartesianPlotTraceCount> loadedTraceSideExplicit{};
+  std::array<bool, kCartesianPlotTraceCount> loadedTraceUsesRight{};
+  std::array<bool, kCartesianPlotTraceCount> loadedTraceDefined{};
+  loadedTraceAxes.fill(CartesianPlotYAxis::kY1);
+
   for (const auto &child : cartesianNode.children) {
     if (!child.name.startsWith(QStringLiteral("trace"), Qt::CaseInsensitive)) {
       continue;
@@ -23164,34 +23217,121 @@ inline CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
 
     const QString xdata = propertyValue(child, QStringLiteral("xdata"));
     if (!xdata.trimmed().isEmpty()) {
-      element->setTraceXChannel(traceIndex, xdata.trimmed());
+      loadedTraceX[traceIndex] = xdata.trimmed();
+      loadedTraceDefined[traceIndex] = true;
     }
 
     const QString ydata = propertyValue(child, QStringLiteral("ydata"));
     if (!ydata.trimmed().isEmpty()) {
-      element->setTraceYChannel(traceIndex, ydata.trimmed());
+      loadedTraceY[traceIndex] = ydata.trimmed();
+      loadedTraceDefined[traceIndex] = true;
     }
 
     bool ok = false;
     const QString clrStr = propertyValue(child, QStringLiteral("data_clr"));
     const int clrIndex = clrStr.toInt(&ok);
     if (ok) {
-      element->setTraceColor(traceIndex, colorForIndex(clrIndex));
+      loadedTraceColors[traceIndex] = colorForIndex(clrIndex);
+      loadedTraceColorDefined[traceIndex] = true;
+      loadedTraceDefined[traceIndex] = true;
     }
 
     ok = false;
     const QString axisStr = propertyValue(child, QStringLiteral("yaxis"));
     const int axisIndex = axisStr.toInt(&ok);
     if (ok) {
-      element->setTraceYAxis(traceIndex, axisForIndex(axisIndex));
+      loadedTraceAxes[traceIndex] = axisForIndex(axisIndex);
+      loadedTraceDefined[traceIndex] = true;
     }
 
     ok = false;
     const QString sideStr = propertyValue(child, QStringLiteral("yside"));
     const int sideIndex = sideStr.toInt(&ok);
     if (ok) {
-      element->setTraceUsesRightAxis(traceIndex, sideIndex == 1, true);
+      loadedTraceUsesRight[traceIndex] = (sideIndex == 1);
+      loadedTraceSideExplicit[traceIndex] = true;
+      loadedTraceDefined[traceIndex] = true;
     }
+  }
+
+  std::array<bool, 4> axisSideEstablished{};
+  std::array<bool, 4> axisSideValues{};
+  for (int traceIndex = 0; traceIndex < element->traceCount(); ++traceIndex) {
+    if (!loadedTraceDefined[traceIndex]) {
+      continue;
+    }
+
+    element->setTraceXChannel(traceIndex, loadedTraceX[traceIndex]);
+    element->setTraceYChannel(traceIndex, loadedTraceY[traceIndex]);
+    if (loadedTraceColorDefined[traceIndex]) {
+      element->setTraceColor(traceIndex, loadedTraceColors[traceIndex]);
+    }
+    element->setTraceYAxis(traceIndex, loadedTraceAxes[traceIndex]);
+
+    int axisBucket = 0;
+    switch (loadedTraceAxes[traceIndex]) {
+    case CartesianPlotYAxis::kY2:
+      axisBucket = 1;
+      break;
+    case CartesianPlotYAxis::kY3:
+      axisBucket = 2;
+      break;
+    case CartesianPlotYAxis::kY4:
+      axisBucket = 3;
+      break;
+    case CartesianPlotYAxis::kY1:
+    default:
+      axisBucket = 0;
+      break;
+    }
+
+    if (!axisSideEstablished[axisBucket]) {
+      const bool usesRight = loadedTraceSideExplicit[traceIndex]
+          ? loadedTraceUsesRight[traceIndex]
+          : element->traceUsesRightAxis(traceIndex);
+      if (loadedTraceSideExplicit[traceIndex]) {
+        element->setTraceUsesRightAxis(traceIndex, usesRight, true);
+      }
+      axisSideEstablished[axisBucket] = true;
+      axisSideValues[axisBucket] = usesRight;
+    } else {
+      element->setTraceUsesRightAxis(traceIndex, axisSideValues[axisBucket],
+          false);
+    }
+  }
+
+  auto parseBooleanProperty = [](const QString &raw, bool *value) {
+    const QString normalized = raw.trimmed().toLower();
+    if (!value || normalized.isEmpty()) {
+      return false;
+    }
+    if (normalized == QStringLiteral("1")
+        || normalized == QStringLiteral("true")
+        || normalized == QStringLiteral("on")
+        || normalized == QStringLiteral("yes")) {
+      *value = true;
+      return true;
+    }
+    if (normalized == QStringLiteral("0")
+        || normalized == QStringLiteral("false")
+        || normalized == QStringLiteral("off")
+        || normalized == QStringLiteral("no")) {
+      *value = false;
+      return true;
+    }
+    return false;
+  };
+
+  bool drawMajor = true;
+  if (parseBooleanProperty(propertyValue(cartesianNode,
+          QStringLiteral("drawMajor")), &drawMajor)) {
+    element->setDrawMajorGrid(drawMajor);
+  }
+
+  bool drawMinor = false;
+  if (parseBooleanProperty(propertyValue(cartesianNode,
+          QStringLiteral("drawMinor")), &drawMinor)) {
+    element->setDrawMinorGrid(drawMinor);
   }
 
   auto parseAxisNode = [this, element](const AdlNode &axisNode, int axisIndex) {

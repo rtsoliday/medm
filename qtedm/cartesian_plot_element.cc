@@ -741,6 +741,14 @@ void CartesianPlotElement::setTraceYAxis(int index, CartesianPlotYAxis axis)
     return;
   }
   traces_[index].yAxis = axis;
+  for (int i = 0; i < traceCount(); ++i) {
+    if (i == index || traces_[i].yAxis != axis) {
+      continue;
+    }
+    traces_[index].usesRightAxis = traces_[i].usesRightAxis;
+    traces_[index].sideExplicit = traces_[i].sideExplicit;
+    break;
+  }
   update();
 }
 
@@ -763,18 +771,7 @@ void CartesianPlotElement::setTraceUsesRightAxis(int index, bool usesRightAxis,
   if (index < 0 || index >= traceCount()) {
     return;
   }
-  bool changed = false;
-  if (traces_[index].usesRightAxis != usesRightAxis) {
-    traces_[index].usesRightAxis = usesRightAxis;
-    changed = true;
-  }
-  if (explicitSide && !traces_[index].sideExplicit) {
-    traces_[index].sideExplicit = true;
-    changed = true;
-  }
-  if (changed) {
-    update();
-  }
+  applySideToAxis(traces_[index].yAxis, usesRightAxis, explicitSide);
 }
 
 bool CartesianPlotElement::traceSideExplicit(int index) const
@@ -1882,7 +1879,7 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   
   // Compute "nice" axis range matching MEDM's behavior
   const NiceAxisRange nice = computeNiceAxisRange(axisMin, axisMax, isLog10);
-  
+
   // Draw ticks and numbers
   if (isLog10 && nice.drawMin > 0 && nice.drawMax > 0) {
     // Logarithmic axis - match MEDM's tick drawing behavior
@@ -2441,15 +2438,8 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
     if (hasData[axisIndex]) {
       minimum = autoMinimums[axisIndex];
       maximum = autoMaximums[axisIndex];
-      valid = (maximum > minimum)
-          && std::isfinite(minimum) && std::isfinite(maximum);
-      if (!valid
-          && std::isfinite(minimum) && std::isfinite(maximum)
-          && qFuzzyIsNull(minimum) && qFuzzyIsNull(maximum)) {
-        minimum = -0.5;
-        maximum = 0.5;
-        valid = true;
-      }
+      valid = std::isfinite(minimum) && std::isfinite(maximum)
+          && maximum >= minimum;
     } else if (axisRuntimeValid_[axisIndex]) {
       minimum = axisRuntimeMinimums_[axisIndex];
       maximum = axisRuntimeMaximums_[axisIndex];
@@ -2549,9 +2539,30 @@ int CartesianPlotElement::axisIndexForTrace(int traceIndex) const
   return 1;
 }
 
+void CartesianPlotElement::applySideToAxis(CartesianPlotYAxis axis,
+    bool usesRightAxis, bool explicitSide)
+{
+  bool changed = false;
+  for (Trace &trace : traces_) {
+    if (trace.yAxis != axis) {
+      continue;
+    }
+    if (trace.usesRightAxis != usesRightAxis) {
+      trace.usesRightAxis = usesRightAxis;
+      changed = true;
+    }
+    if (explicitSide && !trace.sideExplicit) {
+      trace.sideExplicit = true;
+      changed = true;
+    }
+  }
+  if (changed) {
+    update();
+  }
+}
+
 bool CartesianPlotElement::isYAxisOnRight(int yAxisIndex) const
 {
-  // Check if any trace using this Y-axis is set to use the right side
   CartesianPlotYAxis targetAxis;
   switch (yAxisIndex) {
   case 0: targetAxis = CartesianPlotYAxis::kY1; break;
@@ -2566,7 +2577,6 @@ bool CartesianPlotElement::isYAxisOnRight(int yAxisIndex) const
         || !trace.yChannel.trimmed().isEmpty();
   };
 
-  bool hasExplicitSide = false;
   for (const auto &trace : traces_) {
     if (trace.yAxis != targetAxis) {
       continue;
@@ -2574,20 +2584,7 @@ bool CartesianPlotElement::isYAxisOnRight(int yAxisIndex) const
     if (!traceDefinesAxis(trace)) {
       continue;
     }
-    if (trace.sideExplicit) {
-      hasExplicitSide = true;
-      if (trace.usesRightAxis) {
-        return true;
-      }
-    }
-  }
-  if (hasExplicitSide) {
-    return false;
-  }
-
-  // Default MEDM-like behavior: Y2 and Y4 are on the right when visible
-  if (yAxisIndex == 1 || yAxisIndex == 3) {
-    return true;
+    return trace.usesRightAxis;
   }
   return false;
 }

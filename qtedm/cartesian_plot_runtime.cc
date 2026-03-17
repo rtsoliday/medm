@@ -301,6 +301,7 @@ void CartesianPlotRuntime::resetState()
     trace.hasXScalar = false;
     trace.hasYScalar = false;
     trace.pendingTrigger = false;
+    trace.initialSnapshotPending = true;
     trace.lastXScalar = 0.0;
     trace.lastYScalar = 0.0;
     trace.x.connected = false;
@@ -532,7 +533,7 @@ void CartesianPlotRuntime::handleTraceControlInfo(int index, bool isX,
 
   const double low = data.lopr;
   const double high = data.hopr;
-  bool valid = std::isfinite(low) && std::isfinite(high) && high >= low;
+  const bool valid = areAxisLimitsUsable(low, high);
 
   if (isX) {
     invokeOnElement([low, high, valid](CartesianPlotElement *element) {
@@ -594,7 +595,7 @@ void CartesianPlotRuntime::handleCountValue(const SharedChannelData &data)
   if (newCount <= 0) {
     countFromChannel_ = 0;
   } else {
-  countFromChannel_ = std::clamp(newCount, 1, kCartesianPlotMaximumSampleCount);
+    countFromChannel_ = std::clamp(newCount, 1, kCartesianPlotMaximumSampleCount);
   }
 
   invokeOnElement([count = countFromChannel_](CartesianPlotElement *element) {
@@ -602,7 +603,8 @@ void CartesianPlotRuntime::handleCountValue(const SharedChannelData &data)
   });
 
   for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
-    clearTraceData(i, false);
+    traces_[i].initialSnapshotPending = true;
+    clearTraceData(i, true);
     processTraceUpdate(i, true);
   }
 }
@@ -720,34 +722,39 @@ void CartesianPlotRuntime::processTraceUpdate(int index, bool forceAppend)
     return;
   }
   TraceState &trace = traces_[index];
-  if (isTriggerEnabled() && !forceAppend) {
+  if (isTriggerEnabled() && !forceAppend && !trace.initialSnapshotPending) {
     return;
   }
 
+  QVector<QPointF> outputPoints;
+  bool emitted = false;
   switch (trace.mode) {
   case CartesianPlotTraceMode::kXYScalar:
     if (!trace.hasXScalar || !trace.hasYScalar) {
       break;
     }
     appendXYScalarPoint(trace);
-    emitTraceData(index, trace.scalarPoints, trace.mode,
-        traceConnected(trace));
+    outputPoints = trace.scalarPoints;
+    emitTraceData(index, outputPoints, trace.mode, traceConnected(trace));
+    emitted = !outputPoints.isEmpty();
     break;
   case CartesianPlotTraceMode::kXScalar:
     if (!trace.hasXScalar) {
       break;
     }
     appendXScalarPoint(trace);
-    emitTraceData(index, buildXScalarPoints(trace), trace.mode,
-        traceConnected(trace));
+    outputPoints = buildXScalarPoints(trace);
+    emitTraceData(index, outputPoints, trace.mode, traceConnected(trace));
+    emitted = !outputPoints.isEmpty();
     break;
   case CartesianPlotTraceMode::kYScalar:
     if (!trace.hasYScalar) {
       break;
     }
     appendYScalarPoint(trace);
-    emitTraceData(index, buildYScalarPoints(trace), trace.mode,
-        traceConnected(trace));
+    outputPoints = buildYScalarPoints(trace);
+    emitTraceData(index, outputPoints, trace.mode, traceConnected(trace));
+    emitted = !outputPoints.isEmpty();
     break;
   case CartesianPlotTraceMode::kXVector:
   case CartesianPlotTraceMode::kYVector:
@@ -755,11 +762,15 @@ void CartesianPlotRuntime::processTraceUpdate(int index, bool forceAppend)
   case CartesianPlotTraceMode::kYVectorXScalar:
   case CartesianPlotTraceMode::kXYVector:
     rebuildVectorPoints(trace);
-    emitTraceData(index, trace.vectorPoints, trace.mode,
-        traceConnected(trace));
+    outputPoints = trace.vectorPoints;
+    emitTraceData(index, outputPoints, trace.mode, traceConnected(trace));
+    emitted = !outputPoints.isEmpty();
     break;
   case CartesianPlotTraceMode::kNone:
     break;
+  }
+  if (emitted) {
+    trace.initialSnapshotPending = false;
   }
   trace.pendingTrigger = false;
 }
@@ -944,6 +955,18 @@ bool CartesianPlotRuntime::traceConnected(const TraceState &trace) const
 bool CartesianPlotRuntime::isTriggerEnabled() const
 {
   return !triggerChannel_.name.isEmpty();
+}
+
+bool CartesianPlotRuntime::areAxisLimitsUsable(double low, double high)
+{
+  if (!std::isfinite(low) || !std::isfinite(high) || high < low) {
+    return false;
+  }
+  const double floatMax = static_cast<double>(std::numeric_limits<float>::max());
+  if (std::fabs(low) >= floatMax || std::fabs(high) >= floatMax) {
+    return false;
+  }
+  return true;
 }
 
 QVector<double> CartesianPlotRuntime::extractValues(

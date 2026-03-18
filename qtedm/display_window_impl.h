@@ -20211,8 +20211,21 @@ inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
       /* Empty composite is treated as static */
       return true;
     }
-    /* Composite is static only if ALL children are static graphics */
+    /*
+     * Match MEDM/composite internal stacking semantics: controls inside a
+     * composite do not make the composite itself interactive or dynamic.
+     * The composite is static unless it contains dynamic graphics/monitors.
+     */
     for (QWidget *child : children) {
+      if (!child) {
+        continue;
+      }
+      if (isControlWidget(child)) {
+        continue;
+      }
+      if (isExecuteMonitorWidget(child)) {
+        return false;
+      }
       if (!isStaticGraphicWidget(child)) {
         return false;
       }

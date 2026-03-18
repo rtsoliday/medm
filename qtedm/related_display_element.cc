@@ -420,18 +420,7 @@ QColor RelatedDisplayElement::effectiveBackground() const
 
 QString RelatedDisplayElement::displayLabel(bool &showIcon) const
 {
-  QString base = sanitizedLabel(label_, showIcon);
-  if (!base.isEmpty()) {
-    return base;
-  }
-  for (const auto &entry : entries_) {
-    QString candidate = entryDisplayLabel(entry);
-    if (!candidate.isEmpty()) {
-      return candidate;
-    }
-  }
-  showIcon = true;
-  return QStringLiteral("Related Display");
+  return sanitizedLabel(label_, showIcon);
 }
 
 QVector<int> RelatedDisplayElement::buttonEntryIndices() const
@@ -451,6 +440,14 @@ int RelatedDisplayElement::activeEntryCount() const
   /* Match MEDM behavior: only count entries with non-empty labels.
    * Entries with just a name but no label are not shown as buttons. */
   return buttonEntryIndices().size();
+}
+
+bool RelatedDisplayElement::entryVisibleInMenu(int index) const
+{
+  if (index < 0 || index >= entryCount()) {
+    return false;
+  }
+  return entries_[index].name.trimmed().size() > 1;
 }
 
 void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
@@ -488,10 +485,6 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
 
   bool showIcon = true;
   QString labelText = displayLabel(showIcon);
-  if (visual_ == RelatedDisplayVisual::kMenu && executeMode_
-      && label_.trimmed().isEmpty()) {
-    labelText.clear();
-  }
 
   // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
   // Search from largest to smallest font, return first that fits
@@ -624,7 +617,7 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
       } else if (index < activeCount) {
         text = entryDisplayLabel(entries_[buttonIndices[index]]);
       }
-      if (text.isEmpty()) {
+      if (!singleButton && text.isEmpty()) {
         text = QStringLiteral("Display %1").arg(index + 1);
       }
 
@@ -714,20 +707,13 @@ void RelatedDisplayElement::mousePressEvent(QMouseEvent *event)
   if (visual_ == RelatedDisplayVisual::kMenu) {
     pressedEntryIndex_ = -1;
     event->accept();
-    /* If there is only one usable entry, open it directly instead of showing
-     * a menu with a single option. */
-    int usableCount = 0;
-    int singleIndex = -1;
-    for (int i = 0; i < entryCount(); ++i) {
-      if (entryHasTarget(i)) {
-        ++usableCount;
-        if (usableCount == 1) {
-          singleIndex = i;
-        }
-      }
-    }
-    if (usableCount == 1 && singleIndex >= 0) {
-      if (activationCallback_) {
+    /*
+     * Match MEDM: the widget behaves like a single button unless more than
+     * one entry has a visible label.
+     */
+    if (activeEntryCount() <= 1) {
+      const int singleIndex = firstUsableEntryIndex();
+      if (singleIndex >= 0 && activationCallback_) {
         activationCallback_(singleIndex, event->modifiers());
       }
     } else {
@@ -853,10 +839,10 @@ void RelatedDisplayElement::showMenu(Qt::KeyboardModifiers modifiers)
   QMenu menu(this);
   int labelIndex = 0;
   for (int i = 0; i < entryCount(); ++i) {
-    if (!entryHasTarget(i)) {
+    if (!entryVisibleInMenu(i)) {
       continue;
     }
-    QString label = entryDisplayLabel(entries_[i]);
+    QString label = entries_[i].label;
     if (label.isEmpty()) {
       label = QStringLiteral("Display %1").arg(labelIndex + 1);
     }

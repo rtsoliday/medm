@@ -67,6 +67,7 @@ private:
   QString displayLabel(bool &showIcon) const;
   QVector<int> buttonEntryIndices() const;
   int activeEntryCount() const;
+  bool entryVisibleInMenu(int index) const;
   void paintMenuVisual(QPainter &painter, const QRect &content) const;
   void paintButtonVisual(QPainter &painter, const QRect &content,
       bool vertical) const;

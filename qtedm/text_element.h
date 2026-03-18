@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QMoveEvent>
 #include <QPaintEvent>
+#include <QPointer>
 #include <QRect>
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -101,6 +102,6 @@ private:
   bool allowDisconnectIndication_ = false;
   bool runtimeVisible_ = true;
   short runtimeSeverity_ = 0;
-  TextOverflowWidget *overflowWidget_ = nullptr;
+  QPointer<TextOverflowWidget> overflowWidget_;
   QTimer *disconnectIndicationTimer_ = nullptr;
 };

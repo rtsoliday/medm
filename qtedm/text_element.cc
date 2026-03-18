@@ -8,6 +8,7 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
+#include <QPointer>
 #include <QPen>
 #include <QHideEvent>
 #include <QMoveEvent>
@@ -60,6 +61,11 @@ public:
     setAttribute(Qt::WA_NoSystemBackground);
     setFocusPolicy(Qt::NoFocus);
     hide();
+  }
+
+  void clearOwner()
+  {
+    owner_.clear();
   }
 
   void syncParent()
@@ -123,7 +129,7 @@ protected:
   }
 
 private:
-  TextElement *owner_ = nullptr;
+  QPointer<TextElement> owner_;
 };
 
 TextElement::TextElement(QWidget *parent)
@@ -153,9 +159,8 @@ TextElement::~TextElement()
     disconnectIndicationTimer_ = nullptr;
   }
   if (overflowWidget_) {
-    overflowWidget_->hide();
-    overflowWidget_->setParent(nullptr);
-    delete overflowWidget_;
+    overflowWidget_->clearOwner();
+    overflowWidget_->deleteLater();
     overflowWidget_ = nullptr;
   }
 }
@@ -476,8 +481,9 @@ bool TextElement::event(QEvent *event)
   switch (event->type()) {
   case QEvent::ParentAboutToChange:
     if (overflowWidget_) {
-      overflowWidget_->hide();
-      overflowWidget_->setParent(nullptr);
+      overflowWidget_->clearOwner();
+      overflowWidget_->deleteLater();
+      overflowWidget_.clear();
     }
     break;
   case QEvent::ParentChange:

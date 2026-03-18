@@ -25806,9 +25806,13 @@ inline void DisplayWindow::enterExecuteMode()
     }
   }
   for (RelatedDisplayElement *element : relatedDisplayElements_) {
-    if (element) {
-      element->raise();
+    if (!element) {
+      continue;
     }
+    if (element->visual() == RelatedDisplayVisual::kHiddenButton) {
+      continue;
+    }
+    element->raise();
   }
   if (displayArea_) {
     displayArea_->setUpdatesEnabled(restoreDisplayUpdates);

@@ -239,6 +239,11 @@ void ImageElement::paintEvent(QPaintEvent *event)
       && (!executeMode_ || (runtimeConnected_ && runtimeFrameValid_));
 
   if (showImage) {
+    /*
+     * Match MEDM image transparency semantics: transparent pixels resolve to
+     * the display background, not to widgets stacked underneath the image.
+     */
+    painter.fillRect(drawRect, backgroundColor());
     painter.drawPixmap(drawRect, pixmap_);
   } else {
     const bool disconnected = executeMode_ && !runtimeConnected_;

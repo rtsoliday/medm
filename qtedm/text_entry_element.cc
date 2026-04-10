@@ -193,6 +193,24 @@ const PvLimits &TextEntryElement::limits() const
   return limits_;
 }
 
+double TextEntryElement::displayLowLimit() const
+{
+  if (executeMode_ && limits_.lowSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeLow_;
+  }
+  return limits_.lowDefault;
+}
+
+double TextEntryElement::displayHighLimit() const
+{
+  if (executeMode_ && limits_.highSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeHigh_;
+  }
+  return limits_.highDefault;
+}
+
 void TextEntryElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;

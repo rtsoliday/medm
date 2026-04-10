@@ -1,6 +1,7 @@
 #include "pv_limits_dialog.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -213,6 +214,8 @@ void PvLimitsDialog::clearTargets()
   precisionDefaultSetter_ = {};
   meterLimitsGetter_ = {};
   meterLimitsSetter_ = {};
+  lowValueGetter_ = {};
+  highValueGetter_ = {};
   onChangedCallback_ = {};
   allowUserSources_ = false;
   channelLabel_.clear();
@@ -232,6 +235,8 @@ void PvLimitsDialog::setTextMonitorCallbacks(const QString &channelName,
     std::function<void()> changeNotifier,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter,
     bool allowUserSources)
 {
   mode_ = Mode::kTextMonitor;
@@ -241,6 +246,8 @@ void PvLimitsDialog::setTextMonitorCallbacks(const QString &channelName,
   precisionDefaultSetter_ = std::move(precisionDefaultSetter);
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   allowUserSources_ = allowUserSources;
   channelLabel_ = channelName;
@@ -293,12 +300,15 @@ void PvLimitsDialog::setTextEntryCallbacks(const QString &channelName,
     std::function<void(int)> precisionDefaultSetter,
     std::function<void()> changeNotifier,
     std::function<PvLimits()> limitsGetter,
-    std::function<void(const PvLimits &)> limitsSetter)
+    std::function<void(const PvLimits &)> limitsSetter,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   setTextMonitorCallbacks(channelName, std::move(precisionSourceGetter),
       std::move(precisionSourceSetter), std::move(precisionDefaultGetter),
       std::move(precisionDefaultSetter), std::move(changeNotifier),
-      std::move(limitsGetter), std::move(limitsSetter), true);
+      std::move(limitsGetter), std::move(limitsSetter),
+      std::move(lowValueGetter), std::move(highValueGetter), true);
   mode_ = Mode::kTextEntry;
   setLimitsRowsVisible(false);
 }
@@ -317,12 +327,16 @@ void PvLimitsDialog::showForTextEntry()
 void PvLimitsDialog::setMeterCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
-    std::function<void()> changeNotifier)
+    std::function<void()> changeNotifier,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   mode_ = Mode::kMeter;
   allowUserSources_ = true;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   channelLabel_ = channelName;
   if (titleLabel_) {
@@ -401,12 +415,16 @@ void PvLimitsDialog::showForMeter()
 void PvLimitsDialog::setStripChartCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
-    std::function<void()> changeNotifier)
+    std::function<void()> changeNotifier,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   mode_ = Mode::kStripChart;
   allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   channelLabel_ = channelName;
   precisionSourceGetter_ = {};
@@ -456,12 +474,16 @@ void PvLimitsDialog::showForStripChart()
 void PvLimitsDialog::setSliderCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
-    std::function<void()> changeNotifier)
+    std::function<void()> changeNotifier,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   mode_ = Mode::kSlider;
   allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   channelLabel_ = channelName;
   if (titleLabel_) {
@@ -539,12 +561,16 @@ void PvLimitsDialog::showForSlider()
 void PvLimitsDialog::setWheelSwitchCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
-    std::function<void()> changeNotifier)
+    std::function<void()> changeNotifier,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   mode_ = Mode::kWheelSwitch;
   allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   channelLabel_ = channelName;
   if (titleLabel_) {
@@ -622,12 +648,16 @@ void PvLimitsDialog::showForWheelSwitch()
 void PvLimitsDialog::setBarCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
-    std::function<void()> changeNotifier)
+    std::function<void()> changeNotifier,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   mode_ = Mode::kBarMonitor;
   allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   channelLabel_ = channelName;
   if (titleLabel_) {
@@ -705,12 +735,16 @@ void PvLimitsDialog::showForBarMonitor()
 void PvLimitsDialog::setThermometerCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
-    std::function<void()> changeNotifier)
+    std::function<void()> changeNotifier,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   mode_ = Mode::kThermometer;
   allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   channelLabel_ = channelName;
   if (titleLabel_) {
@@ -785,12 +819,16 @@ void PvLimitsDialog::showForThermometer()
 void PvLimitsDialog::setScaleCallbacks(const QString &channelName,
     std::function<PvLimits()> limitsGetter,
     std::function<void(const PvLimits &)> limitsSetter,
-    std::function<void()> changeNotifier)
+    std::function<void()> changeNotifier,
+    std::function<double()> lowValueGetter,
+    std::function<double()> highValueGetter)
 {
   mode_ = Mode::kScaleMonitor;
   allowUserSources_ = false;
   meterLimitsGetter_ = std::move(limitsGetter);
   meterLimitsSetter_ = std::move(limitsSetter);
+  lowValueGetter_ = std::move(lowValueGetter);
+  highValueGetter_ = std::move(highValueGetter);
   onChangedCallback_ = std::move(changeNotifier);
   channelLabel_ = channelName;
   if (titleLabel_) {
@@ -928,23 +966,37 @@ void PvLimitsDialog::updateMeterControls()
 
   if (loprEdit_) {
     const QSignalBlocker blocker(loprEdit_);
-    if (!hasLimits || limits.lowSource == PvLimitSource::kChannel) {
+    if (!hasLimits) {
       loprEdit_->clear();
       loprEdit_->setEnabled(false);
     } else {
-      loprEdit_->setText(QString::number(limits.lowDefault, 'g', 6));
-      loprEdit_->setEnabled(true);
+      double value = limits.lowDefault;
+      if (limits.lowSource == PvLimitSource::kChannel && lowValueGetter_) {
+        const double activeValue = lowValueGetter_();
+        if (std::isfinite(activeValue)) {
+          value = activeValue;
+        }
+      }
+      loprEdit_->setText(QString::number(value, 'g', 6));
+      loprEdit_->setEnabled(limits.lowSource != PvLimitSource::kChannel);
     }
   }
 
   if (hoprEdit_) {
     const QSignalBlocker blocker(hoprEdit_);
-    if (!hasLimits || limits.highSource == PvLimitSource::kChannel) {
+    if (!hasLimits) {
       hoprEdit_->clear();
       hoprEdit_->setEnabled(false);
     } else {
-      hoprEdit_->setText(QString::number(limits.highDefault, 'g', 6));
-      hoprEdit_->setEnabled(true);
+      double value = limits.highDefault;
+      if (limits.highSource == PvLimitSource::kChannel && highValueGetter_) {
+        const double activeValue = highValueGetter_();
+        if (std::isfinite(activeValue)) {
+          value = activeValue;
+        }
+      }
+      hoprEdit_->setText(QString::number(value, 'g', 6));
+      hoprEdit_->setEnabled(limits.highSource != PvLimitSource::kChannel);
     }
   }
 }

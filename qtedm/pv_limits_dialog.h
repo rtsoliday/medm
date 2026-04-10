@@ -28,6 +28,8 @@ public:
       std::function<void()> changeNotifier = {},
       std::function<PvLimits()> limitsGetter = {},
       std::function<void(const PvLimits &)> limitsSetter = {},
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {},
       bool allowUserSources = false);
   void showForTextMonitor();
   void setTextEntryCallbacks(const QString &channelName,
@@ -37,42 +39,58 @@ public:
       std::function<void(int)> precisionDefaultSetter,
       std::function<void()> changeNotifier = {},
       std::function<PvLimits()> limitsGetter = {},
-      std::function<void(const PvLimits &)> limitsSetter = {});
+      std::function<void(const PvLimits &)> limitsSetter = {},
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForTextEntry();
   void setMeterCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier,
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForMeter();
   void setStripChartCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier,
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForStripChart();
   void setSliderCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier,
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForSlider();
   void setWheelSwitchCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier,
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForWheelSwitch();
   void setBarCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier,
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForBarMonitor();
   void setThermometerCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier,
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForThermometer();
   void setScaleCallbacks(const QString &channelName,
       std::function<PvLimits()> limitsGetter,
       std::function<void(const PvLimits &)> limitsSetter,
-      std::function<void()> changeNotifier);
+      std::function<void()> changeNotifier,
+      std::function<double()> lowValueGetter = {},
+      std::function<double()> highValueGetter = {});
   void showForScaleMonitor();
 
 private:
@@ -127,6 +145,8 @@ private:
   std::function<void(int)> precisionDefaultSetter_;
   std::function<PvLimits()> meterLimitsGetter_;
   std::function<void(const PvLimits &)> meterLimitsSetter_;
+  std::function<double()> lowValueGetter_;
+  std::function<double()> highValueGetter_;
   std::function<void()> onChangedCallback_;
   bool allowUserSources_ = false;
   bool updating_ = false;

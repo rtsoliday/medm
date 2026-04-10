@@ -42,6 +42,8 @@ public:
 
   const PvLimits &limits() const;
   void setLimits(const PvLimits &limits);
+  double displayLowLimit() const;
+  double displayHighLimit() const;
   bool hasExplicitLimitsBlock() const;
   void setHasExplicitLimitsBlock(bool hasBlock);
   bool hasExplicitLimitsData() const;

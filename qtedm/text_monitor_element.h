@@ -43,6 +43,8 @@ public:
   void setPrecisionDefault(int precision);
   const PvLimits &limits() const;
   void setLimits(const PvLimits &limits);
+  double displayLowLimit() const;
+  double displayHighLimit() const;
   bool hasExplicitLimitsBlock() const;
   void setHasExplicitLimitsBlock(bool hasBlock);
   bool hasExplicitLimitsData() const;
@@ -63,6 +65,7 @@ public:
   void setRuntimeText(const QString &text);
   void setRuntimeConnected(bool connected);
   void setRuntimeSeverity(short severity);
+  void setRuntimeLimits(double low, double high);
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -92,8 +95,10 @@ private:
   bool hasExplicitPrecisionData_ = false;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
+  bool runtimeLimitsValid_ = false;
+  double runtimeLow_ = 0.0;
+  double runtimeHigh_ = 1.0;
   short runtimeSeverity_ = 0;
   QString designModeText_;
   QFont baseFontForExecuteMode_;  /* Stored base font calculated from "9.876543" */
 };
-

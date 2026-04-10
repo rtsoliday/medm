@@ -170,6 +170,16 @@ const PvLimits &ScaleMonitorElement::limits() const
   return limits_;
 }
 
+double ScaleMonitorElement::displayLowLimit() const
+{
+  return effectiveLowLimit();
+}
+
+double ScaleMonitorElement::displayHighLimit() const
+{
+  return effectiveHighLimit();
+}
+
 void ScaleMonitorElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;

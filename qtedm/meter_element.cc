@@ -263,6 +263,16 @@ const PvLimits &MeterElement::limits() const
   return limits_;
 }
 
+double MeterElement::displayLowLimit() const
+{
+  return effectiveLowLimit();
+}
+
+double MeterElement::displayHighLimit() const
+{
+  return effectiveHighLimit();
+}
+
 void MeterElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;

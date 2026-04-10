@@ -174,6 +174,16 @@ const PvLimits &BarMonitorElement::limits() const
   return limits_;
 }
 
+double BarMonitorElement::displayLowLimit() const
+{
+  return effectiveLowLimit();
+}
+
+double BarMonitorElement::displayHighLimit() const
+{
+  return effectiveHighLimit();
+}
+
 void BarMonitorElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;

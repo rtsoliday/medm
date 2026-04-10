@@ -173,6 +173,16 @@ void TextMonitorRuntime::handleChannelConnection(bool connected,
     }
 
     if (element_) {
+      if (data.hasControlInfo) {
+        const double low = std::min(data.lopr, data.hopr);
+        double high = std::max(data.lopr, data.hopr);
+        if (std::isfinite(low) && std::isfinite(high)) {
+          if (high == low) {
+            high = low + 1.0;
+          }
+          element_->setRuntimeLimits(low, high);
+        }
+      }
       element_->setRuntimeConnected(true);
     }
   } else {
@@ -247,6 +257,14 @@ void TextMonitorRuntime::handleChannelData(const SharedChannelData &data)
   if (data.hasControlInfo) {
     channelPrecision_ = data.precision;
     enumStrings_ = data.enumStrings;
+    const double low = std::min(data.lopr, data.hopr);
+    double high = std::max(data.lopr, data.hopr);
+    if (element_ && std::isfinite(low) && std::isfinite(high)) {
+      if (high == low) {
+        high = low + 1.0;
+      }
+      element_->setRuntimeLimits(low, high);
+    }
   }
 
   updateElementDisplay();

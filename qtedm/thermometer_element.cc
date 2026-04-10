@@ -316,6 +316,16 @@ const PvLimits &ThermometerElement::limits() const
   return limits_;
 }
 
+double ThermometerElement::displayLowLimit() const
+{
+  return effectiveLowLimit();
+}
+
+double ThermometerElement::displayHighLimit() const
+{
+  return effectiveHighLimit();
+}
+
 void ThermometerElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;

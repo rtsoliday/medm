@@ -1,6 +1,7 @@
 #include "text_monitor_element.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QApplication>
 #include <QPainter>
@@ -201,6 +202,24 @@ void TextMonitorElement::setLimits(const PvLimits &limits)
   }
 }
 
+double TextMonitorElement::displayLowLimit() const
+{
+  if (executeMode_ && limits_.lowSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeLow_;
+  }
+  return limits_.lowDefault;
+}
+
+double TextMonitorElement::displayHighLimit() const
+{
+  if (executeMode_ && limits_.highSource == PvLimitSource::kChannel
+      && runtimeLimitsValid_) {
+    return runtimeHigh_;
+  }
+  return limits_.highDefault;
+}
+
 bool TextMonitorElement::hasExplicitLimitsBlock() const
 {
   return hasExplicitLimitsBlock_;
@@ -281,11 +300,17 @@ void TextMonitorElement::setExecuteMode(bool execute)
     designModeText_ = QLabel::text();
     QLabel::setText(QString());
     runtimeConnected_ = false;
+    runtimeLimitsValid_ = false;
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
     runtimeSeverity_ = 0;
   } else {
     QLabel::setText(designModeText_);
     designModeText_.clear();
     runtimeConnected_ = false;
+    runtimeLimitsValid_ = false;
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
     runtimeSeverity_ = 0;
   }
   applyPaletteColors();
@@ -339,6 +364,11 @@ void TextMonitorElement::setRuntimeConnected(bool connected)
     return;
   }
   runtimeConnected_ = connected;
+  if (!runtimeConnected_) {
+    runtimeLimitsValid_ = false;
+    runtimeLow_ = limits_.lowDefault;
+    runtimeHigh_ = limits_.highDefault;
+  }
   if (executeMode_) {
     applyPaletteColors();
     /* Use UpdateCoordinator for throttled updates with adaptive rate control. */
@@ -360,6 +390,19 @@ void TextMonitorElement::setRuntimeSeverity(short severity)
     /* Use UpdateCoordinator for throttled updates with adaptive rate control. */
     UpdateCoordinator::instance().requestUpdate(this);
   }
+}
+
+void TextMonitorElement::setRuntimeLimits(double low, double high)
+{
+  if (!std::isfinite(low) || !std::isfinite(high)) {
+    return;
+  }
+  if (std::abs(high - low) < 1e-12) {
+    high = low + 1.0;
+  }
+  runtimeLow_ = low;
+  runtimeHigh_ = high;
+  runtimeLimitsValid_ = true;
 }
 
 void TextMonitorElement::resizeEvent(QResizeEvent *event)
@@ -495,4 +538,3 @@ QColor TextMonitorElement::defaultBackgroundColor() const
   }
   return QColor(Qt::white);
 }
-

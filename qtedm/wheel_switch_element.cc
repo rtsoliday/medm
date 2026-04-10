@@ -464,6 +464,16 @@ const PvLimits &WheelSwitchElement::limits() const
   return limits_;
 }
 
+double WheelSwitchElement::displayLowLimit() const
+{
+  return effectiveLowLimit();
+}
+
+double WheelSwitchElement::displayHighLimit() const
+{
+  return effectiveHighLimit();
+}
+
 void WheelSwitchElement::setLimits(const PvLimits &limits)
 
 {

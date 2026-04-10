@@ -8981,7 +8981,9 @@ private:
           },
           [element]() { element->update(); },
           [element]() { return element->limits(); },
-          [element](const PvLimits &limits) { element->setLimits(limits); });
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForTextMonitor();
       return;
     }
@@ -9008,7 +9010,9 @@ private:
           },
           [element]() { element->update(); },
           [element]() { return element->limits(); },
-          [element](const PvLimits &limits) { element->setLimits(limits); });
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForTextMonitor();
       return;
     }
@@ -9023,7 +9027,9 @@ private:
           channelName,
           [element]() { return element->limits(); },
           [element](const PvLimits &limits) { element->setLimits(limits); },
-          [element]() { element->update(); });
+          [element]() { element->update(); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForSlider();
       return;
     }
@@ -9038,7 +9044,9 @@ private:
           channelName,
           [element]() { return element->limits(); },
           [element](const PvLimits &limits) { element->setLimits(limits); },
-          [element]() { element->update(); });
+          [element]() { element->update(); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForWheelSwitch();
       return;
     }
@@ -9053,7 +9061,9 @@ private:
           channelName,
           [element]() { return element->limits(); },
           [element](const PvLimits &limits) { element->setLimits(limits); },
-          [element]() { element->update(); });
+          [element]() { element->update(); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForMeter();
       return;
     }
@@ -9068,7 +9078,9 @@ private:
           channelName,
           [element]() { return element->limits(); },
           [element](const PvLimits &limits) { element->setLimits(limits); },
-          [element]() { element->update(); });
+          [element]() { element->update(); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForBarMonitor();
       return;
     }
@@ -9083,7 +9095,9 @@ private:
           channelName,
           [element]() { return element->limits(); },
           [element](const PvLimits &limits) { element->setLimits(limits); },
-          [element]() { element->update(); });
+          [element]() { element->update(); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForThermometer();
       return;
     }
@@ -9098,7 +9112,9 @@ private:
           channelName,
           [element]() { return element->limits(); },
           [element](const PvLimits &limits) { element->setLimits(limits); },
-          [element]() { element->update(); });
+          [element]() { element->update(); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
       dialog->showForScaleMonitor();
       return;
     }

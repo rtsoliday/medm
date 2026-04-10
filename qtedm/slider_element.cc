@@ -331,6 +331,16 @@ const PvLimits &SliderElement::limits() const
   return limits_;
 }
 
+double SliderElement::displayLowLimit() const
+{
+  return effectiveLowLimit();
+}
+
+double SliderElement::displayHighLimit() const
+{
+  return effectiveHighLimit();
+}
+
 void SliderElement::setLimits(const PvLimits &limits)
 {
   limits_ = limits;

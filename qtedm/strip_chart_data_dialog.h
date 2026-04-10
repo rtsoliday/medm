@@ -53,6 +53,8 @@ private:
 
   void openColorPalette(int penIndex);
   void updateColorButton(int penIndex, const QColor &color);
+  void refreshLoprValue(int penIndex);
+  void refreshHoprValue(int penIndex);
   void updateLoprValueEnabled(int penIndex);
   void updateHoprValueEnabled(int penIndex);
 
@@ -77,6 +79,8 @@ private:
     PvLimits limits;
   };
   std::array<OriginalPenData, kMaxPens> originalPenData_;
+  std::array<double, kMaxPens> userLowValues_{};
+  std::array<double, kMaxPens> userHighValues_{};
   double originalPeriod_ = 60.0;
   TimeUnits originalUnits_ = TimeUnits::kSeconds;
 };

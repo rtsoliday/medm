@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QScrollArea>
+#include <QSignalBlocker>
 
 #include "color_palette_dialog.h"
 #include "strip_chart_element.h"
@@ -113,7 +114,10 @@ void StripChartDataDialog::setupUi()
     penRow.loprSourceCombo->addItem(tr("Default"), static_cast<int>(PvLimitSource::kDefault));
     penRow.loprSourceCombo->addItem(tr("User"), static_cast<int>(PvLimitSource::kUser));
     connect(penRow.loprSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-        this, [this, penIndex](int) { updateLoprValueEnabled(penIndex); });
+        this, [this, penIndex](int) {
+          refreshLoprValue(penIndex);
+          updateLoprValueEnabled(penIndex);
+        });
     penLayout->addWidget(penRow.loprSourceCombo, row, 2);
 
     /* LOPR value spin */
@@ -122,6 +126,17 @@ void StripChartDataDialog::setupUi()
     penRow.loprValueSpin->setRange(-1e12, 1e12);
     penRow.loprValueSpin->setDecimals(6);
     penRow.loprValueSpin->setMinimumWidth(80);
+    connect(penRow.loprValueSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+        this, [this, penIndex](double value) {
+          if (penIndex < 0 || penIndex >= kMaxPens) {
+            return;
+          }
+          auto source = static_cast<PvLimitSource>(
+              penRows_[penIndex].loprSourceCombo->currentData().toInt());
+          if (source == PvLimitSource::kUser) {
+            userLowValues_[penIndex] = value;
+          }
+        });
     penLayout->addWidget(penRow.loprValueSpin, row, 3);
 
     /* HOPR source combo */
@@ -131,7 +146,10 @@ void StripChartDataDialog::setupUi()
     penRow.hoprSourceCombo->addItem(tr("Default"), static_cast<int>(PvLimitSource::kDefault));
     penRow.hoprSourceCombo->addItem(tr("User"), static_cast<int>(PvLimitSource::kUser));
     connect(penRow.hoprSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-        this, [this, penIndex](int) { updateHoprValueEnabled(penIndex); });
+        this, [this, penIndex](int) {
+          refreshHoprValue(penIndex);
+          updateHoprValueEnabled(penIndex);
+        });
     penLayout->addWidget(penRow.hoprSourceCombo, row, 4);
 
     /* HOPR value spin */
@@ -140,6 +158,17 @@ void StripChartDataDialog::setupUi()
     penRow.hoprValueSpin->setRange(-1e12, 1e12);
     penRow.hoprValueSpin->setDecimals(6);
     penRow.hoprValueSpin->setMinimumWidth(80);
+    connect(penRow.hoprValueSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+        this, [this, penIndex](double value) {
+          if (penIndex < 0 || penIndex >= kMaxPens) {
+            return;
+          }
+          auto source = static_cast<PvLimitSource>(
+              penRows_[penIndex].hoprSourceCombo->currentData().toInt());
+          if (source == PvLimitSource::kUser) {
+            userHighValues_[penIndex] = value;
+          }
+        });
     penLayout->addWidget(penRow.hoprValueSpin, row, 5);
   }
 
@@ -223,6 +252,8 @@ void StripChartDataDialog::populateFromElement()
     /* Store original */
     originalPenData_[i].color = color;
     originalPenData_[i].limits = limits;
+    userLowValues_[i] = limits.lowDefault;
+    userHighValues_[i] = limits.highDefault;
 
     /* Populate UI */
     penRow.channelLabel->setText(channel);
@@ -233,7 +264,7 @@ void StripChartDataDialog::populateFromElement()
     if (loprIndex >= 0) {
       penRow.loprSourceCombo->setCurrentIndex(loprIndex);
     }
-    penRow.loprValueSpin->setValue(limits.lowDefault);
+    refreshLoprValue(i);
     updateLoprValueEnabled(i);
 
     /* HOPR */
@@ -241,16 +272,16 @@ void StripChartDataDialog::populateFromElement()
     if (hoprIndex >= 0) {
       penRow.hoprSourceCombo->setCurrentIndex(hoprIndex);
     }
-    penRow.hoprValueSpin->setValue(limits.highDefault);
+    refreshHoprValue(i);
     updateHoprValueEnabled(i);
 
     /* Enable/disable row based on whether channel is set */
     bool hasChannel = !channel.isEmpty();
     penRow.colorButton->setEnabled(hasChannel);
     penRow.loprSourceCombo->setEnabled(hasChannel);
-    penRow.loprValueSpin->setEnabled(hasChannel);
     penRow.hoprSourceCombo->setEnabled(hasChannel);
-    penRow.hoprValueSpin->setEnabled(hasChannel);
+    updateLoprValueEnabled(i);
+    updateHoprValueEnabled(i);
   }
 
   /* Period and units */
@@ -285,10 +316,14 @@ void StripChartDataDialog::applyChanges()
     PvLimits limits = element_->penLimits(i);
     limits.lowSource = static_cast<PvLimitSource>(
         penRow.loprSourceCombo->currentData().toInt());
-    limits.lowDefault = penRow.loprValueSpin->value();
     limits.highSource = static_cast<PvLimitSource>(
         penRow.hoprSourceCombo->currentData().toInt());
-    limits.highDefault = penRow.hoprValueSpin->value();
+    if (limits.lowSource == PvLimitSource::kUser) {
+      limits.lowDefault = userLowValues_[i];
+    }
+    if (limits.highSource == PvLimitSource::kUser) {
+      limits.highDefault = userHighValues_[i];
+    }
     element_->setPenLimits(i, limits);
   }
 
@@ -365,24 +400,58 @@ void StripChartDataDialog::updateColorButton(int penIndex, const QColor &color)
       QStringLiteral("background-color: %1; border: 1px solid gray;").arg(color.name()));
 }
 
-void StripChartDataDialog::updateLoprValueEnabled(int penIndex)
+void StripChartDataDialog::refreshLoprValue(int penIndex)
 {
-  if (penIndex < 0 || penIndex >= kMaxPens) {
+  if (penIndex < 0 || penIndex >= kMaxPens || !element_) {
     return;
   }
   PenRow &penRow = penRows_[penIndex];
   auto source = static_cast<PvLimitSource>(
       penRow.loprSourceCombo->currentData().toInt());
-  penRow.loprValueSpin->setEnabled(source == PvLimitSource::kUser);
+  const double value = (source == PvLimitSource::kUser)
+      ? userLowValues_[penIndex]
+      : element_->penDisplayLowValue(penIndex, source);
+  const QSignalBlocker blocker(penRow.loprValueSpin);
+  penRow.loprValueSpin->setValue(value);
 }
 
-void StripChartDataDialog::updateHoprValueEnabled(int penIndex)
+void StripChartDataDialog::refreshHoprValue(int penIndex)
 {
-  if (penIndex < 0 || penIndex >= kMaxPens) {
+  if (penIndex < 0 || penIndex >= kMaxPens || !element_) {
     return;
   }
   PenRow &penRow = penRows_[penIndex];
   auto source = static_cast<PvLimitSource>(
       penRow.hoprSourceCombo->currentData().toInt());
-  penRow.hoprValueSpin->setEnabled(source == PvLimitSource::kUser);
+  const double value = (source == PvLimitSource::kUser)
+      ? userHighValues_[penIndex]
+      : element_->penDisplayHighValue(penIndex, source);
+  const QSignalBlocker blocker(penRow.hoprValueSpin);
+  penRow.hoprValueSpin->setValue(value);
+}
+
+void StripChartDataDialog::updateLoprValueEnabled(int penIndex)
+{
+  if (penIndex < 0 || penIndex >= kMaxPens || !element_) {
+    return;
+  }
+  PenRow &penRow = penRows_[penIndex];
+  auto source = static_cast<PvLimitSource>(
+      penRow.loprSourceCombo->currentData().toInt());
+  const bool hasChannel = !element_->channel(penIndex).isEmpty();
+  penRow.loprValueSpin->setEnabled(
+      hasChannel && source == PvLimitSource::kUser);
+}
+
+void StripChartDataDialog::updateHoprValueEnabled(int penIndex)
+{
+  if (penIndex < 0 || penIndex >= kMaxPens || !element_) {
+    return;
+  }
+  PenRow &penRow = penRows_[penIndex];
+  auto source = static_cast<PvLimitSource>(
+      penRow.hoprSourceCombo->currentData().toInt());
+  const bool hasChannel = !element_->channel(penIndex).isEmpty();
+  penRow.hoprValueSpin->setEnabled(
+      hasChannel && source == PvLimitSource::kUser);
 }

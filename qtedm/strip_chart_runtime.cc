@@ -71,6 +71,8 @@ void StripChartRuntime::start()
     PenState &pen = pens_[i];
     pen.channelName = element_->channel(i).trimmed();
     pen.connected = false;
+    pen.readAccessKnown = false;
+    pen.canRead = false;
     pen.fieldType = -1;
     pen.elementCount = 1;
 
@@ -117,7 +119,28 @@ void StripChartRuntime::subscribePen(int index)
       },
       [this, index](bool connected, const SharedChannelData &data) {
         handleConnectionEvent(index, connected, data);
+      },
+      [this, index](bool canRead, bool canWrite) {
+        handleAccessRightsEvent(index, canRead, canWrite);
       });
+}
+
+void StripChartRuntime::handleAccessRightsEvent(int index, bool canRead,
+    bool canWrite)
+{
+  Q_UNUSED(canWrite);
+  if (!started_ || index < 0 || index >= kStripChartPenCount) {
+    return;
+  }
+
+  PenState &pen = pens_[index];
+  pen.readAccessKnown = true;
+  pen.canRead = canRead;
+
+  invokeOnElement([index, canRead](StripChartElement *element) {
+    element->setRuntimeReadAccessKnown(index, true);
+    element->setRuntimeReadAccess(index, canRead);
+  });
 }
 
 void StripChartRuntime::handleConnectionEvent(int index,
@@ -144,6 +167,13 @@ void StripChartRuntime::handleConnectionEvent(int index,
     invokeOnElement([index](StripChartElement *element) {
       element->setRuntimeConnected(index, true);
     });
+    if (pen.readAccessKnown) {
+      const bool canRead = pen.canRead;
+      invokeOnElement([index, canRead](StripChartElement *element) {
+        element->setRuntimeReadAccessKnown(index, true);
+        element->setRuntimeReadAccess(index, canRead);
+      });
+    }
 
     if (data.hasControlInfo) {
       const double low = data.lopr;
@@ -154,8 +184,12 @@ void StripChartRuntime::handleConnectionEvent(int index,
     }
   } else {
     pen.connected = false;
+    pen.readAccessKnown = false;
+    pen.canRead = false;
     invokeOnElement([index](StripChartElement *element) {
       element->setRuntimeConnected(index, false);
+      element->setRuntimeReadAccessKnown(index, false);
+      element->setRuntimeReadAccess(index, false);
       element->clearPenRuntimeState(index);
     });
   }
@@ -176,6 +210,16 @@ void StripChartRuntime::handleValueEvent(int index,
   }
   if (!data.isNumeric) {
     return;
+  }
+
+  PenState &pen = pens_[index];
+  if (!pen.readAccessKnown || !pen.canRead) {
+    pen.readAccessKnown = true;
+    pen.canRead = true;
+    invokeOnElement([index](StripChartElement *element) {
+      element->setRuntimeReadAccessKnown(index, true);
+      element->setRuntimeReadAccess(index, true);
+    });
   }
 
   const double numericValue = data.numericValue;
@@ -199,6 +243,8 @@ void StripChartRuntime::resetPen(int index)
   PenState &pen = pens_[index];
   pen.subscription.reset();
   pen.connected = false;
+  pen.readAccessKnown = false;
+  pen.canRead = false;
   pen.fieldType = -1;
   pen.elementCount = 1;
 }

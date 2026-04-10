@@ -30,11 +30,14 @@ private:
     QString channelName;
     SubscriptionHandle subscription;
     bool connected = false;
+    bool readAccessKnown = false;
+    bool canRead = false;
     short fieldType = -1;
     long elementCount = 1;
   };
 
   void subscribePen(int index);
+  void handleAccessRightsEvent(int index, bool canRead, bool canWrite);
   void handleConnectionEvent(int index, bool connected,
       const SharedChannelData &data);
   void handleValueEvent(int index, const SharedChannelData &data);

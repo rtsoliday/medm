@@ -231,6 +231,8 @@ StripChartElement::StripChartElement(QWidget *parent)
     pens_[i].limits.precisionDefault = 0;
     pens_[i].color = defaultPenColor(i);
     pens_[i].runtimeConnected = false;
+    pens_[i].runtimeReadAccessKnown = false;
+    pens_[i].runtimeReadAccess = false;
     pens_[i].runtimeLimitsValid = false;
     pens_[i].runtimeLow = pens_[i].limits.lowDefault;
     pens_[i].runtimeHigh = pens_[i].limits.highDefault;
@@ -449,6 +451,32 @@ PvLimits StripChartElement::penLimits(int index) const
   return limits;
 }
 
+double StripChartElement::penDisplayLowValue(int index,
+    PvLimitSource source) const
+{
+  if (index < 0 || index >= penCount()) {
+    return 0.0;
+  }
+  const Pen &pen = pens_[index];
+  if (source == PvLimitSource::kChannel && pen.runtimeLimitsValid) {
+    return pen.runtimeLow;
+  }
+  return pen.limits.lowDefault;
+}
+
+double StripChartElement::penDisplayHighValue(int index,
+    PvLimitSource source) const
+{
+  if (index < 0 || index >= penCount()) {
+    return 1.0;
+  }
+  const Pen &pen = pens_[index];
+  if (source == PvLimitSource::kChannel && pen.runtimeLimitsValid) {
+    return pen.runtimeHigh;
+  }
+  return pen.limits.highDefault;
+}
+
 void StripChartElement::setPenLimits(int index, const PvLimits &limits)
 {
   if (index < 0 || index >= penCount()) {
@@ -512,12 +540,52 @@ void StripChartElement::setRuntimeConnected(int index, bool connected)
   }
   pen.runtimeConnected = connected;
   if (!connected) {
+    pen.runtimeReadAccessKnown = false;
+    pen.runtimeReadAccess = false;
     pen.runtimeLimitsValid = false;
     pen.runtimeLow = pen.limits.lowDefault;
     pen.runtimeHigh = pen.limits.highDefault;
     pen.hasRuntimeValue = false;
     pen.hasIntervalRange = false;
   }
+  invalidateStaticCache();
+  invalidatePenCache();
+  updateRefreshTimer();
+  update();
+}
+
+void StripChartElement::setRuntimeReadAccessKnown(int index, bool known)
+{
+  if (index < 0 || index >= penCount()) {
+    return;
+  }
+  Pen &pen = pens_[index];
+  if (pen.runtimeReadAccessKnown == known) {
+    return;
+  }
+  pen.runtimeReadAccessKnown = known;
+  if (!known) {
+    pen.runtimeReadAccess = false;
+  }
+  invalidateStaticCache();
+  invalidatePenCache();
+  updateRefreshTimer();
+  update();
+}
+
+void StripChartElement::setRuntimeReadAccess(int index, bool readAccess)
+{
+  if (index < 0 || index >= penCount()) {
+    return;
+  }
+  Pen &pen = pens_[index];
+  const bool normalized = pen.runtimeReadAccessKnown && readAccess;
+  if (pen.runtimeReadAccess == normalized) {
+    return;
+  }
+  pen.runtimeReadAccess = normalized;
+  invalidateStaticCache();
+  invalidatePenCache();
   updateRefreshTimer();
   update();
 }
@@ -552,7 +620,7 @@ void StripChartElement::addRuntimeSample(int index, double value, qint64 timesta
     return;
   }
   Pen &pen = pens_[index];
-  if (!pen.runtimeConnected) {
+  if (!pen.runtimeConnected || (pen.runtimeReadAccessKnown && !pen.runtimeReadAccess)) {
     return;
   }
 
@@ -591,6 +659,8 @@ void StripChartElement::clearRuntimeState()
   for (int i = 0; i < penCount(); ++i) {
     Pen &pen = pens_[i];
     pen.runtimeConnected = false;
+    pen.runtimeReadAccessKnown = false;
+    pen.runtimeReadAccess = false;
     pen.runtimeLimitsValid = false;
     pen.runtimeLow = pen.limits.lowDefault;
     pen.runtimeHigh = pen.limits.highDefault;
@@ -613,6 +683,8 @@ void StripChartElement::clearPenRuntimeState(int index)
   }
   Pen &pen = pens_[index];
   pen.runtimeConnected = false;
+  pen.runtimeReadAccessKnown = false;
+  pen.runtimeReadAccess = false;
   pen.runtimeLimitsValid = false;
   pen.runtimeLow = pen.limits.lowDefault;
   pen.runtimeHigh = pen.limits.highDefault;
@@ -672,14 +744,20 @@ void StripChartElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
 
-  /* In execute mode, show solid white when any defined pen is disconnected.
-   * This provides a clear visual indication that PV data is unavailable. */
-  if (executeMode_ && !allDefinedPensConnected()) {
-    painter.fillRect(rect(), Qt::white);
-    if (selected_) {
-      paintSelectionOverlay(painter);
+  if (executeMode_) {
+    QColor fallbackColor;
+    if (!hasDefinedPens() || !allDefinedPensConnected()) {
+      fallbackColor = Qt::white;
+    } else if (anyDefinedPenWithoutReadAccess()) {
+      fallbackColor = Qt::black;
     }
-    return;
+    if (fallbackColor.isValid()) {
+      painter.fillRect(rect(), fallbackColor);
+      if (selected_) {
+        paintSelectionOverlay(painter);
+      }
+      return;
+    }
   }
 
   const QFont labelsFont = labelFont();
@@ -1185,20 +1263,13 @@ QColor StripChartElement::effectiveForeground() const
 
 QColor StripChartElement::effectiveBackground() const
 {
-  /* Show white background when any defined pen is disconnected */
+  /* Match MEDM execute-mode fallback states before drawing any chart content. */
   if (executeMode_) {
-    bool hasDefinedPen = false;
-    for (const Pen &pen : pens_) {
-      if (!pen.channel.trimmed().isEmpty()) {
-        hasDefinedPen = true;
-        if (!pen.runtimeConnected) {
-          return QColor(Qt::white);
-        }
-      }
-    }
-    /* Also show white if no pens are defined but we're in execute mode */
-    if (!hasDefinedPen) {
+    if (!hasDefinedPens() || !allDefinedPensConnected()) {
       return QColor(Qt::white);
+    }
+    if (anyDefinedPenWithoutReadAccess()) {
+      return QColor(Qt::black);
     }
   }
   if (backgroundColor_.isValid()) {
@@ -1759,7 +1830,7 @@ void StripChartElement::ensureRefreshTimer()
 
 void StripChartElement::updateRefreshTimer()
 {
-  const bool needTimer = executeMode_ && anyPenConnected();
+  const bool needTimer = executeMode_ && allDefinedPensConnectedAndReadable();
   if (needTimer) {
     ensureRefreshTimer();
     if (refreshTimer_ && !refreshTimer_->isActive()) {
@@ -1885,7 +1956,7 @@ void StripChartElement::enforceSampleCapacity(int capacity)
 
 void StripChartElement::maybeAppendSamples(qint64 nowMs)
 {
-  if (!anyPenConnected()) {
+  if (!allDefinedPensConnectedAndReadable()) {
     lastSampleMs_ = nowMs;
     nextAdvanceTimeMs_ = 0;
     return;
@@ -2017,6 +2088,16 @@ bool StripChartElement::anyPenConnected() const
   return false;
 }
 
+bool StripChartElement::hasDefinedPens() const
+{
+  for (const Pen &pen : pens_) {
+    if (!pen.channel.trimmed().isEmpty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool StripChartElement::anyPenReady() const
 {
   for (const Pen &pen : pens_) {
@@ -2027,15 +2108,44 @@ bool StripChartElement::anyPenReady() const
   return false;
 }
 
+bool StripChartElement::anyDefinedPenWithoutReadAccess() const
+{
+  for (const Pen &pen : pens_) {
+    if (!pen.channel.trimmed().isEmpty()
+        && pen.runtimeConnected
+        && pen.runtimeReadAccessKnown
+        && !pen.runtimeReadAccess) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool StripChartElement::allDefinedPensConnected() const
 {
-  bool hasDefinedPen = false;
   for (const Pen &pen : pens_) {
     if (!pen.channel.trimmed().isEmpty()) {
-      hasDefinedPen = true;
       if (!pen.runtimeConnected) {
         return false;
       }
+    }
+  }
+  return hasDefinedPens();
+}
+
+bool StripChartElement::allDefinedPensConnectedAndReadable() const
+{
+  bool hasDefinedPen = false;
+  for (const Pen &pen : pens_) {
+    if (pen.channel.trimmed().isEmpty()) {
+      continue;
+    }
+    hasDefinedPen = true;
+    if (!pen.runtimeConnected) {
+      return false;
+    }
+    if (!pen.runtimeReadAccessKnown || !pen.runtimeReadAccess) {
+      return false;
     }
   }
   return hasDefinedPen;

@@ -56,11 +56,15 @@ public:
   void setPenColor(int index, const QColor &color);
 
   PvLimits penLimits(int index) const;
+  double penDisplayLowValue(int index, PvLimitSource source) const;
+  double penDisplayHighValue(int index, PvLimitSource source) const;
   void setPenLimits(int index, const PvLimits &limits);
 
   void setExecuteMode(bool execute);
   bool isExecuteMode() const;
   void setRuntimeConnected(int index, bool connected);
+  void setRuntimeReadAccessKnown(int index, bool known);
+  void setRuntimeReadAccess(int index, bool readAccess);
   void setRuntimeLimits(int index, double low, double high);
   void addRuntimeSample(int index, double value, qint64 timestampMs);
   void clearRuntimeState();
@@ -111,6 +115,8 @@ private:
     QString channel;
     PvLimits limits;
     bool runtimeConnected = false;
+    bool runtimeReadAccessKnown = false;
+    bool runtimeReadAccess = false;
     bool runtimeLimitsValid = false;
     double runtimeLow = 0.0;
     double runtimeHigh = 0.0;
@@ -160,9 +166,12 @@ private:
   void enforceSampleCapacity(int capacity);
   void maybeAppendSamples(qint64 nowMs);
   void appendSampleColumn();
+  bool hasDefinedPens() const;
   bool anyPenConnected() const;
   bool anyPenReady() const;
+  bool anyDefinedPenWithoutReadAccess() const;
   bool allDefinedPensConnected() const;
+  bool allDefinedPensConnectedAndReadable() const;
   void invalidateStaticCache();
   void ensureStaticCache(const QFont &labelsFont, const QFontMetrics &metrics);
   void paintStaticContent(QPainter &painter, const Layout &layout,

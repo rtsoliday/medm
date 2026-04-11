@@ -4,7 +4,7 @@ SDDS1
 &column name=Type, type=string, description="PV scalar type" &end
 &column name=EnumStrings, type=string, description="Comma-separated enum state labels" &end
 &data mode=ascii &end
-212
+230
 "CRYO:PRESS:HEAD05" "double" ""
 "CRYO:PRESS:TAIL33" "double" ""
 "CRYO:TEMP:LOOP77" "double" ""
@@ -52,6 +52,24 @@ SDDS1
 "byte:test:gamma06" "uint" ""
 "byte:test:gamma07" "uint" ""
 "byte:test:gamma08" "uint" ""
+"cartesian:test:alpha:count" "double" ""
+"cartesian:test:alpha:y1" "double" ""
+"cartesian:test:baselinea:count" "double" ""
+"cartesian:test:baselinea:y1" "double" ""
+"cartesian:test:baselineb:count" "double" ""
+"cartesian:test:baselineb:y1" "double" ""
+"cartesian:test:beta:count" "double" ""
+"cartesian:test:beta:y1" "double" ""
+"cartesian:test:delta:count" "double" ""
+"cartesian:test:delta:y1" "double" ""
+"cartesian:test:epsilon:count" "double" ""
+"cartesian:test:epsilon:y1" "double" ""
+"cartesian:test:gamma:count" "double" ""
+"cartesian:test:gamma:y1" "double" ""
+"cartesian:test:probe:count" "double" ""
+"cartesian:test:probe:y1" "double" ""
+"cartesian:test:zeta:count" "double" ""
+"cartesian:test:zeta:y1" "double" ""
 "cb:aux:1574" "enum" "OFF,ON,AUTO,ERROR"
 "cb:ctrl:2845" "enum" "OFF,ON,AUTO,ERROR"
 "cb:data:8754" "enum" "OFF,ON,AUTO,ERROR"

@@ -17640,7 +17640,7 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("count=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(countPv)));
-      } else if (cartesian->count() > 1) {
+      } else if (cartesian->count() != 1) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("count=\"%1\"")
                 .arg(QString::number(cartesian->count())));
@@ -18657,7 +18657,7 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("count=\"%1\"")
               .arg(AdlWriter::escapeAdlString(countPv)));
-    } else if (cartesian->count() > 1) {
+    } else if (cartesian->count() != 1) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("count=\"%1\"")
               .arg(QString::number(cartesian->count())));

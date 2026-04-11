@@ -5,8 +5,8 @@ file {
 }
 display {
 	object {
-		x=2590
-		y=55
+		x=2580
+		y=47
 		width=1354
 		height=699
 	}
@@ -106,24 +106,21 @@ display {
 	}
 	style="step"
 	erase_oldest="plot last n pts"
-	count="cb:ctrl:2845"
+	count="cartesian:test:alpha:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:alpha:y1"
 		data_clr=28
 		yaxis=0
 		yside=1
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=42
 		yaxis=1
 		yside=0
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselineb:y1"
 		data_clr=9
 		yaxis=2
 		yside=1
@@ -146,9 +143,8 @@ display {
 		minRange=-22.400000
 		maxRange=48.599998
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:alpha:count"
 	eraseMode="if zero"
 }
 "cartesian plot" {
@@ -169,31 +165,27 @@ display {
 		bclr=51
 	}
 	style="fill-under"
-	count="cb:ctrl:2845"
+	count="cartesian:test:beta:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:beta:y1"
 		data_clr=55
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:probe:y1"
 		data_clr=8
 		yaxis=1
 		yside=1
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=47
 		yaxis=0
 		yside=0
 	}
 	trace[3] {
-		xdata="SPEC:DET:A208"
-		ydata="SYS:GRAD:LOOP32"
+		ydata="cartesian:test:baselineb:y1"
 		data_clr=23
 		yaxis=3
 		yside=0
@@ -216,9 +208,8 @@ display {
 		axisStyle="log10"
 		rangeStyle="auto-scale"
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:beta:count"
 }
 "cartesian plot" {
 	object {
@@ -237,39 +228,34 @@ display {
 		clr=11
 		bclr=52
 	}
-	style="line"
 	erase_oldest="plot last n pts"
-	count="cb:ctrl:2845"
+	count="cartesian:test:gamma:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:gamma:y1"
 		data_clr=6
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=37
 		yaxis=2
 		yside=1
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselineb:y1"
 		data_clr=59
 		yaxis=1
 		yside=0
 	}
 	x_axis {
-		axisStyle="time"
 		rangeStyle="auto-scale"
 		timeFormat="wd hh:00"
 	}
 	y1_axis {
 		rangeStyle="user-specified"
-		minRange=-3.150000
-		maxRange=3.150000
+		minRange=-10.000000
+		maxRange=10.000000
 	}
 	y2_axis {
 		axisStyle="log10"
@@ -280,9 +266,8 @@ display {
 	y3_axis {
 		rangeStyle="auto-scale"
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:gamma:count"
 	eraseMode="if zero"
 }
 "cartesian plot" {
@@ -302,24 +287,21 @@ display {
 		clr=25
 		bclr=2
 	}
-	count="cb:ctrl:2845"
+	count="cartesian:test:delta:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:delta:y1"
 		data_clr=15
 		yaxis=0
 		yside=1
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:probe:y1"
 		data_clr=48
 		yaxis=3
 		yside=0
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=30
 		yaxis=1
 		yside=1
@@ -341,9 +323,8 @@ display {
 	y4_axis {
 		rangeStyle="auto-scale"
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:delta:count"
 }
 "cartesian plot" {
 	object {
@@ -362,39 +343,33 @@ display {
 		clr=44
 		bclr=13
 	}
-	style="fill-under"
 	erase_oldest="plot last n pts"
-	count="cb:ctrl:2845"
+	count="cartesian:test:epsilon:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:epsilon:y1"
 		data_clr=18
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:probe:y1"
 		data_clr=63
 		yaxis=2
 		yside=1
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=31
 		yaxis=1
 		yside=0
 	}
 	trace[3] {
-		xdata="SPEC:DET:A208"
-		ydata="SYS:GRAD:LOOP32"
-		data_clr=4
+		ydata="cartesian:test:baselineb:y1"
+		data_clr=20
 		yaxis=3
 		yside=1
 	}
 	x_axis {
-		axisStyle="time"
 		rangeStyle="user-specified"
 		minRange=0.500000
 		maxRange=18.750000
@@ -409,9 +384,8 @@ display {
 	y2_axis {
 		rangeStyle="auto-scale"
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:epsilon:count"
 	eraseMode="if zero"
 }
 "cartesian plot" {
@@ -432,31 +406,27 @@ display {
 		bclr=58
 	}
 	style="line"
-	count="cb:ctrl:2845"
+	count="cartesian:test:zeta:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:zeta:y1"
 		data_clr=40
 		yaxis=0
 		yside=1
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:probe:y1"
 		data_clr=24
 		yaxis=1
 		yside=0
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=12
 		yaxis=2
 		yside=1
 	}
 	trace[3] {
-		xdata="SPEC:DET:A208"
-		ydata="SYS:GRAD:LOOP32"
+		ydata="cartesian:test:baselineb:y1"
 		data_clr=50
 		yaxis=3
 		yside=0
@@ -478,9 +448,8 @@ display {
 		minRange=-5.500000
 		maxRange=12.250000
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:zeta:count"
 }
 "cartesian plot" {
 	object {
@@ -517,39 +486,34 @@ display {
 		clr=11
 		bclr=52
 	}
-	style="line"
 	erase_oldest="plot last n pts"
-	count="cb:ctrl:2845"
+	count="cartesian:test:gamma:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:gamma:y1"
 		data_clr=6
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=37
 		yaxis=2
 		yside=1
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselineb:y1"
 		data_clr=59
 		yaxis=1
 		yside=0
 	}
 	x_axis {
-		axisStyle="time"
 		rangeStyle="auto-scale"
 		timeFormat="wd hh:00"
 	}
 	y1_axis {
 		rangeStyle="user-specified"
-		minRange=-3.150000
-		maxRange=3.150000
+		minRange=-10.000000
+		maxRange=10.000000
 	}
 	y2_axis {
 		axisStyle="log10"
@@ -560,9 +524,8 @@ display {
 	y3_axis {
 		rangeStyle="auto-scale"
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:gamma:count"
 	eraseMode="if zero"
 }
 "cartesian plot" {
@@ -580,31 +543,27 @@ display {
 		bclr=51
 	}
 	style="fill-under"
-	count="cb:ctrl:2845"
+	count="cartesian:test:beta:count"
 	trace[0] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:SIG327"
+		ydata="cartesian:test:beta:y1"
 		data_clr=55
 		yaxis=0
 		yside=0
 	}
 	trace[1] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:RMS011"
+		ydata="cartesian:test:probe:y1"
 		data_clr=8
 		yaxis=0
 		yside=0
 	}
 	trace[2] {
-		xdata="SPEC:DET:A208"
-		ydata="DEV:FLUX:DRIFT901"
+		ydata="cartesian:test:baselinea:y1"
 		data_clr=47
 		yaxis=0
 		yside=0
 	}
 	trace[3] {
-		xdata="SPEC:DET:A208"
-		ydata="SYS:GRAD:LOOP32"
+		ydata="cartesian:test:baselineb:y1"
 		data_clr=23
 		yaxis=0
 		yside=0
@@ -627,7 +586,6 @@ display {
 		axisStyle="log10"
 		rangeStyle="auto-scale"
 	}
-	trigger="cb:logic:7319"
 	erase="cb:scan:8095"
-	countPvName="cb:ctrl:2845"
+	countPvName="cartesian:test:beta:count"
 }

@@ -121,6 +121,7 @@ public:
   void clearRuntimeState();
   void setRuntimeCount(int count);
   int effectiveSampleCapacity() const;
+  void setRuntimePaintReady(bool hasConfiguredTrace, bool ready);
   void setAxisRuntimeLimits(int axisIndex, double minimum, double maximum,
       bool valid);
 
@@ -242,7 +243,7 @@ private:
   std::array<QString, 4> yLabels_{};
   CartesianPlotStyle style_ = CartesianPlotStyle::kLine;
   bool eraseOldest_ = false;
-  int count_ = 0;
+  int count_ = 1;
   CartesianPlotEraseMode eraseMode_ = CartesianPlotEraseMode::kIfNotZero;
   QString triggerChannel_;
   QString eraseChannel_;
@@ -259,6 +260,8 @@ private:
   bool executeMode_ = false;
   int runtimeCount_ = 0;
   bool runtimeCountValid_ = false;
+  bool runtimeHasConfiguredTrace_ = false;
+  bool runtimePaintReady_ = false;
   std::array<bool, kCartesianAxisCount> axisRuntimeValid_{};
   std::array<double, kCartesianAxisCount> axisRuntimeMinimums_{};
   std::array<double, kCartesianAxisCount> axisRuntimeMaximums_{};

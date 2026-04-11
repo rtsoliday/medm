@@ -2514,8 +2514,8 @@ public:
         this, [this](int index) { handleCartesianEraseOldestChanged(index); });
 
     cartesianCountEdit_ = createLineEdit();
-    cartesianCountEdit_->setValidator(new QIntValidator(1,
-        kCartesianPlotMaximumSampleCount,
+    cartesianCountEdit_->setValidator(new QIntValidator(0,
+        std::numeric_limits<int>::max(),
         cartesianCountEdit_));
     committedTexts_.insert(cartesianCountEdit_, cartesianCountEdit_->text());
     cartesianCountEdit_->installEventFilter(this);
@@ -6027,7 +6027,7 @@ public:
     if (cartesianCountEdit_) {
       const int countValue = cartesianCountGetter_ ? cartesianCountGetter_() : 1;
       const QSignalBlocker blocker(cartesianCountEdit_);
-      cartesianCountEdit_->setText(QString::number(std::max(countValue, 1)));
+      cartesianCountEdit_->setText(QString::number(std::max(countValue, 0)));
       cartesianCountEdit_->setEnabled(static_cast<bool>(cartesianCountSetter_));
       committedTexts_[cartesianCountEdit_] = cartesianCountEdit_->text();
     }
@@ -9385,7 +9385,7 @@ private:
     }
     bool ok = false;
     int value = cartesianCountEdit_->text().toInt(&ok);
-    if (!ok || value <= 0) {
+    if (!ok || value < 0) {
       revertLineEdit(cartesianCountEdit_);
       return;
     }
@@ -9394,7 +9394,7 @@ private:
                                                      : value;
     const QSignalBlocker blocker(cartesianCountEdit_);
     cartesianCountEdit_->setText(
-        QString::number(std::max(effectiveCount, 1)));
+        QString::number(std::max(effectiveCount, 0)));
     committedTexts_[cartesianCountEdit_] = cartesianCountEdit_->text();
   }
 

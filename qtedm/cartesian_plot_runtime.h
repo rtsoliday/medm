@@ -5,6 +5,7 @@
 #include <QVector>
 #include <QString>
 #include <QPointF>
+#include <QTimer>
 
 #include <array>
 
@@ -44,6 +45,13 @@ private:
     QString name;
     SubscriptionHandle subscription;
     bool connected = false;
+    bool readAccessKnown = false;
+    bool canRead = false;
+    bool hasControlInfo = false;
+    bool precisionValid = false;
+    bool runtimeLimitsValid = false;
+    double runtimeLow = 0.0;
+    double runtimeHigh = 0.0;
     short fieldType = -1;
     long elementCount = 0;
   };
@@ -61,8 +69,10 @@ private:
     QVector<QPointF> vectorPoints;
     double lastXScalar = 0.0;
     double lastYScalar = 0.0;
+    qint64 lastYTimestampMs = 0;
     bool hasXScalar = false;
     bool hasYScalar = false;
+    bool hasYTimestamp = false;
     bool pendingTrigger = false;
     bool initialSnapshotPending = true;
     int yAxisIndex = 1;
@@ -80,26 +90,32 @@ private:
       ChannelState &state, ChannelContext &context);
   void createAuxiliaryChannel(ChannelKind kind, ChannelState &state,
       ChannelContext &context);
-    void subscribeChannel(ChannelState &state, ChannelContext &context);
-    void unsubscribeChannel(ChannelState &state);
-    void handleConnection(const ChannelContext &context, bool connected,
+  void subscribeChannel(ChannelState &state, ChannelContext &context);
+  void unsubscribeChannel(ChannelState &state);
+  void handleAccessRights(const ChannelContext &context, bool canRead,
+      bool canWrite);
+  void handleConnection(const ChannelContext &context, bool connected,
       const SharedChannelData &data);
-    void handleValue(const ChannelContext &context,
+  void handleValue(const ChannelContext &context,
       const SharedChannelData &data);
 
-    void handleTraceValue(int index, bool isX,
+  void updateChannelControlInfo(ChannelState &state,
       const SharedChannelData &data);
-    void handleTraceControlInfo(int index, bool isX,
+  void handleTraceValue(int index, bool isX,
       const SharedChannelData &data);
-    void handleTriggerValue(const SharedChannelData &data);
-    void handleEraseValue(const SharedChannelData &data);
-    void handleCountValue(const SharedChannelData &data);
+  void handleTraceControlInfo(int index, bool isX,
+      const SharedChannelData &data);
+  void handleTriggerValue(const SharedChannelData &data);
+  void handleEraseValue(const SharedChannelData &data);
+  void handleCountValue(const SharedChannelData &data);
 
   void updateTraceMode(int index);
-  void updateXAxisRangeForYOnlyTraces();
+  void updateRuntimePaintState();
+  void recomputeAxisRuntimeLimits();
   void clearTraceData(int index, bool notifyElement);
   void emitTraceData(int index, const QVector<QPointF> &points,
       CartesianPlotTraceMode mode, bool connected);
+  void handlePeriodicSampleTimeout();
   void processTraceUpdate(int index, bool forceAppend);
   void appendXYScalarPoint(TraceState &trace);
   void appendXScalarPoint(TraceState &trace);
@@ -114,6 +130,8 @@ private:
 
   int effectiveCapacity(int preferredCount = 0,
       bool allowConfiguredCount = true) const;
+  void resizeScalarHistory(TraceState &trace);
+  bool channelReadyForDisplay(const ChannelState &state) const;
   bool traceConnected(const TraceState &trace) const;
   bool isTriggerEnabled() const;
 
@@ -141,6 +159,7 @@ private:
   int configuredCount_ = 1;
   int countFromChannel_ = 0;
   bool configuredAxesLogged_ = false;
+  QTimer periodicSampleTimer_;
 };
 
 template <typename Func>

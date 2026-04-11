@@ -355,14 +355,17 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
     // Logarithmic axis
     double drawMin = 0.0;
     double drawMax = 0.0;
+    constexpr double kLogExponentTolerance = 1e-12;
     if (relRange < std::numeric_limits<double>::epsilon()) {
       drawMin = (min > 0.0) ? std::pow(10.0, std::floor(std::log10(min))) : 1.0;
       drawMax = drawMin * 10.0;
     } else {
       const double logMin = std::log10(min);
       const double logMax = std::log10(max);
-      drawMin = std::pow(10.0, std::floor(logMin));
-      drawMax = std::pow(10.0, std::ceil(logMax));
+      const double minExponent = std::floor(logMin + kLogExponentTolerance);
+      const double maxExponent = std::ceil(logMax - kLogExponentTolerance);
+      drawMin = std::pow(10.0, minExponent);
+      drawMax = std::pow(10.0, maxExponent);
     }
     result.drawMin = drawMin;
     result.drawMax = drawMax;
@@ -592,7 +595,7 @@ int CartesianPlotElement::count() const
 
 void CartesianPlotElement::setCount(int count)
 {
-  const int clamped = std::clamp(count, 0, kMaximumSampleCount);
+  const int clamped = std::max(count, 0);
   if (count_ == clamped) {
     return;
   }
@@ -1016,6 +1019,8 @@ void CartesianPlotElement::clearRuntimeState()
 {
   runtimeCountValid_ = false;
   runtimeCount_ = 0;
+  runtimeHasConfiguredTrace_ = false;
+  runtimePaintReady_ = false;
   axisRuntimeValid_.fill(false);
   axisRuntimeMinimums_.fill(0.0);
   axisRuntimeMaximums_.fill(0.0);
@@ -1047,12 +1052,11 @@ void CartesianPlotElement::setRuntimeCount(int count)
     update();
     return;
   }
-  const int clamped = std::clamp(count, 1, kMaximumSampleCount);
-  if (runtimeCountValid_ && runtimeCount_ == clamped) {
+  if (runtimeCountValid_ && runtimeCount_ == count) {
     return;
   }
   runtimeCountValid_ = true;
-  runtimeCount_ = clamped;
+  runtimeCount_ = count;
   update();
 }
 
@@ -1061,10 +1065,19 @@ int CartesianPlotElement::effectiveSampleCapacity() const
   if (runtimeCountValid_) {
     return runtimeCount_;
   }
-  if (count_ > 0) {
-    return std::clamp(count_, 1, kMaximumSampleCount);
+  return std::max(count_, 0);
+}
+
+void CartesianPlotElement::setRuntimePaintReady(bool hasConfiguredTrace,
+    bool ready)
+{
+  if (runtimeHasConfiguredTrace_ == hasConfiguredTrace
+      && runtimePaintReady_ == ready) {
+    return;
   }
-  return kMaximumSampleCount;
+  runtimeHasConfiguredTrace_ = hasConfiguredTrace;
+  runtimePaintReady_ = ready;
+  update();
 }
 
 void CartesianPlotElement::setAxisRuntimeLimits(int axisIndex,
@@ -1161,24 +1174,7 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
 
   // In execute mode, if any PV is not connected or no PVs are defined, fill with solid white
   if (executeMode_) {
-    bool anyChannelsDefined = false;
-    bool anyDisconnected = false;
-    
-    for (const auto &trace : traces_) {
-      // Check if this trace has any channels configured
-      const bool hasChannels = !trace.xChannel.trimmed().isEmpty() || 
-                               !trace.yChannel.trimmed().isEmpty();
-      if (hasChannels) {
-        anyChannelsDefined = true;
-        if (!trace.runtimeConnected) {
-          anyDisconnected = true;
-          break;
-        }
-      }
-    }
-    
-    // Draw white if no channels defined or any are disconnected
-    if (!anyChannelsDefined || anyDisconnected) {
+    if (!runtimeHasConfiguredTrace_ || !runtimePaintReady_) {
       painter.fillRect(rect(), Qt::white);
       return;  // Don't draw anything else
     }
@@ -2462,7 +2458,7 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
       minimum = 1e-3;
     }
     if (maximum <= minimum) {
-      maximum = minimum * 10.0;
+      maximum = minimum;
     }
   }
 

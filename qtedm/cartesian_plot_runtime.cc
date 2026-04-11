@@ -3,13 +3,16 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 
 #include <QByteArray>
+#include <QDateTime>
 #include <QDebug>
 #include <QtGlobal>
 #include <QtMath>
 
 #include <db_access.h>
+#include <epicsTime.h>
 
 #include "cartesian_plot_element.h"
 #include "channel_access_context.h"
@@ -17,6 +20,18 @@
 #include "runtime_utils.h"
 
 namespace {
+
+using RuntimeUtils::isNumericFieldType;
+
+constexpr qint64 kUnixEpicsEpochOffsetSeconds = 631152000LL;
+constexpr int kPeriodicSampleIntervalMs = 1000;
+
+qint64 epicsTimestampToMs(const epicsTimeStamp &stamp)
+{
+  const qint64 seconds = static_cast<qint64>(stamp.secPastEpoch)
+      + kUnixEpicsEpochOffsetSeconds;
+  return seconds * 1000LL + stamp.nsec / 1000000LL;
+}
 
 int axisIndexForYAxis(CartesianPlotYAxis axis)
 {
@@ -140,6 +155,10 @@ CartesianPlotRuntime::CartesianPlotRuntime(CartesianPlotElement *element)
   : QObject(element)
   , element_(element)
 {
+  periodicSampleTimer_.setInterval(kPeriodicSampleIntervalMs);
+  periodicSampleTimer_.setSingleShot(false);
+  connect(&periodicSampleTimer_, &QTimer::timeout,
+      this, &CartesianPlotRuntime::handlePeriodicSampleTimeout);
   for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
     xContexts_[i].runtime = this;
     xContexts_[i].traceIndex = i;
@@ -266,6 +285,12 @@ void CartesianPlotRuntime::start()
         countContext_);
   }
 
+  if (triggerChannel_.name.isEmpty()) {
+    periodicSampleTimer_.start();
+  } else {
+    periodicSampleTimer_.stop();
+  }
+
 }
 
 void CartesianPlotRuntime::stop()
@@ -274,6 +299,7 @@ void CartesianPlotRuntime::stop()
     return;
   }
   started_ = false;
+  periodicSampleTimer_.stop();
 
   for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
     unsubscribeChannel(traces_[i].x);
@@ -300,15 +326,31 @@ void CartesianPlotRuntime::resetState()
     trace.vectorPoints.clear();
     trace.hasXScalar = false;
     trace.hasYScalar = false;
+    trace.lastYTimestampMs = 0;
+    trace.hasYTimestamp = false;
     trace.pendingTrigger = false;
     trace.initialSnapshotPending = true;
     trace.lastXScalar = 0.0;
     trace.lastYScalar = 0.0;
     trace.x.connected = false;
     trace.y.connected = false;
+    trace.x.readAccessKnown = false;
+    trace.x.canRead = false;
+    trace.x.hasControlInfo = false;
+    trace.x.precisionValid = false;
+    trace.x.runtimeLimitsValid = false;
+    trace.x.runtimeLow = 0.0;
+    trace.x.runtimeHigh = 0.0;
     trace.x.subscription.reset();
     trace.x.fieldType = -1;
     trace.x.elementCount = 0;
+    trace.y.readAccessKnown = false;
+    trace.y.canRead = false;
+    trace.y.hasControlInfo = false;
+    trace.y.precisionValid = false;
+    trace.y.runtimeLimitsValid = false;
+    trace.y.runtimeLow = 0.0;
+    trace.y.runtimeHigh = 0.0;
     trace.y.subscription.reset();
     trace.y.fieldType = -1;
     trace.y.elementCount = 0;
@@ -382,6 +424,9 @@ void CartesianPlotRuntime::subscribeChannel(ChannelState &state,
       },
       [this, context](bool connected, const SharedChannelData &data) {
         handleConnection(context, connected, data);
+      },
+      [this, context](bool canRead, bool canWrite) {
+        handleAccessRights(context, canRead, canWrite);
       });
 }
 
@@ -389,6 +434,13 @@ void CartesianPlotRuntime::unsubscribeChannel(ChannelState &state)
 {
   state.subscription.reset();
   state.connected = false;
+  state.readAccessKnown = false;
+  state.canRead = false;
+  state.hasControlInfo = false;
+  state.precisionValid = false;
+  state.runtimeLimitsValid = false;
+  state.runtimeLow = 0.0;
+  state.runtimeHigh = 0.0;
   state.fieldType = -1;
   state.elementCount = 0;
 }
@@ -421,14 +473,16 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
 
   if (connected) {
     state->connected = true;
+    state->readAccessKnown = false;
+    state->canRead = false;
+    state->hasControlInfo = false;
+    state->precisionValid = false;
+    state->runtimeLimitsValid = false;
+    state->runtimeLow = 0.0;
+    state->runtimeHigh = 0.0;
     state->fieldType = data.nativeFieldType;
-    state->elementCount = data.nativeElementCount;
-
-    if (context.kind == ChannelKind::kTrigger
-        || context.kind == ChannelKind::kErase
-        || context.kind == ChannelKind::kCount) {
-      return;
-    }
+    state->elementCount = std::max<long>(data.nativeElementCount, 1);
+    updateChannelControlInfo(*state, data);
 
     if (context.kind == ChannelKind::kTraceX
         || context.kind == ChannelKind::kTraceY) {
@@ -437,11 +491,18 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
       invokeOnElement([index = context.traceIndex, traceConn](CartesianPlotElement *element) {
         element->setTraceRuntimeConnected(index, traceConn);
       });
-      handleTraceControlInfo(context.traceIndex,
-          context.kind == ChannelKind::kTraceX, data);
     }
   } else {
     state->connected = false;
+    state->readAccessKnown = false;
+    state->canRead = false;
+    state->hasControlInfo = false;
+    state->precisionValid = false;
+    state->runtimeLimitsValid = false;
+    state->runtimeLow = 0.0;
+    state->runtimeHigh = 0.0;
+    state->fieldType = -1;
+    state->elementCount = 0;
     if (context.kind == ChannelKind::kTraceX
         || context.kind == ChannelKind::kTraceY) {
       const bool traceConn = traceConnected(traces_[context.traceIndex]);
@@ -449,6 +510,63 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
         element->setTraceRuntimeConnected(index, traceConn);
       });
     }
+  }
+
+  recomputeAxisRuntimeLimits();
+  updateRuntimePaintState();
+}
+
+void CartesianPlotRuntime::handleAccessRights(const ChannelContext &context,
+    bool canRead, bool canWrite)
+{
+  Q_UNUSED(canWrite);
+  if (!started_) {
+    return;
+  }
+
+  ChannelState *state = nullptr;
+  if (context.kind == ChannelKind::kTraceX && context.traceIndex >= 0
+      && context.traceIndex < kCartesianPlotTraceCount) {
+    state = &traces_[context.traceIndex].x;
+  } else if (context.kind == ChannelKind::kTraceY && context.traceIndex >= 0
+      && context.traceIndex < kCartesianPlotTraceCount) {
+    state = &traces_[context.traceIndex].y;
+  } else if (context.kind == ChannelKind::kTrigger) {
+    state = &triggerChannel_;
+  } else if (context.kind == ChannelKind::kErase) {
+    state = &eraseChannel_;
+  } else if (context.kind == ChannelKind::kCount) {
+    state = &countChannel_;
+  }
+
+  if (!state) {
+    return;
+  }
+
+  state->readAccessKnown = true;
+  state->canRead = canRead;
+  updateRuntimePaintState();
+}
+
+void CartesianPlotRuntime::updateChannelControlInfo(ChannelState &state,
+    const SharedChannelData &data)
+{
+  if (!data.hasControlInfo) {
+    return;
+  }
+
+  state.hasControlInfo = true;
+  state.precisionValid = !isNumericFieldType(state.fieldType)
+      || data.precision >= 0;
+
+  if (areAxisLimitsUsable(data.lopr, data.hopr)) {
+    state.runtimeLimitsValid = true;
+    state.runtimeLow = data.lopr;
+    state.runtimeHigh = data.hopr;
+  } else {
+    state.runtimeLimitsValid = false;
+    state.runtimeLow = 0.0;
+    state.runtimeHigh = 0.0;
   }
 }
 
@@ -488,6 +606,12 @@ void CartesianPlotRuntime::handleTraceValue(int index, bool isX,
   if (index < 0 || index >= kCartesianPlotTraceCount) {
     return;
   }
+  ChannelState &channel = isX ? traces_[index].x : traces_[index].y;
+  if (!channel.readAccessKnown || !channel.canRead) {
+    channel.readAccessKnown = true;
+    channel.canRead = true;
+    updateRuntimePaintState();
+  }
   if (data.hasControlInfo) {
     handleTraceControlInfo(index, isX, data);
   }
@@ -505,6 +629,10 @@ void CartesianPlotRuntime::handleTraceValue(int index, bool isX,
       trace.xVector = values;
     }
   } else {
+    trace.lastYTimestampMs = data.hasTimestamp
+        ? epicsTimestampToMs(data.timestamp)
+        : QDateTime::currentMSecsSinceEpoch();
+    trace.hasYTimestamp = true;
     if (values.size() == 1) {
       trace.lastYScalar = values.front();
       trace.hasYScalar = true;
@@ -527,34 +655,23 @@ void CartesianPlotRuntime::handleTraceControlInfo(int index, bool isX,
   if (!started_ || index < 0 || index >= kCartesianPlotTraceCount) {
     return;
   }
-  if (!data.hasControlInfo) {
-    return;
-  }
-
-  const double low = data.lopr;
-  const double high = data.hopr;
-  const bool valid = areAxisLimitsUsable(low, high);
-
-  if (isX) {
-    invokeOnElement([low, high, valid](CartesianPlotElement *element) {
-      element->setAxisRuntimeLimits(0, low, high, valid);
-      printRuntimeAxisInfo(element, 0, low, high, valid);
-    });
-  } else {
-    const int axisIndex = traces_[index].yAxisIndex;
-    invokeOnElement([axisIndex, low, high, valid](CartesianPlotElement *element) {
-      element->setAxisRuntimeLimits(axisIndex, low, high, valid);
-      printRuntimeAxisInfo(element, axisIndex, low, high, valid);
-    });
-  }
+  ChannelState &state = isX ? traces_[index].x : traces_[index].y;
+  updateChannelControlInfo(state, data);
+  recomputeAxisRuntimeLimits();
+  updateRuntimePaintState();
 }
 
 void CartesianPlotRuntime::handleTriggerValue(const SharedChannelData &data)
 {
-  Q_UNUSED(data);
   if (!started_) {
     return;
   }
+  if (!triggerChannel_.readAccessKnown || !triggerChannel_.canRead) {
+    triggerChannel_.readAccessKnown = true;
+    triggerChannel_.canRead = true;
+  }
+  updateChannelControlInfo(triggerChannel_, data);
+  updateRuntimePaintState();
   for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
     processTraceUpdate(i, true);
   }
@@ -562,6 +679,12 @@ void CartesianPlotRuntime::handleTriggerValue(const SharedChannelData &data)
 
 void CartesianPlotRuntime::handleEraseValue(const SharedChannelData &data)
 {
+  if (!eraseChannel_.readAccessKnown || !eraseChannel_.canRead) {
+    eraseChannel_.readAccessKnown = true;
+    eraseChannel_.canRead = true;
+  }
+  updateChannelControlInfo(eraseChannel_, data);
+  updateRuntimePaintState();
   QVector<double> values = extractValues(data);
   if (values.isEmpty()) {
     return;
@@ -587,15 +710,26 @@ void CartesianPlotRuntime::handleEraseValue(const SharedChannelData &data)
 
 void CartesianPlotRuntime::handleCountValue(const SharedChannelData &data)
 {
+  if (!countChannel_.readAccessKnown || !countChannel_.canRead) {
+    countChannel_.readAccessKnown = true;
+    countChannel_.canRead = true;
+  }
+  updateChannelControlInfo(countChannel_, data);
   QVector<double> values = extractValues(data);
   if (values.isEmpty()) {
+    updateRuntimePaintState();
     return;
   }
-  int newCount = static_cast<int>(std::lround(values.front()));
+  const double roundedValue = std::lround(values.front());
+  const int newCount = roundedValue > static_cast<double>(std::numeric_limits<int>::max())
+      ? std::numeric_limits<int>::max()
+      : roundedValue < static_cast<double>(std::numeric_limits<int>::min())
+          ? std::numeric_limits<int>::min()
+          : static_cast<int>(roundedValue);
   if (newCount <= 0) {
     countFromChannel_ = 0;
   } else {
-    countFromChannel_ = std::clamp(newCount, 1, kCartesianPlotMaximumSampleCount);
+    countFromChannel_ = newCount;
   }
 
   invokeOnElement([count = countFromChannel_](CartesianPlotElement *element) {
@@ -603,10 +737,36 @@ void CartesianPlotRuntime::handleCountValue(const SharedChannelData &data)
   });
 
   for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
-    traces_[i].initialSnapshotPending = true;
-    clearTraceData(i, true);
-    processTraceUpdate(i, true);
+    TraceState &trace = traces_[i];
+    resizeScalarHistory(trace);
+    QVector<QPointF> outputPoints;
+    switch (trace.mode) {
+    case CartesianPlotTraceMode::kXYScalar:
+      outputPoints = trace.scalarPoints;
+      break;
+    case CartesianPlotTraceMode::kXScalar:
+      outputPoints = buildXScalarPoints(trace);
+      break;
+    case CartesianPlotTraceMode::kYScalar:
+      outputPoints = buildYScalarPoints(trace);
+      break;
+    case CartesianPlotTraceMode::kXVector:
+    case CartesianPlotTraceMode::kYVector:
+    case CartesianPlotTraceMode::kXVectorYScalar:
+    case CartesianPlotTraceMode::kYVectorXScalar:
+    case CartesianPlotTraceMode::kXYVector:
+      rebuildVectorPoints(trace);
+      outputPoints = trace.vectorPoints;
+      break;
+    case CartesianPlotTraceMode::kNone:
+      break;
+    }
+    trace.initialSnapshotPending = outputPoints.isEmpty();
+    trace.pendingTrigger = false;
+    emitTraceData(i, outputPoints, trace.mode, traceConnected(trace));
   }
+  recomputeAxisRuntimeLimits();
+  updateRuntimePaintState();
 }
 
 void CartesianPlotRuntime::updateTraceMode(int index)
@@ -647,40 +807,179 @@ void CartesianPlotRuntime::updateTraceMode(int index)
     element->setTraceRuntimeMode(index, mode);
   });
 
-  /* Update X-axis range for Y-only traces to match MEDM behavior */
-  updateXAxisRangeForYOnlyTraces();
+  recomputeAxisRuntimeLimits();
 }
 
-void CartesianPlotRuntime::updateXAxisRangeForYOnlyTraces()
+void CartesianPlotRuntime::updateRuntimePaintState()
 {
-  /* Match MEDM behavior: when Y-only vectors are used (no X channel),
-   * the X-axis range should be 0 to (elementCount - 1) based on the
-   * Y vector element count. This is the "from channel" range style
-   * when there's no X channel to provide LOPR/HOPR. */
-  double maxX = 0.0;
-  bool hasYOnlyVector = false;
+  bool hasConfiguredTrace = false;
+  bool ready = true;
 
-  for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
-    const TraceState &trace = traces_[i];
-    const bool hasX = !trace.x.name.isEmpty();
-    const bool hasY = !trace.y.name.isEmpty();
-    const bool yVector = hasY && trace.y.elementCount > 1;
+  for (const TraceState &trace : traces_) {
+    const bool needsX = !trace.x.name.isEmpty();
+    const bool needsY = !trace.y.name.isEmpty();
+    if (!needsX && !needsY) {
+      continue;
+    }
 
-    if (!hasX && yVector) {
-      /* Y-only vector trace - X range is 0 to (elementCount - 1) */
-      hasYOnlyVector = true;
-      const double traceMaxX = static_cast<double>(trace.y.elementCount - 1);
-      if (traceMaxX > maxX) {
-        maxX = traceMaxX;
-      }
+    hasConfiguredTrace = true;
+    if ((needsX && !channelReadyForDisplay(trace.x))
+        || (needsY && !channelReadyForDisplay(trace.y))) {
+      ready = false;
+      break;
     }
   }
 
-  if (hasYOnlyVector) {
-    invokeOnElement([maxX](CartesianPlotElement *element) {
-      element->setAxisRuntimeLimits(0, 0.0, maxX, true);
-    });
+  if (ready && !triggerChannel_.name.isEmpty()
+      && !channelReadyForDisplay(triggerChannel_)) {
+    ready = false;
   }
+  if (ready && !eraseChannel_.name.isEmpty()
+      && !channelReadyForDisplay(eraseChannel_)) {
+    ready = false;
+  }
+  if (ready && !countChannel_.name.isEmpty()
+      && !channelReadyForDisplay(countChannel_)) {
+    ready = false;
+  }
+
+  invokeOnElement([hasConfiguredTrace, ready](CartesianPlotElement *element) {
+    element->setRuntimePaintReady(hasConfiguredTrace, ready);
+  });
+}
+
+void CartesianPlotRuntime::recomputeAxisRuntimeLimits()
+{
+  std::array<double, kCartesianAxisCount> minimums{};
+  std::array<double, kCartesianAxisCount> maximums{};
+  std::array<bool, kCartesianAxisCount> valid{};
+
+  minimums.fill(std::numeric_limits<double>::infinity());
+  maximums.fill(-std::numeric_limits<double>::infinity());
+
+  auto accumulateAxis = [&](int axisIndex, double low, double high) {
+    if (axisIndex < 0 || axisIndex >= kCartesianAxisCount
+        || !areAxisLimitsUsable(low, high)) {
+      return;
+    }
+    if (!valid[axisIndex]) {
+      minimums[axisIndex] = low;
+      maximums[axisIndex] = high;
+      valid[axisIndex] = true;
+      return;
+    }
+    minimums[axisIndex] = std::min(minimums[axisIndex], low);
+    maximums[axisIndex] = std::max(maximums[axisIndex], high);
+  };
+
+  const int scalarCapacity = effectiveCapacity();
+
+  for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
+    const TraceState &trace = traces_[i];
+    if (trace.x.connected && trace.x.runtimeLimitsValid) {
+      accumulateAxis(0, trace.x.runtimeLow, trace.x.runtimeHigh);
+    }
+    if (trace.y.connected && trace.y.runtimeLimitsValid) {
+      accumulateAxis(trace.yAxisIndex, trace.y.runtimeLow, trace.y.runtimeHigh);
+    }
+
+    switch (trace.mode) {
+    case CartesianPlotTraceMode::kXVector:
+      if (trace.x.connected) {
+        accumulateAxis(trace.yAxisIndex, 0.0,
+            static_cast<double>(std::max<long>(trace.x.elementCount - 1, 0)));
+      }
+      break;
+    case CartesianPlotTraceMode::kYVector:
+      if (trace.y.connected) {
+        accumulateAxis(0, 0.0,
+            static_cast<double>(std::max<long>(trace.y.elementCount - 1, 0)));
+      }
+      break;
+    case CartesianPlotTraceMode::kXScalar:
+      if (trace.x.connected) {
+        accumulateAxis(trace.yAxisIndex, 0.0,
+            static_cast<double>(std::max(scalarCapacity, 0)));
+      }
+      break;
+    case CartesianPlotTraceMode::kYScalar:
+      if (trace.y.connected) {
+        accumulateAxis(0, 0.0, static_cast<double>(std::max(scalarCapacity, 0)));
+      }
+      break;
+    case CartesianPlotTraceMode::kNone:
+    case CartesianPlotTraceMode::kXYScalar:
+    case CartesianPlotTraceMode::kXVectorYScalar:
+    case CartesianPlotTraceMode::kYVectorXScalar:
+    case CartesianPlotTraceMode::kXYVector:
+      break;
+    }
+  }
+
+  invokeOnElement([minimums, maximums, valid](CartesianPlotElement *element) {
+    for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+      element->setAxisRuntimeLimits(axis, minimums[axis], maximums[axis],
+          valid[axis]);
+      if (valid[axis]) {
+        printRuntimeAxisInfo(element, axis, minimums[axis], maximums[axis],
+            true);
+      }
+    }
+  });
+}
+
+void CartesianPlotRuntime::resizeScalarHistory(TraceState &trace)
+{
+  switch (trace.mode) {
+  case CartesianPlotTraceMode::kXYScalar: {
+    const int capacity = effectiveCapacity();
+    if (capacity <= 0) {
+      trace.scalarPoints.clear();
+      break;
+    }
+    if (trace.scalarPoints.size() > capacity) {
+      trace.scalarPoints.resize(capacity);
+    }
+    break;
+  }
+  case CartesianPlotTraceMode::kXScalar: {
+    const int capacity = effectiveCapacity();
+    if (capacity <= 0) {
+      trace.xScalarValues.clear();
+      break;
+    }
+    if (trace.xScalarValues.size() > capacity) {
+      trace.xScalarValues.resize(capacity);
+    }
+    break;
+  }
+  case CartesianPlotTraceMode::kYScalar: {
+    const int capacity = effectiveCapacity();
+    if (capacity <= 0) {
+      trace.yScalarValues.clear();
+      break;
+    }
+    if (trace.yScalarValues.size() > capacity) {
+      trace.yScalarValues.resize(capacity);
+    }
+    break;
+  }
+  case CartesianPlotTraceMode::kNone:
+  case CartesianPlotTraceMode::kXVector:
+  case CartesianPlotTraceMode::kYVector:
+  case CartesianPlotTraceMode::kXVectorYScalar:
+  case CartesianPlotTraceMode::kYVectorXScalar:
+  case CartesianPlotTraceMode::kXYVector:
+    break;
+  }
+}
+
+bool CartesianPlotRuntime::channelReadyForDisplay(const ChannelState &state) const
+{
+  if (!state.connected || !state.readAccessKnown || !state.canRead) {
+    return false;
+  }
+  return state.hasControlInfo && state.precisionValid;
 }
 
 void CartesianPlotRuntime::clearTraceData(int index, bool notifyElement)
@@ -693,11 +992,8 @@ void CartesianPlotRuntime::clearTraceData(int index, bool notifyElement)
   trace.xScalarValues.clear();
   trace.yScalarValues.clear();
   trace.vectorPoints.clear();
-  trace.xVector.clear();
-  trace.yVector.clear();
-  trace.hasXScalar = false;
-  trace.hasYScalar = false;
   trace.pendingTrigger = false;
+  trace.initialSnapshotPending = true;
   if (notifyElement) {
     invokeOnElement([index](CartesianPlotElement *element) {
       element->updateTraceRuntimeData(index, {});
@@ -773,6 +1069,28 @@ void CartesianPlotRuntime::processTraceUpdate(int index, bool forceAppend)
     trace.initialSnapshotPending = false;
   }
   trace.pendingTrigger = false;
+}
+
+void CartesianPlotRuntime::handlePeriodicSampleTimeout()
+{
+  if (!started_ || isTriggerEnabled()) {
+    return;
+  }
+
+  const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+  for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
+    TraceState &trace = traces_[i];
+    if (!trace.x.name.isEmpty() || trace.y.name.isEmpty()) {
+      continue;
+    }
+    if (!trace.y.connected || !trace.y.readAccessKnown || !trace.y.canRead) {
+      continue;
+    }
+    if (!trace.hasYTimestamp || nowMs - trace.lastYTimestampMs <= kPeriodicSampleIntervalMs) {
+      continue;
+    }
+    processTraceUpdate(i, false);
+  }
 }
 
 void CartesianPlotRuntime::appendXYScalarPoint(TraceState &trace)
@@ -922,18 +1240,12 @@ int CartesianPlotRuntime::effectiveCapacity(int preferredCount,
     capacity = configuredCount_;
   }
   if (capacity <= 0) {
-    capacity = preferredCount > 0 ? preferredCount : kCartesianPlotMaximumSampleCount;
+    if (allowConfiguredCount) {
+      return 0;
+    }
+    capacity = preferredCount;
   }
-  /* For vector data (allowConfiguredCount=false), don't apply the maximum
-   * sample count limit - use the full vector size from the channel.
-   * This matches MEDM behavior where vector element count is used directly.
-   * The limit only applies to scalar accumulation modes. */
-  if (allowConfiguredCount) {
-    capacity = std::clamp(capacity, 1, kCartesianPlotMaximumSampleCount);
-  } else {
-    capacity = std::max(capacity, 1);
-  }
-  return capacity;
+  return std::max(capacity, 0);
 }
 
 bool CartesianPlotRuntime::traceConnected(const TraceState &trace) const

@@ -39,6 +39,11 @@ constexpr int kMaximumSampleCount = kCartesianPlotMaximumSampleCount;
 constexpr int kDefaultTraceColorIndex = 14;
 constexpr qreal kAxisCueThickness = 3.0;
 constexpr qreal kAxisCueGap = 2.0;
+constexpr int kMajorTickSize = 4;
+constexpr int kMinorTickSize = 2;
+constexpr qreal kAxisTickLabelGap = 2.0;
+constexpr qreal kAxisLabelGap = 4.0;
+constexpr qreal kAxisInterAxisGap = 2.0;
 
 // Font size constants matching medm's SciPlot defaults
 // (XtNlabelFont = XtFONT_TIMES | 18, XtNaxisFont = XtFONT_TIMES | 10)
@@ -1179,10 +1184,10 @@ void CartesianPlotElement::paintEvent(QPaintEvent *event)
       return;  // Don't draw anything else
     }
 
-    const QRectF chart = chartRect();
-
     // Step 1: Compute axis ranges first (needed for static cache validation)
     computeAxisRangesFromData();
+
+    const QRectF chart = chartRect();
 
     // Step 2: Draw static content (background, frame, grid, axes, labels)
     // using cache when possible
@@ -1544,37 +1549,25 @@ CartesianPlotElement::calculateYAxisPositions(const QRectF &widgetBounds) const
   const QFontMetrics axisMetrics(axisFont);
   const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
   const QFontMetrics labelMetrics(labelFont);
-  
-  const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
-  const qreal axisSpacing = axisnumberwidth + kHorizontalMargin;
-  const qreal labelGap = 1.0;  // Gap between axis numbers and labels
-  
-  // Start from the widget edges (after outer margin) and work inward
-  // Reserve space at edges for the outermost labels
-  // Add extra space for the outermost label to prevent crowding
-  qreal leftX = widgetBounds.left() + kHorizontalMargin * 1.5;
-  qreal rightX = widgetBounds.right() - kHorizontalMargin * 1.5;
+
+  qreal leftBoundary = widgetBounds.left();
+  qreal rightBoundary = widgetBounds.right();
   
   // Process axes in reverse order (Y4, Y3, Y2, Y1) like MEDM
   for (int i = 3; i >= 0; --i) {
     if (!isYAxisVisible(i)) {
       continue;
     }
-    
+
+    const qreal outwardSpan = yAxisOutwardSpan(i, axisMetrics, labelMetrics);
     if (isYAxisOnRight(i)) {
-      // Always reserve label clearance when the axis is shown
-      rightX -= labelMetrics.height() + labelGap;
-      // Position the axis line itself
-      positions.rightAxes.push_back({i, rightX});
-      // Reserve space for this axis's numbers and move inward
-      rightX -= axisSpacing;
+      const qreal axisX = rightBoundary - outwardSpan;
+      positions.rightAxes.push_back({i, axisX});
+      rightBoundary = axisX - kMajorTickSize - kAxisInterAxisGap;
     } else {
-      // Always reserve label clearance when the axis is shown
-      leftX += labelMetrics.height() + labelGap;
-      // Position the axis line itself
-      positions.leftAxes.push_back({i, leftX});
-      // Reserve space for this axis's numbers and move inward
-      leftX += axisSpacing;
+      const qreal axisX = leftBoundary + outwardSpan;
+      positions.leftAxes.push_back({i, axisX});
+      leftBoundary = axisX + kMajorTickSize + kAxisInterAxisGap;
     }
   }
   
@@ -1721,8 +1714,6 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
 
   // Draw X-axis (bottom)
   painter.setFont(axisFont);
-  const int majorTickSize = 4;
-  const int minorTickSize = 2;
   const int numMajorTicks = 5;
   const int numMinorTicks = 4;
   
@@ -1778,15 +1769,16 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       const qreal x = rect.left() + normalizedPos * rect.width();
       
       // Major tick
-      painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
-                       QPointF(x, rect.bottom() + majorTickSize));
+      painter.drawLine(QPointF(x, rect.bottom() - kMajorTickSize),
+                       QPointF(x, rect.bottom() + kMajorTickSize));
       
-        // Major tick label
-        QString label = formatCartesianAxisValue(majorValue, xAxisStyle,
+      // Major tick label
+      QString label = formatCartesianAxisValue(majorValue, xAxisStyle,
           axisTimeFormats_[xAxisIndex]);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
-      const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
+      const qreal textY = rect.bottom() + kMajorTickSize
+          + axisMetrics.ascent() + kAxisTickLabelGap;
       painter.drawText(QPointF(textX, textY), label);
       
       // Minor ticks (2x, 3x, 4x, 5x, 6x, 7x, 8x, 9x within this decade)
@@ -1797,8 +1789,8 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
             const double logMinor = std::log10(minorValue);
             const double minorNormPos = (logMinor - logMin) / (logMax - logMin);
             const qreal minorX = rect.left() + minorNormPos * rect.width();
-            painter.drawLine(QPointF(minorX, rect.bottom() - minorTickSize),
-                             QPointF(minorX, rect.bottom() + minorTickSize));
+            painter.drawLine(QPointF(minorX, rect.bottom() - kMinorTickSize),
+                             QPointF(minorX, rect.bottom() + kMinorTickSize));
           }
         }
       }
@@ -1811,25 +1803,26 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
     for (int i = 0; i <= numMajorTicks; ++i) {
       const qreal x = rect.left() + i * rect.width() / numMajorTicks;
       // Major tick
-      painter.drawLine(QPointF(x, rect.bottom() - majorTickSize),
-                       QPointF(x, rect.bottom() + majorTickSize));
+      painter.drawLine(QPointF(x, rect.bottom() - kMajorTickSize),
+                       QPointF(x, rect.bottom() + kMajorTickSize));
       
       // Axis number - map from normalized position to actual value
       const double normalizedValue = static_cast<double>(i) / numMajorTicks;
       const double value = xAxisMin + normalizedValue * (xAxisMax - xAxisMin);
-        QString label = formatCartesianAxisValue(value, xAxisStyle,
+      QString label = formatCartesianAxisValue(value, xAxisStyle,
           axisTimeFormats_[xAxisIndex]);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
-      const qreal textY = rect.bottom() + majorTickSize + axisMetrics.ascent() + 2.0;
+      const qreal textY = rect.bottom() + kMajorTickSize
+          + axisMetrics.ascent() + kAxisTickLabelGap;
       painter.drawText(QPointF(textX, textY), label);
       
       // Minor ticks
       if (i < numMajorTicks) {
         for (int j = 1; j <= numMinorTicks; ++j) {
           const qreal minorX = x + j * rect.width() / (numMajorTicks * (numMinorTicks + 1));
-          painter.drawLine(QPointF(minorX, rect.bottom() - minorTickSize),
-                           QPointF(minorX, rect.bottom() + minorTickSize));
+          painter.drawLine(QPointF(minorX, rect.bottom() - kMinorTickSize),
+                           QPointF(minorX, rect.bottom() + kMinorTickSize));
         }
       }
     }
@@ -1843,28 +1836,14 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
   const QFontMetrics metrics(axisFont);
   painter.setFont(axisFont);
-  
-  const int majorTickSize = 4;
-  const int minorTickSize = 2;
-  
+
   // Convert yAxisIndex (0=Y1, 1=Y2, 2=Y3, 3=Y4) to array index (1=Y1, 2=Y2, 3=Y3, 4=Y4)
   const int arrayIndex = yAxisIndex + 1;
-  
-  // Determine axis range for value labels
-  double axisMin = 0.0;
-  double axisMax = 1.0;
-  CartesianPlotAxisStyle axisStyle = axisStyles_[arrayIndex];
-  if (precomputedRange && precomputedRange->valid) {
-    axisMin = precomputedRange->minimum;
-    axisMax = precomputedRange->maximum;
-    axisStyle = precomputedRange->style;
-  } else if (axisRangeStyles_[arrayIndex] == CartesianPlotRangeStyle::kUserSpecified) {
-    axisMin = axisMinimums_[arrayIndex];
-    axisMax = axisMaximums_[arrayIndex];
-  } else if (executeMode_ && axisRuntimeValid_[arrayIndex]) {
-    axisMin = axisRuntimeMinimums_[arrayIndex];
-    axisMax = axisRuntimeMaximums_[arrayIndex];
-  }
+
+  const AxisRange axisRange = resolvedAxisRange(arrayIndex, precomputedRange);
+  const double axisMin = axisRange.minimum;
+  const double axisMax = axisRange.maximum;
+  const CartesianPlotAxisStyle axisStyle = axisRange.style;
   
   // Draw the vertical axis line
   painter.drawLine(QPointF(axisX, rect.top()),
@@ -1887,19 +1866,20 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       const qreal y = rect.bottom();  // At the bottom (min value)
       
       // Major tick
-      painter.drawLine(QPointF(axisX - majorTickSize, y),
-                       QPointF(axisX + majorTickSize, y));
+      painter.drawLine(QPointF(axisX - kMajorTickSize, y),
+                       QPointF(axisX + kMajorTickSize, y));
       
-      // Axis number - use 'g', 6 to match MEDM's %.6g format
-      QString label = QString::number(nice.drawMin, 'g', 6);
+      QString label = formatCartesianAxisValue(nice.drawMin, axisStyle,
+          axisTimeFormats_[arrayIndex]);
       const qreal textWidth = metrics.horizontalAdvance(label);
       
       if (onLeft) {
-        const qreal textX = axisX - majorTickSize - textWidth - 2.0;
+        const qreal textX = axisX - kMajorTickSize - textWidth
+            - kAxisTickLabelGap;
         const qreal textY = y + metrics.ascent() / 2.0;
         painter.drawText(QPointF(textX, textY), label);
       } else {
-        const qreal textX = axisX + majorTickSize + 2.0;
+        const qreal textX = axisX + kMajorTickSize + kAxisTickLabelGap;
         const qreal textY = y + metrics.ascent() / 2.0;
         painter.drawText(QPointF(textX, textY), label);
       }
@@ -1918,8 +1898,8 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
           const double minorLogValue = std::log10(minorValue);
           const double minorNormalizedLog = (minorLogValue - logMin) / (logMax - logMin);
           const qreal minorY = rect.bottom() - minorNormalizedLog * rect.height();
-          painter.drawLine(QPointF(axisX - minorTickSize, minorY),
-                           QPointF(axisX + minorTickSize, minorY));
+          painter.drawLine(QPointF(axisX - kMinorTickSize, minorY),
+                           QPointF(axisX + kMinorTickSize, minorY));
         }
       }
       
@@ -1933,19 +1913,20 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
         const qreal y = rect.bottom() - normalizedLog * rect.height();
         
         // Major tick
-        painter.drawLine(QPointF(axisX - majorTickSize, y),
-                         QPointF(axisX + majorTickSize, y));
+        painter.drawLine(QPointF(axisX - kMajorTickSize, y),
+                         QPointF(axisX + kMajorTickSize, y));
         
-        // Axis number - use 'g', 6 to match MEDM's %.6g format
-        QString label = QString::number(majorValue, 'g', 6);
+        QString label = formatCartesianAxisValue(majorValue, axisStyle,
+            axisTimeFormats_[arrayIndex]);
         const qreal textWidth = metrics.horizontalAdvance(label);
         
         if (onLeft) {
-          const qreal textX = axisX - majorTickSize - textWidth - 2.0;
+          const qreal textX = axisX - kMajorTickSize - textWidth
+              - kAxisTickLabelGap;
           const qreal textY = y + metrics.ascent() / 2.0;
           painter.drawText(QPointF(textX, textY), label);
         } else {
-          const qreal textX = axisX + majorTickSize + 2.0;
+          const qreal textX = axisX + kMajorTickSize + kAxisTickLabelGap;
           const qreal textY = y + metrics.ascent() / 2.0;
           painter.drawText(QPointF(textX, textY), label);
         }
@@ -1961,19 +1942,20 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       const qreal y = rect.bottom() - normalized * rect.height();
       
       // Major tick
-      painter.drawLine(QPointF(axisX - majorTickSize, y),
-                       QPointF(axisX + majorTickSize, y));
+      painter.drawLine(QPointF(axisX - kMajorTickSize, y),
+                       QPointF(axisX + kMajorTickSize, y));
       
-      // Axis number - use 'g', 6 to match MEDM's %.6g format
-      QString label = QString::number(value, 'g', 6);
+      QString label = formatCartesianAxisValue(value, axisStyle,
+          axisTimeFormats_[arrayIndex]);
       const qreal textWidth = metrics.horizontalAdvance(label);
       
       if (onLeft) {
-        const qreal textX = axisX - majorTickSize - textWidth - 2.0;
+        const qreal textX = axisX - kMajorTickSize - textWidth
+            - kAxisTickLabelGap;
         const qreal textY = y + metrics.ascent() / 2.0;
         painter.drawText(QPointF(textX, textY), label);
       } else {
-        const qreal textX = axisX + majorTickSize + 2.0;
+        const qreal textX = axisX + kMajorTickSize + kAxisTickLabelGap;
         const qreal textY = y + metrics.ascent() / 2.0;
         painter.drawText(QPointF(textX, textY), label);
       }
@@ -1984,8 +1966,8 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
           const double minorValue = value + j * nice.majorInc / (nice.numMinor + 1);
           const double minorNormalized = (minorValue - nice.drawMin) / (nice.drawMax - nice.drawMin);
           const qreal minorY = rect.bottom() - minorNormalized * rect.height();
-          painter.drawLine(QPointF(axisX - minorTickSize, minorY),
-                           QPointF(axisX + minorTickSize, minorY));
+          painter.drawLine(QPointF(axisX - kMinorTickSize, minorY),
+                           QPointF(axisX + kMinorTickSize, minorY));
         }
       }
     }
@@ -2030,9 +2012,6 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   const QRectF widgetBounds = this->rect().adjusted(kOuterMargin, kOuterMargin,
       -kOuterMargin, -kOuterMargin);
   const YAxisPositions axisPos = calculateYAxisPositions(widgetBounds);
-  
-  const qreal axisnumberwidth = axisMetrics.horizontalAdvance(QStringLiteral("0.88"));
-  const qreal labelGap = 1.0;  // Gap between axis numbers and labels
   const qreal centerY = rect.top() + rect.height() / 2.0;
   
   // Draw labels for left-side axes
@@ -2057,10 +2036,11 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     QTransform transform;
     transform.rotate(-90.0);
     QImage rotatedImage = textImage.transformed(transform);
-    
-    // Position label to the left of the axis line with reduced gap
-    const qreal labelX = xPosition - axisnumberwidth - 4 - labelGap - labelMetrics.height() / 2.0;
-    const qreal drawX = labelX - rotatedImage.width() / 2.0;
+
+    const qreal tickLabelWidth = yAxisMaximumTickLabelWidth(axisIndex,
+        axisMetrics);
+    const qreal drawX = xPosition - kMajorTickSize - kAxisTickLabelGap
+        - tickLabelWidth - kAxisLabelGap - rotatedImage.width();
     const qreal drawY = centerY - rotatedImage.height() / 2.0;
     
     // Ensure label stays within visible bounds
@@ -2100,10 +2080,11 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     QTransform transform;
     transform.rotate(-90.0);
     QImage rotatedImage = textImage.transformed(transform);
-    
-    // Position label to the right of the axis line with reduced gap
-    const qreal labelX = xPosition + axisnumberwidth + 4 + labelGap + labelMetrics.height() / 2.0;
-    const qreal drawX = labelX - rotatedImage.width() / 2.0;
+
+    const qreal tickLabelWidth = yAxisMaximumTickLabelWidth(axisIndex,
+        axisMetrics);
+    const qreal drawX = xPosition + kMajorTickSize + kAxisTickLabelGap
+        + tickLabelWidth + kAxisLabelGap;
     const qreal drawY = centerY - rotatedImage.height() / 2.0;
     
     // Ensure label stays within visible bounds
@@ -2472,6 +2453,82 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
   range.maximum = nice.drawMax;
   range.valid = true;
   return range;
+}
+
+CartesianPlotElement::AxisRange CartesianPlotElement::resolvedAxisRange(
+    int axisIndex, const AxisRange *precomputedRange) const
+{
+  if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
+    return AxisRange{};
+  }
+
+  if (precomputedRange && precomputedRange->valid) {
+    return *precomputedRange;
+  }
+
+  if (executeMode_ && runtimePaintReady_ && !cachedAxisRangesValid_) {
+    computeAxisRangesFromData();
+  }
+  if (cachedAxisRangesValid_ && cachedAxisRanges_[axisIndex].valid) {
+    return cachedAxisRanges_[axisIndex];
+  }
+
+  const std::array<bool, kCartesianAxisCount> hasData{};
+  const std::array<double, kCartesianAxisCount> autoMinimums{};
+  const std::array<double, kCartesianAxisCount> autoMaximums{};
+  return computeAxisRange(axisIndex, hasData, autoMinimums, autoMaximums);
+}
+
+qreal CartesianPlotElement::yAxisMaximumTickLabelWidth(int yAxisIndex,
+    const QFontMetrics &metrics, const AxisRange *precomputedRange) const
+{
+  if (yAxisIndex < 0 || yAxisIndex >= 4) {
+    return 0.0;
+  }
+
+  const int arrayIndex = yAxisIndex + 1;
+  const AxisRange axisRange = resolvedAxisRange(arrayIndex, precomputedRange);
+  if (!axisRange.valid) {
+    return 0.0;
+  }
+
+  const bool isLog10 = (axisRange.style == CartesianPlotAxisStyle::kLog10);
+  const NiceAxisRange nice = computeNiceAxisRange(axisRange.minimum,
+      axisRange.maximum, isLog10);
+
+  qreal maxWidth = 0.0;
+  auto measureLabel = [&](double value) {
+    const QString label = formatCartesianAxisValue(value, axisRange.style,
+        axisTimeFormats_[arrayIndex]);
+    maxWidth = std::max(maxWidth,
+        static_cast<qreal>(metrics.horizontalAdvance(label)));
+  };
+
+  if (isLog10 && nice.drawMin > 0.0 && nice.drawMax > 0.0) {
+    double majorValue = nice.drawMin;
+    measureLabel(majorValue);
+    for (int i = 0; i < nice.numMajor; ++i) {
+      majorValue *= nice.majorInc;
+      if (majorValue <= nice.drawMax * 1.0001) {
+        measureLabel(majorValue);
+      }
+    }
+  } else {
+    for (int i = 0; i <= nice.numMajor; ++i) {
+      measureLabel(nice.drawMin + i * nice.majorInc);
+    }
+  }
+
+  return maxWidth;
+}
+
+qreal CartesianPlotElement::yAxisOutwardSpan(int yAxisIndex,
+    const QFontMetrics &axisMetrics, const QFontMetrics &labelMetrics,
+    const AxisRange *precomputedRange) const
+{
+  return kMajorTickSize + kAxisTickLabelGap
+      + yAxisMaximumTickLabelWidth(yAxisIndex, axisMetrics, precomputedRange)
+      + kAxisLabelGap + labelMetrics.height();
 }
 
 bool CartesianPlotElement::mapPointToChart(const QPointF &value,

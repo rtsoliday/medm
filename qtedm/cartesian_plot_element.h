@@ -16,6 +16,7 @@
 class QPaintEvent;
 class QPainter;
 class QTimer;
+class QFontMetrics;
 
 class CartesianPlotElement : public QWidget
 {
@@ -191,8 +192,16 @@ private:
       const std::array<bool, kCartesianAxisCount> &hasData,
       const std::array<double, kCartesianAxisCount> &autoMinimums,
       const std::array<double, kCartesianAxisCount> &autoMaximums) const;
+  AxisRange resolvedAxisRange(int axisIndex,
+      const AxisRange *precomputedRange = nullptr) const;
   bool mapPointToChart(const QPointF &value, const AxisRange &xRange,
       const AxisRange &yRange, const QRectF &rect, QPointF *mapped) const;
+  qreal yAxisMaximumTickLabelWidth(int yAxisIndex,
+      const QFontMetrics &metrics,
+      const AxisRange *precomputedRange = nullptr) const;
+  qreal yAxisOutwardSpan(int yAxisIndex, const QFontMetrics &axisMetrics,
+      const QFontMetrics &labelMetrics,
+      const AxisRange *precomputedRange = nullptr) const;
   int axisIndexForTrace(int traceIndex) const;
   void applySideToAxis(CartesianPlotYAxis axis, bool usesRightAxis,
       bool explicitSide);

@@ -71,6 +71,7 @@ private:
   void applyRuntimeVisibility();
   void raiseCompositeHierarchy();
   void scheduleChildStackingRefresh();
+  bool isMedmWidgetBackedChildWidget(const QWidget *child) const;
   bool isStaticChildWidget(const QWidget *child) const;
   bool isDynamicGraphicChildWidget(const QWidget *child) const;
   void refreshChildStackingOrder();

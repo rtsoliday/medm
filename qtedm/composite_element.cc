@@ -31,6 +31,7 @@
 #include "meter_element.h"
 #include "bar_monitor_element.h"
 #include "scale_monitor_element.h"
+#include "thermometer_element.h"
 #include "byte_monitor_element.h"
 #include "strip_chart_element.h"
 #include "cartesian_plot_element.h"
@@ -648,30 +649,66 @@ void CompositeElement::raiseCompositeHierarchy()
  *    - Composites that contain ONLY static graphic children
  *    - Examples: plain rectangles, static text labels, decorative shapes
  *
- * 2. DYNAMIC WIDGETS (raised second, middle of stack)
+ * 2. DYNAMIC GRAPHICS (raised second, middle of stack)
  *    - Graphic elements with dynamic attributes (visibility rules like
  *      "if not zero", alarm-sensitive color modes, channel connections)
- *    - Composites that contain ANY dynamic graphic children
- *    - Text elements with channel connections (even without visibility rules)
- *    - Examples: rectangles that show/hide based on PV values, alarm indicators
+ *    - Text monitor widgets, which QtEDM implements as widgets even though
+ *      MEDM draws them as graphics
+ *    - Composites that contain dynamic graphics but no MEDM-style widgets
+ *    - Examples: rectangles that show/hide based on PV values
  *
- * 3. INTERACTIVE WIDGETS (raised last, top of stack)
- *    - Control widgets: text entries, sliders, buttons, menus, related displays
- *    - Monitor widgets: text updates, meters, bar graphs, strip charts
- *    - These must be on top so users can interact with them
+ * 3. MEDM WIDGET-BACKED ELEMENTS (raised last, top of stack)
+ *    - Controls: text entries, sliders, buttons, menus, related displays
+ *    - Monitor widgets that are real widgets in MEDM: indicators, meters,
+ *      bar graphs, byte monitors, strip charts, cartesian plots
+ *    - Composites that contain any of the above
  *
- * IMPORTANT: Composites are containers, not controls. A composite's stacking
- * category is determined by its GRAPHIC content, not by whether it contains
- * controls. Controls inside a composite are managed by that composite's own
- * internal stacking order.
- *
- * Example: A composite containing a related display + static rectangle is
- * classified as STATIC (not interactive), because its graphic content (the
- * rectangle) has no dynamic attributes. The related display inside will be
- * raised to the top within that composite's internal stacking.
+ * This mirrors MEDM more closely than a control-vs-monitor split: widget-
+ * backed elements share one top layer, and ADL declaration order decides
+ * which of them ends up on top.
  *
  * Within each category, widgets maintain their ADL declaration order.
  */
+
+bool CompositeElement::isMedmWidgetBackedChildWidget(const QWidget *child) const
+{
+  if (!child) {
+    return false;
+  }
+
+  if (executeMode_) {
+    if (const auto *related = dynamic_cast<const RelatedDisplayElement *>(child)) {
+      if (related->visual() == RelatedDisplayVisual::kHiddenButton) {
+        return false;
+      }
+    }
+  }
+
+  if (isControlChildWidget(child)) {
+    return true;
+  }
+
+  if (dynamic_cast<const MeterElement *>(child)
+      || dynamic_cast<const BarMonitorElement *>(child)
+      || dynamic_cast<const ScaleMonitorElement *>(child)
+      || dynamic_cast<const ByteMonitorElement *>(child)
+      || dynamic_cast<const StripChartElement *>(child)
+      || dynamic_cast<const CartesianPlotElement *>(child)
+      || dynamic_cast<const ThermometerElement *>(child)) {
+    return true;
+  }
+
+  if (const auto *composite = dynamic_cast<const CompositeElement *>(child)) {
+    const QList<QWidget *> children = composite->childWidgets();
+    for (QWidget *grandChild : children) {
+      if (isMedmWidgetBackedChildWidget(grandChild)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 bool CompositeElement::isStaticChildWidget(const QWidget *child) const
 {
@@ -680,24 +717,14 @@ bool CompositeElement::isStaticChildWidget(const QWidget *child) const
   }
 
   if (const auto *composite = dynamic_cast<const CompositeElement *>(child)) {
-    /*
-     * A composite is STATIC if it contains NO dynamic graphic children.
-     *
-     * IMPORTANT: Controls (related displays, buttons, text entries, etc.)
-     * inside a composite do NOT affect whether the composite is static or
-     * dynamic. Controls are handled by the composite's own internal stacking
-     * order - they will be raised to the top within that composite.
-     *
-     * This allows patterns like:
-     *   composite {
-     *     related display (invisible)  <- control, ignored for classification
-     *     rectangle (clr=57)           <- static graphic
-     *   }
-     * to be correctly classified as STATIC, so sibling composites with
-     * dynamic rectangles will stack on top of it.
-     */
     const QList<QWidget *> children = composite->childWidgets();
     for (QWidget *grandChild : children) {
+      if (isMedmWidgetBackedChildWidget(grandChild)) {
+        return false;
+      }
+      if (isMonitorChildWidget(grandChild)) {
+        return false;
+      }
       if (isDynamicGraphicChildWidget(grandChild)) {
         return false;
       }
@@ -811,7 +838,7 @@ void CompositeElement::refreshChildStackingOrder()
 
   QList<QWidget *> staticWidgets;
   QList<QWidget *> dynamicWidgets;
-  QList<QWidget *> interactiveWidgets;
+  QList<QWidget *> medmWidgetBackedWidgets;
 
   /*
    * Classify each child widget into one of three stacking categories.
@@ -839,9 +866,8 @@ void CompositeElement::refreshChildStackingOrder()
       }
     }
 
-    /* Controls (buttons, text entries, etc.) always go to interactive layer */
-    if (isControlChildWidget(child)) {
-      interactiveWidgets.append(child);
+    if (isMedmWidgetBackedChildWidget(child)) {
+      medmWidgetBackedWidgets.append(child);
       continue;
     }
 
@@ -854,22 +880,24 @@ void CompositeElement::refreshChildStackingOrder()
       staticWidgets.append(child);
     } else {
       /*
-       * Fallback: anything not classified goes to interactive layer.
+       * Fallback: anything not classified goes to the MEDM widget-backed
+       * layer so it remains accessible above graphics.
        * This should rarely happen - most widgets should be caught by
        * the checks above. If new widget types are added, they should
        * be explicitly handled in the classification functions.
        */
-      interactiveWidgets.append(child);
+      medmWidgetBackedWidgets.append(child);
     }
   }
 
   /*
    * Apply stacking order by raising widgets in category order.
    * Qt's raise() moves a widget to the top of its siblings' stack.
-   * By raising in order (static, dynamic, interactive), we ensure:
+   * By raising in order (static, dynamic graphics, MEDM widget-backed), we
+   * ensure:
    *   - Static widgets are at the bottom
    *   - Dynamic widgets are in the middle (above static)
-   *   - Interactive widgets are at the top (always accessible)
+   *   - MEDM widget-backed widgets are at the top
    *
    * Within each category, widgets are raised in their original ADL order,
    * so later declarations end up on top of earlier ones.
@@ -884,7 +912,7 @@ void CompositeElement::refreshChildStackingOrder()
       widget->raise();
     }
   }
-  for (QWidget *widget : interactiveWidgets) {
+  for (QWidget *widget : medmWidgetBackedWidgets) {
     if (widget) {
       widget->raise();
     }

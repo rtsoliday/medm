@@ -8,7 +8,7 @@ display {
 		x=1795
 		y=118
 		width=583
-		height=860
+		height=1560
 	}
 	clr=14
 	bclr=4
@@ -854,4 +854,604 @@ text {
 		clr=14
 	}
 	textix="Overlap probe: (56,766) under (60,760)"
+}
+
+rectangle {
+	object {
+		x=20
+		y=860
+		width=540
+		height=670
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=872
+		width=520
+		height=16
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Additional execute-mode layering probes (append-only, focused on uncovered paths)"
+}
+text {
+	object {
+		x=30
+		y=892
+		width=520
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Expected top object is named in each case; compare MEDM and QtEDM side by side in execute mode."
+}
+
+text {
+	object {
+		x=40
+		y=918
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 4A: later bar above meter"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=300
+		y=918
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 4B: later meter above bar"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=40
+		y=938
+		width=230
+		height=132
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+rectangle {
+	object {
+		x=300
+		y=938
+		width=230
+		height=132
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+meter {
+	object {
+		x=66
+		y=950
+		width=92
+		height=92
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=20
+		bclr=4
+	}
+	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=2
+	}
+}
+bar {
+	object {
+		x=92
+		y=984
+		width=140
+		height=30
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=30
+		bclr=46
+	}
+	direction="right"
+	limits {
+		loprDefault=-5
+		hoprDefault=5
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=64
+		y=1044
+		width=182
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="MEDM top: the later bar"
+	align="horiz. centered"
+}
+bar {
+	object {
+		x=326
+		y=984
+		width=140
+		height=30
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=30
+		bclr=46
+	}
+	direction="right"
+	limits {
+		loprDefault=-5
+		hoprDefault=5
+		precDefault=2
+	}
+}
+meter {
+	object {
+		x=354
+		y=950
+		width=92
+		height=92
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=20
+		bclr=4
+	}
+	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=324
+		y=1044
+		width=182
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="MEDM top: the later meter"
+	align="horiz. centered"
+}
+
+text {
+	object {
+		x=40
+		y=1090
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 5A: later bar above text entry"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=300
+		y=1090
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 5B: later text entry above bar"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=40
+		y=1110
+		width=230
+		height=128
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+rectangle {
+	object {
+		x=300
+		y=1110
+		width=230
+		height=128
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+"text entry" {
+	object {
+		x=54
+		y=1150
+		width=150
+		height=28
+	}
+	control {
+		chan="tm:string:status"
+		clr=14
+		bclr=5
+	}
+	limits {
+	}
+}
+bar {
+	object {
+		x=92
+		y=1138
+		width=132
+		height=46
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=21
+		bclr=48
+	}
+	direction="right"
+	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=54
+		y=1206
+		width=182
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="MEDM top: the later bar"
+	align="horiz. centered"
+}
+bar {
+	object {
+		x=322
+		y=1138
+		width=132
+		height=46
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=21
+		bclr=48
+	}
+	direction="right"
+	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=2
+	}
+}
+"text entry" {
+	object {
+		x=360
+		y=1150
+		width=150
+		height=28
+	}
+	control {
+		chan="tm:string:status"
+		clr=14
+		bclr=5
+	}
+	limits {
+	}
+}
+text {
+	object {
+		x=324
+		y=1206
+		width=182
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="MEDM top: the later text entry"
+	align="horiz. centered"
+}
+
+text {
+	object {
+		x=40
+		y=1258
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 6A: composite first, later sibling fill"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=300
+		y=1258
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 6B: later composite above sibling fill"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=40
+		y=1278
+		width=230
+		height=136
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+rectangle {
+	object {
+		x=300
+		y=1278
+		width=230
+		height=136
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+composite {
+	object {
+		x=48
+		y=1296
+		width=180
+		height=56
+	}
+	"composite name"=""
+	children {
+		"text entry" {
+			object {
+				x=58
+				y=1310
+				width=150
+				height=26
+			}
+			control {
+				chan="tm:string:status"
+				clr=14
+				bclr=5
+			}
+			limits {
+			}
+		}
+	}
+}
+rectangle {
+	object {
+		x=92
+		y=1300
+		width=110
+		height=42
+	}
+	"basic attribute" {
+		clr=31
+	}
+}
+text {
+	object {
+		x=48
+		y=1384
+		width=208
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="MEDM: READY field should still sit above the fill"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=352
+		y=1300
+		width=110
+		height=42
+	}
+	"basic attribute" {
+		clr=31
+	}
+}
+composite {
+	object {
+		x=308
+		y=1296
+		width=180
+		height=56
+	}
+	"composite name"=""
+	children {
+		"text entry" {
+			object {
+				x=318
+				y=1310
+				width=150
+				height=26
+			}
+			control {
+				chan="tm:string:status"
+				clr=14
+				bclr=5
+			}
+			limits {
+			}
+		}
+	}
+}
+text {
+	object {
+		x=308
+		y=1384
+		width=208
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Baseline: later composite should stay above the fill"
+	align="horiz. centered"
+}
+
+text {
+	object {
+		x=40
+		y=1434
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 7A: later text update on top"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=300
+		y=1434
+		width=230
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Case 7B: reverse ADL order"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=40
+		y=1454
+		width=230
+		height=66
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+rectangle {
+	object {
+		x=300
+		y=1454
+		width=230
+		height=66
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+"text update" {
+	object {
+		x=58
+		y=1472
+		width=130
+		height=24
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=14
+		bclr=20
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=92
+		y=1482
+		width=130
+		height=24
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=14
+		bclr=15
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=318
+		y=1482
+		width=130
+		height=24
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=14
+		bclr=15
+	}
+	align="horiz. centered"
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=352
+		y=1472
+		width=130
+		height=24
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=14
+		bclr=20
+	}
+	align="horiz. centered"
+	limits {
+	}
 }

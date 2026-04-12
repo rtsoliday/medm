@@ -74,6 +74,20 @@ constexpr char kWidgetHasDynamicAttributeProperty[] =
     "_adlHasDynamicAttribute";
 constexpr char kOriginalAdlGeometryProperty[] = "_adlOriginalGeometry";
 constexpr char kAdlGeometryEditedProperty[] = "_adlGeometryEdited";
+
+template <typename ElementType, int ChannelCount = 5>
+bool hasConfiguredLayeringChannel(const ElementType *element)
+{
+  if (!element) {
+    return false;
+  }
+  for (int i = 0; i < ChannelCount; ++i) {
+    if (!element->channel(i).isEmpty()) {
+      return true;
+    }
+  }
+  return false;
+}
 }
 
 inline void setUtf8Encoding(QTextStream &stream)
@@ -3097,8 +3111,9 @@ private:
   bool widgetGeometryEdited(const QWidget *widget) const;
   QRect widgetGeometryForSerialization(const QWidget *widget) const;
   bool isControlWidget(const QWidget *widget) const;
+  bool isMedmWidgetBackedWidget(const QWidget *widget) const;
+  bool needsGraphicDynamicLayer(const QWidget *widget) const;
   bool isStaticGraphicWidget(const QWidget *widget) const;
-  bool isExecuteMonitorWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
   void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
@@ -19731,9 +19746,78 @@ inline bool DisplayWindow::isControlWidget(const QWidget *widget) const
       || dynamic_cast<const RelatedDisplayElement *>(widget);
 }
 
-inline bool DisplayWindow::isExecuteMonitorWidget(const QWidget *widget) const
+inline bool DisplayWindow::isMedmWidgetBackedWidget(const QWidget *widget) const
 {
-  return dynamic_cast<const ScaleMonitorElement *>(widget);
+  if (!widget) {
+    return false;
+  }
+
+  if (executeModeActive_) {
+    if (const auto *related = dynamic_cast<const RelatedDisplayElement *>(widget)) {
+      if (related->visual() == RelatedDisplayVisual::kHiddenButton) {
+        return false;
+      }
+    }
+  }
+
+  if (isControlWidget(widget)) {
+    return true;
+  }
+
+  if (dynamic_cast<const MeterElement *>(widget)
+      || dynamic_cast<const BarMonitorElement *>(widget)
+      || dynamic_cast<const ScaleMonitorElement *>(widget)
+      || dynamic_cast<const ByteMonitorElement *>(widget)
+      || dynamic_cast<const StripChartElement *>(widget)
+      || dynamic_cast<const CartesianPlotElement *>(widget)
+      || dynamic_cast<const ThermometerElement *>(widget)) {
+    return true;
+  }
+
+  if (const auto *composite = dynamic_cast<const CompositeElement *>(widget)) {
+    const QList<QWidget *> children = composite->childWidgets();
+    for (QWidget *child : children) {
+      if (isMedmWidgetBackedWidget(child)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+inline bool DisplayWindow::needsGraphicDynamicLayer(const QWidget *widget) const
+{
+  if (!widget) {
+    return false;
+  }
+  if (widgetHasDynamicAttribute(widget)) {
+    return true;
+  }
+
+  if (const auto *rectangle = dynamic_cast<const RectangleElement *>(widget)) {
+    return hasConfiguredLayeringChannel(rectangle);
+  }
+  if (const auto *image = dynamic_cast<const ImageElement *>(widget)) {
+    return hasConfiguredLayeringChannel(image);
+  }
+  if (const auto *oval = dynamic_cast<const OvalElement *>(widget)) {
+    return hasConfiguredLayeringChannel(oval);
+  }
+  if (const auto *arc = dynamic_cast<const ArcElement *>(widget)) {
+    return hasConfiguredLayeringChannel(arc);
+  }
+  if (const auto *line = dynamic_cast<const LineElement *>(widget)) {
+    return hasConfiguredLayeringChannel(line);
+  }
+  if (const auto *polyline = dynamic_cast<const PolylineElement *>(widget)) {
+    return hasConfiguredLayeringChannel(polyline);
+  }
+  if (const auto *polygon = dynamic_cast<const PolygonElement *>(widget)) {
+    return hasConfiguredLayeringChannel(polygon);
+  }
+
+  return false;
 }
 
 inline QStringList DisplayWindow::buildDisplaySearchPaths() const
@@ -20229,17 +20313,28 @@ inline bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
     }
     /*
      * Match MEDM/composite internal stacking semantics: controls inside a
-     * composite do not make the composite itself interactive or dynamic.
-     * The composite is static unless it contains dynamic graphics/monitors.
+     * composite should still keep the composite above drawn siblings, so a
+     * composite is static only when it contains static graphics only.
      */
     for (QWidget *child : children) {
       if (!child) {
         continue;
       }
-      if (isControlWidget(child)) {
-        continue;
+      if (executeModeActive_) {
+        if (const auto *related =
+                dynamic_cast<const RelatedDisplayElement *>(child)) {
+          if (related->visual() == RelatedDisplayVisual::kHiddenButton) {
+            continue;
+          }
+        }
       }
-      if (isExecuteMonitorWidget(child)) {
+      if (isMedmWidgetBackedWidget(child)) {
+        return false;
+      }
+      if (needsGraphicDynamicLayer(child)) {
+        return false;
+      }
+      if (dynamic_cast<const TextMonitorElement *>(child)) {
         return false;
       }
       if (!isStaticGraphicWidget(child)) {
@@ -20265,8 +20360,7 @@ inline void DisplayWindow::refreshStackingOrder()
   stackingOrderInternallyUpdating_ = true;
   QList<QWidget *> staticWidgets;
   QList<QWidget *> dynamicWidgets;
-  QList<QWidget *> executeMonitorWidgets;
-  QList<QWidget *> interactiveWidgets;
+  QList<QWidget *> medmWidgetBackedWidgets;
 
   for (auto it = elementStack_.begin(); it != elementStack_.end();) {
     QWidget *widget = it->data();
@@ -20290,12 +20384,12 @@ inline void DisplayWindow::refreshStackingOrder()
         }
       }
     }
-    if (isStaticGraphicWidget(widget)) {
+    if (isMedmWidgetBackedWidget(widget)) {
+      medmWidgetBackedWidgets.append(widget);
+    } else if (needsGraphicDynamicLayer(widget)) {
+      dynamicWidgets.append(widget);
+    } else if (isStaticGraphicWidget(widget)) {
       staticWidgets.append(widget);
-    } else if (executeModeActive_ && isExecuteMonitorWidget(widget)) {
-      executeMonitorWidgets.append(widget);
-    } else if (isControlWidget(widget)) {
-      interactiveWidgets.append(widget);
     } else {
       dynamicWidgets.append(widget);
     }
@@ -20311,13 +20405,8 @@ inline void DisplayWindow::refreshStackingOrder()
   for (QWidget *widget : dynamicWidgets) {
     widget->raise();
   }
-  /* In execute mode, raise monitor widgets that MEDM realizes above
-   * text update drawing (for example, indicator widgets). */
-  for (QWidget *widget : executeMonitorWidgets) {
-    widget->raise();
-  }
-  /* Then raise interactive controls. */
-  for (QWidget *widget : interactiveWidgets) {
+  /* Then raise the elements that MEDM realizes as widgets. */
+  for (QWidget *widget : medmWidgetBackedWidgets) {
     widget->raise();
   }
   stackingOrderInternallyUpdating_ = false;
@@ -25658,191 +25747,7 @@ inline void DisplayWindow::enterExecuteMode()
   }
 
   QTEDM_TIMING_MARK("enterExecuteMode: Adjusting widget layering");
-  /* Mimic MEDM's behavior: raise dynamic widgets above static widgets
-   * MEDM draws static graphics to drawingAreaPixmap and dynamic widgets
-   * to updatePixmap (layered on top). In Qt, we achieve the same effect
-   * by calling raise() on widgets that need channels. */
-  for (auto it = rectangleRuntimes_.constBegin();
-      it != rectangleRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = imageRuntimes_.constBegin();
-      it != imageRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = ovalRuntimes_.constBegin();
-      it != ovalRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = arcRuntimes_.constBegin();
-      it != arcRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = lineRuntimes_.constBegin();
-      it != lineRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = polylineRuntimes_.constBegin();
-      it != polylineRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = polygonRuntimes_.constBegin();
-      it != polygonRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = textRuntimes_.constBegin();
-      it != textRuntimes_.constEnd(); ++it) {
-    if (auto *runtime = it.value()) {
-      if (runtime->needsLayering()) {
-        it.key()->raise();
-      }
-    }
-  }
-  for (auto it = textMonitorRuntimes_.constBegin();
-      it != textMonitorRuntimes_.constEnd(); ++it) {
-    /* TextMonitor always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = meterRuntimes_.constBegin();
-      it != meterRuntimes_.constEnd(); ++it) {
-    /* Meter always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = scaleMonitorRuntimes_.constBegin();
-      it != scaleMonitorRuntimes_.constEnd(); ++it) {
-    /* ScaleMonitor always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = barMonitorRuntimes_.constBegin();
-      it != barMonitorRuntimes_.constEnd(); ++it) {
-    /* BarMonitor always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = thermometerRuntimes_.constBegin();
-      it != thermometerRuntimes_.constEnd(); ++it) {
-    /* Thermometer always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = byteMonitorRuntimes_.constBegin();
-      it != byteMonitorRuntimes_.constEnd(); ++it) {
-    /* ByteMonitor always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = textEntryRuntimes_.constBegin();
-      it != textEntryRuntimes_.constEnd(); ++it) {
-    /* TextEntry always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = sliderRuntimes_.constBegin();
-      it != sliderRuntimes_.constEnd(); ++it) {
-    /* Slider always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = wheelSwitchRuntimes_.constBegin();
-      it != wheelSwitchRuntimes_.constEnd(); ++it) {
-    /* WheelSwitch always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = choiceButtonRuntimes_.constBegin();
-      it != choiceButtonRuntimes_.constEnd(); ++it) {
-    /* ChoiceButton always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = menuRuntimes_.constBegin();
-      it != menuRuntimes_.constEnd(); ++it) {
-    /* Menu always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = messageButtonRuntimes_.constBegin();
-      it != messageButtonRuntimes_.constEnd(); ++it) {
-    /* MessageButton always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = stripChartRuntimes_.constBegin();
-      it != stripChartRuntimes_.constEnd(); ++it) {
-    /* StripChart always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-  for (auto it = cartesianPlotRuntimes_.constBegin();
-      it != cartesianPlotRuntimes_.constEnd(); ++it) {
-    /* CartesianPlot always needs channels, so always raise */
-    if (it.key()) {
-      it.key()->raise();
-    }
-  }
-
-  /* ShellCommand and RelatedDisplay elements do not own runtimes, but in
-   * MEDM they are realized as widgets that sit above the static graphics.
-   * Explicitly raise them after all channel-driven widgets so they mimic the
-   * same layering semantics. */
-  for (ShellCommandElement *element : shellCommandElements_) {
-    if (element) {
-      element->raise();
-    }
-  }
-  for (RelatedDisplayElement *element : relatedDisplayElements_) {
-    if (!element) {
-      continue;
-    }
-    if (element->visual() == RelatedDisplayVisual::kHiddenButton) {
-      continue;
-    }
-    element->raise();
-  }
+  refreshStackingOrder();
   if (displayArea_) {
     displayArea_->setUpdatesEnabled(restoreDisplayUpdates);
     if (restoreDisplayUpdates) {

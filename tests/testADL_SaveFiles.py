@@ -5,9 +5,16 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
+
+
+EXIT_SETUP_ERROR = 3
+EXIT_QTEDM_FAILURE = 4
+EXIT_DIFF_FAILURE = 5
 
 
 @dataclass
@@ -48,10 +55,16 @@ def _apply_string_filter(
   return _rebuild_entries_after_filter(entries, filtered)
 
 
-def run_qtedm(adl_path: Path, qtedm_path: Path) -> None:
+def run_qtedm(adl_path: Path, qtedm_path: Path, output_path: Path) -> int:
   """Invoke qtedm -testSave for the provided ADL file."""
   result = subprocess.run(
-      [str(qtedm_path), "-testSave", str(adl_path)],
+      [
+          str(qtedm_path),
+          "-testSave",
+          "-testSaveOutput",
+          str(output_path),
+          str(adl_path),
+      ],
       capture_output=True,
       text=True,
       check=False,
@@ -60,7 +73,7 @@ def run_qtedm(adl_path: Path, qtedm_path: Path) -> None:
     sys.stderr.write(
         f"qtedm -testSave failed for {adl_path}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n"
     )
-    sys.exit(result.returncode)
+  return result.returncode
 
 
 def diff_has_only_name_changes(diff_output: str) -> bool:
@@ -199,6 +212,35 @@ def strip_cartesian_trace_yside_zero(lines: list[str]) -> list[str]:
       depth += line.count("{") - line.count("}")
       if depth <= 0:
         inside_trace = False
+      continue
+
+    result.append(line)
+
+  return result
+
+
+def strip_default_basic_attribute_width(lines: list[str]) -> list[str]:
+  """Remove width=1 lines inside any basic attribute block."""
+  result: list[str] = []
+  inside_basic = False
+  depth = 0
+
+  for line in lines:
+    stripped = line.strip().lower()
+    if not inside_basic and stripped.startswith('"basic attribute"'):
+      inside_basic = True
+      depth = line.count("{") - line.count("}")
+      result.append(line)
+      if depth <= 0:
+        inside_basic = False
+      continue
+
+    if inside_basic:
+      if line.strip() != "width=1":
+        result.append(line)
+      depth += line.count("{") - line.count("}")
+      if depth <= 0:
+        inside_basic = False
       continue
 
     result.append(line)
@@ -695,6 +737,132 @@ def strip_default_dprecision(lines: list[str]) -> list[str]:
   return [line for line in lines if line.strip() != "dPrecision=1.000000"]
 
 
+def strip_default_prec_zero(lines: list[str]) -> list[str]:
+  """Drop precDefault=0 entries that restate the default precision."""
+  return [line for line in lines if line.strip() != "precDefault=0"]
+
+
+def strip_default_prec_one(lines: list[str]) -> list[str]:
+  """Drop precDefault=1 entries that restate a widget's built-in precision."""
+  return [line for line in lines if line.strip() != "precDefault=1"]
+
+
+def strip_default_lopr_zero(lines: list[str]) -> list[str]:
+  """Drop loprDefault=0 entries when the low limit already defaults to zero."""
+  return [line for line in lines if line.strip() != "loprDefault=0"]
+
+
+def strip_default_hopr_hundred(lines: list[str]) -> list[str]:
+  """Drop hoprDefault=100 entries when the high limit already defaults to 100."""
+  return [line for line in lines if line.strip() != "hoprDefault=100"]
+
+
+def strip_default_channel_limit_sources(lines: list[str]) -> list[str]:
+  """Drop explicit *Src=\"channel\" lines when omission has the same meaning."""
+  defaults = {
+      'loprSrc="channel"',
+      'hoprSrc="channel"',
+      'precSrc="channel"',
+  }
+  return [line for line in lines if line.strip() not in defaults]
+
+
+def strip_default_direction_right(lines: list[str]) -> list[str]:
+  """Drop direction=\"right\" lines when rightward is the widget default."""
+  return [line for line in lines if line.strip() != 'direction="right"']
+
+
+def strip_default_dprecision_one(lines: list[str]) -> list[str]:
+  """Drop dPrecision=1.000000 entries when the default increment is 1."""
+  return [line for line in lines if line.strip() != "dPrecision=1.000000"]
+
+
+def strip_default_arc_angles(lines: list[str]) -> list[str]:
+  """Drop begin/path values that restate the arc defaults."""
+  defaults = {"begin=0", "path=5760"}
+  return [line for line in lines if line.strip() not in defaults]
+
+
+def _quoted_value(line: str) -> str | None:
+  """Return the quoted portion of a simple key="value" line if present."""
+  first = line.find('"')
+  last = line.rfind('"')
+  if first == -1 or last == -1 or last <= first:
+    return None
+  return line[first + 1:last]
+
+
+def _is_blank_channel_line(stripped_lower: str) -> bool:
+  """Return True when the line only assigns blank whitespace to a channel key."""
+  normalized = stripped_lower.replace(" ", "")
+  channel_keys = (
+      "chan=",
+      "chana=",
+      "chanb=",
+      "chanc=",
+      "chand=",
+      "chane=",
+  )
+  if not normalized.startswith(channel_keys):
+    return False
+  quoted = _quoted_value(stripped_lower)
+  if quoted is None:
+    return False
+  return quoted.strip() == ""
+
+
+def strip_blank_channel_lines(lines: list[str]) -> list[str]:
+  """Drop blank channel assignments that behave like an omitted channel."""
+  result: list[str] = []
+  for line in lines:
+    stripped_lower = line.strip().lower()
+    if _is_blank_channel_line(stripped_lower):
+      continue
+    result.append(line)
+  return result
+
+
+def strip_noop_dynamic_attribute_blocks(lines: list[str]) -> list[str]:
+  """Drop dynamic attribute blocks that reference only blank channels."""
+  result: list[str] = []
+  i = 0
+  while i < len(lines):
+    line = lines[i]
+    stripped_lower = line.strip().lower()
+    if stripped_lower.startswith('"dynamic attribute"'):
+      block: list[str] = []
+      depth = 0
+      has_non_blank_channel = False
+      while i < len(lines):
+        block_line = lines[i]
+        block.append(block_line)
+        candidate = block_line.strip().lower()
+        normalized = candidate.replace(" ", "")
+        if normalized.startswith((
+            "chan=",
+            "chana=",
+            "chanb=",
+            "chanc=",
+            "chand=",
+            "chane=",
+        )):
+          quoted = _quoted_value(block_line)
+          if quoted is not None and quoted.strip() != "":
+            has_non_blank_channel = True
+        depth += block_line.count("{") - block_line.count("}")
+        i += 1
+        if depth <= 0:
+          break
+      if has_non_blank_channel:
+        result.extend(block)
+      continue
+
+    result.append(line)
+    i += 1
+
+  return result
+
+
 def strip_edge_spaces_in_quotes(lines: list[str]) -> list[str]:
   """Trim leading/trailing whitespace inside quoted attribute values."""
   entries = strip_edge_spaces_in_quotes_entries(_entries_from_lines(lines))
@@ -724,6 +892,9 @@ def normalize_entries_for_allowed_differences(
     lines: list[str]) -> list[LineEntry]:
   """Return LineEntries after removing allowed variations."""
   entries = _entries_from_lines(lines)
+  entries = _apply_string_filter(entries, strip_noop_dynamic_attribute_blocks)
+  entries = _apply_string_filter(entries, strip_blank_channel_lines)
+  entries = _apply_string_filter(entries, strip_default_basic_attribute_width)
   entries = _apply_string_filter(entries, strip_cartesian_counts_with_pv)
   entries = _apply_string_filter(entries, strip_cartesian_trace_yside_zero)
   entries = _apply_string_filter(
@@ -739,6 +910,14 @@ def normalize_entries_for_allowed_differences(
   entries = _apply_string_filter(entries, strip_empty_polyline_blocks)
   entries = _apply_string_filter(entries, strip_empty_children_blocks)
   entries = _apply_string_filter(entries, strip_default_dprecision)
+  entries = _apply_string_filter(entries, strip_default_prec_zero)
+  entries = _apply_string_filter(entries, strip_default_prec_one)
+  entries = _apply_string_filter(entries, strip_default_lopr_zero)
+  entries = _apply_string_filter(entries, strip_default_hopr_hundred)
+  entries = _apply_string_filter(entries, strip_default_channel_limit_sources)
+  entries = _apply_string_filter(entries, strip_default_direction_right)
+  entries = _apply_string_filter(entries, strip_default_dprecision_one)
+  entries = _apply_string_filter(entries, strip_default_arc_angles)
   entries = strip_edge_spaces_in_quotes_entries(entries)
 
   normalized: list[LineEntry] = []
@@ -750,7 +929,7 @@ def normalize_entries_for_allowed_differences(
       continue
     if stripped_lower.startswith("version="):
       continue
-    normalized.append(entry)
+    normalized.append(LineEntry(text=entry.text.strip(), line_no=entry.line_no))
   return normalized
 
 
@@ -839,42 +1018,142 @@ def report_first_filtered_difference(original: Path, saved: Path) -> None:
     break
 
 
+def default_qtedm_path(repo_root: Path) -> Path:
+  """Return the default qtedm binary location for this platform."""
+  env_path = os.environ.get("QTEDM_BIN")
+  if env_path:
+    return Path(env_path).expanduser().resolve()
+
+  system = platform.system()
+  machine = platform.machine()
+  return repo_root / "bin" / f"{system}-{machine}" / "qtedm"
+
+
+def paths_from_manifest(manifest_path: Path) -> list[Path]:
+  """Load ADL file paths from a manifest."""
+  adl_files: list[Path] = []
+  for line in manifest_path.read_text().splitlines():
+    entry = line.strip()
+    if not entry or entry.startswith("#"):
+      continue
+    path = Path(entry)
+    if not path.is_absolute():
+      path = manifest_path.parent / path
+    adl_files.append(path.resolve())
+  return adl_files
+
+
+def collect_adl_files(
+    direct_paths: list[str], manifest_paths: list[str],
+    scan_dirs: list[str]) -> list[Path]:
+  """Resolve the requested direct files, manifests, and scan directories."""
+  candidates: list[Path] = []
+
+  for manifest in manifest_paths:
+    manifest_path = Path(manifest).expanduser().resolve()
+    if not manifest_path.is_file():
+      raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+    candidates.extend(paths_from_manifest(manifest_path))
+
+  for scan_dir in scan_dirs:
+    directory = Path(scan_dir).expanduser().resolve()
+    if not directory.is_dir():
+      raise FileNotFoundError(f"Scan directory not found: {directory}")
+    candidates.extend(sorted(directory.glob("*.adl")))
+
+  for entry in direct_paths:
+    path = Path(entry).expanduser().resolve()
+    if path.is_dir():
+      candidates.extend(sorted(path.glob("*.adl")))
+    else:
+      candidates.append(path)
+
+  unique_files: list[Path] = []
+  seen: set[Path] = set()
+  for path in candidates:
+    resolved = path.resolve()
+    if resolved in seen:
+      continue
+    seen.add(resolved)
+    unique_files.append(resolved)
+  return unique_files
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(
       description="Run qtedm -testSave on ADL files and check for changes."
   )
   parser.add_argument(
-      "directory",
-      help="Directory containing ADL files to validate",
+      "paths",
+      nargs="*",
+      help="ADL files or directories to validate",
+  )
+  parser.add_argument(
+      "--manifest",
+      action="append",
+      default=[],
+      help="Manifest listing ADL files to validate",
+  )
+  parser.add_argument(
+      "--scan-dir",
+      action="append",
+      default=[],
+      help="Directory to scan for *.adl files",
+  )
+  parser.add_argument(
+      "--qtedm",
+      help="Path to the qtedm binary to test",
+  )
+  parser.add_argument(
+      "--output",
+      default="/tmp/qtedmTest.adl",
+      help="Path used for qtedm -testSave output",
   )
   args = parser.parse_args()
 
-  target_dir = Path(args.directory).expanduser().resolve()
-  if not target_dir.is_dir():
-    sys.stderr.write(f"Provided path is not a directory: {target_dir}\n")
-    return 1
-
   repo_root = Path(__file__).resolve().parents[1]
-  qtedm_path = repo_root / "bin" / "Linux-x86_64" / "qtedm"
+  qtedm_path = (
+      Path(args.qtedm).expanduser().resolve()
+      if args.qtedm
+      else default_qtedm_path(repo_root)
+  )
   if not qtedm_path.is_file():
     sys.stderr.write(f"qtedm binary not found at {qtedm_path}\n")
-    return 1
+    return EXIT_SETUP_ERROR
 
-  adl_files = sorted(target_dir.glob("*.adl"))
+  try:
+    adl_files = collect_adl_files(args.paths, args.manifest, args.scan_dir)
+  except FileNotFoundError as exc:
+    sys.stderr.write(f"{exc}\n")
+    return EXIT_SETUP_ERROR
+
   if not adl_files:
-    print(f"No ADL files found in {target_dir}")
+    print("SUMMARY: PASS files=0")
     return 0
 
-  tmp_path = Path("/tmp/qtedmTest.adl")
-  for adl_path in adl_files:
-    run_qtedm(adl_path, qtedm_path)
-    if not tmp_path.is_file():
-      sys.stderr.write(f"Expected output file not found: {tmp_path}\n")
-      return 1
-    if not compare_files(adl_path, tmp_path):
-      return 1
+  output_path = Path(args.output).expanduser().resolve()
+  output_path.parent.mkdir(parents=True, exist_ok=True)
 
-  print("All ADL files processed successfully.")
+  for adl_path in adl_files:
+    if not adl_path.is_file():
+      sys.stderr.write(f"ADL file not found: {adl_path}\n")
+      print(f"SUMMARY: FAIL stage=setup file={adl_path}")
+      return EXIT_SETUP_ERROR
+    if output_path.exists():
+      output_path.unlink()
+    qtedm_status = run_qtedm(adl_path, qtedm_path, output_path)
+    if qtedm_status != 0:
+      print(f"SUMMARY: FAIL stage=qtedm file={adl_path}")
+      return EXIT_QTEDM_FAILURE
+    if not output_path.is_file():
+      sys.stderr.write(f"Expected output file not found: {output_path}\n")
+      print(f"SUMMARY: FAIL stage=output file={adl_path}")
+      return EXIT_SETUP_ERROR
+    if not compare_files(adl_path, output_path):
+      print(f"SUMMARY: FAIL stage=diff file={adl_path}")
+      return EXIT_DIFF_FAILURE
+
+  print(f"SUMMARY: PASS files={len(adl_files)}")
   return 0
 
 

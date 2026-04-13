@@ -164,14 +164,23 @@ ifneq ($(XM_LIB),)
   endif
 endif
 
-# Detect Qt5 development environment using pkg-config
+# Detect Qt development environment using pkg-config
 # On Windows, Qt detection is handled separately in qtedm/Makefile
 ifneq ($(OS), Windows)
-  QT_CFLAGS := $(shell pkg-config --cflags Qt5Widgets 2>/dev/null)
-  QT_LIBS := $(shell pkg-config --libs Qt5Widgets 2>/dev/null)
-  ifneq ($(QT_CFLAGS),)
-    ifneq ($(QT_LIBS),)
+  QT6_CFLAGS := $(shell pkg-config --cflags Qt6Widgets 2>/dev/null)
+  QT6_LIBS := $(shell pkg-config --libs Qt6Widgets 2>/dev/null)
+  ifneq ($(QT6_CFLAGS),)
+    ifneq ($(QT6_LIBS),)
       HAVE_QT = 1
+    endif
+  endif
+  ifneq ($(HAVE_QT), 1)
+    QT5_CFLAGS := $(shell pkg-config --cflags Qt5Widgets 2>/dev/null)
+    QT5_LIBS := $(shell pkg-config --libs Qt5Widgets 2>/dev/null)
+    ifneq ($(QT5_CFLAGS),)
+      ifneq ($(QT5_LIBS),)
+        HAVE_QT = 1
+      endif
     endif
   endif
 endif

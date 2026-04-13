@@ -1,0 +1,8 @@
+
+	"dynamic attribute" {
+		clr="alarm"
+		vis="calc"
+		calc="A==B\nC"
+		chan="pv:a"
+		chanA="pv:b"
+	}

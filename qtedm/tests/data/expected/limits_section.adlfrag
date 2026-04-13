@@ -1,0 +1,9 @@
+
+	limits {
+		loprSrc="default"
+		loprDefault=-1.5
+		hoprSrc="default"
+		hoprDefault=12.5
+		precSrc="default"
+		precDefault=3
+	}

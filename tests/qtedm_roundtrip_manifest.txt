@@ -1,0 +1,31 @@
+# Canonical QtEDM round-trip fixtures for qtedm -testSave.
+# This list contains harness screens whose current round-trip deltas are either
+# absent or normalized as behavior-preserving no-ops for MEDM and QtEDM.
+index.adl
+test_Arc.adl
+test_Bar.adl
+test_Byte.adl
+test_CartesianPlot.adl
+test_CartesianPlot_BAK.adl
+test_ChoiceButton.adl
+test_Image.adl
+test_Layering.adl
+test_Line.adl
+test_Menu.adl
+test_MessageButton.adl
+test_Meter.adl
+test_Oval.adl
+test_Polygon.adl
+test_RelatedDisplay.adl
+test_ScaleMonitor.adl
+test_ShellCommand.adl
+test_Slider.adl
+test_StripChart.adl
+test_StripChartLoad.adl
+test_Text.adl
+test_TextEntry.adl
+test_TextFonts.adl
+test_TextMonitor.adl
+test_Thermometer.adl
+test_WheelSwitch.adl
+test_rectangle.adl

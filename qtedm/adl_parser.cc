@@ -166,9 +166,61 @@ private:
 
       }
 
-      /* ADL files do not use escape sequences; all characters within quotes
+      if (ch == QChar('\\')) {
 
-       * are treated literally, matching medm's getToken() behavior. */
+        if (atEnd()) {
+
+          result.append(ch);
+
+          break;
+
+        }
+
+        const QChar escaped = get();
+        switch (escaped.unicode()) {
+        case '\\':
+          result.append(QChar('\\'));
+          break;
+        case '"':
+          result.append(QChar('"'));
+          break;
+        case 'n':
+          result.append(QChar('\n'));
+          break;
+        case 'r':
+          result.append(QChar('\r'));
+          break;
+        case 't':
+          result.append(QChar('\t'));
+          break;
+        case 'x':
+        case 'X': {
+          QString digits;
+          for (int i = 0; i < 2 && !atEnd(); ++i) {
+            const QChar hex = peek();
+            if (!hex.isDigit()
+                && (hex.toLower() < QChar('a') || hex.toLower() > QChar('f'))) {
+              break;
+            }
+            digits.append(get());
+          }
+          bool ok = false;
+          const ushort value = digits.toUShort(&ok, 16);
+          if (ok && !digits.isEmpty()) {
+            result.append(QChar(value));
+          } else {
+            result.append(QChar('\\'));
+            result.append(escaped);
+            result.append(digits);
+          }
+          break;
+        }
+        default:
+          result.append(escaped);
+          break;
+        }
+        continue;
+      }
 
       result.append(ch);
 

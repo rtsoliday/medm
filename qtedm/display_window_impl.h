@@ -3206,6 +3206,9 @@ private:
   bool executeModeActive_ = false;
   bool preserveNextLoadPosition_ = false;
   QPoint preservedLoadPosition_;
+  QPoint originalDisplayPosition_;
+  bool hasOriginalDisplayX_ = false;
+  bool hasOriginalDisplayY_ = false;
   bool displaySelected_ = false;
   bool gridOn_ = kDefaultGridOn;
   bool snapToGrid_ = kDefaultSnapToGrid;
@@ -16920,9 +16923,8 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
     if (!widget) {
       return QRect();
     }
-    if (originalAdlGeometries_.contains(widget)) {
-      return absoluteGeometryForWidget(widget,
-          originalAdlGeometries_.value(widget));
+    if (originalAdlGeometries_.contains(widget) && !widgetGeometryEdited(widget)) {
+      return originalAdlGeometries_.value(widget);
     }
     return absoluteGeometryForWidget(widget,
         widgetGeometryForSerialization(widget));
@@ -16956,10 +16958,12 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
 
   const int displayWidth = displayArea_ ? displayArea_->width() : width();
   const int displayHeight = displayArea_ ? displayArea_->height() : height();
-  // Capture the decorated window position so the saved ADL restores accurately.
   const QRect frameRect = frameGeometry();
-  const QRect displayRect(frameRect.x(), frameRect.y(), displayWidth,
-    displayHeight);
+  const int displayX = hasOriginalDisplayX_ ? originalDisplayPosition_.x()
+                                            : frameRect.x();
+  const int displayY = hasOriginalDisplayY_ ? originalDisplayPosition_.y()
+                                            : frameRect.y();
+  const QRect displayRect(displayX, displayY, displayWidth, displayHeight);
 
   AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("display {"));
   AdlWriter::writeObjectSection(stream, 1, displayRect);
@@ -17237,11 +17241,6 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       AdlWriter::writeControlSection(stream, 1, message->channel(),
       AdlWriter::medmColorIndex(messageForeground),
       AdlWriter::medmColorIndex(messageBackground));
-      if (message->colorMode() != TextColorMode::kStatic) {
-        AdlWriter::writeIndentedLine(stream, 1,
-            QStringLiteral("clrmod=\"%1\"")
-                .arg(AdlWriter::colorModeString(message->colorMode())));
-      }
       const QString label = message->label().trimmed();
       if (!label.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -17259,6 +17258,11 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("release_msg=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(release)));
+      }
+      if (message->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(message->colorMode())));
       }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
@@ -18010,7 +18014,8 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (!target) {
       return QRect();
     }
-    if (originalAdlGeometries_.contains(target)) {
+    if (originalAdlGeometries_.contains(target)
+        && !widgetGeometryEdited(target)) {
       return absoluteGeometryForWidget(target,
           originalAdlGeometries_.value(target));
     }
@@ -18249,11 +18254,6 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeControlSection(stream, next, message->channel(),
         AdlWriter::medmColorIndex(messageForeground),
         AdlWriter::medmColorIndex(messageBackground));
-    if (message->colorMode() != TextColorMode::kStatic) {
-      AdlWriter::writeIndentedLine(stream, next,
-          QStringLiteral("clrmod=\"%1\"")
-              .arg(AdlWriter::colorModeString(message->colorMode())));
-    }
     const QString label = message->label().trimmed();
     if (!label.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -18271,6 +18271,11 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("release_msg=\"%1\"")
               .arg(AdlWriter::escapeAdlString(release)));
+    }
+    if (message->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(message->colorMode())));
     }
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
@@ -19087,6 +19092,9 @@ inline void DisplayWindow::clearAllElements()
   /* Reset original display dimensions so they get reinitialized on next load */
   originalDisplayWidth_ = 0;
   originalDisplayHeight_ = 0;
+  originalDisplayPosition_ = QPoint();
+  hasOriginalDisplayX_ = false;
+  hasOriginalDisplayY_ = false;
   pendingResizeAreaSize_ = QSize(0, 0);
   lastScaledAreaSize_ = QSize(0, 0);
   if (resizeDebounceTimer_ && resizeDebounceTimer_->isActive()) {
@@ -19115,6 +19123,9 @@ inline bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
       && (::findProperty(*objectNode, QStringLiteral("x")) != nullptr);
   const bool hasYProperty = objectNode
       && (::findProperty(*objectNode, QStringLiteral("y")) != nullptr);
+  originalDisplayPosition_ = geometry.topLeft();
+  hasOriginalDisplayX_ = hasXProperty;
+  hasOriginalDisplayY_ = hasYProperty;
 
   if (displayArea_) {
     const QSize currentWindowSize = size();

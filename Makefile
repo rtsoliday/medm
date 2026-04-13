@@ -42,7 +42,9 @@ ifeq ($(HAVE_QT), 1)
   DIRS += qtedm
 endif
 
-.PHONY: all $(DIRS) clean distclean check-motif check-qt final-check
+.PHONY: all $(DIRS) clean distclean check-motif check-qt final-check \
+        test test-qtedm test-qtedm-cli test-qtedm-unit test-qtedm-ioc \
+        test-qtedm-visual
 
 all: check-motif $(DIRS) final-check
 
@@ -75,14 +77,17 @@ final-check:
 ifneq ($(HAVE_QT), 1)
 	@echo ""
 	@echo "=========================================="
-	@echo "ERROR: Qt5 development libraries not found."
+	@echo "ERROR: Qt development libraries not found."
 	@echo ""
-	@echo "Qt5 is required to build qtedm."
+	@echo "Qt5 or Qt6 is required to build qtedm."
 	@echo ""
-	@echo "To install Qt5 development packages:"
+	@echo "To install Qt development packages:"
 	@echo "  Debian/Ubuntu: sudo apt-get install qtbase5-dev qt5-qmake"
+	@echo "                 or sudo apt-get install qt6-base-dev"
 	@echo "  RHEL/CentOS:   sudo yum install qt5-qtbase-devel"
+	@echo "                 or sudo yum install qt6-qtbase-devel"
 	@echo "  macOS:         brew install qt@5"
+	@echo "                 or brew install qt"
 	@echo "=========================================="
 	@echo ""
 	@exit 1
@@ -103,6 +108,29 @@ endif
 ifeq ($(HAVE_QT), 1)
 qtedm: $(GSL_REPO)
 	$(MAKE) -C $@
+endif
+
+ifeq ($(HAVE_QT), 1)
+test: test-qtedm
+
+test-qtedm: qtedm
+	$(MAKE) -C qtedm test
+
+test-qtedm-cli: qtedm
+	$(MAKE) -C qtedm test-cli
+
+test-qtedm-unit: qtedm
+	$(MAKE) -C qtedm test-unit
+
+test-qtedm-ioc: qtedm
+	$(MAKE) -C qtedm test-ioc
+
+test-qtedm-visual: qtedm
+	$(MAKE) -C qtedm test-visual
+else
+test test-qtedm test-qtedm-cli test-qtedm-unit test-qtedm-ioc test-qtedm-visual:
+	@echo "Qt development libraries are required to run qtedm tests."
+	@exit 1
 endif
 
 clean:

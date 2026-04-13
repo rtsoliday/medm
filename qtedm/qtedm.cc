@@ -75,6 +75,7 @@ typedef int Status;
 
 #include "audit_logger.h"
 #include "audit_log_viewer_dialog.h"
+#include "command_line_options.h"
 #include "display_properties.h"
 #include "display_state.h"
 #include "display_list_dialog.h"
@@ -91,58 +92,9 @@ typedef int Status;
 
 namespace {
 
-constexpr char kVersionString[] =
-    "QtEDM Version 1.0.0  (EPICS 7.0.9.1-DEV)";
-
-struct GeometrySpec {
-  bool hasWidth = false;
-  bool hasHeight = false;
-  bool hasX = false;
-  bool hasY = false;
-  int width = 0;
-  int height = 0;
-  int x = 0;
-  int y = 0;
-  bool xFromRight = false;
-  bool yFromBottom = false;
-};
-
-enum class RemoteMode {
-  kLocal,
-  kAttach,
-  kCleanup,
-};
-
-struct CommandLineOptions {
-  bool startInExecuteMode = false;
-  bool showHelp = false;
-  bool showVersion = false;
-  bool raiseMessageWindow = true;
-  bool usePrivateColormap = false;
-  bool useBigMousePointer = false;
-  bool testSave = false;
-  bool crashTest = false;
-  bool enableAuditLog = true;
-  QString invalidOption;
-  QStringList displayFiles;
-  QString displayGeometry;
-  QString macroString;
-  RemoteMode remoteMode = RemoteMode::kLocal;
-  QStringList resolvedDisplayFiles;
-  QString displayFont = QStringLiteral("alias");
-};
-
-QString programName(const QStringList &args)
-{
-  if (args.isEmpty()) {
-    return QStringLiteral("qtedm");
-  }
-  return QFileInfo(args.first()).fileName();
-}
-
 void printUsage(const QString &program)
 {
-  fprintf(stdout, "\n%s\n", kVersionString);
+  fprintf(stdout, "\n%s\n", kQtEdmVersionString);
   fprintf(stdout,
       "Usage:\n"
       "  %s [X options]\n"
@@ -153,6 +105,9 @@ void printUsage(const QString &program)
       "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
       "  [-displayFont alias|scalable]\n"
+      "  [-testSave]\n"
+      "  [-testSaveOutput output-file]\n"
+      "  [-testExitAfterMs milliseconds]\n"
       "  [-noMsg]\n"
       "  [-nolog]\n"
       "  [display-files]\n"
@@ -179,210 +134,6 @@ void printUsage(const QString &program)
       "\n",
       program.toLocal8Bit().constData());
   fflush(stdout);
-}
-
-CommandLineOptions parseCommandLine(const QStringList &args)
-{
-  CommandLineOptions options;
-  for (int i = 1; i < args.size(); ++i) {
-    const QString &arg = args.at(i);
-    if (arg == QLatin1String("-x")) {
-      options.startInExecuteMode = true;
-    } else if (arg == QLatin1String("-local")) {
-      options.remoteMode = RemoteMode::kLocal;
-    } else if (arg == QLatin1String("-attach")) {
-      options.remoteMode = RemoteMode::kAttach;
-    } else if (arg == QLatin1String("-cleanup")) {
-      options.remoteMode = RemoteMode::kCleanup;
-    } else if (arg == QLatin1String("-help") ||
-               arg == QLatin1String("-h") ||
-               arg == QLatin1String("-?")) {
-      options.showHelp = true;
-    } else if (arg == QLatin1String("-version")) {
-      options.showVersion = true;
-    } else if (arg == QLatin1String("-noMsg")) {
-      options.raiseMessageWindow = false;
-    } else if (arg == QLatin1String("-nolog")) {
-      options.enableAuditLog = false;
-    } else if (arg == QLatin1String("-bigMousePointer")) {
-      options.useBigMousePointer = true;
-    } else if (arg == QLatin1String("-cmap")) {
-      options.usePrivateColormap = true;
-    } else if (arg == QLatin1String("-testSave")) {
-      options.testSave = true;
-    } else if (arg == QLatin1String("-crashTest") ||
-               arg == QLatin1String("--crash-test")) {
-      options.crashTest = true;
-    } else if (arg == QLatin1String("-macro")) {
-      if ((i + 1) < args.size()) {
-        QString tmp = args.at(++i);
-        if (!tmp.isEmpty() && tmp.front() == QLatin1Char('"')) {
-          tmp.remove(0, 1);
-        }
-        if (!tmp.isEmpty() && tmp.back() == QLatin1Char('"')) {
-          tmp.chop(1);
-        }
-        options.macroString = tmp.trimmed();
-      }
-    } else if (arg == QLatin1String("-displayGeometry") ||
-               arg == QLatin1String("-dg")) {
-      if ((i + 1) < args.size()) {
-        options.displayGeometry = args.at(++i);
-      }
-    } else if (arg == QLatin1String("-displayFont")) {
-      if ((i + 1) < args.size()) {
-        options.displayFont = args.at(++i).trimmed();
-      } else {
-        options.invalidOption = arg;
-      }
-    } else if (arg.startsWith(QLatin1Char('-'))) {
-      options.invalidOption = arg;
-    } else {
-      options.displayFiles.push_back(arg);
-    }
-  }
-
-  /* Check QTEDM_NOLOG environment variable */
-  const QByteArray noLogEnv = qgetenv("QTEDM_NOLOG");
-  if (!noLogEnv.isEmpty() && noLogEnv != "0") {
-    options.enableAuditLog = false;
-  }
-
-  if (!options.invalidOption.isEmpty()) {
-    options.showHelp = true;
-  }
-  if (options.showHelp) {
-    options.showVersion = true;
-  }
-  return options;
-}
-
-QStringList displaySearchPaths()
-{
-  QStringList searchPaths;
-  const QByteArray env = qgetenv("EPICS_DISPLAY_PATH");
-  if (!env.isEmpty()) {
-    const QStringList parts = QString::fromLocal8Bit(env).split(
-        QLatin1Char(':'), Qt::SkipEmptyParts);
-    for (const QString &part : parts) {
-      const QString trimmed = part.trimmed();
-      if (!trimmed.isEmpty()) {
-        searchPaths.push_back(trimmed);
-      }
-    }
-  }
-  return searchPaths;
-}
-
-QString resolveDisplayFile(const QString &fileArgument)
-{
-  QFileInfo directInfo(fileArgument);
-  if (directInfo.exists() && directInfo.isFile()) {
-    return directInfo.absoluteFilePath();
-  }
-  const QStringList searchPaths = displaySearchPaths();
-  for (const QString &basePath : searchPaths) {
-    QFileInfo candidate(QDir(basePath), fileArgument);
-    if (candidate.exists() && candidate.isFile()) {
-      return candidate.absoluteFilePath();
-    }
-  }
-  return QString();
-}
-
-QStringList resolveDisplayArguments(const QStringList &files)
-{
-  QStringList resolved;
-  for (const QString &file : files) {
-    if (!file.endsWith(QStringLiteral(".adl"), Qt::CaseInsensitive)) {
-      fprintf(stderr, "\nFile has wrong suffix: %s\n",
-          file.toLocal8Bit().constData());
-      fflush(stderr);
-      continue;
-    }
-    const QString resolvedPath = resolveDisplayFile(file);
-    if (resolvedPath.isEmpty()) {
-      fprintf(stderr, "\nCannot access file: %s\n",
-          file.toLocal8Bit().constData());
-      fflush(stderr);
-      continue;
-    }
-    resolved.push_back(resolvedPath);
-  }
-  return resolved;
-}
-
-using MacroMap = QHash<QString, QString>;
-
-MacroMap parseMacroDefinitionString(const QString &macroString)
-{
-  MacroMap macros;
-  if (macroString.isEmpty()) {
-    return macros;
-  }
-  const QStringList entries = macroString.split(QLatin1Char(','), Qt::KeepEmptyParts);
-  for (const QString &entry : entries) {
-    const QString trimmedEntry = entry.trimmed();
-    if (trimmedEntry.isEmpty()) {
-      continue;
-    }
-    const int equalsIndex = trimmedEntry.indexOf(QLatin1Char('='));
-    if (equalsIndex <= 0) {
-      fprintf(stderr, "\nInvalid macro definition: %s\n",
-          trimmedEntry.toLocal8Bit().constData());
-      continue;
-    }
-    const QString name = trimmedEntry.left(equalsIndex).trimmed();
-    const QString value = trimmedEntry.mid(equalsIndex + 1).trimmed();
-    if (name.isEmpty()) {
-      fprintf(stderr, "\nInvalid macro definition: %s\n",
-          trimmedEntry.toLocal8Bit().constData());
-      continue;
-    }
-    macros.insert(name, value);
-  }
-  return macros;
-}
-
-std::optional<GeometrySpec> geometrySpecFromString(const QString &geometry)
-{
-  const QString trimmed = geometry.trimmed();
-  if (trimmed.isEmpty()) {
-    return std::nullopt;
-  }
-  QString effective = trimmed;
-  if (effective.startsWith(QLatin1Char('='))) {
-    effective.remove(0, 1);
-  }
-  static const QRegularExpression kGeometryPattern(
-      QStringLiteral(R"(^\s*(?:(\d+))?(?:x(\d+))?([+-]\d+)?([+-]\d+)?\s*$)"));
-  const QRegularExpressionMatch match = kGeometryPattern.match(effective);
-  if (!match.hasMatch()) {
-    return std::nullopt;
-  }
-
-  GeometrySpec spec;
-  if (!match.captured(1).isEmpty()) {
-    spec.hasWidth = true;
-    spec.width = match.captured(1).toInt();
-  }
-  if (!match.captured(2).isEmpty()) {
-    spec.hasHeight = true;
-    spec.height = match.captured(2).toInt();
-  }
-  if (!match.captured(3).isEmpty()) {
-    spec.hasX = true;
-    const QString xStr = match.captured(3);
-    spec.xFromRight = xStr.startsWith(QLatin1Char('-'));
-    spec.x = xStr.mid(1).toInt();
-  }
-  if (!match.captured(4).isEmpty()) {
-    spec.hasY = true;
-    const QString yStr = match.captured(4);
-    spec.yFromBottom = yStr.startsWith(QLatin1Char('-'));
-    spec.y = yStr.mid(1).toInt();
-  }
-  return spec;
 }
 
 void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
@@ -863,7 +614,7 @@ int main(int argc, char *argv[])
 #endif
 
   if (options.showVersion) {
-    fprintf(stdout, "\n%s\n\n", kVersionString);
+    fprintf(stdout, "\n%s\n\n", kQtEdmVersionString);
     fflush(stdout);
     return 0;
   }
@@ -2025,8 +1776,8 @@ int main(int argc, char *argv[])
       return 1;
     }
     QPointer<DisplayWindow> target(testSaveWindow);
-    QTimer::singleShot(0, &win, [target]() {
-      const QString outputPath = QStringLiteral("/tmp/qtedmTest.adl");
+    QTimer::singleShot(0, &win, [target, options]() {
+      const QString outputPath = options.testSaveOutputPath;
       if (DisplayWindow *window = target.data()) {
         if (!window->saveToPath(outputPath)) {
           fprintf(stderr, "\nFailed to save display to %s\n",
@@ -2041,6 +1792,15 @@ int main(int argc, char *argv[])
         QCoreApplication::exit(1);
         return;
       }
+      QCoreApplication::exit(0);
+    });
+  } else if (options.testExitAfterMs >= 0) {
+    if (!options.resolvedDisplayFiles.isEmpty() && !loadedAnyDisplay) {
+      fprintf(stderr, "\nFailed to load display file for automated test run\n");
+      fflush(stderr);
+      return 1;
+    }
+    QTimer::singleShot(options.testExitAfterMs, &app, []() {
       QCoreApplication::exit(0);
     });
   }

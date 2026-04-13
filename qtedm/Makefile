@@ -19,6 +19,7 @@ PROD_LIBS :=
 ifeq ($(OS), Windows)
   QT_VERSION := 6
   QT_CORE_PKG := Qt6Core
+  QT_TEST_PKG := Qt6Test
   QT_DIR ?= C:\\Qt\\6.8.2\\msvc2022_64
   QT_DIR_FWD := $(subst \\,/,$(QT_DIR))
   QT_WIDGETS_CFLAGS := -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg"
@@ -31,6 +32,7 @@ else
     QT_PRINT_PKG := Qt6PrintSupport
     QT_SVG_PKG := Qt6Svg
     QT_CORE_PKG := Qt6Core
+    QT_TEST_PKG := Qt6Test
   else
     QT5_AVAILABLE := $(shell pkg-config --exists Qt5Core 2>/dev/null && echo 1)
     ifeq ($(QT5_AVAILABLE),1)
@@ -39,6 +41,7 @@ else
       QT_PRINT_PKG := Qt5PrintSupport
       QT_SVG_PKG := Qt5Svg
       QT_CORE_PKG := Qt5Core
+      QT_TEST_PKG := Qt5Test
     else
       $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
     endif
@@ -66,6 +69,7 @@ endif
 PROD = qtedm
 
 qtedm_SRC = qtedm.cc \
+            command_line_options.cc \
             adl_parser.cc \
             audit_logger.cc \
             legacy_fonts.cc \
@@ -154,14 +158,24 @@ qtedm_SRC = qtedm.cc \
 
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
 
-CFLAGS += -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
-CCFLAGS += -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
+CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
+CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 ifeq ($(OS), Windows)
  CCFLAGS += /std:c++20 /Zc:__cplusplus /permissive- $(QT_WIDGETS_CFLAGS)
  LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt6PrintSupport.lib Qt6Svg.lib Qt6Widgets.lib Qt6Gui.lib Qt6Core.lib
 else
  CCFLAGS += $(shell pkg-config --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
  LDFLAGS += $(shell pkg-config --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
+endif
+
+ifeq ($(OS), Windows)
+  QT_TEST_CFLAGS :=
+  QT_TEST_LIBS := Qt6Test.lib
+  QT_TEST_AVAILABLE := 1
+else
+  QT_TEST_AVAILABLE := $(shell pkg-config --exists $(QT_TEST_PKG) 2>/dev/null && echo 1)
+  QT_TEST_CFLAGS := $(shell pkg-config --cflags $(QT_TEST_PKG))
+  QT_TEST_LIBS := $(shell pkg-config --libs $(QT_TEST_PKG))
 endif
 
 
@@ -309,3 +323,78 @@ $(OBJ_DIR)/medm$(EXEEXT): $(medm_OBJS) $(PROD_DEPS)
 	cp -f $@ $(BIN_DIR)/
 	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
 	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
+
+QTEDM_UNIT_TEST_NAMES = test_command_line \
+                        test_adl_parser \
+                        test_adl_writer \
+                        test_text_format_utils \
+                        test_runtime_utils
+
+QTEDM_UNIT_TEST_BINARIES = $(addprefix $(OBJ_DIR)/,$(addsuffix $(EXEEXT),$(QTEDM_UNIT_TEST_NAMES)))
+QTEDM_UNIT_TEST_MOCS = $(addprefix $(OBJ_DIR)/,$(addsuffix .moc,$(QTEDM_UNIT_TEST_NAMES)))
+
+test_command_line_OBJS = $(OBJ_DIR)/test_command_line.$(OBJEXT) \
+                         $(OBJ_DIR)/command_line_options.$(OBJEXT)
+test_adl_parser_OBJS = $(OBJ_DIR)/test_adl_parser.$(OBJEXT) \
+                       $(OBJ_DIR)/adl_parser.$(OBJEXT)
+test_adl_writer_OBJS = $(OBJ_DIR)/test_adl_writer.$(OBJEXT) \
+                       $(OBJ_DIR)/adl_writer.$(OBJEXT) \
+                       $(OBJ_DIR)/medm_colors.$(OBJEXT)
+test_text_format_utils_OBJS = $(OBJ_DIR)/test_text_format_utils.$(OBJEXT) \
+                              $(OBJ_DIR)/text_format_utils.$(OBJEXT)
+test_runtime_utils_OBJS = $(OBJ_DIR)/test_runtime_utils.$(OBJEXT) \
+                          $(OBJ_DIR)/runtime_utils.$(OBJEXT)
+
+$(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
+	$(MOC) $(QT_WIDGETS_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
+
+$(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc | $(OBJ_DIR)
+	$(CCC) $(CCFLAGS) $(QT_TEST_CFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+
+define link_qtedm_unit_test
+$(OBJ_DIR)/$(1)$(EXEEXT): $$($(1)_OBJS)
+	$$(LINKEXE) $$(OUTPUTEXE) $$^ $$(LDFLAGS) $$(QT_TEST_LIBS) $$(PROD_SYS_LIBS)
+endef
+
+$(foreach test,$(QTEDM_UNIT_TEST_NAMES),$(eval $(call link_qtedm_unit_test,$(test))))
+
+check-qt-test:
+ifeq ($(QT_TEST_AVAILABLE),1)
+	@:
+else
+	@echo "ERROR: $(QT_TEST_PKG) development package not found."
+	@exit 1
+endif
+
+tests: check-qt-test $(QTEDM_UNIT_TEST_BINARIES)
+
+test: test-cli test-unit
+
+test-unit: tests
+	@set -e; \
+	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/qtedm-unit.XXXXXX"); \
+	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
+	export QT_QPA_PLATFORM=offscreen; \
+	export QTEDM_NOLOG=1; \
+	export LC_ALL=C; \
+	export TZ=UTC; \
+	export HOME="$$tmp_dir/home"; \
+	mkdir -p "$$HOME"; \
+	for test_bin in $(QTEDM_UNIT_TEST_BINARIES); do \
+	  echo "Running $$test_bin"; \
+	  "$$test_bin"; \
+	done
+
+test-cli: $(OBJ_DIR)/qtedm$(EXEEXT)
+	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" ../tests/run_qtedm_cli_tests.sh
+
+test-ioc: $(OBJ_DIR)/qtedm$(EXEEXT)
+	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" ../tests/run_qtedm_ioc_tests.sh
+
+test-visual:
+	@echo "QtEDM visual regression tests are not implemented yet."
+
+clean-tests:
+	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS)
+
+.PHONY: tests test test-unit test-cli test-ioc test-visual clean-tests check-qt-test

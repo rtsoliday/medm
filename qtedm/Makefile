@@ -368,7 +368,7 @@ endif
 
 tests: check-qt-test $(QTEDM_UNIT_TEST_BINARIES)
 
-test: test-cli test-unit
+test: test-cli test-unit test-ioc
 
 test-unit: tests
 	@set -e; \

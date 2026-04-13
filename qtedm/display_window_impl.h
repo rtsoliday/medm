@@ -39,6 +39,8 @@
 #include <QVariant>
 #include <QSvgGenerator>
 #include <QImageWriter>
+#include <QJsonArray>
+#include <QJsonObject>
 
 #ifdef KeyPress
 #  undef KeyPress
@@ -2508,6 +2510,8 @@ public:
   {
     return filePath_;
   }
+
+  QJsonObject testStateObject() const;
 
   const QHash<QString, QString> &macroDefinitions() const
   {
@@ -20223,6 +20227,141 @@ inline QRect DisplayWindow::absoluteGeometryForWidget(
   QRect absolute = localGeometry;
   absolute.moveTopLeft(widgetDisplayRect(widget).topLeft());
   return absolute;
+}
+
+inline QJsonObject DisplayWindow::testStateObject() const
+{
+  auto rectToJson = [](const QRect &rect) {
+    QJsonObject object;
+    object[QStringLiteral("x")] = rect.x();
+    object[QStringLiteral("y")] = rect.y();
+    object[QStringLiteral("width")] = rect.width();
+    object[QStringLiteral("height")] = rect.height();
+    return object;
+  };
+  auto appendWidgetBase = [this, &rectToJson](QJsonObject &widgetObject,
+                              const char *typeName, const QWidget *widget,
+                              const QString &channel) {
+    widgetObject[QStringLiteral("type")] = QLatin1String(typeName);
+    widgetObject[QStringLiteral("channel")] = channel;
+    widgetObject[QStringLiteral("visible")] = widget && widget->isVisible();
+    if (widget) {
+      widgetObject[QStringLiteral("geometry")] = rectToJson(
+          absoluteGeometryForWidget(widget, widget->geometry()));
+    }
+  };
+
+  QJsonArray widgets;
+
+  for (TextMonitorElement *element : textMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    TextMonitorRuntime *runtime = textMonitorRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "text_monitor", element,
+        element->channel(0));
+    widgetObject[QStringLiteral("display_text")] = element->text();
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("has_numeric_value")] =
+          runtime->hasNumericValue_;
+      widgetObject[QStringLiteral("has_string_value")] =
+          runtime->hasStringValue_;
+      if (runtime->hasNumericValue_) {
+        widgetObject[QStringLiteral("numeric_value")] =
+            runtime->lastNumericValue_;
+      }
+      if (runtime->hasStringValue_) {
+        widgetObject[QStringLiteral("string_value")] =
+            runtime->lastStringValue_;
+      }
+      const char *valueKind = "none";
+      switch (runtime->valueKind_) {
+      case TextMonitorRuntime::ValueKind::kNumeric:
+        valueKind = "numeric";
+        break;
+      case TextMonitorRuntime::ValueKind::kString:
+        valueKind = "string";
+        break;
+      case TextMonitorRuntime::ValueKind::kEnum:
+        valueKind = "enum";
+        break;
+      case TextMonitorRuntime::ValueKind::kCharArray:
+        valueKind = "char_array";
+        break;
+      case TextMonitorRuntime::ValueKind::kNone:
+      default:
+        valueKind = "none";
+        break;
+      }
+      widgetObject[QStringLiteral("value_kind")] = QLatin1String(valueKind);
+    }
+    widgets.append(widgetObject);
+  }
+
+  auto appendSingleChannelWidgets =
+      [this, &appendWidgetBase, &widgets](const char *typeName,
+          const auto &elements, const auto &runtimes) {
+        for (auto *element : elements) {
+          if (!element) {
+            continue;
+          }
+          auto *runtime = runtimes.value(element, nullptr);
+          QJsonObject widgetObject;
+          appendWidgetBase(widgetObject, typeName, element, element->channel());
+          if (runtime) {
+            widgetObject[QStringLiteral("connected")] = runtime->connected_;
+            widgetObject[QStringLiteral("initial_update")] =
+                runtime->initialUpdateTracked_;
+            widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+            widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+            if (runtime->hasLastValue_) {
+              widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+            }
+          }
+          widgets.append(widgetObject);
+        }
+      };
+
+  appendSingleChannelWidgets("meter", meterElements_, meterRuntimes_);
+  appendSingleChannelWidgets("bar_monitor", barMonitorElements_,
+      barMonitorRuntimes_);
+  appendSingleChannelWidgets("thermometer", thermometerElements_,
+      thermometerRuntimes_);
+  appendSingleChannelWidgets("scale_monitor", scaleMonitorElements_,
+      scaleMonitorRuntimes_);
+
+  for (SliderElement *element : sliderElements_) {
+    if (!element) {
+      continue;
+    }
+    SliderRuntime *runtime = sliderRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "slider", element, element->channel());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("write_access")] = runtime->lastWriteAccess_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  QJsonObject object;
+  object[QStringLiteral("file_path")] = filePath_;
+  object[QStringLiteral("window_title")] = windowTitle();
+  object[QStringLiteral("widget_count")] = widgets.size();
+  object[QStringLiteral("widgets")] = widgets;
+  return object;
 }
 
 inline std::optional<AdlNode> DisplayWindow::widgetToAdlNode(QWidget *widget) const

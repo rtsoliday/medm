@@ -7,6 +7,7 @@ IOC_BIN="${SCRIPT_DIR}/sddsSoftIOC"
 CAVPUT_BIN="${SCRIPT_DIR}/cavput"
 SDDS_FILE="${SCRIPT_DIR}/sddsSoftIOC_tests.sdds"
 LOG_FILE="${SCRIPT_DIR}/sddsSoftIOC.log"
+READY_FILE=""
 PV_PREFIX=""
 EXECUTION_TIME="0"
 REGENERATE="0"
@@ -21,6 +22,7 @@ Run tests/sddsSoftIOC with a local SDDS file and controlled lifecycle.
 Options:
   --sdds-file <path>       SDDS definition file to load
   --log-file <path>        Log file path (default: tests/sddsSoftIOC.log)
+  --ready-file <path>      Touch this file after PV initialization completes
   --pv-prefix <prefix>     Prefix added to served PVs (default: none)
   --execution-time <sec>   IOC runtime in seconds, 0 means forever
   --regenerate             Regenerate SDDS file from tests/*.adl first
@@ -45,6 +47,14 @@ while [[ $# -gt 0 ]]; do
         exit 1
       }
       LOG_FILE="$2"
+      shift 2
+      ;;
+    --ready-file)
+      [[ $# -ge 2 ]] || {
+        echo "Missing value for $1" >&2
+        exit 1
+      }
+      READY_FILE="$2"
       shift 2
       ;;
     --pv-prefix)
@@ -102,6 +112,9 @@ if [[ ! -f "${SDDS_FILE}" ]]; then
 fi
 
 mkdir -p "$(dirname "${LOG_FILE}")"
+if [[ -n "${READY_FILE}" ]]; then
+  mkdir -p "$(dirname "${READY_FILE}")"
+fi
 
 cmd=(
   "${IOC_BIN}"
@@ -126,6 +139,34 @@ set_local_ca_env() {
   EPICS_CA_ADDR_LIST=localhost
   EPICS_CA_AUTO_ADDR_LIST=NO
   export EPICS_CA_ADDR_LIST EPICS_CA_AUTO_ADDR_LIST
+}
+
+set_local_epics_runtime_env() {
+  local epics_base="${EPICS_BASE:-}"
+  local candidate=""
+  local -a epics_search_paths=(
+    "${SCRIPT_DIR}/../../epics-base"
+    "${SCRIPT_DIR}/../../../epics-base"
+    "/usr/local/oag/base"
+  )
+
+  if [[ -z "${epics_base}" ]]; then
+    for candidate in "${epics_search_paths[@]}"; do
+      if [[ -x "${candidate}/startup/EpicsHostArch" ]]; then
+        epics_base="${candidate}"
+        break
+      fi
+    done
+  fi
+
+  if [[ -n "${epics_base}" && -x "${epics_base}/startup/EpicsHostArch" ]]; then
+    EPICS_BASE="$(cd "${epics_base}" && pwd)"
+    export EPICS_BASE
+    if [[ -z "${EPICS_HOST_ARCH:-}" ]]; then
+      EPICS_HOST_ARCH="$("${EPICS_BASE}/startup/EpicsHostArch")"
+      export EPICS_HOST_ARCH
+    fi
+  fi
 }
 
 set_slider_test_pvs() {
@@ -1285,6 +1326,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 set_local_ca_env
+set_local_epics_runtime_env
 "${cmd[@]}" > "${LOG_FILE}" 2>&1 &
 ioc_pid="$!"
 set_slider_test_pvs "${PV_PREFIX}" || true
@@ -1310,4 +1352,8 @@ set_text_fonts_test_pvs "${PV_PREFIX}" || true
 set_text_entry_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
+if [[ -n "${READY_FILE}" ]]; then
+  printf 'ready\n' > "${READY_FILE}"
+  echo "Wrote IOC ready file: ${READY_FILE}"
+fi
 wait "${ioc_pid}"

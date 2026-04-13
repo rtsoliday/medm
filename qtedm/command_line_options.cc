@@ -73,6 +73,20 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       } else {
         options.invalidOption = arg;
       }
+    } else if (arg == QLatin1String("-testDumpState") ||
+               arg == QLatin1String("--test-dump-state")) {
+      if ((i + 1) < args.size()) {
+        options.testDumpStatePath = args.at(++i);
+      } else {
+        options.invalidOption = arg;
+      }
+    } else if (arg == QLatin1String("-testReadyFile") ||
+               arg == QLatin1String("--test-ready-file")) {
+      if ((i + 1) < args.size()) {
+        options.testReadyFilePath = args.at(++i);
+      } else {
+        options.invalidOption = arg;
+      }
     } else if (arg == QLatin1String("-crashTest") ||
                arg == QLatin1String("--crash-test")) {
       options.crashTest = true;

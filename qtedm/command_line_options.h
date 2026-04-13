@@ -47,6 +47,8 @@ struct CommandLineOptions {
   QStringList resolvedDisplayFiles;
   QString displayFont = QStringLiteral("alias");
   QString testSaveOutputPath = QStringLiteral("/tmp/qtedmTest.adl");
+  QString testDumpStatePath;
+  QString testReadyFilePath;
 };
 
 using MacroMap = QHash<QString, QString>;

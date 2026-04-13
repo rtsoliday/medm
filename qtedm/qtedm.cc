@@ -13,6 +13,9 @@
 #include <QGuiApplication>
 #include <QHash>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMainWindow>
@@ -107,6 +110,8 @@ void printUsage(const QString &program)
       "  [-displayFont alias|scalable]\n"
       "  [-testSave]\n"
       "  [-testSaveOutput output-file]\n"
+      "  [-testDumpState output-file]\n"
+      "  [-testReadyFile output-file]\n"
       "  [-testExitAfterMs milliseconds]\n"
       "  [-noMsg]\n"
       "  [-nolog]\n"
@@ -134,6 +139,71 @@ void printUsage(const QString &program)
       "\n",
       program.toLocal8Bit().constData());
   fflush(stdout);
+}
+
+bool ensureParentDirectoryExists(const QString &path, QString *errorMessage)
+{
+  const QFileInfo info(path);
+  const QString parentPath = info.absolutePath();
+  if (parentPath.isEmpty()) {
+    return true;
+  }
+  QDir dir;
+  if (dir.mkpath(parentPath)) {
+    return true;
+  }
+  if (errorMessage) {
+    *errorMessage = QStringLiteral("Failed to create parent directory for %1")
+        .arg(path);
+  }
+  return false;
+}
+
+bool writeTextFile(const QString &path, const QByteArray &data,
+    QString *errorMessage)
+{
+  if (!ensureParentDirectoryExists(path, errorMessage)) {
+    return false;
+  }
+  QFile file(path);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Failed to open %1 for writing: %2")
+          .arg(path, file.errorString());
+    }
+    return false;
+  }
+  if (file.write(data) != data.size()) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Failed to write %1: %2")
+          .arg(path, file.errorString());
+    }
+    return false;
+  }
+  return true;
+}
+
+bool writeReadyFile(const QString &path, QString *errorMessage)
+{
+  return writeTextFile(path, QByteArray("ready\n"), errorMessage);
+}
+
+bool writeTestStateFile(const QString &path,
+    const std::shared_ptr<DisplayState> &state, QString *errorMessage)
+{
+  QJsonObject root;
+  QJsonArray displays;
+  if (state) {
+    for (const QPointer<DisplayWindow> &displayPtr : state->displays) {
+      if (!displayPtr.isNull()) {
+        displays.append(displayPtr->testStateObject());
+      }
+    }
+  }
+  root[QStringLiteral("display_count")] = displays.size();
+  root[QStringLiteral("displays")] = displays;
+  return writeTextFile(path, QJsonDocument(root).toJson(QJsonDocument::Indented),
+      errorMessage);
 }
 
 void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
@@ -522,6 +592,14 @@ int main(int argc, char *argv[])
 
   if (options.testSave && options.resolvedDisplayFiles.isEmpty()) {
     fprintf(stderr, "\n-testSave requires at least one ADL file argument\n");
+    fflush(stderr);
+    return 1;
+  }
+
+  if (!options.testDumpStatePath.isEmpty() && !options.testSave
+      && options.testExitAfterMs < 0) {
+    fprintf(stderr,
+        "\n-testDumpState requires -testExitAfterMs when not used with -testSave\n");
     fflush(stderr);
     return 1;
   }
@@ -1769,6 +1847,17 @@ int main(int argc, char *argv[])
     }
   }
 
+  if (!options.testReadyFilePath.isEmpty() && loadedAnyDisplay) {
+    QTimer::singleShot(0, &app, [readyPath = options.testReadyFilePath]() {
+      QString errorMessage;
+      if (!writeReadyFile(readyPath, &errorMessage)) {
+        fprintf(stderr, "\n%s\n", errorMessage.toLocal8Bit().constData());
+        fflush(stderr);
+        QCoreApplication::exit(1);
+      }
+    });
+  }
+
   if (options.testSave) {
     if (!testSaveWindow) {
       fprintf(stderr, "\nFailed to load ADL file for -testSave\n");
@@ -1800,8 +1889,19 @@ int main(int argc, char *argv[])
       fflush(stderr);
       return 1;
     }
-    QTimer::singleShot(options.testExitAfterMs, &app, []() {
-      QCoreApplication::exit(0);
+    QTimer::singleShot(options.testExitAfterMs, &app,
+        [state, dumpPath = options.testDumpStatePath]() {
+          if (!dumpPath.isEmpty()) {
+            QString errorMessage;
+            if (!writeTestStateFile(dumpPath, state, &errorMessage)) {
+              fprintf(stderr, "\n%s\n",
+                  errorMessage.toLocal8Bit().constData());
+              fflush(stderr);
+              QCoreApplication::exit(1);
+              return;
+            }
+          }
+          QCoreApplication::exit(0);
     });
   }
 

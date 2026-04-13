@@ -72,6 +72,25 @@ Notes:
 - If Qt is missing, the top-level build exits with an error after dependency
 	checks.
 
+### Automated QtEDM Tests
+
+Run the automated QtEDM suites from the repository root:
+
+```bash
+make test-qtedm-cli
+make test-qtedm-unit
+make test-qtedm-ioc
+make test-qtedm-visual
+make test-qtedm
+```
+
+Visual regression goldens live under `tests/golden/`. When an intentional
+rendering change needs new baselines, regenerate them with:
+
+```bash
+tests/run_qtedm_visual_tests.sh --update-goldens
+```
+
 ## MEDM (Motif/X11)
 
 MEDM is the legacy Motif/X11 implementation in this repository (`medm/`).

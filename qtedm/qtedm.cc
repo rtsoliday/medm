@@ -111,6 +111,7 @@ void printUsage(const QString &program)
       "  [-testSave]\n"
       "  [-testSaveOutput output-file]\n"
       "  [-testDumpState output-file]\n"
+      "  [-testCaptureScreenshot output-file]\n"
       "  [-testReadyFile output-file]\n"
       "  [-testExitAfterMs milliseconds]\n"
       "  [-noMsg]\n"
@@ -600,6 +601,14 @@ int main(int argc, char *argv[])
       && options.testExitAfterMs < 0) {
     fprintf(stderr,
         "\n-testDumpState requires -testExitAfterMs when not used with -testSave\n");
+    fflush(stderr);
+    return 1;
+  }
+
+  if (!options.testCaptureScreenshotPath.isEmpty()
+      && options.testExitAfterMs < 0) {
+    fprintf(stderr,
+        "\n-testCaptureScreenshot requires -testExitAfterMs\n");
     fflush(stderr);
     return 1;
   }
@@ -1812,6 +1821,7 @@ int main(int argc, char *argv[])
   const MacroMap macroDefinitions = parseMacroDefinitionString(options.macroString);
   bool loadedAnyDisplay = false;
   DisplayWindow *testSaveWindow = nullptr;
+  DisplayWindow *testCaptureWindow = nullptr;
 
   if (!options.resolvedDisplayFiles.isEmpty()) {
     QTEDM_TIMING_MARK_COUNT("Display files to load", options.resolvedDisplayFiles.size());
@@ -1840,6 +1850,9 @@ int main(int argc, char *argv[])
       loadedAnyDisplay = true;
       if (!testSaveWindow) {
         testSaveWindow = displayWin;
+      }
+      if (!testCaptureWindow) {
+        testCaptureWindow = displayWin;
       }
       if (options.testSave) {
         break;
@@ -1889,8 +1902,27 @@ int main(int argc, char *argv[])
       fflush(stderr);
       return 1;
     }
+    QPointer<DisplayWindow> captureTarget(testCaptureWindow);
     QTimer::singleShot(options.testExitAfterMs, &app,
-        [state, dumpPath = options.testDumpStatePath]() {
+        [state, dumpPath = options.testDumpStatePath,
+            capturePath = options.testCaptureScreenshotPath,
+            captureTarget]() {
+          if (!capturePath.isEmpty()) {
+            if (!captureTarget) {
+              fprintf(stderr,
+                  "\nDisplay window unavailable for test screenshot\n");
+              fflush(stderr);
+              QCoreApplication::exit(1);
+              return;
+            }
+            if (!captureTarget->saveScreenshotToPath(capturePath)) {
+              fprintf(stderr, "\nFailed to capture screenshot to %s\n",
+                  capturePath.toLocal8Bit().constData());
+              fflush(stderr);
+              QCoreApplication::exit(1);
+              return;
+            }
+          }
           if (!dumpPath.isEmpty()) {
             QString errorMessage;
             if (!writeTestStateFile(dumpPath, state, &errorMessage)) {

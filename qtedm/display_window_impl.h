@@ -1866,6 +1866,7 @@ public:
   bool save(QWidget *dialogParent = nullptr);
   bool saveAs(QWidget *dialogParent = nullptr);
   bool saveToPath(const QString &filePath) const;
+  bool saveScreenshotToPath(const QString &filePath) const;
 
   void showPrintSetup()
   {
@@ -16398,6 +16399,40 @@ inline bool DisplayWindow::saveToPath(const QString &filePath) const
     return false;
   }
   return writeAdlFile(normalized);
+}
+
+inline bool DisplayWindow::saveScreenshotToPath(const QString &filePath) const
+{
+  if (!displayArea_) {
+    return false;
+  }
+
+  const QString normalized = QFileInfo(filePath).absoluteFilePath();
+  if (normalized.isEmpty()) {
+    return false;
+  }
+
+  const QFileInfo outputInfo(normalized);
+  QDir parentDir = outputInfo.absoluteDir();
+  if (!parentDir.exists() && !QDir().mkpath(parentDir.absolutePath())) {
+    return false;
+  }
+
+  displayArea_->update();
+  displayArea_->repaint();
+  QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+  QImage image(displayArea_->size(), QImage::Format_ARGB32_Premultiplied);
+  if (image.isNull()) {
+    return false;
+  }
+
+  image.fill(Qt::transparent);
+  QPainter painter(&image);
+  displayArea_->render(&painter, QPoint(), QRegion(),
+      QWidget::DrawChildren);
+  painter.end();
+  return image.save(normalized, "PNG");
 }
 
 inline bool DisplayWindow::loadFromFile(const QString &filePath,

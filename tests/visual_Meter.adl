@@ -1,0 +1,288 @@
+file {
+	name="/home/SOLIDAY/github/medm/tests/visual_Meter.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=10
+		width=760
+		height=500
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+text {
+	object {
+		x=24
+		y=16
+		width=710
+		height=22
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="QtEDM Visual Regression Fixture: Meter"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=42
+		width=710
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Focused meter render checks: outline, alarm, channel labels, and wide monitor-only layouts."
+}
+rectangle {
+	object {
+		x=20
+		y=70
+		width=720
+		height=390
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=60
+		y=90
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="outline"
+	align="horiz. centered"
+}
+meter {
+	object {
+		x=74
+		y=118
+		width=110
+		height=100
+	}
+	monitor {
+		chan="meter:cycle:epsilon"
+		clr=52
+		bclr=4
+	}
+	label="outline"
+	limits {
+		loprDefault=-5.5
+		hoprDefault=68.9
+		precDefault=1
+	}
+}
+text {
+	object {
+		x=234
+		y=90
+		width=140
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="outline + alarm"
+	align="horiz. centered"
+}
+meter {
+	object {
+		x=248
+		y=118
+		width=110
+		height=100
+	}
+	monitor {
+		chan="meter:drift:zeta"
+		clr=15
+		bclr=51
+	}
+	label="outline"
+	clrmod="alarm"
+	limits {
+		loprDefault=-120.6
+		hoprDefault=15.4
+		precDefault=1
+	}
+}
+text {
+	object {
+		x=424
+		y=90
+		width=200
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="large + channel"
+	align="horiz. centered"
+}
+meter {
+	object {
+		x=424
+		y=118
+		width=220
+		height=170
+	}
+	monitor {
+		chan="meter:fast:alpha"
+		clr=21
+		bclr=48
+	}
+	label="channel"
+	limits {
+		loprDefault=-14.3
+		hoprDefault=92.7
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=68
+		y=316
+		width=240
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="wide no decorations"
+	align="horiz. centered"
+}
+meter {
+	object {
+		x=56
+		y=340
+		width=260
+		height=100
+	}
+	monitor {
+		chan="meter:slow:beta"
+		clr=10
+		bclr=32
+	}
+	label="no decorations"
+	limits {
+		loprDefault=-85.6
+		hoprDefault=125.4
+		precDefault=1
+	}
+}
+text {
+	object {
+		x=402
+		y=316
+		width=260
+		height=14
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="wide no decorations + alarm"
+	align="horiz. centered"
+}
+meter {
+	object {
+		x=402
+		y=340
+		width=260
+		height=100
+	}
+	monitor {
+		chan="meter:burst:gamma"
+		clr=33
+		bclr=12
+	}
+	label="no decorations"
+	clrmod="alarm"
+	limits {
+		loprDefault=-3.8
+		hoprDefault=3.8
+		precDefault=3
+	}
+}

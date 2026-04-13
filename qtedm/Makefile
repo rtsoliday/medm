@@ -330,6 +330,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_text_format_utils \
                         test_runtime_utils
 
+QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
+
 QTEDM_UNIT_TEST_BINARIES = $(addprefix $(OBJ_DIR)/,$(addsuffix $(EXEEXT),$(QTEDM_UNIT_TEST_NAMES)))
 QTEDM_UNIT_TEST_MOCS = $(addprefix $(OBJ_DIR)/,$(addsuffix .moc,$(QTEDM_UNIT_TEST_NAMES)))
 
@@ -344,6 +346,7 @@ test_text_format_utils_OBJS = $(OBJ_DIR)/test_text_format_utils.$(OBJEXT) \
                               $(OBJ_DIR)/text_format_utils.$(OBJEXT)
 test_runtime_utils_OBJS = $(OBJ_DIR)/test_runtime_utils.$(OBJEXT) \
                           $(OBJ_DIR)/runtime_utils.$(OBJEXT)
+qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
@@ -351,12 +354,18 @@ $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
 $(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(QT_TEST_CFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
+$(OBJ_DIR)/qtedm_image_compare.$(OBJEXT): tests/qtedm_image_compare.cc | $(OBJ_DIR)
+	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+
 define link_qtedm_unit_test
 $(OBJ_DIR)/$(1)$(EXEEXT): $$($(1)_OBJS)
 	$$(LINKEXE) $$(OUTPUTEXE) $$^ $$(LDFLAGS) $$(QT_TEST_LIBS) $$(PROD_SYS_LIBS)
 endef
 
 $(foreach test,$(QTEDM_UNIT_TEST_NAMES),$(eval $(call link_qtedm_unit_test,$(test))))
+
+$(OBJ_DIR)/qtedm_image_compare$(EXEEXT): $(qtedm_image_compare_OBJS)
+	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
 
 check-qt-test:
 ifeq ($(QT_TEST_AVAILABLE),1)
@@ -368,7 +377,7 @@ endif
 
 tests: check-qt-test $(QTEDM_UNIT_TEST_BINARIES)
 
-test: test-cli test-unit test-ioc
+test: test-cli test-unit test-ioc test-visual
 
 test-unit: tests
 	@set -e; \
@@ -391,10 +400,15 @@ test-cli: $(OBJ_DIR)/qtedm$(EXEEXT)
 test-ioc: $(OBJ_DIR)/qtedm$(EXEEXT)
 	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" ../tests/run_qtedm_ioc_tests.sh
 
-test-visual:
-	@echo "QtEDM visual regression tests are not implemented yet."
+test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
+	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
+	QTEDM_IMAGE_COMPARE_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm_image_compare$(EXEEXT)" \
+	../tests/run_qtedm_visual_tests.sh
 
 clean-tests:
-	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS)
+	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS) \
+	  $(QTEDM_VISUAL_TEST_TOOLS)
 
 .PHONY: tests test test-unit test-cli test-ioc test-visual clean-tests check-qt-test
+
+.NOTPARALLEL: test

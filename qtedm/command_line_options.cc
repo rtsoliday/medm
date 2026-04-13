@@ -80,6 +80,13 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       } else {
         options.invalidOption = arg;
       }
+    } else if (arg == QLatin1String("-testCaptureScreenshot") ||
+               arg == QLatin1String("--test-capture-screenshot")) {
+      if ((i + 1) < args.size()) {
+        options.testCaptureScreenshotPath = args.at(++i);
+      } else {
+        options.invalidOption = arg;
+      }
     } else if (arg == QLatin1String("-testReadyFile") ||
                arg == QLatin1String("--test-ready-file")) {
       if ((i + 1) < args.size()) {

@@ -137,6 +137,8 @@ void TestCommandLine::parsesTestAutomationOptions()
       QStringLiteral("/tmp/output.adl"),
       QStringLiteral("-testDumpState"),
       QStringLiteral("/tmp/state.json"),
+      QStringLiteral("-testCaptureScreenshot"),
+      QStringLiteral("/tmp/screenshot.png"),
       QStringLiteral("-testReadyFile"),
       QStringLiteral("/tmp/ready.flag"),
       QStringLiteral("-testExitAfterMs"),
@@ -147,6 +149,8 @@ void TestCommandLine::parsesTestAutomationOptions()
   QVERIFY(options.testSave);
   QCOMPARE(options.testSaveOutputPath, QStringLiteral("/tmp/output.adl"));
   QCOMPARE(options.testDumpStatePath, QStringLiteral("/tmp/state.json"));
+  QCOMPARE(options.testCaptureScreenshotPath,
+      QStringLiteral("/tmp/screenshot.png"));
   QCOMPARE(options.testReadyFilePath, QStringLiteral("/tmp/ready.flag"));
   QCOMPARE(options.testExitAfterMs, 250);
   QCOMPARE(options.displayFiles, QStringList{QStringLiteral("screen.adl")});

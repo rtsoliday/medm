@@ -96,7 +96,7 @@ $(LIB_DIR):
 	mkdir -p $(LIB_DIR)
 
 $(OBJ_DIR):
-	mkdir $(OBJ_DIR)
+	mkdir -p $(OBJ_DIR)
 
 ifeq ($(OS), Windows)
 
@@ -167,11 +167,11 @@ DEPFLAGS = -MMD -MP -MF $(@:.$(OBJEXT)=.d)
 endif
 
 
-$(OBJ_DIR)/%.$(OBJEXT): %.c
+$(OBJ_DIR)/%.$(OBJEXT): %.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) $(DEPFLAGS) $(if $(filter $(notdir $<), $(LIBRARY_SRC)),$(LIBRARY_CFLAGS)) -c $< $(OUTPUT)
-$(OBJ_DIR)/%.$(OBJEXT): %.cc
+$(OBJ_DIR)/%.$(OBJEXT): %.cc | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) $(if $(filter $(notdir $<), $(LIBRARY_SRC)),$(LIBRARY_CCFLAGS)) -c $< $(OUTPUT)
-$(OBJ_DIR)/%.$(OBJEXT): %.cpp
+$(OBJ_DIR)/%.$(OBJEXT): %.cpp | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) $(if $(filter $(notdir $<), $(LIBRARY_SRC)),$(LIBRARY_CCFLAGS)) -c $< $(OUTPUT)
 $(BIN_DIR)/%: %
 	cp -f $< $@

@@ -8,11 +8,15 @@ endif
 
 EPICS_BASE := $(abspath $(EPICS_BASE))
 
-# Detect if libCom.a was built with readline support by checking for undefined readline symbol
-LIBCOM_PATH := $(EPICS_BASE)/lib/$(shell uname -s | sed 's/CYGWIN.*/windows-x64/' | sed 's/Darwin/darwin-x86/' | tr 'A-Z' 'a-z')-$(shell uname -m)/libCom.a
-LIBCOM_NEEDS_READLINE := $(shell nm $(LIBCOM_PATH) 2>/dev/null | grep -q "U readline$$" && echo 1)
-
 include ../Makefile.rules
+
+# Detect if libCom.a was built with readline support by checking for an
+# unresolved readline symbol in the EPICS archive for the active platform.
+LIBCOM_PATH := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a
+ifneq ($(OS), Windows)
+  LIBCOM_NEEDS_READLINE := $(shell test -f "$(LIBCOM_PATH)" && \
+    nm "$(LIBCOM_PATH)" 2>/dev/null | grep -Eq "U _?readline$$" && echo 1)
+endif
 
 PROD_LIBS :=
 
@@ -23,6 +27,7 @@ ifeq ($(OS), Windows)
   QT_DIR ?= C:\\Qt\\6.8.2\\msvc2022_64
   QT_DIR_FWD := $(subst \\,/,$(QT_DIR))
   QT_WIDGETS_CFLAGS := -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg"
+  QT_TEST_CFLAGS := -I"$(QT_DIR_FWD)/include/QtTest"
 else
   # Detect Qt version: prefer Qt6, fallback to Qt5
   QT6_AVAILABLE := $(shell pkg-config --exists Qt6Core 2>/dev/null && echo 1)
@@ -55,7 +60,21 @@ ifeq ($(OS), Windows)
 else
   QT_RCC_DIR := $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
   ifeq ($(QT_RCC_DIR),)
-    QT_RCC := rcc
+    ifeq ($(OS), Darwin)
+      QT_RCC := $(firstword $(wildcard \
+              /opt/homebrew/bin/rcc \
+              /opt/homebrew/opt/qt@6/bin/rcc \
+              /opt/homebrew/opt/qt/bin/rcc \
+              /opt/local/libexec/qt6/bin/rcc \
+              /usr/local/opt/qt@6/bin/rcc \
+              /usr/local/opt/qt/bin/rcc \
+              /usr/bin/rcc))
+      ifeq ($(strip $(QT_RCC)),)
+        QT_RCC := rcc
+      endif
+    else
+      QT_RCC := rcc
+    endif
   else
     QT_RCC := $(QT_RCC_DIR)/rcc
   endif
@@ -235,7 +254,8 @@ ifeq ($(OS), Darwin)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvData.a \
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
-    $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) $(Z_LIB) $(PROD_SYS_LIBS)
+    $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
+    $(Z_LIB) $(if $(LIBCOM_NEEDS_READLINE),-lreadline) $(PROD_SYS_LIBS)
   # Try to get MOC from pkg-config first, then fallback to known paths
   MOC_DIR := $(shell pkg-config --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null)
   ifneq ($(MOC_DIR),)
@@ -247,12 +267,17 @@ ifeq ($(OS), Darwin)
     else
       ifeq ($(QT_VERSION),6)
         MOC = $(firstword $(wildcard \
+                /opt/homebrew/bin/moc \
                 /opt/homebrew/opt/qt@6/libexec/moc \
+                /opt/homebrew/opt/qt@6/bin/moc \
                 /opt/homebrew/opt/qt/libexec/moc \
+                /opt/homebrew/opt/qt/bin/moc \
                 /opt/local/libexec/qt6/bin/moc \
-                /usr/local/opt/qt@6/bin/moc))
+                /usr/local/opt/qt@6/bin/moc \
+                /usr/local/opt/qt/bin/moc))
       else
         MOC = $(firstword $(wildcard \
+                /opt/homebrew/bin/moc \
                 /opt/homebrew/opt/qt@5/bin/moc \
                 /opt/local/libexec/qt5/bin/moc \
                 /usr/local/opt/qt@5/bin/moc))

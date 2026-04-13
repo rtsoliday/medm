@@ -371,13 +371,17 @@ ifeq ($(OS), Linux)
 endif
 
 ifeq ($(OS), Darwin)
+  DARWIN_ARCH_FLAGS =
+  ifeq ($(ARCH),x86_64)
+    DARWIN_ARCH_FLAGS += -m64
+  endif
   CC = clang
   CCC = clang++
   AR = libtool -static -o
   RANLIB = ranlib
   #MAC_VERSION = -mmacosx-version-min=10.13
-  CFLAGS = -Wno-deprecated-non-prototype -m64 -O3 -g -Wall -fPIC -fno-common $(MAC_VERSION) $(EXTRA_INC_DIRS)
-  CCFLAGS = -Wno-deprecated-non-prototype -m64 -O3 -g -Wall -fPIC -fno-common -std=c++17 $(MAC_VERSION) $(EXTRA_INC_DIRS)
+  CFLAGS = -Wno-deprecated-non-prototype $(DARWIN_ARCH_FLAGS) -O3 -g -Wall -fPIC -fno-common $(MAC_VERSION) $(EXTRA_INC_DIRS)
+  CCFLAGS = -Wno-deprecated-non-prototype $(DARWIN_ARCH_FLAGS) -O3 -g -Wall -fPIC -fno-common -std=c++17 $(MAC_VERSION) $(EXTRA_INC_DIRS)
   LDFLAGS = $(MAC_VERSION) -std=c++17
   LIBRARY_SYS_LIBS = -lm
   PROD_SYS_LIBS = -lm
@@ -406,8 +410,10 @@ ifeq ($(ARCH), x86_64)
 endif
 
 ifeq ($(ARCH), arm64)
+  ifneq ($(OS), Darwin)
     CFLAGS += -mcpu=native
     CCFLAGS += -mcpu=native
+  endif
 endif
 
 # Adjust for Windows in a cygwin terminal

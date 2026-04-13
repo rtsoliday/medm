@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Run focused QtEDM visual regression tests against golden screenshots."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -13,6 +11,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import List, Match, Optional, Set
 
 
 CHANNEL_PATTERN = re.compile(r'(chan=")([^"]*)(")')
@@ -33,7 +32,7 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
     output_dir: Path) -> Path:
   text = display_path.read_text(encoding="utf-8")
 
-  def replace(match: re.Match[str]) -> str:
+  def replace(match: Match[str]) -> str:
     channel = match.group(2)
     return f'{match.group(1)}{prefix_channel_name(channel, prefix)}{match.group(3)}'
 
@@ -43,7 +42,7 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
   return output_path
 
 
-def terminate_process(process: subprocess.Popen[str] | None) -> None:
+def terminate_process(process: Optional[subprocess.Popen]) -> None:
   if process is None or process.poll() is not None:
     return
   process.terminate()
@@ -54,7 +53,7 @@ def terminate_process(process: subprocess.Popen[str] | None) -> None:
     process.wait(timeout=5)
 
 
-def wait_for_file(path: Path, process: subprocess.Popen[str],
+def wait_for_file(path: Path, process: subprocess.Popen,
     timeout_seconds: float) -> None:
   deadline = time.monotonic() + timeout_seconds
   while time.monotonic() < deadline:
@@ -66,7 +65,7 @@ def wait_for_file(path: Path, process: subprocess.Popen[str],
   raise CaseFailure(f"Timed out waiting for {path.name}")
 
 
-def load_cases(cases_path: Path, selected_names: set[str]) -> list[dict]:
+def load_cases(cases_path: Path, selected_names: Set[str]) -> List[dict]:
   cases = json.loads(cases_path.read_text(encoding="utf-8"))
   if not selected_names:
     return cases
@@ -97,8 +96,9 @@ def compare_images(compare_tool: Path, expected: Path, actual: Path, diff: Path,
   result = subprocess.run(
       command,
       check=False,
-      capture_output=True,
-      text=True,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      universal_newlines=True,
   )
   if result.returncode == 0:
     return
@@ -139,7 +139,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
       command,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
-      text=True,
+      universal_newlines=True,
   )
   try:
     wait_for_file(ready_path, process, timeout_seconds=20)
@@ -215,10 +215,11 @@ def main() -> int:
   cases = load_cases(cases_path, selected_names)
   needs_ioc = any(case.get("use_ioc") for case in cases)
 
-  prefix = f"qv_{int(time.time())}_{os.getpid()}:"
+  # Visual goldens can render channel labels, so keep the IOC prefix stable.
+  prefix = os.environ.get("QTEDM_VISUAL_PV_PREFIX", "qtedm_visual:")
   temp_dir = Path(tempfile.mkdtemp(prefix="qtedm-visual."))
   keep_temp_dir = False
-  ioc_process: subprocess.Popen[str] | None = None
+  ioc_process: Optional[subprocess.Popen] = None
   ioc_log = temp_dir / "local_ioc.log"
   ioc_runner_log = temp_dir / "run_local_ioc.out"
   ioc_ready_file = temp_dir / "ioc.ready"
@@ -242,7 +243,7 @@ def main() -> int:
           ioc_command,
           stdout=runner_log_handle,
           stderr=subprocess.STDOUT,
-          text=True,
+          universal_newlines=True,
       )
       wait_for_file(ioc_ready_file, ioc_process, timeout_seconds=120)
 

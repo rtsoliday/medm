@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Run IOC-backed QtEDM integration checks with structured state assertions."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -13,9 +11,12 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import List, Match, Optional, Set
 
 
 CHANNEL_PATTERN = re.compile(r'(chan=")([^"]*)(")')
+
+
 class CaseFailure(RuntimeError):
   """Raised when an IOC-backed integration case fails."""
 
@@ -31,7 +32,7 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
     output_dir: Path) -> Path:
   text = display_path.read_text(encoding="utf-8")
 
-  def replace(match: re.Match[str]) -> str:
+  def replace(match: Match[str]) -> str:
     channel = match.group(2)
     return f'{match.group(1)}{prefix_channel_name(channel, prefix)}{match.group(3)}'
 
@@ -41,16 +42,17 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
   return output_path
 
 
-def run_cavput(cavput_bin: Path, pv: str, value: str) -> subprocess.CompletedProcess[str]:
+def run_cavput(cavput_bin: Path, pv: str, value: str) -> subprocess.CompletedProcess:
   return subprocess.run(
       [str(cavput_bin), f"-list={pv}={value}"],
       check=False,
-      capture_output=True,
-      text=True,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      universal_newlines=True,
   )
 
 
-def wait_for_ioc_ready(process: subprocess.Popen[str], ready_file: Path,
+def wait_for_ioc_ready(process: subprocess.Popen, ready_file: Path,
     timeout_seconds: float) -> None:
   deadline = time.monotonic() + timeout_seconds
 
@@ -67,7 +69,7 @@ def wait_for_ioc_ready(process: subprocess.Popen[str], ready_file: Path,
       f"Timed out waiting for run_local_ioc.sh readiness file {ready_file}")
 
 
-def wait_for_file(path: Path, process: subprocess.Popen[str],
+def wait_for_file(path: Path, process: subprocess.Popen,
     timeout_seconds: float) -> None:
   deadline = time.monotonic() + timeout_seconds
   while time.monotonic() < deadline:
@@ -79,7 +81,7 @@ def wait_for_file(path: Path, process: subprocess.Popen[str],
   raise CaseFailure(f"Timed out waiting for {path.name}")
 
 
-def terminate_process(process: subprocess.Popen[str] | None) -> None:
+def terminate_process(process: Optional[subprocess.Popen]) -> None:
   if process is None or process.poll() is not None:
     return
   process.terminate()
@@ -90,7 +92,7 @@ def terminate_process(process: subprocess.Popen[str] | None) -> None:
     process.wait(timeout=5)
 
 
-def load_cases(cases_path: Path, selected_names: set[str]) -> list[dict]:
+def load_cases(cases_path: Path, selected_names: Set[str]) -> List[dict]:
   cases = json.loads(cases_path.read_text(encoding="utf-8"))
   if not selected_names:
     return cases
@@ -101,8 +103,8 @@ def load_cases(cases_path: Path, selected_names: set[str]) -> list[dict]:
   return selected
 
 
-def flatten_widgets(state_data: dict) -> list[dict]:
-  widgets: list[dict] = []
+def flatten_widgets(state_data: dict) -> List[dict]:
+  widgets: List[dict] = []
   for display in state_data.get("displays", []):
     widgets.extend(display.get("widgets", []))
   return widgets
@@ -135,7 +137,7 @@ def object_contains(actual, expected) -> bool:
   return actual == expected
 
 
-def matching_widgets(state_data: dict, selector: dict, prefix: str) -> list[dict]:
+def matching_widgets(state_data: dict, selector: dict, prefix: str) -> List[dict]:
   normalized_selector = normalize_selector(selector, prefix)
   expected_type = normalized_selector.get("type", "<unknown>")
   matches = [
@@ -156,7 +158,7 @@ def matching_widgets(state_data: dict, selector: dict, prefix: str) -> list[dict
       f"{', '.join(available[:10])}")
 
 
-def compare_expected(actual, expected, path: str, failures: list[str]) -> None:
+def compare_expected(actual, expected, path: str, failures: List[str]) -> None:
   if isinstance(expected, dict):
     if not isinstance(actual, dict):
       failures.append(f"{path} expected object {expected!r}, got {actual!r}")
@@ -177,12 +179,12 @@ def compare_expected(actual, expected, path: str, failures: list[str]) -> None:
     failures.append(f"{path} expected {expected!r}, got {actual!r}")
 
 
-def assert_expectations(case: dict, widgets: list[dict]) -> None:
+def assert_expectations(case: dict, widgets: List[dict]) -> None:
   expect = dict(case.get("expect", {}))
   numeric_expected = expect.pop("numeric_value", None)
   numeric_tolerance = float(expect.pop("numeric_tolerance", 0.0))
 
-  failures: list[str] = []
+  failures: List[str] = []
   for widget in widgets:
     for key, expected in expect.items():
       actual = widget.get(key)
@@ -226,7 +228,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       command,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
-      text=True,
+      universal_newlines=True,
   )
   try:
     wait_for_file(ready_path, process, timeout_seconds=15)
@@ -299,7 +301,7 @@ def main() -> int:
   cases = load_cases(cases_path, selected_names)
 
   prefix = f"qtedm_ioc_{int(time.time())}_{os.getpid()}:"
-  ioc_process: subprocess.Popen[str] | None = None
+  ioc_process: Optional[subprocess.Popen] = None
 
   temp_dir = Path(tempfile.mkdtemp(prefix="qtedm-ioc."))
   keep_temp_dir = False
@@ -322,7 +324,7 @@ def main() -> int:
       ioc_command,
       stdout=runner_log_handle,
       stderr=subprocess.STDOUT,
-      text=True,
+      universal_newlines=True,
   )
 
   try:

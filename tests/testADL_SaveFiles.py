@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Validate round-trip ADL saves produced by qtedm."""
 
-from __future__ import annotations
-
 import argparse
-from dataclasses import dataclass
 import os
 import platform
 import subprocess
 import sys
 from pathlib import Path
+from typing import Callable, List, NamedTuple, Optional, Set, Tuple
 
 
 EXIT_SETUP_ERROR = 3
@@ -17,24 +15,23 @@ EXIT_QTEDM_FAILURE = 4
 EXIT_DIFF_FAILURE = 5
 
 
-@dataclass
-class LineEntry:
+class LineEntry(NamedTuple):
   """Single ADL line paired with its 1-based line number."""
 
   text: str
   line_no: int
 
 
-def _entries_from_lines(lines: list[str]) -> list[LineEntry]:
+def _entries_from_lines(lines: List[str]) -> List[LineEntry]:
   return [LineEntry(text=line, line_no=idx + 1) for idx, line in enumerate(lines)]
 
 
 def _rebuild_entries_after_filter(
-    entries: list[LineEntry], filtered_lines: list[str]) -> list[LineEntry]:
+    entries: List[LineEntry], filtered_lines: List[str]) -> List[LineEntry]:
   """Return new entries list aligned to the filtered strings."""
   if not filtered_lines:
     return []
-  rebuilt: list[LineEntry] = []
+  rebuilt: List[LineEntry] = []
   target_idx = 0
   total = len(filtered_lines)
   for entry in entries:
@@ -49,7 +46,8 @@ def _rebuild_entries_after_filter(
 
 
 def _apply_string_filter(
-    entries: list[LineEntry], filter_func) -> list[LineEntry]:
+    entries: List[LineEntry], filter_func: Callable[[List[str]], List[str]]
+) -> List[LineEntry]:
   """Run existing string-based filters while keeping line numbers."""
   filtered = filter_func([entry.text for entry in entries])
   return _rebuild_entries_after_filter(entries, filtered)
@@ -65,8 +63,9 @@ def run_qtedm(adl_path: Path, qtedm_path: Path, output_path: Path) -> int:
           str(output_path),
           str(adl_path),
       ],
-      capture_output=True,
-      text=True,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      universal_newlines=True,
       check=False,
   )
   if result.returncode != 0:
@@ -153,13 +152,13 @@ def report_first_difference(diff_output: str) -> None:
       print(f"  new line {added_line}: {added_text}")
 
 
-def strip_cartesian_counts_with_pv(lines: list[str]) -> list[str]:
+def strip_cartesian_counts_with_pv(lines: List[str]) -> List[str]:
   """Remove count= lines for cartesian plots that define countPvName."""
-  to_remove: set[int] = set()
+  to_remove: Set[int] = set()
   inside_cartesian = False
   depth = 0
   has_count_pv = False
-  block_count_lines: list[int] = []
+  block_count_lines: List[int] = []
 
   for idx, line in enumerate(lines):
     if not inside_cartesian:
@@ -190,9 +189,9 @@ def strip_cartesian_counts_with_pv(lines: list[str]) -> list[str]:
   return [line for idx, line in enumerate(lines) if idx not in to_remove]
 
 
-def strip_cartesian_trace_yside_zero(lines: list[str]) -> list[str]:
+def strip_cartesian_trace_yside_zero(lines: List[str]) -> List[str]:
   """Remove yside=0 entries inside cartesian trace blocks."""
-  result: list[str] = []
+  result: List[str] = []
   inside_trace = False
   depth = 0
 
@@ -219,9 +218,9 @@ def strip_cartesian_trace_yside_zero(lines: list[str]) -> list[str]:
   return result
 
 
-def strip_default_basic_attribute_width(lines: list[str]) -> list[str]:
+def strip_default_basic_attribute_width(lines: List[str]) -> List[str]:
   """Remove width=1 lines inside any basic attribute block."""
-  result: list[str] = []
+  result: List[str] = []
   inside_basic = False
   depth = 0
 
@@ -248,9 +247,9 @@ def strip_default_basic_attribute_width(lines: list[str]) -> list[str]:
   return result
 
 
-def _strip_default_width_from_block(block_lines: list[str]) -> list[str]:
+def _strip_default_width_from_block(block_lines: List[str]) -> List[str]:
   """Return block lines omitting width=1 entries inside basic attribute."""
-  result: list[str] = []
+  result: List[str] = []
   inside_basic = False
   basic_depth = 0
 
@@ -278,15 +277,15 @@ def _strip_default_width_from_block(block_lines: list[str]) -> list[str]:
 
 
 def strip_default_width_for_widgets(
-    lines: list[str], widget_names: tuple[str, ...]) -> list[str]:
+    lines: List[str], widget_names: Tuple[str, ...]) -> List[str]:
   """Remove default width=1 entries added inside specified widgets."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip()
     if any(stripped.startswith(name) for name in widget_names):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -304,9 +303,9 @@ def strip_default_width_for_widgets(
   return result
 
 
-def _strip_text_basic_attribute_fill(block_lines: list[str]) -> list[str]:
+def _strip_text_basic_attribute_fill(block_lines: List[str]) -> List[str]:
   """Remove fill= lines from text widget basic attribute blocks."""
-  result: list[str] = []
+  result: List[str] = []
   inside_basic = False
   depth = 0
 
@@ -335,16 +334,16 @@ def _strip_text_basic_attribute_fill(block_lines: list[str]) -> list[str]:
   return result
 
 
-def strip_text_fill(lines: list[str]) -> list[str]:
+def strip_text_fill(lines: List[str]) -> List[str]:
   """Remove basic attribute fill lines added to text widgets."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip()
     normalized = stripped.lower()
     if normalized.startswith("text {"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -362,9 +361,9 @@ def strip_text_fill(lines: list[str]) -> list[str]:
   return result
 
 
-def _strip_text_basic_attribute_width(block_lines: list[str]) -> list[str]:
+def _strip_text_basic_attribute_width(block_lines: List[str]) -> List[str]:
   """Remove width= lines from text widget basic attribute blocks."""
-  result: list[str] = []
+  result: List[str] = []
   inside_basic = False
   depth = 0
 
@@ -393,16 +392,16 @@ def _strip_text_basic_attribute_width(block_lines: list[str]) -> list[str]:
   return result
 
 
-def strip_text_width(lines: list[str]) -> list[str]:
+def strip_text_width(lines: List[str]) -> List[str]:
   """Remove width= lines from text widget basic attribute sections."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip()
     normalized = stripped.lower()
     if normalized.startswith("text {"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -420,9 +419,9 @@ def strip_text_width(lines: list[str]) -> list[str]:
   return result
 
 
-def _strip_oval_basic_attribute_width(block_lines: list[str]) -> list[str]:
+def _strip_oval_basic_attribute_width(block_lines: List[str]) -> List[str]:
   """Remove width= lines inside oval basic attribute sections."""
-  result: list[str] = []
+  result: List[str] = []
   inside_basic = False
   depth = 0
 
@@ -451,15 +450,15 @@ def _strip_oval_basic_attribute_width(block_lines: list[str]) -> list[str]:
   return result
 
 
-def strip_oval_width(lines: list[str]) -> list[str]:
+def strip_oval_width(lines: List[str]) -> List[str]:
   """Remove width= lines from oval widget basic attribute sections."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip().lower()
     if stripped.startswith("oval"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -477,9 +476,9 @@ def strip_oval_width(lines: list[str]) -> list[str]:
   return result
 
 
-def _strip_arc_basic_attribute_width(block_lines: list[str]) -> list[str]:
+def _strip_arc_basic_attribute_width(block_lines: List[str]) -> List[str]:
   """Remove width= lines inside arc basic attribute sections."""
-  result: list[str] = []
+  result: List[str] = []
   inside_basic = False
   depth = 0
 
@@ -508,15 +507,15 @@ def _strip_arc_basic_attribute_width(block_lines: list[str]) -> list[str]:
   return result
 
 
-def strip_arc_width(lines: list[str]) -> list[str]:
+def strip_arc_width(lines: List[str]) -> List[str]:
   """Remove width= lines from arc widget basic attribute sections."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip().lower()
     if stripped.startswith("arc"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -534,9 +533,9 @@ def strip_arc_width(lines: list[str]) -> list[str]:
   return result
 
 
-def _strip_polyline_basic_attribute(block_lines: list[str]) -> list[str]:
+def _strip_polyline_basic_attribute(block_lines: List[str]) -> List[str]:
   """Remove fill entries and default widths from polyline basic attributes."""
-  result: list[str] = []
+  result: List[str] = []
   inside_basic = False
   depth = 0
 
@@ -566,15 +565,15 @@ def _strip_polyline_basic_attribute(block_lines: list[str]) -> list[str]:
   return result
 
 
-def strip_polyline_outline_fill(lines: list[str]) -> list[str]:
+def strip_polyline_outline_fill(lines: List[str]) -> List[str]:
   """Remove fill="outline" lines from polyline widgets."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip()
     if stripped.startswith("polyline"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -592,9 +591,9 @@ def strip_polyline_outline_fill(lines: list[str]) -> list[str]:
   return result
 
 
-def _strip_indicator_limits(block_lines: list[str]) -> list[str]:
+def _strip_indicator_limits(block_lines: List[str]) -> List[str]:
   """Remove precDefault=1 entries inside indicator limits blocks."""
-  result: list[str] = []
+  result: List[str] = []
   inside_limits = False
   limits_depth = 0
 
@@ -621,15 +620,15 @@ def _strip_indicator_limits(block_lines: list[str]) -> list[str]:
   return result
 
 
-def strip_indicator_prec_default(lines: list[str]) -> list[str]:
+def strip_indicator_prec_default(lines: List[str]) -> List[str]:
   """Remove default precision lines added within indicator widgets."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip()
     if stripped.startswith("indicator"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -647,7 +646,7 @@ def strip_indicator_prec_default(lines: list[str]) -> list[str]:
   return result
 
 
-def _is_empty_polyline(block_lines: list[str]) -> bool:
+def _is_empty_polyline(block_lines: List[str]) -> bool:
   """Return True if block has a points section with no coordinates."""
   inside_points = False
   saw_points = False
@@ -673,15 +672,15 @@ def _is_empty_polyline(block_lines: list[str]) -> bool:
   return saw_points and not inside_points
 
 
-def strip_empty_polyline_blocks(lines: list[str]) -> list[str]:
+def strip_empty_polyline_blocks(lines: List[str]) -> List[str]:
   """Remove polyline blocks that define no points."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip()
     if stripped.startswith("polyline"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -701,15 +700,15 @@ def strip_empty_polyline_blocks(lines: list[str]) -> list[str]:
   return result
 
 
-def strip_empty_children_blocks(lines: list[str]) -> list[str]:
+def strip_empty_children_blocks(lines: List[str]) -> List[str]:
   """Drop children blocks that contain no child definitions."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped = line.strip().lower()
     if stripped.startswith("children"):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       while i < len(lines):
         block_line = lines[i]
@@ -732,32 +731,32 @@ def strip_empty_children_blocks(lines: list[str]) -> list[str]:
   return result
 
 
-def strip_default_dprecision(lines: list[str]) -> list[str]:
+def strip_default_dprecision(lines: List[str]) -> List[str]:
   """Drop dPrecision entries that remain at the default 1.0."""
   return [line for line in lines if line.strip() != "dPrecision=1.000000"]
 
 
-def strip_default_prec_zero(lines: list[str]) -> list[str]:
+def strip_default_prec_zero(lines: List[str]) -> List[str]:
   """Drop precDefault=0 entries that restate the default precision."""
   return [line for line in lines if line.strip() != "precDefault=0"]
 
 
-def strip_default_prec_one(lines: list[str]) -> list[str]:
+def strip_default_prec_one(lines: List[str]) -> List[str]:
   """Drop precDefault=1 entries that restate a widget's built-in precision."""
   return [line for line in lines if line.strip() != "precDefault=1"]
 
 
-def strip_default_lopr_zero(lines: list[str]) -> list[str]:
+def strip_default_lopr_zero(lines: List[str]) -> List[str]:
   """Drop loprDefault=0 entries when the low limit already defaults to zero."""
   return [line for line in lines if line.strip() != "loprDefault=0"]
 
 
-def strip_default_hopr_hundred(lines: list[str]) -> list[str]:
+def strip_default_hopr_hundred(lines: List[str]) -> List[str]:
   """Drop hoprDefault=100 entries when the high limit already defaults to 100."""
   return [line for line in lines if line.strip() != "hoprDefault=100"]
 
 
-def strip_default_channel_limit_sources(lines: list[str]) -> list[str]:
+def strip_default_channel_limit_sources(lines: List[str]) -> List[str]:
   """Drop explicit *Src=\"channel\" lines when omission has the same meaning."""
   defaults = {
       'loprSrc="channel"',
@@ -767,23 +766,23 @@ def strip_default_channel_limit_sources(lines: list[str]) -> list[str]:
   return [line for line in lines if line.strip() not in defaults]
 
 
-def strip_default_direction_right(lines: list[str]) -> list[str]:
+def strip_default_direction_right(lines: List[str]) -> List[str]:
   """Drop direction=\"right\" lines when rightward is the widget default."""
   return [line for line in lines if line.strip() != 'direction="right"']
 
 
-def strip_default_dprecision_one(lines: list[str]) -> list[str]:
+def strip_default_dprecision_one(lines: List[str]) -> List[str]:
   """Drop dPrecision=1.000000 entries when the default increment is 1."""
   return [line for line in lines if line.strip() != "dPrecision=1.000000"]
 
 
-def strip_default_arc_angles(lines: list[str]) -> list[str]:
+def strip_default_arc_angles(lines: List[str]) -> List[str]:
   """Drop begin/path values that restate the arc defaults."""
   defaults = {"begin=0", "path=5760"}
   return [line for line in lines if line.strip() not in defaults]
 
 
-def _quoted_value(line: str) -> str | None:
+def _quoted_value(line: str) -> Optional[str]:
   """Return the quoted portion of a simple key="value" line if present."""
   first = line.find('"')
   last = line.rfind('"')
@@ -811,9 +810,9 @@ def _is_blank_channel_line(stripped_lower: str) -> bool:
   return quoted.strip() == ""
 
 
-def strip_blank_channel_lines(lines: list[str]) -> list[str]:
+def strip_blank_channel_lines(lines: List[str]) -> List[str]:
   """Drop blank channel assignments that behave like an omitted channel."""
-  result: list[str] = []
+  result: List[str] = []
   for line in lines:
     stripped_lower = line.strip().lower()
     if _is_blank_channel_line(stripped_lower):
@@ -822,15 +821,15 @@ def strip_blank_channel_lines(lines: list[str]) -> list[str]:
   return result
 
 
-def strip_noop_dynamic_attribute_blocks(lines: list[str]) -> list[str]:
+def strip_noop_dynamic_attribute_blocks(lines: List[str]) -> List[str]:
   """Drop dynamic attribute blocks that reference only blank channels."""
-  result: list[str] = []
+  result: List[str] = []
   i = 0
   while i < len(lines):
     line = lines[i]
     stripped_lower = line.strip().lower()
     if stripped_lower.startswith('"dynamic attribute"'):
-      block: list[str] = []
+      block: List[str] = []
       depth = 0
       has_non_blank_channel = False
       while i < len(lines):
@@ -863,16 +862,16 @@ def strip_noop_dynamic_attribute_blocks(lines: list[str]) -> list[str]:
   return result
 
 
-def strip_edge_spaces_in_quotes(lines: list[str]) -> list[str]:
+def strip_edge_spaces_in_quotes(lines: List[str]) -> List[str]:
   """Trim leading/trailing whitespace inside quoted attribute values."""
   entries = strip_edge_spaces_in_quotes_entries(_entries_from_lines(lines))
   return [entry.text for entry in entries]
 
 
 def strip_edge_spaces_in_quotes_entries(
-    entries: list[LineEntry]) -> list[LineEntry]:
+    entries: List[LineEntry]) -> List[LineEntry]:
   """Entry-aware version of quote trimming that preserves line numbers."""
-  result: list[LineEntry] = []
+  result: List[LineEntry] = []
   for entry in entries:
     line = entry.text
     first = line.find('"')
@@ -889,7 +888,7 @@ def strip_edge_spaces_in_quotes_entries(
 
 
 def normalize_entries_for_allowed_differences(
-    lines: list[str]) -> list[LineEntry]:
+    lines: List[str]) -> List[LineEntry]:
   """Return LineEntries after removing allowed variations."""
   entries = _entries_from_lines(lines)
   entries = _apply_string_filter(entries, strip_noop_dynamic_attribute_blocks)
@@ -920,7 +919,7 @@ def normalize_entries_for_allowed_differences(
   entries = _apply_string_filter(entries, strip_default_arc_angles)
   entries = strip_edge_spaces_in_quotes_entries(entries)
 
-  normalized: list[LineEntry] = []
+  normalized: List[LineEntry] = []
   for entry in entries:
     stripped_lower = entry.text.strip().lower()
     if not stripped_lower:
@@ -933,7 +932,7 @@ def normalize_entries_for_allowed_differences(
   return normalized
 
 
-def normalize_lines_for_allowed_differences(lines: list[str]) -> list[str]:
+def normalize_lines_for_allowed_differences(lines: List[str]) -> List[str]:
   """Return lines with allowed-difference fields removed."""
   return [entry.text for entry in normalize_entries_for_allowed_differences(lines)]
 
@@ -959,8 +958,9 @@ def compare_files(original: Path, saved: Path) -> bool:
   """Run diff and allow only approved differences between files."""
   result = subprocess.run(
       ["diff", "-w", "-u", str(saved), str(original)],
-      capture_output=True,
-      text=True,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      universal_newlines=True,
       check=False,
   )
   if result.returncode == 0:
@@ -1029,9 +1029,9 @@ def default_qtedm_path(repo_root: Path) -> Path:
   return repo_root / "bin" / f"{system}-{machine}" / "qtedm"
 
 
-def paths_from_manifest(manifest_path: Path) -> list[Path]:
+def paths_from_manifest(manifest_path: Path) -> List[Path]:
   """Load ADL file paths from a manifest."""
-  adl_files: list[Path] = []
+  adl_files: List[Path] = []
   for line in manifest_path.read_text().splitlines():
     entry = line.strip()
     if not entry or entry.startswith("#"):
@@ -1044,10 +1044,10 @@ def paths_from_manifest(manifest_path: Path) -> list[Path]:
 
 
 def collect_adl_files(
-    direct_paths: list[str], manifest_paths: list[str],
-    scan_dirs: list[str]) -> list[Path]:
+    direct_paths: List[str], manifest_paths: List[str],
+    scan_dirs: List[str]) -> List[Path]:
   """Resolve the requested direct files, manifests, and scan directories."""
-  candidates: list[Path] = []
+  candidates: List[Path] = []
 
   for manifest in manifest_paths:
     manifest_path = Path(manifest).expanduser().resolve()
@@ -1068,8 +1068,8 @@ def collect_adl_files(
     else:
       candidates.append(path)
 
-  unique_files: list[Path] = []
-  seen: set[Path] = set()
+  unique_files: List[Path] = []
+  seen: Set[Path] = set()
   for path in candidates:
     resolved = path.resolve()
     if resolved in seen:

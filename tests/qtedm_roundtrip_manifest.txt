@@ -6,7 +6,6 @@ test_Arc.adl
 test_Bar.adl
 test_Byte.adl
 test_CartesianPlot.adl
-test_CartesianPlot_BAK.adl
 test_ChoiceButton.adl
 test_Image.adl
 test_Layering.adl

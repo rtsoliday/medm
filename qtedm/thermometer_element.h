@@ -14,6 +14,8 @@ class QPainter;
 
 class ThermometerElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit ThermometerElement(QWidget *parent = nullptr);
 

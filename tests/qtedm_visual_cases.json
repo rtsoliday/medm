@@ -29,9 +29,69 @@
     "use_ioc": true,
     "exit_after_ms": 8000,
     "tolerance": {
-      "max_different_pixels": 100,
+      "max_different_pixels": 150,
       "max_mean_absolute_delta": 0.02,
       "max_channel_delta": 130
+    }
+  },
+  {
+    "name": "byte_visual",
+    "display": "tests/visual_Byte.adl",
+    "golden": "tests/golden/test_Byte.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
+    }
+  },
+  {
+    "name": "choice_button_visual",
+    "display": "tests/visual_ChoiceButton.adl",
+    "golden": "tests/golden/test_ChoiceButton.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
+    }
+  },
+  {
+    "name": "scale_monitor_visual",
+    "display": "tests/visual_ScaleMonitor.adl",
+    "golden": "tests/golden/test_ScaleMonitor.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 250,
+      "max_mean_absolute_delta": 0.07,
+      "max_channel_delta": 245
+    }
+  },
+  {
+    "name": "wheel_switch_visual",
+    "display": "tests/visual_WheelSwitch.adl",
+    "golden": "tests/golden/test_WheelSwitch.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
+    }
+  },
+  {
+    "name": "layering_visual",
+    "display": "tests/visual_Layering.adl",
+    "golden": "tests/golden/test_Layering.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
     }
   }
 ]

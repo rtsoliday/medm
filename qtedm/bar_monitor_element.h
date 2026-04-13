@@ -11,6 +11,8 @@ class QFontMetricsF;
 
 class BarMonitorElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit BarMonitorElement(QWidget *parent = nullptr);
 

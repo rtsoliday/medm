@@ -8,6 +8,8 @@
 
 class MeterElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit MeterElement(QWidget *parent = nullptr);
 

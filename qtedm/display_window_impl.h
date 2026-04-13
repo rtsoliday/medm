@@ -20274,6 +20274,81 @@ inline QJsonObject DisplayWindow::testStateObject() const
     object[QStringLiteral("height")] = rect.height();
     return object;
   };
+  auto colorToString = [](const QColor &color) {
+    if (!color.isValid()) {
+      return QString();
+    }
+    const QColor rgb = color.toRgb();
+    return rgb.alpha() == 255
+        ? rgb.name(QColor::HexRgb)
+        : rgb.name(QColor::HexArgb);
+  };
+  auto stringListToJson = [](const QStringList &values) {
+    QJsonArray array;
+    for (const QString &value : values) {
+      array.append(value);
+    }
+    return array;
+  };
+  auto colorModeToString = [](TextColorMode mode) {
+    switch (mode) {
+    case TextColorMode::kAlarm:
+      return QStringLiteral("alarm");
+    case TextColorMode::kDiscrete:
+      return QStringLiteral("discrete");
+    case TextColorMode::kStatic:
+    default:
+      return QStringLiteral("static");
+    }
+  };
+  auto meterLabelToString = [](MeterLabel label) {
+    switch (label) {
+    case MeterLabel::kNoDecorations:
+      return QStringLiteral("no_decorations");
+    case MeterLabel::kOutline:
+      return QStringLiteral("outline");
+    case MeterLabel::kLimits:
+      return QStringLiteral("limits");
+    case MeterLabel::kChannel:
+      return QStringLiteral("channel");
+    case MeterLabel::kNone:
+    default:
+      return QStringLiteral("none");
+    }
+  };
+  auto barDirectionToString = [](BarDirection direction) {
+    switch (direction) {
+    case BarDirection::kUp:
+      return QStringLiteral("up");
+    case BarDirection::kDown:
+      return QStringLiteral("down");
+    case BarDirection::kLeft:
+      return QStringLiteral("left");
+    case BarDirection::kRight:
+    default:
+      return QStringLiteral("right");
+    }
+  };
+  auto barFillToString = [](BarFill fillMode) {
+    switch (fillMode) {
+    case BarFill::kFromCenter:
+      return QStringLiteral("from_center");
+    case BarFill::kFromEdge:
+    default:
+      return QStringLiteral("from_edge");
+    }
+  };
+  auto choiceButtonStackingToString = [](ChoiceButtonStacking stacking) {
+    switch (stacking) {
+    case ChoiceButtonStacking::kColumn:
+      return QStringLiteral("column");
+    case ChoiceButtonStacking::kRow:
+      return QStringLiteral("row");
+    case ChoiceButtonStacking::kRowColumn:
+    default:
+      return QStringLiteral("row_column");
+    }
+  };
   auto appendWidgetBase = [this, &rectToJson](QJsonObject &widgetObject,
                               const char *typeName, const QWidget *widget,
                               const QString &channel) {
@@ -20284,6 +20359,14 @@ inline QJsonObject DisplayWindow::testStateObject() const
       widgetObject[QStringLiteral("geometry")] = rectToJson(
           absoluteGeometryForWidget(widget, widget->geometry()));
     }
+  };
+  auto appendColorState = [&colorToString](QJsonObject &widgetObject,
+                               const QColor &foreground,
+                               const QColor &background) {
+    widgetObject[QStringLiteral("effective_foreground")] =
+        colorToString(foreground);
+    widgetObject[QStringLiteral("effective_background")] =
+        colorToString(background);
   };
 
   QJsonArray widgets;
@@ -20296,6 +20379,10 @@ inline QJsonObject DisplayWindow::testStateObject() const
     QJsonObject widgetObject;
     appendWidgetBase(widgetObject, "text_monitor", element,
         element->channel(0));
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    appendColorState(widgetObject, element->effectiveForegroundColor(),
+        element->effectiveBackgroundColor());
     widgetObject[QStringLiteral("display_text")] = element->text();
     if (runtime) {
       widgetObject[QStringLiteral("connected")] = runtime->connected_;
@@ -20338,37 +20425,118 @@ inline QJsonObject DisplayWindow::testStateObject() const
     widgets.append(widgetObject);
   }
 
-  auto appendSingleChannelWidgets =
-      [this, &appendWidgetBase, &widgets](const char *typeName,
-          const auto &elements, const auto &runtimes) {
-        for (auto *element : elements) {
-          if (!element) {
-            continue;
-          }
-          auto *runtime = runtimes.value(element, nullptr);
-          QJsonObject widgetObject;
-          appendWidgetBase(widgetObject, typeName, element, element->channel());
-          if (runtime) {
-            widgetObject[QStringLiteral("connected")] = runtime->connected_;
-            widgetObject[QStringLiteral("initial_update")] =
-                runtime->initialUpdateTracked_;
-            widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
-            widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
-            if (runtime->hasLastValue_) {
-              widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
-            }
-          }
-          widgets.append(widgetObject);
-        }
-      };
+  for (MeterElement *element : meterElements_) {
+    if (!element) {
+      continue;
+    }
+    MeterRuntime *runtime = meterRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "meter", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("label")] =
+        meterLabelToString(element->label());
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
 
-  appendSingleChannelWidgets("meter", meterElements_, meterRuntimes_);
-  appendSingleChannelWidgets("bar_monitor", barMonitorElements_,
-      barMonitorRuntimes_);
-  appendSingleChannelWidgets("thermometer", thermometerElements_,
-      thermometerRuntimes_);
-  appendSingleChannelWidgets("scale_monitor", scaleMonitorElements_,
-      scaleMonitorRuntimes_);
+  for (BarMonitorElement *element : barMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    BarMonitorRuntime *runtime = barMonitorRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "bar_monitor", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("label")] =
+        meterLabelToString(element->label());
+    widgetObject[QStringLiteral("direction")] =
+        barDirectionToString(element->direction());
+    widgetObject[QStringLiteral("fill_mode")] =
+        barFillToString(element->fillMode());
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (ThermometerElement *element : thermometerElements_) {
+    if (!element) {
+      continue;
+    }
+    ThermometerRuntime *runtime = thermometerRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "thermometer", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("label")] =
+        meterLabelToString(element->label());
+    widgetObject[QStringLiteral("direction")] =
+        barDirectionToString(element->direction());
+    widgetObject[QStringLiteral("show_value")] = element->showValue();
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (ScaleMonitorElement *element : scaleMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    ScaleMonitorRuntime *runtime = scaleMonitorRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "scale_monitor", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("label")] =
+        meterLabelToString(element->label());
+    widgetObject[QStringLiteral("direction")] =
+        barDirectionToString(element->direction());
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
 
   for (SliderElement *element : sliderElements_) {
     if (!element) {
@@ -20377,6 +20545,101 @@ inline QJsonObject DisplayWindow::testStateObject() const
     SliderRuntime *runtime = sliderRuntimes_.value(element, nullptr);
     QJsonObject widgetObject;
     appendWidgetBase(widgetObject, "slider", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("label")] =
+        meterLabelToString(element->label());
+    widgetObject[QStringLiteral("direction")] =
+        barDirectionToString(element->direction());
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    widgetObject[QStringLiteral("effective_value_text_color")] =
+        colorToString(element->effectiveForegroundForValueText());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("write_access")] = runtime->lastWriteAccess_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (ByteMonitorElement *element : byteMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    ByteMonitorRuntime *runtime = byteMonitorRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "byte_monitor", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("direction")] =
+        barDirectionToString(element->direction());
+    widgetObject[QStringLiteral("start_bit")] = element->startBit();
+    widgetObject[QStringLiteral("end_bit")] = element->endBit();
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] =
+            static_cast<qint64>(runtime->lastValue_);
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (ChoiceButtonElement *element : choiceButtonElements_) {
+    if (!element) {
+      continue;
+    }
+    ChoiceButtonRuntime *runtime = choiceButtonRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "choice_button", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("stacking")] =
+        choiceButtonStackingToString(element->stacking());
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("read_access_known")] =
+          runtime->lastReadAccessKnown_;
+      widgetObject[QStringLiteral("read_access")] = runtime->lastReadAccess_;
+      widgetObject[QStringLiteral("write_access")] = runtime->lastWriteAccess_;
+      widgetObject[QStringLiteral("has_value")] =
+          !runtime->lastValueOutOfRange_ && runtime->lastValue_ >= 0;
+      widgetObject[QStringLiteral("value_out_of_range")] =
+          runtime->lastValueOutOfRange_;
+      widgetObject[QStringLiteral("selected_index")] = runtime->lastValue_;
+      widgetObject[QStringLiteral("labels")] =
+          stringListToJson(runtime->enumStrings_);
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (WheelSwitchElement *element : wheelSwitchElements_) {
+    if (!element) {
+      continue;
+    }
+    WheelSwitchRuntime *runtime = wheelSwitchRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "wheel_switch", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    widgetObject[QStringLiteral("effective_value_text_color")] =
+        colorToString(element->valueForeground());
     if (runtime) {
       widgetObject[QStringLiteral("connected")] = runtime->connected_;
       widgetObject[QStringLiteral("initial_update")] =

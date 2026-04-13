@@ -13,6 +13,8 @@ class QPaintEvent;
 
 class TextMonitorElement : public QLabel
 {
+  friend class DisplayWindow;
+
 public:
   explicit TextMonitorElement(QWidget *parent = nullptr);
 

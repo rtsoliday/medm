@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QColor>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -1907,6 +1908,8 @@ int main(int argc, char *argv[])
         [state, dumpPath = options.testDumpStatePath,
             capturePath = options.testCaptureScreenshotPath,
             captureTarget]() {
+          QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+          QCoreApplication::processEvents();
           if (!capturePath.isEmpty()) {
             if (!captureTarget) {
               fprintf(stderr,

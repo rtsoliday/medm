@@ -9,6 +9,8 @@
 
 class ByteMonitorElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit ByteMonitorElement(QWidget *parent = nullptr);
 
@@ -68,4 +70,3 @@ private:
   quint32 runtimeValue_ = 0u;
   short runtimeSeverity_ = 3;
 };
-

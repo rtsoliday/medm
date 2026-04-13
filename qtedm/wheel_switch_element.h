@@ -21,6 +21,8 @@ class QWheelEvent;
 
 class WheelSwitchElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit WheelSwitchElement(QWidget *parent = nullptr);
 

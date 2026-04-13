@@ -17,6 +17,8 @@ class QKeyEvent;
 
 class SliderElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit SliderElement(QWidget *parent = nullptr);
 

@@ -108,26 +108,73 @@ def flatten_widgets(state_data: dict) -> list[dict]:
   return widgets
 
 
+def normalize_selector(value, prefix: str):
+  if isinstance(value, dict):
+    normalized = {}
+    for key, item in value.items():
+      if key == "channel" and isinstance(item, str):
+        normalized[key] = prefix_channel_name(item, prefix)
+      else:
+        normalized[key] = normalize_selector(item, prefix)
+    return normalized
+  if isinstance(value, list):
+    return [normalize_selector(item, prefix) for item in value]
+  return value
+
+
+def object_contains(actual, expected) -> bool:
+  if isinstance(expected, dict):
+    if not isinstance(actual, dict):
+      return False
+    for key, value in expected.items():
+      if key not in actual or not object_contains(actual[key], value):
+        return False
+    return True
+  if isinstance(expected, list):
+    return actual == expected
+  return actual == expected
+
+
 def matching_widgets(state_data: dict, selector: dict, prefix: str) -> list[dict]:
-  expected_type = selector["type"]
-  expected_channel = prefix_channel_name(selector["channel"], prefix)
+  normalized_selector = normalize_selector(selector, prefix)
+  expected_type = normalized_selector.get("type", "<unknown>")
   matches = [
       widget for widget in flatten_widgets(state_data)
-      if widget.get("type") == expected_type
-      and widget.get("channel") == expected_channel
+      if object_contains(widget, normalized_selector)
   ]
   if matches:
     return matches
 
   available = sorted({
-      f"{widget.get('type')}:{widget.get('channel')}"
+      f"{widget.get('type')}:{widget.get('channel')}:{widget.get('geometry')}"
       for widget in flatten_widgets(state_data)
       if widget.get("type") == expected_type
   })
   raise CaseFailure(
-      f"No widgets matched selector type={expected_type} "
-      f"channel={expected_channel}. Available {expected_type} widgets: "
+      f"No widgets matched selector {normalized_selector!r}. "
+      f"Available {expected_type} widgets: "
       f"{', '.join(available[:10])}")
+
+
+def compare_expected(actual, expected, path: str, failures: list[str]) -> None:
+  if isinstance(expected, dict):
+    if not isinstance(actual, dict):
+      failures.append(f"{path} expected object {expected!r}, got {actual!r}")
+      return
+    for key, value in expected.items():
+      if key not in actual:
+        failures.append(f"{path}.{key} missing, expected {value!r}")
+        continue
+      compare_expected(actual[key], value, f"{path}.{key}", failures)
+    return
+
+  if isinstance(expected, list):
+    if actual != expected:
+      failures.append(f"{path} expected {expected!r}, got {actual!r}")
+    return
+
+  if actual != expected:
+    failures.append(f"{path} expected {expected!r}, got {actual!r}")
 
 
 def assert_expectations(case: dict, widgets: list[dict]) -> None:
@@ -139,10 +186,9 @@ def assert_expectations(case: dict, widgets: list[dict]) -> None:
   for widget in widgets:
     for key, expected in expect.items():
       actual = widget.get(key)
-      if actual != expected:
-        failures.append(
-            f"{widget.get('type')}:{widget.get('channel')} expected {key}="
-            f"{expected!r}, got {actual!r}")
+      compare_expected(
+          actual, expected,
+          f"{widget.get('type')}:{widget.get('channel')}:{key}", failures)
     if numeric_expected is not None:
       actual_value = widget.get("numeric_value")
       if actual_value is None:

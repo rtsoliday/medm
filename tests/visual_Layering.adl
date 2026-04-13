@@ -1,0 +1,456 @@
+file {
+	name="/home/SOLIDAY/github/medm/tests/visual_Layering.adl"
+	version=030122
+}
+display {
+	object {
+		x=10
+		y=10
+		width=820
+		height=560
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+text {
+	object {
+		x=24
+		y=16
+		width=772
+		height=22
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="QtEDM Visual Regression Fixture: Layering"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=42
+		width=772
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Focused execute-mode layering checks: overlapping dynamic monitors, relative order within monitor widgets, and composite children staying above later fills."
+}
+rectangle {
+	object {
+		x=20
+		y=72
+		width=780
+		height=452
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=40
+		y=92
+		width=320
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="A. Indicator over text update"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=40
+		y=114
+		width=320
+		height=150
+	}
+	"basic attribute" {
+		clr=44
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=52
+		y=122
+		width=296
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Indicator body should visibly cover the overlapping READY field."
+	align="horiz. centered"
+}
+indicator {
+	object {
+		x=62
+		y=162
+		width=240
+		height=28
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=14
+		bclr=3
+	}
+	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=2
+	}
+}
+"text update" {
+	object {
+		x=56
+		y=168
+		width=60
+		height=14
+	}
+	monitor {
+		chan="tm:string:status"
+		clr=10
+		bclr=4
+	}
+	align="horiz. centered"
+	format="string"
+	limits {
+	}
+}
+
+text {
+	object {
+		x=436
+		y=92
+		width=320
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="B. Later bar above earlier meter"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=436
+		y=114
+		width=320
+		height=150
+	}
+	"basic attribute" {
+		clr=44
+		fill="outline"
+		width=2
+	}
+}
+meter {
+	object {
+		x=462
+		y=130
+		width=104
+		height=104
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=20
+		bclr=4
+	}
+	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=2
+	}
+}
+bar {
+	object {
+		x=492
+		y=166
+		width=160
+		height=36
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=30
+		bclr=46
+	}
+	direction="right"
+	limits {
+		loprDefault=-5
+		hoprDefault=5
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=458
+		y=236
+		width=276
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="The orange bar should slice across the lower-right of the meter."
+	align="horiz. centered"
+}
+
+text {
+	object {
+		x=40
+		y=286
+		width=320
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="C. Later meter above earlier bar"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=40
+		y=308
+		width=320
+		height=150
+	}
+	"basic attribute" {
+		clr=44
+		fill="outline"
+		width=2
+	}
+}
+bar {
+	object {
+		x=92
+		y=360
+		width=160
+		height=36
+	}
+	monitor {
+		chan="channelB_PV"
+		clr=30
+		bclr=46
+	}
+	direction="right"
+	limits {
+		loprDefault=-5
+		hoprDefault=5
+		precDefault=2
+	}
+}
+meter {
+	object {
+		x=120
+		y=326
+		width=104
+		height=104
+	}
+	monitor {
+		chan="channelA_PV"
+		clr=20
+		bclr=4
+	}
+	limits {
+		loprDefault=-2
+		hoprDefault=3
+		precDefault=2
+	}
+}
+text {
+	object {
+		x=58
+		y=430
+		width=284
+		height=14
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="The green meter should sit on top of the overlapping bar."
+	align="horiz. centered"
+}
+
+text {
+	object {
+		x=436
+		y=286
+		width=320
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="D. Composite child above later fill"
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=436
+		y=308
+		width=320
+		height=186
+	}
+	"basic attribute" {
+		clr=44
+		fill="outline"
+		width=2
+	}
+}
+composite {
+	object {
+		x=454
+		y=336
+		width=190
+		height=60
+	}
+	"composite name"=""
+	children {
+		"text entry" {
+			object {
+				x=464
+				y=350
+				width=154
+				height=28
+			}
+			control {
+				chan="tm:string:status"
+				clr=14
+				bclr=5
+			}
+			limits {
+			}
+		}
+	}
+}
+rectangle {
+	object {
+		x=506
+		y=340
+		width=114
+		height=44
+	}
+	"basic attribute" {
+		clr=31
+	}
+}
+text {
+	object {
+		x=448
+		y=430
+		width=296
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="The READY entry field should remain visible above the blue fill."
+	align="horiz. centered"
+}
+rectangle {
+	object {
+		x=508
+		y=456
+		width=114
+		height=20
+	}
+	"basic attribute" {
+		clr=6
+		fill="outline"
+	}
+}
+text {
+	object {
+		x=508
+		y=458
+		width=114
+		height=16
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="READY"
+	align="horiz. centered"
+}

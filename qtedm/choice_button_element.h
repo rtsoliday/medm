@@ -16,6 +16,8 @@ class QButtonGroup;
 
 class ChoiceButtonElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit ChoiceButtonElement(QWidget *parent = nullptr);
 

@@ -11,6 +11,8 @@ class QFontMetricsF;
 
 class ScaleMonitorElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit ScaleMonitorElement(QWidget *parent = nullptr);
 

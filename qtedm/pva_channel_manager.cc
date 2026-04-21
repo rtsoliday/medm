@@ -124,15 +124,7 @@ SubscriptionHandle PvaChannelManager::subscribe(
   subscriptionToChannel_.insert(subId, channel);
 
   if (channel->connected) {
-    if (sub.connectionCallback) {
-      sub.connectionCallback(true, channel->cachedData);
-    }
-    if (sub.accessRightsCallback) {
-      sub.accessRightsCallback(channel->canRead, channel->canWrite);
-    }
-    if (channel->cachedData.hasValue) {
-      sub.valueCallback(channel->cachedData);
-    }
+    scheduleInitialDelivery(subId);
   }
 
   if (!pollTimer_.isActive()) {
@@ -166,6 +158,182 @@ void PvaChannelManager::unsubscribe(quint64 subscriptionId)
   }
 }
 
+void PvaChannelManager::scheduleInitialDelivery(quint64 subscriptionId)
+{
+  QTimer::singleShot(0, this, [this, subscriptionId]() {
+    deliverInitialState(subscriptionId);
+  });
+}
+
+void PvaChannelManager::deliverInitialState(quint64 subscriptionId)
+{
+  auto it = subscriptionToChannel_.find(subscriptionId);
+  if (it == subscriptionToChannel_.end()) {
+    return;
+  }
+
+  PvaChannel *channel = it.value();
+  if (!channel) {
+    return;
+  }
+
+  ++channel->dispatchDepth;
+
+  if (channel->connected) {
+    if (Subscriber *sub = findSubscriber(channel, subscriptionId)) {
+      if (sub->connectionCallback) {
+        const SharedChannelData data = channel->cachedData;
+        auto callback = sub->connectionCallback;
+        callback(true, data);
+      }
+    }
+
+    if (Subscriber *sub = findSubscriber(channel, subscriptionId)) {
+      if (sub->accessRightsCallback) {
+        auto callback = sub->accessRightsCallback;
+        callback(channel->canRead, channel->canWrite);
+      }
+    }
+
+    if (channel->cachedData.hasValue) {
+      if (Subscriber *sub = findSubscriber(channel, subscriptionId)) {
+        if (sub->valueCallback) {
+          const SharedChannelData data = channel->cachedData;
+          auto callback = sub->valueCallback;
+          callback(data);
+        }
+      }
+    }
+  }
+
+  --channel->dispatchDepth;
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
+}
+
+PvaChannelManager::Subscriber *PvaChannelManager::findSubscriber(
+    PvaChannel *channel, quint64 subscriptionId)
+{
+  if (!channel) {
+    return nullptr;
+  }
+
+  for (Subscriber &sub : channel->subscribers) {
+    if (sub.id == subscriptionId) {
+      return &sub;
+    }
+  }
+  return nullptr;
+}
+
+void PvaChannelManager::dispatchConnectionCallbacks(PvaChannel *channel)
+{
+  if (!channel) {
+    return;
+  }
+
+  QList<quint64> subscriberIds;
+  subscriberIds.reserve(channel->subscribers.size());
+  for (const Subscriber &sub : channel->subscribers) {
+    subscriberIds.append(sub.id);
+  }
+
+  const bool connected = channel->connected;
+  const SharedChannelData data = channel->cachedData;
+  ++channel->dispatchDepth;
+  for (quint64 subscriberId : subscriberIds) {
+    Subscriber *sub = findSubscriber(channel, subscriberId);
+    if (!sub || !sub->connectionCallback) {
+      continue;
+    }
+    auto callback = sub->connectionCallback;
+    callback(connected, data);
+  }
+  --channel->dispatchDepth;
+
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
+}
+
+void PvaChannelManager::dispatchAccessRightsCallbacks(PvaChannel *channel)
+{
+  if (!channel) {
+    return;
+  }
+
+  QList<quint64> subscriberIds;
+  subscriberIds.reserve(channel->subscribers.size());
+  for (const Subscriber &sub : channel->subscribers) {
+    subscriberIds.append(sub.id);
+  }
+
+  const bool canRead = channel->canRead;
+  const bool canWrite = channel->canWrite;
+  ++channel->dispatchDepth;
+  for (quint64 subscriberId : subscriberIds) {
+    Subscriber *sub = findSubscriber(channel, subscriberId);
+    if (!sub || !sub->accessRightsCallback) {
+      continue;
+    }
+    auto callback = sub->accessRightsCallback;
+    callback(canRead, canWrite);
+  }
+  --channel->dispatchDepth;
+
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
+}
+
+void PvaChannelManager::dispatchValueCallbacks(PvaChannel *channel)
+{
+  if (!channel) {
+    return;
+  }
+
+  QList<quint64> subscriberIds;
+  subscriberIds.reserve(channel->subscribers.size());
+  for (const Subscriber &sub : channel->subscribers) {
+    subscriberIds.append(sub.id);
+  }
+
+  const SharedChannelData data = channel->cachedData;
+  ++channel->dispatchDepth;
+  for (quint64 subscriberId : subscriberIds) {
+    Subscriber *sub = findSubscriber(channel, subscriberId);
+    if (!sub || !sub->valueCallback) {
+      continue;
+    }
+    auto callback = sub->valueCallback;
+    callback(data);
+  }
+  --channel->dispatchDepth;
+
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
+}
+
+void PvaChannelManager::scheduleDeferredValueNotify(const SharedChannelKey &key,
+    int delayMs)
+{
+  QTimer::singleShot(delayMs, this, [this, key]() {
+    dispatchDeferredValueNotify(key);
+  });
+}
+
+void PvaChannelManager::dispatchDeferredValueNotify(const SharedChannelKey &key)
+{
+  PvaChannel *channel = channels_.value(key, nullptr);
+  if (!channel || !channel->notifyPending) {
+    return;
+  }
+
+  notifySubscribers(channel);
+}
+
 PvaChannelManager::PvaChannel *PvaChannelManager::findOrCreateChannel(
     const SharedChannelKey &key,
     const QString &rawName,
@@ -195,9 +363,18 @@ PvaChannelManager::PvaChannel *PvaChannelManager::findOrCreateChannel(
 
 void PvaChannelManager::destroyChannelIfUnused(PvaChannel *channel)
 {
-  if (!channel || !channel->subscribers.isEmpty()) {
+  if (!channel) {
     return;
   }
+  if (!channel->subscribers.isEmpty()) {
+    channel->destroyPending = false;
+    return;
+  }
+  if (channel->dispatchDepth > 0) {
+    channel->destroyPending = true;
+    return;
+  }
+  channel->destroyPending = false;
 
   channels_.remove(channel->key);
   pvaBridgeDestroyChannel(channel->bridge);
@@ -299,26 +476,26 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
 
 void PvaChannelManager::notifySubscribers(PvaChannel *channel)
 {
-  if (!channel) {
+  if (!channel || !channel->cachedData.hasValue) {
     return;
   }
 
   const qint64 now = QDateTime::currentMSecsSinceEpoch();
-  if (now - channel->lastNotifyTimeMs < kMinNotifyIntervalMs) {
-    return;
-  }
-  channel->lastNotifyTimeMs = now;
-
-  if (!channel->cachedData.hasValue) {
-    return;
-  }
-
-  for (const Subscriber &sub : channel->subscribers) {
-    if (sub.valueCallback) {
-      sub.valueCallback(channel->cachedData);
+  if (channel->lastNotifyTimeMs > 0) {
+    const qint64 elapsedMs = now - channel->lastNotifyTimeMs;
+    if (elapsedMs < kMinNotifyIntervalMs) {
+      if (!channel->notifyPending) {
+        channel->notifyPending = true;
+        scheduleDeferredValueNotify(channel->key,
+            static_cast<int>(kMinNotifyIntervalMs - elapsedMs));
+      }
+      return;
     }
   }
+  channel->lastNotifyTimeMs = now;
+  channel->notifyPending = false;
   channel->updateCount++;
+  dispatchValueCallbacks(channel);
 }
 
 void PvaChannelManager::pollChannels()
@@ -345,7 +522,9 @@ void PvaChannelManager::pollChannels()
   }
   wasPaused = isPaused;
 
-  for (auto *channel : channels_) {
+  const QList<SharedChannelKey> channelKeys = channels_.keys();
+  for (const SharedChannelKey &key : channelKeys) {
+    PvaChannel *channel = channels_.value(key, nullptr);
     if (!channel || !channel->bridge) {
       continue;
     }
@@ -355,13 +534,13 @@ void PvaChannelManager::pollChannels()
 
     if (connectionChanged) {
       updateCachedData(channel);
-      for (const Subscriber &sub : channel->subscribers) {
-        if (sub.connectionCallback) {
-          sub.connectionCallback(channel->connected, channel->cachedData);
-        }
-        if (sub.accessRightsCallback) {
-          sub.accessRightsCallback(channel->canRead, channel->canWrite);
-        }
+      dispatchConnectionCallbacks(channel);
+      if (channels_.value(key, nullptr) != channel) {
+        continue;
+      }
+      dispatchAccessRightsCallbacks(channel);
+      if (channels_.value(key, nullptr) != channel) {
+        continue;
       }
     }
 

@@ -157,17 +157,8 @@ SubscriptionHandle SharedChannelManager::subscribe(
   channel->subscribers.append(sub);
   subscriptionToChannel_.insert(subId, channel);
 
-  /* If already connected, deliver cached data immediately */
   if (channel->connected) {
-    if (sub.connectionCallback) {
-      sub.connectionCallback(true, channel->cachedData);
-    }
-    if (sub.accessRightsCallback) {
-      sub.accessRightsCallback(channel->canRead, channel->canWrite);
-    }
-    if (channel->cachedData.hasValue) {
-      sub.valueCallback(channel->cachedData);
-    }
+    scheduleInitialDelivery(subId);
   }
 
   return SubscriptionHandle(subId, this);
@@ -194,6 +185,163 @@ void SharedChannelManager::unsubscribe(quint64 subscriptionId)
 
   /* Destroy channel if no more subscribers */
   destroyChannelIfUnused(channel);
+}
+
+void SharedChannelManager::scheduleInitialDelivery(quint64 subscriptionId)
+{
+  QTimer::singleShot(0, this, [this, subscriptionId]() {
+    deliverInitialState(subscriptionId);
+  });
+}
+
+void SharedChannelManager::deliverInitialState(quint64 subscriptionId)
+{
+  auto it = subscriptionToChannel_.find(subscriptionId);
+  if (it == subscriptionToChannel_.end()) {
+    return;
+  }
+
+  SharedChannel *channel = it.value();
+  if (!channel) {
+    return;
+  }
+
+  ++channel->dispatchDepth;
+
+  if (channel->connected) {
+    if (Subscriber *sub = findSubscriber(channel, subscriptionId)) {
+      if (sub->connectionCallback) {
+        const SharedChannelData data = channel->cachedData;
+        auto callback = sub->connectionCallback;
+        callback(true, data);
+      }
+    }
+
+    if (Subscriber *sub = findSubscriber(channel, subscriptionId)) {
+      if (sub->accessRightsCallback) {
+        auto callback = sub->accessRightsCallback;
+        callback(channel->canRead, channel->canWrite);
+      }
+    }
+
+    if (channel->cachedData.hasValue) {
+      if (Subscriber *sub = findSubscriber(channel, subscriptionId)) {
+        if (sub->valueCallback) {
+          const SharedChannelData data = channel->cachedData;
+          auto callback = sub->valueCallback;
+          callback(data);
+        }
+      }
+    }
+  }
+
+  --channel->dispatchDepth;
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
+}
+
+SharedChannelManager::Subscriber *SharedChannelManager::findSubscriber(
+    SharedChannel *channel, quint64 subscriptionId)
+{
+  if (!channel) {
+    return nullptr;
+  }
+
+  for (Subscriber &sub : channel->subscribers) {
+    if (sub.id == subscriptionId) {
+      return &sub;
+    }
+  }
+  return nullptr;
+}
+
+void SharedChannelManager::dispatchConnectionCallbacks(SharedChannel *channel,
+    bool connected)
+{
+  if (!channel) {
+    return;
+  }
+
+  QList<quint64> subscriberIds;
+  subscriberIds.reserve(channel->subscribers.size());
+  for (const Subscriber &sub : channel->subscribers) {
+    subscriberIds.append(sub.id);
+  }
+
+  const SharedChannelData data = channel->cachedData;
+  ++channel->dispatchDepth;
+  for (quint64 subscriberId : subscriberIds) {
+    Subscriber *sub = findSubscriber(channel, subscriberId);
+    if (!sub || !sub->connectionCallback) {
+      continue;
+    }
+    auto callback = sub->connectionCallback;
+    callback(connected, data);
+  }
+  --channel->dispatchDepth;
+
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
+}
+
+void SharedChannelManager::dispatchValueCallbacks(SharedChannel *channel)
+{
+  if (!channel) {
+    return;
+  }
+
+  QList<quint64> subscriberIds;
+  subscriberIds.reserve(channel->subscribers.size());
+  for (const Subscriber &sub : channel->subscribers) {
+    subscriberIds.append(sub.id);
+  }
+
+  const SharedChannelData data = channel->cachedData;
+  ++channel->dispatchDepth;
+  for (quint64 subscriberId : subscriberIds) {
+    Subscriber *sub = findSubscriber(channel, subscriberId);
+    if (!sub || !sub->valueCallback) {
+      continue;
+    }
+    auto callback = sub->valueCallback;
+    callback(data);
+  }
+  --channel->dispatchDepth;
+
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
+}
+
+void SharedChannelManager::dispatchAccessRightsCallbacks(SharedChannel *channel,
+    bool canRead, bool canWrite)
+{
+  if (!channel) {
+    return;
+  }
+
+  QList<quint64> subscriberIds;
+  subscriberIds.reserve(channel->subscribers.size());
+  for (const Subscriber &sub : channel->subscribers) {
+    subscriberIds.append(sub.id);
+  }
+
+  ++channel->dispatchDepth;
+  for (quint64 subscriberId : subscriberIds) {
+    Subscriber *sub = findSubscriber(channel, subscriberId);
+    if (!sub || !sub->accessRightsCallback) {
+      continue;
+    }
+    auto callback = sub->accessRightsCallback;
+    callback(canRead, canWrite);
+  }
+  --channel->dispatchDepth;
+
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
 }
 
 SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
@@ -250,9 +398,18 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
 
 void SharedChannelManager::destroyChannelIfUnused(SharedChannel *channel)
 {
-  if (!channel || !channel->subscribers.isEmpty()) {
+  if (!channel) {
     return;
   }
+  if (!channel->subscribers.isEmpty()) {
+    channel->destroyPending = false;
+    return;
+  }
+  if (channel->dispatchDepth > 0) {
+    channel->destroyPending = true;
+    return;
+  }
+  channel->destroyPending = false;
 
   /* Remove from hash */
   channels_.remove(channel->key);
@@ -565,11 +722,7 @@ void SharedChannelManager::onDeferredValueNotify(void *channelPtr)
   channel->lastNotifiedEnum = data.enumValue;
   ++channel->updateCount;
 
-  for (const auto &sub : channel->subscribers) {
-    if (sub.valueCallback) {
-      sub.valueCallback(data);
-    }
-  }
+  dispatchValueCallbacks(channel);
 }
 
 void SharedChannelManager::onControlInfoReceived(void *channelPtr, QByteArray eventData,
@@ -702,11 +855,7 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
   scheduleConnectionCompletionReport();
 
   /* Notify all subscribers of connection state change */
-  for (const auto &sub : channel->subscribers) {
-    if (sub.connectionCallback) {
-      sub.connectionCallback(connected, channel->cachedData);
-    }
-  }
+  dispatchConnectionCallbacks(channel, connected);
 }
 
 void SharedChannelManager::handleValue(SharedChannel *channel,
@@ -995,11 +1144,7 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
   ++channel->updateCount;
 
   /* Notify all subscribers */
-  for (const auto &sub : channel->subscribers) {
-    if (sub.valueCallback) {
-      sub.valueCallback(data);
-    }
-  }
+  dispatchValueCallbacks(channel);
 
       
 }
@@ -1059,11 +1204,7 @@ void SharedChannelManager::handleControlInfo(SharedChannel *channel,
 
   /* Re-notify subscribers so they get the control info */
   if (data.hasValue) {
-    for (const auto &sub : channel->subscribers) {
-      if (sub.valueCallback) {
-        sub.valueCallback(data);
-      }
-    }
+    dispatchValueCallbacks(channel);
   }
 }
 
@@ -1080,11 +1221,7 @@ void SharedChannelManager::handleAccessRights(SharedChannel *channel,
 
   if (changed) {
     /* Notify all subscribers of access rights change */
-    for (const auto &sub : channel->subscribers) {
-      if (sub.accessRightsCallback) {
-        sub.accessRightsCallback(canRead, canWrite);
-      }
-    }
+    dispatchAccessRightsCallbacks(channel, canRead, canWrite);
   }
 }
 
@@ -1186,11 +1323,7 @@ void SharedChannelManager::notifySubscribersForLocalNumericPut(
   channel->lastNotifiedEnum = data.enumValue;
   ++channel->updateCount;
 
-  for (const auto &sub : channel->subscribers) {
-    if (sub.valueCallback) {
-      sub.valueCallback(data);
-    }
-  }
+  dispatchValueCallbacks(channel);
 }
 
 bool SharedChannelManager::putValue(const QString &pvName, const QString &value)

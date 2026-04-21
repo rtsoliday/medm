@@ -242,6 +242,8 @@ private:
     int updateCount = 0;  /* Updates since last reset for rate calc */
     qint64 lastNotifyTimeMs = 0;  /* Time of last subscriber notification */
     bool notifyPending = false;  /* Deferred notify scheduled */
+    int dispatchDepth = 0;  /* Active callback dispatches using this channel */
+    bool destroyPending = false;  /* Delay destruction until dispatch completes */
     /* Last notified values for change detection */
     double lastNotifiedValue = 0.0;
     short lastNotifiedSeverity = -1;  /* -1 = never notified */
@@ -261,6 +263,13 @@ private:
   void handleControlInfo(SharedChannel *channel, const event_handler_args &args);
   void handleAccessRights(SharedChannel *channel, bool canRead, bool canWrite);
   void notifySubscribersForLocalNumericPut(SharedChannel *channel, double value);
+  void scheduleInitialDelivery(quint64 subscriptionId);
+  void deliverInitialState(quint64 subscriptionId);
+  Subscriber *findSubscriber(SharedChannel *channel, quint64 subscriptionId);
+  void dispatchConnectionCallbacks(SharedChannel *channel, bool connected);
+  void dispatchValueCallbacks(SharedChannel *channel);
+  void dispatchAccessRightsCallbacks(SharedChannel *channel,
+      bool canRead, bool canWrite);
 
   /* Channel management */
   SharedChannel *findOrCreateChannel(const SharedChannelKey &key);

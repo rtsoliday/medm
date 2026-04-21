@@ -89,11 +89,22 @@ private:
     QList<Subscriber> subscribers;
     int updateCount = 0;
     qint64 lastNotifyTimeMs = 0;
+    bool notifyPending = false;
+    int dispatchDepth = 0;
+    bool destroyPending = false;
   };
 
   PvaChannel *findOrCreateChannel(const SharedChannelKey &key,
       const QString &rawName, const QString &pvName);
   void destroyChannelIfUnused(PvaChannel *channel);
+  void scheduleInitialDelivery(quint64 subscriptionId);
+  void deliverInitialState(quint64 subscriptionId);
+  Subscriber *findSubscriber(PvaChannel *channel, quint64 subscriptionId);
+  void dispatchConnectionCallbacks(PvaChannel *channel);
+  void dispatchAccessRightsCallbacks(PvaChannel *channel);
+  void dispatchValueCallbacks(PvaChannel *channel);
+  void scheduleDeferredValueNotify(const SharedChannelKey &key, int delayMs);
+  void dispatchDeferredValueNotify(const SharedChannelKey &key);
   void updateCachedData(PvaChannel *channel);
   void notifySubscribers(PvaChannel *channel);
   void updateAccessRights(PvaChannel *channel);

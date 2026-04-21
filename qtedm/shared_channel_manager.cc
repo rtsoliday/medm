@@ -1641,7 +1641,12 @@ void SharedChannelManager::reportConnectionCompletion()
 
 void SharedChannelManager::scheduleDeferredFlush()
 {
-  if (flushScheduled_) {
+  if (shutdownComplete_ || flushScheduled_) {
+    return;
+  }
+
+  ChannelAccessContext *context = ChannelAccessContext::instanceIfExists();
+  if (!context || !context->isInitialized()) {
     return;
   }
   flushScheduled_ = true;
@@ -1655,6 +1660,15 @@ void SharedChannelManager::scheduleDeferredFlush()
 void SharedChannelManager::performDeferredFlush()
 {
   flushScheduled_ = false;
+  if (shutdownComplete_) {
+    return;
+  }
+
+  ChannelAccessContext *context = ChannelAccessContext::instanceIfExists();
+  if (!context || !context->isInitialized()) {
+    return;
+  }
+
   if (StartupTiming::instance().isEnabled()) {
     qint64 before = StartupTiming::instance().elapsedMs();
     fprintf(stderr, "[TIMING] %8lld ms : performDeferredFlush starting\n", before);
@@ -1675,6 +1689,7 @@ void SharedChannelManager::shutdown()
     return;
   }
 
+  shutdownComplete_ = true;
   acceptingCallbacks_.store(false, std::memory_order_release);
   connectionCompletionTimer_.stop();
   flushScheduled_ = false;
@@ -1704,7 +1719,6 @@ void SharedChannelManager::shutdown()
   if (canUseCa) {
     ca_flush_io();
   }
-  shutdownComplete_ = true;
 }
 
 /* Include moc-generated code */

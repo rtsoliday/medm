@@ -60,6 +60,8 @@ def wait_for_ioc_ready(process: subprocess.Popen, ready_file: Path,
     if ready_file.exists():
       return
     time.sleep(0.1)
+    if ready_file.exists():
+      return
 
     if process.poll() is not None:
       raise CaseFailure(
@@ -232,7 +234,9 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
   )
   try:
     wait_for_file(ready_path, process, timeout_seconds=15)
-    time.sleep(float(case.get("post_ready_delay_ms", 1000)) / 1000.0)
+    post_ready_delay_ms = float(case.get("post_ready_delay_ms", 0))
+    if post_ready_delay_ms > 0:
+      time.sleep(post_ready_delay_ms / 1000.0)
 
     for write in case.get("writes", []):
       delay_ms = float(write.get("delay_ms", 0))

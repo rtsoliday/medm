@@ -208,6 +208,25 @@ bool writeTestStateFile(const QString &path,
       errorMessage);
 }
 
+bool areDisplaysReadyForAutomation(const std::shared_ptr<DisplayState> &state)
+{
+  if (!state) {
+    return false;
+  }
+
+  bool hasLiveDisplay = false;
+  for (const QPointer<DisplayWindow> &displayPtr : state->displays) {
+    if (displayPtr.isNull()) {
+      continue;
+    }
+    hasLiveDisplay = true;
+    if (!displayPtr->isTestAutomationReady()) {
+      return false;
+    }
+  }
+  return hasLiveDisplay;
+}
+
 void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
 {
   if (!window) {
@@ -1862,13 +1881,23 @@ int main(int argc, char *argv[])
   }
 
   if (!options.testReadyFilePath.isEmpty() && loadedAnyDisplay) {
-    QTimer::singleShot(0, &app, [readyPath = options.testReadyFilePath]() {
-      QString errorMessage;
-      if (!writeReadyFile(readyPath, &errorMessage)) {
-        fprintf(stderr, "\n%s\n", errorMessage.toLocal8Bit().constData());
-        fflush(stderr);
-        QCoreApplication::exit(1);
-      }
+    auto *readyTimer = new QTimer(&app);
+    readyTimer->setInterval(25);
+    QObject::connect(readyTimer, &QTimer::timeout, &app,
+        [readyTimer, state, readyPath = options.testReadyFilePath]() {
+          if (!areDisplaysReadyForAutomation(state)) {
+            return;
+          }
+          readyTimer->stop();
+          QString errorMessage;
+          if (!writeReadyFile(readyPath, &errorMessage)) {
+            fprintf(stderr, "\n%s\n", errorMessage.toLocal8Bit().constData());
+            fflush(stderr);
+            QCoreApplication::exit(1);
+          }
+        });
+    QTimer::singleShot(0, readyTimer, [readyTimer]() {
+      readyTimer->start();
     });
   }
 

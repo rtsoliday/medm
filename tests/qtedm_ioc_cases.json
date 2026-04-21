@@ -12,7 +12,6 @@
         "height": 12
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -40,7 +39,6 @@
         "height": 34
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "expect": {
       "color_mode": "alarm",
@@ -57,7 +55,6 @@
       "type": "slider",
       "channel": "slider:test:alpha"
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -80,7 +77,6 @@
       "type": "meter",
       "channel": "meter:fast:alpha"
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -108,7 +104,6 @@
         "height": 160
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -137,7 +132,6 @@
         "height": 70
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "expect": {
       "color_mode": "alarm",
@@ -159,7 +153,6 @@
         "height": 144
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "expect": {
       "color_mode": "alarm",
@@ -185,7 +178,6 @@
         "height": 60
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -216,7 +208,6 @@
         "height": 200
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -246,7 +237,6 @@
         "height": 30
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -275,7 +265,6 @@
         "height": 92
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "expect": {
       "color_mode": "alarm",
@@ -299,7 +288,6 @@
         "height": 26
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -327,7 +315,6 @@
         "height": 52
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "writes": [
       {
@@ -357,7 +344,6 @@
         "height": 36
       }
     },
-    "post_ready_delay_ms": 1000,
     "exit_after_ms": 4500,
     "expect": {
       "color_mode": "alarm",

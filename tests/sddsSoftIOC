@@ -22,6 +22,10 @@ if [[ -n "${SDDS_SOFT_IOC_REAL_BIN:-}" ]]; then
   exec "${SDDS_SOFT_IOC_REAL_BIN}" "$@"
 fi
 
+if resolved="$(resolve_ioc "${SCRIPT_PATH}.backup")"; then
+  exec "${resolved}" "$@"
+fi
+
 candidate="$(command -v sddsSoftIOC 2>/dev/null || true)"
 if resolved="$(resolve_ioc "${candidate}")"; then
   exec "${resolved}" "$@"

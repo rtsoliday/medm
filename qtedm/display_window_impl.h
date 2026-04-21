@@ -1867,6 +1867,7 @@ public:
   bool saveAs(QWidget *dialogParent = nullptr);
   bool saveToPath(const QString &filePath) const;
   bool saveScreenshotToPath(const QString &filePath) const;
+  bool isTestAutomationReady() const;
 
   void showPrintSetup()
   {
@@ -16435,6 +16436,104 @@ inline bool DisplayWindow::saveScreenshotToPath(const QString &filePath) const
   return image.save(normalized, "PNG");
 }
 
+inline bool DisplayWindow::isTestAutomationReady() const
+{
+  if (!executeModeActive_) {
+    return true;
+  }
+
+  auto hasChannel = [](const QString &channel) {
+    return !channel.trimmed().isEmpty();
+  };
+
+  auto allWidgetsReady = [&hasChannel](const auto &elements,
+                           const auto &runtimes,
+                           auto channelForElement,
+                           auto runtimeReady) {
+    for (auto *element : elements) {
+      if (!element) {
+        continue;
+      }
+      if (!hasChannel(channelForElement(element))) {
+        continue;
+      }
+      auto *runtime = runtimes.value(element, nullptr);
+      if (!runtime || !runtimeReady(runtime)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  if (!allWidgetsReady(textMonitorElements_, textMonitorRuntimes_,
+          [](TextMonitorElement *element) { return element->channel(0); },
+          [](TextMonitorRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(meterElements_, meterRuntimes_,
+          [](MeterElement *element) { return element->channel(); },
+          [](MeterRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(barMonitorElements_, barMonitorRuntimes_,
+          [](BarMonitorElement *element) { return element->channel(); },
+          [](BarMonitorRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(thermometerElements_, thermometerRuntimes_,
+          [](ThermometerElement *element) { return element->channel(); },
+          [](ThermometerRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(scaleMonitorElements_, scaleMonitorRuntimes_,
+          [](ScaleMonitorElement *element) { return element->channel(); },
+          [](ScaleMonitorRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(sliderElements_, sliderRuntimes_,
+          [](SliderElement *element) { return element->channel(); },
+          [](SliderRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(wheelSwitchElements_, wheelSwitchRuntimes_,
+          [](WheelSwitchElement *element) { return element->channel(); },
+          [](WheelSwitchRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(byteMonitorElements_, byteMonitorRuntimes_,
+          [](ByteMonitorElement *element) { return element->channel(); },
+          [](ByteMonitorRuntime *runtime) {
+            return runtime->connected_ && runtime->hasLastValue_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(choiceButtonElements_, choiceButtonRuntimes_,
+          [](ChoiceButtonElement *element) { return element->channel(); },
+          [](ChoiceButtonRuntime *runtime) {
+            return runtime->connected_ && runtime->lastReadAccessKnown_
+                && !runtime->enumStrings_.isEmpty()
+                && (runtime->lastValue_ >= 0 || runtime->lastValueOutOfRange_);
+          })) {
+    return false;
+  }
+
+  return true;
+}
+
 inline bool DisplayWindow::loadFromFile(const QString &filePath,
     QString *errorMessage, const QHash<QString, QString> &macros)
 {
@@ -22616,6 +22715,15 @@ inline void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin,
         if (auto locked = stateWeak.lock()) {
           if (locked->activeDisplay == displayPtr) {
             locked->activeDisplay.clear();
+          }
+          /* Match the top-level registration path: remove the dying display
+           * before any menu refresh chooses a new active window. */
+          auto &displays = locked->displays;
+          for (auto it = displays.begin(); it != displays.end(); ++it) {
+            if (*it == displayPtr) {
+              displays.erase(it);
+              break;
+            }
           }
           bool hasLiveDisplay = false;
           for (auto &display : locked->displays) {

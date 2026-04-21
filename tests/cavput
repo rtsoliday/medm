@@ -22,6 +22,10 @@ if [[ -n "${CAVPUT_REAL_BIN:-}" ]]; then
   exec "${CAVPUT_REAL_BIN}" "$@"
 fi
 
+if resolved="$(resolve_cavput "${SCRIPT_PATH}.backup")"; then
+  exec "${resolved}" "$@"
+fi
+
 candidate="$(command -v cavput 2>/dev/null || true)"
 if resolved="$(resolve_cavput "${candidate}")"; then
   exec "${resolved}" "$@"

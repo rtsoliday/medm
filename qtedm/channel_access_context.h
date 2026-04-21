@@ -12,6 +12,7 @@ class ChannelAccessContext : public QObject
 {
 public:
   static ChannelAccessContext &instance();
+  static ChannelAccessContext *instanceIfExists();
 
   void ensureInitialized();
   bool isInitialized() const;
@@ -26,6 +27,7 @@ private:
   void pollOnce();
   void handleFdActivity(int fd);
   void maybeReportPollStats(const char *trigger);
+  void shutdown();
 
   /* CA file descriptor registration callback */
   static void fdRegistrationCallback(void *user, int fd, int opened);
@@ -40,4 +42,5 @@ private:
   int timerPollCount_ = 0;
   int fdPollCount_ = 0;
   qint64 lastPollReportTime_ = 0;
+  bool shutdownComplete_ = false;
 };

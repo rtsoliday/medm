@@ -1,5 +1,7 @@
 #include "channel_access_context.h"
 
+#include <atomic>
+
 #include <QCoreApplication>
 #include <QSocketNotifier>
 #include <QTimer>
@@ -12,6 +14,7 @@
 namespace {
 /* Timer interval for deferred operations. */
 constexpr int kDeferredPollIntervalMs = 50;
+std::atomic<ChannelAccessContext *> gChannelAccessContext{nullptr};
 
 /* Track if we're currently inside pollOnce to prevent re-entrancy */
 static bool inPollOnce = false;
@@ -19,38 +22,29 @@ static bool inPollOnce = false;
 
 ChannelAccessContext &ChannelAccessContext::instance()
 {
-  static ChannelAccessContext *context = []() {
-    auto *ctx = new ChannelAccessContext;
-    return ctx;
-  }();
-  return *context;
+  static ChannelAccessContext context;
+  return context;
+}
+
+ChannelAccessContext *ChannelAccessContext::instanceIfExists()
+{
+  return gChannelAccessContext.load(std::memory_order_acquire);
 }
 
 ChannelAccessContext::ChannelAccessContext()
-  : QObject(QCoreApplication::instance())
+  : QObject(nullptr)
 {
+  gChannelAccessContext.store(this, std::memory_order_release);
+  if (QCoreApplication *core = QCoreApplication::instance()) {
+    connect(core, &QCoreApplication::aboutToQuit, this,
+        &ChannelAccessContext::shutdown);
+  }
 }
 
 ChannelAccessContext::~ChannelAccessContext()
 {
-  /* Clean up socket notifiers */
-  for (auto *notifier : socketNotifiers_) {
-    notifier->setEnabled(false);
-    notifier->deleteLater();
-  }
-  socketNotifiers_.clear();
-
-  if (pollTimer_) {
-    pollTimer_->stop();
-    pollTimer_->deleteLater();
-    pollTimer_ = nullptr;
-  }
-  if (initialized_) {
-    /* Unregister FD callback before destroying context */
-    ca_add_fd_registration(nullptr, nullptr);
-    ca_context_destroy();
-    initialized_ = false;
-  }
+  gChannelAccessContext.store(nullptr, std::memory_order_release);
+  shutdown();
 }
 
 void ChannelAccessContext::ensureInitialized()
@@ -83,6 +77,9 @@ bool ChannelAccessContext::isInitializedForProtocol(PvProtocol protocol) const
 
 void ChannelAccessContext::initialize()
 {
+  if (shutdownComplete_) {
+    return;
+  }
   QTEDM_TIMING_MARK("Channel Access: Creating context with preemptive callbacks");
   /* Use preemptive callbacks so CA can process events on its own thread.
    * This means our CA callbacks will be invoked from a non-main thread,
@@ -113,7 +110,7 @@ void ChannelAccessContext::initialize()
 
 void ChannelAccessContext::pollOnce()
 {
-  if (!initialized_ || inPollOnce) {
+  if (shutdownComplete_ || !initialized_ || inPollOnce) {
     return;
   }
   inPollOnce = true;
@@ -153,7 +150,7 @@ void ChannelAccessContext::maybeReportPollStats(const char *trigger)
 void ChannelAccessContext::fdRegistrationCallback(void *user, int fd, int opened)
 {
   auto *self = static_cast<ChannelAccessContext *>(user);
-  if (!self) {
+  if (!self || self->shutdownComplete_) {
     return;
   }
 
@@ -180,5 +177,36 @@ void ChannelAccessContext::fdRegistrationCallback(void *user, int fd, int opened
       notifier->setEnabled(false);
       notifier->deleteLater();
     }
+  }
+}
+
+void ChannelAccessContext::shutdown()
+{
+  if (shutdownComplete_) {
+    return;
+  }
+
+  shutdownComplete_ = true;
+  inPollOnce = false;
+
+  for (auto *notifier : socketNotifiers_) {
+    if (notifier) {
+      notifier->setEnabled(false);
+      delete notifier;
+    }
+  }
+  socketNotifiers_.clear();
+
+  if (pollTimer_) {
+    pollTimer_->stop();
+    delete pollTimer_;
+    pollTimer_ = nullptr;
+  }
+
+  if (initialized_) {
+    /* Unregister FD callback before destroying context. */
+    ca_add_fd_registration(nullptr, nullptr);
+    ca_context_destroy();
+    initialized_ = false;
   }
 }

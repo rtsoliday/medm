@@ -55,32 +55,26 @@ static SharedChannelData toSharedChannelData(const PvaBridgeData &bridgeData)
 
 PvaChannelManager &PvaChannelManager::instance()
 {
-  static PvaChannelManager *manager = []() {
-    auto *mgr = new PvaChannelManager;
-    return mgr;
-  }();
-  return *manager;
+  static PvaChannelManager manager;
+  return manager;
 }
 
 PvaChannelManager::PvaChannelManager()
-  : QObject(QCoreApplication::instance())
+  : QObject(nullptr)
 {
   statsTimer_.start();
   pollTimer_.setInterval(kPollIntervalMs);
   pollTimer_.setTimerType(Qt::CoarseTimer);
   connect(&pollTimer_, &QTimer::timeout, this, [this]() { pollChannels(); });
+  if (QCoreApplication *core = QCoreApplication::instance()) {
+    connect(core, &QCoreApplication::aboutToQuit, this,
+        &PvaChannelManager::shutdown);
+  }
 }
 
 PvaChannelManager::~PvaChannelManager()
 {
-  pollTimer_.stop();
-  for (auto *channel : channels_) {
-    pvaBridgeDestroyChannel(channel->bridge);
-    channel->bridge = nullptr;
-    delete channel;
-  }
-  channels_.clear();
-  subscriptionToChannel_.clear();
+  shutdown();
 }
 
 SubscriptionHandle PvaChannelManager::subscribe(
@@ -94,7 +88,7 @@ SubscriptionHandle PvaChannelManager::subscribe(
   Q_UNUSED(requestedType);
   Q_UNUSED(elementCount);
 
-  if (pvName.trimmed().isEmpty() || !valueCallback) {
+  if (shutdownComplete_ || pvName.trimmed().isEmpty() || !valueCallback) {
     return SubscriptionHandle();
   }
 
@@ -153,9 +147,6 @@ void PvaChannelManager::unsubscribe(quint64 subscriptionId)
   }
 
   destroyChannelIfUnused(channel);
-  if (channels_.isEmpty()) {
-    pollTimer_.stop();
-  }
 }
 
 void PvaChannelManager::scheduleInitialDelivery(quint64 subscriptionId)
@@ -339,6 +330,9 @@ PvaChannelManager::PvaChannel *PvaChannelManager::findOrCreateChannel(
     const QString &rawName,
     const QString &pvName)
 {
+  if (shutdownComplete_) {
+    return nullptr;
+  }
   auto it = channels_.find(key);
   if (it != channels_.end()) {
     return it.value();
@@ -380,6 +374,9 @@ void PvaChannelManager::destroyChannelIfUnused(PvaChannel *channel)
   pvaBridgeDestroyChannel(channel->bridge);
   channel->bridge = nullptr;
   delete channel;
+  if (channels_.isEmpty()) {
+    pollTimer_.stop();
+  }
 }
 
 void PvaChannelManager::updateAccessRights(PvaChannel *channel)
@@ -413,6 +410,9 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
     PvaInfoSnapshot &snapshot)
 {
   snapshot = PvaInfoSnapshot{};
+  if (shutdownComplete_) {
+    return false;
+  }
 
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.pvName.isEmpty()) {
@@ -428,11 +428,17 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
   if (!channel) {
     return false;
   }
+  const auto cleanupChannel = [this](PvaChannel *candidate) {
+    if (candidate && candidate->subscribers.isEmpty()) {
+      destroyChannelIfUnused(candidate);
+    }
+  };
 
   updateCachedData(channel);
 
   PvaBridgeData bridgeData;
   if (!pvaBridgeGetData(channel->bridge, &bridgeData)) {
+    cleanupChannel(channel);
     return false;
   }
 
@@ -471,6 +477,7 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
     }
   }
 
+  cleanupChannel(channel);
   return true;
 }
 
@@ -553,6 +560,9 @@ void PvaChannelManager::pollChannels()
 
 bool PvaChannelManager::putValue(const QString &pvName, double value)
 {
+  if (shutdownComplete_) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.pvName.isEmpty()) {
     return false;
@@ -564,15 +574,25 @@ bool PvaChannelManager::putValue(const QString &pvName, double value)
   key.elementCount = 1;
 
   PvaChannel *channel = findOrCreateChannel(key, parsed.rawName, parsed.pvName);
-  if (!channel || !channel->bridge || !channel->connected) {
+  if (!channel) {
     return false;
   }
-
-  return pvaBridgePutDouble(channel->bridge, value);
+  const auto cleanupChannel = [this](PvaChannel *candidate) {
+    if (candidate && candidate->subscribers.isEmpty()) {
+      destroyChannelIfUnused(candidate);
+    }
+  };
+  const bool ok = channel->bridge && channel->connected
+      && pvaBridgePutDouble(channel->bridge, value);
+  cleanupChannel(channel);
+  return ok;
 }
 
 bool PvaChannelManager::putValue(const QString &pvName, const QString &value)
 {
+  if (shutdownComplete_) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.pvName.isEmpty()) {
     return false;
@@ -584,11 +604,18 @@ bool PvaChannelManager::putValue(const QString &pvName, const QString &value)
   key.elementCount = 1;
 
   PvaChannel *channel = findOrCreateChannel(key, parsed.rawName, parsed.pvName);
-  if (!channel || !channel->bridge || !channel->connected) {
+  if (!channel) {
     return false;
   }
-
-  return pvaBridgePutString(channel->bridge, value.toStdString());
+  const auto cleanupChannel = [this](PvaChannel *candidate) {
+    if (candidate && candidate->subscribers.isEmpty()) {
+      destroyChannelIfUnused(candidate);
+    }
+  };
+  const bool ok = channel->bridge && channel->connected
+      && pvaBridgePutString(channel->bridge, value.toStdString());
+  cleanupChannel(channel);
+  return ok;
 }
 
 bool PvaChannelManager::putValue(const QString &pvName, dbr_enum_t value)
@@ -599,6 +626,9 @@ bool PvaChannelManager::putValue(const QString &pvName, dbr_enum_t value)
 bool PvaChannelManager::putArrayValue(const QString &pvName,
     const QVector<double> &values)
 {
+  if (shutdownComplete_) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.pvName.isEmpty()) {
     return false;
@@ -610,12 +640,19 @@ bool PvaChannelManager::putArrayValue(const QString &pvName,
   key.elementCount = values.size();
 
   PvaChannel *channel = findOrCreateChannel(key, parsed.rawName, parsed.pvName);
-  if (!channel || !channel->bridge || !channel->connected) {
+  if (!channel) {
     return false;
   }
-
-  return pvaBridgePutDoubleArray(channel->bridge, values.constData(),
-      static_cast<size_t>(values.size()));
+  const auto cleanupChannel = [this](PvaChannel *candidate) {
+    if (candidate && candidate->subscribers.isEmpty()) {
+      destroyChannelIfUnused(candidate);
+    }
+  };
+  const bool ok = channel->bridge && channel->connected
+      && pvaBridgePutDoubleArray(channel->bridge, values.constData(),
+          static_cast<size_t>(values.size()));
+  cleanupChannel(channel);
+  return ok;
 }
 
 int PvaChannelManager::uniqueChannelCount() const
@@ -679,4 +716,21 @@ double PvaChannelManager::elapsedSecondsSinceReset() const
   return statsTimer_.isValid()
       ? static_cast<double>(statsTimer_.elapsed()) / 1000.0
       : 0.0;
+}
+
+void PvaChannelManager::shutdown()
+{
+  if (shutdownComplete_) {
+    return;
+  }
+
+  shutdownComplete_ = true;
+  pollTimer_.stop();
+  for (auto *channel : channels_) {
+    pvaBridgeDestroyChannel(channel->bridge);
+    channel->bridge = nullptr;
+    delete channel;
+  }
+  channels_.clear();
+  subscriptionToChannel_.clear();
 }

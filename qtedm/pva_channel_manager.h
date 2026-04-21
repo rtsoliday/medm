@@ -67,6 +67,7 @@ public:
 private:
   PvaChannelManager();
   ~PvaChannelManager() override;
+  void shutdown();
 
   struct Subscriber
   {
@@ -115,4 +116,5 @@ private:
   quint64 nextSubscriptionId_ = 1;
   QElapsedTimer statsTimer_;
   QTimer pollTimer_;
+  bool shutdownComplete_ = false;
 };

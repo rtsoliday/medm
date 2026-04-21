@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -164,6 +165,7 @@ class SharedChannelManager : public QObject, public SubscriptionOwner
 
 public:
   static SharedChannelManager &instance();
+  static SharedChannelManager *instanceIfExists();
 
   /* Subscribe to a channel.
    *
@@ -278,6 +280,7 @@ private:
   void destroyChannelIfUnused(SharedChannel *channel);
   void subscribeToChannel(SharedChannel *channel);
   void requestControlInfo(SharedChannel *channel);
+  void shutdown();
 
   /* Deferred flush mechanism - batches CA operations to avoid blocking */
   void scheduleDeferredFlush();
@@ -332,4 +335,6 @@ private:
   QTimer connectionCompletionTimer_;
   int lastConnectionCompletionCount_ = -1;
   int lastConnectionCompletionTotal_ = -1;
+  std::atomic<bool> acceptingCallbacks_{false};
+  bool shutdownComplete_ = false;
 };

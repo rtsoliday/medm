@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -21,6 +22,17 @@ namespace {
 constexpr qint64 kMinNotifyIntervalMs = 100;
 /* Idle time after the last connection change before reporting completion. */
 constexpr int kConnectionCompletionIdleMs = 100;
+std::atomic<SharedChannelManager *> gSharedChannelManager{nullptr};
+
+void *callbackUserDataForInstanceId(quint64 instanceId)
+{
+  return reinterpret_cast<void *>(static_cast<quintptr>(instanceId));
+}
+
+quint64 channelInstanceIdFromUserData(const void *userData)
+{
+  return static_cast<quint64>(reinterpret_cast<quintptr>(userData));
+}
 
 bool isNumericMonitorType(chtype requestedType)
 {
@@ -84,40 +96,38 @@ void SubscriptionHandle::reset()
 
 SharedChannelManager &SharedChannelManager::instance()
 {
-  static SharedChannelManager *manager = []() {
-    auto *mgr = new SharedChannelManager;
-    return mgr;
-  }();
-  return *manager;
+  static SharedChannelManager manager;
+  return manager;
+}
+
+SharedChannelManager *SharedChannelManager::instanceIfExists()
+{
+  return gSharedChannelManager.load(std::memory_order_acquire);
 }
 
 SharedChannelManager::SharedChannelManager()
-  : QObject(QCoreApplication::instance())
+  : QObject(nullptr)
 {
   /* Register types for queued connections from CA thread */
   qRegisterMetaType<QByteArray>("QByteArray");
   qRegisterMetaType<quint64>("quint64");
 
+  gSharedChannelManager.store(this, std::memory_order_release);
+  acceptingCallbacks_.store(true, std::memory_order_release);
   connectionCompletionTimer_.setSingleShot(true);
   connect(&connectionCompletionTimer_, &QTimer::timeout,
       this, &SharedChannelManager::reportConnectionCompletion);
+  if (QCoreApplication *core = QCoreApplication::instance()) {
+    connect(core, &QCoreApplication::aboutToQuit, this,
+        &SharedChannelManager::shutdown);
+  }
 }
 
 SharedChannelManager::~SharedChannelManager()
 {
-  /* Clean up all channels */
-  for (auto *channel : channels_) {
-    if (channel->subscriptionId) {
-      ca_clear_subscription(channel->subscriptionId);
-    }
-    if (channel->channelId) {
-      ca_clear_channel(channel->channelId);
-    }
-    delete channel;
-  }
-  channels_.clear();
-  instanceIdToChannel_.clear();
-  subscriptionToChannel_.clear();
+  acceptingCallbacks_.store(false, std::memory_order_release);
+  gSharedChannelManager.store(nullptr, std::memory_order_release);
+  shutdown();
 }
 
 SubscriptionHandle SharedChannelManager::subscribe(
@@ -357,6 +367,12 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
   /* Create new channel */
   auto *channel = new SharedChannel;
   channel->key = key;
+  if (nextChannelInstanceId_
+      > static_cast<quint64>(std::numeric_limits<quintptr>::max())) {
+    qWarning() << "SharedChannelManager: channel instance id overflow";
+    delete channel;
+    return nullptr;
+  }
   channel->instanceId = nextChannelInstanceId_++;
   channel->cachedData.connected = false;
 
@@ -364,7 +380,7 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
   int status = ca_create_channel(
       pvBytes.constData(),
       &SharedChannelManager::connectionCallback,
-      channel,
+      callbackUserDataForInstanceId(channel->instanceId),
       CA_PRIORITY_DEFAULT,
       &channel->channelId);
 
@@ -375,8 +391,9 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
     return nullptr;
   }
 
-  /* Set user pointer for access rights callback (ca_puser retrieval) */
-  ca_set_puser(channel->channelId, channel);
+  /* Store instance id so CA callbacks never touch freed SharedChannel memory. */
+  ca_set_puser(channel->channelId,
+      callbackUserDataForInstanceId(channel->instanceId));
 
   /* Register access rights callback */
   ca_replace_access_rights_event(channel->channelId,
@@ -420,22 +437,31 @@ void SharedChannelManager::destroyChannelIfUnused(SharedChannel *channel)
   instanceIdToChannel_.remove(channel->instanceId);
 
   /* Clean up CA resources */
+  ChannelAccessContext *context = ChannelAccessContext::instanceIfExists();
+  const bool canUseCa = context && context->isInitialized();
   if (channel->subscriptionId) {
-    ca_clear_subscription(channel->subscriptionId);
+    if (canUseCa) {
+      ca_clear_subscription(channel->subscriptionId);
+    }
     channel->subscriptionId = nullptr;
   }
   if (channel->channelId) {
-    /* Remove access rights callback before clearing channel */
-    ca_replace_access_rights_event(channel->channelId, nullptr);
-    if (channel->connected) {
-      StatisticsTracker::instance().registerChannelDisconnected();
+    if (canUseCa) {
+      /* Remove access rights callback before clearing channel. */
+      ca_replace_access_rights_event(channel->channelId, nullptr);
+      ca_set_puser(channel->channelId, nullptr);
+      if (channel->connected) {
+        StatisticsTracker::instance().registerChannelDisconnected();
+      }
+      ca_clear_channel(channel->channelId);
+      StatisticsTracker::instance().registerChannelDestroyed();
     }
-    ca_clear_channel(channel->channelId);
-    StatisticsTracker::instance().registerChannelDestroyed();
     channel->channelId = nullptr;
   }
 
-  ca_flush_io();
+  if (canUseCa) {
+    ca_flush_io();
+  }
   delete channel;
 }
 
@@ -456,7 +482,7 @@ void SharedChannelManager::subscribeToChannel(SharedChannel *channel)
       channel->channelId,
       DBE_VALUE | DBE_ALARM,
       &SharedChannelManager::valueCallback,
-      channel,
+      callbackUserDataForInstanceId(channel->instanceId),
       &channel->subscriptionId);
 
   if (status != ECA_NORMAL) {
@@ -507,7 +533,7 @@ void SharedChannelManager::requestControlInfo(SharedChannel *channel)
       1,
       channel->channelId,
       &SharedChannelManager::controlInfoCallback,
-      channel);
+      callbackUserDataForInstanceId(channel->instanceId));
 
   if (status == ECA_NORMAL) {
     scheduleDeferredFlush();
@@ -519,21 +545,25 @@ void SharedChannelManager::connectionCallback(connection_handler_args args)
   if (!args.chid) {
     return;
   }
-  auto *channel = static_cast<SharedChannel *>(ca_puser(args.chid));
-  if (!channel) {
+  SharedChannelManager *manager = SharedChannelManager::instanceIfExists();
+  if (!manager
+      || !manager->acceptingCallbacks_.load(std::memory_order_acquire)) {
     return;
   }
-  
+  const quint64 channelInstanceId =
+      channelInstanceIdFromUserData(ca_puser(args.chid));
+  if (channelInstanceId == 0) {
+    return;
+  }
   bool connected = (args.op == CA_OP_CONN_UP);
-  
+
   /* Capture native type info while still on CA thread */
   short nativeType = connected ? ca_field_type(args.chid) : -1;
   long nativeCount = connected ? ca_element_count(args.chid) : 0;
-  
+
   /* With preemptive callbacks, we're on the CA thread.
    * Queue the event to the main thread for processing. */
-  const quint64 channelInstanceId = channel->instanceId;
-  QMetaObject::invokeMethod(&SharedChannelManager::instance(),
+  QMetaObject::invokeMethod(manager,
       "onConnectionChanged",
       Qt::QueuedConnection,
       Q_ARG(quint64, channelInstanceId),
@@ -544,26 +574,30 @@ void SharedChannelManager::connectionCallback(connection_handler_args args)
 
 void SharedChannelManager::valueCallback(event_handler_args args)
 {
-    auto *channel = static_cast<SharedChannel *>(args.usr);
-  if (!channel) {
+  SharedChannelManager *manager = SharedChannelManager::instanceIfExists();
+  if (!manager
+      || !manager->acceptingCallbacks_.load(std::memory_order_acquire)) {
     return;
   }
-  
+  const quint64 channelInstanceId = channelInstanceIdFromUserData(args.usr);
+  if (channelInstanceId == 0) {
+    return;
+  }
+
   if (args.count > 1000 && HeatmapRuntime::isGlobalUpdatesPaused()) {
     return;
   }
-  
+
   /* Copy the event data so it can be passed to the main thread.
    * The args.dbr pointer is only valid during this callback. */
   QByteArray eventData;
   if (args.dbr && args.status == ECA_NORMAL) {
     size_t dataSize = dbr_size_n(args.type, args.count);
-    eventData = QByteArray(static_cast<const char*>(args.dbr), 
+    eventData = QByteArray(static_cast<const char *>(args.dbr),
                            static_cast<int>(dataSize));
   }
-  
-  const quint64 channelInstanceId = channel->instanceId;
-  QMetaObject::invokeMethod(&SharedChannelManager::instance(),
+
+  QMetaObject::invokeMethod(manager,
       "onValueReceived",
       Qt::QueuedConnection,
       Q_ARG(quint64, channelInstanceId),
@@ -575,21 +609,25 @@ void SharedChannelManager::valueCallback(event_handler_args args)
 
 void SharedChannelManager::controlInfoCallback(event_handler_args args)
 {
-  auto *channel = static_cast<SharedChannel *>(args.usr);
-  if (!channel) {
+  SharedChannelManager *manager = SharedChannelManager::instanceIfExists();
+  if (!manager
+      || !manager->acceptingCallbacks_.load(std::memory_order_acquire)) {
     return;
   }
-  
+  const quint64 channelInstanceId = channelInstanceIdFromUserData(args.usr);
+  if (channelInstanceId == 0) {
+    return;
+  }
+
   /* Copy the event data for main thread processing */
   QByteArray eventData;
   if (args.dbr && args.status == ECA_NORMAL) {
     size_t dataSize = dbr_size_n(args.type, args.count);
-    eventData = QByteArray(static_cast<const char*>(args.dbr), 
+    eventData = QByteArray(static_cast<const char *>(args.dbr),
                            static_cast<int>(dataSize));
   }
-  
-  const quint64 channelInstanceId = channel->instanceId;
-  QMetaObject::invokeMethod(&SharedChannelManager::instance(),
+
+  QMetaObject::invokeMethod(manager,
       "onControlInfoReceived",
       Qt::QueuedConnection,
       Q_ARG(quint64, channelInstanceId),
@@ -603,15 +641,20 @@ void SharedChannelManager::accessRightsCallback(access_rights_handler_args args)
   if (!args.chid) {
     return;
   }
-  auto *channel = static_cast<SharedChannel *>(ca_puser(args.chid));
-  if (!channel) {
+  SharedChannelManager *manager = SharedChannelManager::instanceIfExists();
+  if (!manager
+      || !manager->acceptingCallbacks_.load(std::memory_order_acquire)) {
+    return;
+  }
+  const quint64 channelInstanceId =
+      channelInstanceIdFromUserData(ca_puser(args.chid));
+  if (channelInstanceId == 0) {
     return;
   }
   bool canRead = ca_read_access(args.chid) != 0;
   bool canWrite = ca_write_access(args.chid) != 0;
-  
-  const quint64 channelInstanceId = channel->instanceId;
-  QMetaObject::invokeMethod(&SharedChannelManager::instance(),
+
+  QMetaObject::invokeMethod(manager,
       "onAccessRightsChanged",
       Qt::QueuedConnection,
       Q_ARG(quint64, channelInstanceId),
@@ -625,6 +668,9 @@ void SharedChannelManager::onConnectionChanged(quint64 channelInstanceId,
     bool connected,
                                                 short nativeType, long nativeCount)
 {
+  if (!acceptingCallbacks_.load(std::memory_order_acquire)) {
+    return;
+  }
   SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
   if (!channel) {
     return;
@@ -640,6 +686,9 @@ void SharedChannelManager::onConnectionChanged(quint64 channelInstanceId,
 void SharedChannelManager::onValueReceived(quint64 channelInstanceId,
     QByteArray eventData, int status, long type, long count)
 {
+  if (!acceptingCallbacks_.load(std::memory_order_acquire)) {
+    return;
+  }
   SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
   if (!channel) {
     return;
@@ -659,6 +708,9 @@ void SharedChannelManager::onValueReceived(quint64 channelInstanceId,
 
 void SharedChannelManager::onDeferredValueNotify(quint64 channelInstanceId)
 {
+  if (!acceptingCallbacks_.load(std::memory_order_acquire)) {
+    return;
+  }
   SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
   if (!channel) {
     return;
@@ -713,6 +765,9 @@ void SharedChannelManager::onDeferredValueNotify(quint64 channelInstanceId)
 void SharedChannelManager::onControlInfoReceived(quint64 channelInstanceId,
     QByteArray eventData, int status, long type)
 {
+  if (!acceptingCallbacks_.load(std::memory_order_acquire)) {
+    return;
+  }
   SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
   if (!channel) {
     return;
@@ -733,6 +788,9 @@ void SharedChannelManager::onControlInfoReceived(quint64 channelInstanceId,
 void SharedChannelManager::onAccessRightsChanged(quint64 channelInstanceId,
     bool canRead, bool canWrite)
 {
+  if (!acceptingCallbacks_.load(std::memory_order_acquire)) {
+    return;
+  }
   SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
   if (!channel) {
     return;
@@ -1609,6 +1667,44 @@ void SharedChannelManager::performDeferredFlush()
   } else {
     ca_flush_io();
   }
+}
+
+void SharedChannelManager::shutdown()
+{
+  if (shutdownComplete_) {
+    return;
+  }
+
+  acceptingCallbacks_.store(false, std::memory_order_release);
+  connectionCompletionTimer_.stop();
+  flushScheduled_ = false;
+
+  ChannelAccessContext *context = ChannelAccessContext::instanceIfExists();
+  const bool canUseCa = context && context->isInitialized();
+  for (auto *channel : channels_) {
+    if (channel->subscriptionId) {
+      if (canUseCa) {
+        ca_clear_subscription(channel->subscriptionId);
+      }
+      channel->subscriptionId = nullptr;
+    }
+    if (channel->channelId) {
+      if (canUseCa) {
+        ca_replace_access_rights_event(channel->channelId, nullptr);
+        ca_set_puser(channel->channelId, nullptr);
+        ca_clear_channel(channel->channelId);
+      }
+      channel->channelId = nullptr;
+    }
+    delete channel;
+  }
+  channels_.clear();
+  instanceIdToChannel_.clear();
+  subscriptionToChannel_.clear();
+  if (canUseCa) {
+    ca_flush_io();
+  }
+  shutdownComplete_ = true;
 }
 
 /* Include moc-generated code */

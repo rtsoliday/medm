@@ -41,6 +41,7 @@
  */
 
 #include "pvaSDDS.h"
+#include <cstring>
 #include <unordered_map>
 #include <inttypes.h>
 
@@ -56,6 +57,60 @@ static long ExtractByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructu
 static long PutByPath(PVA_OVERALL *pva, long index, epics::pvData::PVStructurePtr root, const std::string &path);
 
 static bool ParseIndexedToken(const std::string &token, std::string &name, long &arrayIndex, bool &hasIndex);
+
+static bool EnsureDoubleBuffer(PVA_DATA *data, long *elementCount,
+    long requiredCount)
+{
+  if (!data || !elementCount) {
+    return false;
+  }
+
+  if (requiredCount < 1) {
+    requiredCount = 1;
+  }
+
+  if (data->values == NULL) {
+    data->values = (double *)malloc(sizeof(double) * requiredCount);
+    if (data->values == NULL) {
+      return false;
+    }
+  } else if (*elementCount < requiredCount) {
+    double *resized = (double *)realloc(data->values,
+        sizeof(double) * requiredCount);
+    if (resized == NULL) {
+      return false;
+    }
+    data->values = resized;
+  }
+
+  *elementCount = requiredCount;
+  return true;
+}
+
+static bool ReplaceSingleStringValue(PVA_DATA *data, const char *value)
+{
+  if (!data || !value) {
+    return false;
+  }
+
+  if (data->stringValues == NULL) {
+    data->stringValues = (char **)malloc(sizeof(char *));
+    if (data->stringValues == NULL) {
+      return false;
+    }
+    data->stringValues[0] = NULL;
+  } else if (data->stringValues[0] != NULL) {
+    free(data->stringValues[0]);
+    data->stringValues[0] = NULL;
+  }
+
+  data->stringValues[0] = (char *)malloc(sizeof(char) * (strlen(value) + 1));
+  if (data->stringValues[0] == NULL) {
+    return false;
+  }
+  strcpy(data->stringValues[0], value);
+  return true;
+}
 
 /*
   Allocate memory for the pva structure.
@@ -907,28 +962,32 @@ long ExtractScalarArrayValue(PVA_OVERALL *pva, long index, epics::pvData::PVFiel
   case epics::pvData::pvUByte: {
     //Special code for byte arrays which are usutally strings
     epics::pvData::PVDoubleArray::const_svector dataVector;
-    int nLength;
+    long nLength;
     pvScalarArrayPtr->PVScalarArray::getAs<double>(dataVector);
-    nLength = dataVector.size();
+    nLength = static_cast<long>(dataVector.size());
     if (nLength < 256) {
       nLength = 256;
     }
     if (monitorMode) {
-      if (pva->pvaData[index].monitorData[0].values == NULL) {
-        pva->pvaData[index].monitorData[0].values = (double *)malloc(sizeof(double) * nLength);
-        pva->pvaData[index].numeric = true;
+      if (!EnsureDoubleBuffer(&pva->pvaData[index].monitorData[0],
+              &pva->pvaData[index].numMonitorElements, nLength)) {
+        return (1);
       }
+      pva->pvaData[index].numeric = true;
       std::copy(dataVector.begin(), dataVector.end(), pva->pvaData[index].monitorData[0].values);
-      for (long k = dataVector.size(); k < 256; k++) {
+      for (long k = static_cast<long>(dataVector.size());
+           k < pva->pvaData[index].numMonitorElements; k++) {
         pva->pvaData[index].monitorData[0].values[k] = 0;
       }
     } else {
-      if (pva->pvaData[index].getData[i].values == NULL) {
-        pva->pvaData[index].getData[i].values = (double *)malloc(sizeof(double) * nLength);
-        pva->pvaData[index].numeric = true;
+      if (!EnsureDoubleBuffer(&pva->pvaData[index].getData[i],
+              &pva->pvaData[index].numGetElements, nLength)) {
+        return (1);
       }
+      pva->pvaData[index].numeric = true;
       std::copy(dataVector.begin(), dataVector.end(), pva->pvaData[index].getData[i].values);
-      for (long k = dataVector.size(); k < 256; k++) {
+      for (long k = static_cast<long>(dataVector.size());
+           k < pva->pvaData[index].numGetElements; k++) {
         pva->pvaData[index].getData[i].values[k] = 0;
       }
     }
@@ -2044,7 +2103,9 @@ long PutNTEnumValue(PVA_OVERALL *pva, long index) {
             enumindex = -1;
             choices = pvEnumerated.getChoices();
             for (size_t i = 0; i < choices.size(); i++) {
-              if (pva->pvaData[index].putData[0].stringValues[0] == choices[i]) {
+              const char *requestedValue =
+                  pva->pvaData[index].putData[0].stringValues[0];
+              if (requestedValue != NULL && choices[i] == requestedValue) {
                 enumindex = i;
               }
             }
@@ -2059,9 +2120,10 @@ long PutNTEnumValue(PVA_OVERALL *pva, long index) {
               }
             }
           } else {
-            enumindex = pva->pvaData[index].putData[0].values[0];
+            enumindex = static_cast<int>(pva->pvaData[index].putData[0].values[0]);
             if ((enumindex < 0) || (enumindex >= numChoices)) {
-              fprintf(stderr, "error: value (%s) for %s is out of range.\n", pva->pvaData[index].putData[0].stringValues[0], pva->pvaChannelNames[index].c_str());
+              fprintf(stderr, "error: value (%d) for %s is out of range.\n",
+                  enumindex, pva->pvaChannelNames[index].c_str());
               return (1);
             }
           }
@@ -2138,15 +2200,10 @@ long PrepPut(PVA_OVERALL *pva, long index, double value) {
     pva->pvaData[index].putData[0].values[0] = value;
   } else {
     char buffer[100];
-    if (pva->pvaData[index].putData[0].stringValues == NULL) {
-      pva->pvaData[index].putData[0].stringValues = (char **)malloc(sizeof(char *));
-    } else {
-      //if (pva->pvaData[index].putData[0].stringValues[0])
-      //free(pva->pvaData[index].putData[0].stringValues[0]);
-    }
     snprintf(buffer, sizeof(buffer), "%lf", value);
-    pva->pvaData[index].putData[0].stringValues[0] = (char *)malloc(sizeof(char) * (strlen(buffer) + 1));
-    strcpy(pva->pvaData[index].putData[0].stringValues[0], buffer);
+    if (!ReplaceSingleStringValue(&pva->pvaData[index].putData[0], buffer)) {
+      return (1);
+    }
   }
   return (0);
 }
@@ -2208,15 +2265,10 @@ long PrepPut(PVA_OVERALL *pva, long index, int64_t value) {
     pva->pvaData[index].putData[0].values[0] = (double)value;
   } else {
     char buffer[100];
-    if (pva->pvaData[index].putData[0].stringValues == NULL) {
-      pva->pvaData[index].putData[0].stringValues = (char **)malloc(sizeof(char *));
-    } else {
-      //if (pva->pvaData[index].putData[0].stringValues[0])
-      //free(pva->pvaData[index].putData[0].stringValues[0]);
-    }
     snprintf(buffer, sizeof(buffer), "%" PRId64, value);
-    pva->pvaData[index].putData[0].stringValues[0] = (char *)malloc(sizeof(char) * (strlen(buffer) + 1));
-    strcpy(pva->pvaData[index].putData[0].stringValues[0], buffer);
+    if (!ReplaceSingleStringValue(&pva->pvaData[index].putData[0], buffer)) {
+      return (1);
+    }
   }
   return (0);
 }
@@ -2280,14 +2332,9 @@ long PrepPut(PVA_OVERALL *pva, long index, char *value) {
       return (1);
     }
   } else {
-    if (pva->pvaData[index].putData[0].stringValues == NULL) {
-      pva->pvaData[index].putData[0].stringValues = (char **)malloc(sizeof(char *));
-    } else {
-      //if (pva->pvaData[index].putData[0].stringValues[0])
-      //free(pva->pvaData[index].putData[0].stringValues[0]);
+    if (!ReplaceSingleStringValue(&pva->pvaData[index].putData[0], value)) {
+      return (1);
     }
-    pva->pvaData[index].putData[0].stringValues[0] = (char *)malloc(sizeof(char) * (strlen(value) + 1));
-    strcpy(pva->pvaData[index].putData[0].stringValues[0], value);
   }
   return (0);
 }

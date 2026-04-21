@@ -1335,7 +1335,7 @@ public:
     /* Expand composite bounds to encompass all child widgets */
     composite->expandToFitChildren();
 
-    elementStack_.insert(insertIndex, QPointer<QWidget>(composite));
+    insertElementInStack(insertIndex, composite);
     if (insertIndex == 0) {
       composite->lower();
     } else {
@@ -1419,7 +1419,7 @@ public:
         child->setParent(displayArea_);
         child->setGeometry(newGeometry);
         child->show();
-        elementStack_.insert(insertIndex, QPointer<QWidget>(child));
+        insertElementInStack(insertIndex, child);
         ++insertIndex;
       }
 
@@ -3106,6 +3106,7 @@ private:
   QRect parseObjectGeometry(const AdlNode &parent) const;
   bool parseAdlPoint(const QString &text, QPoint *point) const;
   QVector<QPoint> parsePolylinePoints(const AdlNode &polylineNode) const;
+  void insertElementInStack(int insertIndex, QWidget *element);
   void ensureElementInStack(QWidget *element);
   void refreshStackingOrder();
   void requestStackingOrderRefresh();
@@ -10098,7 +10099,7 @@ private:
         return;
       }
     }
-    elementStack_.append(QPointer<QWidget>(element));
+    insertElementInStack(elementStack_.size(), element);
     refreshStackingOrder();
   }
 
@@ -20821,6 +20822,26 @@ inline QWidget *DisplayWindow::effectiveElementParent() const
   return displayArea_;
 }
 
+inline void DisplayWindow::insertElementInStack(int insertIndex, QWidget *element)
+{
+  if (!element) {
+    return;
+  }
+  for (const QPointer<QWidget> &pointer : elementStack_) {
+    if (pointer.data() == element) {
+      return;
+    }
+  }
+  if (insertIndex < 0 || insertIndex > elementStack_.size()) {
+    insertIndex = elementStack_.size();
+  }
+  elementStack_.insert(insertIndex, QPointer<QWidget>(element));
+  elementStackSet_.insert(element);
+  if (stackingEventFilter_) {
+    element->installEventFilter(stackingEventFilter_);
+  }
+}
+
 inline void DisplayWindow::ensureElementInStack(QWidget *element)
 {
   if (!element || suppressLoadRegistration_) {
@@ -20830,11 +20851,7 @@ inline void DisplayWindow::ensureElementInStack(QWidget *element)
   if (elementStackSet_.contains(element)) {
     return;
   }
-  elementStack_.append(QPointer<QWidget>(element));
-  elementStackSet_.insert(element);
-  if (stackingEventFilter_) {
-    element->installEventFilter(stackingEventFilter_);
-  }
+  insertElementInStack(elementStack_.size(), element);
   /* Defer stacking order refresh during bulk loading to avoid O(n²) behavior.
    * refreshStackingOrder() will be called once after load completes. */
   if (!restoringState_) {
@@ -20908,14 +20925,19 @@ inline void DisplayWindow::refreshStackingOrder()
   QList<QWidget *> staticWidgets;
   QList<QWidget *> dynamicWidgets;
   QList<QWidget *> medmWidgetBackedWidgets;
+  QSet<QWidget *> liveElementStackSet;
 
   for (auto it = elementStack_.begin(); it != elementStack_.end();) {
     QWidget *widget = it->data();
     if (!widget) {
       it = elementStack_.erase(it);
-      /* No widget to remove from set - already null */
       continue;
     }
+    if (liveElementStackSet.contains(widget)) {
+      it = elementStack_.erase(it);
+      continue;
+    }
+    liveElementStackSet.insert(widget);
     if (executeModeActive_) {
       if (const auto *related =
               dynamic_cast<const RelatedDisplayElement *>(widget)) {
@@ -20942,6 +20964,8 @@ inline void DisplayWindow::refreshStackingOrder()
     }
     ++it;
   }
+
+  elementStackSet_ = liveElementStackSet;
 
   /* Raise static widgets first so that interactive controls can sit on top
    * just like MEDM draws static graphics onto the background pixmap. */

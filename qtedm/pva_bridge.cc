@@ -308,7 +308,9 @@ bool pvaBridgePutDouble(PvaBridgeChannel *channel, double value)
     return false;
   }
 
-  PrepPut(channel->impl.pva, 0, value);
+  if (PrepPut(channel->impl.pva, 0, value) != 0) {
+    return false;
+  }
   return PutPVAValues(channel->impl.pva) == 0;
 }
 
@@ -320,7 +322,9 @@ bool pvaBridgePutString(PvaBridgeChannel *channel, const std::string &value)
 
   std::vector<char> bytes(value.begin(), value.end());
   bytes.push_back('\0');
-  PrepPut(channel->impl.pva, 0, bytes.data());
+  if (PrepPut(channel->impl.pva, 0, bytes.data()) != 0) {
+    return false;
+  }
   return PutPVAValues(channel->impl.pva) == 0;
 }
 
@@ -332,7 +336,9 @@ bool pvaBridgePutDoubleArray(PvaBridgeChannel *channel,
     return false;
   }
 
-  PrepPut(channel->impl.pva, 0, const_cast<double *>(values),
-      static_cast<long>(count));
+  if (PrepPut(channel->impl.pva, 0, const_cast<double *>(values),
+          static_cast<long>(count)) != 0) {
+    return false;
+  }
   return PutPVAValues(channel->impl.pva) == 0;
 }

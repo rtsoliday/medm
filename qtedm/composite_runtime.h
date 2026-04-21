@@ -4,6 +4,7 @@
 
 #include <QByteArray>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 
 #include "pv_channel_manager.h"
@@ -42,7 +43,7 @@ private:
   void evaluateVisibility();
   bool evaluateCalcExpression(double &result) const;
 
-  CompositeElement *element_ = nullptr;
+  QPointer<CompositeElement> element_;
   std::array<ChannelState, 5> channels_{};
   QByteArray calcPostfix_;
   bool calcValid_ = false;

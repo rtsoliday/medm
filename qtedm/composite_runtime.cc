@@ -37,7 +37,7 @@ QString normalizeCalcExpression(const QString &expr)
 }
 
 CompositeRuntime::CompositeRuntime(CompositeElement *element)
-  : QObject(nullptr)
+  : QObject(element)
   , element_(element)
 {
 }

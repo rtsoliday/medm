@@ -501,20 +501,14 @@ public:
     undoShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     QObject::connect(undoShortcut, &QShortcut::activated, this,
         [this]() {
-          setAsActiveDisplay();
-          if (undoStack_ && undoStack_->canUndo()) {
-            undoStack_->undo();
-          }
+          triggerUndo();
         });
     auto *redoShortcut =
         new QShortcut(QKeySequence::Redo, this);
     redoShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     QObject::connect(redoShortcut, &QShortcut::activated, this,
         [this]() {
-          setAsActiveDisplay();
-          if (undoStack_ && undoStack_->canRedo()) {
-            undoStack_->redo();
-          }
+          triggerRedo();
         });
     updateDirtyIndicator();
     setAcceptDrops(true);
@@ -712,6 +706,29 @@ public:
 
   void enterExecuteMode();
   void leaveExecuteMode();
+  void triggerUndo()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || executeModeActive_ || !undoStack_) {
+      return;
+    }
+    if (undoStack_->canUndo()) {
+      undoStack_->undo();
+    }
+  }
+
+  void triggerRedo()
+  {
+    setAsActiveDisplay();
+    auto state = state_.lock();
+    if (!state || !state->editMode || executeModeActive_ || !undoStack_) {
+      return;
+    }
+    if (undoStack_->canRedo()) {
+      undoStack_->redo();
+    }
+  }
 
   void handleEditModeChanged(bool editMode)
   {
@@ -4365,6 +4382,7 @@ private:
   }
 
   void removeTextRuntime(TextElement *element);
+  void removeCompositeRuntime(CompositeElement *element);
   void removeSliderRuntime(SliderElement *element);
   void removeChoiceButtonRuntime(ChoiceButtonElement *element);
   void removeMenuRuntime(MenuElement *element);
@@ -4385,6 +4403,7 @@ private:
   void removeCartesianPlotRuntime(CartesianPlotElement *element);
   void removeByteMonitorRuntime(ByteMonitorElement *element);
   void removeWheelSwitchRuntime(WheelSwitchElement *element);
+  void removeTextMonitorRuntime(TextMonitorElement *element);
   void removeTextEntryRuntime(TextEntryElement *element);
 
   template <typename ElementType>
@@ -15710,13 +15729,7 @@ private:
         addMenuAction(&menu, undoLabel, QKeySequence::Undo);
     undoAction->setEnabled(canUndo);
     QObject::connect(undoAction, &QAction::triggered, this, [this]() {
-      if (!undoStack_) {
-        return;
-      }
-      setAsActiveDisplay();
-      if (undoStack_->canUndo()) {
-        undoStack_->undo();
-      }
+      triggerUndo();
     });
 
     QString redoLabel = QStringLiteral("Redo");
@@ -15734,13 +15747,7 @@ private:
         addMenuAction(&menu, redoLabel, QKeySequence::Redo);
     redoAction->setEnabled(canRedo);
     QObject::connect(redoAction, &QAction::triggered, this, [this]() {
-      if (!undoStack_) {
-        return;
-      }
-      setAsActiveDisplay();
-      if (undoStack_->canRedo()) {
-        undoStack_->redo();
-      }
+      triggerRedo();
     });
 
     menu.addSeparator();
@@ -19136,7 +19143,9 @@ inline void DisplayWindow::clearAllElements()
     using ElementType = typename std::decay_t<decltype(list)>::value_type;
     for (auto *element : list) {
       if (element) {
-        if constexpr (std::is_same_v<ElementType, TextElement *>) {
+        if constexpr (std::is_same_v<ElementType, CompositeElement *>) {
+          removeCompositeRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, TextElement *>) {
           removeTextRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, TextEntryElement *>) {
           removeTextEntryRuntime(element);
@@ -19144,6 +19153,8 @@ inline void DisplayWindow::clearAllElements()
           removeSliderRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, WheelSwitchElement *>) {
           removeWheelSwitchRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, TextMonitorElement *>) {
+          removeTextMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MeterElement *>) {
           removeMeterRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, BarMonitorElement *>) {
@@ -22315,7 +22326,8 @@ inline bool DisplayWindow::promptForShellCommandInput(
 
 inline QStringList DisplayWindow::promptForShellCommandPvNames()
 {
-  if (!displayArea_) {
+  QPointer<DisplayAreaWidget> pickerArea(displayArea_);
+  if (pickerArea.isNull()) {
     return QStringList();
   }
 
@@ -22324,7 +22336,7 @@ inline QStringList DisplayWindow::promptForShellCommandPvNames()
   public:
     ShellCommandPvPicker(DisplayWindow *window, QStringList &channels,
         bool &cancelled, QEventLoop &loop)
-      : QObject(window)
+      : QObject(nullptr)
       , window_(window)
       , channels_(channels)
       , cancelled_(cancelled)
@@ -22383,7 +22395,7 @@ inline QStringList DisplayWindow::promptForShellCommandPvNames()
     }
 
   private:
-    DisplayWindow *window_ = nullptr;
+    QPointer<DisplayWindow> window_;
     QStringList &channels_;
     bool &cancelled_;
     QEventLoop &loop_;
@@ -22394,9 +22406,9 @@ inline QStringList DisplayWindow::promptForShellCommandPvNames()
   bool cancelled = true;
 
   ShellCommandPvPicker picker(this, channels, cancelled, loop);
-  displayArea_->installEventFilter(&picker);
+  pickerArea->installEventFilter(&picker);
   QMetaObject::Connection destroyedConnection =
-      QObject::connect(displayArea_, &QObject::destroyed,
+      QObject::connect(pickerArea, &QObject::destroyed,
           &loop, &QEventLoop::quit);
 
   if (!pvInfoCursorInitialized_) {
@@ -22408,7 +22420,9 @@ inline QStringList DisplayWindow::promptForShellCommandPvNames()
   QGuiApplication::restoreOverrideCursor();
 
   QObject::disconnect(destroyedConnection);
-  displayArea_->removeEventFilter(&picker);
+  if (!pickerArea.isNull()) {
+    pickerArea->removeEventFilter(&picker);
+  }
 
   if (cancelled || channels.isEmpty()) {
     return QStringList();
@@ -25851,6 +25865,10 @@ inline bool DisplayWindow::restoreSerializedState(const QByteArray &data)
     return false;
   }
 
+  const bool restartExecuteModeAfterRestore = executeModeActive_;
+  if (restartExecuteModeAfterRestore) {
+    leaveExecuteMode();
+  }
   clearAllElements();
 
   bool displayLoaded = false;
@@ -25885,6 +25903,10 @@ inline bool DisplayWindow::restoreSerializedState(const QByteArray &data)
   }
 
   lastCommittedState_ = serializeStateForUndo(filePath_);
+
+  if (restartExecuteModeAfterRestore) {
+    enterExecuteMode();
+  }
 
   restoringState_ = false;
   suppressUndoCapture_ = false;
@@ -26667,6 +26689,17 @@ inline void DisplayWindow::removeTextRuntime(TextElement *element)
   }
 }
 
+inline void DisplayWindow::removeCompositeRuntime(CompositeElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = compositeRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
 inline void DisplayWindow::removeTextEntryRuntime(TextEntryElement *element)
 {
   if (!element) {
@@ -26860,6 +26893,17 @@ inline void DisplayWindow::removeWheelSwitchRuntime(WheelSwitchElement *element)
     return;
   }
   if (auto *runtime = wheelSwitchRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeTextMonitorRuntime(TextMonitorElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = textMonitorRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

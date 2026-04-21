@@ -1181,17 +1181,13 @@ int main(int argc, char *argv[])
   QObject::connect(undoAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
-          if (auto *stack = active->undoStack()) {
-            stack->undo();
-          }
+          active->triggerUndo();
         }
       });
   QObject::connect(redoAct, &QAction::triggered, &win,
       [state]() {
         if (auto active = state->activeDisplay.data()) {
-          if (auto *stack = active->undoStack()) {
-            stack->redo();
-          }
+          active->triggerRedo();
         }
       });
   QObject::connect(cutAct, &QAction::triggered, &win,

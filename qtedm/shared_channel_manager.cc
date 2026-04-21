@@ -96,6 +96,7 @@ SharedChannelManager::SharedChannelManager()
 {
   /* Register types for queued connections from CA thread */
   qRegisterMetaType<QByteArray>("QByteArray");
+  qRegisterMetaType<quint64>("quint64");
 
   connectionCompletionTimer_.setSingleShot(true);
   connect(&connectionCompletionTimer_, &QTimer::timeout,
@@ -115,6 +116,7 @@ SharedChannelManager::~SharedChannelManager()
     delete channel;
   }
   channels_.clear();
+  instanceIdToChannel_.clear();
   subscriptionToChannel_.clear();
 }
 
@@ -355,6 +357,7 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
   /* Create new channel */
   auto *channel = new SharedChannel;
   channel->key = key;
+  channel->instanceId = nextChannelInstanceId_++;
   channel->cachedData.connected = false;
 
   QByteArray pvBytes = key.pvName.toLatin1();
@@ -381,6 +384,7 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
 
   StatisticsTracker::instance().registerChannelCreated();
   channels_.insert(key, channel);
+  instanceIdToChannel_.insert(channel->instanceId, channel);
   
   /* With preemptive callbacks, CA processes events on its own thread.
    * We just need to flush periodically to ensure requests are sent. */
@@ -413,6 +417,7 @@ void SharedChannelManager::destroyChannelIfUnused(SharedChannel *channel)
 
   /* Remove from hash */
   channels_.remove(channel->key);
+  instanceIdToChannel_.remove(channel->instanceId);
 
   /* Clean up CA resources */
   if (channel->subscriptionId) {
@@ -462,6 +467,12 @@ void SharedChannelManager::subscribeToChannel(SharedChannel *channel)
 
   channel->subscribed = true;
   scheduleDeferredFlush();
+}
+
+SharedChannelManager::SharedChannel *SharedChannelManager::findChannelByInstanceId(
+    quint64 channelInstanceId) const
+{
+  return instanceIdToChannel_.value(channelInstanceId, nullptr);
 }
 
 void SharedChannelManager::requestControlInfo(SharedChannel *channel)
@@ -521,10 +532,11 @@ void SharedChannelManager::connectionCallback(connection_handler_args args)
   
   /* With preemptive callbacks, we're on the CA thread.
    * Queue the event to the main thread for processing. */
+  const quint64 channelInstanceId = channel->instanceId;
   QMetaObject::invokeMethod(&SharedChannelManager::instance(),
       "onConnectionChanged",
       Qt::QueuedConnection,
-      Q_ARG(void*, channel),
+      Q_ARG(quint64, channelInstanceId),
       Q_ARG(bool, connected),
       Q_ARG(short, nativeType),
       Q_ARG(long, nativeCount));
@@ -550,10 +562,11 @@ void SharedChannelManager::valueCallback(event_handler_args args)
                            static_cast<int>(dataSize));
   }
   
+  const quint64 channelInstanceId = channel->instanceId;
   QMetaObject::invokeMethod(&SharedChannelManager::instance(),
       "onValueReceived",
       Qt::QueuedConnection,
-      Q_ARG(void*, channel),
+      Q_ARG(quint64, channelInstanceId),
       Q_ARG(QByteArray, eventData),
       Q_ARG(int, args.status),
       Q_ARG(long, args.type),
@@ -575,10 +588,11 @@ void SharedChannelManager::controlInfoCallback(event_handler_args args)
                            static_cast<int>(dataSize));
   }
   
+  const quint64 channelInstanceId = channel->instanceId;
   QMetaObject::invokeMethod(&SharedChannelManager::instance(),
       "onControlInfoReceived",
       Qt::QueuedConnection,
-      Q_ARG(void*, channel),
+      Q_ARG(quint64, channelInstanceId),
       Q_ARG(QByteArray, eventData),
       Q_ARG(int, args.status),
       Q_ARG(long, args.type));
@@ -596,60 +610,41 @@ void SharedChannelManager::accessRightsCallback(access_rights_handler_args args)
   bool canRead = ca_read_access(args.chid) != 0;
   bool canWrite = ca_write_access(args.chid) != 0;
   
+  const quint64 channelInstanceId = channel->instanceId;
   QMetaObject::invokeMethod(&SharedChannelManager::instance(),
       "onAccessRightsChanged",
       Qt::QueuedConnection,
-      Q_ARG(void*, channel),
+      Q_ARG(quint64, channelInstanceId),
       Q_ARG(bool, canRead),
       Q_ARG(bool, canWrite));
 }
 
 /* Slot implementations - these run on the main Qt thread */
 
-void SharedChannelManager::onConnectionChanged(void *channelPtr, bool connected,
+void SharedChannelManager::onConnectionChanged(quint64 channelInstanceId,
+    bool connected,
                                                 short nativeType, long nativeCount)
 {
-  auto *channel = static_cast<SharedChannel *>(channelPtr);
-  
-  /* Validate the channel pointer is still in our map */
-  std::lock_guard<std::mutex> lock(channelMutex_);
-  bool found = false;
-  for (auto it = channels_.begin(); it != channels_.end(); ++it) {
-    if (it.value() == channel) {
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
-    /* Channel was destroyed before we processed this event */
+  SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
+  if (!channel) {
     return;
   }
-  
+
   /* Store the native type info (captured on CA thread) */
   channel->cachedData.nativeFieldType = nativeType;
   channel->cachedData.nativeElementCount = nativeCount;
-  
+
   handleConnection(channel, connected);
 }
 
-void SharedChannelManager::onValueReceived(void *channelPtr, QByteArray eventData,
-                                            int status, long type, long count)
+void SharedChannelManager::onValueReceived(quint64 channelInstanceId,
+    QByteArray eventData, int status, long type, long count)
 {
-  auto *channel = static_cast<SharedChannel *>(channelPtr);
-  
-  /* Validate the channel pointer */
-  std::lock_guard<std::mutex> lock(channelMutex_);
-  bool found = false;
-  for (auto it = channels_.begin(); it != channels_.end(); ++it) {
-    if (it.value() == channel) {
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
+  SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
+  if (!channel) {
     return;
   }
-  
+
   /* Reconstruct event_handler_args from the copied data */
   event_handler_args args;
   args.usr = channel;
@@ -662,20 +657,10 @@ void SharedChannelManager::onValueReceived(void *channelPtr, QByteArray eventDat
   handleValue(channel, args);
 }
 
-void SharedChannelManager::onDeferredValueNotify(void *channelPtr)
+void SharedChannelManager::onDeferredValueNotify(quint64 channelInstanceId)
 {
-  auto *channel = static_cast<SharedChannel *>(channelPtr);
-
-  /* Validate the channel pointer */
-  std::lock_guard<std::mutex> lock(channelMutex_);
-  bool found = false;
-  for (auto it = channels_.begin(); it != channels_.end(); ++it) {
-    if (it.value() == channel) {
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
+  SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
+  if (!channel) {
     return;
   }
 
@@ -708,8 +693,8 @@ void SharedChannelManager::onDeferredValueNotify(void *channelPtr)
     if (elapsedMs < kMinNotifyIntervalMs) {
       const int delayMs = static_cast<int>(kMinNotifyIntervalMs - elapsedMs);
       channel->notifyPending = true;
-      QTimer::singleShot(delayMs, this, [this, channel]() {
-        onDeferredValueNotify(channel);
+      QTimer::singleShot(delayMs, this, [this, channelInstanceId]() {
+        onDeferredValueNotify(channelInstanceId);
       });
       return;
     }
@@ -725,24 +710,14 @@ void SharedChannelManager::onDeferredValueNotify(void *channelPtr)
   dispatchValueCallbacks(channel);
 }
 
-void SharedChannelManager::onControlInfoReceived(void *channelPtr, QByteArray eventData,
-                                                  int status, long type)
+void SharedChannelManager::onControlInfoReceived(quint64 channelInstanceId,
+    QByteArray eventData, int status, long type)
 {
-  auto *channel = static_cast<SharedChannel *>(channelPtr);
-  
-  /* Validate the channel pointer */
-  std::lock_guard<std::mutex> lock(channelMutex_);
-  bool found = false;
-  for (auto it = channels_.begin(); it != channels_.end(); ++it) {
-    if (it.value() == channel) {
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
+  SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
+  if (!channel) {
     return;
   }
-  
+
   /* Reconstruct event_handler_args from the copied data */
   event_handler_args args;
   args.usr = channel;
@@ -755,24 +730,14 @@ void SharedChannelManager::onControlInfoReceived(void *channelPtr, QByteArray ev
   handleControlInfo(channel, args);
 }
 
-void SharedChannelManager::onAccessRightsChanged(void *channelPtr, bool canRead, 
-                                                  bool canWrite)
+void SharedChannelManager::onAccessRightsChanged(quint64 channelInstanceId,
+    bool canRead, bool canWrite)
 {
-  auto *channel = static_cast<SharedChannel *>(channelPtr);
-  
-  /* Validate the channel pointer */
-  std::lock_guard<std::mutex> lock(channelMutex_);
-  bool found = false;
-  for (auto it = channels_.begin(); it != channels_.end(); ++it) {
-    if (it.value() == channel) {
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
+  SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
+  if (!channel) {
     return;
   }
-  
+
   handleAccessRights(channel, canRead, canWrite);
 }
 
@@ -1125,8 +1090,9 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
       if (!channel->notifyPending) {
         const int delayMs = static_cast<int>(kMinNotifyIntervalMs - elapsedMs);
         channel->notifyPending = true;
-        QTimer::singleShot(delayMs, this, [this, channel]() {
-          onDeferredValueNotify(channel);
+        const quint64 channelInstanceId = channel->instanceId;
+        QTimer::singleShot(delayMs, this, [this, channelInstanceId]() {
+          onDeferredValueNotify(channelInstanceId);
         });
       }
       return;

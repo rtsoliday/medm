@@ -230,6 +230,7 @@ private:
   struct SharedChannel
   {
     SharedChannelKey key;
+    quint64 instanceId = 0;
     chid channelId = nullptr;
     evid subscriptionId = nullptr;
     bool connected = false;
@@ -272,6 +273,7 @@ private:
       bool canRead, bool canWrite);
 
   /* Channel management */
+  SharedChannel *findChannelByInstanceId(quint64 channelInstanceId) const;
   SharedChannel *findOrCreateChannel(const SharedChannelKey &key);
   void destroyChannelIfUnused(SharedChannel *channel);
   void subscribeToChannel(SharedChannel *channel);
@@ -286,21 +288,24 @@ private:
 private Q_SLOTS:
   /* Thread-safe slots for processing CA callbacks from the CA thread.
    * These are invoked via QueuedConnection to marshal data to main thread. */
-  void onConnectionChanged(void *channelPtr, bool connected, 
+  void onConnectionChanged(quint64 channelInstanceId, bool connected,
                            short nativeType, long nativeCount);
-  void onValueReceived(void *channelPtr, QByteArray eventData, int status, 
+  void onValueReceived(quint64 channelInstanceId, QByteArray eventData, int status,
                        long type, long count);
-  void onDeferredValueNotify(void *channelPtr);
-  void onControlInfoReceived(void *channelPtr, QByteArray eventData, 
+  void onDeferredValueNotify(quint64 channelInstanceId);
+  void onControlInfoReceived(quint64 channelInstanceId, QByteArray eventData,
                              int status, long type);
-  void onAccessRightsChanged(void *channelPtr, bool canRead, bool canWrite);
+  void onAccessRightsChanged(quint64 channelInstanceId, bool canRead,
+      bool canWrite);
 
 private:
   /* Data */
   mutable std::mutex channelMutex_;  /* Protects channel access from CA thread */
   QHash<SharedChannelKey, SharedChannel *> channels_;
+  QHash<quint64, SharedChannel *> instanceIdToChannel_;
   bool flushScheduled_ = false;
   QHash<quint64, SharedChannel *> subscriptionToChannel_;
+  quint64 nextChannelInstanceId_ = 1;
   quint64 nextSubscriptionId_ = 1;
   QElapsedTimer updateRateTimer_;
   bool updateRateTimerStarted_ = false;

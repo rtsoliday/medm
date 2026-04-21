@@ -87,9 +87,10 @@ inline void TextEntryRuntime::invokeOnElement(Func &&func)
     return;
   }
   QPointer<TextEntryElement> target = element_;
+  QPointer<TextEntryRuntime> self(this);
   QMetaObject::invokeMethod(element_.data(),
-      [target, func = std::forward<Func>(func)]() mutable {
-        if (!target) {
+      [target, self, func = std::forward<Func>(func)]() mutable {
+        if (!target || !self) {
           return;
         }
         func(target.data());

@@ -38,7 +38,7 @@ This supplement is generated from repository evidence and leaves the handwritten
 
 <!-- BEGIN MACHINE:summary -->
 ## Quick start
-- [Central wiki page](../llm-wiki/repos/medm.md)
+- Repository-local guidance is sufficient: start with `AGENTS.md`, `README.md`, `docs/`, build/test/config files, and the source tree.
 - MEDM - Motif Editor and Display Manager
 - Primary work areas: `.github`, `docs`, `medm`, `printUtils`, `qtedm`, `tests`.
 
@@ -67,7 +67,9 @@ This supplement is generated from repository evidence and leaves the handwritten
 - Build and runtime behavior likely depends on neighboring core toolkit checkouts.
 
 ## Related knowledge
-- [Central wiki page](../llm-wiki/repos/medm.md)
-- [EPICS concept](../llm-wiki/concepts/epics.md)
-- [Cross-repo map](../llm-wiki/insights/cross-repo-map.md)
+- Repository-local documentation should be treated as authoritative.
+- If a shared `llm-wiki/` directory is present in this workspace or parent folder, consult [the matching repo page](../llm-wiki/repos/medm.md) for additional architectural context.
+- If no shared wiki is present, continue using repository-local evidence only.
+- If available, [the EPICS concept page](../llm-wiki/concepts/epics.md) adds broader cross-repo context.
+- If present in this workspace, [the cross-repo map](../llm-wiki/insights/cross-repo-map.md) helps explain related repositories.
 <!-- END MACHINE:summary -->

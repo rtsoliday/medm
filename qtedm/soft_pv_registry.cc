@@ -5,6 +5,7 @@
 #include <QThread>
 
 #include <db_access.h>
+#include <epicsTime.h>
 
 namespace {
 
@@ -110,6 +111,8 @@ void SoftPvRegistry::publishValue(const QString &name, double value)
 
   entry->value = value;
   entry->hasValue = true;
+  epicsTimeGetCurrent(&entry->timestamp);
+  entry->hasTimestamp = true;
   dispatchValueCallbacks(entry);
 }
 
@@ -139,6 +142,8 @@ void SoftPvRegistry::setConnected(const QString &name, bool connected)
   if (!isConnected) {
     entry->hasValue = false;
     entry->value = 0.0;
+    entry->hasTimestamp = false;
+    entry->timestamp = epicsTimeStamp{};
   }
 
   dispatchConnectionCallbacks(entry);
@@ -150,6 +155,32 @@ bool SoftPvRegistry::isRegistered(const QString &name) const
   const Entry *entry = findEntry(name);
   return entry != nullptr
       && (entry->preparedCount > 0 || entry->producerCount > 0);
+}
+
+bool SoftPvRegistry::infoSnapshot(const QString &name,
+    SoftPvInfoSnapshot &snapshot) const
+{
+  assertMainThread();
+
+  snapshot = SoftPvInfoSnapshot{};
+
+  const Entry *entry = findEntry(name);
+  if (!entry) {
+    return false;
+  }
+
+  snapshot.name = entry->name;
+  snapshot.registered = (entry->preparedCount > 0 || entry->producerCount > 0);
+  snapshot.connected = entry->connectedProducerCount > 0;
+  snapshot.hasValue = entry->hasValue;
+  snapshot.value = entry->value;
+  snapshot.timestamp = entry->timestamp;
+  snapshot.hasTimestamp = entry->hasTimestamp;
+  snapshot.preparedCount = entry->preparedCount;
+  snapshot.producerCount = entry->producerCount;
+  snapshot.connectedProducerCount = entry->connectedProducerCount;
+  snapshot.subscriberCount = entry->subscribers.size();
+  return true;
 }
 
 SubscriptionHandle SoftPvRegistry::subscribe(const QString &name,
@@ -250,6 +281,8 @@ SharedChannelData SoftPvRegistry::buildData(const Entry &entry) const
     data.numericValue = entry.value;
     data.hasValue = true;
     data.isNumeric = true;
+    data.timestamp = entry.timestamp;
+    data.hasTimestamp = entry.hasTimestamp;
   }
 
   return data;

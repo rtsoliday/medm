@@ -7,6 +7,21 @@
 
 #include "shared_channel_manager.h"
 
+struct SoftPvInfoSnapshot
+{
+  QString name;
+  bool registered = false;
+  bool connected = false;
+  bool hasValue = false;
+  double value = 0.0;
+  epicsTimeStamp timestamp{};
+  bool hasTimestamp = false;
+  int preparedCount = 0;
+  int producerCount = 0;
+  int connectedProducerCount = 0;
+  int subscriberCount = 0;
+};
+
 class SoftPvRegistry : public QObject, public SubscriptionOwner
 {
 public:
@@ -21,6 +36,7 @@ public:
   void setConnected(const QString &name, bool connected);
 
   bool isRegistered(const QString &name) const;
+  bool infoSnapshot(const QString &name, SoftPvInfoSnapshot &snapshot) const;
 
   SubscriptionHandle subscribe(
       const QString &name,
@@ -45,6 +61,8 @@ private:
     int connectedProducerCount = 0;
     bool hasValue = false;
     double value = 0.0;
+    epicsTimeStamp timestamp{};
+    bool hasTimestamp = false;
     QVector<Subscriber> subscribers;
     int dispatchDepth = 0;
     bool cleanupPending = false;

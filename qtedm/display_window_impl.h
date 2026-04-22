@@ -9108,14 +9108,8 @@ private:
     const QPoint globalPos = mapToGlobal(windowPos);
     lastContextMenuGlobalPos_ = globalPos;
 
-    ChannelAccessContext &context = ChannelAccessContext::instance();
-    context.ensureInitialized();
-
     QString content;
-    if (!context.isInitialized()) {
-      content = QStringLiteral(
-          "           PV Information\n\nChannel Access is not available.\n");
-    } else if (widget) {
+    if (widget) {
       content = buildPvInfoText(widget);
     } else {
       content = buildPvInfoBackgroundText();
@@ -10018,6 +10012,37 @@ private:
     return QString::fromLatin1(value);
   }
 
+  bool populateSoftPvInfoDetails(const QString &channelName,
+      const SoftPvInfoSnapshot &snapshot,
+      PvInfoChannelDetails &details) const
+  {
+    details = PvInfoChannelDetails{};
+    details.name = channelName.trimmed();
+    details.desc = QStringLiteral("QtEDM local soft PV");
+    details.recordType = QStringLiteral("SOFTPV");
+    details.fieldType = DBF_DOUBLE;
+    details.elementCount = 1;
+    details.readAccess = true;
+    details.writeAccess = false;
+    details.host = QStringLiteral("QtEDM Local");
+    details.severity = snapshot.connected ? NO_ALARM : INVALID_ALARM;
+    details.status = 0;
+    details.hasTimestamp = snapshot.hasTimestamp;
+    details.timestamp = snapshot.timestamp;
+
+    if (snapshot.connected && snapshot.hasValue) {
+      details.value = QString::number(snapshot.value, 'g', 12);
+      details.hasValue = true;
+    } else if (!snapshot.connected) {
+      details.value = QStringLiteral("Disconnected");
+    } else {
+      details.value = QStringLiteral("Not Yet Published");
+    }
+
+    details.error.clear();
+    return true;
+  }
+
   bool populatePvInfoDetails(const QString &channelName, chid existingChid,
       PvInfoChannelDetails &details) const
   {
@@ -10057,9 +10082,21 @@ private:
       return true;
     }
 
+    SoftPvInfoSnapshot softSnapshot;
+    if (SoftPvRegistry::instance().infoSnapshot(parsed.pvName, softSnapshot)) {
+      return populateSoftPvInfoDetails(channelName, softSnapshot, details);
+    }
+
     const QString trimmed = channelName.trimmed();
     if (trimmed.isEmpty()) {
       details.error = QStringLiteral("Channel name is empty.");
+      return false;
+    }
+
+    ChannelAccessContext &context = ChannelAccessContext::instance();
+    context.ensureInitializedForProtocol(PvProtocol::kCa);
+    if (!context.isInitializedForProtocol(PvProtocol::kCa)) {
+      details.error = QStringLiteral("Channel Access is not available.");
       return false;
     }
 

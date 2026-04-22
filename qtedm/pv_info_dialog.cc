@@ -51,8 +51,9 @@ PvInfoDialog::PvInfoDialog(const QPalette &basePalette,
   connect(closeButton_, &QPushButton::clicked, this, &QDialog::hide);
   connect(helpButton_, &QPushButton::clicked, this, [this]() {
     QMessageBox::information(this, windowTitle(),
-        QStringLiteral("Displays detailed information about the process "
-                       "variables associated with the object under the cursor."));
+        QStringLiteral("Displays detailed information about the IOC-backed "
+                       "channels or local soft PVs associated with the object "
+                       "under the cursor."));
   });
 
   resize(350, 420);

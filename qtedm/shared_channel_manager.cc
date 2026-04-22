@@ -1300,6 +1300,7 @@ bool SharedChannelManager::putValue(const QString &pvName, double value)
   }
   ca_flush_io();
   if (status == ECA_NORMAL) {
+    QList<quint64> channelInstanceIds;
     for (auto *channel : channels_) {
       if (!channel || !channel->connected) {
         continue;
@@ -1308,6 +1309,17 @@ bool SharedChannelManager::putValue(const QString &pvName, double value)
         continue;
       }
       if (!isNumericMonitorType(channel->key.requestedType)) {
+        continue;
+      }
+      channelInstanceIds.append(channel->instanceId);
+    }
+
+    /* Subscriber callbacks can unsubscribe the last listener on a channel,
+     * which may destroy that channel. Snapshot instance ids first so we
+     * never mutate channels_ while iterating it. */
+    for (quint64 channelInstanceId : channelInstanceIds) {
+      SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
+      if (!channel || !channel->connected) {
         continue;
       }
       notifySubscribersForLocalNumericPut(channel, value);

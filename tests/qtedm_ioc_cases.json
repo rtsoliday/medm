@@ -354,5 +354,98 @@
       "numeric_value": 0,
       "numeric_tolerance": 0.0
     }
+  },
+  {
+    "name": "expression_channel_soft_pv_any_change",
+    "display": "tests/test_ExpressionChannel.adl",
+    "selector": {
+      "type": "text_monitor",
+      "channel": "expr:sum"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "channelA_PV",
+        "value": "2.5"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "has_numeric_value": true,
+      "numeric_value": 1.75,
+      "numeric_tolerance": 0.000001
+    }
+  },
+  {
+    "name": "expression_channel_chained_soft_pv_update",
+    "display": "tests/test_ExpressionChannel.adl",
+    "selector": {
+      "type": "text_monitor",
+      "channel": "expr:chain"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "channelA_PV",
+        "value": "1.25"
+      },
+      {
+        "pv": "channelB_PV",
+        "value": "1.25"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "has_numeric_value": true,
+      "numeric_value": 5.0,
+      "numeric_tolerance": 0.000001
+    }
+  },
+  {
+    "name": "expression_channel_on_first_change_latches",
+    "display": "tests/test_ExpressionChannel.adl",
+    "selector": {
+      "type": "text_monitor",
+      "channel": "expr:latch"
+    },
+    "post_ready_delay_ms": 750,
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "channelC_PV",
+        "value": "33"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "has_numeric_value": true,
+      "numeric_value": 12.0,
+      "numeric_tolerance": 0.000001
+    }
+  },
+  {
+    "name": "expression_channel_trigger_zero_to_one",
+    "display": "tests/test_ExpressionChannel.adl",
+    "selector": {
+      "type": "text_monitor",
+      "channel": "expr:trigger_up"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "channelD_PV",
+        "value": "8"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "has_numeric_value": true,
+      "numeric_value": 1.0,
+      "numeric_tolerance": 0.000001
+    }
   }
 ]

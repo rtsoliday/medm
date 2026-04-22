@@ -4,6 +4,7 @@
 
 #include "channel_access_context.h"
 #include "pva_channel_manager.h"
+#include "soft_pv_registry.h"
 
 PvChannelManager &PvChannelManager::instance()
 {
@@ -20,6 +21,13 @@ SubscriptionHandle PvChannelManager::subscribe(
     ChannelAccessRightsCallback accessRightsCallback)
 {
   ParsedPvName parsed = parsePvName(pvName);
+  if (parsed.protocol == PvProtocol::kCa
+      && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
+    return SoftPvRegistry::instance().subscribe(parsed.pvName,
+        std::move(valueCallback), std::move(connectionCallback),
+        std::move(accessRightsCallback));
+  }
+
   ChannelAccessContext::instance().ensureInitializedForProtocol(parsed.protocol);
 
   if (parsed.protocol == PvProtocol::kPva) {

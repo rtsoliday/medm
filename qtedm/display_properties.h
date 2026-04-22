@@ -122,6 +122,15 @@ enum class RectangleLineStyle
   kDash
 };
 
+enum class ExpressionChannelEventSignalMode
+{
+  kNever,
+  kOnFirstChange,
+  kOnAnyChange,
+  kTriggerZeroToOne,
+  kTriggerOneToZero
+};
+
 enum class ImageType
 {
   kNone,
@@ -246,6 +255,8 @@ constexpr int kMinimumSliderHeight = 5;
 constexpr int kMinimumWheelSwitchWidth = 70;
 constexpr int kMinimumWheelSwitchHeight = 30;
 constexpr int kMinimumRectangleSize = 1;
+constexpr int kMinimumExpressionChannelWidth = 80;
+constexpr int kMinimumExpressionChannelHeight = 40;
 constexpr int kMinimumMeterSize = 60;
 constexpr int kMinimumBarSize = 5;
 constexpr int kMinimumThermometerSize = 5;

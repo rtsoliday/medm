@@ -21,6 +21,7 @@
 #include "composite_element.h"
 #include "display_state.h"
 #include "display_window.h"
+#include "expression_channel_element.h"
 #include "image_element.h"
 #include "line_element.h"
 #include "menu_element.h"
@@ -438,6 +439,9 @@ QString FindPvDialog::elementTypeLabel(QWidget *widget) const
   if (dynamic_cast<ByteMonitorElement *>(widget)) {
     return QStringLiteral("Byte Monitor");
   }
+  if (dynamic_cast<ExpressionChannelElement *>(widget)) {
+    return QStringLiteral("Expression Channel");
+  }
   if (dynamic_cast<StripChartElement *>(widget)) {
     return QStringLiteral("Strip Chart");
   }
@@ -518,6 +522,11 @@ QStringList FindPvDialog::channelsForWidget(QWidget *widget) const
     appendChannel(element->channel());
   } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
     appendChannel(element->channel());
+  } else if (auto *element = dynamic_cast<ExpressionChannelElement *>(widget)) {
+    appendChannel(element->variable());
+    for (int i = 0; i < 4; ++i) {
+      appendChannel(element->channel(i));
+    }
   } else if (auto *element = dynamic_cast<RectangleElement *>(widget)) {
     appendChannelArray(AdlWriter::collectChannels(element));
   } else if (auto *element = dynamic_cast<ImageElement *>(widget)) {

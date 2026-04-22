@@ -126,6 +126,22 @@ Any update to a test ADL file in `tests/` must include the matching
 - Keep alarm probe channels in sync with ADL references when they are used for
   INVALID/UDF rendering checks.
 
+### Expression channel harnesses
+
+Expression-channel screens have both source PV names and soft-PV names, so keep
+these rules in mind:
+
+- `tests/test_ExpressionChannel.adl` is the current reference harness.
+- IOC/visual prefix rewriting covers `chan=`, `variable=`, and
+  `channelA` through `channelD`. This keeps source PVs and generated soft-PV
+  names isolated per test run.
+- Downstream widgets should subscribe using the expression channel's
+  `variable` name, not by repeating its calc expression.
+- If a new expression-channel screen introduces new IOC-backed source PVs,
+  update `run_local_ioc.sh` in the same change.
+- Reusing existing deterministic PVs is acceptable when the new screen does not
+  require additional IOC initialization.
+
 ### Alarm probe initialization
 
 When you want a predictable alarm-color test without changing IOC internals:

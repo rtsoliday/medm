@@ -112,12 +112,15 @@ qtedm_SRC = qtedm.cc \
             text_monitor_runtime.cc \
             byte_monitor_element.cc \
             byte_monitor_runtime.cc \
+            expression_channel_element.cc \
+            expression_channel_runtime.cc \
             bar_monitor_element.cc \
             bar_monitor_runtime.cc \
             thermometer_element.cc \
             thermometer_runtime.cc \
             channel_access_context.cc \
             shared_channel_manager.cc \
+            soft_pv_registry.cc \
             pvaSDDS.cc \
             pva_bridge.cc \
             pva_channel_manager.cc \

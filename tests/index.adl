@@ -477,3 +477,18 @@ display {
 	bclr=4
 	label="-Thermometer"
 }
+"related display" {
+	object {
+		x=200
+		y=270
+		width=160
+		height=40
+	}
+	display[0] {
+		label="ExpressionChannel"
+		name="tests/test_ExpressionChannel.adl"
+	}
+	clr=14
+	bclr=4
+	label="-ExpressionChannel"
+}

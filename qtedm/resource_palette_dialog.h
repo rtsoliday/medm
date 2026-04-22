@@ -11,6 +11,7 @@
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDialog>
+#include <QDoubleSpinBox>
 #include <QEvent>
 #include <QFrame>
 #include <QFont>
@@ -2758,6 +2759,183 @@ public:
     byteLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(byteSection_);
 
+    expressionChannelSection_ = new QWidget(entriesWidget_);
+    auto *expressionChannelLayout = new QGridLayout(expressionChannelSection_);
+    expressionChannelLayout->setContentsMargins(0, 0, 0, 0);
+    expressionChannelLayout->setHorizontalSpacing(12);
+    expressionChannelLayout->setVerticalSpacing(6);
+
+    expressionChannelForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(expressionChannelForegroundButton_,
+        &QPushButton::clicked, this, [this]() {
+          openColorPalette(expressionChannelForegroundButton_,
+              QStringLiteral("Expression Channel Foreground"),
+              expressionChannelForegroundSetter_);
+        });
+
+    expressionChannelBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(expressionChannelBackgroundButton_,
+        &QPushButton::clicked, this, [this]() {
+          openColorPalette(expressionChannelBackgroundButton_,
+              QStringLiteral("Expression Channel Background"),
+              expressionChannelBackgroundSetter_);
+        });
+
+    expressionChannelVariableEdit_ = createLineEdit();
+    expressionChannelVariableEdit_->setPlaceholderText(
+        QStringLiteral("(auto-generated if empty)"));
+    committedTexts_.insert(expressionChannelVariableEdit_,
+        expressionChannelVariableEdit_->text());
+    expressionChannelVariableEdit_->installEventFilter(this);
+    QObject::connect(expressionChannelVariableEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitExpressionChannelVariable(); });
+    QObject::connect(expressionChannelVariableEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitExpressionChannelVariable(); });
+
+    expressionChannelCalcEdit_ = createLineEdit();
+    expressionChannelCalcEdit_->setPlaceholderText(
+        QStringLiteral("e.g. A+B"));
+    committedTexts_.insert(expressionChannelCalcEdit_,
+        expressionChannelCalcEdit_->text());
+    expressionChannelCalcEdit_->installEventFilter(this);
+    QObject::connect(expressionChannelCalcEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitExpressionChannelCalc(); });
+    QObject::connect(expressionChannelCalcEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitExpressionChannelCalc(); });
+
+    for (int i = 0;
+         i < static_cast<int>(expressionChannelChannelEdits_.size()); ++i) {
+      expressionChannelChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(expressionChannelChannelEdits_[i],
+          expressionChannelChannelEdits_[i]->text());
+      expressionChannelChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(expressionChannelChannelEdits_[i],
+          &QLineEdit::returnPressed, this,
+          [this, i]() { commitExpressionChannelChannel(i); });
+      QObject::connect(expressionChannelChannelEdits_[i],
+          &QLineEdit::editingFinished, this,
+          [this, i]() { commitExpressionChannelChannel(i); });
+    }
+
+    expressionChannelInitialValueSpin_ = new QDoubleSpinBox;
+    expressionChannelInitialValueSpin_->setFont(valueFont_);
+    expressionChannelInitialValueSpin_->setAutoFillBackground(true);
+    QPalette expressionSpinPalette = palette();
+    expressionSpinPalette.setColor(QPalette::Base, Qt::white);
+    expressionSpinPalette.setColor(QPalette::Text, Qt::black);
+    expressionChannelInitialValueSpin_->setPalette(expressionSpinPalette);
+    expressionChannelInitialValueSpin_->setRange(-1.0e12, 1.0e12);
+    expressionChannelInitialValueSpin_->setDecimals(6);
+    expressionChannelInitialValueSpin_->setSingleStep(0.1);
+    expressionChannelInitialValueSpin_->setAccelerated(true);
+    QObject::connect(expressionChannelInitialValueSpin_,
+        static_cast<void (QDoubleSpinBox::*)(double)>(
+            &QDoubleSpinBox::valueChanged),
+        this, [this](double value) {
+          if (!expressionChannelInitialValueSetter_) {
+            if (expressionChannelInitialValueGetter_) {
+              const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
+              expressionChannelInitialValueSpin_->setValue(
+                  expressionChannelInitialValueGetter_());
+            }
+            return;
+          }
+          expressionChannelInitialValueSetter_(value);
+          if (expressionChannelInitialValueGetter_) {
+            const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
+            expressionChannelInitialValueSpin_->setValue(
+                expressionChannelInitialValueGetter_());
+          }
+        });
+
+    expressionChannelEventSignalCombo_ = new QComboBox;
+    expressionChannelEventSignalCombo_->setFont(valueFont_);
+    expressionChannelEventSignalCombo_->setAutoFillBackground(true);
+    expressionChannelEventSignalCombo_->addItem(QStringLiteral("Never"));
+    expressionChannelEventSignalCombo_->addItem(
+        QStringLiteral("On First Change"));
+    expressionChannelEventSignalCombo_->addItem(
+        QStringLiteral("On Any Change"));
+    expressionChannelEventSignalCombo_->addItem(
+        QStringLiteral("Trigger 0->1"));
+    expressionChannelEventSignalCombo_->addItem(
+        QStringLiteral("Trigger 1->0"));
+    QObject::connect(expressionChannelEventSignalCombo_,
+        static_cast<void (QComboBox::*)(int)>(
+            &QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (!expressionChannelEventSignalSetter_) {
+            if (expressionChannelEventSignalGetter_) {
+              const QSignalBlocker blocker(expressionChannelEventSignalCombo_);
+              expressionChannelEventSignalCombo_->setCurrentIndex(
+                  expressionChannelEventSignalToIndex(
+                      expressionChannelEventSignalGetter_()));
+            }
+            return;
+          }
+          expressionChannelEventSignalSetter_(
+              expressionChannelEventSignalFromIndex(index));
+          if (expressionChannelEventSignalGetter_) {
+            const QSignalBlocker blocker(expressionChannelEventSignalCombo_);
+            expressionChannelEventSignalCombo_->setCurrentIndex(
+                expressionChannelEventSignalToIndex(
+                    expressionChannelEventSignalGetter_()));
+          }
+        });
+
+    expressionChannelPrecisionSpin_ = new QSpinBox;
+    expressionChannelPrecisionSpin_->setFont(valueFont_);
+    expressionChannelPrecisionSpin_->setAutoFillBackground(true);
+    expressionChannelPrecisionSpin_->setPalette(expressionSpinPalette);
+    expressionChannelPrecisionSpin_->setRange(0, 17);
+    expressionChannelPrecisionSpin_->setAccelerated(true);
+    QObject::connect(expressionChannelPrecisionSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) {
+          if (!expressionChannelPrecisionSetter_) {
+            if (expressionChannelPrecisionGetter_) {
+              const QSignalBlocker blocker(expressionChannelPrecisionSpin_);
+              expressionChannelPrecisionSpin_->setValue(
+                  expressionChannelPrecisionGetter_());
+            }
+            return;
+          }
+          expressionChannelPrecisionSetter_(value);
+          if (expressionChannelPrecisionGetter_) {
+            const QSignalBlocker blocker(expressionChannelPrecisionSpin_);
+            expressionChannelPrecisionSpin_->setValue(
+                expressionChannelPrecisionGetter_());
+          }
+        });
+
+    int expressionChannelRow = 0;
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Foreground"), expressionChannelForegroundButton_);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Background"), expressionChannelBackgroundButton_);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Variable"), expressionChannelVariableEdit_);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Calc"), expressionChannelCalcEdit_);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Channel A"), expressionChannelChannelEdits_[0]);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Channel B"), expressionChannelChannelEdits_[1]);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Channel C"), expressionChannelChannelEdits_[2]);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Channel D"), expressionChannelChannelEdits_[3]);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Initial Value"), expressionChannelInitialValueSpin_);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Event Signal"), expressionChannelEventSignalCombo_);
+    addRow(expressionChannelLayout, expressionChannelRow++,
+        QStringLiteral("Precision"), expressionChannelPrecisionSpin_);
+    expressionChannelLayout->setRowStretch(expressionChannelRow, 1);
+    entriesLayout->addWidget(expressionChannelSection_);
+
     entriesLayout->addStretch(1);
 
   displaySection_->setVisible(false);
@@ -2774,6 +2952,7 @@ public:
   thermometerSection_->setVisible(false);
   scaleSection_->setVisible(false);
   byteSection_->setVisible(false);
+  expressionChannelSection_->setVisible(false);
   updateSectionVisibility(selectionKind_);
 
     scrollArea_->setWidget(entriesWidget_);
@@ -6227,6 +6406,155 @@ public:
     showPaletteWithoutActivating();
   }
 
+  void showForExpressionChannel(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<QString()> variableGetter,
+      std::function<void(const QString &)> variableSetter,
+      std::function<QString()> calcGetter,
+      std::function<void(const QString &)> calcSetter,
+      std::array<std::function<QString()>, 4> channelGetters,
+      std::array<std::function<void(const QString &)>, 4> channelSetters,
+      std::function<double()> initialValueGetter,
+      std::function<void(double)> initialValueSetter,
+      std::function<ExpressionChannelEventSignalMode()> eventSignalGetter,
+      std::function<void(ExpressionChannelEventSignalMode)> eventSignalSetter,
+      std::function<int()> precisionGetter,
+      std::function<void(int)> precisionSetter,
+      const QString &elementLabel = QStringLiteral("Expression Channel"))
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kExpressionChannel;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    expressionChannelForegroundGetter_ = std::move(foregroundGetter);
+    expressionChannelForegroundSetter_ = std::move(foregroundSetter);
+    expressionChannelBackgroundGetter_ = std::move(backgroundGetter);
+    expressionChannelBackgroundSetter_ = std::move(backgroundSetter);
+    expressionChannelVariableGetter_ = std::move(variableGetter);
+    expressionChannelVariableSetter_ = std::move(variableSetter);
+    expressionChannelCalcGetter_ = std::move(calcGetter);
+    expressionChannelCalcSetter_ = std::move(calcSetter);
+    expressionChannelChannelGetters_ = std::move(channelGetters);
+    expressionChannelChannelSetters_ = std::move(channelSetters);
+    expressionChannelInitialValueGetter_ = std::move(initialValueGetter);
+    expressionChannelInitialValueSetter_ = std::move(initialValueSetter);
+    expressionChannelEventSignalGetter_ = std::move(eventSignalGetter);
+    expressionChannelEventSignalSetter_ = std::move(eventSignalSetter);
+    expressionChannelPrecisionGetter_ = std::move(precisionGetter);
+    expressionChannelPrecisionSetter_ = std::move(precisionSetter);
+
+    QRect geometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (geometry.width() <= 0) {
+      geometry.setWidth(kMinimumExpressionChannelWidth);
+    }
+    if (geometry.height() <= 0) {
+      geometry.setHeight(kMinimumExpressionChannelHeight);
+    }
+    lastCommittedGeometry_ = geometry;
+    updateGeometryEdits(geometry);
+
+    if (expressionChannelForegroundButton_) {
+      const QColor color = expressionChannelForegroundGetter_
+              ? expressionChannelForegroundGetter_()
+              : palette().color(QPalette::WindowText);
+      setColorButtonColor(expressionChannelForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+      expressionChannelForegroundButton_->setEnabled(
+          static_cast<bool>(expressionChannelForegroundSetter_));
+    }
+
+    if (expressionChannelBackgroundButton_) {
+      const QColor color = expressionChannelBackgroundGetter_
+              ? expressionChannelBackgroundGetter_()
+              : palette().color(QPalette::Window);
+      setColorButtonColor(expressionChannelBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+      expressionChannelBackgroundButton_->setEnabled(
+          static_cast<bool>(expressionChannelBackgroundSetter_));
+    }
+
+    if (expressionChannelVariableEdit_) {
+      const QString value = expressionChannelVariableGetter_
+              ? expressionChannelVariableGetter_()
+              : QString();
+      const QSignalBlocker blocker(expressionChannelVariableEdit_);
+      expressionChannelVariableEdit_->setText(value);
+      expressionChannelVariableEdit_->setEnabled(
+          static_cast<bool>(expressionChannelVariableSetter_));
+      committedTexts_[expressionChannelVariableEdit_] = value;
+    }
+
+    if (expressionChannelCalcEdit_) {
+      const QString value = expressionChannelCalcGetter_
+              ? expressionChannelCalcGetter_()
+              : QString();
+      const QSignalBlocker blocker(expressionChannelCalcEdit_);
+      expressionChannelCalcEdit_->setText(value);
+      expressionChannelCalcEdit_->setEnabled(
+          static_cast<bool>(expressionChannelCalcSetter_));
+      committedTexts_[expressionChannelCalcEdit_] = value;
+    }
+
+    for (int i = 0;
+         i < static_cast<int>(expressionChannelChannelEdits_.size()); ++i) {
+      if (!expressionChannelChannelEdits_[i]) {
+        continue;
+      }
+      const QString value = expressionChannelChannelGetters_[i]
+              ? expressionChannelChannelGetters_[i]()
+              : QString();
+      const QSignalBlocker blocker(expressionChannelChannelEdits_[i]);
+      expressionChannelChannelEdits_[i]->setText(value);
+      expressionChannelChannelEdits_[i]->setEnabled(
+          static_cast<bool>(expressionChannelChannelSetters_[i]));
+      committedTexts_[expressionChannelChannelEdits_[i]] = value;
+    }
+
+    if (expressionChannelInitialValueSpin_) {
+      const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
+      expressionChannelInitialValueSpin_->setValue(
+          expressionChannelInitialValueGetter_
+              ? expressionChannelInitialValueGetter_()
+              : 0.0);
+      expressionChannelInitialValueSpin_->setEnabled(
+          static_cast<bool>(expressionChannelInitialValueSetter_));
+    }
+
+    if (expressionChannelEventSignalCombo_) {
+      const QSignalBlocker blocker(expressionChannelEventSignalCombo_);
+      expressionChannelEventSignalCombo_->setCurrentIndex(
+          expressionChannelEventSignalGetter_
+              ? expressionChannelEventSignalToIndex(
+                    expressionChannelEventSignalGetter_())
+              : expressionChannelEventSignalToIndex(
+                    ExpressionChannelEventSignalMode::kOnAnyChange));
+      expressionChannelEventSignalCombo_->setEnabled(
+          static_cast<bool>(expressionChannelEventSignalSetter_));
+    }
+
+    if (expressionChannelPrecisionSpin_) {
+      const QSignalBlocker blocker(expressionChannelPrecisionSpin_);
+      expressionChannelPrecisionSpin_->setValue(
+          expressionChannelPrecisionGetter_
+              ? std::max(0, expressionChannelPrecisionGetter_())
+              : 0);
+      expressionChannelPrecisionSpin_->setEnabled(
+          static_cast<bool>(expressionChannelPrecisionSetter_));
+    }
+
+    if (elementLabel_) {
+      elementLabel_->setText(elementLabel);
+    }
+
+    showPaletteWithoutActivating();
+  }
+
 
   void showForComposite(std::function<QRect()> geometryGetter,
     std::function<void(const QRect &)> geometrySetter,
@@ -7702,6 +8030,52 @@ public:
     if (byteChannelEdit_) {
       byteChannelEdit_->setEnabled(false);
     }
+    expressionChannelForegroundGetter_ = {};
+    expressionChannelForegroundSetter_ = {};
+    expressionChannelBackgroundGetter_ = {};
+    expressionChannelBackgroundSetter_ = {};
+    expressionChannelVariableGetter_ = {};
+    expressionChannelVariableSetter_ = {};
+    expressionChannelCalcGetter_ = {};
+    expressionChannelCalcSetter_ = {};
+    for (auto &getter : expressionChannelChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : expressionChannelChannelSetters_) {
+      setter = {};
+    }
+    expressionChannelInitialValueGetter_ = {};
+    expressionChannelInitialValueSetter_ = {};
+    expressionChannelEventSignalGetter_ = {};
+    expressionChannelEventSignalSetter_ = {};
+    expressionChannelPrecisionGetter_ = {};
+    expressionChannelPrecisionSetter_ = {};
+    if (expressionChannelForegroundButton_) {
+      expressionChannelForegroundButton_->setEnabled(false);
+    }
+    if (expressionChannelBackgroundButton_) {
+      expressionChannelBackgroundButton_->setEnabled(false);
+    }
+    if (expressionChannelVariableEdit_) {
+      expressionChannelVariableEdit_->setEnabled(false);
+    }
+    if (expressionChannelCalcEdit_) {
+      expressionChannelCalcEdit_->setEnabled(false);
+    }
+    for (QLineEdit *edit : expressionChannelChannelEdits_) {
+      if (edit) {
+        edit->setEnabled(false);
+      }
+    }
+    if (expressionChannelInitialValueSpin_) {
+      expressionChannelInitialValueSpin_->setEnabled(false);
+    }
+    if (expressionChannelEventSignalCombo_) {
+      expressionChannelEventSignalCombo_->setEnabled(false);
+    }
+    if (expressionChannelPrecisionSpin_) {
+      expressionChannelPrecisionSpin_->setEnabled(false);
+    }
     rectangleForegroundGetter_ = {};
     rectangleForegroundSetter_ = {};
     rectangleFillGetter_ = {};
@@ -7816,6 +8190,11 @@ public:
     }
     updateThermometerChannelDependentControls();
     resetLineEdit(scaleChannelEdit_);
+    resetLineEdit(expressionChannelVariableEdit_);
+    resetLineEdit(expressionChannelCalcEdit_);
+    for (QLineEdit *edit : expressionChannelChannelEdits_) {
+      resetLineEdit(edit);
+    }
     resetLineEdit(rectangleLineWidthEdit_);
     resetLineEdit(rectangleVisibilityCalcEdit_);
     for (QLineEdit *edit : rectangleChannelEdits_) {
@@ -7886,6 +8265,8 @@ public:
       resetColorButton(button);
     }
     resetColorButton(rectangleForegroundButton_);
+    resetColorButton(expressionChannelForegroundButton_);
+    resetColorButton(expressionChannelBackgroundButton_);
     resetColorButton(lineColorButton_);
     resetColorButton(compositeForegroundButton_);
     resetColorButton(compositeBackgroundButton_);
@@ -7999,6 +8380,20 @@ public:
     if (barFillCombo_) {
       const QSignalBlocker blocker(barFillCombo_);
       barFillCombo_->setCurrentIndex(barFillToIndex(BarFill::kFromEdge));
+    }
+    if (expressionChannelInitialValueSpin_) {
+      const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
+      expressionChannelInitialValueSpin_->setValue(0.0);
+    }
+    if (expressionChannelEventSignalCombo_) {
+      const QSignalBlocker blocker(expressionChannelEventSignalCombo_);
+      expressionChannelEventSignalCombo_->setCurrentIndex(
+          expressionChannelEventSignalToIndex(
+              ExpressionChannelEventSignalMode::kOnAnyChange));
+    }
+    if (expressionChannelPrecisionSpin_) {
+      const QSignalBlocker blocker(expressionChannelPrecisionSpin_);
+      expressionChannelPrecisionSpin_->setValue(0);
     }
     if (textVisibilityCombo_) {
       const QSignalBlocker blocker(textVisibilityCombo_);
@@ -8257,6 +8652,7 @@ private:
   enum class SelectionKind {
     kNone,
     kDisplay,
+    kExpressionChannel,
     kRectangle,
     kImage,
     kHeatmap,
@@ -8352,6 +8748,10 @@ private:
         const bool isImageChannelEdit = std::find(
             imageChannelEdits_.begin(), imageChannelEdits_.end(), edit)
             != imageChannelEdits_.end();
+        const bool isExpressionChannelEdit = std::find(
+            expressionChannelChannelEdits_.begin(),
+            expressionChannelChannelEdits_.end(), edit)
+            != expressionChannelChannelEdits_.end();
         const bool isCompositeChannelEdit = std::find(
             compositeChannelEdits_.begin(), compositeChannelEdits_.end(), edit)
             != compositeChannelEdits_.end();
@@ -8378,12 +8778,15 @@ private:
             || edit == compositeFileEdit_
             || edit == compositeVisibilityCalcEdit_
             || edit == imageNameEdit_ || edit == imageCalcEdit_
+            || edit == expressionChannelVariableEdit_
+            || edit == expressionChannelCalcEdit_
             || edit == imageVisibilityCalcEdit_
             || edit == thermometerVisibilityCalcEdit_
             || edit == lineLineWidthEdit_
             || edit == lineVisibilityCalcEdit_
             || isRectangleChannelEdit || isLineChannelEdit
-            || isImageChannelEdit || isCompositeChannelEdit
+            || isImageChannelEdit || isExpressionChannelEdit
+            || isCompositeChannelEdit
             || isThermometerVisibilityChannelEdit
             || isRelatedLabelEdit
             || isRelatedNameEdit || isRelatedArgsEdit
@@ -8595,6 +8998,11 @@ private:
       const bool byteVisible = kind == SelectionKind::kByteMonitor;
       byteSection_->setVisible(byteVisible);
       byteSection_->setEnabled(byteVisible);
+    }
+    if (expressionChannelSection_) {
+      const bool expressionVisible = kind == SelectionKind::kExpressionChannel;
+      expressionChannelSection_->setVisible(expressionVisible);
+      expressionChannelSection_->setEnabled(expressionVisible);
     }
   }
 
@@ -9488,6 +9896,53 @@ private:
     const QString value = byteChannelEdit_->text();
     byteChannelSetter_(value);
     committedTexts_[byteChannelEdit_] = value;
+  }
+
+  void commitExpressionChannelVariable()
+  {
+    if (!expressionChannelVariableEdit_) {
+      return;
+    }
+    if (!expressionChannelVariableSetter_) {
+      revertLineEdit(expressionChannelVariableEdit_);
+      return;
+    }
+    const QString value = expressionChannelVariableEdit_->text();
+    expressionChannelVariableSetter_(value);
+    committedTexts_[expressionChannelVariableEdit_] = value;
+  }
+
+  void commitExpressionChannelCalc()
+  {
+    if (!expressionChannelCalcEdit_) {
+      return;
+    }
+    if (!expressionChannelCalcSetter_) {
+      revertLineEdit(expressionChannelCalcEdit_);
+      return;
+    }
+    const QString value = expressionChannelCalcEdit_->text();
+    expressionChannelCalcSetter_(value);
+    committedTexts_[expressionChannelCalcEdit_] = value;
+  }
+
+  void commitExpressionChannelChannel(int index)
+  {
+    if (index < 0
+        || index >= static_cast<int>(expressionChannelChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = expressionChannelChannelEdits_[index];
+    if (!edit) {
+      return;
+    }
+    if (!expressionChannelChannelSetters_[index]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    expressionChannelChannelSetters_[index](value);
+    committedTexts_[edit] = value;
   }
 
   void handleStripChartUnitsChanged(int index)
@@ -10688,6 +11143,42 @@ private:
     }
   }
 
+  ExpressionChannelEventSignalMode expressionChannelEventSignalFromIndex(
+      int index) const
+  {
+    switch (index) {
+    case 0:
+      return ExpressionChannelEventSignalMode::kNever;
+    case 1:
+      return ExpressionChannelEventSignalMode::kOnFirstChange;
+    case 3:
+      return ExpressionChannelEventSignalMode::kTriggerZeroToOne;
+    case 4:
+      return ExpressionChannelEventSignalMode::kTriggerOneToZero;
+    case 2:
+    default:
+      return ExpressionChannelEventSignalMode::kOnAnyChange;
+    }
+  }
+
+  int expressionChannelEventSignalToIndex(
+      ExpressionChannelEventSignalMode mode) const
+  {
+    switch (mode) {
+    case ExpressionChannelEventSignalMode::kNever:
+      return 0;
+    case ExpressionChannelEventSignalMode::kOnFirstChange:
+      return 1;
+    case ExpressionChannelEventSignalMode::kTriggerZeroToOne:
+      return 3;
+    case ExpressionChannelEventSignalMode::kTriggerOneToZero:
+      return 4;
+    case ExpressionChannelEventSignalMode::kOnAnyChange:
+    default:
+      return 2;
+    }
+  }
+
   ChoiceButtonStacking choiceButtonStackingFromIndex(int index) const
   {
     switch (index) {
@@ -11066,6 +11557,15 @@ private:
   QSpinBox *byteStartBitSpin_ = nullptr;
   QSpinBox *byteEndBitSpin_ = nullptr;
   QLineEdit *byteChannelEdit_ = nullptr;
+  QWidget *expressionChannelSection_ = nullptr;
+  QPushButton *expressionChannelForegroundButton_ = nullptr;
+  QPushButton *expressionChannelBackgroundButton_ = nullptr;
+  QLineEdit *expressionChannelVariableEdit_ = nullptr;
+  QLineEdit *expressionChannelCalcEdit_ = nullptr;
+  std::array<QLineEdit *, 4> expressionChannelChannelEdits_{};
+  QDoubleSpinBox *expressionChannelInitialValueSpin_ = nullptr;
+  QComboBox *expressionChannelEventSignalCombo_ = nullptr;
+  QSpinBox *expressionChannelPrecisionSpin_ = nullptr;
   QPushButton *rectangleForegroundButton_ = nullptr;
   QComboBox *rectangleFillCombo_ = nullptr;
   QComboBox *rectangleLineStyleCombo_ = nullptr;
@@ -11362,6 +11862,19 @@ private:
     }
     if (byteChannelEdit_) {
       committedTexts_[byteChannelEdit_] = byteChannelEdit_->text();
+    }
+    if (expressionChannelVariableEdit_) {
+      committedTexts_[expressionChannelVariableEdit_]
+          = expressionChannelVariableEdit_->text();
+    }
+    if (expressionChannelCalcEdit_) {
+      committedTexts_[expressionChannelCalcEdit_]
+          = expressionChannelCalcEdit_->text();
+    }
+    for (QLineEdit *edit : expressionChannelChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
     }
     if (rectangleLineWidthEdit_) {
       committedTexts_[rectangleLineWidthEdit_] = rectangleLineWidthEdit_->text();
@@ -11750,6 +12263,25 @@ private:
   std::function<void(int)> byteEndBitSetter_;
   std::function<QString()> byteChannelGetter_;
   std::function<void(const QString &)> byteChannelSetter_;
+  std::function<QColor()> expressionChannelForegroundGetter_;
+  std::function<void(const QColor &)> expressionChannelForegroundSetter_;
+  std::function<QColor()> expressionChannelBackgroundGetter_;
+  std::function<void(const QColor &)> expressionChannelBackgroundSetter_;
+  std::function<QString()> expressionChannelVariableGetter_;
+  std::function<void(const QString &)> expressionChannelVariableSetter_;
+  std::function<QString()> expressionChannelCalcGetter_;
+  std::function<void(const QString &)> expressionChannelCalcSetter_;
+  std::array<std::function<QString()>, 4> expressionChannelChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4>
+      expressionChannelChannelSetters_{};
+  std::function<double()> expressionChannelInitialValueGetter_;
+  std::function<void(double)> expressionChannelInitialValueSetter_;
+  std::function<ExpressionChannelEventSignalMode()>
+      expressionChannelEventSignalGetter_;
+  std::function<void(ExpressionChannelEventSignalMode)>
+      expressionChannelEventSignalSetter_;
+  std::function<int()> expressionChannelPrecisionGetter_;
+  std::function<void(int)> expressionChannelPrecisionSetter_;
   QString committedTextString_;
   std::function<QColor()> rectangleForegroundGetter_;
   std::function<void(const QColor &)> rectangleForegroundSetter_;

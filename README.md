@@ -91,6 +91,26 @@ rendering change needs new baselines, regenerate them with:
 tests/run_qtedm_visual_tests.sh --update-goldens
 ```
 
+### Expression Channels
+
+QtEDM includes an `Expression Channel` monitor widget that evaluates an EPICS
+calc expression over up to four inputs and publishes the result as a process-
+local soft PV. Other widgets can subscribe to that result by using the
+expression channel's `variable` name as their normal channel name.
+
+For creation steps, resource-palette field meanings, ADL syntax, event-signal
+semantics, troubleshooting, and validation commands, see
+[qtedm/ExpressionChannelUsage.md](qtedm/ExpressionChannelUsage.md).
+
+Current reference fixtures and coverage:
+
+- Manual/IOC harness:
+  `tests/test_ExpressionChannel.adl`
+- Parser coverage:
+  `qtedm/tests/test_adl_parser.cc`
+- IOC smoke cases:
+  `tests/qtedm_ioc_cases.json`
+
 ## MEDM (Motif/X11)
 
 MEDM is the legacy Motif/X11 implementation in this repository (`medm/`).

@@ -650,6 +650,7 @@ public:
     appendVisible(stripChartElements_);
     appendVisible(cartesianPlotElements_);
     appendVisible(byteMonitorElements_);
+    appendVisible(expressionChannelElements_);
     appendVisible(rectangleElements_);
     appendVisible(imageElements_);
     appendVisible(heatmapElements_);
@@ -817,6 +818,9 @@ public:
       if (dynamic_cast<ByteMonitorElement *>(widget)) {
         return QStringLiteral("Byte Monitor");
       }
+      if (dynamic_cast<ExpressionChannelElement *>(widget)) {
+        return QStringLiteral("Expression Channel");
+      }
       if (dynamic_cast<RectangleElement *>(widget)) {
         return QStringLiteral("Rectangle");
       }
@@ -889,6 +893,7 @@ public:
     considerList(stripChartElements_);
     considerList(cartesianPlotElements_);
     considerList(byteMonitorElements_);
+    considerList(expressionChannelElements_);
     considerList(rectangleElements_);
     considerList(imageElements_);
     considerList(heatmapElements_);
@@ -2749,6 +2754,7 @@ protected:
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kThermometer
             || state->createTool == CreateTool::kByteMonitor
+            || state->createTool == CreateTool::kExpressionChannel
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
             || state->createTool == CreateTool::kCartesianPlot
@@ -3074,6 +3080,8 @@ private:
   CartesianPlotElement *loadCartesianPlotElement(const AdlNode &cartesianNode);
   StripChartElement *loadStripChartElement(const AdlNode &stripNode);
   ByteMonitorElement *loadByteMonitorElement(const AdlNode &byteNode);
+  ExpressionChannelElement *loadExpressionChannelElement(
+      const AdlNode &expressionChannelNode);
   ImageElement *loadImageElement(const AdlNode &imageNode);
   HeatmapElement *loadHeatmapElement(const AdlNode &heatmapNode);
   RectangleElement *loadRectangleElement(const AdlNode &rectangleNode);
@@ -3198,6 +3206,10 @@ private:
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
   Qt::Alignment parseAlignment(const QString &value) const;
+  ExpressionChannelEventSignalMode parseExpressionChannelEventSignalMode(
+      const QString &value) const;
+  QString expressionChannelEventSignalModeString(
+      ExpressionChannelEventSignalMode mode) const;
   void setAsActiveDisplay();
   void markDirty();
   void notifyMenus() const;
@@ -3343,6 +3355,10 @@ private:
   QList<ByteMonitorElement *> byteMonitorElements_;
   QHash<ByteMonitorElement *, ByteMonitorRuntime *> byteMonitorRuntimes_;
   ByteMonitorElement *selectedByteMonitorElement_ = nullptr;
+  QList<ExpressionChannelElement *> expressionChannelElements_;
+  QHash<ExpressionChannelElement *, ExpressionChannelRuntime *>
+      expressionChannelRuntimes_;
+  ExpressionChannelElement *selectedExpressionChannel_ = nullptr;
   QList<RectangleElement *> rectangleElements_;
   QHash<RectangleElement *, RectangleRuntime *> rectangleRuntimes_;
   RectangleElement *selectedRectangle_ = nullptr;
@@ -3606,6 +3622,15 @@ private:
     selectedByteMonitorElement_ = nullptr;
   }
 
+  void clearExpressionChannelSelection()
+  {
+    if (!selectedExpressionChannel_) {
+      return;
+    }
+    selectedExpressionChannel_->setSelected(false);
+    selectedExpressionChannel_ = nullptr;
+  }
+
   void clearRectangleSelection()
   {
     if (!selectedRectangle_) {
@@ -3762,6 +3787,10 @@ private:
     }
     if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       byte->setSelected(selected);
+      return;
+    }
+    if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
+      expression->setSelected(selected);
       return;
     }
     if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
@@ -3951,6 +3980,12 @@ private:
     if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       if (selectedByteMonitorElement_ == byte) {
         selectedByteMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
+      if (selectedExpressionChannel_ == expression) {
+        selectedExpressionChannel_ = nullptr;
       }
       return;
     }
@@ -4148,6 +4183,12 @@ private:
         return;
       }
     }
+    if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
+      if (selectedExpressionChannel_ == expression) {
+        clearExpressionChannelSelection();
+        return;
+      }
+    }
     if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
       if (selectedRectangle_ == rectangle) {
         clearRectangleSelection();
@@ -4277,6 +4318,7 @@ private:
     appendUnique(selectedStripChartElement_);
     appendUnique(selectedCartesianPlotElement_);
     appendUnique(selectedByteMonitorElement_);
+    appendUnique(selectedExpressionChannel_);
     appendUnique(selectedRectangle_);
     appendUnique(selectedImage_);
     appendUnique(selectedOval_);
@@ -4368,6 +4410,7 @@ private:
     clearBarMonitorSelection();
     clearThermometerSelection();
     clearByteMonitorSelection();
+    clearExpressionChannelSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearHeatmapSelection();
@@ -4402,6 +4445,7 @@ private:
   void removeStripChartRuntime(StripChartElement *element);
   void removeCartesianPlotRuntime(CartesianPlotElement *element);
   void removeByteMonitorRuntime(ByteMonitorElement *element);
+  void removeExpressionChannelRuntime(ExpressionChannelElement *element);
   void removeWheelSwitchRuntime(WheelSwitchElement *element);
   void removeTextMonitorRuntime(TextMonitorElement *element);
   void removeTextEntryRuntime(TextEntryElement *element);
@@ -4442,6 +4486,8 @@ private:
       removeCartesianPlotRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement>) {
       removeByteMonitorRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, ExpressionChannelElement>) {
+      removeExpressionChannelRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
       removeChoiceButtonRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MenuElement>) {
@@ -5384,6 +5430,43 @@ private:
       return true;
     }
 
+    if (selectedExpressionChannel_) {
+      ExpressionChannelElement *element = selectedExpressionChannel_;
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = target.translateRectForPaste(geometry, offset);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        ExpressionChannelElement *newElement = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          newElement = target.loadExpressionChannelElement(nodeCopy);
+        }
+        if (newElement) {
+          target.selectExpressionChannelElement(newElement);
+          target.showResourcePaletteForExpressionChannel(newElement);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(expressionChannelElements_,
+            selectedExpressionChannel_);
+        finalizeCut();
+      }
+      return true;
+    }
+
     if (selectedRectangle_) {
       RectangleElement *element = selectedRectangle_;
   const QRect geometry = widgetDisplayRect(element);
@@ -5884,6 +5967,7 @@ private:
         || selectedThermometerElement_
         || selectedScaleMonitorElement_ || selectedStripChartElement_
         || selectedCartesianPlotElement_ || selectedByteMonitorElement_
+        || selectedExpressionChannel_
         || selectedRectangle_ || selectedImage_ || selectedHeatmap_ || selectedOval_
         || selectedArc_ || selectedLine_ || selectedPolyline_
         || selectedPolygon_ || selectedCompositeElement_;
@@ -5905,6 +5989,7 @@ private:
         || !thermometerElements_.isEmpty()
         || !scaleMonitorElements_.isEmpty() || !stripChartElements_.isEmpty()
         || !cartesianPlotElements_.isEmpty() || !byteMonitorElements_.isEmpty()
+        || !expressionChannelElements_.isEmpty()
         || !rectangleElements_.isEmpty() || !imageElements_.isEmpty()
         || !heatmapElements_.isEmpty()
         || !ovalElements_.isEmpty() || !arcElements_.isEmpty()
@@ -5950,6 +6035,7 @@ private:
     clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
+    clearExpressionChannelSelection();
     clearRectangleSelection();
     clearImageSelection();
     clearOvalSelection();
@@ -7836,6 +7922,104 @@ private:
         std::move(channelGetters), std::move(channelSetters));
   }
 
+  void showResourcePaletteForExpressionChannel(
+      ExpressionChannelElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    std::array<std::function<QString()>, 4> channelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> channelSetters{{
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
+    }};
+    dialog->showForExpressionChannel(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->variable();
+        },
+        [this, element](const QString &value) {
+          element->setVariable(value);
+          markDirty();
+        },
+        [element]() {
+          return element->calc();
+        },
+        [this, element](const QString &value) {
+          element->setCalc(value);
+          markDirty();
+        },
+        std::move(channelGetters),
+        std::move(channelSetters),
+        [element]() {
+          return element->initialValue();
+        },
+        [this, element](double value) {
+          element->setInitialValue(value);
+          markDirty();
+        },
+        [element]() {
+          return element->eventSignalMode();
+        },
+        [this, element](ExpressionChannelEventSignalMode mode) {
+          element->setEventSignalMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->precision();
+        },
+        [this, element](int precision) {
+          element->setPrecision(precision);
+          markDirty();
+        },
+        element->variable().isEmpty() ? QStringLiteral("Expression Channel")
+                                      : element->variable());
+  }
+
   void showResourcePaletteForImage(ImageElement *element)
   {
     if (!element) {
@@ -8718,6 +8902,11 @@ private:
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
       appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<ExpressionChannelElement *>(widget)) {
+      appendChannel(element->variable());
+      for (int i = 0; i < 4; ++i) {
+        appendChannel(element->channel(i));
+      }
     } else if (auto *element = dynamic_cast<RectangleElement *>(widget)) {
       appendChannelArray(AdlWriter::collectChannels(element));
     } else if (auto *element = dynamic_cast<ImageElement *>(widget)) {
@@ -8790,6 +8979,7 @@ public:
     appendList(byteMonitorElements_);
     appendList(stripChartElements_);
     appendList(cartesianPlotElements_);
+    appendList(expressionChannelElements_);
     appendList(rectangleElements_);
     appendList(imageElements_);
     appendList(heatmapElements_);
@@ -9317,6 +9507,9 @@ private:
     if (dynamic_cast<CartesianPlotElement *>(widget)) {
       return QStringLiteral("Cartesian Plot");
     }
+    if (dynamic_cast<ExpressionChannelElement *>(widget)) {
+      return QStringLiteral("Expression Channel");
+    }
     if (dynamic_cast<RectangleElement *>(widget)) {
       return QStringLiteral("Rectangle");
     }
@@ -9452,6 +9645,11 @@ private:
         addRef(runtime->channelName_);
       } else {
         addRef(element->channel());
+      }
+    } else if (auto *element = dynamic_cast<ExpressionChannelElement *>(widget)) {
+      addRef(element->variable());
+      for (int i = 0; i < 4; ++i) {
+        addRef(element->channel(i));
       }
     } else if (auto *element = dynamic_cast<RectangleElement *>(widget)) {
       if (auto *runtime = rectangleRuntimes_.value(element, nullptr)) {
@@ -10793,6 +10991,7 @@ private:
     clearCartesianPlotSelection();
     clearBarMonitorSelection();
     clearByteMonitorSelection();
+    clearExpressionChannelSelection();
     clearImageSelection();
     clearOvalSelection();
     clearArcSelection();
@@ -10801,6 +11000,42 @@ private:
     clearCompositeSelection();
     selectedRectangle_ = element;
     selectedRectangle_->setSelected(true);
+  }
+
+  void selectExpressionChannelElement(ExpressionChannelElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedExpressionChannel_) {
+      selectedExpressionChannel_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedExpressionChannel_ = element;
+    selectedExpressionChannel_->setSelected(true);
   }
 
   void selectImageElement(ImageElement *element)
@@ -11141,6 +11376,9 @@ private:
     if (selectedByteMonitorElement_) {
       return selectedByteMonitorElement_;
     }
+    if (selectedExpressionChannel_) {
+      return selectedExpressionChannel_;
+    }
     if (selectedRectangle_) {
       return selectedRectangle_;
     }
@@ -11177,6 +11415,9 @@ private:
       return false;
     }
     clearMultiSelection();
+    if (!dynamic_cast<ExpressionChannelElement *>(widget)) {
+      clearExpressionChannelSelection();
+    }
     bool handled = false;
     if (auto *text = dynamic_cast<TextElement *>(widget)) {
       selectTextElement(text);
@@ -11245,6 +11486,10 @@ private:
     } else if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       selectByteMonitorElement(byte);
       showResourcePaletteForByte(byte);
+      handled = true;
+    } else if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
+      selectExpressionChannelElement(expression);
+      showResourcePaletteForExpressionChannel(expression);
       handled = true;
     } else if (auto *rectangle = dynamic_cast<RectangleElement *>(widget)) {
       selectRectangleElement(rectangle);
@@ -13109,6 +13354,16 @@ private:
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createByteMonitorElement(rect);
       break;
+    case CreateTool::kExpressionChannel:
+      if (rect.width() < kMinimumExpressionChannelWidth) {
+        rect.setWidth(kMinimumExpressionChannelWidth);
+      }
+      if (rect.height() < kMinimumExpressionChannelHeight) {
+        rect.setHeight(kMinimumExpressionChannelHeight);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createExpressionChannelElement(rect);
+      break;
     case CreateTool::kScaleMonitor:
       if (rect.width() < kMinimumScaleSize) {
         rect.setWidth(kMinimumScaleSize);
@@ -14307,6 +14562,43 @@ private:
     markDirty();
   }
 
+  void createExpressionChannelElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create Expression Channel"));
+    QRect target = rect;
+    if (target.width() < kMinimumExpressionChannelWidth) {
+      target.setWidth(kMinimumExpressionChannelWidth);
+    }
+    if (target.height() < kMinimumExpressionChannelHeight) {
+      target.setHeight(kMinimumExpressionChannelHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new ExpressionChannelElement(displayArea_);
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    expressionChannelElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!expressionChannelRuntimes_.contains(element)) {
+        auto *runtime = new ExpressionChannelRuntime(element);
+        expressionChannelRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectExpressionChannelElement(element);
+    showResourcePaletteForExpressionChannel(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createRectangleElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -14712,6 +15004,7 @@ private:
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kThermometer
             || state->createTool == CreateTool::kByteMonitor
+            || state->createTool == CreateTool::kExpressionChannel
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
             || state->createTool == CreateTool::kCartesianPlot
@@ -15619,6 +15912,14 @@ private:
     auto *byteAction = addMenuAction(monitorsMenu, QStringLiteral("Byte Monitor"));
     QObject::connect(byteAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kByteMonitor);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
+    auto *expressionChannelAction =
+        addMenuAction(monitorsMenu, QStringLiteral("Expression Channel"));
+    QObject::connect(expressionChannelAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kExpressionChannel);
       if (!lastContextMenuGlobalPos_.isNull()) {
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
@@ -17691,6 +17992,52 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       continue;
     }
 
+    if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("expression_channel {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(expression));
+      if (!expression->variable().isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("variable=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(expression->variable())));
+      }
+      if (!expression->calc().isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("calc=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(expression->calc())));
+      }
+      for (int i = 0; i < 4; ++i) {
+        const QString channel = expression->channel(i).trimmed();
+        if (!channel.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 1,
+              QStringLiteral("channel%1=\"%2\"")
+                  .arg(QChar('A' + i))
+                  .arg(AdlWriter::escapeAdlString(channel)));
+        }
+      }
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("initialValue=%1")
+              .arg(QString::number(expression->initialValue(), 'g', 15)));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("eventSignal=\"%1\"")
+              .arg(expressionChannelEventSignalModeString(
+                  expression->eventSignalMode())));
+      const QColor expressionForeground = resolvedForegroundColor(expression,
+          expression->foregroundColor());
+      const QColor expressionBackground = resolvedBackgroundColor(expression,
+          expression->backgroundColor());
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("clr=%1")
+              .arg(AdlWriter::medmColorIndex(expressionForeground)));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("bclr=%1")
+              .arg(AdlWriter::medmColorIndex(expressionBackground)));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("precision=%1").arg(expression->precision()));
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("\"text update\" {"));
@@ -18709,6 +19056,53 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("expression_channel {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(expression));
+    if (!expression->variable().isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("variable=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(expression->variable())));
+    }
+    if (!expression->calc().isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("calc=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(expression->calc())));
+    }
+    for (int i = 0; i < 4; ++i) {
+      const QString channel = expression->channel(i).trimmed();
+      if (!channel.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next,
+            QStringLiteral("channel%1=\"%2\"")
+                .arg(QChar('A' + i))
+                .arg(AdlWriter::escapeAdlString(channel)));
+      }
+    }
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("initialValue=%1")
+            .arg(QString::number(expression->initialValue(), 'g', 15)));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("eventSignal=\"%1\"")
+            .arg(expressionChannelEventSignalModeString(
+                expression->eventSignalMode())));
+    const QColor expressionForeground = resolveForeground(expression,
+        expression->foregroundColor());
+    const QColor expressionBackground = resolveBackground(expression,
+        expression->backgroundColor());
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("clr=%1")
+            .arg(AdlWriter::medmColorIndex(expressionForeground)));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("bclr=%1")
+            .arg(AdlWriter::medmColorIndex(expressionBackground)));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("precision=%1").arg(expression->precision()));
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *monitor = dynamic_cast<TextMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("\"text update\" {"));
@@ -19169,6 +19563,8 @@ inline void DisplayWindow::clearAllElements()
           removeCartesianPlotRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement *>) {
           removeByteMonitorRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, ExpressionChannelElement *>) {
+          removeExpressionChannelRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
           removeChoiceButtonRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MenuElement *>) {
@@ -19215,6 +19611,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(stripChartElements_);
   clearList(cartesianPlotElements_);
   clearList(byteMonitorElements_);
+  clearList(expressionChannelElements_);
   clearList(rectangleElements_);
   clearList(imageElements_);
   clearList(heatmapElements_);
@@ -20255,6 +20652,54 @@ inline Qt::Alignment DisplayWindow::parseAlignment(
     return Qt::AlignRight | Qt::AlignTop;
   }
   return Qt::AlignLeft | Qt::AlignTop;
+}
+
+inline ExpressionChannelEventSignalMode
+DisplayWindow::parseExpressionChannelEventSignalMode(const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("never")) {
+    return ExpressionChannelEventSignalMode::kNever;
+  }
+  if (normalized == QStringLiteral("onfirstchange")
+      || normalized == QStringLiteral("on first change")
+      || normalized == QStringLiteral("firstchange")
+      || normalized == QStringLiteral("first change")) {
+    return ExpressionChannelEventSignalMode::kOnFirstChange;
+  }
+  if (normalized == QStringLiteral("triggerzerotoone")
+      || normalized == QStringLiteral("trigger zero to one")
+      || normalized == QStringLiteral("zero to one")
+      || normalized == QStringLiteral("0to1")
+      || normalized == QStringLiteral("0->1")) {
+    return ExpressionChannelEventSignalMode::kTriggerZeroToOne;
+  }
+  if (normalized == QStringLiteral("triggeronetozero")
+      || normalized == QStringLiteral("trigger one to zero")
+      || normalized == QStringLiteral("one to zero")
+      || normalized == QStringLiteral("1to0")
+      || normalized == QStringLiteral("1->0")) {
+    return ExpressionChannelEventSignalMode::kTriggerOneToZero;
+  }
+  return ExpressionChannelEventSignalMode::kOnAnyChange;
+}
+
+inline QString DisplayWindow::expressionChannelEventSignalModeString(
+    ExpressionChannelEventSignalMode mode) const
+{
+  switch (mode) {
+  case ExpressionChannelEventSignalMode::kNever:
+    return QStringLiteral("never");
+  case ExpressionChannelEventSignalMode::kOnFirstChange:
+    return QStringLiteral("onFirstChange");
+  case ExpressionChannelEventSignalMode::kTriggerZeroToOne:
+    return QStringLiteral("triggerZeroToOne");
+  case ExpressionChannelEventSignalMode::kTriggerOneToZero:
+    return QStringLiteral("triggerOneToZero");
+  case ExpressionChannelEventSignalMode::kOnAnyChange:
+  default:
+    return QStringLiteral("onAnyChange");
+  }
 }
 
 inline QRect DisplayWindow::parseObjectGeometry(const AdlNode &parent) const
@@ -24862,6 +25307,105 @@ inline RectangleElement *DisplayWindow::loadRectangleElement(
   return element;
 }
 
+inline ExpressionChannelElement *DisplayWindow::loadExpressionChannelElement(
+    const AdlNode &expressionChannelNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(expressionChannelNode);
+  QRect originalGeometry = geometry;
+  if (geometry.width() < kMinimumExpressionChannelWidth) {
+    geometry.setWidth(kMinimumExpressionChannelWidth);
+  }
+  if (geometry.height() < kMinimumExpressionChannelHeight) {
+    geometry.setHeight(kMinimumExpressionChannelHeight);
+  }
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new ExpressionChannelElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  const QString variableValue = propertyValue(expressionChannelNode,
+      QStringLiteral("variable"));
+  if (!variableValue.isEmpty()) {
+    element->setVariable(variableValue);
+  }
+
+  const QString calcValue = propertyValue(expressionChannelNode,
+      QStringLiteral("calc"));
+  if (!calcValue.isEmpty()) {
+    element->setCalc(calcValue);
+  }
+
+  element->setChannel(0, propertyValue(expressionChannelNode,
+      QStringLiteral("channelA")));
+  element->setChannel(1, propertyValue(expressionChannelNode,
+      QStringLiteral("channelB")));
+  element->setChannel(2, propertyValue(expressionChannelNode,
+      QStringLiteral("channelC")));
+  element->setChannel(3, propertyValue(expressionChannelNode,
+      QStringLiteral("channelD")));
+
+  bool ok = false;
+  const QString initialValueText = propertyValue(expressionChannelNode,
+      QStringLiteral("initialValue"));
+  const double initialValue = initialValueText.toDouble(&ok);
+  if (ok) {
+    element->setInitialValue(initialValue);
+  }
+
+  const QString eventSignalValue = propertyValue(expressionChannelNode,
+      QStringLiteral("eventSignal"));
+  if (!eventSignalValue.isEmpty()) {
+    element->setEventSignalMode(
+        parseExpressionChannelEventSignalMode(eventSignalValue));
+  }
+
+  ok = false;
+  const int foregroundIndex = propertyValue(expressionChannelNode,
+      QStringLiteral("clr")).toInt(&ok);
+  if (ok) {
+    element->setForegroundColor(colorForIndex(foregroundIndex));
+  }
+
+  ok = false;
+  const int backgroundIndex = propertyValue(expressionChannelNode,
+      QStringLiteral("bclr")).toInt(&ok);
+  if (ok) {
+    element->setBackgroundColor(colorForIndex(backgroundIndex));
+  }
+
+  ok = false;
+  const int precision = propertyValue(expressionChannelNode,
+      QStringLiteral("precision")).toInt(&ok);
+  if (ok) {
+    element->setPrecision(precision);
+  }
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  expressionChannelElements_.append(element);
+  ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!expressionChannelRuntimes_.contains(element)) {
+      auto *runtime = new ExpressionChannelRuntime(element);
+      expressionChannelRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
+  return element;
+}
+
 inline OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
 {
   const AdlNode withBasic = applyPendingBasicAttribute(ovalNode);
@@ -25794,6 +26338,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadStripChartElement(node) != nullptr;
   } else if (name == QStringLiteral("byte")) {
     loaded = loadByteMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("expression_channel")) {
+    loaded = loadExpressionChannelElement(node) != nullptr;
   } else if (name == QStringLiteral("image")) {
     loaded = loadImageElement(node) != nullptr;
   } else if (name == QStringLiteral("heatmap")) {
@@ -26010,12 +26556,41 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(barMonitorRuntimes_, barMonitorElements_.size());
   reserveRuntime(thermometerRuntimes_, thermometerElements_.size());
   reserveRuntime(byteMonitorRuntimes_, byteMonitorElements_.size());
+  reserveRuntime(expressionChannelRuntimes_, expressionChannelElements_.size());
   reserveRuntime(sliderRuntimes_, sliderElements_.size());
   reserveRuntime(wheelSwitchRuntimes_, wheelSwitchElements_.size());
   reserveRuntime(textMonitorRuntimes_, textMonitorElements_.size());
   reserveRuntime(choiceButtonRuntimes_, choiceButtonElements_.size());
   reserveRuntime(menuRuntimes_, menuElements_.size());
   reserveRuntime(messageButtonRuntimes_, messageButtonElements_.size());
+
+  QList<DisplayWindow *> softPvPrepareDisplays;
+  if (auto state = state_.lock()) {
+    softPvPrepareDisplays.reserve(state->displays.size());
+    for (const QPointer<DisplayWindow> &displayPtr : state->displays) {
+      DisplayWindow *display = displayPtr.data();
+      if (!display) {
+        continue;
+      }
+      softPvPrepareDisplays.append(display);
+    }
+  }
+  if (softPvPrepareDisplays.isEmpty()) {
+    softPvPrepareDisplays.append(this);
+  }
+
+  /* Pre-register all declared expression outputs so cross-display soft-PV
+   * subscriptions resolve deterministically during the execute-mode fanout. */
+  for (DisplayWindow *display : softPvPrepareDisplays) {
+    if (!display) {
+      continue;
+    }
+    for (ExpressionChannelElement *element : display->expressionChannelElements_) {
+      if (element) {
+        SoftPvRegistry::instance().prepareName(element->resolvedVariableName());
+      }
+    }
+  }
 
   /* Report element counts for timing diagnostics */
   int totalWidgets = compositeElements_.size() + textElements_.size() +
@@ -26025,7 +26600,7 @@ inline void DisplayWindow::enterExecuteMode()
       meterElements_.size() + scaleMonitorElements_.size() +
       stripChartElements_.size() + cartesianPlotElements_.size() +
       barMonitorElements_.size() + thermometerElements_.size() +
-      byteMonitorElements_.size() +
+      byteMonitorElements_.size() + expressionChannelElements_.size() +
       sliderElements_.size() + wheelSwitchElements_.size() +
       textMonitorElements_.size() + choiceButtonElements_.size() +
       menuElements_.size() + messageButtonElements_.size() +
@@ -26263,6 +26838,18 @@ inline void DisplayWindow::enterExecuteMode()
       textMonitorElements_.size() + choiceButtonElements_.size() +
       menuElements_.size() + messageButtonElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating control runtimes", controlCount);
+  for (ExpressionChannelElement *element : expressionChannelElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!expressionChannelRuntimes_.contains(element)) {
+      auto *runtime = new ExpressionChannelRuntime(element);
+      expressionChannelRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
   for (SliderElement *element : sliderElements_) {
     if (!element) {
       continue;
@@ -26348,6 +26935,18 @@ inline void DisplayWindow::enterExecuteMode()
     element->setExecuteMode(true);
   }
 
+  for (DisplayWindow *display : softPvPrepareDisplays) {
+    if (!display) {
+      continue;
+    }
+    for (ExpressionChannelElement *element : display->expressionChannelElements_) {
+      if (element) {
+        SoftPvRegistry::instance().releasePreparedName(
+            element->resolvedVariableName());
+      }
+    }
+  }
+
   QTEDM_TIMING_MARK("enterExecuteMode: Adjusting widget layering");
   refreshStackingOrder();
   if (displayArea_) {
@@ -26407,6 +27006,19 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   textEntryRuntimes_.clear();
   for (TextEntryElement *element : textEntryElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (auto it = expressionChannelRuntimes_.begin();
+      it != expressionChannelRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  expressionChannelRuntimes_.clear();
+  for (ExpressionChannelElement *element : expressionChannelElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
@@ -26871,6 +27483,18 @@ inline void DisplayWindow::removeByteMonitorRuntime(ByteMonitorElement *element)
     return;
   }
   if (auto *runtime = byteMonitorRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeExpressionChannelRuntime(
+    ExpressionChannelElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = expressionChannelRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

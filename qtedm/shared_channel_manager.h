@@ -19,6 +19,7 @@
 
 /* Forward declarations */
 class SharedChannelManager;
+class SoftPvRegistry;
 
 /* Unique key identifying a specific channel configuration.
  * Different DBR types or element counts for the same PV name
@@ -132,6 +133,7 @@ private:
   friend class SharedChannelManager;
   friend class PvaChannelManager;
   friend class SubscriptionOwner;
+  friend class SoftPvRegistry;
   explicit SubscriptionHandle(quint64 id, SubscriptionOwner *owner);
 
   quint64 id_ = 0;

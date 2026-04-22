@@ -1,0 +1,270 @@
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_ExpressionChannel.adl"
+	version=030122
+}
+display {
+	object {
+		x=200
+		y=80
+		width=720
+		height=340
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+text {
+	object {
+		x=20
+		y=10
+		width=680
+		height=20
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Expression Channel IOC Harness"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=20
+		y=34
+		width=680
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Checks soft-PV publication, chained expressions, and non-repeating event modes in execute mode."
+	align="horiz. centered"
+}
+expression_channel {
+	object {
+		x=20
+		y=66
+		width=120
+		height=40
+	}
+	variable="expr:sum"
+	calc="A+B"
+	channelA="channelA_PV"
+	channelB="channelB_PV"
+	initialValue=0
+	eventSignal="onAnyChange"
+	clr=30
+	bclr=4
+	precision=3
+}
+"text update" {
+	object {
+		x=180
+		y=78
+		width=150
+		height=16
+	}
+	monitor {
+		chan="expr:sum"
+		clr=14
+		bclr=4
+	}
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+expression_channel {
+	object {
+		x=20
+		y=118
+		width=120
+		height=40
+	}
+	variable="expr:base"
+	calc="A+B"
+	channelA="channelA_PV"
+	channelB="channelB_PV"
+	initialValue=0
+	eventSignal="onAnyChange"
+	clr=30
+	bclr=4
+	precision=3
+}
+expression_channel {
+	object {
+		x=180
+		y=118
+		width=120
+		height=40
+	}
+	variable="expr:chain"
+	calc="A*2"
+	channelA="expr:base"
+	initialValue=0
+	eventSignal="onAnyChange"
+	clr=30
+	bclr=4
+	precision=3
+}
+"text update" {
+	object {
+		x=340
+		y=130
+		width=150
+		height=16
+	}
+	monitor {
+		chan="expr:chain"
+		clr=14
+		bclr=4
+	}
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+expression_channel {
+	object {
+		x=20
+		y=170
+		width=120
+		height=40
+	}
+	variable="expr:latch"
+	calc="A"
+	channelA="channelC_PV"
+	initialValue=0
+	eventSignal="onFirstChange"
+	clr=30
+	bclr=4
+	precision=3
+}
+"text update" {
+	object {
+		x=180
+		y=182
+		width=150
+		height=16
+	}
+	monitor {
+		chan="expr:latch"
+		clr=14
+		bclr=4
+	}
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+expression_channel {
+	object {
+		x=360
+		y=170
+		width=120
+		height=40
+	}
+	variable="expr:trigger_up"
+	calc="A>5"
+	channelA="channelD_PV"
+	initialValue=0
+	eventSignal="triggerZeroToOne"
+	clr=30
+	bclr=4
+	precision=3
+}
+"text update" {
+	object {
+		x=520
+		y=182
+		width=150
+		height=16
+	}
+	monitor {
+		chan="expr:trigger_up"
+		clr=14
+		bclr=4
+	}
+	limits {
+		loprSrc="default"
+		hoprSrc="default"
+		precSrc="default"
+	}
+}
+text {
+	object {
+		x=20
+		y=224
+		width=680
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="How to use: set another widget's channel to the expression Variable name, then enter execute mode."
+}
+text {
+	object {
+		x=20
+		y=242
+		width=680
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="expr:sum = channelA_PV + channelB_PV"
+}
+text {
+	object {
+		x=20
+		y=258
+		width=680
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="expr:chain = (channelA_PV + channelB_PV) * 2 via expr:base"
+}
+text {
+	object {
+		x=20
+		y=274
+		width=680
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="expr:latch publishes only the first post-startup change from channelC_PV"
+}
+text {
+	object {
+		x=20
+		y=290
+		width=680
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="expr:trigger_up publishes when channelD_PV crosses from <=5 to >5"
+}
+text {
+	object {
+		x=20
+		y=306
+		width=680
+		height=14
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Leave Variable empty only for private logic nodes; use an explicit name when another widget must subscribe."
+}

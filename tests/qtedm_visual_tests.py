@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import List, Match, Optional, Set
 
 
-CHANNEL_PATTERN = re.compile(r'(chan=")([^"]*)(")')
+CHANNEL_PATTERN = re.compile(
+    r'((?:chan|channelA|channelB|channelC|channelD|variable)=")([^"]*)(")',
+    re.IGNORECASE)
 
 
 class CaseFailure(RuntimeError):

@@ -44,6 +44,7 @@ enum class CreateTool {
   kStripChart,
   kCartesianPlot,
   kHeatmap,
+  kExpressionChannel,
   kRectangle,
   kOval,
   kArc,

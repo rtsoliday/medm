@@ -242,7 +242,7 @@ void HeatmapRuntime::handleDataValue(const SharedChannelData &data)
     });
   } else {
     QVector<double> values;
-    if (data.isArray && !data.arrayValues.isEmpty()) {
+    if (data.isArray) {
       values = data.arrayValues;
     } else {
       values.append(data.numericValue);

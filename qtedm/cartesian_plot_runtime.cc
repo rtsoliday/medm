@@ -1285,8 +1285,20 @@ QVector<double> CartesianPlotRuntime::extractValues(
     const SharedChannelData &data)
 {
   QVector<double> values;
-  if (data.isArray && !data.arrayValues.isEmpty()) {
-    values = data.arrayValues;
+  if (data.isArray) {
+    if (!data.arrayValues.isEmpty()) {
+      values = data.arrayValues;
+    } else if (data.sharedArrayData && data.sharedArraySize > 0) {
+      const size_t clampedSize = std::min<size_t>(data.sharedArraySize,
+          static_cast<size_t>(std::numeric_limits<int>::max()));
+      const double *sharedValues = data.sharedArrayData.get();
+      if (sharedValues) {
+        values.reserve(static_cast<int>(clampedSize));
+        for (size_t i = 0; i < clampedSize; ++i) {
+          values.append(sharedValues[i]);
+        }
+      }
+    }
     return values;
   }
   if (data.isNumeric) {

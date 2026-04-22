@@ -61,6 +61,8 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
   data.isEnum = false;
   data.isCharArray = false;
   data.isArray = false;
+  data.numericValue = 0.0;
+  data.enumValue = 0;
   data.arrayValues.clear();
   data.sharedArrayData.reset();
   data.sharedArraySize = 0;
@@ -81,11 +83,17 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
   }
 
   if (source && reading.numeric && source[0].values) {
-    data.numericValue = source[0].values[0];
-    data.isNumeric = true;
-    data.hasValue = true;
-    if (elementCount > 1) {
+    const size_t arraySize = elementCount > 0
+        ? static_cast<size_t>(elementCount)
+        : 0u;
+    if (elementCount > 0) {
+      data.numericValue = source[0].values[0];
+      data.isNumeric = true;
+      data.hasValue = true;
+    }
+    if (elementCount != 1) {
       data.isArray = true;
+      data.hasValue = true;
       if (elementCount > 1000 && updatesPaused) {
         data.arrayValues.clear();
       } else if (reading.monitorOpaqueVector != nullptr) {
@@ -94,18 +102,22 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
         auto *keptVec = new SharedDoubleVector(*srcVec);
         data.sharedArrayData = std::shared_ptr<const double>(keptVec->data(),
             [keptVec](const double *) { delete keptVec; });
-        data.sharedArraySize = static_cast<size_t>(elementCount);
+        data.sharedArraySize = arraySize;
       } else {
-        data.arrayValues.resize(static_cast<size_t>(elementCount));
-        std::memcpy(data.arrayValues.data(), source[0].values,
-            static_cast<size_t>(elementCount) * sizeof(double));
+        data.arrayValues.resize(static_cast<int>(arraySize));
+        if (arraySize > 0) {
+          std::memcpy(data.arrayValues.data(), source[0].values,
+              arraySize * sizeof(double));
+        }
       }
     }
   }
 
   if (source && reading.nonnumeric && source[0].stringValues) {
-    const char *text = source[0].stringValues[0];
-    data.stringValue = text ? text : "";
+    if (elementCount > 0) {
+      const char *text = source[0].stringValues[0];
+      data.stringValue = text ? text : "";
+    }
     data.isString = true;
     data.hasValue = true;
   }

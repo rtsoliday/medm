@@ -134,6 +134,7 @@ echo
 echo "Logging to ${LOG_FILE}"
 
 ioc_pid=""
+waterfall_driver_pid=""
 
 set_local_ca_env() {
   EPICS_CA_ADDR_LIST=localhost
@@ -167,6 +168,163 @@ set_local_epics_runtime_env() {
       export EPICS_HOST_ARCH
     fi
   fi
+}
+
+join_cavput_array_values() {
+  local out_name="$1"
+  shift
+  local joined=""
+  local value=""
+
+  for value in "$@"; do
+    if [[ -n "${joined}" ]]; then
+      joined+='\,'
+    fi
+    joined+="${value}"
+  done
+
+  printf -v "${out_name}" '%s' "${joined}"
+}
+
+put_waveform_batch() {
+  local prefix="$1"
+  local waveform_points="$2"
+  local frame="$3"
+  local -a values=()
+  local alpha_csv=""
+  local beta_csv=""
+  local gamma_csv=""
+  local delta_csv=""
+  local epsilon_csv=""
+  local cavput_list=""
+
+  build_waterfall_waveform_values alpha "${frame}" \
+      "${waveform_points}" values
+  join_cavput_array_values alpha_csv "${values[@]}"
+
+  build_waterfall_waveform_values beta "${frame}" \
+      "${waveform_points}" values
+  join_cavput_array_values beta_csv "${values[@]}"
+
+  build_waterfall_waveform_values gamma "${frame}" \
+      "${waveform_points}" values
+  join_cavput_array_values gamma_csv "${values[@]}"
+
+  build_waterfall_waveform_values delta "${frame}" \
+      "${waveform_points}" values
+  join_cavput_array_values delta_csv "${values[@]}"
+
+  build_waterfall_waveform_values epsilon "${frame}" \
+      "${waveform_points}" values
+  join_cavput_array_values epsilon_csv "${values[@]}"
+
+  cavput_list="${prefix}waterfall:test:alpha:waveform=${alpha_csv},"
+  cavput_list+="${prefix}waterfall:test:beta:waveform=${beta_csv},"
+  cavput_list+="${prefix}waterfall:test:gamma:waveform=${gamma_csv},"
+  cavput_list+="${prefix}waterfall:test:delta:waveform=${delta_csv},"
+  cavput_list+="${prefix}waterfall:test:epsilon:waveform=${epsilon_csv}"
+
+  "${CAVPUT_BIN}" "-list=${cavput_list}" >/dev/null 2>&1
+}
+
+build_waterfall_waveform_values() {
+  local family="$1"
+  local frame="$2"
+  local length="$3"
+  local out_name="$4"
+  local -n out_ref="${out_name}"
+  local base=10
+  local center1=0
+  local center2=0
+  local width1=8
+  local width2=5
+  local gain1=8
+  local gain2=4
+  local phase=0
+  local i value ripple dist1 dist2
+
+  case "${family}" in
+    alpha)
+      base=12
+      center1=$(((frame * 3 + 4) % length))
+      center2=$(((center1 + length / 2) % length))
+      width1=10
+      width2=6
+      gain1=8
+      gain2=5
+      phase=1
+      ;;
+    beta)
+      base=18
+      center1=$(((frame * 5 + 9) % length))
+      center2=$(((center1 + length / 3) % length))
+      width1=9
+      width2=7
+      gain1=7
+      gain2=4
+      phase=3
+      ;;
+    gamma)
+      base=10
+      center1=$(((frame * 7 + 2) % length))
+      center2=$(((center1 + length / 4) % length))
+      width1=7
+      width2=5
+      gain1=9
+      gain2=3
+      phase=5
+      ;;
+    delta)
+      base=16
+      center1=$(((frame * 2 + 15) % length))
+      center2=$(((center1 + length / 5) % length))
+      width1=12
+      width2=4
+      gain1=6
+      gain2=5
+      phase=2
+      ;;
+    epsilon)
+      base=14
+      center1=$(((frame * 4 + 11) % length))
+      center2=$(((center1 + (length * 3) / 5) % length))
+      width1=8
+      width2=6
+      gain1=8
+      gain2=4
+      phase=4
+      ;;
+  esac
+
+  out_ref=()
+  for ((i = 0; i < length; ++i)); do
+    ripple=$(((((i + frame + phase) % 7) * 3) + ((i + phase) % 4)))
+    value=$((base + ripple))
+
+    dist1=$((i - center1))
+    if ((dist1 < 0)); then
+      dist1=$((-dist1))
+    fi
+    if ((dist1 > length / 2)); then
+      dist1=$((length - dist1))
+    fi
+    if ((dist1 < width1)); then
+      value=$((value + (width1 - dist1) * gain1))
+    fi
+
+    dist2=$((i - center2))
+    if ((dist2 < 0)); then
+      dist2=$((-dist2))
+    fi
+    if ((dist2 > length / 2)); then
+      dist2=$((length - dist2))
+    fi
+    if ((dist2 < width2)); then
+      value=$((value + (width2 - dist2) * gain2))
+    fi
+
+    out_ref+=("${value}")
+  done
 }
 
 set_slider_test_pvs() {
@@ -499,6 +657,130 @@ set_cartesian_plot_test_pvs() {
 
   echo "Warning: Failed to initialize cartesian plot PV values after ${retries} retries." >&2
   return 1
+}
+
+set_waterfall_plot_test_pvs() {
+  local prefix="$1"
+  local waveform_points=64
+  local -a waveform_field_values=(
+    # pv lopr hopr prec
+    "waterfall:test:alpha:waveform     0   120   1"
+    "waterfall:test:beta:waveform      0   120   1"
+    "waterfall:test:gamma:waveform     0   120   1"
+    "waterfall:test:delta:waveform     0   120   1"
+    "waterfall:test:epsilon:waveform   0   120   1"
+  )
+  local -a scalar_init_values=(
+    # pv value lopr hopr prec
+    "waterfall:test:beta:count      64    0    64   0"
+    "waterfall:test:gamma:trigger    0    0  4096   0"
+    "waterfall:test:delta:erase      0    0     1   0"
+    "waterfall:test:epsilon:erase    1    0     1   0"
+  )
+
+  echo "Initializing waterfall plot PVs for tests/test_WaterfallPlot.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv lopr hopr prec full_pv
+    for entry in "${waveform_field_values[@]}"; do
+      read -r pv lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local value
+      for entry in "${scalar_init_values[@]}"; do
+        read -r pv value lopr hopr prec <<< "${entry}"
+        full_pv="${prefix}${pv}"
+        if ! "${CAVPUT_BIN}" \
+            "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+            >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      if ! put_waveform_batch "${prefix}" "${waveform_points}" 0; then
+        initialized=0
+      fi
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Waterfall plot PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize waterfall plot PV values after ${retries} retries." >&2
+  return 1
+}
+
+start_waterfall_plot_test_driver() {
+  local prefix="$1"
+  local waveform_points=64
+
+  if [[ -n "${waterfall_driver_pid}" ]] \
+      && kill -0 "${waterfall_driver_pid}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "Starting waterfall waveform driver for tests/test_WaterfallPlot.adl"
+  (
+    set +e
+    set_local_ca_env
+
+    local frame=1
+    local beta_count=64
+    local delta_erase=0
+    local epsilon_erase=1
+
+    while kill -0 "${ioc_pid}" >/dev/null 2>&1; do
+      put_waveform_batch "${prefix}" "${waveform_points}" "${frame}" || break
+
+      beta_count=$((16 + ((frame % 7) * 8)))
+      "${CAVPUT_BIN}" \
+          "-list=${prefix}waterfall:test:beta:count=${beta_count}" \
+          >/dev/null 2>&1 || break
+
+      if ((frame % 3 == 0)); then
+        "${CAVPUT_BIN}" \
+            "-list=${prefix}waterfall:test:gamma:trigger=$((frame / 3))" \
+            >/dev/null 2>&1 || break
+      fi
+
+      delta_erase=0
+      if ((frame % 18 == 0)); then
+        delta_erase=1
+      fi
+      "${CAVPUT_BIN}" \
+          "-list=${prefix}waterfall:test:delta:erase=${delta_erase}" \
+          >/dev/null 2>&1 || break
+
+      epsilon_erase=1
+      if ((frame % 20 == 0)); then
+        epsilon_erase=0
+      fi
+      "${CAVPUT_BIN}" \
+          "-list=${prefix}waterfall:test:epsilon:erase=${epsilon_erase}" \
+          >/dev/null 2>&1 || break
+
+      sleep 0.35
+      ((frame++))
+    done
+  ) &
+  waterfall_driver_pid="$!"
+  return 0
 }
 
 set_bar_test_pvs() {
@@ -1379,6 +1661,11 @@ set_related_display_test_pvs() {
 
 cleanup() {
   local status=$?
+  if [[ -n "${waterfall_driver_pid}" ]] \
+      && kill -0 "${waterfall_driver_pid}" >/dev/null 2>&1; then
+    kill "${waterfall_driver_pid}" >/dev/null 2>&1 || true
+    wait "${waterfall_driver_pid}" >/dev/null 2>&1 || true
+  fi
   if [[ -n "${ioc_pid}" ]] && kill -0 "${ioc_pid}" >/dev/null 2>&1; then
     kill "${ioc_pid}" >/dev/null 2>&1 || true
     wait "${ioc_pid}" >/dev/null 2>&1 || true
@@ -1399,6 +1686,12 @@ set_led_monitor_test_pvs "${PV_PREFIX}" || true
 set_meter_test_pvs "${PV_PREFIX}" || true
 set_strip_chart_test_pvs "${PV_PREFIX}" || true
 set_cartesian_plot_test_pvs "${PV_PREFIX}" || true
+set_waterfall_plot_test_pvs "${PV_PREFIX}" || true
+if [[ "${QTEDM_WATERFALL_DRIVER_MODE:-dynamic}" != "static" ]]; then
+  start_waterfall_plot_test_driver "${PV_PREFIX}" || true
+else
+  echo "Waterfall waveform driver disabled; using seeded static waterfall data."
+fi
 set_bar_test_pvs "${PV_PREFIX}" || true
 set_thermometer_test_pvs "${PV_PREFIX}" || true
 set_byte_test_pvs "${PV_PREFIX}" || true

@@ -412,6 +412,8 @@ ObjectPaletteDialog::monitorButtons()
           bar25_height, CreateTool::kThermometer},
       {QStringLiteral("Heatmap"), heatmap25_bits, heatmap25_width,
         heatmap25_height, CreateTool::kHeatmap},
+      {QStringLiteral("Waterfall Plot"), waterfall25_bits, waterfall25_width,
+          waterfall25_height, CreateTool::kWaterfallPlot},
       {QStringLiteral("Strip Chart"), stripChart25_bits, stripChart25_width,
           stripChart25_height, CreateTool::kStripChart},
       {QStringLiteral("Text Monitor"), textUpdate25_bits,

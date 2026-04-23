@@ -162,6 +162,8 @@ qtedm_SRC = qtedm.cc \
             image_runtime.cc \
             heatmap_element.cc \
             heatmap_runtime.cc \
+            waterfall_plot_element.cc \
+            waterfall_plot_runtime.cc \
             composite_element.cc \
             composite_runtime.cc \
             cartesian_axis_dialog.cc \

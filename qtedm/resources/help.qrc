@@ -27,6 +27,7 @@
     <file alias="images/qtedm-widgets/text-monitor.png">../../docs/images/qtedm-widgets/text-monitor.png</file>
     <file alias="images/qtedm-widgets/text.png">../../docs/images/qtedm-widgets/text.png</file>
     <file alias="images/qtedm-widgets/thermometer.png">../../docs/images/qtedm-widgets/thermometer.png</file>
+    <file alias="images/qtedm-widgets/waterfall-plot.png">../../docs/images/qtedm-widgets/waterfall-plot.png</file>
     <file alias="images/qtedm-widgets/wheel-switch.png">../../docs/images/qtedm-widgets/wheel-switch.png</file>
   </qresource>
 </RCC>

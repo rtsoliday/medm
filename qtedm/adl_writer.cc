@@ -166,6 +166,41 @@ QString heatmapRotationString(HeatmapRotation rot)
   }
 }
 
+QString waterfallScrollDirectionString(WaterfallScrollDirection direction)
+{
+  switch (direction) {
+  case WaterfallScrollDirection::kBottomToTop:
+    return QStringLiteral("bottomToTop");
+  case WaterfallScrollDirection::kLeftToRight:
+    return QStringLiteral("leftToRight");
+  case WaterfallScrollDirection::kRightToLeft:
+    return QStringLiteral("rightToLeft");
+  case WaterfallScrollDirection::kTopToBottom:
+  default:
+    return QStringLiteral("topToBottom");
+  }
+}
+
+QString waterfallIntensityScaleString(WaterfallIntensityScale scale)
+{
+  switch (scale) {
+  case WaterfallIntensityScale::kManual:
+    return QStringLiteral("manual");
+  case WaterfallIntensityScale::kLog:
+    return QStringLiteral("log");
+  case WaterfallIntensityScale::kAuto:
+  default:
+    return QStringLiteral("auto");
+  }
+}
+
+QString waterfallEraseModeString(WaterfallEraseMode mode)
+{
+  return mode == WaterfallEraseMode::kIfZero
+      ? QStringLiteral("ifzero")
+      : QStringLiteral("ifnotzero");
+}
+
 QString meterLabelString(MeterLabel label)
 {
   switch (label) {
@@ -226,12 +261,12 @@ QString timeUnitsString(TimeUnits units)
 {
   switch (units) {
   case TimeUnits::kMilliseconds:
-    return QStringLiteral("milli-second");
+    return QStringLiteral("milliseconds");
   case TimeUnits::kMinutes:
-    return QStringLiteral("minute");
+    return QStringLiteral("minutes");
   case TimeUnits::kSeconds:
   default:
-    return QStringLiteral("second");
+    return QStringLiteral("seconds");
   }
 }
 

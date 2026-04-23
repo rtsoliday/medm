@@ -507,3 +507,18 @@ display {
 	bclr=4
 	label="-LedMonitor"
 }
+"related display" {
+	object {
+		x=560
+		y=270
+		width=160
+		height=40
+	}
+	display[0] {
+		label="WaterfallPlot"
+		name="tests/test_WaterfallPlot.adl"
+	}
+	clr=14
+	bclr=4
+	label="-WaterfallPlot"
+}

@@ -376,6 +376,7 @@ way.</p>
   <a href="#WidgetByteMonitor">Byte Monitor</a>,
   <a href="#WidgetLedMonitor">LED Monitor</a>,
   <a href="#WidgetHeatmap">Heatmap</a>,
+  <a href="#WidgetWaterfallPlot">Waterfall Plot</a>,
   <a href="#WidgetScaleMonitor">Scale Monitor</a>,
   <a href="#WidgetMeter">Meter</a>, <a href="#WidgetStripChart">Strip Chart</a>,
   <a href="#WidgetCartesianPlot">Cartesian Plot</a></p>
@@ -710,6 +711,69 @@ way.</p>
 </div>
 
 <div class="widget-entry">
+  <h4><a name="WidgetWaterfallPlot"></a>Waterfall Plot</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/waterfall-plot.png" alt="Waterfall Plot widget in QtEDM connected to a waveform PV" loading="lazy">
+    <p class="figcaption">Waterfall Plot connected to a waveform PV, showing successive buffered samples rendered as a scrolling intensity image with a legend.</p>
+  </div>
+  <p>Waterfall Plot is a QtEDM-only monitor for waveform-versus-time data. It sits
+  between <a href="#WidgetCartesianPlot">Cartesian Plot</a>, which shows the
+  current waveform as traces, and <a href="#WidgetHeatmap">Heatmap</a>, which
+  renders a single 2-D array. Each new waveform becomes one time slice in the
+  rolling buffer.</p>
+  <ul>
+    <li><strong>Configure:</strong> Data, count, trigger, and erase PVs; history depth; scroll direction; color map; intensity scaling; labels; legend; grid; and time units.</li>
+    <li><strong>Use when:</strong> Operators need to see how a profile, spectrum, or other 1-D distribution evolves over time.</li>
+    <li><strong>QtEDM additions:</strong> EXECUTE mode supports wheel zoom on the time axis, drag pan while zoomed, hover readback, and export of images or buffered waveform data.</li>
+  </ul>
+  <table>
+    <tr>
+      <th>Property</th>
+      <th>Description</th>
+    </tr>
+    <tr><td><code>dataChannel</code></td><td>Waveform PV. Each monitor update adds one sample to the waterfall.</td></tr>
+    <tr><td><code>countChannel</code></td><td>Optional PV supplying the active waveform length when the array is only partially populated.</td></tr>
+    <tr><td><code>triggerChannel</code></td><td>Optional PV used to trigger sampling of the most recent waveform update.</td></tr>
+    <tr><td><code>eraseChannel</code></td><td>Optional PV used to clear the rolling buffer when the configured erase transition occurs.</td></tr>
+    <tr><td><code>eraseMode</code></td><td>Controls whether a zero or non-zero transition clears the buffer.</td></tr>
+    <tr><td><code>title</code>, <code>xLabel</code>, <code>yLabel</code></td><td>Plot title and axis labels.</td></tr>
+    <tr><td><code>historyCount</code></td><td>Number of waveform samples retained in the rolling buffer.</td></tr>
+    <tr><td><code>scrollDirection</code></td><td>Chooses where new samples appear: top, bottom, left, or right.</td></tr>
+    <tr><td><code>colorMap</code>, <code>invertGreyscale</code></td><td>Intensity palette selection, reusing the Heatmap color maps.</td></tr>
+    <tr><td><code>intensityScale</code>, <code>intensityMin</code>, <code>intensityMax</code></td><td>Auto, manual, or logarithmic intensity scaling for the image and legend.</td></tr>
+    <tr><td><code>showLegend</code>, <code>showGrid</code></td><td>Optional legend bar and faint axis grid overlay.</td></tr>
+    <tr><td><code>samplePeriod</code>, <code>units</code></td><td>Optional fixed sample spacing used for time-axis labeling and data export when timestamps are not available.</td></tr>
+    <tr><td><code>foreground</code>, <code>background</code></td><td>Colors used for labels, axes, and the plot background.</td></tr>
+  </table>
+  <p>Example ADL fragment:</p>
+  <pre>waterfall_plot {
+  object { x=40 y=40 width=320 height=220 }
+  plotcom {
+    title="Beam Profile vs Time"
+    xlabel="Position (mm)"
+    ylabel="Time (s)"
+    clr=14
+    bclr=0
+  }
+  data { chan="BPM:WAVEFORM" }
+  count { chan="BPM:NUSE" }
+  trigger { chan="BPM:TRIG" }
+  erase { chan="BPM:ERASE" mode="ifnotzero" }
+  historyCount=200
+  scrollDirection="topToBottom"
+  colorMap="rainbow"
+  intensityScale="auto"
+  showLegend=1
+  showGrid=0
+  samplePeriod=0
+  units="seconds"
+}</pre>
+  <p>Right-clicking a Waterfall Plot in EXECUTE mode adds <strong>Save Image...</strong>,
+  <strong>Save Data...</strong>, <strong>Clear Buffer</strong>, and
+  <strong>Reset Zoom</strong> when zoom is active.</p>
+</div>
+
+<div class="widget-entry">
   <h4><a name="WidgetScaleMonitor"></a>Scale Monitor</h4>
   <div class="widget-figure">
     <img src="images/qtedm-widgets/scale-monitor.png" alt="Scale Monitor widget examples in QtEDM" loading="lazy">
@@ -774,7 +838,7 @@ way.</p>
 </div>
 
 <p class="noindent"><strong>QtEDM-only note:</strong> The <code>heatmap</code>,
-<code>thermometer</code>, <code>led_monitor</code>, and
+<code>waterfall_plot</code>, <code>thermometer</code>, <code>led_monitor</code>, and
 <code>expression_channel</code> ADL blocks are extensions implemented only in
 QtEDM. Legacy MEDM does not provide runtime support for these widget types, so
 displays that rely on them are not fully backward compatible.</p>
@@ -1051,7 +1115,7 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
   <li><strong>Font handling</strong> &ndash; QtEDM uses scalable fonts with alias mode for MEDM compatibility</li>
   <li><strong>Window management</strong> &ndash; Some window behaviors may differ depending on the desktop environment</li>
   <li><strong>Platform support</strong> &ndash; QtEDM currently focuses on Linux; Windows and macOS support may vary</li>
-  <li><strong>qtedm-only widgets</strong> &ndash; Heatmap, Thermometer, and Expression Channel are QtEDM ADL extensions and are not backward compatible with MEDM</li>
+  <li><strong>qtedm-only widgets</strong> &ndash; Heatmap, Waterfall Plot, Thermometer, LED Monitor, and Expression Channel are QtEDM ADL extensions and are not backward compatible with MEDM</li>
   <li><strong>Enhanced Statistics Window</strong> &ndash; The Statistics Window (View &gt; Statistics Window) includes a third mode called "PV Details" that displays a sortable table of all connected PVs with their connection status, writable status, update rate, and alarm severity. Click the Mode button to cycle through Interval, Average, and PV Details views.</li>
   <li><strong>Find PV Dialog</strong> &ndash; QtEDM provides a Find PV feature (View &gt; Find PV or Ctrl+F) that allows searching for process variables across all open displays. Enter a PV name pattern to locate widgets using matching PVs.</li>
   <li><strong>Export Image</strong> &ndash; QtEDM adds an "Export Image..." option to the right-click context menu in EXECUTE mode. This allows exporting displays as PNG, SVG, JPEG, or BMP images. MEDM supports XWD format via the print command; QtEDM provides more modern image formats including vector SVG output.</li>
@@ -1059,6 +1123,7 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
     <ul>
       <li><strong>Strip Charts:</strong> Right-clicking shows the standard context menu with "Export Data..." enabled. Exports include Time, EPOCHTIME (with millisecond precision), and channel value columns in SDDS or CSV format.</li>
       <li><strong>Cartesian Plots:</strong> Right-clicking shows a dedicated menu with "Modify Axis Values..." (to access the axis configuration dialog) and "Export Data..." options. Exports include Index and X/Y value pairs for each active trace in SDDS or CSV format.</li>
+      <li><strong>Waterfall Plots:</strong> Right-clicking adds "Save Image..." and "Save Data..." entries. Data exports include one row per buffered waveform sample along with relative time, epoch time, valid length, and waveform point columns in SDDS or CSV format.</li>
     </ul>
   </li>
   <li><strong>Cartesian Plot Zoom/Pan</strong> &ndash; QtEDM adds interactive zoom and pan capabilities to Cartesian Plot widgets in EXECUTE mode:
@@ -1068,6 +1133,7 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
       <li><strong>Reset:</strong> Right-click on a zoomed plot to access the "Reset Zoom" option and restore the original view. Zoom state is also automatically reset when switching from EXECUTE to EDIT mode.</li>
     </ul>
   </li>
+  <li><strong>Waterfall Plot Zoom/Pan</strong> &ndash; Waterfall Plot supports mouse-wheel zoom on the time axis, drag pan while zoomed, hover tooltips showing waveform index, sample age, and intensity, plus a context-menu buffer clear operation in EXECUTE mode.</li>
   <li><strong>Audit Logging</strong> &ndash; QtEDM provides audit logging of all control widget value changes (writes to PVs). This feature is enabled by default and logs to timestamped files in the <code>~/.medm</code> directory.
     <ul>
       <li><strong>Log Format:</strong> Each entry contains timestamp, username, widget type, PV name, value written, and display file (if available).</li>

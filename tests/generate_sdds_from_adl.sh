@@ -68,11 +68,13 @@ row_count="$(wc -l < "${tmp_pvs}" | tr -d ' ')"
   echo '&column name=ControlName, type=string, description="EPICS PV name" &end'
   echo '&column name=Type, type=string, description="PV scalar type" &end'
   echo '&column name=EnumStrings, type=string, description="Comma-separated enum state labels" &end'
+  echo '&column name=ElementCount, type=long, description="PV element count" &end'
   echo '&data mode=ascii &end'
   echo "${row_count}"
   while IFS= read -r pv; do
     type="double"
     enum_strings='""'
+    element_count=1
     case "${pv}" in
       tm:string:status)
         type="string"
@@ -84,8 +86,12 @@ row_count="$(wc -l < "${tmp_pvs}" | tr -d ' ')"
       byte:*)
         type="uint"
         ;;
+      waterfall:test:*:waveform)
+        element_count=64
+        ;;
     esac
-    printf '"%s" "%s" %s\n' "${pv}" "${type}" "${enum_strings}"
+    printf '"%s" "%s" %s %d\n' \
+      "${pv}" "${type}" "${enum_strings}" "${element_count}"
   done < "${tmp_pvs}"
 } > "${tmp_out}"
 

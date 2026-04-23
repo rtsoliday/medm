@@ -26,5 +26,6 @@ test_TextEntry.adl
 test_TextFonts.adl
 test_TextMonitor.adl
 test_Thermometer.adl
+test_WaterfallPlot.adl
 test_WheelSwitch.adl
 test_rectangle.adl

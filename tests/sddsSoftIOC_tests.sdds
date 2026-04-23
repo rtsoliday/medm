@@ -3,248 +3,258 @@ SDDS1
 &column name=ControlName, type=string, description="EPICS PV name" &end
 &column name=Type, type=string, description="PV scalar type" &end
 &column name=EnumStrings, type=string, description="Comma-separated enum state labels" &end
+&column name=ElementCount, type=long, description="PV element count" &end
 &data mode=ascii &end
-243
-"CRYO:PRESS:HEAD05" "double" ""
-"CRYO:PRESS:TAIL33" "double" ""
-"CRYO:TEMP:LOOP77" "double" ""
-"DEV:FLUX:DRIFT901" "double" ""
-"DEV:FLUX:RMS011" "double" ""
-"DEV:FLUX:SIG327" "double" ""
-"ION:BEAM:CUR763" "double" ""
-"ION:BEAM:LOSS041" "double" ""
-"ION:BEAM:SPREAD88" "double" ""
-"ORB:TUNE:ENERGY42" "double" ""
-"ORB:TUNE:X411" "double" ""
-"ORB:TUNE:Y901" "double" ""
-"RF:KLY:PHASE37" "double" ""
-"RF:KLY:TEMP119" "double" ""
-"RF:KLY:VOUT552" "double" ""
-"SPEC:DET:A208" "double" ""
-"SPEC:DET:B557" "double" ""
-"SPEC:DET:C904" "double" ""
-"SYS:GRAD:ERR765" "double" ""
-"SYS:GRAD:LOOP32" "double" ""
-"SYS:GRAD:REF492" "double" ""
-"VAC:LINE:A672" "double" ""
-"VAC:LINE:B283" "double" ""
-"VAC:LINE:C914" "double" ""
-"ZzzButton" "double" ""
-"bar:test:alpha" "double" ""
-"bar:test:alphaa" "double" ""
-"bar:test:beta" "double" ""
-"bar:test:delta" "double" ""
-"bar:test:epsilon" "double" ""
-"bar:test:eta" "double" ""
-"bar:test:gamma" "double" ""
-"bar:test:iota" "double" ""
-"bar:test:kappa" "double" ""
-"bar:test:lambda" "double" ""
-"bar:test:limit_source" "double" ""
-"bar:test:mu" "double" ""
-"bar:test:theta" "double" ""
-"bar:test:zeta" "double" ""
-"byte:test:gamma01" "uint" ""
-"byte:test:gamma02" "uint" ""
-"byte:test:gamma03" "uint" ""
-"byte:test:gamma04" "uint" ""
-"byte:test:gamma05" "uint" ""
-"byte:test:gamma06" "uint" ""
-"byte:test:gamma07" "uint" ""
-"byte:test:gamma08" "uint" ""
-"cartesian:test:alpha:count" "double" ""
-"cartesian:test:alpha:y1" "double" ""
-"cartesian:test:baselinea:y1" "double" ""
-"cartesian:test:baselineb:y1" "double" ""
-"cartesian:test:beta:count" "double" ""
-"cartesian:test:beta:y1" "double" ""
-"cartesian:test:delta:count" "double" ""
-"cartesian:test:delta:y1" "double" ""
-"cartesian:test:epsilon:count" "double" ""
-"cartesian:test:epsilon:y1" "double" ""
-"cartesian:test:gamma:count" "double" ""
-"cartesian:test:gamma:y1" "double" ""
-"cartesian:test:probe:y1" "double" ""
-"cartesian:test:zeta:count" "double" ""
-"cartesian:test:zeta:y1" "double" ""
-"cb:aux:1574" "enum" "OFF,ON,AUTO,ERROR"
-"cb:ctrl:2845" "enum" "OFF,ON,AUTO,ERROR"
-"cb:data:8754" "enum" "OFF,ON,AUTO,ERROR"
-"cb:diag:5930" "enum" "OFF,ON,AUTO,ERROR"
-"cb:eng:1148" "enum" "OFF,ON,AUTO,ERROR"
-"cb:fast:3472" "enum" "OFF,ON,AUTO,ERROR"
-"cb:logic:7319" "enum" "OFF,ON,AUTO,ERROR"
-"cb:macro:2681" "enum" "OFF,ON,AUTO,ERROR"
-"cb:ops:6410" "enum" "OFF,ON,AUTO,ERROR"
-"cb:proto:6678" "enum" "OFF,ON,AUTO,ERROR"
-"cb:sample:9827" "enum" "OFF,ON,AUTO,ERROR"
-"cb:scan:8095" "enum" "OFF,ON,AUTO,ERROR"
-"cb:slow:9210" "enum" "OFF,ON,AUTO,ERROR"
-"cb:test:4193" "enum" "OFF,ON,AUTO,ERROR"
-"cb:testbed:5524" "enum" "OFF,ON,AUTO,ERROR"
-"cb:util:7056" "enum" "OFF,ON,AUTO,ERROR"
-"channelA_PV" "double" ""
-"channelB_PV" "double" ""
-"channelC_PV" "double" ""
-"channelD_PV" "double" ""
-"expr:chain" "double" ""
-"expr:latch" "double" ""
-"expr:sum" "double" ""
-"expr:trigger_up" "double" ""
-"img:vis:a" "double" ""
-"img:vis:b" "double" ""
-"led:probe:alarm" "double" ""
-"led:test:alarm_live" "double" ""
-"led:test:baseline" "double" ""
-"led:test:binary_live" "double" ""
-"led:test:binary_off" "double" ""
-"led:test:discrete" "double" ""
-"led:test:static_on" "double" ""
-"led:test:visibility" "double" ""
-"led:vis:calc_a" "double" ""
-"led:vis:calc_b" "double" ""
-"led:vis:notzero" "double" ""
-"led:vis:zero" "double" ""
-"mb:alarm:01" "double" ""
-"mb:alarm:02" "double" ""
-"mb:alarm:03" "double" ""
-"mb:alarm:04" "double" ""
-"mb:alarm:05" "double" ""
-"mb:alt:01" "double" ""
-"mb:alt:02" "double" ""
-"mb:alt:03" "double" ""
-"mb:alt:04" "double" ""
-"mb:alt:05" "double" ""
-"mb:base:ab" "double" ""
-"mb:beh:full" "double" ""
-"mb:beh:press" "double" ""
-"mb:disc:01" "double" ""
-"mb:disc:02" "double" ""
-"mb:disc:03" "double" ""
-"mb:disc:04" "double" ""
-"mb:disc:05" "double" ""
-"mb:stat:01" "double" ""
-"mb:stat:02" "double" ""
-"mb:stat:03" "double" ""
-"mb:stat:04" "double" ""
-"mb:stat:05" "double" ""
-"meter:burst:gamma" "double" ""
-"meter:burst:mu" "double" ""
-"meter:cycle:epsilon" "double" ""
-"meter:demo:delta" "double" ""
-"meter:drift:zeta" "double" ""
-"meter:fast:alpha" "double" ""
-"meter:flux:nu" "double" ""
-"meter:loop:xi" "double" ""
-"meter:noise:theta" "double" ""
-"meter:pulse:iota" "double" ""
-"meter:ramp:eta" "double" ""
-"meter:random:omicron" "double" ""
-"meter:scan:lambda" "double" ""
-"meter:slow:beta" "double" ""
-"meter:wave:kappa" "double" ""
-"mn:aux:3579" "enum" "OFF,ON,AUTO,ERROR"
-"mn:bench:5775" "enum" "OFF,ON,AUTO,ERROR"
-"mn:ctrl:8127" "enum" "OFF,ON,AUTO,ERROR"
-"mn:data:4710" "enum" "OFF,ON,AUTO,ERROR"
-"mn:diag:2583" "enum" "OFF,ON,AUTO,ERROR"
-"mn:eng:2950" "enum" "OFF,ON,AUTO,ERROR"
-"mn:fast:6730" "enum" "OFF,ON,AUTO,ERROR"
-"mn:logic:8243" "enum" "OFF,ON,AUTO,ERROR"
-"mn:macro:1824" "enum" "OFF,ON,AUTO,ERROR"
-"mn:ops:9365" "enum" "OFF,ON,AUTO,ERROR"
-"mn:pilot:9468" "enum" "OFF,ON,AUTO,ERROR"
-"mn:proto:6687" "enum" "OFF,ON,AUTO,ERROR"
-"mn:scan:3419" "enum" "OFF,ON,AUTO,ERROR"
-"mn:slow:9126" "enum" "OFF,ON,AUTO,ERROR"
-"mn:test:7841" "enum" "OFF,ON,AUTO,ERROR"
-"mn:util:5092" "enum" "OFF,ON,AUTO,ERROR"
-"random:ws:epsilon" "double" ""
-"scale:test:alpha" "double" ""
-"scale:test:beta" "double" ""
-"scale:test:delta" "double" ""
-"scale:test:epsilon" "double" ""
-"scale:test:eta" "double" ""
-"scale:test:gamma" "double" ""
-"scale:test:iota" "double" ""
-"scale:test:kappa" "double" ""
-"scale:test:theta" "double" ""
-"scale:test:zeta" "double" ""
-"slider:test:alpha" "double" ""
-"slider:test:beta" "double" ""
-"slider:test:delta" "double" ""
-"slider:test:epsilon" "double" ""
-"slider:test:eta" "double" ""
-"slider:test:gamma" "double" ""
-"slider:test:iota" "double" ""
-"slider:test:kappa" "double" ""
-"slider:test:lambda" "double" ""
-"slider:test:mu" "double" ""
-"slider:test:nu" "double" ""
-"slider:test:omicron" "double" ""
-"slider:test:pi" "double" ""
-"slider:test:rho" "double" ""
-"slider:test:sigma" "double" ""
-"slider:test:tau" "double" ""
-"slider:test:theta" "double" ""
-"slider:test:upsilon" "double" ""
-"slider:test:xi" "double" ""
-"slider:test:zeta" "double" ""
-"strip:test:alpha" "double" ""
-"strip:test:beta" "double" ""
-"strip:test:delta" "double" ""
-"strip:test:drive:a" "double" ""
-"strip:test:drive:b" "double" ""
-"strip:test:drive:c" "double" ""
-"strip:test:epsilon" "double" ""
-"strip:test:eta" "double" ""
-"strip:test:gamma" "double" ""
-"strip:test:iota" "double" ""
-"strip:test:kappa" "double" ""
-"strip:test:lambda" "double" ""
-"strip:test:missing1" "double" ""
-"strip:test:missing2" "double" ""
-"strip:test:mu" "double" ""
-"strip:test:stress:a" "double" ""
-"strip:test:stress:b" "double" ""
-"strip:test:theta" "double" ""
-"strip:test:zeta" "double" ""
-"test_bar_pv" "double" ""
-"thermometer:test:alpha" "double" ""
-"thermometer:test:baselinea" "double" ""
-"thermometer:test:baselineb" "double" ""
-"thermometer:test:beta" "double" ""
-"thermometer:test:delta" "double" ""
-"thermometer:test:epsilon" "double" ""
-"thermometer:test:eta" "double" ""
-"thermometer:test:gamma" "double" ""
-"thermometer:test:limit_source" "double" ""
-"thermometer:test:theta" "double" ""
-"thermometer:test:zeta" "double" ""
-"tm:compact:1" "double" ""
-"tm:decimal:slow" "double" ""
-"tm:decimal:telemetry" "double" ""
-"tm:engr:mix" "double" ""
-"tm:exp:fastA" "double" ""
-"tm:hex:count" "double" ""
-"tm:octal:plc" "double" ""
-"tm:sexagesimal:az" "double" ""
-"tm:sexagesimal:dms" "double" ""
-"tm:sexagesimal:hms" "double" ""
-"tm:string:status" "string" ""
-"tm:trunc:edge" "double" ""
-"weirdChan" "double" ""
-"wheel:phi" "double" ""
-"wheel:test:A1" "double" ""
-"wheel:test:B7" "double" ""
-"wheel:test:delta" "double" ""
-"wheel:test:eta" "double" ""
-"wheel:test:kappa" "double" ""
-"wheel:theta" "double" ""
-"ws:gamma15" "double" ""
-"ws:lambda" "double" ""
-"ws:mu" "double" ""
-"ws:nu" "double" ""
-"ws:theta9" "double" ""
-"ws:xi" "double" ""
-"ws:zeta" "double" ""
+252
+"CRYO:PRESS:HEAD05" "double" "" 1
+"CRYO:PRESS:TAIL33" "double" "" 1
+"CRYO:TEMP:LOOP77" "double" "" 1
+"DEV:FLUX:DRIFT901" "double" "" 1
+"DEV:FLUX:RMS011" "double" "" 1
+"DEV:FLUX:SIG327" "double" "" 1
+"ION:BEAM:CUR763" "double" "" 1
+"ION:BEAM:LOSS041" "double" "" 1
+"ION:BEAM:SPREAD88" "double" "" 1
+"ORB:TUNE:ENERGY42" "double" "" 1
+"ORB:TUNE:X411" "double" "" 1
+"ORB:TUNE:Y901" "double" "" 1
+"RF:KLY:PHASE37" "double" "" 1
+"RF:KLY:TEMP119" "double" "" 1
+"RF:KLY:VOUT552" "double" "" 1
+"SPEC:DET:A208" "double" "" 1
+"SPEC:DET:B557" "double" "" 1
+"SPEC:DET:C904" "double" "" 1
+"SYS:GRAD:ERR765" "double" "" 1
+"SYS:GRAD:LOOP32" "double" "" 1
+"SYS:GRAD:REF492" "double" "" 1
+"VAC:LINE:A672" "double" "" 1
+"VAC:LINE:B283" "double" "" 1
+"VAC:LINE:C914" "double" "" 1
+"ZzzButton" "double" "" 1
+"bar:test:alpha" "double" "" 1
+"bar:test:alphaa" "double" "" 1
+"bar:test:beta" "double" "" 1
+"bar:test:delta" "double" "" 1
+"bar:test:epsilon" "double" "" 1
+"bar:test:eta" "double" "" 1
+"bar:test:gamma" "double" "" 1
+"bar:test:iota" "double" "" 1
+"bar:test:kappa" "double" "" 1
+"bar:test:lambda" "double" "" 1
+"bar:test:limit_source" "double" "" 1
+"bar:test:mu" "double" "" 1
+"bar:test:theta" "double" "" 1
+"bar:test:zeta" "double" "" 1
+"byte:test:gamma01" "uint" "" 1
+"byte:test:gamma02" "uint" "" 1
+"byte:test:gamma03" "uint" "" 1
+"byte:test:gamma04" "uint" "" 1
+"byte:test:gamma05" "uint" "" 1
+"byte:test:gamma06" "uint" "" 1
+"byte:test:gamma07" "uint" "" 1
+"byte:test:gamma08" "uint" "" 1
+"cartesian:test:alpha:count" "double" "" 1
+"cartesian:test:alpha:y1" "double" "" 1
+"cartesian:test:baselinea:y1" "double" "" 1
+"cartesian:test:baselineb:y1" "double" "" 1
+"cartesian:test:beta:count" "double" "" 1
+"cartesian:test:beta:y1" "double" "" 1
+"cartesian:test:delta:count" "double" "" 1
+"cartesian:test:delta:y1" "double" "" 1
+"cartesian:test:epsilon:count" "double" "" 1
+"cartesian:test:epsilon:y1" "double" "" 1
+"cartesian:test:gamma:count" "double" "" 1
+"cartesian:test:gamma:y1" "double" "" 1
+"cartesian:test:probe:y1" "double" "" 1
+"cartesian:test:zeta:count" "double" "" 1
+"cartesian:test:zeta:y1" "double" "" 1
+"cb:aux:1574" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:ctrl:2845" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:data:8754" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:diag:5930" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:eng:1148" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:fast:3472" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:logic:7319" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:macro:2681" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:ops:6410" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:proto:6678" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:sample:9827" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:scan:8095" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:slow:9210" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:test:4193" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:testbed:5524" "enum" "OFF,ON,AUTO,ERROR" 1
+"cb:util:7056" "enum" "OFF,ON,AUTO,ERROR" 1
+"channelA_PV" "double" "" 1
+"channelB_PV" "double" "" 1
+"channelC_PV" "double" "" 1
+"channelD_PV" "double" "" 1
+"expr:chain" "double" "" 1
+"expr:latch" "double" "" 1
+"expr:sum" "double" "" 1
+"expr:trigger_up" "double" "" 1
+"img:vis:a" "double" "" 1
+"img:vis:b" "double" "" 1
+"led:probe:alarm" "double" "" 1
+"led:test:alarm_live" "double" "" 1
+"led:test:baseline" "double" "" 1
+"led:test:binary_live" "double" "" 1
+"led:test:binary_off" "double" "" 1
+"led:test:discrete" "double" "" 1
+"led:test:static_on" "double" "" 1
+"led:test:visibility" "double" "" 1
+"led:vis:calc_a" "double" "" 1
+"led:vis:calc_b" "double" "" 1
+"led:vis:notzero" "double" "" 1
+"led:vis:zero" "double" "" 1
+"mb:alarm:01" "double" "" 1
+"mb:alarm:02" "double" "" 1
+"mb:alarm:03" "double" "" 1
+"mb:alarm:04" "double" "" 1
+"mb:alarm:05" "double" "" 1
+"mb:alt:01" "double" "" 1
+"mb:alt:02" "double" "" 1
+"mb:alt:03" "double" "" 1
+"mb:alt:04" "double" "" 1
+"mb:alt:05" "double" "" 1
+"mb:base:ab" "double" "" 1
+"mb:beh:full" "double" "" 1
+"mb:beh:press" "double" "" 1
+"mb:disc:01" "double" "" 1
+"mb:disc:02" "double" "" 1
+"mb:disc:03" "double" "" 1
+"mb:disc:04" "double" "" 1
+"mb:disc:05" "double" "" 1
+"mb:stat:01" "double" "" 1
+"mb:stat:02" "double" "" 1
+"mb:stat:03" "double" "" 1
+"mb:stat:04" "double" "" 1
+"mb:stat:05" "double" "" 1
+"meter:burst:gamma" "double" "" 1
+"meter:burst:mu" "double" "" 1
+"meter:cycle:epsilon" "double" "" 1
+"meter:demo:delta" "double" "" 1
+"meter:drift:zeta" "double" "" 1
+"meter:fast:alpha" "double" "" 1
+"meter:flux:nu" "double" "" 1
+"meter:loop:xi" "double" "" 1
+"meter:noise:theta" "double" "" 1
+"meter:pulse:iota" "double" "" 1
+"meter:ramp:eta" "double" "" 1
+"meter:random:omicron" "double" "" 1
+"meter:scan:lambda" "double" "" 1
+"meter:slow:beta" "double" "" 1
+"meter:wave:kappa" "double" "" 1
+"mn:aux:3579" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:bench:5775" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:ctrl:8127" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:data:4710" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:diag:2583" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:eng:2950" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:fast:6730" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:logic:8243" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:macro:1824" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:ops:9365" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:pilot:9468" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:proto:6687" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:scan:3419" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:slow:9126" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:test:7841" "enum" "OFF,ON,AUTO,ERROR" 1
+"mn:util:5092" "enum" "OFF,ON,AUTO,ERROR" 1
+"random:ws:epsilon" "double" "" 1
+"scale:test:alpha" "double" "" 1
+"scale:test:beta" "double" "" 1
+"scale:test:delta" "double" "" 1
+"scale:test:epsilon" "double" "" 1
+"scale:test:eta" "double" "" 1
+"scale:test:gamma" "double" "" 1
+"scale:test:iota" "double" "" 1
+"scale:test:kappa" "double" "" 1
+"scale:test:theta" "double" "" 1
+"scale:test:zeta" "double" "" 1
+"slider:test:alpha" "double" "" 1
+"slider:test:beta" "double" "" 1
+"slider:test:delta" "double" "" 1
+"slider:test:epsilon" "double" "" 1
+"slider:test:eta" "double" "" 1
+"slider:test:gamma" "double" "" 1
+"slider:test:iota" "double" "" 1
+"slider:test:kappa" "double" "" 1
+"slider:test:lambda" "double" "" 1
+"slider:test:mu" "double" "" 1
+"slider:test:nu" "double" "" 1
+"slider:test:omicron" "double" "" 1
+"slider:test:pi" "double" "" 1
+"slider:test:rho" "double" "" 1
+"slider:test:sigma" "double" "" 1
+"slider:test:tau" "double" "" 1
+"slider:test:theta" "double" "" 1
+"slider:test:upsilon" "double" "" 1
+"slider:test:xi" "double" "" 1
+"slider:test:zeta" "double" "" 1
+"strip:test:alpha" "double" "" 1
+"strip:test:beta" "double" "" 1
+"strip:test:delta" "double" "" 1
+"strip:test:drive:a" "double" "" 1
+"strip:test:drive:b" "double" "" 1
+"strip:test:drive:c" "double" "" 1
+"strip:test:epsilon" "double" "" 1
+"strip:test:eta" "double" "" 1
+"strip:test:gamma" "double" "" 1
+"strip:test:iota" "double" "" 1
+"strip:test:kappa" "double" "" 1
+"strip:test:lambda" "double" "" 1
+"strip:test:missing1" "double" "" 1
+"strip:test:missing2" "double" "" 1
+"strip:test:mu" "double" "" 1
+"strip:test:stress:a" "double" "" 1
+"strip:test:stress:b" "double" "" 1
+"strip:test:theta" "double" "" 1
+"strip:test:zeta" "double" "" 1
+"test_bar_pv" "double" "" 1
+"thermometer:test:alpha" "double" "" 1
+"thermometer:test:baselinea" "double" "" 1
+"thermometer:test:baselineb" "double" "" 1
+"thermometer:test:beta" "double" "" 1
+"thermometer:test:delta" "double" "" 1
+"thermometer:test:epsilon" "double" "" 1
+"thermometer:test:eta" "double" "" 1
+"thermometer:test:gamma" "double" "" 1
+"thermometer:test:limit_source" "double" "" 1
+"thermometer:test:theta" "double" "" 1
+"thermometer:test:zeta" "double" "" 1
+"tm:compact:1" "double" "" 1
+"tm:decimal:slow" "double" "" 1
+"tm:decimal:telemetry" "double" "" 1
+"tm:engr:mix" "double" "" 1
+"tm:exp:fastA" "double" "" 1
+"tm:hex:count" "double" "" 1
+"tm:octal:plc" "double" "" 1
+"tm:sexagesimal:az" "double" "" 1
+"tm:sexagesimal:dms" "double" "" 1
+"tm:sexagesimal:hms" "double" "" 1
+"tm:string:status" "string" "" 1
+"tm:trunc:edge" "double" "" 1
+"waterfall:test:alpha:waveform" "double" "" 64
+"waterfall:test:beta:count" "double" "" 1
+"waterfall:test:beta:waveform" "double" "" 64
+"waterfall:test:delta:erase" "double" "" 1
+"waterfall:test:delta:waveform" "double" "" 64
+"waterfall:test:epsilon:erase" "double" "" 1
+"waterfall:test:epsilon:waveform" "double" "" 64
+"waterfall:test:gamma:trigger" "double" "" 1
+"waterfall:test:gamma:waveform" "double" "" 64
+"weirdChan" "double" "" 1
+"wheel:phi" "double" "" 1
+"wheel:test:A1" "double" "" 1
+"wheel:test:B7" "double" "" 1
+"wheel:test:delta" "double" "" 1
+"wheel:test:eta" "double" "" 1
+"wheel:test:kappa" "double" "" 1
+"wheel:theta" "double" "" 1
+"ws:gamma15" "double" "" 1
+"ws:lambda" "double" "" 1
+"ws:mu" "double" "" 1
+"ws:nu" "double" "" 1
+"ws:theta9" "double" "" 1
+"ws:xi" "double" "" 1
+"ws:zeta" "double" "" 1

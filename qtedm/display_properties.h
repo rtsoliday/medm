@@ -175,6 +175,27 @@ enum class HeatmapRotation
   k270,
 };
 
+enum class WaterfallScrollDirection
+{
+  kTopToBottom,
+  kBottomToTop,
+  kLeftToRight,
+  kRightToLeft,
+};
+
+enum class WaterfallIntensityScale
+{
+  kAuto,
+  kManual,
+  kLog,
+};
+
+enum class WaterfallEraseMode
+{
+  kIfNotZero,
+  kIfZero,
+};
+
 enum class TimeUnits
 {
   kMilliseconds,
@@ -278,6 +299,10 @@ constexpr int kMinimumCartesianPlotWidth = 160;
 constexpr int kMinimumCartesianPlotHeight = 93;
 constexpr int kMinimumHeatmapWidth = 40;
 constexpr int kMinimumHeatmapHeight = 40;
+constexpr int kMinimumWaterfallPlotWidth = 160;
+constexpr int kMinimumWaterfallPlotHeight = 93;
+constexpr int kWaterfallDefaultHistory = 200;
+constexpr int kWaterfallMaxHistory = 4096;
 constexpr double kDefaultStripChartPeriod = 60.0;
 constexpr int kRelatedDisplayEntryCount = 16;
 constexpr int kShellCommandEntryCount = 16;

@@ -100,6 +100,8 @@
 #include "image_runtime.h"
 #include "heatmap_element.h"
 #include "heatmap_runtime.h"
+#include "waterfall_plot_element.h"
+#include "waterfall_plot_runtime.h"
 #include "meter_element.h"
 #include "meter_runtime.h"
 #include "line_element.h"

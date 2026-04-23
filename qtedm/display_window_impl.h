@@ -655,6 +655,7 @@ public:
     appendVisible(rectangleElements_);
     appendVisible(imageElements_);
     appendVisible(heatmapElements_);
+    appendVisible(waterfallPlotElements_);
     appendVisible(ovalElements_);
     appendVisible(arcElements_);
     appendVisible(lineElements_);
@@ -902,6 +903,7 @@ public:
     considerList(rectangleElements_);
     considerList(imageElements_);
     considerList(heatmapElements_);
+    considerList(waterfallPlotElements_);
     considerList(ovalElements_);
     considerList(arcElements_);
     considerList(lineElements_);
@@ -2533,6 +2535,314 @@ public:
     }
   }
 
+  void exportWaterfallPlotImage(WaterfallPlotElement *plot)
+  {
+    if (!plot) {
+      return;
+    }
+
+    QStringList filters;
+    filters << QStringLiteral("PNG Image (*.png)");
+    filters << QStringLiteral("SVG Vector Image (*.svg)");
+    filters << QStringLiteral("JPEG Image (*.jpg *.jpeg)");
+    filters << QStringLiteral("BMP Image (*.bmp)");
+
+    QString baseName = filePath_.isEmpty()
+        ? QStringLiteral("waterfall")
+        : QFileInfo(filePath_).completeBaseName();
+    const QString plotTitle = plot->title().trimmed();
+    if (!plotTitle.isEmpty()) {
+      QString sanitized = plotTitle;
+      sanitized.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
+          QStringLiteral("_"));
+      baseName = sanitized;
+    }
+    QString defaultPath = QDir::currentPath() + QDir::separator() + baseName
+        + QStringLiteral(".png");
+
+    QFileDialog dialog(this, QStringLiteral("Export Waterfall Plot Image"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters(filters);
+    dialog.selectFile(defaultPath);
+    dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    dialog.setModal(true);
+    dialog.setWindowModality(Qt::ApplicationModal);
+
+    if (dialog.exec() != QDialog::Accepted) {
+      return;
+    }
+
+    QString selectedFile = dialog.selectedFiles().value(0);
+    if (selectedFile.isEmpty()) {
+      return;
+    }
+
+    QString selectedFilter = dialog.selectedNameFilter();
+    QString suffix = QFileInfo(selectedFile).suffix().toLower();
+    if (suffix.isEmpty()) {
+      if (selectedFilter.contains(QStringLiteral("SVG"))) {
+        selectedFile += QStringLiteral(".svg");
+        suffix = QStringLiteral("svg");
+      } else if (selectedFilter.contains(QStringLiteral("JPEG"))) {
+        selectedFile += QStringLiteral(".jpg");
+        suffix = QStringLiteral("jpg");
+      } else if (selectedFilter.contains(QStringLiteral("BMP"))) {
+        selectedFile += QStringLiteral(".bmp");
+        suffix = QStringLiteral("bmp");
+      } else {
+        selectedFile += QStringLiteral(".png");
+        suffix = QStringLiteral("png");
+      }
+    }
+
+    bool success = false;
+    if (suffix == QStringLiteral("svg")) {
+      QSvgGenerator generator;
+      generator.setFileName(selectedFile);
+      generator.setSize(plot->size());
+      generator.setViewBox(QRect(QPoint(0, 0), plot->size()));
+      generator.setTitle(plotTitle.isEmpty()
+              ? QStringLiteral("Waterfall Plot")
+              : plotTitle);
+      generator.setDescription(QStringLiteral("QtEDM Waterfall Plot Export"));
+
+      QPainter painter;
+      if (painter.begin(&generator)) {
+        plot->render(&painter);
+        painter.end();
+        success = true;
+      }
+    } else {
+      QPixmap pixmap = plot->grab();
+      if (!pixmap.isNull()) {
+        const char *format = "PNG";
+        if (suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg")) {
+          format = "JPEG";
+        } else if (suffix == QStringLiteral("bmp")) {
+          format = "BMP";
+        }
+        success = pixmap.save(selectedFile, format);
+      }
+    }
+
+    if (!success) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to export waterfall plot image to:\n%1")
+              .arg(selectedFile));
+    }
+  }
+
+  void exportWaterfallPlotData(WaterfallPlotElement *plot)
+  {
+    if (!plot) {
+      return;
+    }
+
+    const int sampleCount = plot->bufferedSampleCount();
+    const int waveformLength = plot->waveformLength();
+    if (sampleCount <= 0 || waveformLength <= 0) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("No data available to export.\n"
+              "The waterfall plot has no buffered waveform samples."));
+      return;
+    }
+
+    QStringList filters;
+    filters << QStringLiteral("SDDS Data File (*.sdds)");
+    filters << QStringLiteral("CSV File (*.csv)");
+
+    QString baseName = filePath_.isEmpty()
+        ? QStringLiteral("waterfall")
+        : QFileInfo(filePath_).completeBaseName();
+    const QString plotTitle = plot->title().trimmed();
+    if (!plotTitle.isEmpty()) {
+      QString sanitized = plotTitle;
+      sanitized.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
+          QStringLiteral("_"));
+      baseName = sanitized;
+    }
+    QString defaultPath = QDir::currentPath() + QDir::separator() + baseName
+        + QStringLiteral(".sdds");
+
+    QFileDialog dialog(this, QStringLiteral("Export Waterfall Plot Data"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters(filters);
+    dialog.selectFile(defaultPath);
+    dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    dialog.setModal(true);
+    dialog.setWindowModality(Qt::ApplicationModal);
+
+    if (dialog.exec() != QDialog::Accepted) {
+      return;
+    }
+
+    QString selectedFile = dialog.selectedFiles().value(0);
+    if (selectedFile.isEmpty()) {
+      return;
+    }
+
+    QString selectedFilter = dialog.selectedNameFilter();
+    QString suffix = QFileInfo(selectedFile).suffix().toLower();
+    if (suffix.isEmpty()) {
+      if (selectedFilter.contains(QStringLiteral("CSV"))) {
+        selectedFile += QStringLiteral(".csv");
+        suffix = QStringLiteral("csv");
+      } else {
+        selectedFile += QStringLiteral(".sdds");
+        suffix = QStringLiteral("sdds");
+      }
+    }
+
+    QFile file(selectedFile);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to open file for writing:\n%1")
+              .arg(selectedFile));
+      return;
+    }
+
+    auto samplePeriodSeconds = [plot]() {
+      double period = plot->samplePeriod();
+      if (!(std::isfinite(period) && period > 0.0)) {
+        return 0.0;
+      }
+      switch (plot->units()) {
+      case TimeUnits::kMilliseconds:
+        return period / 1000.0;
+      case TimeUnits::kMinutes:
+        return period * 60.0;
+      case TimeUnits::kSeconds:
+      default:
+        return period;
+      }
+    }();
+
+    qint64 firstTimestampMs = 0;
+    for (int sample = 0; sample < sampleCount; ++sample) {
+      const qint64 timestampMs = plot->sampleTimestampMs(sample);
+      if (timestampMs > 0) {
+        firstTimestampMs = timestampMs;
+        break;
+      }
+    }
+
+    QTextStream stream(&file);
+    setUtf8Encoding(stream);
+    bool success = false;
+
+    if (suffix == QStringLiteral("sdds")) {
+      stream << QStringLiteral("SDDS1\n");
+      stream << QStringLiteral("&description text=\"Waterfall Plot Data Export from QtEDM\", "
+          "contents=\"waterfall plot data\" &end\n");
+      stream << QStringLiteral("&column name=Sample, type=long, "
+          "description=\"Waveform sample index\" &end\n");
+      stream << QStringLiteral("&column name=Time, type=double, units=s, "
+          "description=\"Time relative to first sample\" &end\n");
+      stream << QStringLiteral("&column name=EPOCHTIME, type=double, units=s, "
+          "description=\"Unix epoch time\" &end\n");
+      stream << QStringLiteral("&column name=Length, type=long, "
+          "description=\"Valid waveform element count\" &end\n");
+      for (int i = 0; i < waveformLength; ++i) {
+        stream << QStringLiteral("&column name=V%1, type=double, "
+            "description=\"Waveform point %1\" &end\n").arg(i);
+      }
+      stream << QStringLiteral("&data mode=ascii &end\n");
+      stream << sampleCount << QStringLiteral("\n");
+
+      for (int sample = 0; sample < sampleCount; ++sample) {
+        const qint64 timestampMs = plot->sampleTimestampMs(sample);
+        double relativeSeconds = samplePeriodSeconds > 0.0
+            ? static_cast<double>(sample) * samplePeriodSeconds
+            : static_cast<double>(sample);
+        if (firstTimestampMs > 0 && timestampMs > 0) {
+          relativeSeconds = static_cast<double>(
+              timestampMs - firstTimestampMs) / 1000.0;
+        }
+        const double epochSeconds = timestampMs > 0
+            ? static_cast<double>(timestampMs) / 1000.0
+            : std::numeric_limits<double>::quiet_NaN();
+
+        stream << sample;
+        stream << QStringLiteral(" ")
+               << QString::number(relativeSeconds, 'g', 15);
+        stream << QStringLiteral(" ");
+        if (std::isnan(epochSeconds)) {
+          stream << QStringLiteral("nan");
+        } else {
+          stream << QString::number(epochSeconds, 'f', 6);
+        }
+        stream << QStringLiteral(" ") << plot->sampleLength(sample);
+
+        for (int point = 0; point < waveformLength; ++point) {
+          stream << QStringLiteral(" ");
+          const bool inRange = point < plot->sampleLength(sample);
+          const double value = inRange
+              ? plot->sampleValue(sample, point)
+              : std::numeric_limits<double>::quiet_NaN();
+          if (!inRange || std::isnan(value)) {
+            stream << QStringLiteral("nan");
+          } else {
+            stream << QString::number(value, 'g', 15);
+          }
+        }
+        stream << QStringLiteral("\n");
+      }
+      success = true;
+    } else {
+      stream << QStringLiteral("Sample,Time,EPOCHTIME,Length");
+      for (int i = 0; i < waveformLength; ++i) {
+        stream << QStringLiteral(",V") << i;
+      }
+      stream << QStringLiteral("\n");
+
+      for (int sample = 0; sample < sampleCount; ++sample) {
+        const qint64 timestampMs = plot->sampleTimestampMs(sample);
+        double relativeSeconds = samplePeriodSeconds > 0.0
+            ? static_cast<double>(sample) * samplePeriodSeconds
+            : static_cast<double>(sample);
+        if (firstTimestampMs > 0 && timestampMs > 0) {
+          relativeSeconds = static_cast<double>(
+              timestampMs - firstTimestampMs) / 1000.0;
+        }
+        const double epochSeconds = timestampMs > 0
+            ? static_cast<double>(timestampMs) / 1000.0
+            : std::numeric_limits<double>::quiet_NaN();
+
+        stream << sample << QStringLiteral(",")
+               << QString::number(relativeSeconds, 'g', 15)
+               << QStringLiteral(",");
+        if (!std::isnan(epochSeconds)) {
+          stream << QString::number(epochSeconds, 'f', 6);
+        }
+        stream << QStringLiteral(",") << plot->sampleLength(sample);
+
+        for (int point = 0; point < waveformLength; ++point) {
+          stream << QStringLiteral(",");
+          if (point < plot->sampleLength(sample)) {
+            const double value = plot->sampleValue(sample, point);
+            if (!std::isnan(value)) {
+              stream << QString::number(value, 'g', 15);
+            }
+          }
+        }
+        stream << QStringLiteral("\n");
+      }
+      success = true;
+    }
+
+    file.close();
+
+    if (!success) {
+      QMessageBox::warning(this, QStringLiteral("Export Failed"),
+          QStringLiteral("Failed to export waterfall plot data to:\n%1")
+              .arg(selectedFile));
+    }
+  }
+
   bool loadFromFile(const QString &filePath, QString *errorMessage = nullptr,
       const QHash<QString, QString> &macros = {});
   QString filePath() const
@@ -2770,6 +3080,7 @@ protected:
             || state->createTool == CreateTool::kLine
             || state->createTool == CreateTool::kImage
             || state->createTool == CreateTool::kHeatmap
+            || state->createTool == CreateTool::kWaterfallPlot
             || state->createTool == CreateTool::kRelatedDisplay) {
           if (displayArea_) {
             const QPoint areaPos = displayArea_->mapFrom(this, event->pos());
@@ -3091,6 +3402,8 @@ private:
       const AdlNode &expressionChannelNode);
   ImageElement *loadImageElement(const AdlNode &imageNode);
   HeatmapElement *loadHeatmapElement(const AdlNode &heatmapNode);
+  WaterfallPlotElement *loadWaterfallPlotElement(
+      const AdlNode &waterfallNode);
   RectangleElement *loadRectangleElement(const AdlNode &rectangleNode);
   OvalElement *loadOvalElement(const AdlNode &ovalNode);
   ArcElement *loadArcElement(const AdlNode &arcNode);
@@ -3211,6 +3524,11 @@ private:
   HeatmapRotation parseHeatmapRotation(const QString &value) const;
   HeatmapColorMap parseHeatmapColorMap(const QString &value) const;
   bool parseHeatmapBool(const QString &value) const;
+  WaterfallScrollDirection parseWaterfallScrollDirection(
+      const QString &value) const;
+  WaterfallIntensityScale parseWaterfallIntensityScale(
+      const QString &value) const;
+  WaterfallEraseMode parseWaterfallEraseMode(const QString &value) const;
   TextMonitorFormat parseTextMonitorFormat(const QString &value) const;
   PvLimitSource parseLimitSource(const QString &value) const;
   Qt::Alignment parseAlignment(const QString &value) const;
@@ -3379,6 +3697,10 @@ private:
   QList<HeatmapElement *> heatmapElements_;
   QHash<HeatmapElement *, HeatmapRuntime *> heatmapRuntimes_;
   HeatmapElement *selectedHeatmap_ = nullptr;
+  QList<WaterfallPlotElement *> waterfallPlotElements_;
+  QHash<WaterfallPlotElement *, WaterfallPlotRuntime *>
+      waterfallPlotRuntimes_;
+  WaterfallPlotElement *selectedWaterfallPlot_ = nullptr;
   QList<OvalElement *> ovalElements_;
   QHash<OvalElement *, OvalRuntime *> ovalRuntimes_;
   OvalElement *selectedOval_ = nullptr;
@@ -3666,11 +3988,13 @@ private:
   {
     if (!selectedImage_) {
       clearHeatmapSelection();
+      clearWaterfallPlotSelection();
       return;
     }
     selectedImage_->setSelected(false);
     selectedImage_ = nullptr;
     clearHeatmapSelection();
+    clearWaterfallPlotSelection();
   }
 
   void clearHeatmapSelection()
@@ -3680,6 +4004,15 @@ private:
     }
     selectedHeatmap_->setSelected(false);
     selectedHeatmap_ = nullptr;
+  }
+
+  void clearWaterfallPlotSelection()
+  {
+    if (!selectedWaterfallPlot_) {
+      return;
+    }
+    selectedWaterfallPlot_->setSelected(false);
+    selectedWaterfallPlot_ = nullptr;
   }
 
   void clearOvalSelection()
@@ -3829,6 +4162,10 @@ private:
     }
     if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
       heatmap->setSelected(selected);
+      return;
+    }
+    if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
+      waterfall->setSelected(selected);
       return;
     }
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
@@ -4039,6 +4376,12 @@ private:
       }
       return;
     }
+    if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
+      if (selectedWaterfallPlot_ == waterfall) {
+        selectedWaterfallPlot_ = nullptr;
+      }
+      return;
+    }
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       if (selectedOval_ == oval) {
         selectedOval_ = nullptr;
@@ -4242,6 +4585,12 @@ private:
     if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
       if (selectedHeatmap_ == heatmap) {
         clearHeatmapSelection();
+        return;
+      }
+    }
+    if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
+      if (selectedWaterfallPlot_ == waterfall) {
+        clearWaterfallPlotSelection();
         return;
       }
     }
@@ -4454,6 +4803,7 @@ private:
     clearRectangleSelection();
     clearImageSelection();
     clearHeatmapSelection();
+    clearWaterfallPlotSelection();
     clearOvalSelection();
     clearArcSelection();
     clearLineSelection();
@@ -4476,6 +4826,7 @@ private:
   void removeRectangleRuntime(RectangleElement *element);
   void removeImageRuntime(ImageElement *element);
   void removeHeatmapRuntime(HeatmapElement *element);
+  void removeWaterfallPlotRuntime(WaterfallPlotElement *element);
   void removePolylineRuntime(PolylineElement *element);
   void removePolygonRuntime(PolygonElement *element);
   void removeMeterRuntime(MeterElement *element);
@@ -5730,6 +6081,42 @@ private:
       return true;
     }
 
+    if (selectedWaterfallPlot_) {
+      WaterfallPlotElement *element = selectedWaterfallPlot_;
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = target.translateRectForPaste(geometry, offset);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        WaterfallPlotElement *newElement = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          newElement = target.loadWaterfallPlotElement(nodeCopy);
+        }
+        if (newElement) {
+          target.selectWaterfallPlotElement(newElement);
+          target.showResourcePaletteForWaterfall(newElement);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(waterfallPlotElements_, selectedWaterfallPlot_);
+        finalizeCut();
+      }
+      return true;
+    }
+
     if (selectedOval_) {
       OvalElement *element = selectedOval_;
   const QRect geometry = widgetDisplayRect(element);
@@ -6048,7 +6435,8 @@ private:
         || selectedCartesianPlotElement_ || selectedByteMonitorElement_
         || selectedLedMonitorElement_
         || selectedExpressionChannel_
-        || selectedRectangle_ || selectedImage_ || selectedHeatmap_ || selectedOval_
+        || selectedRectangle_ || selectedImage_ || selectedHeatmap_
+        || selectedWaterfallPlot_ || selectedOval_
         || selectedArc_ || selectedLine_ || selectedPolyline_
         || selectedPolygon_ || selectedCompositeElement_;
   }
@@ -6073,6 +6461,7 @@ private:
         || !expressionChannelElements_.isEmpty()
         || !rectangleElements_.isEmpty() || !imageElements_.isEmpty()
         || !heatmapElements_.isEmpty()
+        || !waterfallPlotElements_.isEmpty()
         || !ovalElements_.isEmpty() || !arcElements_.isEmpty()
         || !lineElements_.isEmpty() || !polylineElements_.isEmpty()
         || !polygonElements_.isEmpty() || !compositeElements_.isEmpty();
@@ -8448,6 +8837,132 @@ private:
         });
   }
 
+  void showResourcePaletteForWaterfall(WaterfallPlotElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    dialog->showForWaterfall(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          const QRect constrained = adjustRectToDisplayArea(newGeometry);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() { return element->foregroundColor(); },
+        [this, element](const QColor &value) {
+          element->setForegroundColor(value);
+          markDirty();
+        },
+        [element]() { return element->backgroundColor(); },
+        [this, element](const QColor &value) {
+          element->setBackgroundColor(value);
+          markDirty();
+        },
+        [element]() { return element->title(); },
+        [this, element](const QString &value) {
+          element->setTitle(value);
+          markDirty();
+        },
+        [element]() { return element->xLabel(); },
+        [this, element](const QString &value) {
+          element->setXLabel(value);
+          markDirty();
+        },
+        [element]() { return element->yLabel(); },
+        [this, element](const QString &value) {
+          element->setYLabel(value);
+          markDirty();
+        },
+        [element]() { return element->dataChannel(); },
+        [this, element](const QString &value) {
+          element->setDataChannel(value);
+          markDirty();
+        },
+        [element]() { return element->countChannel(); },
+        [this, element](const QString &value) {
+          element->setCountChannel(value);
+          markDirty();
+        },
+        [element]() { return element->triggerChannel(); },
+        [this, element](const QString &value) {
+          element->setTriggerChannel(value);
+          markDirty();
+        },
+        [element]() { return element->eraseChannel(); },
+        [this, element](const QString &value) {
+          element->setEraseChannel(value);
+          markDirty();
+        },
+        [element]() { return element->eraseMode(); },
+        [this, element](WaterfallEraseMode value) {
+          element->setEraseMode(value);
+          markDirty();
+        },
+        [element]() { return element->historyCount(); },
+        [this, element](int value) {
+          element->setHistoryCount(value);
+          markDirty();
+        },
+        [element]() { return element->scrollDirection(); },
+        [this, element](WaterfallScrollDirection value) {
+          element->setScrollDirection(value);
+          markDirty();
+        },
+        [element]() { return element->colorMap(); },
+        [this, element](HeatmapColorMap value) {
+          element->setColorMap(value);
+          markDirty();
+        },
+        [element]() { return element->invertGreyscale(); },
+        [this, element](bool value) {
+          element->setInvertGreyscale(value);
+          markDirty();
+        },
+        [element]() { return element->intensityScale(); },
+        [this, element](WaterfallIntensityScale value) {
+          element->setIntensityScale(value);
+          markDirty();
+        },
+        [element]() { return element->intensityMin(); },
+        [this, element](double value) {
+          element->setIntensityMin(value);
+          markDirty();
+        },
+        [element]() { return element->intensityMax(); },
+        [this, element](double value) {
+          element->setIntensityMax(value);
+          markDirty();
+        },
+        [element]() { return element->showLegend(); },
+        [this, element](bool value) {
+          element->setShowLegend(value);
+          markDirty();
+        },
+        [element]() { return element->showGrid(); },
+        [this, element](bool value) {
+          element->setShowGrid(value);
+          markDirty();
+        },
+        [element]() { return element->samplePeriod(); },
+        [this, element](double value) {
+          element->setSamplePeriod(value);
+          markDirty();
+        },
+        [element]() { return element->units(); },
+        [this, element](TimeUnits value) {
+          element->setUnits(value);
+          markDirty();
+        });
+  }
+
   void showResourcePaletteForOval(OvalElement *element)
   {
     if (!element) {
@@ -9066,6 +9581,8 @@ private:
           }
         } else if (dynamic_cast<HeatmapElement *>(candidate)) {
           return candidate;
+        } else if (dynamic_cast<WaterfallPlotElement *>(candidate)) {
+          return candidate;
         } else if (auto *text = dynamic_cast<TextElement *>(candidate)) {
           if (text->colorMode() == TextColorMode::kStatic
               && text->visibilityMode() == TextVisibilityMode::kStatic) {
@@ -9157,6 +9674,11 @@ private:
       if (element->yDimensionSource() == HeatmapDimensionSource::kChannel) {
         appendChannel(element->yDimensionChannel());
       }
+    } else if (auto *element = dynamic_cast<WaterfallPlotElement *>(widget)) {
+      appendChannel(element->dataChannel());
+      appendChannel(element->countChannel());
+      appendChannel(element->triggerChannel());
+      appendChannel(element->eraseChannel());
     } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
       appendChannelArray(AdlWriter::collectChannels(element));
     } else if (auto *element = dynamic_cast<ArcElement *>(widget)) {
@@ -9222,6 +9744,7 @@ public:
     appendList(rectangleElements_);
     appendList(imageElements_);
     appendList(heatmapElements_);
+    appendList(waterfallPlotElements_);
     appendList(ovalElements_);
     appendList(arcElements_);
     appendList(lineElements_);
@@ -9752,11 +10275,14 @@ private:
     if (dynamic_cast<ImageElement *>(widget)) {
       return QStringLiteral("Image");
     }
-    if (dynamic_cast<HeatmapElement *>(widget)) {
-      return QStringLiteral("Heatmap");
-    }
-    if (dynamic_cast<OvalElement *>(widget)) {
-      return QStringLiteral("Oval");
+      if (dynamic_cast<HeatmapElement *>(widget)) {
+        return QStringLiteral("Heatmap");
+      }
+      if (dynamic_cast<WaterfallPlotElement *>(widget)) {
+        return QStringLiteral("Waterfall Plot");
+      }
+      if (dynamic_cast<OvalElement *>(widget)) {
+        return QStringLiteral("Oval");
     }
     if (dynamic_cast<ArcElement *>(widget)) {
       return QStringLiteral("Arc");
@@ -9930,6 +10456,11 @@ private:
       if (element->yDimensionSource() == HeatmapDimensionSource::kChannel) {
         addRef(element->yDimensionChannel());
       }
+    } else if (auto *element = dynamic_cast<WaterfallPlotElement *>(widget)) {
+      addRef(element->dataChannel());
+      addRef(element->countChannel());
+      addRef(element->triggerChannel());
+      addRef(element->eraseChannel());
     } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
       if (auto *runtime = ovalRuntimes_.value(element, nullptr)) {
         for (const auto &channel : runtime->channels_) {
@@ -11438,6 +11969,42 @@ private:
     selectedHeatmap_->setSelected(true);
   }
 
+  void selectWaterfallPlotElement(WaterfallPlotElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedWaterfallPlot_) {
+      selectedWaterfallPlot_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedWaterfallPlot_ = element;
+    selectedWaterfallPlot_->setSelected(true);
+  }
+
   void selectOvalElement(OvalElement *element)
   {
     if (!element) {
@@ -11720,6 +12287,9 @@ private:
     if (selectedHeatmap_) {
       return selectedHeatmap_;
     }
+    if (selectedWaterfallPlot_) {
+      return selectedWaterfallPlot_;
+    }
     if (selectedOval_) {
       return selectedOval_;
     }
@@ -11838,6 +12408,10 @@ private:
     } else if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
       selectHeatmapElement(heatmap);
       showResourcePaletteForHeatmap(heatmap);
+      handled = true;
+    } else if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
+      selectWaterfallPlotElement(waterfall);
+      showResourcePaletteForWaterfall(waterfall);
       handled = true;
     } else if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       selectOvalElement(oval);
@@ -13446,6 +14020,7 @@ private:
     considerList(rectangleElements_);
     considerList(imageElements_);
     considerList(heatmapElements_);
+    considerList(waterfallPlotElements_);
     considerList(ovalElements_);
     considerList(arcElements_);
     considerList(lineElements_);
@@ -13799,6 +14374,16 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createHeatmapElement(rect);
+      break;
+    case CreateTool::kWaterfallPlot:
+      if (rect.width() < kMinimumWaterfallPlotWidth) {
+        rect.setWidth(kMinimumWaterfallPlotWidth);
+      }
+      if (rect.height() < kMinimumWaterfallPlotHeight) {
+        rect.setHeight(kMinimumWaterfallPlotHeight);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createWaterfallPlotElement(rect);
       break;
     case CreateTool::kRelatedDisplay:
       if (rect.width() < kMinimumTextWidth) {
@@ -15103,6 +15688,43 @@ private:
     markDirty();
   }
 
+  void createWaterfallPlotElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create Waterfall Plot"));
+    QRect target = rect;
+    if (target.width() < kMinimumWaterfallPlotWidth) {
+      target.setWidth(kMinimumWaterfallPlotWidth);
+    }
+    if (target.height() < kMinimumWaterfallPlotHeight) {
+      target.setHeight(kMinimumWaterfallPlotHeight);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new WaterfallPlotElement(displayArea_);
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    waterfallPlotElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!waterfallPlotRuntimes_.contains(element)) {
+        auto *runtime = new WaterfallPlotRuntime(element);
+        waterfallPlotRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectWaterfallPlotElement(element);
+    showResourcePaletteForWaterfall(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createOvalElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -15407,6 +16029,7 @@ private:
             || state->createTool == CreateTool::kLine
             || state->createTool == CreateTool::kImage
             || state->createTool == CreateTool::kHeatmap
+            || state->createTool == CreateTool::kWaterfallPlot
             || state->createTool == CreateTool::kRelatedDisplay);
     if (displayArea_) {
       if (crossCursorActive) {
@@ -15746,6 +16369,8 @@ private:
         dynamic_cast<CartesianPlotElement *>(clickedWidget);
     HeatmapElement *clickedHeatmap =
         dynamic_cast<HeatmapElement *>(clickedWidget);
+    WaterfallPlotElement *clickedWaterfall =
+        dynamic_cast<WaterfallPlotElement *>(clickedWidget);
 
     QMenu menu(this);
     menu.setObjectName(QStringLiteral("executeModeContextMenu"));
@@ -15817,6 +16442,35 @@ private:
         QObject::connect(resetZoomAction, &QAction::triggered, this,
             [clickedStripChart]() {
               clickedStripChart->resetZoom();
+            });
+      }
+      menu.addSeparator();
+    }
+
+    if (clickedWaterfall) {
+      menu.addSeparator();
+      QAction *saveImageAction = menu.addAction(QStringLiteral("Save Image..."));
+      QObject::connect(saveImageAction, &QAction::triggered, this,
+          [this, clickedWaterfall]() {
+            setAsActiveDisplay();
+            exportWaterfallPlotImage(clickedWaterfall);
+          });
+      QAction *saveDataAction = menu.addAction(QStringLiteral("Save Data..."));
+      QObject::connect(saveDataAction, &QAction::triggered, this,
+          [this, clickedWaterfall]() {
+            setAsActiveDisplay();
+            exportWaterfallPlotData(clickedWaterfall);
+          });
+      QAction *clearBufferAction = menu.addAction(QStringLiteral("Clear Buffer"));
+      QObject::connect(clearBufferAction, &QAction::triggered, this,
+          [clickedWaterfall]() {
+            clickedWaterfall->clearBuffer();
+          });
+      if (clickedWaterfall->isZoomed()) {
+        QAction *resetZoomAction = menu.addAction(QStringLiteral("Reset Zoom"));
+        QObject::connect(resetZoomAction, &QAction::triggered, this,
+            [clickedWaterfall]() {
+              clickedWaterfall->resetZoom();
             });
       }
       menu.addSeparator();
@@ -16297,6 +16951,14 @@ private:
     auto *heatmapAction = addMenuAction(monitorsMenu, QStringLiteral("Heatmap"));
     QObject::connect(heatmapAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kHeatmap);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
+    auto *waterfallAction =
+        addMenuAction(monitorsMenu, QStringLiteral("Waterfall Plot"));
+    QObject::connect(waterfallAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kWaterfallPlot);
       if (!lastContextMenuGlobalPos_.isNull()) {
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
@@ -16961,6 +17623,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
   for (HeatmapElement *e : heatmapElements_) {
     scaleWidget(e);
   }
+  for (WaterfallPlotElement *e : waterfallPlotElements_) {
+    scaleWidget(e);
+  }
   for (OvalElement *e : ovalElements_) {
     scaleWidget(e);
   }
@@ -17245,6 +17910,17 @@ inline bool DisplayWindow::isTestAutomationReady() const
             return runtime->connected_ && runtime->lastReadAccessKnown_
                 && !runtime->enumStrings_.isEmpty()
                 && (runtime->lastValue_ >= 0 || runtime->lastValueOutOfRange_);
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(waterfallPlotElements_, waterfallPlotRuntimes_,
+          [](WaterfallPlotElement *element) { return element->dataChannel(); },
+          [](WaterfallPlotRuntime *runtime) {
+            WaterfallPlotElement *element = runtime->element_.data();
+            return runtime->dataChannel_.connected && element
+                && element->isRuntimeConnected()
+                && element->waveformLength() > 0
+                && element->bufferedSampleCount() > 0;
           })) {
     return false;
   }
@@ -18811,6 +19487,121 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       continue;
     }
 
+    if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("waterfall_plot {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(waterfall));
+      std::array<QString, 4> yLabels{};
+      yLabels[0] = waterfall->yLabel();
+      const QColor waterfallForeground = resolvedForegroundColor(waterfall,
+          waterfall->foregroundColor());
+      const QColor waterfallBackground = resolvedBackgroundColor(waterfall,
+          waterfall->backgroundColor());
+      AdlWriter::writePlotcom(stream, 1, waterfall->title(),
+          waterfall->xLabel(), yLabels,
+          AdlWriter::medmColorIndex(waterfallForeground),
+          AdlWriter::medmColorIndex(waterfallBackground));
+
+      const QString dataChannel = waterfall->dataChannel().trimmed();
+      if (!dataChannel.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("data {"));
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("chan=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(dataChannel)));
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      }
+
+      const QString countChannel = waterfall->countChannel().trimmed();
+      if (!countChannel.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("count {"));
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("chan=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(countChannel)));
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      }
+
+      const QString triggerChannel = waterfall->triggerChannel().trimmed();
+      if (!triggerChannel.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("trigger {"));
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("chan=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(triggerChannel)));
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      }
+
+      const QString eraseChannel = waterfall->eraseChannel().trimmed();
+      if (!eraseChannel.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("erase {"));
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("chan=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(eraseChannel)));
+        if (waterfall->eraseMode() != WaterfallEraseMode::kIfNotZero) {
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("mode=\"%1\"")
+                  .arg(AdlWriter::waterfallEraseModeString(
+                      waterfall->eraseMode())));
+        }
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      }
+
+      if (waterfall->historyCount() != kWaterfallDefaultHistory) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("historyCount=%1")
+                .arg(waterfall->historyCount()));
+      }
+      if (waterfall->scrollDirection()
+          != WaterfallScrollDirection::kTopToBottom) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("scrollDirection=\"%1\"")
+                .arg(AdlWriter::waterfallScrollDirectionString(
+                    waterfall->scrollDirection())));
+      }
+      if (waterfall->colorMap() != HeatmapColorMap::kGrayscale) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("colorMap=\"%1\"")
+                .arg(AdlWriter::heatmapColorMapString(
+                    waterfall->colorMap())));
+      }
+      if (!waterfall->invertGreyscale()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("invertGreyscale=0"));
+      }
+      if (waterfall->intensityScale() != WaterfallIntensityScale::kAuto) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("intensityScale=\"%1\"")
+                .arg(AdlWriter::waterfallIntensityScaleString(
+                    waterfall->intensityScale())));
+      }
+      if (std::abs(waterfall->intensityMin()) > 1e-12) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("intensityMin=%1")
+                .arg(QString::number(waterfall->intensityMin(), 'g', 15)));
+      }
+      if (std::abs(waterfall->intensityMax() - 1.0) > 1e-12) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("intensityMax=%1")
+                .arg(QString::number(waterfall->intensityMax(), 'g', 15)));
+      }
+      if (!waterfall->showLegend()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showLegend=0"));
+      }
+      if (waterfall->showGrid()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showGrid=1"));
+      }
+      if (std::abs(waterfall->samplePeriod()) > 1e-12) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("samplePeriod=%1")
+                .arg(QString::number(waterfall->samplePeriod(), 'g', 15)));
+      }
+      if (waterfall->units() != TimeUnits::kSeconds) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("units=\"%1\"")
+                .arg(AdlWriter::timeUnitsString(waterfall->units())));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("oval {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(oval));
@@ -19933,6 +20724,123 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("waterfall_plot {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(waterfall));
+    std::array<QString, 4> yLabels{};
+    yLabels[0] = waterfall->yLabel();
+    const QColor waterfallForeground = resolveForeground(waterfall,
+        waterfall->foregroundColor());
+    const QColor waterfallBackground = resolveBackground(waterfall,
+        waterfall->backgroundColor());
+    AdlWriter::writePlotcom(stream, next, waterfall->title(),
+        waterfall->xLabel(), yLabels,
+        AdlWriter::medmColorIndex(waterfallForeground),
+        AdlWriter::medmColorIndex(waterfallBackground));
+
+    const QString dataChannel = waterfall->dataChannel().trimmed();
+    if (!dataChannel.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("data {"));
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("chan=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(dataChannel)));
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    }
+
+    const QString countChannel = waterfall->countChannel().trimmed();
+    if (!countChannel.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("count {"));
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("chan=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(countChannel)));
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    }
+
+    const QString triggerChannel = waterfall->triggerChannel().trimmed();
+    if (!triggerChannel.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("trigger {"));
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("chan=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(triggerChannel)));
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    }
+
+    const QString eraseChannel = waterfall->eraseChannel().trimmed();
+    if (!eraseChannel.isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("erase {"));
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("chan=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(eraseChannel)));
+      if (waterfall->eraseMode() != WaterfallEraseMode::kIfNotZero) {
+        AdlWriter::writeIndentedLine(stream, next + 1,
+            QStringLiteral("mode=\"%1\"")
+                .arg(AdlWriter::waterfallEraseModeString(
+                    waterfall->eraseMode())));
+      }
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    }
+
+    if (waterfall->historyCount() != kWaterfallDefaultHistory) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("historyCount=%1")
+              .arg(waterfall->historyCount()));
+    }
+    if (waterfall->scrollDirection()
+        != WaterfallScrollDirection::kTopToBottom) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("scrollDirection=\"%1\"")
+              .arg(AdlWriter::waterfallScrollDirectionString(
+                  waterfall->scrollDirection())));
+    }
+    if (waterfall->colorMap() != HeatmapColorMap::kGrayscale) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("colorMap=\"%1\"")
+              .arg(AdlWriter::heatmapColorMapString(waterfall->colorMap())));
+    }
+    if (!waterfall->invertGreyscale()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("invertGreyscale=0"));
+    }
+    if (waterfall->intensityScale() != WaterfallIntensityScale::kAuto) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("intensityScale=\"%1\"")
+              .arg(AdlWriter::waterfallIntensityScaleString(
+                  waterfall->intensityScale())));
+    }
+    if (std::abs(waterfall->intensityMin()) > 1e-12) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("intensityMin=%1")
+              .arg(QString::number(waterfall->intensityMin(), 'g', 15)));
+    }
+    if (std::abs(waterfall->intensityMax() - 1.0) > 1e-12) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("intensityMax=%1")
+              .arg(QString::number(waterfall->intensityMax(), 'g', 15)));
+    }
+    if (!waterfall->showLegend()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("showLegend=0"));
+    }
+    if (waterfall->showGrid()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("showGrid=1"));
+    }
+    if (std::abs(waterfall->samplePeriod()) > 1e-12) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("samplePeriod=%1")
+              .arg(QString::number(waterfall->samplePeriod(), 'g', 15)));
+    }
+    if (waterfall->units() != TimeUnits::kSeconds) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("units=\"%1\"")
+              .arg(AdlWriter::timeUnitsString(waterfall->units())));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("oval {"));
     AdlWriter::writeObjectSection(stream, next,
@@ -20096,6 +21004,8 @@ inline void DisplayWindow::clearAllElements()
           removeImageRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, HeatmapElement *>) {
           removeHeatmapRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, WaterfallPlotElement *>) {
+          removeWaterfallPlotRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ArcElement *>) {
           removeArcRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, OvalElement *>) {
@@ -20133,6 +21043,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(rectangleElements_);
   clearList(imageElements_);
   clearList(heatmapElements_);
+  clearList(waterfallPlotElements_);
   clearList(ovalElements_);
   clearList(arcElements_);
   clearList(lineElements_);
@@ -21089,6 +22000,50 @@ inline bool DisplayWindow::parseHeatmapBool(
   return true;
 }
 
+inline WaterfallScrollDirection DisplayWindow::parseWaterfallScrollDirection(
+    const QString &value) const
+{
+  QString normalized = value.trimmed().toLower();
+  normalized.remove(QLatin1Char('_'));
+  normalized.remove(QLatin1Char('-'));
+  normalized.remove(QLatin1Char(' '));
+
+  if (normalized == QStringLiteral("bottomtotop")) {
+    return WaterfallScrollDirection::kBottomToTop;
+  }
+  if (normalized == QStringLiteral("lefttoright")) {
+    return WaterfallScrollDirection::kLeftToRight;
+  }
+  if (normalized == QStringLiteral("righttoleft")) {
+    return WaterfallScrollDirection::kRightToLeft;
+  }
+  return WaterfallScrollDirection::kTopToBottom;
+}
+
+inline WaterfallIntensityScale DisplayWindow::parseWaterfallIntensityScale(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.contains(QStringLiteral("manual"))) {
+    return WaterfallIntensityScale::kManual;
+  }
+  if (normalized.contains(QStringLiteral("log"))) {
+    return WaterfallIntensityScale::kLog;
+  }
+  return WaterfallIntensityScale::kAuto;
+}
+
+inline WaterfallEraseMode DisplayWindow::parseWaterfallEraseMode(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.contains(QStringLiteral("ifzero"))
+      || normalized.contains(QStringLiteral("if zero"))) {
+    return WaterfallEraseMode::kIfZero;
+  }
+  return WaterfallEraseMode::kIfNotZero;
+}
+
 inline TextMonitorFormat DisplayWindow::parseTextMonitorFormat(
     const QString &value) const
 {
@@ -21426,6 +22381,69 @@ inline QJsonObject DisplayWindow::testStateObject() const
     case BarFill::kFromEdge:
     default:
       return QStringLiteral("from_edge");
+    }
+  };
+  auto heatmapColorMapToString = [](HeatmapColorMap map) {
+    switch (map) {
+    case HeatmapColorMap::kJet:
+      return QStringLiteral("jet");
+    case HeatmapColorMap::kHot:
+      return QStringLiteral("hot");
+    case HeatmapColorMap::kCool:
+      return QStringLiteral("cool");
+    case HeatmapColorMap::kRainbow:
+      return QStringLiteral("rainbow");
+    case HeatmapColorMap::kTurbo:
+      return QStringLiteral("turbo");
+    case HeatmapColorMap::kGrayscale:
+    default:
+      return QStringLiteral("grayscale");
+    }
+  };
+  auto timeUnitsToString = [](TimeUnits units) {
+    switch (units) {
+    case TimeUnits::kMilliseconds:
+      return QStringLiteral("milliseconds");
+    case TimeUnits::kMinutes:
+      return QStringLiteral("minutes");
+    case TimeUnits::kSeconds:
+    default:
+      return QStringLiteral("seconds");
+    }
+  };
+  auto waterfallScrollDirectionToString =
+      [](WaterfallScrollDirection direction) {
+        switch (direction) {
+        case WaterfallScrollDirection::kBottomToTop:
+          return QStringLiteral("bottom_to_top");
+        case WaterfallScrollDirection::kLeftToRight:
+          return QStringLiteral("left_to_right");
+        case WaterfallScrollDirection::kRightToLeft:
+          return QStringLiteral("right_to_left");
+        case WaterfallScrollDirection::kTopToBottom:
+        default:
+          return QStringLiteral("top_to_bottom");
+        }
+      };
+  auto waterfallIntensityScaleToString =
+      [](WaterfallIntensityScale scale) {
+        switch (scale) {
+        case WaterfallIntensityScale::kManual:
+          return QStringLiteral("manual");
+        case WaterfallIntensityScale::kLog:
+          return QStringLiteral("log");
+        case WaterfallIntensityScale::kAuto:
+        default:
+          return QStringLiteral("auto");
+        }
+      };
+  auto waterfallEraseModeToString = [](WaterfallEraseMode mode) {
+    switch (mode) {
+    case WaterfallEraseMode::kIfZero:
+      return QStringLiteral("if_zero");
+    case WaterfallEraseMode::kIfNotZero:
+    default:
+      return QStringLiteral("if_not_zero");
     }
   };
   auto choiceButtonStackingToString = [](ChoiceButtonStacking stacking) {
@@ -21776,6 +22794,78 @@ inline QJsonObject DisplayWindow::testStateObject() const
       widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
       if (runtime->hasLastValue_) {
         widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (WaterfallPlotElement *element : waterfallPlotElements_) {
+    if (!element) {
+      continue;
+    }
+    WaterfallPlotRuntime *runtime = waterfallPlotRuntimes_.value(element,
+        nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "waterfall_plot", element,
+        element->dataChannel());
+    widgetObject[QStringLiteral("data_channel")] = element->dataChannel();
+    widgetObject[QStringLiteral("count_channel")] = element->countChannel();
+    widgetObject[QStringLiteral("trigger_channel")] =
+        element->triggerChannel();
+    widgetObject[QStringLiteral("erase_channel")] = element->eraseChannel();
+    widgetObject[QStringLiteral("history_count")] = element->historyCount();
+    widgetObject[QStringLiteral("scroll_direction")] =
+        waterfallScrollDirectionToString(element->scrollDirection());
+    widgetObject[QStringLiteral("color_map")] =
+        heatmapColorMapToString(element->colorMap());
+    widgetObject[QStringLiteral("invert_grayscale")] =
+        element->invertGreyscale();
+    widgetObject[QStringLiteral("intensity_scale")] =
+        waterfallIntensityScaleToString(element->intensityScale());
+    widgetObject[QStringLiteral("intensity_min")] = element->intensityMin();
+    widgetObject[QStringLiteral("intensity_max")] = element->intensityMax();
+    widgetObject[QStringLiteral("show_legend")] = element->showLegend();
+    widgetObject[QStringLiteral("show_grid")] = element->showGrid();
+    widgetObject[QStringLiteral("sample_period")] = element->samplePeriod();
+    widgetObject[QStringLiteral("units")] =
+        timeUnitsToString(element->units());
+    widgetObject[QStringLiteral("erase_mode")] =
+        waterfallEraseModeToString(element->eraseMode());
+    widgetObject[QStringLiteral("runtime_connected")] =
+        element->isRuntimeConnected();
+    widgetObject[QStringLiteral("execute_mode")] = element->isExecuteMode();
+    widgetObject[QStringLiteral("zoomed")] = element->isZoomed();
+    widgetObject[QStringLiteral("waveform_length")] = element->waveformLength();
+    widgetObject[QStringLiteral("buffered_sample_count")] =
+        element->bufferedSampleCount();
+    widgetObject[QStringLiteral("has_samples")] =
+        element->bufferedSampleCount() > 0;
+    if (element->bufferedSampleCount() > 0) {
+      const int latestSampleIndex = element->bufferedSampleCount() - 1;
+      widgetObject[QStringLiteral("latest_sample_length")] =
+          element->sampleLength(latestSampleIndex);
+      widgetObject[QStringLiteral("latest_sample_timestamp_ms")] =
+          static_cast<qint64>(element->sampleTimestampMs(latestSampleIndex));
+    }
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] =
+          runtime->dataChannel_.connected;
+      widgetObject[QStringLiteral("count_connected")] =
+          runtime->countChannel_.connected;
+      widgetObject[QStringLiteral("trigger_connected")] =
+          runtime->triggerChannel_.connected;
+      widgetObject[QStringLiteral("erase_connected")] =
+          runtime->eraseChannel_.connected;
+      widgetObject[QStringLiteral("latest_waveform_available")] =
+          !runtime->latestWaveform_.isEmpty();
+      widgetObject[QStringLiteral("latest_waveform_size")] =
+          runtime->latestWaveform_.size();
+      widgetObject[QStringLiteral("count_from_channel")] =
+          runtime->countFromChannel_;
+      widgetObject[QStringLiteral("erase_value_known")] =
+          runtime->eraseValueKnown_;
+      if (runtime->eraseValueKnown_) {
+        widgetObject[QStringLiteral("erase_value")] = runtime->lastEraseValue_;
       }
     }
     widgets.append(widgetObject);
@@ -25933,6 +27023,239 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
   return element;
 }
 
+inline WaterfallPlotElement *DisplayWindow::loadWaterfallPlotElement(
+    const AdlNode &waterfallNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(waterfallNode);
+  QRect originalGeometry = geometry;
+  if (geometry.width() < kMinimumWaterfallPlotWidth) {
+    geometry.setWidth(kMinimumWaterfallPlotWidth);
+  }
+  if (geometry.height() < kMinimumWaterfallPlotHeight) {
+    geometry.setHeight(kMinimumWaterfallPlotHeight);
+  }
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new WaterfallPlotElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  if (const AdlNode *plotcom = ::findChild(waterfallNode,
+          QStringLiteral("plotcom"))) {
+    const QString title = propertyValue(*plotcom, QStringLiteral("title"));
+    if (!title.trimmed().isEmpty()) {
+      element->setTitle(title.trimmed());
+    }
+
+    const QString xLabel = propertyValue(*plotcom, QStringLiteral("xlabel"));
+    if (!xLabel.trimmed().isEmpty()) {
+      element->setXLabel(xLabel.trimmed());
+    }
+
+    const QString yLabel = propertyValue(*plotcom, QStringLiteral("ylabel"));
+    if (!yLabel.trimmed().isEmpty()) {
+      element->setYLabel(yLabel.trimmed());
+    }
+
+    bool ok = false;
+    const QString clrStr = propertyValue(*plotcom, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*plotcom, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  } else {
+    const QString title = propertyValue(waterfallNode, QStringLiteral("title"));
+    if (!title.trimmed().isEmpty()) {
+      element->setTitle(title.trimmed());
+    }
+    const QString xLabel = propertyValue(waterfallNode, QStringLiteral("xlabel"));
+    if (!xLabel.trimmed().isEmpty()) {
+      element->setXLabel(xLabel.trimmed());
+    }
+    const QString yLabel = propertyValue(waterfallNode, QStringLiteral("ylabel"));
+    if (!yLabel.trimmed().isEmpty()) {
+      element->setYLabel(yLabel.trimmed());
+    }
+  }
+
+  if (const AdlNode *dataNode = ::findChild(waterfallNode,
+          QStringLiteral("data"))) {
+    const QString channel = channelValueWithLegacyFallback(*dataNode);
+    if (!channel.trimmed().isEmpty()) {
+      element->setDataChannel(channel);
+    }
+  } else {
+    const QString dataPv = propertyValue(waterfallNode,
+        QStringLiteral("dataPv"));
+    if (!dataPv.trimmed().isEmpty()) {
+      element->setDataChannel(dataPv);
+    }
+  }
+
+  if (const AdlNode *countNode = ::findChild(waterfallNode,
+          QStringLiteral("count"))) {
+    const QString channel = channelValueWithLegacyFallback(*countNode);
+    if (!channel.trimmed().isEmpty()) {
+      element->setCountChannel(channel);
+    }
+  } else {
+    const QString countPv = propertyValue(waterfallNode,
+        QStringLiteral("countPv"));
+    if (!countPv.trimmed().isEmpty()) {
+      element->setCountChannel(countPv);
+    }
+  }
+
+  if (const AdlNode *triggerNode = ::findChild(waterfallNode,
+          QStringLiteral("trigger"))) {
+    const QString channel = channelValueWithLegacyFallback(*triggerNode);
+    if (!channel.trimmed().isEmpty()) {
+      element->setTriggerChannel(channel);
+    }
+  } else {
+    const QString triggerPv = propertyValue(waterfallNode,
+        QStringLiteral("triggerPv"));
+    if (!triggerPv.trimmed().isEmpty()) {
+      element->setTriggerChannel(triggerPv);
+    }
+  }
+
+  if (const AdlNode *eraseNode = ::findChild(waterfallNode,
+          QStringLiteral("erase"))) {
+    const QString channel = channelValueWithLegacyFallback(*eraseNode);
+    if (!channel.trimmed().isEmpty()) {
+      element->setEraseChannel(channel);
+    }
+    const QString modeValue = propertyValue(*eraseNode, QStringLiteral("mode"));
+    if (!modeValue.trimmed().isEmpty()) {
+      element->setEraseMode(parseWaterfallEraseMode(modeValue));
+    }
+  } else {
+    const QString erasePv = propertyValue(waterfallNode,
+        QStringLiteral("erasePv"));
+    if (!erasePv.trimmed().isEmpty()) {
+      element->setEraseChannel(erasePv);
+    }
+    const QString eraseModeValue = propertyValue(waterfallNode,
+        QStringLiteral("eraseMode"));
+    if (!eraseModeValue.trimmed().isEmpty()) {
+      element->setEraseMode(parseWaterfallEraseMode(eraseModeValue));
+    }
+  }
+
+  bool ok = false;
+  const QString historyValue = propertyValue(waterfallNode,
+      QStringLiteral("historyCount"));
+  const int historyCount = historyValue.toInt(&ok);
+  if (ok && historyCount > 0) {
+    element->setHistoryCount(historyCount);
+  }
+
+  const QString directionValue = propertyValue(waterfallNode,
+      QStringLiteral("scrollDirection"));
+  if (!directionValue.trimmed().isEmpty()) {
+    element->setScrollDirection(parseWaterfallScrollDirection(directionValue));
+  }
+
+  const QString colorMapValue = propertyValue(waterfallNode,
+      QStringLiteral("colorMap"));
+  if (!colorMapValue.trimmed().isEmpty()) {
+    element->setColorMap(parseHeatmapColorMap(colorMapValue));
+  }
+
+  QString invertValue = propertyValue(waterfallNode,
+      QStringLiteral("invertGreyscale"));
+  if (invertValue.trimmed().isEmpty()) {
+    invertValue = propertyValue(waterfallNode,
+        QStringLiteral("invertGrayscale"));
+  }
+  if (invertValue.trimmed().isEmpty()) {
+    invertValue = propertyValue(waterfallNode,
+        QStringLiteral("invertGrayScale"));
+  }
+  if (!invertValue.trimmed().isEmpty()) {
+    element->setInvertGreyscale(parseHeatmapBool(invertValue));
+  }
+
+  const QString scaleValue = propertyValue(waterfallNode,
+      QStringLiteral("intensityScale"));
+  if (!scaleValue.trimmed().isEmpty()) {
+    element->setIntensityScale(parseWaterfallIntensityScale(scaleValue));
+  }
+
+  ok = false;
+  const QString minValue = propertyValue(waterfallNode,
+      QStringLiteral("intensityMin"));
+  const double intensityMin = minValue.toDouble(&ok);
+  if (ok) {
+    element->setIntensityMin(intensityMin);
+  }
+
+  ok = false;
+  const QString maxValue = propertyValue(waterfallNode,
+      QStringLiteral("intensityMax"));
+  const double intensityMax = maxValue.toDouble(&ok);
+  if (ok) {
+    element->setIntensityMax(intensityMax);
+  }
+
+  const QString showLegendValue = propertyValue(waterfallNode,
+      QStringLiteral("showLegend"));
+  if (!showLegendValue.trimmed().isEmpty()) {
+    element->setShowLegend(parseHeatmapBool(showLegendValue));
+  }
+
+  const QString showGridValue = propertyValue(waterfallNode,
+      QStringLiteral("showGrid"));
+  if (!showGridValue.trimmed().isEmpty()) {
+    element->setShowGrid(parseHeatmapBool(showGridValue));
+  }
+
+  ok = false;
+  const QString samplePeriodValue = propertyValue(waterfallNode,
+      QStringLiteral("samplePeriod"));
+  const double samplePeriod = samplePeriodValue.toDouble(&ok);
+  if (ok) {
+    element->setSamplePeriod(samplePeriod);
+  }
+
+  const QString unitsValue = propertyValue(waterfallNode, QStringLiteral("units"));
+  if (!unitsValue.trimmed().isEmpty()) {
+    element->setUnits(parseTimeUnits(unitsValue));
+  }
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  waterfallPlotElements_.append(element);
+  ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!waterfallPlotRuntimes_.contains(element)) {
+      auto *runtime = new WaterfallPlotRuntime(element);
+      waterfallPlotRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
+  return element;
+}
+
 inline RectangleElement *DisplayWindow::loadRectangleElement(
     const AdlNode &rectangleNode)
 {
@@ -27096,6 +28419,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadImageElement(node) != nullptr;
   } else if (name == QStringLiteral("heatmap")) {
     loaded = loadHeatmapElement(node) != nullptr;
+  } else if (name == QStringLiteral("waterfall_plot")) {
+    loaded = loadWaterfallPlotElement(node) != nullptr;
   } else if (name == QStringLiteral("rectangle")) {
     loaded = loadRectangleElement(node) != nullptr;
   } else if (name == QStringLiteral("oval")) {
@@ -27296,6 +28621,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(rectangleRuntimes_, rectangleElements_.size());
   reserveRuntime(imageRuntimes_, imageElements_.size());
   reserveRuntime(heatmapRuntimes_, heatmapElements_.size());
+  reserveRuntime(waterfallPlotRuntimes_, waterfallPlotElements_.size());
   reserveRuntime(ovalRuntimes_, ovalElements_.size());
   reserveRuntime(arcRuntimes_, arcElements_.size());
   reserveRuntime(lineRuntimes_, lineElements_.size());
@@ -27348,7 +28674,8 @@ inline void DisplayWindow::enterExecuteMode()
   /* Report element counts for timing diagnostics */
   int totalWidgets = compositeElements_.size() + textElements_.size() +
       textEntryElements_.size() + rectangleElements_.size() +
-      imageElements_.size() + heatmapElements_.size() + ovalElements_.size() + arcElements_.size() +
+      imageElements_.size() + heatmapElements_.size() +
+      waterfallPlotElements_.size() + ovalElements_.size() + arcElements_.size() +
       lineElements_.size() + polylineElements_.size() + polygonElements_.size() +
       meterElements_.size() + scaleMonitorElements_.size() +
       stripChartElements_.size() + cartesianPlotElements_.size() +
@@ -27439,6 +28766,18 @@ inline void DisplayWindow::enterExecuteMode()
 
     }
   }
+  for (WaterfallPlotElement *element : waterfallPlotElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!waterfallPlotRuntimes_.contains(element)) {
+      auto *runtime = new WaterfallPlotRuntime(element);
+      waterfallPlotRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
   for (OvalElement *element : ovalElements_) {
     if (!element) {
       continue;
@@ -27515,7 +28854,7 @@ inline void DisplayWindow::enterExecuteMode()
       cartesianPlotElements_.size() + barMonitorElements_.size() +
       thermometerElements_.size() +
       byteMonitorElements_.size() + ledMonitorElements_.size() +
-      heatmapElements_.size();
+      heatmapElements_.size() + waterfallPlotElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating monitor runtimes", monitorCount);
   for (ScaleMonitorElement *element : scaleMonitorElements_) {
     if (!element) {
@@ -27822,6 +29161,19 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   heatmapRuntimes_.clear();
   for (HeatmapElement *element : heatmapElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (auto it = waterfallPlotRuntimes_.begin();
+      it != waterfallPlotRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  waterfallPlotRuntimes_.clear();
+  for (WaterfallPlotElement *element : waterfallPlotElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
@@ -28163,6 +29515,18 @@ inline void DisplayWindow::removeHeatmapRuntime(HeatmapElement *element)
     return;
   }
   if (auto *runtime = heatmapRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeWaterfallPlotRuntime(
+    WaterfallPlotElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = waterfallPlotRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

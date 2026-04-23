@@ -795,6 +795,213 @@ public:
     updateHeatmapDimensionControls();
     entriesLayout->addWidget(heatmapSection_);
 
+    waterfallSection_ = new QWidget(entriesWidget_);
+    auto *waterfallLayout = new QGridLayout(waterfallSection_);
+    waterfallLayout->setContentsMargins(0, 0, 0, 0);
+    waterfallLayout->setHorizontalSpacing(12);
+    waterfallLayout->setVerticalSpacing(6);
+
+    waterfallForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(waterfallForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(waterfallForegroundButton_,
+              QStringLiteral("Waterfall Foreground"),
+              waterfallForegroundSetter_);
+        });
+
+    waterfallBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(waterfallBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(waterfallBackgroundButton_,
+              QStringLiteral("Waterfall Background"),
+              waterfallBackgroundSetter_);
+        });
+
+    auto setupWaterfallEdit = [this](QLineEdit **field,
+                                 const std::function<void()> &commit) {
+      *field = createLineEdit();
+      committedTexts_.insert(*field, (*field)->text());
+      (*field)->installEventFilter(this);
+      QObject::connect(*field, &QLineEdit::returnPressed, this, commit);
+      QObject::connect(*field, &QLineEdit::editingFinished, this, commit);
+    };
+
+    setupWaterfallEdit(&waterfallTitleEdit_,
+        [this]() { commitWaterfallTitle(); });
+    setupWaterfallEdit(&waterfallXLabelEdit_,
+        [this]() { commitWaterfallXLabel(); });
+    setupWaterfallEdit(&waterfallYLabelEdit_,
+        [this]() { commitWaterfallYLabel(); });
+    setupWaterfallEdit(&waterfallDataChannelEdit_,
+        [this]() { commitWaterfallDataChannel(); });
+    setupWaterfallEdit(&waterfallCountChannelEdit_,
+        [this]() { commitWaterfallCountChannel(); });
+    setupWaterfallEdit(&waterfallTriggerChannelEdit_,
+        [this]() { commitWaterfallTriggerChannel(); });
+    setupWaterfallEdit(&waterfallEraseChannelEdit_,
+        [this]() { commitWaterfallEraseChannel(); });
+    setupWaterfallEdit(&waterfallHistoryEdit_,
+        [this]() { commitWaterfallHistoryCount(); });
+    setupWaterfallEdit(&waterfallIntensityMinEdit_,
+        [this]() { commitWaterfallIntensityMinimum(); });
+    setupWaterfallEdit(&waterfallIntensityMaxEdit_,
+        [this]() { commitWaterfallIntensityMaximum(); });
+    setupWaterfallEdit(&waterfallSamplePeriodEdit_,
+        [this]() { commitWaterfallSamplePeriod(); });
+
+    waterfallEraseModeCombo_ = new QComboBox;
+    waterfallEraseModeCombo_->setFont(valueFont_);
+    waterfallEraseModeCombo_->setAutoFillBackground(true);
+    waterfallEraseModeCombo_->addItem(QStringLiteral("If Not Zero"));
+    waterfallEraseModeCombo_->addItem(QStringLiteral("If Zero"));
+    QObject::connect(waterfallEraseModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallEraseModeSetter_) {
+            waterfallEraseModeSetter_(static_cast<WaterfallEraseMode>(index));
+          }
+        });
+
+    waterfallScrollDirectionCombo_ = new QComboBox;
+    waterfallScrollDirectionCombo_->setFont(valueFont_);
+    waterfallScrollDirectionCombo_->setAutoFillBackground(true);
+    waterfallScrollDirectionCombo_->addItem(QStringLiteral("Top To Bottom"));
+    waterfallScrollDirectionCombo_->addItem(QStringLiteral("Bottom To Top"));
+    waterfallScrollDirectionCombo_->addItem(QStringLiteral("Left To Right"));
+    waterfallScrollDirectionCombo_->addItem(QStringLiteral("Right To Left"));
+    QObject::connect(waterfallScrollDirectionCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallScrollDirectionSetter_) {
+            waterfallScrollDirectionSetter_(
+                static_cast<WaterfallScrollDirection>(index));
+          }
+        });
+
+    waterfallColorMapCombo_ = new QComboBox;
+    waterfallColorMapCombo_->setFont(valueFont_);
+    waterfallColorMapCombo_->setAutoFillBackground(true);
+    waterfallColorMapCombo_->addItem(QStringLiteral("Grayscale"));
+    waterfallColorMapCombo_->addItem(QStringLiteral("Jet"));
+    waterfallColorMapCombo_->addItem(QStringLiteral("Hot"));
+    waterfallColorMapCombo_->addItem(QStringLiteral("Cool"));
+    waterfallColorMapCombo_->addItem(QStringLiteral("Rainbow"));
+    waterfallColorMapCombo_->addItem(QStringLiteral("Turbo"));
+    QObject::connect(waterfallColorMapCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallColorMapSetter_) {
+            waterfallColorMapSetter_(static_cast<HeatmapColorMap>(index));
+          }
+          updateWaterfallDependentControls();
+        });
+
+    waterfallInvertGreyscaleCombo_ = createBooleanComboBox();
+    QObject::connect(waterfallInvertGreyscaleCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallInvertGreyscaleSetter_) {
+            waterfallInvertGreyscaleSetter_(index == 1);
+          }
+        });
+
+    waterfallIntensityScaleCombo_ = new QComboBox;
+    waterfallIntensityScaleCombo_->setFont(valueFont_);
+    waterfallIntensityScaleCombo_->setAutoFillBackground(true);
+    waterfallIntensityScaleCombo_->addItem(QStringLiteral("Auto"));
+    waterfallIntensityScaleCombo_->addItem(QStringLiteral("Manual"));
+    waterfallIntensityScaleCombo_->addItem(QStringLiteral("Log"));
+    QObject::connect(waterfallIntensityScaleCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallIntensityScaleSetter_) {
+            waterfallIntensityScaleSetter_(
+                static_cast<WaterfallIntensityScale>(index));
+          }
+          updateWaterfallDependentControls();
+        });
+
+    waterfallShowLegendCombo_ = createBooleanComboBox();
+    QObject::connect(waterfallShowLegendCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallShowLegendSetter_) {
+            waterfallShowLegendSetter_(index == 1);
+          }
+        });
+
+    waterfallShowGridCombo_ = createBooleanComboBox();
+    QObject::connect(waterfallShowGridCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallShowGridSetter_) {
+            waterfallShowGridSetter_(index == 1);
+          }
+        });
+
+    waterfallUnitsCombo_ = new QComboBox;
+    waterfallUnitsCombo_->setFont(valueFont_);
+    waterfallUnitsCombo_->setAutoFillBackground(true);
+    waterfallUnitsCombo_->addItem(QStringLiteral("Milliseconds"));
+    waterfallUnitsCombo_->addItem(QStringLiteral("Seconds"));
+    waterfallUnitsCombo_->addItem(QStringLiteral("Minutes"));
+    QObject::connect(waterfallUnitsCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (waterfallUnitsSetter_) {
+            waterfallUnitsSetter_(timeUnitsFromIndex(index));
+          }
+        });
+
+    int waterfallRow = 0;
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Foreground"),
+        waterfallForegroundButton_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Background"),
+        waterfallBackgroundButton_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Title"),
+        waterfallTitleEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("X Label"),
+        waterfallXLabelEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Y Label"),
+        waterfallYLabelEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Data PV"),
+        waterfallDataChannelEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Count PV"),
+        waterfallCountChannelEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Trigger PV"),
+        waterfallTriggerChannelEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Erase PV"),
+        waterfallEraseChannelEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Erase Mode"),
+        waterfallEraseModeCombo_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("History Count"),
+        waterfallHistoryEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Scroll Direction"),
+        waterfallScrollDirectionCombo_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Color Map"),
+        waterfallColorMapCombo_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Invert Color Scale"),
+        waterfallInvertGreyscaleCombo_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Intensity Scale"),
+        waterfallIntensityScaleCombo_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Intensity Minimum"),
+        waterfallIntensityMinEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Intensity Maximum"),
+        waterfallIntensityMaxEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Show Legend"),
+        waterfallShowLegendCombo_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Show Grid"),
+        waterfallShowGridCombo_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Sample Period"),
+        waterfallSamplePeriodEdit_);
+    addRow(waterfallLayout, waterfallRow++, QStringLiteral("Units"),
+        waterfallUnitsCombo_);
+    waterfallLayout->setRowStretch(waterfallRow, 1);
+    updateWaterfallDependentControls();
+    entriesLayout->addWidget(waterfallSection_);
+
     lineSection_ = new QWidget(entriesWidget_);
     auto *lineLayout = new QGridLayout(lineSection_);
     lineLayout->setContentsMargins(0, 0, 0, 0);
@@ -3153,6 +3360,7 @@ public:
   compositeSection_->setVisible(false);
   imageSection_->setVisible(false);
   heatmapSection_->setVisible(false);
+  waterfallSection_->setVisible(false);
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
   textEntrySection_->setVisible(false);
@@ -7713,6 +7921,285 @@ public:
     showPaletteWithoutActivating();
   }
 
+  void showForWaterfall(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<QString()> titleGetter,
+      std::function<void(const QString &)> titleSetter,
+      std::function<QString()> xLabelGetter,
+      std::function<void(const QString &)> xLabelSetter,
+      std::function<QString()> yLabelGetter,
+      std::function<void(const QString &)> yLabelSetter,
+      std::function<QString()> dataChannelGetter,
+      std::function<void(const QString &)> dataChannelSetter,
+      std::function<QString()> countChannelGetter,
+      std::function<void(const QString &)> countChannelSetter,
+      std::function<QString()> triggerChannelGetter,
+      std::function<void(const QString &)> triggerChannelSetter,
+      std::function<QString()> eraseChannelGetter,
+      std::function<void(const QString &)> eraseChannelSetter,
+      std::function<WaterfallEraseMode()> eraseModeGetter,
+      std::function<void(WaterfallEraseMode)> eraseModeSetter,
+      std::function<int()> historyCountGetter,
+      std::function<void(int)> historyCountSetter,
+      std::function<WaterfallScrollDirection()> scrollDirectionGetter,
+      std::function<void(WaterfallScrollDirection)> scrollDirectionSetter,
+      std::function<HeatmapColorMap()> colorMapGetter,
+      std::function<void(HeatmapColorMap)> colorMapSetter,
+      std::function<bool()> invertGreyscaleGetter,
+      std::function<void(bool)> invertGreyscaleSetter,
+      std::function<WaterfallIntensityScale()> intensityScaleGetter,
+      std::function<void(WaterfallIntensityScale)> intensityScaleSetter,
+      std::function<double()> intensityMinGetter,
+      std::function<void(double)> intensityMinSetter,
+      std::function<double()> intensityMaxGetter,
+      std::function<void(double)> intensityMaxSetter,
+      std::function<bool()> showLegendGetter,
+      std::function<void(bool)> showLegendSetter,
+      std::function<bool()> showGridGetter,
+      std::function<void(bool)> showGridSetter,
+      std::function<double()> samplePeriodGetter,
+      std::function<void(double)> samplePeriodSetter,
+      std::function<TimeUnits()> unitsGetter,
+      std::function<void(TimeUnits)> unitsSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kWaterfallPlot;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    waterfallForegroundGetter_ = std::move(foregroundGetter);
+    waterfallForegroundSetter_ = std::move(foregroundSetter);
+    waterfallBackgroundGetter_ = std::move(backgroundGetter);
+    waterfallBackgroundSetter_ = std::move(backgroundSetter);
+    waterfallTitleGetter_ = std::move(titleGetter);
+    waterfallTitleSetter_ = std::move(titleSetter);
+    waterfallXLabelGetter_ = std::move(xLabelGetter);
+    waterfallXLabelSetter_ = std::move(xLabelSetter);
+    waterfallYLabelGetter_ = std::move(yLabelGetter);
+    waterfallYLabelSetter_ = std::move(yLabelSetter);
+    waterfallDataChannelGetter_ = std::move(dataChannelGetter);
+    waterfallDataChannelSetter_ = std::move(dataChannelSetter);
+    waterfallCountChannelGetter_ = std::move(countChannelGetter);
+    waterfallCountChannelSetter_ = std::move(countChannelSetter);
+    waterfallTriggerChannelGetter_ = std::move(triggerChannelGetter);
+    waterfallTriggerChannelSetter_ = std::move(triggerChannelSetter);
+    waterfallEraseChannelGetter_ = std::move(eraseChannelGetter);
+    waterfallEraseChannelSetter_ = std::move(eraseChannelSetter);
+    waterfallEraseModeGetter_ = std::move(eraseModeGetter);
+    waterfallEraseModeSetter_ = std::move(eraseModeSetter);
+    waterfallHistoryCountGetter_ = std::move(historyCountGetter);
+    waterfallHistoryCountSetter_ = std::move(historyCountSetter);
+    waterfallScrollDirectionGetter_ = std::move(scrollDirectionGetter);
+    waterfallScrollDirectionSetter_ = std::move(scrollDirectionSetter);
+    waterfallColorMapGetter_ = std::move(colorMapGetter);
+    waterfallColorMapSetter_ = std::move(colorMapSetter);
+    waterfallInvertGreyscaleGetter_ = std::move(invertGreyscaleGetter);
+    waterfallInvertGreyscaleSetter_ = std::move(invertGreyscaleSetter);
+    waterfallIntensityScaleGetter_ = std::move(intensityScaleGetter);
+    waterfallIntensityScaleSetter_ = std::move(intensityScaleSetter);
+    waterfallIntensityMinGetter_ = std::move(intensityMinGetter);
+    waterfallIntensityMinSetter_ = std::move(intensityMinSetter);
+    waterfallIntensityMaxGetter_ = std::move(intensityMaxGetter);
+    waterfallIntensityMaxSetter_ = std::move(intensityMaxSetter);
+    waterfallShowLegendGetter_ = std::move(showLegendGetter);
+    waterfallShowLegendSetter_ = std::move(showLegendSetter);
+    waterfallShowGridGetter_ = std::move(showGridGetter);
+    waterfallShowGridSetter_ = std::move(showGridSetter);
+    waterfallSamplePeriodGetter_ = std::move(samplePeriodGetter);
+    waterfallSamplePeriodSetter_ = std::move(samplePeriodSetter);
+    waterfallUnitsGetter_ = std::move(unitsGetter);
+    waterfallUnitsSetter_ = std::move(unitsSetter);
+
+    QRect waterfallGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (waterfallGeometry.width() <= 0) {
+      waterfallGeometry.setWidth(kMinimumWaterfallPlotWidth);
+    }
+    if (waterfallGeometry.height() <= 0) {
+      waterfallGeometry.setHeight(kMinimumWaterfallPlotHeight);
+    }
+    lastCommittedGeometry_ = waterfallGeometry;
+    updateGeometryEdits(waterfallGeometry);
+
+    if (waterfallForegroundButton_) {
+      const QColor color = waterfallForegroundGetter_
+          ? waterfallForegroundGetter_()
+          : palette().color(QPalette::WindowText);
+      setColorButtonColor(waterfallForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+      waterfallForegroundButton_->setEnabled(
+          static_cast<bool>(waterfallForegroundSetter_));
+    }
+
+    if (waterfallBackgroundButton_) {
+      const QColor color = waterfallBackgroundGetter_
+          ? waterfallBackgroundGetter_()
+          : palette().color(QPalette::Window);
+      setColorButtonColor(waterfallBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+      waterfallBackgroundButton_->setEnabled(
+          static_cast<bool>(waterfallBackgroundSetter_));
+    }
+
+    auto setWaterfallEdit = [this](QLineEdit *edit, const QString &value,
+                               bool enabled) {
+      if (!edit) {
+        return;
+      }
+      const QSignalBlocker blocker(edit);
+      edit->setText(value);
+      edit->setEnabled(enabled);
+      committedTexts_[edit] = edit->text();
+    };
+
+    auto formatNumber = [](double value) {
+      QString text = QString::number(value, 'g', 15);
+      if (text == QStringLiteral("-0")) {
+        text = QStringLiteral("0");
+      }
+      return text;
+    };
+
+    int historyCount = waterfallHistoryCountGetter_
+        ? waterfallHistoryCountGetter_()
+        : kWaterfallDefaultHistory;
+    historyCount = std::clamp(historyCount, 1, kWaterfallMaxHistory);
+
+    setWaterfallEdit(waterfallTitleEdit_,
+        waterfallTitleGetter_ ? waterfallTitleGetter_() : QString(),
+        static_cast<bool>(waterfallTitleSetter_));
+    setWaterfallEdit(waterfallXLabelEdit_,
+        waterfallXLabelGetter_ ? waterfallXLabelGetter_() : QString(),
+        static_cast<bool>(waterfallXLabelSetter_));
+    setWaterfallEdit(waterfallYLabelEdit_,
+        waterfallYLabelGetter_ ? waterfallYLabelGetter_() : QString(),
+        static_cast<bool>(waterfallYLabelSetter_));
+    setWaterfallEdit(waterfallDataChannelEdit_,
+        waterfallDataChannelGetter_ ? waterfallDataChannelGetter_() : QString(),
+        static_cast<bool>(waterfallDataChannelSetter_));
+    setWaterfallEdit(waterfallCountChannelEdit_,
+        waterfallCountChannelGetter_
+            ? waterfallCountChannelGetter_()
+            : QString(),
+        static_cast<bool>(waterfallCountChannelSetter_));
+    setWaterfallEdit(waterfallTriggerChannelEdit_,
+        waterfallTriggerChannelGetter_
+            ? waterfallTriggerChannelGetter_()
+            : QString(),
+        static_cast<bool>(waterfallTriggerChannelSetter_));
+    setWaterfallEdit(waterfallEraseChannelEdit_,
+        waterfallEraseChannelGetter_
+            ? waterfallEraseChannelGetter_()
+            : QString(),
+        static_cast<bool>(waterfallEraseChannelSetter_));
+    setWaterfallEdit(waterfallHistoryEdit_, QString::number(historyCount),
+        static_cast<bool>(waterfallHistoryCountSetter_));
+    setWaterfallEdit(waterfallIntensityMinEdit_,
+        formatNumber(waterfallIntensityMinGetter_
+                ? waterfallIntensityMinGetter_()
+                : 0.0),
+        static_cast<bool>(waterfallIntensityMinSetter_));
+    setWaterfallEdit(waterfallIntensityMaxEdit_,
+        formatNumber(waterfallIntensityMaxGetter_
+                ? waterfallIntensityMaxGetter_()
+                : 1.0),
+        static_cast<bool>(waterfallIntensityMaxSetter_));
+    setWaterfallEdit(waterfallSamplePeriodEdit_,
+        formatNumber(waterfallSamplePeriodGetter_
+                ? waterfallSamplePeriodGetter_()
+                : 0.0),
+        static_cast<bool>(waterfallSamplePeriodSetter_));
+
+    if (waterfallEraseModeCombo_) {
+      const QSignalBlocker blocker(waterfallEraseModeCombo_);
+      const auto mode = waterfallEraseModeGetter_
+          ? waterfallEraseModeGetter_()
+          : WaterfallEraseMode::kIfNotZero;
+      waterfallEraseModeCombo_->setCurrentIndex(std::clamp(
+          static_cast<int>(mode), 0, waterfallEraseModeCombo_->count() - 1));
+    }
+
+    if (waterfallScrollDirectionCombo_) {
+      const QSignalBlocker blocker(waterfallScrollDirectionCombo_);
+      const auto direction = waterfallScrollDirectionGetter_
+          ? waterfallScrollDirectionGetter_()
+          : WaterfallScrollDirection::kTopToBottom;
+      waterfallScrollDirectionCombo_->setCurrentIndex(std::clamp(
+          static_cast<int>(direction), 0,
+          waterfallScrollDirectionCombo_->count() - 1));
+      waterfallScrollDirectionCombo_->setEnabled(
+          static_cast<bool>(waterfallScrollDirectionSetter_));
+    }
+
+    if (waterfallColorMapCombo_) {
+      const QSignalBlocker blocker(waterfallColorMapCombo_);
+      const auto colorMap = waterfallColorMapGetter_
+          ? waterfallColorMapGetter_()
+          : HeatmapColorMap::kGrayscale;
+      waterfallColorMapCombo_->setCurrentIndex(std::clamp(
+          static_cast<int>(colorMap), 0, waterfallColorMapCombo_->count() - 1));
+      waterfallColorMapCombo_->setEnabled(
+          static_cast<bool>(waterfallColorMapSetter_));
+    }
+
+    if (waterfallInvertGreyscaleCombo_) {
+      const QSignalBlocker blocker(waterfallInvertGreyscaleCombo_);
+      const bool invert = waterfallInvertGreyscaleGetter_
+          ? waterfallInvertGreyscaleGetter_()
+          : true;
+      waterfallInvertGreyscaleCombo_->setCurrentIndex(invert ? 1 : 0);
+    }
+
+    if (waterfallIntensityScaleCombo_) {
+      const QSignalBlocker blocker(waterfallIntensityScaleCombo_);
+      const auto scale = waterfallIntensityScaleGetter_
+          ? waterfallIntensityScaleGetter_()
+          : WaterfallIntensityScale::kAuto;
+      waterfallIntensityScaleCombo_->setCurrentIndex(std::clamp(
+          static_cast<int>(scale), 0,
+          waterfallIntensityScaleCombo_->count() - 1));
+      waterfallIntensityScaleCombo_->setEnabled(
+          static_cast<bool>(waterfallIntensityScaleSetter_));
+    }
+
+    if (waterfallShowLegendCombo_) {
+      const QSignalBlocker blocker(waterfallShowLegendCombo_);
+      const bool show = waterfallShowLegendGetter_
+          ? waterfallShowLegendGetter_()
+          : true;
+      waterfallShowLegendCombo_->setCurrentIndex(show ? 1 : 0);
+      waterfallShowLegendCombo_->setEnabled(
+          static_cast<bool>(waterfallShowLegendSetter_));
+    }
+
+    if (waterfallShowGridCombo_) {
+      const QSignalBlocker blocker(waterfallShowGridCombo_);
+      const bool show = waterfallShowGridGetter_
+          ? waterfallShowGridGetter_()
+          : false;
+      waterfallShowGridCombo_->setCurrentIndex(show ? 1 : 0);
+      waterfallShowGridCombo_->setEnabled(
+          static_cast<bool>(waterfallShowGridSetter_));
+    }
+
+    if (waterfallUnitsCombo_) {
+      const QSignalBlocker blocker(waterfallUnitsCombo_);
+      const TimeUnits units = waterfallUnitsGetter_
+          ? waterfallUnitsGetter_()
+          : TimeUnits::kSeconds;
+      waterfallUnitsCombo_->setCurrentIndex(timeUnitsToIndex(units));
+      waterfallUnitsCombo_->setEnabled(static_cast<bool>(waterfallUnitsSetter_));
+    }
+
+    updateWaterfallDependentControls();
+    elementLabel_->setText(QStringLiteral("Waterfall Plot"));
+    showPaletteWithoutActivating();
+  }
+
   void showForLine(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> colorGetter,
@@ -8784,6 +9271,8 @@ public:
     for (QPushButton *button : ledStateColorButtons_) {
       resetColorButton(button);
     }
+    resetColorButton(waterfallForegroundButton_);
+    resetColorButton(waterfallBackgroundButton_);
     resetColorButton(stripForegroundButton_);
     resetColorButton(stripBackgroundButton_);
     for (QPushButton *button : stripPenColorButtons_) {
@@ -9054,6 +9543,42 @@ public:
       const QSignalBlocker blocker(heatmapShowRightProfileCombo_);
       heatmapShowRightProfileCombo_->setCurrentIndex(heatmapBoolToIndex(false));
     }
+    if (waterfallEraseModeCombo_) {
+      const QSignalBlocker blocker(waterfallEraseModeCombo_);
+      waterfallEraseModeCombo_->setCurrentIndex(
+          static_cast<int>(WaterfallEraseMode::kIfNotZero));
+    }
+    if (waterfallScrollDirectionCombo_) {
+      const QSignalBlocker blocker(waterfallScrollDirectionCombo_);
+      waterfallScrollDirectionCombo_->setCurrentIndex(
+          static_cast<int>(WaterfallScrollDirection::kTopToBottom));
+    }
+    if (waterfallColorMapCombo_) {
+      const QSignalBlocker blocker(waterfallColorMapCombo_);
+      waterfallColorMapCombo_->setCurrentIndex(
+          static_cast<int>(HeatmapColorMap::kGrayscale));
+    }
+    if (waterfallInvertGreyscaleCombo_) {
+      const QSignalBlocker blocker(waterfallInvertGreyscaleCombo_);
+      waterfallInvertGreyscaleCombo_->setCurrentIndex(1);
+    }
+    if (waterfallIntensityScaleCombo_) {
+      const QSignalBlocker blocker(waterfallIntensityScaleCombo_);
+      waterfallIntensityScaleCombo_->setCurrentIndex(
+          static_cast<int>(WaterfallIntensityScale::kAuto));
+    }
+    if (waterfallShowLegendCombo_) {
+      const QSignalBlocker blocker(waterfallShowLegendCombo_);
+      waterfallShowLegendCombo_->setCurrentIndex(1);
+    }
+    if (waterfallShowGridCombo_) {
+      const QSignalBlocker blocker(waterfallShowGridCombo_);
+      waterfallShowGridCombo_->setCurrentIndex(0);
+    }
+    if (waterfallUnitsCombo_) {
+      const QSignalBlocker blocker(waterfallUnitsCombo_);
+      waterfallUnitsCombo_->setCurrentIndex(timeUnitsToIndex(TimeUnits::kSeconds));
+    }
 
     resetLineEdit(heatmapTitleEdit_);
     resetLineEdit(heatmapDataChannelEdit_);
@@ -9061,6 +9586,18 @@ public:
     resetLineEdit(heatmapYDimEdit_);
     resetLineEdit(heatmapXDimChannelEdit_);
     resetLineEdit(heatmapYDimChannelEdit_);
+    resetLineEdit(waterfallTitleEdit_);
+    resetLineEdit(waterfallXLabelEdit_);
+    resetLineEdit(waterfallYLabelEdit_);
+    resetLineEdit(waterfallDataChannelEdit_);
+    resetLineEdit(waterfallCountChannelEdit_);
+    resetLineEdit(waterfallTriggerChannelEdit_);
+    resetLineEdit(waterfallEraseChannelEdit_);
+    resetLineEdit(waterfallHistoryEdit_);
+    resetLineEdit(waterfallIntensityMinEdit_);
+    resetLineEdit(waterfallIntensityMaxEdit_);
+    resetLineEdit(waterfallSamplePeriodEdit_);
+    updateWaterfallDependentControls();
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Select..."));
@@ -9115,6 +9652,52 @@ public:
     heatmapFlipVerticalSetter_ = {};
     heatmapRotationGetter_ = {};
     heatmapRotationSetter_ = {};
+    heatmapShowTopProfileGetter_ = {};
+    heatmapShowTopProfileSetter_ = {};
+    heatmapShowRightProfileGetter_ = {};
+    heatmapShowRightProfileSetter_ = {};
+    waterfallForegroundGetter_ = {};
+    waterfallForegroundSetter_ = {};
+    waterfallBackgroundGetter_ = {};
+    waterfallBackgroundSetter_ = {};
+    waterfallTitleGetter_ = {};
+    waterfallTitleSetter_ = {};
+    waterfallXLabelGetter_ = {};
+    waterfallXLabelSetter_ = {};
+    waterfallYLabelGetter_ = {};
+    waterfallYLabelSetter_ = {};
+    waterfallDataChannelGetter_ = {};
+    waterfallDataChannelSetter_ = {};
+    waterfallCountChannelGetter_ = {};
+    waterfallCountChannelSetter_ = {};
+    waterfallTriggerChannelGetter_ = {};
+    waterfallTriggerChannelSetter_ = {};
+    waterfallEraseChannelGetter_ = {};
+    waterfallEraseChannelSetter_ = {};
+    waterfallEraseModeGetter_ = {};
+    waterfallEraseModeSetter_ = {};
+    waterfallHistoryCountGetter_ = {};
+    waterfallHistoryCountSetter_ = {};
+    waterfallScrollDirectionGetter_ = {};
+    waterfallScrollDirectionSetter_ = {};
+    waterfallColorMapGetter_ = {};
+    waterfallColorMapSetter_ = {};
+    waterfallInvertGreyscaleGetter_ = {};
+    waterfallInvertGreyscaleSetter_ = {};
+    waterfallIntensityScaleGetter_ = {};
+    waterfallIntensityScaleSetter_ = {};
+    waterfallIntensityMinGetter_ = {};
+    waterfallIntensityMinSetter_ = {};
+    waterfallIntensityMaxGetter_ = {};
+    waterfallIntensityMaxSetter_ = {};
+    waterfallShowLegendGetter_ = {};
+    waterfallShowLegendSetter_ = {};
+    waterfallShowGridGetter_ = {};
+    waterfallShowGridSetter_ = {};
+    waterfallSamplePeriodGetter_ = {};
+    waterfallSamplePeriodSetter_ = {};
+    waterfallUnitsGetter_ = {};
+    waterfallUnitsSetter_ = {};
 
     textMonitorPrecisionSourceGetter_ = {};
     textMonitorPrecisionSourceSetter_ = {};
@@ -9209,6 +9792,7 @@ private:
     kRectangle,
     kImage,
     kHeatmap,
+    kWaterfallPlot,
     kPolygon,
     kComposite,
     kLine,
@@ -9344,6 +9928,17 @@ private:
             || edit == compositeFileEdit_
             || edit == compositeVisibilityCalcEdit_
             || edit == imageNameEdit_ || edit == imageCalcEdit_
+            || edit == waterfallTitleEdit_
+            || edit == waterfallXLabelEdit_
+            || edit == waterfallYLabelEdit_
+            || edit == waterfallDataChannelEdit_
+            || edit == waterfallCountChannelEdit_
+            || edit == waterfallTriggerChannelEdit_
+            || edit == waterfallEraseChannelEdit_
+            || edit == waterfallHistoryEdit_
+            || edit == waterfallIntensityMinEdit_
+            || edit == waterfallIntensityMaxEdit_
+            || edit == waterfallSamplePeriodEdit_
             || edit == expressionChannelVariableEdit_
             || edit == expressionChannelCalcEdit_
             || edit == imageVisibilityCalcEdit_
@@ -9448,6 +10043,11 @@ private:
       const bool heatmapVisible = kind == SelectionKind::kHeatmap;
       heatmapSection_->setVisible(heatmapVisible);
       heatmapSection_->setEnabled(heatmapVisible);
+    }
+    if (waterfallSection_) {
+      const bool waterfallVisible = kind == SelectionKind::kWaterfallPlot;
+      waterfallSection_->setVisible(waterfallVisible);
+      waterfallSection_->setEnabled(waterfallVisible);
     }
     const bool showArcControls = (kind == SelectionKind::kRectangle
         || kind == SelectionKind::kPolygon) && rectangleIsArc_;
@@ -9669,6 +10269,33 @@ private:
     setFieldEnabled(heatmapXDimChannelEdit_, xFromChannel);
     setFieldEnabled(heatmapYDimEdit_, !yFromChannel);
     setFieldEnabled(heatmapYDimChannelEdit_, yFromChannel);
+  }
+
+  void updateWaterfallDependentControls()
+  {
+    bool hasEraseChannel = false;
+    if (waterfallEraseChannelGetter_) {
+      hasEraseChannel = !waterfallEraseChannelGetter_().trimmed().isEmpty();
+    }
+    if (!hasEraseChannel && waterfallEraseChannelEdit_) {
+      hasEraseChannel = !waterfallEraseChannelEdit_->text().trimmed().isEmpty();
+    }
+    setFieldEnabled(waterfallEraseModeCombo_,
+        hasEraseChannel && static_cast<bool>(waterfallEraseModeSetter_));
+
+    const bool manualScale = waterfallIntensityScaleCombo_
+        && waterfallIntensityScaleCombo_->currentIndex()
+            == static_cast<int>(WaterfallIntensityScale::kManual);
+    setFieldEnabled(waterfallIntensityMinEdit_,
+        manualScale && static_cast<bool>(waterfallIntensityMinSetter_));
+    setFieldEnabled(waterfallIntensityMaxEdit_,
+        manualScale && static_cast<bool>(waterfallIntensityMaxSetter_));
+
+    const bool grayscale = waterfallColorMapCombo_
+        && waterfallColorMapCombo_->currentIndex()
+            == static_cast<int>(HeatmapColorMap::kGrayscale);
+    setFieldEnabled(waterfallInvertGreyscaleCombo_,
+        grayscale && static_cast<bool>(waterfallInvertGreyscaleSetter_));
   }
 
   void updateLineChannelDependentControls()
@@ -11401,6 +12028,189 @@ private:
     committedTexts_[heatmapYDimChannelEdit_] = value;
   }
 
+  void commitWaterfallTitle()
+  {
+    if (!waterfallTitleEdit_) {
+      return;
+    }
+    if (!waterfallTitleSetter_) {
+      revertLineEdit(waterfallTitleEdit_);
+      return;
+    }
+    const QString value = waterfallTitleEdit_->text();
+    waterfallTitleSetter_(value);
+    committedTexts_[waterfallTitleEdit_] = value;
+  }
+
+  void commitWaterfallXLabel()
+  {
+    if (!waterfallXLabelEdit_) {
+      return;
+    }
+    if (!waterfallXLabelSetter_) {
+      revertLineEdit(waterfallXLabelEdit_);
+      return;
+    }
+    const QString value = waterfallXLabelEdit_->text();
+    waterfallXLabelSetter_(value);
+    committedTexts_[waterfallXLabelEdit_] = value;
+  }
+
+  void commitWaterfallYLabel()
+  {
+    if (!waterfallYLabelEdit_) {
+      return;
+    }
+    if (!waterfallYLabelSetter_) {
+      revertLineEdit(waterfallYLabelEdit_);
+      return;
+    }
+    const QString value = waterfallYLabelEdit_->text();
+    waterfallYLabelSetter_(value);
+    committedTexts_[waterfallYLabelEdit_] = value;
+  }
+
+  void commitWaterfallDataChannel()
+  {
+    if (!waterfallDataChannelEdit_) {
+      return;
+    }
+    if (!waterfallDataChannelSetter_) {
+      revertLineEdit(waterfallDataChannelEdit_);
+      return;
+    }
+    const QString value = waterfallDataChannelEdit_->text();
+    waterfallDataChannelSetter_(value);
+    committedTexts_[waterfallDataChannelEdit_] = value;
+  }
+
+  void commitWaterfallCountChannel()
+  {
+    if (!waterfallCountChannelEdit_) {
+      return;
+    }
+    if (!waterfallCountChannelSetter_) {
+      revertLineEdit(waterfallCountChannelEdit_);
+      return;
+    }
+    const QString value = waterfallCountChannelEdit_->text();
+    waterfallCountChannelSetter_(value);
+    committedTexts_[waterfallCountChannelEdit_] = value;
+  }
+
+  void commitWaterfallTriggerChannel()
+  {
+    if (!waterfallTriggerChannelEdit_) {
+      return;
+    }
+    if (!waterfallTriggerChannelSetter_) {
+      revertLineEdit(waterfallTriggerChannelEdit_);
+      return;
+    }
+    const QString value = waterfallTriggerChannelEdit_->text();
+    waterfallTriggerChannelSetter_(value);
+    committedTexts_[waterfallTriggerChannelEdit_] = value;
+  }
+
+  void commitWaterfallEraseChannel()
+  {
+    if (!waterfallEraseChannelEdit_) {
+      return;
+    }
+    if (!waterfallEraseChannelSetter_) {
+      revertLineEdit(waterfallEraseChannelEdit_);
+      return;
+    }
+    const QString value = waterfallEraseChannelEdit_->text();
+    waterfallEraseChannelSetter_(value);
+    committedTexts_[waterfallEraseChannelEdit_] = value;
+    updateWaterfallDependentControls();
+  }
+
+  void commitWaterfallHistoryCount()
+  {
+    if (!waterfallHistoryEdit_) {
+      return;
+    }
+    if (!waterfallHistoryCountSetter_) {
+      revertLineEdit(waterfallHistoryEdit_);
+      return;
+    }
+    bool ok = false;
+    const int value = waterfallHistoryEdit_->text().toInt(&ok);
+    if (!ok || value < 1 || value > kWaterfallMaxHistory) {
+      revertLineEdit(waterfallHistoryEdit_);
+      return;
+    }
+    waterfallHistoryCountSetter_(value);
+    const int effective = waterfallHistoryCountGetter_
+        ? std::clamp(waterfallHistoryCountGetter_(), 1, kWaterfallMaxHistory)
+        : value;
+    const QSignalBlocker blocker(waterfallHistoryEdit_);
+    waterfallHistoryEdit_->setText(QString::number(effective));
+    committedTexts_[waterfallHistoryEdit_] = waterfallHistoryEdit_->text();
+  }
+
+  void commitWaterfallIntensityMinimum()
+  {
+    if (!waterfallIntensityMinEdit_) {
+      return;
+    }
+    if (!waterfallIntensityMinSetter_) {
+      revertLineEdit(waterfallIntensityMinEdit_);
+      return;
+    }
+    bool ok = false;
+    const double value = waterfallIntensityMinEdit_->text().toDouble(&ok);
+    if (!ok || !std::isfinite(value)) {
+      revertLineEdit(waterfallIntensityMinEdit_);
+      return;
+    }
+    waterfallIntensityMinSetter_(value);
+    committedTexts_[waterfallIntensityMinEdit_] =
+        waterfallIntensityMinEdit_->text();
+  }
+
+  void commitWaterfallIntensityMaximum()
+  {
+    if (!waterfallIntensityMaxEdit_) {
+      return;
+    }
+    if (!waterfallIntensityMaxSetter_) {
+      revertLineEdit(waterfallIntensityMaxEdit_);
+      return;
+    }
+    bool ok = false;
+    const double value = waterfallIntensityMaxEdit_->text().toDouble(&ok);
+    if (!ok || !std::isfinite(value)) {
+      revertLineEdit(waterfallIntensityMaxEdit_);
+      return;
+    }
+    waterfallIntensityMaxSetter_(value);
+    committedTexts_[waterfallIntensityMaxEdit_] =
+        waterfallIntensityMaxEdit_->text();
+  }
+
+  void commitWaterfallSamplePeriod()
+  {
+    if (!waterfallSamplePeriodEdit_) {
+      return;
+    }
+    if (!waterfallSamplePeriodSetter_) {
+      revertLineEdit(waterfallSamplePeriodEdit_);
+      return;
+    }
+    bool ok = false;
+    const double value = waterfallSamplePeriodEdit_->text().toDouble(&ok);
+    if (!ok || !std::isfinite(value) || value < 0.0) {
+      revertLineEdit(waterfallSamplePeriodEdit_);
+      return;
+    }
+    waterfallSamplePeriodSetter_(value);
+    committedTexts_[waterfallSamplePeriodEdit_] =
+        waterfallSamplePeriodEdit_->text();
+  }
+
   void commitImageChannel(int index)
   {
     if (index < 0 || index >= static_cast<int>(imageChannelEdits_.size())) {
@@ -12240,6 +13050,7 @@ private:
   QWidget *compositeSection_ = nullptr;
   QWidget *imageSection_ = nullptr;
   QWidget *heatmapSection_ = nullptr;
+  QWidget *waterfallSection_ = nullptr;
   QWidget *lineSection_ = nullptr;
   QWidget *textSection_ = nullptr;
   QLineEdit *xEdit_ = nullptr;
@@ -12272,6 +13083,27 @@ private:
   QComboBox *heatmapRotationCombo_ = nullptr;
   QComboBox *heatmapShowTopProfileCombo_ = nullptr;
   QComboBox *heatmapShowRightProfileCombo_ = nullptr;
+  QPushButton *waterfallForegroundButton_ = nullptr;
+  QPushButton *waterfallBackgroundButton_ = nullptr;
+  QLineEdit *waterfallTitleEdit_ = nullptr;
+  QLineEdit *waterfallXLabelEdit_ = nullptr;
+  QLineEdit *waterfallYLabelEdit_ = nullptr;
+  QLineEdit *waterfallDataChannelEdit_ = nullptr;
+  QLineEdit *waterfallCountChannelEdit_ = nullptr;
+  QLineEdit *waterfallTriggerChannelEdit_ = nullptr;
+  QLineEdit *waterfallEraseChannelEdit_ = nullptr;
+  QComboBox *waterfallEraseModeCombo_ = nullptr;
+  QLineEdit *waterfallHistoryEdit_ = nullptr;
+  QComboBox *waterfallScrollDirectionCombo_ = nullptr;
+  QComboBox *waterfallColorMapCombo_ = nullptr;
+  QComboBox *waterfallInvertGreyscaleCombo_ = nullptr;
+  QComboBox *waterfallIntensityScaleCombo_ = nullptr;
+  QLineEdit *waterfallIntensityMinEdit_ = nullptr;
+  QLineEdit *waterfallIntensityMaxEdit_ = nullptr;
+  QComboBox *waterfallShowLegendCombo_ = nullptr;
+  QComboBox *waterfallShowGridCombo_ = nullptr;
+  QLineEdit *waterfallSamplePeriodEdit_ = nullptr;
+  QComboBox *waterfallUnitsCombo_ = nullptr;
   QWidget *textMonitorSection_ = nullptr;
   QPushButton *textMonitorForegroundButton_ = nullptr;
   QPushButton *textMonitorBackgroundButton_ = nullptr;
@@ -12704,6 +13536,39 @@ private:
     }
     if (stripPeriodEdit_) {
       committedTexts_[stripPeriodEdit_] = stripPeriodEdit_->text();
+    }
+    if (waterfallTitleEdit_) {
+      committedTexts_[waterfallTitleEdit_] = waterfallTitleEdit_->text();
+    }
+    if (waterfallXLabelEdit_) {
+      committedTexts_[waterfallXLabelEdit_] = waterfallXLabelEdit_->text();
+    }
+    if (waterfallYLabelEdit_) {
+      committedTexts_[waterfallYLabelEdit_] = waterfallYLabelEdit_->text();
+    }
+    if (waterfallDataChannelEdit_) {
+      committedTexts_[waterfallDataChannelEdit_] = waterfallDataChannelEdit_->text();
+    }
+    if (waterfallCountChannelEdit_) {
+      committedTexts_[waterfallCountChannelEdit_] = waterfallCountChannelEdit_->text();
+    }
+    if (waterfallTriggerChannelEdit_) {
+      committedTexts_[waterfallTriggerChannelEdit_] = waterfallTriggerChannelEdit_->text();
+    }
+    if (waterfallEraseChannelEdit_) {
+      committedTexts_[waterfallEraseChannelEdit_] = waterfallEraseChannelEdit_->text();
+    }
+    if (waterfallHistoryEdit_) {
+      committedTexts_[waterfallHistoryEdit_] = waterfallHistoryEdit_->text();
+    }
+    if (waterfallIntensityMinEdit_) {
+      committedTexts_[waterfallIntensityMinEdit_] = waterfallIntensityMinEdit_->text();
+    }
+    if (waterfallIntensityMaxEdit_) {
+      committedTexts_[waterfallIntensityMaxEdit_] = waterfallIntensityMaxEdit_->text();
+    }
+    if (waterfallSamplePeriodEdit_) {
+      committedTexts_[waterfallSamplePeriodEdit_] = waterfallSamplePeriodEdit_->text();
     }
     for (QLineEdit *edit : stripPenChannelEdits_) {
       if (edit) {
@@ -13282,6 +14147,49 @@ private:
   std::function<void(bool)> heatmapShowTopProfileSetter_;
   std::function<bool()> heatmapShowRightProfileGetter_;
   std::function<void(bool)> heatmapShowRightProfileSetter_;
+  std::function<QColor()> waterfallForegroundGetter_;
+  std::function<void(const QColor &)> waterfallForegroundSetter_;
+  std::function<QColor()> waterfallBackgroundGetter_;
+  std::function<void(const QColor &)> waterfallBackgroundSetter_;
+  std::function<QString()> waterfallTitleGetter_;
+  std::function<void(const QString &)> waterfallTitleSetter_;
+  std::function<QString()> waterfallXLabelGetter_;
+  std::function<void(const QString &)> waterfallXLabelSetter_;
+  std::function<QString()> waterfallYLabelGetter_;
+  std::function<void(const QString &)> waterfallYLabelSetter_;
+  std::function<QString()> waterfallDataChannelGetter_;
+  std::function<void(const QString &)> waterfallDataChannelSetter_;
+  std::function<QString()> waterfallCountChannelGetter_;
+  std::function<void(const QString &)> waterfallCountChannelSetter_;
+  std::function<QString()> waterfallTriggerChannelGetter_;
+  std::function<void(const QString &)> waterfallTriggerChannelSetter_;
+  std::function<QString()> waterfallEraseChannelGetter_;
+  std::function<void(const QString &)> waterfallEraseChannelSetter_;
+  std::function<WaterfallEraseMode()> waterfallEraseModeGetter_;
+  std::function<void(WaterfallEraseMode)> waterfallEraseModeSetter_;
+  std::function<int()> waterfallHistoryCountGetter_;
+  std::function<void(int)> waterfallHistoryCountSetter_;
+  std::function<WaterfallScrollDirection()> waterfallScrollDirectionGetter_;
+  std::function<void(WaterfallScrollDirection)>
+      waterfallScrollDirectionSetter_;
+  std::function<HeatmapColorMap()> waterfallColorMapGetter_;
+  std::function<void(HeatmapColorMap)> waterfallColorMapSetter_;
+  std::function<bool()> waterfallInvertGreyscaleGetter_;
+  std::function<void(bool)> waterfallInvertGreyscaleSetter_;
+  std::function<WaterfallIntensityScale()> waterfallIntensityScaleGetter_;
+  std::function<void(WaterfallIntensityScale)> waterfallIntensityScaleSetter_;
+  std::function<double()> waterfallIntensityMinGetter_;
+  std::function<void(double)> waterfallIntensityMinSetter_;
+  std::function<double()> waterfallIntensityMaxGetter_;
+  std::function<void(double)> waterfallIntensityMaxSetter_;
+  std::function<bool()> waterfallShowLegendGetter_;
+  std::function<void(bool)> waterfallShowLegendSetter_;
+  std::function<bool()> waterfallShowGridGetter_;
+  std::function<void(bool)> waterfallShowGridSetter_;
+  std::function<double()> waterfallSamplePeriodGetter_;
+  std::function<void(double)> waterfallSamplePeriodSetter_;
+  std::function<TimeUnits()> waterfallUnitsGetter_;
+  std::function<void(TimeUnits)> waterfallUnitsSetter_;
   std::function<QColor()> lineColorGetter_;
   std::function<void(const QColor &)> lineColorSetter_;
   std::function<RectangleLineStyle()> lineLineStyleGetter_;

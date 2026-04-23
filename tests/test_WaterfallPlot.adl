@@ -1,0 +1,588 @@
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_WaterfallPlot.adl"
+	version=030122
+}
+display {
+	object {
+		x=220
+		y=44
+		width=1780
+		height=1210
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+text {
+	object {
+		x=24
+		y=10
+		width=1720
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="QtEDM Waterfall Plot Test Harness"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="Manual test notes: Section A covers connected visual cases; Section B covers count, trigger, erase, zoom, and disconnected behavior."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Waterfall Plot is QtEDM-only. Legacy MEDM should ignore waterfall_plot blocks cleanly while QtEDM renders the widgets below."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1720
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Start tests/run_local_ioc.sh before execute-mode checks. The script seeds waterfall:test:* waveforms and keeps data/count/trigger/erase probes changing."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1740
+		height=540
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=900
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (scroll direction, legend/grid options, scaling, and geometry range)"
+}
+text {
+	object {
+		x=56
+		y=262
+		width=96
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="baseline"
+}
+text {
+	object {
+		x=56
+		y=478
+		width=96
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="variants"
+}
+text {
+	object {
+		x=230
+		y=154
+		width=320
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Vertical A"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=700
+		y=154
+		width=320
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Vertical B"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1180
+		y=154
+		width=360
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Horizontal / stress"
+	align="horiz. centered"
+}
+waterfall_plot {
+	object {
+		x=180
+		y=186
+		width=420
+		height=170
+	}
+	plotcom {
+		title="Baseline Jet"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=19
+		bclr=7
+	}
+	data {
+		chan="waterfall:test:alpha:waveform"
+	}
+	historyCount=64
+	colorMap="jet"
+	samplePeriod=350
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=650
+		y=186
+		width=420
+		height=170
+	}
+	plotcom {
+		title="Baseline Jet"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=19
+		bclr=7
+	}
+	data {
+		chan="waterfall:test:alpha:waveform"
+	}
+	historyCount=64
+	scrollDirection="bottomToTop"
+	colorMap="jet"
+	samplePeriod=350
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=1120
+		y=186
+		width=520
+		height=170
+	}
+	plotcom {
+		title="Horizontal Grid"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=34
+		bclr=51
+	}
+	data {
+		chan="waterfall:test:alpha:waveform"
+	}
+	historyCount=64
+	scrollDirection="leftToRight"
+	colorMap="rainbow"
+	showLegend=0
+	showGrid=1
+	samplePeriod=350
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=180
+		y=392
+		width=420
+		height=190
+	}
+	plotcom {
+		title="Manual Hot Window"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=11
+		bclr=52
+	}
+	data {
+		chan="waterfall:test:beta:waveform"
+	}
+	historyCount=72
+	colorMap="hot"
+	intensityScale="manual"
+	intensityMin=10
+	intensityMax=110
+	showGrid=1
+	samplePeriod=350
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=650
+		y=392
+		width=420
+		height=190
+	}
+	plotcom {
+		title="Log Turbo Window"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=30
+		bclr=4
+	}
+	data {
+		chan="waterfall:test:beta:waveform"
+	}
+	historyCount=72
+	colorMap="turbo"
+	intensityScale="log"
+	samplePeriod=350
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=1120
+		y=426
+		width=520
+		height=120
+	}
+	plotcom {
+		title="Right-to-Left Stress"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=54
+		bclr=5
+	}
+	data {
+		chan="waterfall:test:alpha:waveform"
+	}
+	historyCount=48
+	scrollDirection="rightToLeft"
+	invertGreyscale=0
+	showLegend=0
+	showGrid=1
+	samplePeriod=350
+	units="milliseconds"
+}
+rectangle {
+	object {
+		x=20
+		y=668
+		width=1740
+		height=500
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=678
+		width=900
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Behavior checks (count clip, trigger gating, erase modes, execute-mode interactivity)"
+}
+waterfall_plot {
+	object {
+		x=40
+		y=764
+		width=380
+		height=182
+	}
+	plotcom {
+		title="Count-Channel Clip"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=54
+		bclr=7
+	}
+	data {
+		chan="waterfall:test:beta:waveform"
+	}
+	count {
+		chan="waterfall:test:beta:count"
+	}
+	historyCount=72
+	colorMap="hot"
+	showGrid=1
+	samplePeriod=350
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=460
+		y=764
+		width=380
+		height=182
+	}
+	plotcom {
+		title="Trigger-Gated Sample"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=30
+		bclr=4
+	}
+	data {
+		chan="waterfall:test:gamma:waveform"
+	}
+	trigger {
+		chan="waterfall:test:gamma:trigger"
+	}
+	historyCount=72
+	colorMap="rainbow"
+	samplePeriod=1050
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=880
+		y=764
+		width=380
+		height=182
+	}
+	plotcom {
+		title="Erase On Nonzero"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=19
+		bclr=7
+	}
+	data {
+		chan="waterfall:test:delta:waveform"
+	}
+	erase {
+		chan="waterfall:test:delta:erase"
+	}
+	historyCount=72
+	colorMap="jet"
+	showGrid=1
+	samplePeriod=350
+	units="milliseconds"
+}
+waterfall_plot {
+	object {
+		x=1300
+		y=764
+		width=380
+		height=182
+	}
+	plotcom {
+		title="Erase On Zero"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=34
+		bclr=51
+	}
+	data {
+		chan="waterfall:test:epsilon:waveform"
+	}
+	erase {
+		chan="waterfall:test:epsilon:erase"
+		mode="ifzero"
+	}
+	historyCount=72
+	scrollDirection="rightToLeft"
+	colorMap="cool"
+	showLegend=0
+	samplePeriod=350
+	units="milliseconds"
+}
+text {
+	object {
+		x=40
+		y=980
+		width=1260
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1. Count-Channel Clip should sweep between a short active width and the full waveform as waterfall:test:beta:count moves between 16 and 64."
+}
+text {
+	object {
+		x=40
+		y=1000
+		width=1260
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2. Trigger-Gated Sample should advance only when waterfall:test:gamma:trigger changes; the source waveform updates faster between those trigger pulses."
+}
+text {
+	object {
+		x=40
+		y=1020
+		width=1260
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3. The erase probes should clear on their configured edge: delta clears on a nonzero pulse, while epsilon clears when its erase PV returns to zero."
+}
+text {
+	object {
+		x=40
+		y=1040
+		width=1260
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4. In execute mode, use mouse wheel and drag on any connected widget to check time-axis zoom/pan; hover readback should show bin, age, and intensity."
+}
+text {
+	object {
+		x=40
+		y=1060
+		width=1260
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="5. The blank probe at lower right intentionally has no data channel. It should stay empty and use the widget's disconnected execute-state treatment."
+}
+text {
+	object {
+		x=1370
+		y=980
+		width=300
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Blank / disconnected probe"
+	align="horiz. centered"
+}
+waterfall_plot {
+	object {
+		x=1370
+		y=1010
+		width=300
+		height=120
+	}
+	plotcom {
+		title="Blank Probe"
+		xlabel="Waveform Bin"
+		ylabel="Sample Age"
+		clr=14
+		bclr=4
+	}
+	showLegend=0
+}

@@ -346,9 +346,11 @@ reference: what each widget is for, the properties that matter most, and a
 representative screenshot.</p>
 
 <p class="noindent">The screenshots in this section were captured from dedicated
-documentation ADL example files in <code>docs/images/adl</code>, rendered in
-EDIT mode. They are intended to show geometry, styling, labeling, and
-available variants even when no live IOC is running.</p>
+documentation ADL example files in <code>docs/images/adl</code>. Most are
+rendered in EDIT mode; monitor examples that need live state coloring may be
+captured in EXECUTE mode using local soft-PV fixtures. They are intended to
+show geometry, styling, labeling, and available variants in a reproducible
+way.</p>
 
 <h3>Common Widget Concepts</h3>
 
@@ -372,6 +374,7 @@ available variants even when no live IOC is running.</p>
   <a href="#WidgetBarMonitor">Bar Monitor</a>,
   <a href="#WidgetThermometer">Thermometer</a>,
   <a href="#WidgetByteMonitor">Byte Monitor</a>,
+  <a href="#WidgetLedMonitor">LED Monitor</a>,
   <a href="#WidgetHeatmap">Heatmap</a>,
   <a href="#WidgetScaleMonitor">Scale Monitor</a>,
   <a href="#WidgetMeter">Meter</a>, <a href="#WidgetStripChart">Strip Chart</a>,
@@ -614,6 +617,83 @@ available variants even when no live IOC is running.</p>
 </div>
 
 <div class="widget-entry">
+  <h4><a name="WidgetLedMonitor"></a>LED Monitor</h4>
+  <div class="widget-figure">
+    <img src="images/qtedm-widgets/led-monitor.png" alt="LED Monitor widget examples in QtEDM" loading="lazy">
+    <p class="figcaption">LED Monitor examples showing a static lamp, an alarm-driven indicator, and a discrete multi-state indicator.</p>
+  </div>
+  <p>LED Monitor is a QtEDM-only compact status lamp. It is intended for cases
+  where a single small shape should communicate connection, alarm state, or a
+  discrete integer state more directly than a full bar, meter, or layered
+  graphic composite.</p>
+  <ul>
+    <li><strong>Configure:</strong> Channel, color mode, shape, bezel, foreground/background colors, on/off/undefined colors, state count, and per-state colors.</li>
+    <li><strong>Use when:</strong> You need a compact lamp for binary status, alarm indication, or MBBI-style multi-state readback.</li>
+    <li><strong>Runtime behavior:</strong> In EXECUTE mode the LED can hold a static color, follow EPICS alarm severity, or map integer values to up to 16 configured colors.</li>
+  </ul>
+  <table>
+    <tr>
+      <th>Property</th>
+      <th>Purpose</th>
+    </tr>
+    <tr>
+      <td><code>channel</code></td>
+      <td>The PV or soft-PV driving the LED state.</td>
+    </tr>
+    <tr>
+      <td><code>colorMode</code></td>
+      <td><code>static</code>, <code>alarm</code>, or <code>discrete</code>.</td>
+    </tr>
+    <tr>
+      <td><code>shape</code></td>
+      <td><code>circle</code>, <code>square</code>, or <code>rounded_square</code>.</td>
+    </tr>
+    <tr>
+      <td><code>bezel</code></td>
+      <td>Enables the lamp-style raised ring and highlight.</td>
+    </tr>
+    <tr>
+      <td><code>onColor</code> / <code>offColor</code></td>
+      <td>Convenience colors for binary-style usage and edit-mode previews.</td>
+    </tr>
+    <tr>
+      <td><code>undefinedColor</code></td>
+      <td>Fallback color for disconnects or out-of-range discrete states.</td>
+    </tr>
+    <tr>
+      <td><code>stateCount</code> / <code>stateColorN</code></td>
+      <td>Configures the discrete color table for integer states 0 through 15.</td>
+    </tr>
+    <tr>
+      <td><code>visibilityMode</code>, <code>visibilityCalc</code>, visibility channels</td>
+      <td>Optional hide/show behavior matching the other dynamic widgets.</td>
+    </tr>
+  </table>
+  <pre>led_monitor {
+  object {
+    x=60
+    y=110
+    width=24
+    height=24
+  }
+  monitor {
+    chan="device:state"
+    clr=25
+    bclr=4
+  }
+  colorMode="discrete"
+  shape="rounded_square"
+  bezel=1
+  stateCount=4
+  stateColor0=12
+  stateColor1=15
+  stateColor2=33
+  stateColor3=20
+  undefinedColor=7
+}</pre>
+</div>
+
+<div class="widget-entry">
   <h4><a name="WidgetHeatmap"></a>Heatmap</h4>
   <div class="widget-figure">
     <img src="images/qtedm-widgets/heatmap.png" alt="Heatmap widget example in QtEDM" loading="lazy">
@@ -694,10 +774,10 @@ available variants even when no live IOC is running.</p>
 </div>
 
 <p class="noindent"><strong>QtEDM-only note:</strong> The <code>heatmap</code>,
-<code>thermometer</code>, and <code>expression_channel</code> ADL blocks are
-extensions implemented only in QtEDM. Legacy MEDM does not provide runtime
-support for these widget types, so displays that rely on them are not fully
-backward compatible.</p>
+<code>thermometer</code>, <code>led_monitor</code>, and
+<code>expression_channel</code> ADL blocks are extensions implemented only in
+QtEDM. Legacy MEDM does not provide runtime support for these widget types, so
+displays that rely on them are not fully backward compatible.</p>
 
 <h3>Controllers</h3>
 

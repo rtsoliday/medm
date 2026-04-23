@@ -269,7 +269,7 @@ void BarMonitorElement::setChannel(const QString &channel)
     return;
   }
   channel_ = normalized;
-  setToolTip(channel_.trimmed());
+  setToolTip(QString());
   update();
 }
 

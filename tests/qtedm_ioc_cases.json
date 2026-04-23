@@ -276,6 +276,145 @@
     }
   },
   {
+    "name": "led_monitor_disconnect_blank_channel",
+    "display": "tests/test_LedMonitor.adl",
+    "selector": {
+      "type": "led_monitor",
+      "channel": "",
+      "shape": "circle",
+      "bezel": true
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "color_mode": "discrete",
+      "shape": "circle",
+      "bezel": true,
+      "connected": false,
+      "hatched": true,
+      "effective_foreground": "#919191",
+      "effective_background": "#bbbbbb"
+    }
+  },
+  {
+    "name": "led_monitor_alarm_probe_udf",
+    "display": "tests/test_LedMonitor.adl",
+    "selector": {
+      "type": "led_monitor",
+      "channel": "led:probe:alarm",
+      "color_mode": "alarm",
+      "shape": "square",
+      "bezel": false
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "color_mode": "alarm",
+      "shape": "square",
+      "bezel": false,
+      "connected": true,
+      "initial_update": true,
+      "severity": 3,
+      "has_value": true,
+      "effective_foreground": "#ffffff",
+      "effective_background": "#bbbbbb",
+      "numeric_value": 0,
+      "numeric_tolerance": 0.0
+    }
+  },
+  {
+    "name": "led_monitor_static_color_ignores_value_update",
+    "display": "tests/test_LedMonitor.adl",
+    "selector": {
+      "type": "led_monitor",
+      "channel": "led:test:static_on",
+      "geometry": {
+        "width": 56
+      }
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "led:test:static_on",
+        "value": "0"
+      }
+    ],
+    "expect": {
+      "color_mode": "static",
+      "shape": "circle",
+      "bezel": true,
+      "connected": true,
+      "initial_update": true,
+      "has_value": true,
+      "hatched": false,
+      "effective_foreground": "#5893ff",
+      "effective_background": "#bbbbbb",
+      "numeric_value": 0,
+      "numeric_tolerance": 0.0
+    }
+  },
+  {
+    "name": "led_monitor_discrete_live_state_update",
+    "display": "tests/test_LedMonitor.adl",
+    "selector": {
+      "type": "led_monitor",
+      "channel": "led:test:discrete",
+      "geometry": {
+        "width": 56
+      }
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "led:test:discrete",
+        "value": "3"
+      }
+    ],
+    "expect": {
+      "color_mode": "discrete",
+      "shape": "rounded_square",
+      "bezel": true,
+      "connected": true,
+      "initial_update": true,
+      "has_value": true,
+      "hatched": false,
+      "effective_foreground": "#fd0000",
+      "effective_background": "#bbbbbb",
+      "numeric_value": 3,
+      "numeric_tolerance": 0.0
+    }
+  },
+  {
+    "name": "led_monitor_visibility_calc_hides",
+    "display": "tests/test_LedMonitor.adl",
+    "selector": {
+      "type": "led_monitor",
+      "channel": "led:test:visibility",
+      "shape": "rounded_square",
+      "bezel": true
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "led:vis:calc_a",
+        "value": "0"
+      },
+      {
+        "pv": "led:vis:calc_b",
+        "value": "2"
+      }
+    ],
+    "expect": {
+      "color_mode": "discrete",
+      "shape": "rounded_square",
+      "bezel": true,
+      "connected": true,
+      "initial_update": true,
+      "has_value": true,
+      "visible": false,
+      "numeric_value": 1,
+      "numeric_tolerance": 0.0
+    }
+  },
+  {
     "name": "choice_button_discrete_live_selection_update",
     "display": "tests/test_ChoiceButton.adl",
     "selector": {

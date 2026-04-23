@@ -36,6 +36,7 @@ QString heatmapRotationString(HeatmapRotation rot);
 QString meterLabelString(MeterLabel label);
 QString barDirectionString(BarDirection direction);
 QString barFillModeString(BarFill fill);
+QString ledShapeString(LedShape shape);
 QString timeUnitsString(TimeUnits units);
 QString channelFieldName(int index);
 QString textMonitorFormatString(TextMonitorFormat format);

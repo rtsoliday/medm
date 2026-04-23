@@ -413,7 +413,7 @@ void SliderElement::setChannel(const QString &channel)
     return;
   }
   channel_ = normalized;
-  setToolTip(channel_);
+  setToolTip(QString());
   update();
 }
 

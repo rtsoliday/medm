@@ -288,7 +288,7 @@ void MessageButtonElement::setChannel(const QString &channel)
   }
   channel_ = normalized;
   if (button_) {
-    button_->setToolTip(channel_);
+    button_->setToolTip(QString());
   }
 }
 

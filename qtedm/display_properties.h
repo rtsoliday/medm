@@ -93,6 +93,13 @@ enum class BarFill
   kFromCenter,
 };
 
+enum class LedShape
+{
+  kCircle,
+  kSquare,
+  kRoundedSquare,
+};
+
 enum class PvLimitSource
 {
   kChannel,
@@ -238,6 +245,7 @@ enum class CartesianPlotTraceMode
 constexpr int kStripChartPenCount = 8;
 constexpr int kCartesianPlotTraceCount = 8;
 constexpr int kCartesianAxisCount = 5;
+constexpr int kLedStateCount = 16;
 constexpr int kCartesianPlotMaximumSampleCount = 256;
 constexpr int kMinimumDisplayWidth = 1;
 constexpr int kMinimumDisplayHeight = 1;
@@ -261,6 +269,8 @@ constexpr int kMinimumMeterSize = 60;
 constexpr int kMinimumBarSize = 5;
 constexpr int kMinimumThermometerSize = 5;
 constexpr int kMinimumByteSize = 5;
+constexpr int kMinimumLedSize = 5;
+constexpr int kDefaultLedSize = 20;
 constexpr int kMinimumScaleSize = 20;
 constexpr int kMinimumStripChartWidth = 60;
 constexpr int kMinimumStripChartHeight = 40;

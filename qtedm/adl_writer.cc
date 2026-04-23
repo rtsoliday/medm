@@ -209,6 +209,19 @@ QString barFillModeString(BarFill fill)
   }
 }
 
+QString ledShapeString(LedShape shape)
+{
+  switch (shape) {
+  case LedShape::kSquare:
+    return QStringLiteral("square");
+  case LedShape::kRoundedSquare:
+    return QStringLiteral("rounded_square");
+  case LedShape::kCircle:
+  default:
+    return QStringLiteral("circle");
+  }
+}
+
 QString timeUnitsString(TimeUnits units)
 {
   switch (units) {

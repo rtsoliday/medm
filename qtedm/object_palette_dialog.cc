@@ -423,6 +423,8 @@ ObjectPaletteDialog::monitorButtons()
           CreateTool::kCartesianPlot},
       {QStringLiteral("Byte Monitor"), byte25_bits, byte25_width,
           byte25_height, CreateTool::kByteMonitor},
+      {QStringLiteral("LED Monitor"), led25_bits, led25_width,
+          led25_height, CreateTool::kLedMonitor},
       {QStringLiteral("Expression Channel"), expressionChannel25_bits,
           expressionChannel25_width, expressionChannel25_height,
           CreateTool::kExpressionChannel},

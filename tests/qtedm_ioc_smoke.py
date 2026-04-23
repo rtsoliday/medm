@@ -15,7 +15,7 @@ from typing import List, Match, Optional, Set
 
 
 CHANNEL_PATTERN = re.compile(
-    r'((?:chan|channelA|channelB|channelC|channelD|variable)=")([^"]*)(")',
+    r'((?:chan(?:[ABCD])?|channelA|channelB|channelC|channelD|variable)=")([^"]*)(")',
     re.IGNORECASE)
 
 

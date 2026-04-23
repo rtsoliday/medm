@@ -79,6 +79,8 @@
 #include "cartesian_plot_runtime.h"
 #include "byte_monitor_element.h"
 #include "byte_monitor_runtime.h"
+#include "led_monitor_element.h"
+#include "led_monitor_runtime.h"
 #include "bar_monitor_element.h"
 #include "bar_monitor_runtime.h"
 #include "thermometer_element.h"

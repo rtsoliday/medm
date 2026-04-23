@@ -47,6 +47,17 @@
     }
   },
   {
+    "name": "led_monitor_visual",
+    "display": "docs/images/adl/led-monitor.adl",
+    "golden": "tests/golden/test_LedMonitor.png",
+    "exit_after_ms": 1500,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
+    }
+  },
+  {
     "name": "choice_button_visual",
     "display": "tests/visual_ChoiceButton.adl",
     "golden": "tests/golden/test_ChoiceButton.png",

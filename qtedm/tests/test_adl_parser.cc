@@ -13,6 +13,7 @@ private slots:
   void parsesCommentsAndQuotedValues();
   void parsesEscapedQuotedValues();
   void parsesExpressionChannelBlock();
+  void parsesLedMonitorBlock();
   void rejectsMalformedInput();
 };
 
@@ -131,6 +132,84 @@ void TestAdlParser::parsesExpressionChannelBlock()
       QStringLiteral("onAnyChange"));
   QCOMPARE(propertyValue(*expressionNode, QStringLiteral("precision")),
       QStringLiteral("3"));
+}
+
+void TestAdlParser::parsesLedMonitorBlock()
+{
+  const QString text = QStringLiteral(
+      "led_monitor {\n"
+      "  object {\n"
+      "    x=16\n"
+      "    y=18\n"
+      "    width=24\n"
+      "    height=26\n"
+      "  }\n"
+      "  monitor {\n"
+      "    chan=\"soft:state\"\n"
+      "    clr=25\n"
+      "    bclr=4\n"
+      "  }\n"
+      "  \"dynamic attribute\" {\n"
+      "    attr {\n"
+      "      vis=\"calc\"\n"
+      "      calc=\"A\"\n"
+      "    }\n"
+      "    chan=\"soft:state\"\n"
+      "    chanB=\"soft:mask\"\n"
+      "  }\n"
+      "  colorMode=\"discrete\"\n"
+      "  shape=\"rounded_square\"\n"
+      "  bezel=1\n"
+      "  stateCount=4\n"
+      "  stateColor0=12\n"
+      "  stateColor1=15\n"
+      "  stateColor2=33\n"
+      "  stateColor3=20\n"
+      "  undefinedColor=7\n"
+      "}\n");
+
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(text, &errorMessage);
+
+  QVERIFY2(root.has_value(), qPrintable(errorMessage));
+
+  const AdlNode *ledNode = ::findChild(*root, QStringLiteral("led_monitor"));
+  QVERIFY(ledNode);
+  QCOMPARE(propertyValue(*ledNode, QStringLiteral("colorMode")),
+      QStringLiteral("discrete"));
+  QCOMPARE(propertyValue(*ledNode, QStringLiteral("shape")),
+      QStringLiteral("rounded_square"));
+  QCOMPARE(propertyValue(*ledNode, QStringLiteral("bezel")),
+      QStringLiteral("1"));
+  QCOMPARE(propertyValue(*ledNode, QStringLiteral("stateCount")),
+      QStringLiteral("4"));
+  QCOMPARE(propertyValue(*ledNode, QStringLiteral("stateColor2")),
+      QStringLiteral("33"));
+  QCOMPARE(propertyValue(*ledNode, QStringLiteral("undefinedColor")),
+      QStringLiteral("7"));
+
+  const AdlNode *monitorNode = ::findChild(*ledNode, QStringLiteral("monitor"));
+  QVERIFY(monitorNode);
+  QCOMPARE(propertyValue(*monitorNode, QStringLiteral("chan")),
+      QStringLiteral("soft:state"));
+  QCOMPARE(propertyValue(*monitorNode, QStringLiteral("clr")),
+      QStringLiteral("25"));
+  QCOMPARE(propertyValue(*monitorNode, QStringLiteral("bclr")),
+      QStringLiteral("4"));
+
+  const AdlNode *dynamicNode =
+      ::findChild(*ledNode, QStringLiteral("dynamic attribute"));
+  QVERIFY(dynamicNode);
+  QCOMPARE(propertyValue(*dynamicNode, QStringLiteral("chan")),
+      QStringLiteral("soft:state"));
+  QCOMPARE(propertyValue(*dynamicNode, QStringLiteral("chanB")),
+      QStringLiteral("soft:mask"));
+  const AdlNode *attrNode = ::findChild(*dynamicNode, QStringLiteral("attr"));
+  QVERIFY(attrNode);
+  QCOMPARE(propertyValue(*attrNode, QStringLiteral("vis")),
+      QStringLiteral("calc"));
+  QCOMPARE(propertyValue(*attrNode, QStringLiteral("calc")),
+      QStringLiteral("A"));
 }
 
 void TestAdlParser::rejectsMalformedInput()

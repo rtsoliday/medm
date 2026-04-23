@@ -650,6 +650,7 @@ public:
     appendVisible(stripChartElements_);
     appendVisible(cartesianPlotElements_);
     appendVisible(byteMonitorElements_);
+    appendVisible(ledMonitorElements_);
     appendVisible(expressionChannelElements_);
     appendVisible(rectangleElements_);
     appendVisible(imageElements_);
@@ -818,6 +819,9 @@ public:
       if (dynamic_cast<ByteMonitorElement *>(widget)) {
         return QStringLiteral("Byte Monitor");
       }
+      if (dynamic_cast<LedMonitorElement *>(widget)) {
+        return QStringLiteral("LED Monitor");
+      }
       if (dynamic_cast<ExpressionChannelElement *>(widget)) {
         return QStringLiteral("Expression Channel");
       }
@@ -893,6 +897,7 @@ public:
     considerList(stripChartElements_);
     considerList(cartesianPlotElements_);
     considerList(byteMonitorElements_);
+    considerList(ledMonitorElements_);
     considerList(expressionChannelElements_);
     considerList(rectangleElements_);
     considerList(imageElements_);
@@ -2754,6 +2759,7 @@ protected:
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kThermometer
             || state->createTool == CreateTool::kByteMonitor
+            || state->createTool == CreateTool::kLedMonitor
             || state->createTool == CreateTool::kExpressionChannel
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
@@ -3080,6 +3086,7 @@ private:
   CartesianPlotElement *loadCartesianPlotElement(const AdlNode &cartesianNode);
   StripChartElement *loadStripChartElement(const AdlNode &stripNode);
   ByteMonitorElement *loadByteMonitorElement(const AdlNode &byteNode);
+  LedMonitorElement *loadLedMonitorElement(const AdlNode &ledNode);
   ExpressionChannelElement *loadExpressionChannelElement(
       const AdlNode &expressionChannelNode);
   ImageElement *loadImageElement(const AdlNode &imageNode);
@@ -3168,6 +3175,7 @@ private:
   CartesianPlotTimeFormat parseCartesianTimeFormat(const QString &value) const;
   BarDirection parseBarDirection(const QString &value) const;
   BarFill parseBarFill(const QString &value) const;
+  LedShape parseLedShape(const QString &value) const;
   ChoiceButtonStacking parseChoiceButtonStacking(const QString &value) const;
   RelatedDisplayVisual parseRelatedDisplayVisual(const QString &value) const;
   RelatedDisplayMode parseRelatedDisplayMode(const QString &value) const;
@@ -3355,6 +3363,9 @@ private:
   QList<ByteMonitorElement *> byteMonitorElements_;
   QHash<ByteMonitorElement *, ByteMonitorRuntime *> byteMonitorRuntimes_;
   ByteMonitorElement *selectedByteMonitorElement_ = nullptr;
+  QList<LedMonitorElement *> ledMonitorElements_;
+  QHash<LedMonitorElement *, LedMonitorRuntime *> ledMonitorRuntimes_;
+  LedMonitorElement *selectedLedMonitorElement_ = nullptr;
   QList<ExpressionChannelElement *> expressionChannelElements_;
   QHash<ExpressionChannelElement *, ExpressionChannelRuntime *>
       expressionChannelRuntimes_;
@@ -3616,10 +3627,21 @@ private:
   void clearByteMonitorSelection()
   {
     if (!selectedByteMonitorElement_) {
+      clearLedMonitorSelection();
       return;
     }
     selectedByteMonitorElement_->setSelected(false);
     selectedByteMonitorElement_ = nullptr;
+    clearLedMonitorSelection();
+  }
+
+  void clearLedMonitorSelection()
+  {
+    if (!selectedLedMonitorElement_) {
+      return;
+    }
+    selectedLedMonitorElement_->setSelected(false);
+    selectedLedMonitorElement_ = nullptr;
   }
 
   void clearExpressionChannelSelection()
@@ -3787,6 +3809,10 @@ private:
     }
     if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       byte->setSelected(selected);
+      return;
+    }
+    if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
+      led->setSelected(selected);
       return;
     }
     if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
@@ -3980,6 +4006,12 @@ private:
     if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       if (selectedByteMonitorElement_ == byte) {
         selectedByteMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
+      if (selectedLedMonitorElement_ == led) {
+        selectedLedMonitorElement_ = nullptr;
       }
       return;
     }
@@ -4183,6 +4215,12 @@ private:
         return;
       }
     }
+    if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
+      if (selectedLedMonitorElement_ == led) {
+        clearLedMonitorSelection();
+        return;
+      }
+    }
     if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
       if (selectedExpressionChannel_ == expression) {
         clearExpressionChannelSelection();
@@ -4318,6 +4356,7 @@ private:
     appendUnique(selectedStripChartElement_);
     appendUnique(selectedCartesianPlotElement_);
     appendUnique(selectedByteMonitorElement_);
+    appendUnique(selectedLedMonitorElement_);
     appendUnique(selectedExpressionChannel_);
     appendUnique(selectedRectangle_);
     appendUnique(selectedImage_);
@@ -4410,6 +4449,7 @@ private:
     clearBarMonitorSelection();
     clearThermometerSelection();
     clearByteMonitorSelection();
+    clearLedMonitorSelection();
     clearExpressionChannelSelection();
     clearRectangleSelection();
     clearImageSelection();
@@ -4445,6 +4485,7 @@ private:
   void removeStripChartRuntime(StripChartElement *element);
   void removeCartesianPlotRuntime(CartesianPlotElement *element);
   void removeByteMonitorRuntime(ByteMonitorElement *element);
+  void removeLedMonitorRuntime(LedMonitorElement *element);
   void removeExpressionChannelRuntime(ExpressionChannelElement *element);
   void removeWheelSwitchRuntime(WheelSwitchElement *element);
   void removeTextMonitorRuntime(TextMonitorElement *element);
@@ -4486,6 +4527,8 @@ private:
       removeCartesianPlotRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement>) {
       removeByteMonitorRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, LedMonitorElement>) {
+      removeLedMonitorRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ExpressionChannelElement>) {
       removeExpressionChannelRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement>) {
@@ -5430,6 +5473,42 @@ private:
       return true;
     }
 
+    if (selectedLedMonitorElement_) {
+      LedMonitorElement *element = selectedLedMonitorElement_;
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = target.translateRectForPaste(geometry, offset);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        LedMonitorElement *newElement = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          newElement = target.loadLedMonitorElement(nodeCopy);
+        }
+        if (newElement) {
+          target.selectLedMonitorElement(newElement);
+          target.showResourcePaletteForLedMonitor(newElement);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(ledMonitorElements_, selectedLedMonitorElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
     if (selectedExpressionChannel_) {
       ExpressionChannelElement *element = selectedExpressionChannel_;
       const QRect geometry = widgetDisplayRect(element);
@@ -5967,6 +6046,7 @@ private:
         || selectedThermometerElement_
         || selectedScaleMonitorElement_ || selectedStripChartElement_
         || selectedCartesianPlotElement_ || selectedByteMonitorElement_
+        || selectedLedMonitorElement_
         || selectedExpressionChannel_
         || selectedRectangle_ || selectedImage_ || selectedHeatmap_ || selectedOval_
         || selectedArc_ || selectedLine_ || selectedPolyline_
@@ -5989,6 +6069,7 @@ private:
         || !thermometerElements_.isEmpty()
         || !scaleMonitorElements_.isEmpty() || !stripChartElements_.isEmpty()
         || !cartesianPlotElements_.isEmpty() || !byteMonitorElements_.isEmpty()
+        || !ledMonitorElements_.isEmpty()
         || !expressionChannelElements_.isEmpty()
         || !rectangleElements_.isEmpty() || !imageElements_.isEmpty()
         || !heatmapElements_.isEmpty()
@@ -7726,6 +7807,160 @@ private:
         });
   }
 
+  void showResourcePaletteForLedMonitor(LedMonitorElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    std::array<std::function<QColor()>, kLedStateCount> stateColorGetters{};
+    std::array<std::function<void(const QColor &)>, kLedStateCount>
+        stateColorSetters{};
+    for (int i = 0; i < kLedStateCount; ++i) {
+      stateColorGetters[static_cast<std::size_t>(i)] = [element, i]() {
+        return element->stateColor(i);
+      };
+      stateColorSetters[static_cast<std::size_t>(i)] =
+          [this, element, i](const QColor &color) {
+            element->setStateColor(i, color);
+            markDirty();
+          };
+    }
+
+    std::array<std::function<QString()>, 4> visibilityChannelGetters{{
+        [element]() { return element->channel(0); },
+        [element]() { return element->channel(1); },
+        [element]() { return element->channel(2); },
+        [element]() { return element->channel(3); },
+    }};
+    std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters{{
+        [this, element](const QString &value) {
+          element->setChannel(0, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(1, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(2, value);
+          markDirty();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(3, value);
+          markDirty();
+        },
+    }};
+
+    dialog->showForLedMonitor(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumLedSize) {
+            adjusted.setWidth(kMinimumLedSize);
+          }
+          if (adjusted.height() < kMinimumLedSize) {
+            adjusted.setHeight(kMinimumLedSize);
+          }
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->shape();
+        },
+        [this, element](LedShape shape) {
+          element->setShape(shape);
+          markDirty();
+        },
+        [element]() {
+          return element->bezel();
+        },
+        [this, element](bool bezel) {
+          element->setBezel(bezel);
+          markDirty();
+        },
+        [element]() {
+          return element->onColor();
+        },
+        [this, element](const QColor &color) {
+          element->setOnColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->offColor();
+        },
+        [this, element](const QColor &color) {
+          element->setOffColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->undefinedColor();
+        },
+        [this, element](const QColor &color) {
+          element->setUndefinedColor(color);
+          markDirty();
+        },
+        std::move(stateColorGetters), std::move(stateColorSetters),
+        [element]() {
+          return element->stateCount();
+        },
+        [this, element](int stateCount) {
+          element->setStateCount(stateCount);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          markDirty();
+        },
+        [element]() {
+          return element->visibilityMode();
+        },
+        [this, element](TextVisibilityMode mode) {
+          element->setVisibilityMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->visibilityCalc();
+        },
+        [this, element](const QString &calc) {
+          element->setVisibilityCalc(calc);
+          markDirty();
+        },
+        std::move(visibilityChannelGetters),
+        std::move(visibilityChannelSetters));
+  }
+
   void showResourcePaletteForComposite(CompositeElement *element)
   {
     if (!element) {
@@ -8902,6 +9137,9 @@ private:
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
       appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<LedMonitorElement *>(widget)) {
+      appendChannel(element->channel());
+      appendChannelArray(AdlWriter::collectChannels(element));
     } else if (auto *element = dynamic_cast<ExpressionChannelElement *>(widget)) {
       appendChannel(element->variable());
       for (int i = 0; i < 4; ++i) {
@@ -8977,6 +9215,7 @@ public:
     appendList(thermometerElements_);
     appendList(scaleMonitorElements_);
     appendList(byteMonitorElements_);
+    appendList(ledMonitorElements_);
     appendList(stripChartElements_);
     appendList(cartesianPlotElements_);
     appendList(expressionChannelElements_);
@@ -9495,6 +9734,9 @@ private:
     if (dynamic_cast<ByteMonitorElement *>(widget)) {
       return QStringLiteral("Byte Monitor");
     }
+    if (dynamic_cast<LedMonitorElement *>(widget)) {
+      return QStringLiteral("LED Monitor");
+    }
     if (dynamic_cast<StripChartElement *>(widget)) {
       return QStringLiteral("Strip Chart");
     }
@@ -9639,6 +9881,19 @@ private:
         addRef(runtime->channelName_);
       } else {
         addRef(element->channel());
+      }
+    } else if (auto *element = dynamic_cast<LedMonitorElement *>(widget)) {
+      if (auto *runtime = ledMonitorRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_);
+        for (const auto &channel : runtime->visibilityChannels_) {
+          addRef(channel.name);
+        }
+      } else {
+        addRef(element->channel());
+        const auto rawChannels = AdlWriter::collectChannels(element);
+        for (const QString &channel : rawChannels) {
+          addRef(channel);
+        }
       }
     } else if (auto *element = dynamic_cast<ExpressionChannelElement *>(widget)) {
       addRef(element->variable());
@@ -11004,6 +11259,43 @@ private:
     selectedByteMonitorElement_->setSelected(true);
   }
 
+  void selectLedMonitorElement(LedMonitorElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedLedMonitorElement_) {
+      selectedLedMonitorElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSliderSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearLedMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedLedMonitorElement_ = element;
+    selectedLedMonitorElement_->setSelected(true);
+  }
+
   void selectRectangleElement(RectangleElement *element)
   {
     if (!element) {
@@ -11413,6 +11705,9 @@ private:
     if (selectedByteMonitorElement_) {
       return selectedByteMonitorElement_;
     }
+    if (selectedLedMonitorElement_) {
+      return selectedLedMonitorElement_;
+    }
     if (selectedExpressionChannel_) {
       return selectedExpressionChannel_;
     }
@@ -11523,6 +11818,10 @@ private:
     } else if (auto *byte = dynamic_cast<ByteMonitorElement *>(widget)) {
       selectByteMonitorElement(byte);
       showResourcePaletteForByte(byte);
+      handled = true;
+    } else if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
+      selectLedMonitorElement(led);
+      showResourcePaletteForLedMonitor(led);
       handled = true;
     } else if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
       selectExpressionChannelElement(expression);
@@ -13143,6 +13442,7 @@ private:
     considerList(stripChartElements_);
     considerList(cartesianPlotElements_);
     considerList(byteMonitorElements_);
+    considerList(ledMonitorElements_);
     considerList(rectangleElements_);
     considerList(imageElements_);
     considerList(heatmapElements_);
@@ -13390,6 +13690,22 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createByteMonitorElement(rect);
+      break;
+    case CreateTool::kLedMonitor:
+      if (rect.width() <= 0) {
+        rect.setWidth(kDefaultLedSize);
+      }
+      if (rect.height() <= 0) {
+        rect.setHeight(kDefaultLedSize);
+      }
+      if (rect.width() < kMinimumLedSize) {
+        rect.setWidth(kMinimumLedSize);
+      }
+      if (rect.height() < kMinimumLedSize) {
+        rect.setHeight(kMinimumLedSize);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createLedMonitorElement(rect);
       break;
     case CreateTool::kExpressionChannel:
       if (rect.width() < kMinimumExpressionChannelWidth) {
@@ -14599,6 +14915,43 @@ private:
     markDirty();
   }
 
+  void createLedMonitorElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create LED Monitor"));
+    QRect target = rect;
+    if (target.width() < kMinimumLedSize) {
+      target.setWidth(kMinimumLedSize);
+    }
+    if (target.height() < kMinimumLedSize) {
+      target.setHeight(kMinimumLedSize);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new LedMonitorElement(displayArea_);
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    ledMonitorElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!ledMonitorRuntimes_.contains(element)) {
+        auto *runtime = new LedMonitorRuntime(element);
+        ledMonitorRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectLedMonitorElement(element);
+    showResourcePaletteForLedMonitor(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
   void createExpressionChannelElement(const QRect &rect)
   {
     if (!displayArea_) {
@@ -15041,6 +15394,7 @@ private:
             || state->createTool == CreateTool::kBarMonitor
             || state->createTool == CreateTool::kThermometer
             || state->createTool == CreateTool::kByteMonitor
+            || state->createTool == CreateTool::kLedMonitor
             || state->createTool == CreateTool::kExpressionChannel
             || state->createTool == CreateTool::kScaleMonitor
             || state->createTool == CreateTool::kStripChart
@@ -15731,7 +16085,8 @@ private:
         attemptSingleChannelRuntime(barMonitorRuntimes_) ||
         attemptSingleChannelRuntime(thermometerRuntimes_) ||
         attemptSingleChannelRuntime(scaleMonitorRuntimes_) ||
-        attemptSingleChannelRuntime(byteMonitorRuntimes_)) {
+        attemptSingleChannelRuntime(byteMonitorRuntimes_) ||
+        attemptSingleChannelRuntime(ledMonitorRuntimes_)) {
       return true;
     }
 
@@ -15949,6 +16304,13 @@ private:
     auto *byteAction = addMenuAction(monitorsMenu, QStringLiteral("Byte Monitor"));
     QObject::connect(byteAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kByteMonitor);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
+    auto *ledAction = addMenuAction(monitorsMenu, QStringLiteral("LED Monitor"));
+    QObject::connect(ledAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kLedMonitor);
       if (!lastContextMenuGlobalPos_.isNull()) {
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
@@ -16587,6 +16949,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
   for (ByteMonitorElement *e : byteMonitorElements_) {
     scaleWidget(e);
   }
+  for (LedMonitorElement *e : ledMonitorElements_) {
+    scaleWidget(e);
+  }
   for (RectangleElement *e : rectangleElements_) {
     scaleWidget(e);
   }
@@ -16864,6 +17229,13 @@ inline bool DisplayWindow::isTestAutomationReady() const
           [](ByteMonitorElement *element) { return element->channel(); },
           [](ByteMonitorRuntime *runtime) {
             return runtime->connected_ && runtime->hasLastValue_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(ledMonitorElements_, ledMonitorRuntimes_,
+          [](LedMonitorElement *element) { return element->channel(); },
+          [](LedMonitorRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
           })) {
     return false;
   }
@@ -18029,6 +18401,58 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       continue;
     }
 
+    if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("led_monitor {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(led));
+      const QColor ledForeground = resolvedForegroundColor(led,
+          led->foregroundColor());
+      const QColor ledBackground = resolvedBackgroundColor(led,
+          led->backgroundColor());
+      AdlWriter::writeMonitorSection(stream, 1, led->channel(),
+          AdlWriter::medmColorIndex(ledForeground),
+          AdlWriter::medmColorIndex(ledBackground));
+      const bool needsPrimaryVisibilityFallback =
+          led->visibilityMode() != TextVisibilityMode::kStatic
+          || !led->visibilityCalc().trimmed().isEmpty();
+      const auto ledChannels = AdlWriter::channelsForMedmFourValues(
+          AdlWriter::collectChannelsWithPrimaryFallback(led, led->channel(),
+              needsPrimaryVisibilityFallback));
+      AdlWriter::writeDynamicAttributeSection(stream, 1,
+          TextColorMode::kStatic, led->visibilityMode(),
+          led->visibilityCalc(), ledChannels);
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("colorMode=\"%1\"")
+              .arg(AdlWriter::colorModeString(led->colorMode())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("shape=\"%1\"")
+              .arg(AdlWriter::ledShapeString(led->shape())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("bezel=%1").arg(led->bezel() ? 1 : 0));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("stateCount=%1").arg(led->stateCount()));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("onColor=%1")
+              .arg(AdlWriter::medmColorIndex(led->onColor())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("offColor=%1")
+              .arg(AdlWriter::medmColorIndex(led->offColor())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("undefinedColor=%1")
+              .arg(AdlWriter::medmColorIndex(led->undefinedColor())));
+      for (int i = 0; i < led->stateCount(); ++i) {
+        const QColor stateColor = led->stateColor(i);
+        if (!stateColor.isValid()) {
+          continue;
+        }
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("stateColor%1=%2")
+                .arg(i)
+                .arg(AdlWriter::medmColorIndex(stateColor)));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("expression_channel {"));
@@ -19093,6 +19517,60 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("led_monitor {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(led));
+    const QColor ledForeground = resolveForeground(led,
+        led->foregroundColor());
+    const QColor ledBackground = resolveBackground(led,
+        led->backgroundColor());
+    AdlWriter::writeMonitorSection(stream, next, led->channel(),
+        AdlWriter::medmColorIndex(ledForeground),
+        AdlWriter::medmColorIndex(ledBackground));
+    const bool needsPrimaryVisibilityFallback =
+        led->visibilityMode() != TextVisibilityMode::kStatic
+        || !led->visibilityCalc().trimmed().isEmpty();
+    const auto ledChannels = AdlWriter::channelsForMedmFourValues(
+        AdlWriter::collectChannelsWithPrimaryFallback(led, led->channel(),
+            needsPrimaryVisibilityFallback));
+    AdlWriter::writeDynamicAttributeSection(stream, next,
+        TextColorMode::kStatic, led->visibilityMode(),
+        led->visibilityCalc(), ledChannels);
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("colorMode=\"%1\"")
+            .arg(AdlWriter::colorModeString(led->colorMode())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("shape=\"%1\"")
+            .arg(AdlWriter::ledShapeString(led->shape())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("bezel=%1").arg(led->bezel() ? 1 : 0));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("stateCount=%1").arg(led->stateCount()));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("onColor=%1")
+            .arg(AdlWriter::medmColorIndex(led->onColor())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("offColor=%1")
+            .arg(AdlWriter::medmColorIndex(led->offColor())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("undefinedColor=%1")
+            .arg(AdlWriter::medmColorIndex(led->undefinedColor())));
+    for (int i = 0; i < led->stateCount(); ++i) {
+      const QColor stateColor = led->stateColor(i);
+      if (!stateColor.isValid()) {
+        continue;
+      }
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("stateColor%1=%2")
+              .arg(i)
+              .arg(AdlWriter::medmColorIndex(stateColor)));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *expression = dynamic_cast<ExpressionChannelElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("expression_channel {"));
@@ -19600,6 +20078,8 @@ inline void DisplayWindow::clearAllElements()
           removeCartesianPlotRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ByteMonitorElement *>) {
           removeByteMonitorRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, LedMonitorElement *>) {
+          removeLedMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ExpressionChannelElement *>) {
           removeExpressionChannelRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, ChoiceButtonElement *>) {
@@ -19648,6 +20128,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(stripChartElements_);
   clearList(cartesianPlotElements_);
   clearList(byteMonitorElements_);
+  clearList(ledMonitorElements_);
   clearList(expressionChannelElements_);
   clearList(rectangleElements_);
   clearList(imageElements_);
@@ -20040,6 +20521,21 @@ inline BarFill DisplayWindow::parseBarFill(const QString &value) const
   return BarFill::kFromEdge;
 }
 
+inline LedShape DisplayWindow::parseLedShape(const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized == QStringLiteral("square")) {
+    return LedShape::kSquare;
+  }
+  if (normalized == QStringLiteral("rounded square")
+      || normalized == QStringLiteral("rounded-square")
+      || normalized == QStringLiteral("rounded_square")
+      || normalized == QStringLiteral("roundedsquare")) {
+    return LedShape::kRoundedSquare;
+  }
+  return LedShape::kCircle;
+}
+
 inline ChoiceButtonStacking DisplayWindow::parseChoiceButtonStacking(
     const QString &value) const
 {
@@ -20363,6 +20859,7 @@ inline bool DisplayWindow::isMedmWidgetBackedWidget(const QWidget *widget) const
       || dynamic_cast<const BarMonitorElement *>(widget)
       || dynamic_cast<const ScaleMonitorElement *>(widget)
       || dynamic_cast<const ByteMonitorElement *>(widget)
+      || dynamic_cast<const LedMonitorElement *>(widget)
       || dynamic_cast<const StripChartElement *>(widget)
       || dynamic_cast<const CartesianPlotElement *>(widget)
       || dynamic_cast<const ThermometerElement *>(widget)) {
@@ -21179,6 +21676,43 @@ inline QJsonObject DisplayWindow::testStateObject() const
         element->effectiveBackground());
     if (runtime) {
       widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
+      if (runtime->hasLastValue_) {
+        widgetObject[QStringLiteral("numeric_value")] =
+            static_cast<qint64>(runtime->lastValue_);
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (LedMonitorElement *element : ledMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    LedMonitorRuntime *runtime = ledMonitorRuntimes_.value(element, nullptr);
+    const LedMonitorElement::FillState fillState = element->effectiveFillState();
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "led_monitor", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("shape")] =
+        AdlWriter::ledShapeString(element->shape());
+    widgetObject[QStringLiteral("bezel")] = element->bezel();
+    widgetObject[QStringLiteral("state_count")] = element->stateCount();
+    appendColorState(widgetObject, fillState.color,
+        element->effectiveBackground());
+    widgetObject[QStringLiteral("hatched")] = fillState.hatched;
+    widgetObject[QStringLiteral("on_color")] =
+        colorToString(element->onColor());
+    widgetObject[QStringLiteral("off_color")] =
+        colorToString(element->offColor());
+    widgetObject[QStringLiteral("undefined_color")] =
+        colorToString(element->undefinedColor());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
       widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
       widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
       if (runtime->hasLastValue_) {
@@ -24968,6 +25502,185 @@ inline ByteMonitorElement *DisplayWindow::loadByteMonitorElement(
   return element;
 }
 
+inline LedMonitorElement *DisplayWindow::loadLedMonitorElement(
+    const AdlNode &ledNode)
+{
+  const AdlNode effectiveNode = applyPendingDynamicAttribute(ledNode);
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(effectiveNode);
+  QRect originalGeometry = geometry;
+  if (geometry.width() < kMinimumLedSize) {
+    geometry.setWidth(kMinimumLedSize);
+  }
+  if (geometry.height() < kMinimumLedSize) {
+    geometry.setHeight(kMinimumLedSize);
+  }
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new LedMonitorElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  auto parseOptionalColor = [this](const QString &value) {
+    const QString trimmed = value.trimmed();
+    if (trimmed.isEmpty()) {
+      return QColor();
+    }
+    bool ok = false;
+    const int index = trimmed.toInt(&ok);
+    if (ok) {
+      return colorForIndex(index);
+    }
+    const QColor color(trimmed);
+    return color.isValid() ? color : QColor();
+  };
+
+  auto parseBoolProperty = [](const QString &value, bool defaultValue) {
+    const QString normalized = value.trimmed().toLower();
+    if (normalized.isEmpty()) {
+      return defaultValue;
+    }
+    if (normalized == QStringLiteral("1")
+        || normalized == QStringLiteral("true")
+        || normalized == QStringLiteral("yes")
+        || normalized == QStringLiteral("on")) {
+      return true;
+    }
+    if (normalized == QStringLiteral("0")
+        || normalized == QStringLiteral("false")
+        || normalized == QStringLiteral("no")
+        || normalized == QStringLiteral("off")) {
+      return false;
+    }
+    bool ok = false;
+    const int numeric = normalized.toInt(&ok);
+    return ok ? numeric != 0 : defaultValue;
+  };
+
+  if (const AdlNode *monitor = ::findChild(effectiveNode,
+          QStringLiteral("monitor"))) {
+    QString channel = channelValueWithLegacyFallback(*monitor);
+    if (channel.isEmpty()) {
+      channel = propertyValue(*monitor, QStringLiteral("rdbk"));
+    }
+    if (!channel.isEmpty()) {
+      element->setChannel(channel);
+    }
+
+    const QColor foreground = parseOptionalColor(propertyValue(*monitor,
+        QStringLiteral("clr")));
+    if (foreground.isValid()) {
+      element->setForegroundColor(foreground);
+    }
+
+    const QColor background = parseOptionalColor(propertyValue(*monitor,
+        QStringLiteral("bclr")));
+    if (background.isValid()) {
+      element->setBackgroundColor(background);
+    }
+  }
+
+  QString colorModeValue = propertyValue(effectiveNode,
+      QStringLiteral("colorMode"));
+  if (colorModeValue.isEmpty()) {
+    colorModeValue = propertyValue(effectiveNode, QStringLiteral("clrmod"));
+  }
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  const QString shapeValue = propertyValue(effectiveNode, QStringLiteral("shape"));
+  if (!shapeValue.isEmpty()) {
+    element->setShape(parseLedShape(shapeValue));
+  }
+
+  const QString bezelValue = propertyValue(effectiveNode, QStringLiteral("bezel"));
+  if (!bezelValue.isEmpty()) {
+    element->setBezel(parseBoolProperty(bezelValue, element->bezel()));
+  }
+
+  bool ok = false;
+  const QString stateCountValue = propertyValue(effectiveNode,
+      QStringLiteral("stateCount"));
+  const int stateCount = stateCountValue.toInt(&ok);
+  if (ok) {
+    element->setStateCount(stateCount);
+  }
+
+  const QColor onColor = parseOptionalColor(propertyValue(effectiveNode,
+      QStringLiteral("onColor")));
+  if (onColor.isValid()) {
+    element->setOnColor(onColor);
+  }
+
+  const QColor offColor = parseOptionalColor(propertyValue(effectiveNode,
+      QStringLiteral("offColor")));
+  if (offColor.isValid()) {
+    element->setOffColor(offColor);
+  }
+
+  const QColor undefinedColor = parseOptionalColor(propertyValue(effectiveNode,
+      QStringLiteral("undefinedColor")));
+  if (undefinedColor.isValid()) {
+    element->setUndefinedColor(undefinedColor);
+  }
+
+  for (int i = 0; i < kLedStateCount; ++i) {
+    const QColor stateColor = parseOptionalColor(propertyValue(effectiveNode,
+        QStringLiteral("stateColor%1").arg(i)));
+    if (stateColor.isValid()) {
+      element->setStateColor(i, stateColor);
+    }
+  }
+
+  const auto setVisibilityChannel = [element](int index, const QString &value) {
+    constexpr int kChannelCount = 5;
+    if (index < 0 || index >= kChannelCount) {
+      return;
+    }
+    element->setChannel(index, value);
+  };
+
+  if (const AdlNode *dyn = ::findChild(effectiveNode,
+          QStringLiteral("dynamic attribute"))) {
+    markWidgetHasDynamicAttribute(element);
+    const AdlNode *attrNode = ::findChild(*dyn, QStringLiteral("attr"));
+    const AdlNode *modNode = attrNode != nullptr
+        ? ::findChild(*attrNode, QStringLiteral("mod"))
+        : nullptr;
+    const AdlNode &modeSource = modNode != nullptr ? *modNode : *dyn;
+
+    const QString visibility = propertyValue(modeSource, QStringLiteral("vis"));
+    if (!visibility.isEmpty()) {
+      element->setVisibilityMode(parseVisibilityMode(visibility));
+    }
+
+    const QString calc = propertyValue(modeSource, QStringLiteral("calc"));
+    if (!calc.isEmpty()) {
+      element->setVisibilityCalc(calc);
+    }
+
+    applyChannelProperties(*dyn, setVisibilityChannel, 0, 0);
+  }
+
+  applyChannelProperties(effectiveNode, setVisibilityChannel, 0, 0);
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  ledMonitorElements_.append(element);
+  ensureElementInStack(element);
+  return element;
+}
+
 inline ImageElement *DisplayWindow::loadImageElement(
     const AdlNode &imageNode)
 {
@@ -26375,6 +27088,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadStripChartElement(node) != nullptr;
   } else if (name == QStringLiteral("byte")) {
     loaded = loadByteMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("led_monitor")) {
+    loaded = loadLedMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("expression_channel")) {
     loaded = loadExpressionChannelElement(node) != nullptr;
   } else if (name == QStringLiteral("image")) {
@@ -26593,6 +27308,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(barMonitorRuntimes_, barMonitorElements_.size());
   reserveRuntime(thermometerRuntimes_, thermometerElements_.size());
   reserveRuntime(byteMonitorRuntimes_, byteMonitorElements_.size());
+  reserveRuntime(ledMonitorRuntimes_, ledMonitorElements_.size());
   reserveRuntime(expressionChannelRuntimes_, expressionChannelElements_.size());
   reserveRuntime(sliderRuntimes_, sliderElements_.size());
   reserveRuntime(wheelSwitchRuntimes_, wheelSwitchElements_.size());
@@ -26637,7 +27353,8 @@ inline void DisplayWindow::enterExecuteMode()
       meterElements_.size() + scaleMonitorElements_.size() +
       stripChartElements_.size() + cartesianPlotElements_.size() +
       barMonitorElements_.size() + thermometerElements_.size() +
-      byteMonitorElements_.size() + expressionChannelElements_.size() +
+      byteMonitorElements_.size() + ledMonitorElements_.size() +
+      expressionChannelElements_.size() +
       sliderElements_.size() + wheelSwitchElements_.size() +
       textMonitorElements_.size() + choiceButtonElements_.size() +
       menuElements_.size() + messageButtonElements_.size() +
@@ -26797,7 +27514,8 @@ inline void DisplayWindow::enterExecuteMode()
   int monitorCount = scaleMonitorElements_.size() + stripChartElements_.size() +
       cartesianPlotElements_.size() + barMonitorElements_.size() +
       thermometerElements_.size() +
-      byteMonitorElements_.size() + heatmapElements_.size();
+      byteMonitorElements_.size() + ledMonitorElements_.size() +
+      heatmapElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating monitor runtimes", monitorCount);
   for (ScaleMonitorElement *element : scaleMonitorElements_) {
     if (!element) {
@@ -26867,6 +27585,18 @@ inline void DisplayWindow::enterExecuteMode()
     if (!byteMonitorRuntimes_.contains(element)) {
       auto *runtime = new ByteMonitorRuntime(element);
       byteMonitorRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
+  for (LedMonitorElement *element : ledMonitorElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!ledMonitorRuntimes_.contains(element)) {
+      auto *runtime = new LedMonitorRuntime(element);
+      ledMonitorRuntimes_.insert(element, runtime);
       runtime->start();
 
     }
@@ -27243,6 +27973,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = ledMonitorRuntimes_.begin(); it != ledMonitorRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  ledMonitorRuntimes_.clear();
+  for (LedMonitorElement *element : ledMonitorElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = sliderRuntimes_.begin(); it != sliderRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();
@@ -27520,6 +28262,17 @@ inline void DisplayWindow::removeByteMonitorRuntime(ByteMonitorElement *element)
     return;
   }
   if (auto *runtime = byteMonitorRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeLedMonitorRuntime(LedMonitorElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = ledMonitorRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

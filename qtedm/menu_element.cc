@@ -600,19 +600,7 @@ void MenuElement::updateToolTip()
   if (!comboBox_) {
     return;
   }
-
-  QString toolTip = channel_;
-  if (runtimeValueOutOfRange_) {
-    const QString detail = QStringLiteral(
-        "Current enum value %1 is outside the available state range (0-%2).")
-                               .arg(runtimeValue_)
-                               .arg(std::max(0, runtimeLabels_.size() - 1));
-    if (!toolTip.isEmpty()) {
-      toolTip.append(QLatin1Char('\n'));
-    }
-    toolTip.append(detail);
-  }
-  comboBox_->setToolTip(toolTip);
+  comboBox_->setToolTip(QString());
 }
 
 void MenuElement::mousePressEvent(QMouseEvent *event)

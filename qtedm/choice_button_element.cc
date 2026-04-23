@@ -421,7 +421,7 @@ void ChoiceButtonElement::setChannel(const QString &channel)
   channel_ = normalized;
   for (QAbstractButton *button : buttons_) {
     if (button) {
-      button->setToolTip(channel_);
+      button->setToolTip(QString());
     }
   }
   update();
@@ -817,7 +817,7 @@ void ChoiceButtonElement::rebuildButtons()
     auto *button = new ChoiceButtonCell(this);
     button->setCheckable(true);
     button->setText(runtimeLabels_.value(i).trimmed());
-    button->setToolTip(channel_);
+    button->setToolTip(QString());
     button->setAutoExclusive(false);
     button->setCursor(runtimeWriteAccess_ ? CursorUtils::arrowCursor()
                                          : CursorUtils::forbiddenCursor());

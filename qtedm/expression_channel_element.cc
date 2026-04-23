@@ -1,7 +1,5 @@
 #include "expression_channel_element.h"
 
-#include <algorithm>
-
 #include <QFontMetrics>
 #include <QPainter>
 #include <QPalette>
@@ -14,23 +12,6 @@ namespace {
 
 constexpr int kHorizontalMargin = 6;
 constexpr int kVerticalMargin = 4;
-
-QString eventSignalSummary(ExpressionChannelEventSignalMode mode)
-{
-  switch (mode) {
-  case ExpressionChannelEventSignalMode::kNever:
-    return QStringLiteral("Never");
-  case ExpressionChannelEventSignalMode::kOnFirstChange:
-    return QStringLiteral("First Change");
-  case ExpressionChannelEventSignalMode::kTriggerZeroToOne:
-    return QStringLiteral("0 -> 1");
-  case ExpressionChannelEventSignalMode::kTriggerOneToZero:
-    return QStringLiteral("1 -> 0");
-  case ExpressionChannelEventSignalMode::kOnAnyChange:
-  default:
-    return QStringLiteral("Any Change");
-  }
-}
 
 } // namespace
 
@@ -304,21 +285,5 @@ QColor ExpressionChannelElement::defaultBackgroundColor() const
 
 void ExpressionChannelElement::updateToolTip()
 {
-  QStringList lines;
-  lines.append(QStringLiteral("Variable: %1").arg(
-      variable_.isEmpty() ? QStringLiteral("(auto-generated)") : variable_));
-  lines.append(QStringLiteral("Calc: %1").arg(
-      calc_.isEmpty() ? QStringLiteral("(empty)") : calc_));
-  lines.append(QStringLiteral("Event: %1").arg(
-      eventSignalSummary(eventSignalMode_)));
-  lines.append(QStringLiteral("Initial: %1").arg(
-      QString::number(initialValue_, 'f', precision_)));
-  for (int i = 0; i < static_cast<int>(channels_.size()); ++i) {
-    const QString name = channels_[static_cast<std::size_t>(i)].trimmed();
-    if (!name.isEmpty()) {
-      lines.append(QStringLiteral("%1: %2")
-          .arg(QChar('A' + i)).arg(name));
-    }
-  }
-  setToolTip(lines.join(QChar('\n')));
+  setToolTip(QString());
 }

@@ -9,6 +9,7 @@
 #include <QAbstractScrollArea>
 #include <QAction>
 #include <QCloseEvent>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
@@ -45,6 +46,7 @@
 #include "color_palette_dialog.h"
 #include "cartesian_axis_dialog.h"
 #include "display_properties.h"
+#include "medm_colors.h"
 #include "pv_limits_dialog.h"
 
 class ResourcePaletteDialog : public QDialog
@@ -2759,6 +2761,214 @@ public:
     byteLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(byteSection_);
 
+    ledSection_ = new QWidget(entriesWidget_);
+    auto *ledLayout = new QGridLayout(ledSection_);
+    ledLayout->setContentsMargins(0, 0, 0, 0);
+    ledLayout->setHorizontalSpacing(12);
+    ledLayout->setVerticalSpacing(6);
+
+    ledForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(ledForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(ledForegroundButton_,
+              QStringLiteral("LED Monitor Foreground"),
+              ledForegroundSetter_);
+        });
+
+    ledBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(ledBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(ledBackgroundButton_,
+              QStringLiteral("LED Monitor Background"),
+              ledBackgroundSetter_);
+        });
+
+    ledOnColorButton_ = createColorButton(MedmColors::alarmColorForSeverity(0));
+    QObject::connect(ledOnColorButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(ledOnColorButton_,
+              QStringLiteral("LED Monitor On Color"),
+              [this](const QColor &color) {
+                if (ledOnColorSetter_) {
+                  ledOnColorSetter_(color);
+                }
+                refreshLedMonitorColorButtons();
+              });
+        });
+
+    ledOffColorButton_ = createColorButton(QColor(45, 45, 45));
+    QObject::connect(ledOffColorButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(ledOffColorButton_,
+              QStringLiteral("LED Monitor Off Color"),
+              [this](const QColor &color) {
+                if (ledOffColorSetter_) {
+                  ledOffColorSetter_(color);
+                }
+                refreshLedMonitorColorButtons();
+              });
+        });
+
+    ledUndefinedColorButton_ = createColorButton(QColor(204, 204, 204));
+    QObject::connect(ledUndefinedColorButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(ledUndefinedColorButton_,
+              QStringLiteral("LED Monitor Undefined Color"),
+              ledUndefinedColorSetter_);
+        });
+
+    ledColorModeCombo_ = new QComboBox;
+    ledColorModeCombo_->setFont(valueFont_);
+    ledColorModeCombo_->setAutoFillBackground(true);
+    ledColorModeCombo_->addItem(QStringLiteral("Static"));
+    ledColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    ledColorModeCombo_->addItem(QStringLiteral("Binary"));
+    ledColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(ledColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          const LedColorModeChoice choice = ledColorModeChoiceFromIndex(index);
+          if (ledColorModeSetter_) {
+            ledColorModeSetter_(ledTextColorModeForChoice(choice));
+          }
+          if (choice == LedColorModeChoice::kBinary) {
+            applyBinaryLedPreset();
+          }
+          updateLedMonitorStateColorControls();
+        });
+
+    ledShapeCombo_ = new QComboBox;
+    ledShapeCombo_->setFont(valueFont_);
+    ledShapeCombo_->setAutoFillBackground(true);
+    ledShapeCombo_->addItem(QStringLiteral("Circle"));
+    ledShapeCombo_->addItem(QStringLiteral("Square"));
+    ledShapeCombo_->addItem(QStringLiteral("Rounded Square"));
+    QObject::connect(ledShapeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (ledShapeSetter_) {
+            ledShapeSetter_(ledShapeFromIndex(index));
+          }
+        });
+
+    ledBezelCheckBox_ = new QCheckBox;
+    ledBezelCheckBox_->setFont(valueFont_);
+    QObject::connect(ledBezelCheckBox_, &QCheckBox::toggled, this,
+        [this](bool checked) {
+          if (ledBezelSetter_) {
+            ledBezelSetter_(checked);
+          }
+        });
+
+    ledStateCountSpin_ = new QSpinBox;
+    ledStateCountSpin_->setFont(valueFont_);
+    ledStateCountSpin_->setAutoFillBackground(true);
+    QPalette ledSpinPalette = palette();
+    ledSpinPalette.setColor(QPalette::Base, Qt::white);
+    ledSpinPalette.setColor(QPalette::Text, Qt::black);
+    ledStateCountSpin_->setPalette(ledSpinPalette);
+    ledStateCountSpin_->setRange(1, kLedStateCount);
+    QObject::connect(ledStateCountSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) { commitLedStateCount(value); });
+
+    ledStateColorsWidget_ = new QWidget(entriesWidget_);
+    auto *ledStateColorsLayout = new QGridLayout(ledStateColorsWidget_);
+    ledStateColorsLayout->setContentsMargins(0, 0, 0, 0);
+    ledStateColorsLayout->setHorizontalSpacing(6);
+    ledStateColorsLayout->setVerticalSpacing(6);
+    for (int i = 0; i < kLedStateCount; ++i) {
+      auto *button = createColorButton(basePalette.color(QPalette::WindowText));
+      button->setFixedSize(88, 24);
+      button->setToolTip(QStringLiteral("State %1").arg(i));
+      ledStateColorButtons_[static_cast<std::size_t>(i)] = button;
+      QObject::connect(button, &QPushButton::clicked, this,
+          [this, i]() {
+            openColorPalette(ledStateColorButtons_[static_cast<std::size_t>(i)],
+                QStringLiteral("LED Monitor State %1").arg(i),
+                [this, i](const QColor &color) {
+                  const auto &setter =
+                      ledStateColorSetters_[static_cast<std::size_t>(i)];
+                  if (setter) {
+                    setter(color);
+                  }
+                  refreshLedMonitorColorButtons();
+                });
+          });
+      ledStateColorsLayout->addWidget(button, i / 4, i % 4);
+    }
+
+    ledChannelEdit_ = createLineEdit();
+    committedTexts_.insert(ledChannelEdit_, ledChannelEdit_->text());
+    ledChannelEdit_->installEventFilter(this);
+    QObject::connect(ledChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitLedChannel(); });
+    QObject::connect(ledChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitLedChannel(); });
+
+    ledVisibilityCombo_ = new QComboBox;
+    ledVisibilityCombo_->setFont(valueFont_);
+    ledVisibilityCombo_->setAutoFillBackground(true);
+    ledVisibilityCombo_->addItem(QStringLiteral("Static"));
+    ledVisibilityCombo_->addItem(QStringLiteral("If Not Zero"));
+    ledVisibilityCombo_->addItem(QStringLiteral("If Zero"));
+    ledVisibilityCombo_->addItem(QStringLiteral("Calc"));
+    QObject::connect(ledVisibilityCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (ledVisibilityModeSetter_) {
+            ledVisibilityModeSetter_(visibilityModeFromIndex(index));
+          }
+          updateLedMonitorChannelDependentControls();
+        });
+
+    ledVisibilityCalcEdit_ = createLineEdit();
+    committedTexts_.insert(ledVisibilityCalcEdit_,
+        ledVisibilityCalcEdit_->text());
+    ledVisibilityCalcEdit_->installEventFilter(this);
+    QObject::connect(ledVisibilityCalcEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitLedVisibilityCalc(); });
+    QObject::connect(ledVisibilityCalcEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitLedVisibilityCalc(); });
+
+    for (int i = 0; i < static_cast<int>(ledVisibilityChannelEdits_.size()); ++i) {
+      auto *edit = createLineEdit();
+      ledVisibilityChannelEdits_[static_cast<std::size_t>(i)] = edit;
+      committedTexts_.insert(edit, edit->text());
+      edit->installEventFilter(this);
+      QObject::connect(edit, &QLineEdit::returnPressed, this,
+          [this, i]() { commitLedVisibilityChannel(i); });
+      QObject::connect(edit, &QLineEdit::editingFinished, this,
+          [this, i]() { commitLedVisibilityChannel(i); });
+    }
+
+    addRow(ledLayout, 0, QStringLiteral("Foreground"), ledForegroundButton_);
+    addRow(ledLayout, 1, QStringLiteral("Background"), ledBackgroundButton_);
+    addRow(ledLayout, 2, QStringLiteral("On Color"), ledOnColorButton_);
+    addRow(ledLayout, 3, QStringLiteral("Off Color"), ledOffColorButton_);
+    addRow(ledLayout, 4, QStringLiteral("Undefined"), ledUndefinedColorButton_);
+    addRow(ledLayout, 5, QStringLiteral("Color Mode"), ledColorModeCombo_);
+    addRow(ledLayout, 6, QStringLiteral("Shape"), ledShapeCombo_);
+    addRow(ledLayout, 7, QStringLiteral("Bezel"), ledBezelCheckBox_);
+    addRow(ledLayout, 8, QStringLiteral("State Count"), ledStateCountSpin_);
+    addRow(ledLayout, 9, QStringLiteral("State Colors"), ledStateColorsWidget_);
+    addRow(ledLayout, 10, QStringLiteral("Channel"), ledChannelEdit_);
+    addRow(ledLayout, 11, QStringLiteral("Visibility"), ledVisibilityCombo_);
+    addRow(ledLayout, 12, QStringLiteral("Visibility Calc"),
+        ledVisibilityCalcEdit_);
+    addRow(ledLayout, 13, QStringLiteral("Vis Channel A"),
+        ledVisibilityChannelEdits_[0]);
+    addRow(ledLayout, 14, QStringLiteral("Vis Channel B"),
+        ledVisibilityChannelEdits_[1]);
+    addRow(ledLayout, 15, QStringLiteral("Vis Channel C"),
+        ledVisibilityChannelEdits_[2]);
+    addRow(ledLayout, 16, QStringLiteral("Vis Channel D"),
+        ledVisibilityChannelEdits_[3]);
+    ledLayout->setRowStretch(17, 1);
+    entriesLayout->addWidget(ledSection_);
+
     expressionChannelSection_ = new QWidget(entriesWidget_);
     auto *expressionChannelLayout = new QGridLayout(expressionChannelSection_);
     expressionChannelLayout->setContentsMargins(0, 0, 0, 0);
@@ -2952,6 +3162,7 @@ public:
   thermometerSection_->setVisible(false);
   scaleSection_->setVisible(false);
   byteSection_->setVisible(false);
+  ledSection_->setVisible(false);
   expressionChannelSection_->setVisible(false);
   updateSectionVisibility(selectionKind_);
 
@@ -3361,6 +3572,22 @@ public:
     backgroundColorGetter_ = {};
     backgroundColorSetter_ = {};
     activeColorSetter_ = {};
+    compositeForegroundGetter_ = {};
+    compositeForegroundSetter_ = {};
+    compositeBackgroundGetter_ = {};
+    compositeBackgroundSetter_ = {};
+    compositeFileGetter_ = {};
+    compositeFileSetter_ = {};
+    compositeVisibilityModeGetter_ = {};
+    compositeVisibilityModeSetter_ = {};
+    compositeVisibilityCalcGetter_ = {};
+    compositeVisibilityCalcSetter_ = {};
+    for (auto &getter : compositeChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : compositeChannelSetters_) {
+      setter = {};
+    }
     gridSpacingGetter_ = {};
     gridSpacingSetter_ = {};
     gridOnGetter_ = {};
@@ -6406,6 +6633,197 @@ public:
     showPaletteWithoutActivating();
   }
 
+  void showForLedMonitor(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<LedShape()> shapeGetter,
+      std::function<void(LedShape)> shapeSetter,
+      std::function<bool()> bezelGetter,
+      std::function<void(bool)> bezelSetter,
+      std::function<QColor()> onColorGetter,
+      std::function<void(const QColor &)> onColorSetter,
+      std::function<QColor()> offColorGetter,
+      std::function<void(const QColor &)> offColorSetter,
+      std::function<QColor()> undefinedColorGetter,
+      std::function<void(const QColor &)> undefinedColorSetter,
+      std::array<std::function<QColor()>, kLedStateCount> stateColorGetters,
+      std::array<std::function<void(const QColor &)>, kLedStateCount> stateColorSetters,
+      std::function<int()> stateCountGetter,
+      std::function<void(int)> stateCountSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter,
+      std::function<TextVisibilityMode()> visibilityModeGetter,
+      std::function<void(TextVisibilityMode)> visibilityModeSetter,
+      std::function<QString()> visibilityCalcGetter,
+      std::function<void(const QString &)> visibilityCalcSetter,
+      std::array<std::function<QString()>, 4> visibilityChannelGetters,
+      std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kLedMonitor;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    ledForegroundGetter_ = std::move(foregroundGetter);
+    ledForegroundSetter_ = std::move(foregroundSetter);
+    ledBackgroundGetter_ = std::move(backgroundGetter);
+    ledBackgroundSetter_ = std::move(backgroundSetter);
+    ledColorModeGetter_ = std::move(colorModeGetter);
+    ledColorModeSetter_ = std::move(colorModeSetter);
+    ledShapeGetter_ = std::move(shapeGetter);
+    ledShapeSetter_ = std::move(shapeSetter);
+    ledBezelGetter_ = std::move(bezelGetter);
+    ledBezelSetter_ = std::move(bezelSetter);
+    ledOnColorGetter_ = std::move(onColorGetter);
+    ledOnColorSetter_ = std::move(onColorSetter);
+    ledOffColorGetter_ = std::move(offColorGetter);
+    ledOffColorSetter_ = std::move(offColorSetter);
+    ledUndefinedColorGetter_ = std::move(undefinedColorGetter);
+    ledUndefinedColorSetter_ = std::move(undefinedColorSetter);
+    ledStateColorGetters_ = std::move(stateColorGetters);
+    ledStateColorSetters_ = std::move(stateColorSetters);
+    ledStateCountGetter_ = std::move(stateCountGetter);
+    ledStateCountSetter_ = std::move(stateCountSetter);
+    ledChannelGetter_ = std::move(channelGetter);
+    ledChannelSetter_ = std::move(channelSetter);
+    ledVisibilityModeGetter_ = std::move(visibilityModeGetter);
+    ledVisibilityModeSetter_ = std::move(visibilityModeSetter);
+    ledVisibilityCalcGetter_ = std::move(visibilityCalcGetter);
+    ledVisibilityCalcSetter_ = std::move(visibilityCalcSetter);
+    ledVisibilityChannelGetters_ = std::move(visibilityChannelGetters);
+    ledVisibilityChannelSetters_ = std::move(visibilityChannelSetters);
+
+    QRect ledGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (ledGeometry.width() <= 0) {
+      ledGeometry.setWidth(kDefaultLedSize);
+    }
+    if (ledGeometry.height() <= 0) {
+      ledGeometry.setHeight(kDefaultLedSize);
+    }
+    lastCommittedGeometry_ = ledGeometry;
+    updateGeometryEdits(ledGeometry);
+
+    if (ledForegroundButton_) {
+      const QColor color = ledForegroundGetter_ ? ledForegroundGetter_()
+                                                : palette().color(QPalette::WindowText);
+      setColorButtonColor(ledForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+      ledForegroundButton_->setEnabled(static_cast<bool>(ledForegroundSetter_));
+    }
+
+    if (ledBackgroundButton_) {
+      const QColor color = ledBackgroundGetter_ ? ledBackgroundGetter_()
+                                                : palette().color(QPalette::Window);
+      setColorButtonColor(ledBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+      ledBackgroundButton_->setEnabled(static_cast<bool>(ledBackgroundSetter_));
+    }
+
+    refreshLedMonitorColorButtons();
+
+    if (ledOnColorButton_) {
+      ledOnColorButton_->setEnabled(static_cast<bool>(ledOnColorSetter_));
+    }
+
+    if (ledOffColorButton_) {
+      ledOffColorButton_->setEnabled(static_cast<bool>(ledOffColorSetter_));
+    }
+
+    if (ledUndefinedColorButton_) {
+      const QColor color = ledUndefinedColorGetter_ ? ledUndefinedColorGetter_()
+                                                    : QColor(204, 204, 204);
+      setColorButtonColor(ledUndefinedColorButton_,
+          color.isValid() ? color : QColor(204, 204, 204));
+      ledUndefinedColorButton_->setEnabled(
+          static_cast<bool>(ledUndefinedColorSetter_));
+    }
+
+    if (ledColorModeCombo_) {
+      const QSignalBlocker blocker(ledColorModeCombo_);
+      const TextColorMode mode = ledColorModeGetter_ ? ledColorModeGetter_()
+                                                     : TextColorMode::kAlarm;
+      const int stateCount = ledStateCountGetter_ ? ledStateCountGetter_() : 2;
+      ledColorModeCombo_->setCurrentIndex(ledColorModeChoiceToIndex(
+          ledColorModeChoiceForState(mode, stateCount)));
+      ledColorModeCombo_->setEnabled(static_cast<bool>(ledColorModeSetter_));
+    }
+
+    if (ledShapeCombo_) {
+      const QSignalBlocker blocker(ledShapeCombo_);
+      const LedShape shape = ledShapeGetter_ ? ledShapeGetter_()
+                                             : LedShape::kCircle;
+      ledShapeCombo_->setCurrentIndex(ledShapeToIndex(shape));
+      ledShapeCombo_->setEnabled(static_cast<bool>(ledShapeSetter_));
+    }
+
+    if (ledBezelCheckBox_) {
+      const QSignalBlocker blocker(ledBezelCheckBox_);
+      ledBezelCheckBox_->setChecked(ledBezelGetter_ ? ledBezelGetter_() : true);
+      ledBezelCheckBox_->setEnabled(static_cast<bool>(ledBezelSetter_));
+    }
+
+    if (ledStateCountSpin_) {
+      const QSignalBlocker blocker(ledStateCountSpin_);
+      int count = ledStateCountGetter_ ? ledStateCountGetter_() : 2;
+      count = std::clamp(count, 1, kLedStateCount);
+      ledStateCountSpin_->setValue(count);
+      ledStateCountSpin_->setEnabled(static_cast<bool>(ledStateCountSetter_));
+    }
+
+    if (ledChannelEdit_) {
+      const QString channel = ledChannelGetter_ ? ledChannelGetter_()
+                                                : QString();
+      const QSignalBlocker blocker(ledChannelEdit_);
+      ledChannelEdit_->setText(channel);
+      committedTexts_[ledChannelEdit_] = ledChannelEdit_->text();
+      ledChannelEdit_->setEnabled(static_cast<bool>(ledChannelSetter_));
+    }
+
+    if (ledVisibilityCombo_) {
+      const QSignalBlocker blocker(ledVisibilityCombo_);
+      const TextVisibilityMode mode = ledVisibilityModeGetter_
+              ? ledVisibilityModeGetter_()
+              : TextVisibilityMode::kStatic;
+      ledVisibilityCombo_->setCurrentIndex(visibilityModeToIndex(mode));
+    }
+
+    if (ledVisibilityCalcEdit_) {
+      const QString calc = ledVisibilityCalcGetter_ ? ledVisibilityCalcGetter_()
+                                                    : QString();
+      const QSignalBlocker blocker(ledVisibilityCalcEdit_);
+      ledVisibilityCalcEdit_->setText(calc);
+      committedTexts_[ledVisibilityCalcEdit_] = ledVisibilityCalcEdit_->text();
+    }
+
+    for (int i = 0; i < static_cast<int>(ledVisibilityChannelEdits_.size()); ++i) {
+      QLineEdit *edit = ledVisibilityChannelEdits_[static_cast<std::size_t>(i)];
+      if (!edit) {
+        continue;
+      }
+      const QString channel = ledVisibilityChannelGetters_[static_cast<std::size_t>(i)]
+              ? ledVisibilityChannelGetters_[static_cast<std::size_t>(i)]()
+              : QString();
+      const QSignalBlocker blocker(edit);
+      edit->setText(channel);
+      committedTexts_[edit] = edit->text();
+      edit->setEnabled(static_cast<bool>(
+          ledVisibilityChannelSetters_[static_cast<std::size_t>(i)]));
+    }
+
+    updateLedMonitorStateColorControls();
+    updateLedMonitorChannelDependentControls();
+
+    elementLabel_->setText(QStringLiteral("LED Monitor"));
+
+    showPaletteWithoutActivating();
+  }
+
   void showForExpressionChannel(std::function<QRect()> geometryGetter,
       std::function<void(const QRect &)> geometrySetter,
       std::function<QColor()> foregroundGetter,
@@ -7487,6 +7905,22 @@ public:
     backgroundColorGetter_ = {};
     backgroundColorSetter_ = {};
     activeColorSetter_ = {};
+    compositeForegroundGetter_ = {};
+    compositeForegroundSetter_ = {};
+    compositeBackgroundGetter_ = {};
+    compositeBackgroundSetter_ = {};
+    compositeFileGetter_ = {};
+    compositeFileSetter_ = {};
+    compositeVisibilityModeGetter_ = {};
+    compositeVisibilityModeSetter_ = {};
+    compositeVisibilityCalcGetter_ = {};
+    compositeVisibilityCalcSetter_ = {};
+    for (auto &getter : compositeChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : compositeChannelSetters_) {
+      setter = {};
+    }
     gridSpacingGetter_ = {};
     gridSpacingSetter_ = {};
     gridOnGetter_ = {};
@@ -8030,6 +8464,88 @@ public:
     if (byteChannelEdit_) {
       byteChannelEdit_->setEnabled(false);
     }
+    ledForegroundGetter_ = {};
+    ledForegroundSetter_ = {};
+    ledBackgroundGetter_ = {};
+    ledBackgroundSetter_ = {};
+    ledColorModeGetter_ = {};
+    ledColorModeSetter_ = {};
+    ledShapeGetter_ = {};
+    ledShapeSetter_ = {};
+    ledBezelGetter_ = {};
+    ledBezelSetter_ = {};
+    ledOnColorGetter_ = {};
+    ledOnColorSetter_ = {};
+    ledOffColorGetter_ = {};
+    ledOffColorSetter_ = {};
+    ledUndefinedColorGetter_ = {};
+    ledUndefinedColorSetter_ = {};
+    for (auto &getter : ledStateColorGetters_) {
+      getter = {};
+    }
+    for (auto &setter : ledStateColorSetters_) {
+      setter = {};
+    }
+    ledStateCountGetter_ = {};
+    ledStateCountSetter_ = {};
+    ledChannelGetter_ = {};
+    ledChannelSetter_ = {};
+    ledVisibilityModeGetter_ = {};
+    ledVisibilityModeSetter_ = {};
+    ledVisibilityCalcGetter_ = {};
+    ledVisibilityCalcSetter_ = {};
+    for (auto &getter : ledVisibilityChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : ledVisibilityChannelSetters_) {
+      setter = {};
+    }
+    if (ledForegroundButton_) {
+      ledForegroundButton_->setEnabled(false);
+    }
+    if (ledBackgroundButton_) {
+      ledBackgroundButton_->setEnabled(false);
+    }
+    if (ledOnColorButton_) {
+      ledOnColorButton_->setEnabled(false);
+    }
+    if (ledOffColorButton_) {
+      ledOffColorButton_->setEnabled(false);
+    }
+    if (ledUndefinedColorButton_) {
+      ledUndefinedColorButton_->setEnabled(false);
+    }
+    if (ledColorModeCombo_) {
+      ledColorModeCombo_->setEnabled(false);
+    }
+    if (ledShapeCombo_) {
+      ledShapeCombo_->setEnabled(false);
+    }
+    if (ledBezelCheckBox_) {
+      ledBezelCheckBox_->setEnabled(false);
+    }
+    if (ledStateCountSpin_) {
+      ledStateCountSpin_->setEnabled(false);
+    }
+    if (ledChannelEdit_) {
+      ledChannelEdit_->setEnabled(false);
+    }
+    if (ledVisibilityCombo_) {
+      ledVisibilityCombo_->setEnabled(false);
+    }
+    if (ledVisibilityCalcEdit_) {
+      ledVisibilityCalcEdit_->setEnabled(false);
+    }
+    for (QLineEdit *edit : ledVisibilityChannelEdits_) {
+      if (edit) {
+        edit->setEnabled(false);
+      }
+    }
+    for (QPushButton *button : ledStateColorButtons_) {
+      if (button) {
+        button->setEnabled(false);
+      }
+    }
     expressionChannelForegroundGetter_ = {};
     expressionChannelForegroundSetter_ = {};
     expressionChannelBackgroundGetter_ = {};
@@ -8190,6 +8706,12 @@ public:
     }
     updateThermometerChannelDependentControls();
     resetLineEdit(scaleChannelEdit_);
+    resetLineEdit(ledChannelEdit_);
+    resetLineEdit(ledVisibilityCalcEdit_);
+    for (QLineEdit *edit : ledVisibilityChannelEdits_) {
+      resetLineEdit(edit);
+    }
+    updateLedMonitorChannelDependentControls();
     resetLineEdit(expressionChannelVariableEdit_);
     resetLineEdit(expressionChannelCalcEdit_);
     for (QLineEdit *edit : expressionChannelChannelEdits_) {
@@ -8254,6 +8776,14 @@ public:
     resetColorButton(thermometerTextButton_);
     resetColorButton(scaleForegroundButton_);
     resetColorButton(scaleBackgroundButton_);
+    resetColorButton(ledForegroundButton_);
+    resetColorButton(ledBackgroundButton_);
+    resetColorButton(ledOnColorButton_);
+    resetColorButton(ledOffColorButton_);
+    resetColorButton(ledUndefinedColorButton_);
+    for (QPushButton *button : ledStateColorButtons_) {
+      resetColorButton(button);
+    }
     resetColorButton(stripForegroundButton_);
     resetColorButton(stripBackgroundButton_);
     for (QPushButton *button : stripPenColorButtons_) {
@@ -8373,6 +8903,29 @@ public:
       const QSignalBlocker blocker(scaleDirectionCombo_);
       scaleDirectionCombo_->setCurrentIndex(scaleDirectionToIndex(BarDirection::kRight));
     }
+    if (ledColorModeCombo_) {
+      const QSignalBlocker blocker(ledColorModeCombo_);
+      ledColorModeCombo_->setCurrentIndex(
+          ledColorModeChoiceToIndex(LedColorModeChoice::kStatic));
+    }
+    if (ledShapeCombo_) {
+      const QSignalBlocker blocker(ledShapeCombo_);
+      ledShapeCombo_->setCurrentIndex(ledShapeToIndex(LedShape::kCircle));
+    }
+    if (ledBezelCheckBox_) {
+      const QSignalBlocker blocker(ledBezelCheckBox_);
+      ledBezelCheckBox_->setChecked(true);
+    }
+    if (ledStateCountSpin_) {
+      const QSignalBlocker blocker(ledStateCountSpin_);
+      ledStateCountSpin_->setValue(2);
+    }
+    if (ledVisibilityCombo_) {
+      const QSignalBlocker blocker(ledVisibilityCombo_);
+      ledVisibilityCombo_->setCurrentIndex(
+          visibilityModeToIndex(TextVisibilityMode::kStatic));
+    }
+    updateLedMonitorStateColorControls();
     if (barDirectionCombo_) {
       const QSignalBlocker blocker(barDirectionCombo_);
       barDirectionCombo_->setCurrentIndex(barDirectionToIndex(BarDirection::kRight));
@@ -8675,8 +9228,17 @@ private:
     kScaleMonitor,
     kStripChart,
     kCartesianPlot,
-    kByteMonitor
+    kByteMonitor,
+    kLedMonitor
   };
+
+  enum class LedColorModeChoice {
+    kStatic,
+    kAlarm,
+    kBinary,
+    kDiscrete,
+  };
+
   QLineEdit *createLineEdit()
   {
     auto *edit = new QLineEdit;
@@ -8759,6 +9321,10 @@ private:
             thermometerVisibilityChannelEdits_.begin(),
             thermometerVisibilityChannelEdits_.end(), edit)
             != thermometerVisibilityChannelEdits_.end();
+        const bool isLedVisibilityChannelEdit = std::find(
+            ledVisibilityChannelEdits_.begin(),
+            ledVisibilityChannelEdits_.end(), edit)
+            != ledVisibilityChannelEdits_.end();
         const bool isRelatedLabelEdit = std::find(
             relatedDisplayEntryLabelEdits_.begin(),
             relatedDisplayEntryLabelEdits_.end(), edit)
@@ -8782,12 +9348,14 @@ private:
             || edit == expressionChannelCalcEdit_
             || edit == imageVisibilityCalcEdit_
             || edit == thermometerVisibilityCalcEdit_
+            || edit == ledVisibilityCalcEdit_
             || edit == lineLineWidthEdit_
             || edit == lineVisibilityCalcEdit_
             || isRectangleChannelEdit || isLineChannelEdit
             || isImageChannelEdit || isExpressionChannelEdit
             || isCompositeChannelEdit
             || isThermometerVisibilityChannelEdit
+            || isLedVisibilityChannelEdit
             || isRelatedLabelEdit
             || isRelatedNameEdit || isRelatedArgsEdit
             || edit == relatedDisplayLabelEdit_) {
@@ -8795,6 +9363,7 @@ private:
         }
         if (edit == textMonitorChannelEdit_
             || edit == meterChannelEdit_ || edit == thermometerChannelEdit_
+            || edit == ledChannelEdit_
             || edit == sliderIncrementEdit_
             || edit == sliderChannelEdit_) {
           revertLineEdit(edit);
@@ -8999,6 +9568,11 @@ private:
       byteSection_->setVisible(byteVisible);
       byteSection_->setEnabled(byteVisible);
     }
+    if (ledSection_) {
+      const bool ledVisible = kind == SelectionKind::kLedMonitor;
+      ledSection_->setVisible(ledVisible);
+      ledSection_->setEnabled(ledVisible);
+    }
     if (expressionChannelSection_) {
       const bool expressionVisible = kind == SelectionKind::kExpressionChannel;
       expressionChannelSection_->setVisible(expressionVisible);
@@ -9168,6 +9742,133 @@ private:
 
     setFieldEnabled(thermometerVisibilityCombo_, hasChannelA);
     setFieldEnabled(thermometerVisibilityCalcEdit_, hasChannelA);
+  }
+
+  void refreshLedMonitorColorButtons()
+  {
+    if (ledOnColorButton_) {
+      QColor color = ledOnColorGetter_ ? ledOnColorGetter_() : QColor();
+      if (!color.isValid()) {
+        color = MedmColors::alarmColorForSeverity(0);
+      }
+      setColorButtonColor(ledOnColorButton_, color);
+    }
+
+    if (ledOffColorButton_) {
+      QColor color = ledOffColorGetter_ ? ledOffColorGetter_() : QColor();
+      if (!color.isValid()) {
+        color = QColor(45, 45, 45);
+      }
+      setColorButtonColor(ledOffColorButton_, color);
+    }
+
+    for (int i = 0; i < kLedStateCount; ++i) {
+      QPushButton *button = ledStateColorButtons_[static_cast<std::size_t>(i)];
+      if (!button) {
+        continue;
+      }
+      QColor color = ledStateColorGetters_[static_cast<std::size_t>(i)]
+          ? ledStateColorGetters_[static_cast<std::size_t>(i)]()
+          : QColor();
+      if (!color.isValid()) {
+        color = QColor(204, 204, 204);
+      }
+      setColorButtonColor(button, color);
+    }
+  }
+
+  void applyBinaryLedPreset()
+  {
+    if (ledStateCountSetter_) {
+      ledStateCountSetter_(2);
+    }
+
+    if (ledStateColorSetters_[0]) {
+      QColor offColor = ledOffColorGetter_ ? ledOffColorGetter_() : QColor();
+      if (!offColor.isValid()) {
+        offColor = QColor(45, 45, 45);
+      }
+      ledStateColorSetters_[0](offColor);
+    }
+
+    if (ledStateColorSetters_[1]) {
+      QColor onColor = ledOnColorGetter_ ? ledOnColorGetter_() : QColor();
+      if (!onColor.isValid()) {
+        onColor = MedmColors::alarmColorForSeverity(0);
+      }
+      ledStateColorSetters_[1](onColor);
+    }
+
+    if (ledStateCountSpin_) {
+      const QSignalBlocker blocker(ledStateCountSpin_);
+      ledStateCountSpin_->setValue(2);
+    }
+
+    refreshLedMonitorColorButtons();
+  }
+
+  void updateLedMonitorStateColorControls()
+  {
+    const LedColorModeChoice choice = ledColorModeCombo_
+        ? ledColorModeChoiceFromIndex(ledColorModeCombo_->currentIndex())
+        : LedColorModeChoice::kAlarm;
+    const bool discrete = choice == LedColorModeChoice::kBinary
+        || choice == LedColorModeChoice::kDiscrete;
+    int stateCount = ledStateCountGetter_ ? ledStateCountGetter_() : 2;
+    if (ledStateCountSpin_) {
+      stateCount = ledStateCountSpin_->value();
+    }
+    if (choice == LedColorModeChoice::kBinary) {
+      stateCount = 2;
+    }
+    stateCount = std::clamp(stateCount, 1, kLedStateCount);
+
+    setFieldEnabled(ledStateCountSpin_,
+        choice == LedColorModeChoice::kDiscrete
+        && static_cast<bool>(ledStateCountSetter_));
+    setFieldEnabled(ledStateColorsWidget_, discrete);
+
+    for (int i = 0; i < kLedStateCount; ++i) {
+      QPushButton *button = ledStateColorButtons_[static_cast<std::size_t>(i)];
+      if (!button) {
+        continue;
+      }
+      const bool enabled = discrete
+          && i < stateCount
+          && static_cast<bool>(ledStateColorSetters_[static_cast<std::size_t>(i)]);
+      button->setEnabled(enabled);
+    }
+  }
+
+  void updateLedMonitorChannelDependentControls()
+  {
+    bool hasVisibilitySource = false;
+    if (ledVisibilityChannelGetters_[0]) {
+      const QString value = ledVisibilityChannelGetters_[0]();
+      hasVisibilitySource = !value.trimmed().isEmpty();
+    }
+    if (!hasVisibilitySource && ledVisibilityChannelEdits_[0]) {
+      hasVisibilitySource =
+          !ledVisibilityChannelEdits_[0]->text().trimmed().isEmpty();
+    }
+    if (!hasVisibilitySource && ledChannelGetter_) {
+      hasVisibilitySource = !ledChannelGetter_().trimmed().isEmpty();
+    }
+    if (!hasVisibilitySource && ledChannelEdit_) {
+      hasVisibilitySource = !ledChannelEdit_->text().trimmed().isEmpty();
+    }
+
+    setFieldEnabled(ledVisibilityCombo_,
+        hasVisibilitySource && static_cast<bool>(ledVisibilityModeSetter_));
+
+    bool enableCalc = hasVisibilitySource
+        && static_cast<bool>(ledVisibilityCalcSetter_);
+    if (ledVisibilityCombo_) {
+      enableCalc = enableCalc
+          && visibilityModeFromIndex(ledVisibilityCombo_->currentIndex())
+              == TextVisibilityMode::kCalc;
+    }
+    setFieldEnabled(ledVisibilityCalcEdit_, enableCalc);
   }
 
   void updateCompositeChannelDependentControls()
@@ -9896,6 +10597,81 @@ private:
     const QString value = byteChannelEdit_->text();
     byteChannelSetter_(value);
     committedTexts_[byteChannelEdit_] = value;
+  }
+
+  void commitLedChannel()
+  {
+    if (!ledChannelEdit_) {
+      return;
+    }
+    if (!ledChannelSetter_) {
+      revertLineEdit(ledChannelEdit_);
+      return;
+    }
+    const QString value = ledChannelEdit_->text();
+    ledChannelSetter_(value);
+    committedTexts_[ledChannelEdit_] = value;
+    updateLedMonitorChannelDependentControls();
+  }
+
+  void commitLedVisibilityCalc()
+  {
+    if (!ledVisibilityCalcEdit_) {
+      return;
+    }
+    if (!ledVisibilityCalcSetter_) {
+      revertLineEdit(ledVisibilityCalcEdit_);
+      return;
+    }
+    const QString value = ledVisibilityCalcEdit_->text();
+    ledVisibilityCalcSetter_(value);
+    committedTexts_[ledVisibilityCalcEdit_] = value;
+  }
+
+  void commitLedVisibilityChannel(int index)
+  {
+    if (index < 0
+        || index >= static_cast<int>(ledVisibilityChannelEdits_.size())) {
+      return;
+    }
+    QLineEdit *edit = ledVisibilityChannelEdits_[static_cast<std::size_t>(index)];
+    if (!edit) {
+      return;
+    }
+    if (!ledVisibilityChannelSetters_[static_cast<std::size_t>(index)]) {
+      revertLineEdit(edit);
+      return;
+    }
+    const QString value = edit->text();
+    ledVisibilityChannelSetters_[static_cast<std::size_t>(index)](value);
+    committedTexts_[edit] = value;
+    if (index == 0) {
+      updateLedMonitorChannelDependentControls();
+    }
+  }
+
+  void commitLedStateCount(int value)
+  {
+    if (!ledStateCountSpin_) {
+      return;
+    }
+    if (!ledStateCountSetter_) {
+      if (ledStateCountGetter_) {
+        const QSignalBlocker blocker(ledStateCountSpin_);
+        ledStateCountSpin_->setValue(std::clamp(ledStateCountGetter_(), 1,
+            kLedStateCount));
+      }
+      updateLedMonitorStateColorControls();
+      return;
+    }
+    value = std::clamp(value, 1, kLedStateCount);
+    ledStateCountSetter_(value);
+    if (ledStateCountGetter_) {
+      const QSignalBlocker blocker(ledStateCountSpin_);
+      ledStateCountSpin_->setValue(std::clamp(ledStateCountGetter_(), 1,
+          kLedStateCount));
+    }
+    updateLedMonitorStateColorControls();
   }
 
   void commitExpressionChannelVariable()
@@ -10813,6 +11589,65 @@ private:
     }
   }
 
+  LedColorModeChoice ledColorModeChoiceFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return LedColorModeChoice::kAlarm;
+    case 2:
+      return LedColorModeChoice::kBinary;
+    case 3:
+      return LedColorModeChoice::kDiscrete;
+    case 0:
+    default:
+      return LedColorModeChoice::kStatic;
+    }
+  }
+
+  int ledColorModeChoiceToIndex(LedColorModeChoice choice) const
+  {
+    switch (choice) {
+    case LedColorModeChoice::kAlarm:
+      return 1;
+    case LedColorModeChoice::kBinary:
+      return 2;
+    case LedColorModeChoice::kDiscrete:
+      return 3;
+    case LedColorModeChoice::kStatic:
+    default:
+      return 0;
+    }
+  }
+
+  LedColorModeChoice ledColorModeChoiceForState(TextColorMode mode,
+      int stateCount) const
+  {
+    switch (mode) {
+    case TextColorMode::kAlarm:
+      return LedColorModeChoice::kAlarm;
+    case TextColorMode::kDiscrete:
+      return stateCount == 2 ? LedColorModeChoice::kBinary
+                             : LedColorModeChoice::kDiscrete;
+    case TextColorMode::kStatic:
+    default:
+      return LedColorModeChoice::kStatic;
+    }
+  }
+
+  TextColorMode ledTextColorModeForChoice(LedColorModeChoice choice) const
+  {
+    switch (choice) {
+    case LedColorModeChoice::kAlarm:
+      return TextColorMode::kAlarm;
+    case LedColorModeChoice::kBinary:
+    case LedColorModeChoice::kDiscrete:
+      return TextColorMode::kDiscrete;
+    case LedColorModeChoice::kStatic:
+    default:
+      return TextColorMode::kStatic;
+    }
+  }
+
   HeatmapDimensionSource heatmapDimensionSourceFromIndex(int index) const
   {
     return index == 1 ? HeatmapDimensionSource::kChannel
@@ -10942,6 +11777,32 @@ private:
     case BarFill::kFromCenter:
       return 1;
     case BarFill::kFromEdge:
+    default:
+      return 0;
+    }
+  }
+
+  LedShape ledShapeFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return LedShape::kSquare;
+    case 2:
+      return LedShape::kRoundedSquare;
+    case 0:
+    default:
+      return LedShape::kCircle;
+    }
+  }
+
+  int ledShapeToIndex(LedShape shape) const
+  {
+    switch (shape) {
+    case LedShape::kSquare:
+      return 1;
+    case LedShape::kRoundedSquare:
+      return 2;
+    case LedShape::kCircle:
     default:
       return 0;
     }
@@ -11557,6 +12418,22 @@ private:
   QSpinBox *byteStartBitSpin_ = nullptr;
   QSpinBox *byteEndBitSpin_ = nullptr;
   QLineEdit *byteChannelEdit_ = nullptr;
+  QWidget *ledSection_ = nullptr;
+  QPushButton *ledForegroundButton_ = nullptr;
+  QPushButton *ledBackgroundButton_ = nullptr;
+  QPushButton *ledOnColorButton_ = nullptr;
+  QPushButton *ledOffColorButton_ = nullptr;
+  QPushButton *ledUndefinedColorButton_ = nullptr;
+  QComboBox *ledColorModeCombo_ = nullptr;
+  QComboBox *ledShapeCombo_ = nullptr;
+  QCheckBox *ledBezelCheckBox_ = nullptr;
+  QSpinBox *ledStateCountSpin_ = nullptr;
+  QWidget *ledStateColorsWidget_ = nullptr;
+  std::array<QPushButton *, kLedStateCount> ledStateColorButtons_{};
+  QLineEdit *ledChannelEdit_ = nullptr;
+  QComboBox *ledVisibilityCombo_ = nullptr;
+  QLineEdit *ledVisibilityCalcEdit_ = nullptr;
+  std::array<QLineEdit *, 4> ledVisibilityChannelEdits_{};
   QWidget *expressionChannelSection_ = nullptr;
   QPushButton *expressionChannelForegroundButton_ = nullptr;
   QPushButton *expressionChannelBackgroundButton_ = nullptr;
@@ -11800,6 +12677,18 @@ private:
           = thermometerVisibilityCalcEdit_->text();
     }
     for (QLineEdit *edit : thermometerVisibilityChannelEdits_) {
+      if (edit) {
+        committedTexts_[edit] = edit->text();
+      }
+    }
+    if (ledChannelEdit_) {
+      committedTexts_[ledChannelEdit_] = ledChannelEdit_->text();
+    }
+    if (ledVisibilityCalcEdit_) {
+      committedTexts_[ledVisibilityCalcEdit_] =
+          ledVisibilityCalcEdit_->text();
+    }
+    for (QLineEdit *edit : ledVisibilityChannelEdits_) {
       if (edit) {
         committedTexts_[edit] = edit->text();
       }
@@ -12263,6 +13152,36 @@ private:
   std::function<void(int)> byteEndBitSetter_;
   std::function<QString()> byteChannelGetter_;
   std::function<void(const QString &)> byteChannelSetter_;
+  std::function<QColor()> ledForegroundGetter_;
+  std::function<void(const QColor &)> ledForegroundSetter_;
+  std::function<QColor()> ledBackgroundGetter_;
+  std::function<void(const QColor &)> ledBackgroundSetter_;
+  std::function<TextColorMode()> ledColorModeGetter_;
+  std::function<void(TextColorMode)> ledColorModeSetter_;
+  std::function<LedShape()> ledShapeGetter_;
+  std::function<void(LedShape)> ledShapeSetter_;
+  std::function<bool()> ledBezelGetter_;
+  std::function<void(bool)> ledBezelSetter_;
+  std::function<QColor()> ledOnColorGetter_;
+  std::function<void(const QColor &)> ledOnColorSetter_;
+  std::function<QColor()> ledOffColorGetter_;
+  std::function<void(const QColor &)> ledOffColorSetter_;
+  std::function<QColor()> ledUndefinedColorGetter_;
+  std::function<void(const QColor &)> ledUndefinedColorSetter_;
+  std::array<std::function<QColor()>, kLedStateCount> ledStateColorGetters_{};
+  std::array<std::function<void(const QColor &)>, kLedStateCount>
+      ledStateColorSetters_{};
+  std::function<int()> ledStateCountGetter_;
+  std::function<void(int)> ledStateCountSetter_;
+  std::function<QString()> ledChannelGetter_;
+  std::function<void(const QString &)> ledChannelSetter_;
+  std::function<TextVisibilityMode()> ledVisibilityModeGetter_;
+  std::function<void(TextVisibilityMode)> ledVisibilityModeSetter_;
+  std::function<QString()> ledVisibilityCalcGetter_;
+  std::function<void(const QString &)> ledVisibilityCalcSetter_;
+  std::array<std::function<QString()>, 4> ledVisibilityChannelGetters_{};
+  std::array<std::function<void(const QString &)>, 4>
+      ledVisibilityChannelSetters_{};
   std::function<QColor()> expressionChannelForegroundGetter_;
   std::function<void(const QColor &)> expressionChannelForegroundSetter_;
   std::function<QColor()> expressionChannelBackgroundGetter_;

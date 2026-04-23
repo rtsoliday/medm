@@ -271,6 +271,70 @@ set_scale_monitor_test_pvs() {
   return 1
 }
 
+set_led_monitor_test_pvs() {
+  local prefix="$1"
+  local -a led_init_values=(
+    # pv value lopr hopr prec
+    "led:test:static_on     1   0   1   0"
+    "led:test:alarm_live    1   0   1   0"
+    "led:test:binary_off    0   0   1   0"
+    "led:test:binary_live   1   0   1   0"
+    "led:test:discrete      2   0   3   0"
+    "led:test:visibility    1   0   1   0"
+    "led:test:baseline      1   0   1   0"
+    "led:vis:notzero        1   0   1   0"
+    "led:vis:zero           0   0   1   0"
+    "led:vis:calc_a         1   0   3   0"
+    "led:vis:calc_b         0   0   3   0"
+  )
+  local -a led_alarm_probe_fields=(
+    # pv lopr hopr prec (intentionally no value write, keeps UDF/INVALID)
+    "led:probe:alarm 0 3 0"
+  )
+
+  echo "Initializing LED monitor PVs for tests/test_LedMonitor.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${led_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local probe_entry probe_pv probe_lopr probe_hopr probe_prec
+      for probe_entry in "${led_alarm_probe_fields[@]}"; do
+        read -r probe_pv probe_lopr probe_hopr probe_prec <<< "${probe_entry}"
+        full_pv="${prefix}${probe_pv}"
+        if ! "${CAVPUT_BIN}" \
+            "-list=${full_pv}.LOPR=${probe_lopr},${full_pv}.HOPR=${probe_hopr},${full_pv}.PREC=${probe_prec}" \
+            >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "LED monitor PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize LED monitor PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_meter_test_pvs() {
   local prefix="$1"
   local -a meter_init_values=(
@@ -1331,6 +1395,7 @@ set_local_epics_runtime_env
 ioc_pid="$!"
 set_slider_test_pvs "${PV_PREFIX}" || true
 set_scale_monitor_test_pvs "${PV_PREFIX}" || true
+set_led_monitor_test_pvs "${PV_PREFIX}" || true
 set_meter_test_pvs "${PV_PREFIX}" || true
 set_strip_chart_test_pvs "${PV_PREFIX}" || true
 set_cartesian_plot_test_pvs "${PV_PREFIX}" || true

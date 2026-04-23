@@ -10,11 +10,13 @@
 #include <db_access.h>
 
 #include "bar_monitor_element.h"
+#include "led_monitor_element.h"
 #include "meter_element.h"
 #include "scale_monitor_element.h"
 #include "thermometer_element.h"
 #include "channel_access_context.h"
 #include "runtime_utils.h"
+#include "soft_pv_registry.h"
 #include "statistics_tracker.h"
 
 extern "C" {
@@ -168,15 +170,20 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
     return;
   }
 
+  auto needsCaContextFor = [](const QString &channelName) {
+    const ParsedPvName parsed = parsePvName(channelName);
+    return parsed.protocol == PvProtocol::kCa
+        && !SoftPvRegistry::instance().isRegistered(parsed.pvName);
+  };
+
   const QString initialChannel = element_->channel().trimmed();
-  bool needsCa = (!initialChannel.isEmpty()
-      && parsePvName(initialChannel).protocol == PvProtocol::kCa);
+  bool needsCa = !initialChannel.isEmpty() && needsCaContextFor(initialChannel);
   if constexpr (ElementTraits::HasVisibilityInterface<ElementType>::value) {
     if (!needsCa) {
       for (int i = 0; i < 5; ++i) {
         const QString visibilityChannel = element_->channel(i).trimmed();
         if (!visibilityChannel.isEmpty()
-            && parsePvName(visibilityChannel).protocol == PvProtocol::kCa) {
+            && needsCaContextFor(visibilityChannel)) {
           needsCa = true;
           break;
         }
@@ -448,6 +455,7 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
 
 // Explicit template instantiations
 template class SingleChannelMonitorRuntimeBase<BarMonitorElement>;
+template class SingleChannelMonitorRuntimeBase<LedMonitorElement>;
 template class SingleChannelMonitorRuntimeBase<MeterElement>;
 template class SingleChannelMonitorRuntimeBase<ScaleMonitorElement>;
 template class SingleChannelMonitorRuntimeBase<ThermometerElement>;

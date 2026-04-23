@@ -112,6 +112,8 @@ qtedm_SRC = qtedm.cc \
             text_monitor_runtime.cc \
             byte_monitor_element.cc \
             byte_monitor_runtime.cc \
+            led_monitor_element.cc \
+            led_monitor_runtime.cc \
             expression_channel_element.cc \
             expression_channel_runtime.cc \
             bar_monitor_element.cc \
@@ -316,7 +318,9 @@ $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | 
 	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp $(RCC_OBJ_OUT)$@
 
-$(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html | $(OBJ_DIR)
+$(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html \
+                               $(wildcard ../docs/images/qtedm-widgets/*.png) \
+                               | $(OBJ_DIR)
 	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
 

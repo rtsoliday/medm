@@ -10,6 +10,7 @@
     <file alias="images/qtedm-widgets/heatmap.png">../../docs/images/qtedm-widgets/heatmap.png</file>
     <file alias="images/qtedm-widgets/image.png">../../docs/images/qtedm-widgets/image.png</file>
     <file alias="images/qtedm-widgets/line.png">../../docs/images/qtedm-widgets/line.png</file>
+    <file alias="images/qtedm-widgets/led-monitor.png">../../docs/images/qtedm-widgets/led-monitor.png</file>
     <file alias="images/qtedm-widgets/menu.png">../../docs/images/qtedm-widgets/menu.png</file>
     <file alias="images/qtedm-widgets/message-button.png">../../docs/images/qtedm-widgets/message-button.png</file>
     <file alias="images/qtedm-widgets/meter.png">../../docs/images/qtedm-widgets/meter.png</file>

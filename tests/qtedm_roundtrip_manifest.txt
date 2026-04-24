@@ -22,6 +22,7 @@ test_Slider.adl
 test_StripChart.adl
 test_StripChartLoad.adl
 test_Text.adl
+test_TextArea.adl
 test_TextEntry.adl
 test_TextFonts.adl
 test_TextMonitor.adl

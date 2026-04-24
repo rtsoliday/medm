@@ -5,7 +5,7 @@ SDDS1
 &column name=EnumStrings, type=string, description="Comma-separated enum state labels" &end
 &column name=ElementCount, type=long, description="PV element count" &end
 &data mode=ascii &end
-252
+265
 "CRYO:PRESS:HEAD05" "double" "" 1
 "CRYO:PRESS:TAIL33" "double" "" 1
 "CRYO:TEMP:LOOP77" "double" "" 1
@@ -210,6 +210,19 @@ SDDS1
 "strip:test:stress:b" "double" "" 1
 "strip:test:theta" "double" "" 1
 "strip:test:zeta" "double" "" 1
+"ta:number:fallback" "double" "" 1
+"ta:string:single" "string" "" 1
+"ta:text:alarm_probe" "char" "" 256
+"ta:text:baseline" "char" "" 256
+"ta:text:enter" "char" "" 256
+"ta:text:explicit" "char" "" 256
+"ta:text:fixed" "char" "" 256
+"ta:text:focus" "char" "" 256
+"ta:text:main" "char" "" 256
+"ta:text:nowrap" "char" "" 512
+"ta:text:readonly" "char" "" 256
+"ta:text:small" "char" "" 80
+"ta:text:tabs" "char" "" 256
 "test_bar_pv" "double" "" 1
 "thermometer:test:alpha" "double" "" 1
 "thermometer:test:baselinea" "double" "" 1

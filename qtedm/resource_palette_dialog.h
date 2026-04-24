@@ -1410,6 +1410,216 @@ public:
     textEntryLayout->setRowStretch(6, 1);
     entriesLayout->addWidget(textEntrySection_);
 
+    textAreaSection_ = new QWidget(entriesWidget_);
+    auto *textAreaLayout = new QGridLayout(textAreaSection_);
+    textAreaLayout->setContentsMargins(0, 0, 0, 0);
+    textAreaLayout->setHorizontalSpacing(12);
+    textAreaLayout->setVerticalSpacing(6);
+
+    textAreaForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(textAreaForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(textAreaForegroundButton_,
+              QStringLiteral("Text Area Foreground"),
+              textAreaForegroundSetter_);
+        });
+
+    textAreaBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(textAreaBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(textAreaBackgroundButton_,
+              QStringLiteral("Text Area Background"),
+              textAreaBackgroundSetter_);
+        });
+
+    textAreaFormatCombo_ = new QComboBox;
+    textAreaFormatCombo_->setFont(valueFont_);
+    textAreaFormatCombo_->setAutoFillBackground(true);
+    textAreaFormatCombo_->addItem(QStringLiteral("Decimal"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Exponential"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Engineering"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Compact"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Truncated"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Hexadecimal"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Octal"));
+    textAreaFormatCombo_->addItem(QStringLiteral("String"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Sexagesimal"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Sexagesimal (H:M:S)"));
+    textAreaFormatCombo_->addItem(QStringLiteral("Sexagesimal (D:M:S)"));
+    QObject::connect(textAreaFormatCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaFormatSetter_) {
+            textAreaFormatSetter_(textMonitorFormatFromIndex(index));
+          }
+        });
+
+    textAreaColorModeCombo_ = new QComboBox;
+    textAreaColorModeCombo_->setFont(valueFont_);
+    textAreaColorModeCombo_->setAutoFillBackground(true);
+    textAreaColorModeCombo_->addItem(QStringLiteral("Static"));
+    textAreaColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    textAreaColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(textAreaColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaColorModeSetter_) {
+            textAreaColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    textAreaChannelEdit_ = createLineEdit();
+    committedTexts_.insert(textAreaChannelEdit_, textAreaChannelEdit_->text());
+    textAreaChannelEdit_->installEventFilter(this);
+    QObject::connect(textAreaChannelEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitTextAreaChannel(); });
+    QObject::connect(textAreaChannelEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitTextAreaChannel(); });
+
+    textAreaPvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    textAreaPvLimitsButton_->setEnabled(false);
+    QObject::connect(textAreaPvLimitsButton_, &QPushButton::clicked, this,
+        [this]() { openTextAreaPvLimitsDialog(); });
+
+    textAreaReadOnlyCombo_ = createBooleanComboBox();
+    QObject::connect(textAreaReadOnlyCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaReadOnlySetter_) {
+            textAreaReadOnlySetter_(index != 0);
+          }
+        });
+
+    textAreaWordWrapCombo_ = createBooleanComboBox();
+    QObject::connect(textAreaWordWrapCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaWordWrapSetter_) {
+            textAreaWordWrapSetter_(index != 0);
+          }
+          updateTextAreaDependentControls();
+        });
+
+    textAreaLineWrapModeCombo_ = new QComboBox;
+    textAreaLineWrapModeCombo_->setFont(valueFont_);
+    textAreaLineWrapModeCombo_->setAutoFillBackground(true);
+    textAreaLineWrapModeCombo_->addItem(QStringLiteral("No Wrap"));
+    textAreaLineWrapModeCombo_->addItem(QStringLiteral("Widget Width"));
+    textAreaLineWrapModeCombo_->addItem(QStringLiteral("Fixed Column Width"));
+    QObject::connect(textAreaLineWrapModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaWrapModeSetter_) {
+            textAreaWrapModeSetter_(textAreaWrapModeFromIndex(index));
+          }
+          updateTextAreaDependentControls();
+        });
+
+    textAreaWrapColumnWidthEdit_ = createLineEdit();
+    committedTexts_.insert(textAreaWrapColumnWidthEdit_,
+        textAreaWrapColumnWidthEdit_->text());
+    textAreaWrapColumnWidthEdit_->installEventFilter(this);
+    QObject::connect(textAreaWrapColumnWidthEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitTextAreaWrapColumnWidth(); });
+    QObject::connect(textAreaWrapColumnWidthEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitTextAreaWrapColumnWidth(); });
+
+    textAreaVerticalScrollBarCombo_ = createBooleanComboBox();
+    QObject::connect(textAreaVerticalScrollBarCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaShowVerticalScrollBarSetter_) {
+            textAreaShowVerticalScrollBarSetter_(index != 0);
+          }
+        });
+
+    textAreaHorizontalScrollBarCombo_ = createBooleanComboBox();
+    QObject::connect(textAreaHorizontalScrollBarCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaShowHorizontalScrollBarSetter_) {
+            textAreaShowHorizontalScrollBarSetter_(index != 0);
+          }
+        });
+
+    textAreaCommitModeCombo_ = new QComboBox;
+    textAreaCommitModeCombo_->setFont(valueFont_);
+    textAreaCommitModeCombo_->setAutoFillBackground(true);
+    textAreaCommitModeCombo_->addItem(QStringLiteral("Ctrl+Enter"));
+    textAreaCommitModeCombo_->addItem(QStringLiteral("Enter"));
+    textAreaCommitModeCombo_->addItem(QStringLiteral("On Focus Lost"));
+    textAreaCommitModeCombo_->addItem(QStringLiteral("Explicit"));
+    QObject::connect(textAreaCommitModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaCommitModeSetter_) {
+            textAreaCommitModeSetter_(textAreaCommitModeFromIndex(index));
+          }
+        });
+
+    textAreaTabInsertsSpacesCombo_ = createBooleanComboBox();
+    QObject::connect(textAreaTabInsertsSpacesCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (textAreaTabInsertsSpacesSetter_) {
+            textAreaTabInsertsSpacesSetter_(index != 0);
+          }
+        });
+
+    textAreaTabWidthEdit_ = createLineEdit();
+    committedTexts_.insert(textAreaTabWidthEdit_, textAreaTabWidthEdit_->text());
+    textAreaTabWidthEdit_->installEventFilter(this);
+    QObject::connect(textAreaTabWidthEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitTextAreaTabWidth(); });
+    QObject::connect(textAreaTabWidthEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitTextAreaTabWidth(); });
+
+    textAreaFontFamilyEdit_ = createLineEdit();
+    committedTexts_.insert(textAreaFontFamilyEdit_, textAreaFontFamilyEdit_->text());
+    textAreaFontFamilyEdit_->installEventFilter(this);
+    QObject::connect(textAreaFontFamilyEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitTextAreaFontFamily(); });
+    QObject::connect(textAreaFontFamilyEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitTextAreaFontFamily(); });
+
+    addRow(textAreaLayout, 0, QStringLiteral("Foreground"),
+        textAreaForegroundButton_);
+    addRow(textAreaLayout, 1, QStringLiteral("Background"),
+        textAreaBackgroundButton_);
+    addRow(textAreaLayout, 2, QStringLiteral("Format"),
+        textAreaFormatCombo_);
+    addRow(textAreaLayout, 3, QStringLiteral("Color Mode"),
+        textAreaColorModeCombo_);
+    addRow(textAreaLayout, 4, QStringLiteral("Channel"),
+        textAreaChannelEdit_);
+    addRow(textAreaLayout, 5, QStringLiteral("Channel Limits"),
+        textAreaPvLimitsButton_);
+    addRow(textAreaLayout, 6, QStringLiteral("Read Only"),
+        textAreaReadOnlyCombo_);
+    addRow(textAreaLayout, 7, QStringLiteral("Word Wrap"),
+        textAreaWordWrapCombo_);
+    addRow(textAreaLayout, 8, QStringLiteral("Line Wrap Mode"),
+        textAreaLineWrapModeCombo_);
+    addRow(textAreaLayout, 9, QStringLiteral("Wrap Column Width"),
+        textAreaWrapColumnWidthEdit_);
+    addRow(textAreaLayout, 10, QStringLiteral("Vertical Scroll Bar"),
+        textAreaVerticalScrollBarCombo_);
+    addRow(textAreaLayout, 11, QStringLiteral("Horizontal Scroll Bar"),
+        textAreaHorizontalScrollBarCombo_);
+    addRow(textAreaLayout, 12, QStringLiteral("Commit Mode"),
+        textAreaCommitModeCombo_);
+    addRow(textAreaLayout, 13, QStringLiteral("Tab Inserts Spaces"),
+        textAreaTabInsertsSpacesCombo_);
+    addRow(textAreaLayout, 14, QStringLiteral("Tab Width"),
+        textAreaTabWidthEdit_);
+    addRow(textAreaLayout, 15, QStringLiteral("Font Family"),
+        textAreaFontFamilyEdit_);
+    textAreaLayout->setRowStretch(16, 1);
+    entriesLayout->addWidget(textAreaSection_);
+
     sliderSection_ = new QWidget(entriesWidget_);
     auto *sliderLayout = new QGridLayout(sliderSection_);
     sliderLayout->setContentsMargins(0, 0, 0, 0);
@@ -3364,6 +3574,7 @@ public:
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
   textEntrySection_->setVisible(false);
+  textAreaSection_->setVisible(false);
   textMonitorSection_->setVisible(false);
   meterSection_->setVisible(false);
   barSection_->setVisible(false);
@@ -3935,6 +4146,248 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Text Entry"));
+    }
+
+    showPaletteWithoutActivating();
+  }
+
+  void showForTextArea(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextMonitorFormat()> formatGetter,
+      std::function<void(TextMonitorFormat)> formatSetter,
+      std::function<int()> precisionGetter,
+      std::function<void(int)> precisionSetter,
+      std::function<PvLimitSource()> precisionSourceGetter,
+      std::function<void(PvLimitSource)> precisionSourceSetter,
+      std::function<int()> precisionDefaultGetter,
+      std::function<void(int)> precisionDefaultSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<QString()> channelGetter,
+      std::function<void(const QString &)> channelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter,
+      std::function<bool()> readOnlyGetter,
+      std::function<void(bool)> readOnlySetter,
+      std::function<bool()> wordWrapGetter,
+      std::function<void(bool)> wordWrapSetter,
+      std::function<TextAreaWrapMode()> wrapModeGetter,
+      std::function<void(TextAreaWrapMode)> wrapModeSetter,
+      std::function<int()> wrapColumnWidthGetter,
+      std::function<void(int)> wrapColumnWidthSetter,
+      std::function<bool()> showVerticalScrollBarGetter,
+      std::function<void(bool)> showVerticalScrollBarSetter,
+      std::function<bool()> showHorizontalScrollBarGetter,
+      std::function<void(bool)> showHorizontalScrollBarSetter,
+      std::function<TextAreaCommitMode()> commitModeGetter,
+      std::function<void(TextAreaCommitMode)> commitModeSetter,
+      std::function<bool()> tabInsertsSpacesGetter,
+      std::function<void(bool)> tabInsertsSpacesSetter,
+      std::function<int()> tabWidthGetter,
+      std::function<void(int)> tabWidthSetter,
+      std::function<QString()> fontFamilyGetter,
+      std::function<void(const QString &)> fontFamilySetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kTextArea;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    textAreaForegroundGetter_ = std::move(foregroundGetter);
+    textAreaForegroundSetter_ = std::move(foregroundSetter);
+    textAreaBackgroundGetter_ = std::move(backgroundGetter);
+    textAreaBackgroundSetter_ = std::move(backgroundSetter);
+    textAreaFormatGetter_ = std::move(formatGetter);
+    textAreaFormatSetter_ = std::move(formatSetter);
+    textAreaPrecisionGetter_ = std::move(precisionGetter);
+    textAreaPrecisionSetter_ = std::move(precisionSetter);
+    textAreaPrecisionSourceGetter_ = std::move(precisionSourceGetter);
+    textAreaPrecisionSourceSetter_ = std::move(precisionSourceSetter);
+    textAreaPrecisionDefaultGetter_ = std::move(precisionDefaultGetter);
+    textAreaPrecisionDefaultSetter_ = std::move(precisionDefaultSetter);
+    textAreaColorModeGetter_ = std::move(colorModeGetter);
+    textAreaColorModeSetter_ = std::move(colorModeSetter);
+    textAreaChannelGetter_ = std::move(channelGetter);
+    textAreaChannelSetter_ = std::move(channelSetter);
+    textAreaLimitsGetter_ = std::move(limitsGetter);
+    textAreaLimitsSetter_ = std::move(limitsSetter);
+    textAreaReadOnlyGetter_ = std::move(readOnlyGetter);
+    textAreaReadOnlySetter_ = std::move(readOnlySetter);
+    textAreaWordWrapGetter_ = std::move(wordWrapGetter);
+    textAreaWordWrapSetter_ = std::move(wordWrapSetter);
+    textAreaWrapModeGetter_ = std::move(wrapModeGetter);
+    textAreaWrapModeSetter_ = std::move(wrapModeSetter);
+    textAreaWrapColumnWidthGetter_ = std::move(wrapColumnWidthGetter);
+    textAreaWrapColumnWidthSetter_ = std::move(wrapColumnWidthSetter);
+    textAreaShowVerticalScrollBarGetter_ =
+        std::move(showVerticalScrollBarGetter);
+    textAreaShowVerticalScrollBarSetter_ =
+        std::move(showVerticalScrollBarSetter);
+    textAreaShowHorizontalScrollBarGetter_ =
+        std::move(showHorizontalScrollBarGetter);
+    textAreaShowHorizontalScrollBarSetter_ =
+        std::move(showHorizontalScrollBarSetter);
+    textAreaCommitModeGetter_ = std::move(commitModeGetter);
+    textAreaCommitModeSetter_ = std::move(commitModeSetter);
+    textAreaTabInsertsSpacesGetter_ = std::move(tabInsertsSpacesGetter);
+    textAreaTabInsertsSpacesSetter_ = std::move(tabInsertsSpacesSetter);
+    textAreaTabWidthGetter_ = std::move(tabWidthGetter);
+    textAreaTabWidthSetter_ = std::move(tabWidthSetter);
+    textAreaFontFamilyGetter_ = std::move(fontFamilyGetter);
+    textAreaFontFamilySetter_ = std::move(fontFamilySetter);
+
+    QRect areaGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (areaGeometry.width() <= 0) {
+      areaGeometry.setWidth(kMinimumTextWidth * 2);
+    }
+    if (areaGeometry.height() <= 0) {
+      areaGeometry.setHeight(kMinimumTextHeight * 3);
+    }
+    lastCommittedGeometry_ = areaGeometry;
+    updateGeometryEdits(areaGeometry);
+
+    if (textAreaForegroundButton_) {
+      const QColor color = textAreaForegroundGetter_
+          ? textAreaForegroundGetter_()
+          : palette().color(QPalette::WindowText);
+      setColorButtonColor(textAreaForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+
+    if (textAreaBackgroundButton_) {
+      const QColor color = textAreaBackgroundGetter_
+          ? textAreaBackgroundGetter_()
+          : palette().color(QPalette::Window);
+      setColorButtonColor(textAreaBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+
+    if (textAreaFormatCombo_) {
+      const QSignalBlocker blocker(textAreaFormatCombo_);
+      const int index = textAreaFormatGetter_
+          ? textMonitorFormatToIndex(textAreaFormatGetter_())
+          : textMonitorFormatToIndex(TextMonitorFormat::kDecimal);
+      textAreaFormatCombo_->setCurrentIndex(index);
+    }
+
+    if (textAreaColorModeCombo_) {
+      const QSignalBlocker blocker(textAreaColorModeCombo_);
+      const int index = textAreaColorModeGetter_
+          ? colorModeToIndex(textAreaColorModeGetter_())
+          : colorModeToIndex(TextColorMode::kStatic);
+      textAreaColorModeCombo_->setCurrentIndex(index);
+    }
+
+    if (textAreaChannelEdit_) {
+      const QString channel = textAreaChannelGetter_ ? textAreaChannelGetter_()
+                                                     : QString();
+      const QSignalBlocker blocker(textAreaChannelEdit_);
+      textAreaChannelEdit_->setText(channel);
+      committedTexts_[textAreaChannelEdit_] = textAreaChannelEdit_->text();
+    }
+
+    if (textAreaReadOnlyCombo_) {
+      const QSignalBlocker blocker(textAreaReadOnlyCombo_);
+      textAreaReadOnlyCombo_->setCurrentIndex(
+          textAreaReadOnlyGetter_ && textAreaReadOnlyGetter_() ? 1 : 0);
+    }
+
+    if (textAreaWordWrapCombo_) {
+      const QSignalBlocker blocker(textAreaWordWrapCombo_);
+      textAreaWordWrapCombo_->setCurrentIndex(
+          !textAreaWordWrapGetter_ || textAreaWordWrapGetter_() ? 1 : 0);
+    }
+
+    if (textAreaLineWrapModeCombo_) {
+      const QSignalBlocker blocker(textAreaLineWrapModeCombo_);
+      const int index = textAreaWrapModeGetter_
+          ? textAreaWrapModeToIndex(textAreaWrapModeGetter_())
+          : textAreaWrapModeToIndex(TextAreaWrapMode::kWidgetWidth);
+      textAreaLineWrapModeCombo_->setCurrentIndex(index);
+    }
+
+    if (textAreaWrapColumnWidthEdit_) {
+      const int width = textAreaWrapColumnWidthGetter_
+          ? std::max(1, textAreaWrapColumnWidthGetter_())
+          : 80;
+      const QSignalBlocker blocker(textAreaWrapColumnWidthEdit_);
+      textAreaWrapColumnWidthEdit_->setText(QString::number(width));
+      committedTexts_[textAreaWrapColumnWidthEdit_]
+          = textAreaWrapColumnWidthEdit_->text();
+    }
+
+    if (textAreaVerticalScrollBarCombo_) {
+      const QSignalBlocker blocker(textAreaVerticalScrollBarCombo_);
+      textAreaVerticalScrollBarCombo_->setCurrentIndex(
+          !textAreaShowVerticalScrollBarGetter_
+              || textAreaShowVerticalScrollBarGetter_()
+          ? 1
+          : 0);
+    }
+
+    if (textAreaHorizontalScrollBarCombo_) {
+      const QSignalBlocker blocker(textAreaHorizontalScrollBarCombo_);
+      textAreaHorizontalScrollBarCombo_->setCurrentIndex(
+          textAreaShowHorizontalScrollBarGetter_
+              && textAreaShowHorizontalScrollBarGetter_()
+          ? 1
+          : 0);
+    }
+
+    if (textAreaCommitModeCombo_) {
+      const QSignalBlocker blocker(textAreaCommitModeCombo_);
+      const int index = textAreaCommitModeGetter_
+          ? textAreaCommitModeToIndex(textAreaCommitModeGetter_())
+          : textAreaCommitModeToIndex(TextAreaCommitMode::kCtrlEnter);
+      textAreaCommitModeCombo_->setCurrentIndex(index);
+    }
+
+    if (textAreaTabInsertsSpacesCombo_) {
+      const QSignalBlocker blocker(textAreaTabInsertsSpacesCombo_);
+      textAreaTabInsertsSpacesCombo_->setCurrentIndex(
+          !textAreaTabInsertsSpacesGetter_
+              || textAreaTabInsertsSpacesGetter_()
+          ? 1
+          : 0);
+    }
+
+    if (textAreaTabWidthEdit_) {
+      const int width = textAreaTabWidthGetter_
+          ? std::max(1, textAreaTabWidthGetter_())
+          : 8;
+      const QSignalBlocker blocker(textAreaTabWidthEdit_);
+      textAreaTabWidthEdit_->setText(QString::number(width));
+      committedTexts_[textAreaTabWidthEdit_] = textAreaTabWidthEdit_->text();
+    }
+
+    if (textAreaFontFamilyEdit_) {
+      const QString family = textAreaFontFamilyGetter_
+          ? textAreaFontFamilyGetter_()
+          : QString();
+      const QSignalBlocker blocker(textAreaFontFamilyEdit_);
+      textAreaFontFamilyEdit_->setText(family);
+      committedTexts_[textAreaFontFamilyEdit_] = textAreaFontFamilyEdit_->text();
+    }
+
+    if (textAreaPvLimitsButton_) {
+      textAreaPvLimitsButton_->setEnabled(
+          static_cast<bool>(textAreaPrecisionSourceGetter_)
+          && static_cast<bool>(textAreaPrecisionSourceSetter_)
+          && static_cast<bool>(textAreaPrecisionDefaultGetter_)
+          && static_cast<bool>(textAreaPrecisionDefaultSetter_)
+          && static_cast<bool>(textAreaLimitsGetter_)
+          && static_cast<bool>(textAreaLimitsSetter_));
+    }
+
+    updateTextAreaDependentControls();
+
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Text Area"));
     }
 
     showPaletteWithoutActivating();
@@ -8464,6 +8917,46 @@ public:
     textEntryColorModeSetter_ = {};
     textEntryChannelGetter_ = {};
     textEntryChannelSetter_ = {};
+    textEntryLimitsGetter_ = {};
+    textEntryLimitsSetter_ = {};
+    textAreaForegroundGetter_ = {};
+    textAreaForegroundSetter_ = {};
+    textAreaBackgroundGetter_ = {};
+    textAreaBackgroundSetter_ = {};
+    textAreaFormatGetter_ = {};
+    textAreaFormatSetter_ = {};
+    textAreaPrecisionGetter_ = {};
+    textAreaPrecisionSetter_ = {};
+    textAreaPrecisionSourceGetter_ = {};
+    textAreaPrecisionSourceSetter_ = {};
+    textAreaPrecisionDefaultGetter_ = {};
+    textAreaPrecisionDefaultSetter_ = {};
+    textAreaColorModeGetter_ = {};
+    textAreaColorModeSetter_ = {};
+    textAreaChannelGetter_ = {};
+    textAreaChannelSetter_ = {};
+    textAreaLimitsGetter_ = {};
+    textAreaLimitsSetter_ = {};
+    textAreaReadOnlyGetter_ = {};
+    textAreaReadOnlySetter_ = {};
+    textAreaWordWrapGetter_ = {};
+    textAreaWordWrapSetter_ = {};
+    textAreaWrapModeGetter_ = {};
+    textAreaWrapModeSetter_ = {};
+    textAreaWrapColumnWidthGetter_ = {};
+    textAreaWrapColumnWidthSetter_ = {};
+    textAreaShowVerticalScrollBarGetter_ = {};
+    textAreaShowVerticalScrollBarSetter_ = {};
+    textAreaShowHorizontalScrollBarGetter_ = {};
+    textAreaShowHorizontalScrollBarSetter_ = {};
+    textAreaCommitModeGetter_ = {};
+    textAreaCommitModeSetter_ = {};
+    textAreaTabInsertsSpacesGetter_ = {};
+    textAreaTabInsertsSpacesSetter_ = {};
+    textAreaTabWidthGetter_ = {};
+    textAreaTabWidthSetter_ = {};
+    textAreaFontFamilyGetter_ = {};
+    textAreaFontFamilySetter_ = {};
     sliderForegroundGetter_ = {};
     sliderForegroundSetter_ = {};
     sliderBackgroundGetter_ = {};
@@ -8675,6 +9168,9 @@ public:
     }
     if (textEntryPvLimitsButton_) {
       textEntryPvLimitsButton_->setEnabled(false);
+    }
+    if (textAreaPvLimitsButton_) {
+      textAreaPvLimitsButton_->setEnabled(false);
     }
     meterForegroundGetter_ = {};
     meterForegroundSetter_ = {};
@@ -9798,6 +10294,7 @@ private:
     kLine,
     kText,
     kTextEntry,
+    kTextArea,
     kSlider,
     kWheelSwitch,
     kChoiceButton,
@@ -9957,6 +10454,10 @@ private:
           revertLineEdit(edit);
         }
         if (edit == textMonitorChannelEdit_
+            || edit == textAreaChannelEdit_
+            || edit == textAreaWrapColumnWidthEdit_
+            || edit == textAreaTabWidthEdit_
+            || edit == textAreaFontFamilyEdit_
             || edit == meterChannelEdit_ || edit == thermometerChannelEdit_
             || edit == ledChannelEdit_
             || edit == sliderIncrementEdit_
@@ -10084,6 +10585,11 @@ private:
       const bool textEntryVisible = kind == SelectionKind::kTextEntry;
       textEntrySection_->setVisible(textEntryVisible);
       textEntrySection_->setEnabled(textEntryVisible);
+    }
+    if (textAreaSection_) {
+      const bool textAreaVisible = kind == SelectionKind::kTextArea;
+      textAreaSection_->setVisible(textAreaVisible);
+      textAreaSection_->setEnabled(textAreaVisible);
     }
     if (sliderSection_) {
       const bool sliderVisible = kind == SelectionKind::kSlider;
@@ -10538,6 +11044,33 @@ private:
     }
   }
 
+  void updateTextAreaDependentControls()
+  {
+    bool wordWrap = true;
+    if (textAreaWordWrapGetter_) {
+      wordWrap = textAreaWordWrapGetter_();
+    } else if (textAreaWordWrapCombo_) {
+      wordWrap = textAreaWordWrapCombo_->currentIndex() != 0;
+    }
+
+    TextAreaWrapMode mode = TextAreaWrapMode::kWidgetWidth;
+    if (textAreaWrapModeGetter_) {
+      mode = textAreaWrapModeGetter_();
+    } else if (textAreaLineWrapModeCombo_) {
+      mode = textAreaWrapModeFromIndex(textAreaLineWrapModeCombo_->currentIndex());
+    }
+
+    const bool enableWrapColumn = wordWrap
+        && mode == TextAreaWrapMode::kFixedColumnWidth
+        && static_cast<bool>(textAreaWrapColumnWidthSetter_);
+    setFieldEnabled(textAreaWrapColumnWidthEdit_, enableWrapColumn);
+
+    const bool enableHorizontalScroll = (!wordWrap
+            || mode == TextAreaWrapMode::kNoWrap)
+        && static_cast<bool>(textAreaShowHorizontalScrollBarSetter_);
+    setFieldEnabled(textAreaHorizontalScrollBarCombo_, enableHorizontalScroll);
+  }
+
   void commitTextEntryChannel()
   {
     if (!textEntryChannelEdit_) {
@@ -10550,6 +11083,86 @@ private:
     const QString value = textEntryChannelEdit_->text();
     textEntryChannelSetter_(value);
     committedTexts_[textEntryChannelEdit_] = value;
+  }
+
+  void commitTextAreaChannel()
+  {
+    if (!textAreaChannelEdit_) {
+      return;
+    }
+    if (!textAreaChannelSetter_) {
+      revertLineEdit(textAreaChannelEdit_);
+      return;
+    }
+    const QString value = textAreaChannelEdit_->text();
+    textAreaChannelSetter_(value);
+    committedTexts_[textAreaChannelEdit_] = value;
+    updateTextAreaLimitsFromDialog();
+  }
+
+  void commitTextAreaWrapColumnWidth()
+  {
+    if (!textAreaWrapColumnWidthEdit_) {
+      return;
+    }
+    if (!textAreaWrapColumnWidthSetter_) {
+      revertLineEdit(textAreaWrapColumnWidthEdit_);
+      return;
+    }
+    bool ok = false;
+    int value = textAreaWrapColumnWidthEdit_->text().toInt(&ok);
+    if (!ok) {
+      revertLineEdit(textAreaWrapColumnWidthEdit_);
+      return;
+    }
+    value = std::max(1, value);
+    textAreaWrapColumnWidthSetter_(value);
+    const int effectiveValue = textAreaWrapColumnWidthGetter_
+        ? std::max(1, textAreaWrapColumnWidthGetter_())
+        : value;
+    const QSignalBlocker blocker(textAreaWrapColumnWidthEdit_);
+    textAreaWrapColumnWidthEdit_->setText(QString::number(effectiveValue));
+    committedTexts_[textAreaWrapColumnWidthEdit_]
+        = textAreaWrapColumnWidthEdit_->text();
+  }
+
+  void commitTextAreaTabWidth()
+  {
+    if (!textAreaTabWidthEdit_) {
+      return;
+    }
+    if (!textAreaTabWidthSetter_) {
+      revertLineEdit(textAreaTabWidthEdit_);
+      return;
+    }
+    bool ok = false;
+    int value = textAreaTabWidthEdit_->text().toInt(&ok);
+    if (!ok) {
+      revertLineEdit(textAreaTabWidthEdit_);
+      return;
+    }
+    value = std::max(1, value);
+    textAreaTabWidthSetter_(value);
+    const int effectiveValue = textAreaTabWidthGetter_
+        ? std::max(1, textAreaTabWidthGetter_())
+        : value;
+    const QSignalBlocker blocker(textAreaTabWidthEdit_);
+    textAreaTabWidthEdit_->setText(QString::number(effectiveValue));
+    committedTexts_[textAreaTabWidthEdit_] = textAreaTabWidthEdit_->text();
+  }
+
+  void commitTextAreaFontFamily()
+  {
+    if (!textAreaFontFamilyEdit_) {
+      return;
+    }
+    if (!textAreaFontFamilySetter_) {
+      revertLineEdit(textAreaFontFamilyEdit_);
+      return;
+    }
+    const QString value = textAreaFontFamilyEdit_->text();
+    textAreaFontFamilySetter_(value);
+    committedTexts_[textAreaFontFamilyEdit_] = value;
   }
 
   void commitSliderIncrement()
@@ -11662,6 +12275,26 @@ private:
     }
   }
 
+  void updateTextAreaLimitsFromDialog()
+  {
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (textAreaPrecisionSourceGetter_) {
+      const QString channelLabel = textAreaChannelGetter_
+              ? textAreaChannelGetter_()
+              : QString();
+      pvLimitsDialog_->setTextEntryCallbacks(channelLabel,
+          textAreaPrecisionSourceGetter_, textAreaPrecisionSourceSetter_,
+          textAreaPrecisionDefaultGetter_,
+          textAreaPrecisionDefaultSetter_,
+          [this]() { updateTextAreaLimitsFromDialog(); },
+          textAreaLimitsGetter_, textAreaLimitsSetter_);
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
+  }
+
   void updateSliderLimitsFromDialog()
   {
     updateSliderIncrementEdit();
@@ -12369,6 +13002,62 @@ private:
     case TextMonitorFormat::kSexagesimalDms:
       return 10;
     case TextMonitorFormat::kDecimal:
+    default:
+      return 0;
+    }
+  }
+
+  TextAreaWrapMode textAreaWrapModeFromIndex(int index) const
+  {
+    switch (index) {
+    case 0:
+      return TextAreaWrapMode::kNoWrap;
+    case 2:
+      return TextAreaWrapMode::kFixedColumnWidth;
+    case 1:
+    default:
+      return TextAreaWrapMode::kWidgetWidth;
+    }
+  }
+
+  int textAreaWrapModeToIndex(TextAreaWrapMode mode) const
+  {
+    switch (mode) {
+    case TextAreaWrapMode::kNoWrap:
+      return 0;
+    case TextAreaWrapMode::kFixedColumnWidth:
+      return 2;
+    case TextAreaWrapMode::kWidgetWidth:
+    default:
+      return 1;
+    }
+  }
+
+  TextAreaCommitMode textAreaCommitModeFromIndex(int index) const
+  {
+    switch (index) {
+    case 1:
+      return TextAreaCommitMode::kEnter;
+    case 2:
+      return TextAreaCommitMode::kOnFocusLost;
+    case 3:
+      return TextAreaCommitMode::kExplicit;
+    case 0:
+    default:
+      return TextAreaCommitMode::kCtrlEnter;
+    }
+  }
+
+  int textAreaCommitModeToIndex(TextAreaCommitMode mode) const
+  {
+    switch (mode) {
+    case TextAreaCommitMode::kEnter:
+      return 1;
+    case TextAreaCommitMode::kOnFocusLost:
+      return 2;
+    case TextAreaCommitMode::kExplicit:
+      return 3;
+    case TextAreaCommitMode::kCtrlEnter:
     default:
       return 0;
     }
@@ -13119,6 +13808,23 @@ private:
   QComboBox *textEntryColorModeCombo_ = nullptr;
   QLineEdit *textEntryChannelEdit_ = nullptr;
   QPushButton *textEntryPvLimitsButton_ = nullptr;
+  QWidget *textAreaSection_ = nullptr;
+  QPushButton *textAreaForegroundButton_ = nullptr;
+  QPushButton *textAreaBackgroundButton_ = nullptr;
+  QComboBox *textAreaFormatCombo_ = nullptr;
+  QComboBox *textAreaColorModeCombo_ = nullptr;
+  QLineEdit *textAreaChannelEdit_ = nullptr;
+  QPushButton *textAreaPvLimitsButton_ = nullptr;
+  QComboBox *textAreaReadOnlyCombo_ = nullptr;
+  QComboBox *textAreaWordWrapCombo_ = nullptr;
+  QComboBox *textAreaLineWrapModeCombo_ = nullptr;
+  QLineEdit *textAreaWrapColumnWidthEdit_ = nullptr;
+  QComboBox *textAreaVerticalScrollBarCombo_ = nullptr;
+  QComboBox *textAreaHorizontalScrollBarCombo_ = nullptr;
+  QComboBox *textAreaCommitModeCombo_ = nullptr;
+  QComboBox *textAreaTabInsertsSpacesCombo_ = nullptr;
+  QLineEdit *textAreaTabWidthEdit_ = nullptr;
+  QLineEdit *textAreaFontFamilyEdit_ = nullptr;
   QWidget *sliderSection_ = nullptr;
   QPushButton *sliderForegroundButton_ = nullptr;
   QPushButton *sliderBackgroundButton_ = nullptr;
@@ -13441,6 +14147,19 @@ private:
     }
     if (textEntryChannelEdit_) {
       committedTexts_[textEntryChannelEdit_] = textEntryChannelEdit_->text();
+    }
+    if (textAreaChannelEdit_) {
+      committedTexts_[textAreaChannelEdit_] = textAreaChannelEdit_->text();
+    }
+    if (textAreaWrapColumnWidthEdit_) {
+      committedTexts_[textAreaWrapColumnWidthEdit_]
+          = textAreaWrapColumnWidthEdit_->text();
+    }
+    if (textAreaTabWidthEdit_) {
+      committedTexts_[textAreaTabWidthEdit_] = textAreaTabWidthEdit_->text();
+    }
+    if (textAreaFontFamilyEdit_) {
+      committedTexts_[textAreaFontFamilyEdit_] = textAreaFontFamilyEdit_->text();
     }
     if (sliderIncrementEdit_) {
       committedTexts_[sliderIncrementEdit_] = sliderIncrementEdit_->text();
@@ -13779,6 +14498,44 @@ private:
   std::function<void(const QString &)> textEntryChannelSetter_;
   std::function<PvLimits()> textEntryLimitsGetter_;
   std::function<void(const PvLimits &)> textEntryLimitsSetter_;
+  std::function<QColor()> textAreaForegroundGetter_;
+  std::function<void(const QColor &)> textAreaForegroundSetter_;
+  std::function<QColor()> textAreaBackgroundGetter_;
+  std::function<void(const QColor &)> textAreaBackgroundSetter_;
+  std::function<TextMonitorFormat()> textAreaFormatGetter_;
+  std::function<void(TextMonitorFormat)> textAreaFormatSetter_;
+  std::function<int()> textAreaPrecisionGetter_;
+  std::function<void(int)> textAreaPrecisionSetter_;
+  std::function<PvLimitSource()> textAreaPrecisionSourceGetter_;
+  std::function<void(PvLimitSource)> textAreaPrecisionSourceSetter_;
+  std::function<int()> textAreaPrecisionDefaultGetter_;
+  std::function<void(int)> textAreaPrecisionDefaultSetter_;
+  std::function<TextColorMode()> textAreaColorModeGetter_;
+  std::function<void(TextColorMode)> textAreaColorModeSetter_;
+  std::function<QString()> textAreaChannelGetter_;
+  std::function<void(const QString &)> textAreaChannelSetter_;
+  std::function<PvLimits()> textAreaLimitsGetter_;
+  std::function<void(const PvLimits &)> textAreaLimitsSetter_;
+  std::function<bool()> textAreaReadOnlyGetter_;
+  std::function<void(bool)> textAreaReadOnlySetter_;
+  std::function<bool()> textAreaWordWrapGetter_;
+  std::function<void(bool)> textAreaWordWrapSetter_;
+  std::function<TextAreaWrapMode()> textAreaWrapModeGetter_;
+  std::function<void(TextAreaWrapMode)> textAreaWrapModeSetter_;
+  std::function<int()> textAreaWrapColumnWidthGetter_;
+  std::function<void(int)> textAreaWrapColumnWidthSetter_;
+  std::function<bool()> textAreaShowVerticalScrollBarGetter_;
+  std::function<void(bool)> textAreaShowVerticalScrollBarSetter_;
+  std::function<bool()> textAreaShowHorizontalScrollBarGetter_;
+  std::function<void(bool)> textAreaShowHorizontalScrollBarSetter_;
+  std::function<TextAreaCommitMode()> textAreaCommitModeGetter_;
+  std::function<void(TextAreaCommitMode)> textAreaCommitModeSetter_;
+  std::function<bool()> textAreaTabInsertsSpacesGetter_;
+  std::function<void(bool)> textAreaTabInsertsSpacesSetter_;
+  std::function<int()> textAreaTabWidthGetter_;
+  std::function<void(int)> textAreaTabWidthSetter_;
+  std::function<QString()> textAreaFontFamilyGetter_;
+  std::function<void(const QString &)> textAreaFontFamilySetter_;
   std::function<QColor()> sliderForegroundGetter_;
   std::function<void(const QColor &)> sliderForegroundSetter_;
   std::function<QColor()> sliderBackgroundGetter_;
@@ -14421,6 +15178,34 @@ private:
         textEntryPrecisionDefaultSetter_,
         [this]() { updateTextEntryLimitsFromDialog(); }, textEntryLimitsGetter_,
         textEntryLimitsSetter_);
+    positionPvLimitsDialog(dialog);
+    dialog->showForTextEntry();
+  }
+
+  void openTextAreaPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!textAreaPrecisionSourceGetter_ || !textAreaPrecisionSourceSetter_
+        || !textAreaPrecisionDefaultGetter_
+        || !textAreaPrecisionDefaultSetter_
+        || !textAreaLimitsGetter_ || !textAreaLimitsSetter_) {
+      dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = textAreaChannelGetter_ ? textAreaChannelGetter_()
+                                                        : QString();
+    dialog->setTextEntryCallbacks(channelLabel, textAreaPrecisionSourceGetter_,
+        textAreaPrecisionSourceSetter_, textAreaPrecisionDefaultGetter_,
+        textAreaPrecisionDefaultSetter_,
+        [this]() { updateTextAreaLimitsFromDialog(); }, textAreaLimitsGetter_,
+        textAreaLimitsSetter_);
     positionPvLimitsDialog(dialog);
     dialog->showForTextEntry();
   }

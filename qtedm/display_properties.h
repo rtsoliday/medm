@@ -34,6 +34,21 @@ enum class TextMonitorFormat
   kSexagesimalDms,
 };
 
+enum class TextAreaWrapMode
+{
+  kNoWrap,
+  kWidgetWidth,
+  kFixedColumnWidth,
+};
+
+enum class TextAreaCommitMode
+{
+  kCtrlEnter,
+  kEnter,
+  kOnFocusLost,
+  kExplicit,
+};
+
 enum class ChoiceButtonStacking
 {
   kColumn,

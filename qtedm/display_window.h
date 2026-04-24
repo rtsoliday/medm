@@ -132,6 +132,8 @@
 #include "related_display_element.h"
 #include "text_entry_element.h"
 #include "text_entry_runtime.h"
+#include "text_area_element.h"
+#include "text_area_runtime.h"
 #include "text_monitor_element.h"
 #include "text_monitor_runtime.h"
 

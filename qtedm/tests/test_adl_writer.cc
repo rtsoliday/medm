@@ -30,6 +30,7 @@ private slots:
   void escapesSpecialCharacters();
   void writesDynamicAttributeSection();
   void writesLimitsSection();
+  void writesTextAreaEnumStrings();
   void omitsDefaultCartesianAxisSection();
 };
 
@@ -73,6 +74,26 @@ void TestAdlWriter::writesLimitsSection()
   const QString expected =
       readFixture(QStringLiteral("tests/data/expected/limits_section.adlfrag"));
   QCOMPARE(output, expected);
+}
+
+void TestAdlWriter::writesTextAreaEnumStrings()
+{
+  QCOMPARE(AdlWriter::textAreaWrapModeString(TextAreaWrapMode::kNoWrap),
+      QStringLiteral("noWrap"));
+  QCOMPARE(AdlWriter::textAreaWrapModeString(
+      TextAreaWrapMode::kWidgetWidth), QStringLiteral("widgetWidth"));
+  QCOMPARE(AdlWriter::textAreaWrapModeString(
+      TextAreaWrapMode::kFixedColumnWidth),
+      QStringLiteral("fixedColumnWidth"));
+
+  QCOMPARE(AdlWriter::textAreaCommitModeString(
+      TextAreaCommitMode::kCtrlEnter), QStringLiteral("ctrlEnter"));
+  QCOMPARE(AdlWriter::textAreaCommitModeString(
+      TextAreaCommitMode::kEnter), QStringLiteral("enter"));
+  QCOMPARE(AdlWriter::textAreaCommitModeString(
+      TextAreaCommitMode::kOnFocusLost), QStringLiteral("onFocusLost"));
+  QCOMPARE(AdlWriter::textAreaCommitModeString(
+      TextAreaCommitMode::kExplicit), QStringLiteral("explicit"));
 }
 
 void TestAdlWriter::omitsDefaultCartesianAxisSection()

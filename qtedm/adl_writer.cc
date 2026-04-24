@@ -397,6 +397,34 @@ QString textMonitorFormatString(TextMonitorFormat format)
   }
 }
 
+QString textAreaWrapModeString(TextAreaWrapMode mode)
+{
+  switch (mode) {
+  case TextAreaWrapMode::kNoWrap:
+    return QStringLiteral("noWrap");
+  case TextAreaWrapMode::kFixedColumnWidth:
+    return QStringLiteral("fixedColumnWidth");
+  case TextAreaWrapMode::kWidgetWidth:
+  default:
+    return QStringLiteral("widgetWidth");
+  }
+}
+
+QString textAreaCommitModeString(TextAreaCommitMode mode)
+{
+  switch (mode) {
+  case TextAreaCommitMode::kEnter:
+    return QStringLiteral("enter");
+  case TextAreaCommitMode::kOnFocusLost:
+    return QStringLiteral("onFocusLost");
+  case TextAreaCommitMode::kExplicit:
+    return QStringLiteral("explicit");
+  case TextAreaCommitMode::kCtrlEnter:
+  default:
+    return QStringLiteral("ctrlEnter");
+  }
+}
+
 QString choiceButtonStackingString(ChoiceButtonStacking stacking)
 {
   switch (stacking) {

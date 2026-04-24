@@ -100,6 +100,8 @@ qtedm_SRC = qtedm.cc \
             text_runtime.cc \
             text_entry_element.cc \
             text_entry_runtime.cc \
+            text_area_element.cc \
+            text_area_runtime.cc \
             message_button_element.cc \
             message_button_runtime.cc \
             shell_command_element.cc \

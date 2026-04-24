@@ -14,6 +14,7 @@ private slots:
   void parsesEscapedQuotedValues();
   void parsesExpressionChannelBlock();
   void parsesLedMonitorBlock();
+  void parsesTextAreaBlock();
   void rejectsMalformedInput();
 };
 
@@ -210,6 +211,79 @@ void TestAdlParser::parsesLedMonitorBlock()
       QStringLiteral("calc"));
   QCOMPARE(propertyValue(*attrNode, QStringLiteral("calc")),
       QStringLiteral("A"));
+}
+
+void TestAdlParser::parsesTextAreaBlock()
+{
+  const QString text = QStringLiteral(
+      "text_area {\n"
+      "  object {\n"
+      "    x=20\n"
+      "    y=24\n"
+      "    width=180\n"
+      "    height=90\n"
+      "  }\n"
+      "  control {\n"
+      "    chan=\"soft:longText\"\n"
+      "    clr=14\n"
+      "    bclr=4\n"
+      "  }\n"
+      "  clrmod=\"alarm\"\n"
+      "  format=\"string\"\n"
+      "  readOnly=1\n"
+      "  wordWrap=0\n"
+      "  lineWrapMode=\"fixedColumnWidth\"\n"
+      "  wrapColumnWidth=96\n"
+      "  showVerticalScrollBar=0\n"
+      "  showHorizontalScrollBar=1\n"
+      "  commitMode=\"explicit\"\n"
+      "  tabInsertsSpaces=0\n"
+      "  tabWidth=4\n"
+      "  fontFamily=\"DejaVu Sans Mono\"\n"
+      "}\n");
+
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(text, &errorMessage);
+
+  QVERIFY2(root.has_value(), qPrintable(errorMessage));
+
+  const AdlNode *textAreaNode =
+      ::findChild(*root, QStringLiteral("text_area"));
+  QVERIFY(textAreaNode);
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("clrmod")),
+      QStringLiteral("alarm"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("format")),
+      QStringLiteral("string"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("readOnly")),
+      QStringLiteral("1"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("wordWrap")),
+      QStringLiteral("0"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("lineWrapMode")),
+      QStringLiteral("fixedColumnWidth"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("wrapColumnWidth")),
+      QStringLiteral("96"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("showVerticalScrollBar")),
+      QStringLiteral("0"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("showHorizontalScrollBar")),
+      QStringLiteral("1"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("commitMode")),
+      QStringLiteral("explicit"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("tabInsertsSpaces")),
+      QStringLiteral("0"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("tabWidth")),
+      QStringLiteral("4"));
+  QCOMPARE(propertyValue(*textAreaNode, QStringLiteral("fontFamily")),
+      QStringLiteral("DejaVu Sans Mono"));
+
+  const AdlNode *controlNode =
+      ::findChild(*textAreaNode, QStringLiteral("control"));
+  QVERIFY(controlNode);
+  QCOMPARE(propertyValue(*controlNode, QStringLiteral("chan")),
+      QStringLiteral("soft:longText"));
+  QCOMPARE(propertyValue(*controlNode, QStringLiteral("clr")),
+      QStringLiteral("14"));
+  QCOMPARE(propertyValue(*controlNode, QStringLiteral("bclr")),
+      QStringLiteral("4"));
 }
 
 void TestAdlParser::rejectsMalformedInput()

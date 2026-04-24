@@ -665,5 +665,183 @@
       "waveform_length": 0,
       "show_legend": false
     }
+  },
+  {
+    "name": "text_area_char_waveform_live_text",
+    "display": "tests/test_TextArea.adl",
+    "selector": {
+      "type": "text_area",
+      "channel": "ta:text:main",
+      "geometry": {
+        "x": 70,
+        "y": 178,
+        "width": 260,
+        "height": 120
+      }
+    },
+    "exit_after_ms": 5500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "write_access": true,
+      "execute_mode": true,
+      "format": "string",
+      "read_only": false,
+      "word_wrap": true,
+      "line_wrap_mode": "widgetWidth",
+      "commit_mode": "ctrlEnter",
+      "value_kind": "char_array",
+      "element_count": 256,
+      "has_string_value": true,
+      "string_value": "Main read/write buffer\nLine 2 seeded by run_local_ioc.sh\nLine 3: punctuation [] {} = : ; and spaces"
+    }
+  },
+  {
+    "name": "text_area_readonly_char_waveform",
+    "display": "tests/test_TextArea.adl",
+    "selector": {
+      "type": "text_area",
+      "channel": "ta:text:readonly",
+      "geometry": {
+        "x": 410,
+        "y": 178,
+        "width": 260,
+        "height": 120
+      }
+    },
+    "exit_after_ms": 5500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "write_access": true,
+      "read_only": true,
+      "value_kind": "char_array",
+      "element_count": 256,
+      "has_string_value": true,
+      "string_value": "Read-only monitor\nExternal updates should redraw here\nTyping must stay disabled in execute mode"
+    }
+  },
+  {
+    "name": "text_area_no_wrap_properties",
+    "display": "tests/test_TextArea.adl",
+    "selector": {
+      "type": "text_area",
+      "channel": "ta:text:nowrap",
+      "geometry": {
+        "x": 750,
+        "y": 178,
+        "width": 260,
+        "height": 120
+      }
+    },
+    "exit_after_ms": 5500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "word_wrap": false,
+      "line_wrap_mode": "noWrap",
+      "show_horizontal_scroll_bar": true,
+      "value_kind": "char_array",
+      "element_count": 512,
+      "has_string_value": true
+    }
+  },
+  {
+    "name": "text_area_explicit_commit_properties",
+    "display": "tests/test_TextArea.adl",
+    "selector": {
+      "type": "text_area",
+      "channel": "ta:text:explicit",
+      "geometry": {
+        "x": 70,
+        "y": 360,
+        "width": 260,
+        "height": 115
+      }
+    },
+    "exit_after_ms": 5500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "commit_mode": "explicit",
+      "tab_inserts_spaces": true,
+      "value_kind": "char_array",
+      "string_value": "Explicit commit target\nEdit this text, then right-click Commit or Revert."
+    }
+  },
+  {
+    "name": "text_area_string_fallback",
+    "display": "tests/test_TextArea.adl",
+    "selector": {
+      "type": "text_area",
+      "channel": "ta:string:single",
+      "geometry": {
+        "x": 1490,
+        "y": 360,
+        "width": 220,
+        "height": 78
+      }
+    },
+    "exit_after_ms": 5500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "write_access": true,
+      "value_kind": "string",
+      "element_count": 1,
+      "requested_count": 1,
+      "has_string_value": true,
+      "string_value": "READY_TEXT"
+    }
+  },
+  {
+    "name": "text_area_numeric_fallback",
+    "display": "tests/test_TextArea.adl",
+    "selector": {
+      "type": "text_area",
+      "channel": "ta:number:fallback",
+      "geometry": {
+        "x": 750,
+        "y": 534,
+        "width": 260,
+        "height": 112
+      }
+    },
+    "exit_after_ms": 5500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "write_access": true,
+      "value_kind": "numeric",
+      "element_count": 1,
+      "has_numeric_value": true,
+      "numeric_value": 42.125,
+      "numeric_tolerance": 0.000001
+    }
+  },
+  {
+    "name": "text_area_blank_channel_probe",
+    "display": "tests/test_TextArea.adl",
+    "selector": {
+      "type": "text_area",
+      "channel": "",
+      "geometry": {
+        "x": 1250,
+        "y": 360,
+        "width": 200,
+        "height": 78
+      }
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": false,
+      "initial_update": false,
+      "execute_mode": true,
+      "read_only": true,
+      "color_mode": "alarm",
+      "value_kind": "none",
+      "has_string_value": false,
+      "has_numeric_value": false
+    }
   }
 ]

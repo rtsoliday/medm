@@ -86,6 +86,21 @@ row_count="$(wc -l < "${tmp_pvs}" | tr -d ' ')"
       byte:*)
         type="uint"
         ;;
+      ta:text:nowrap)
+        type="char"
+        element_count=512
+        ;;
+      ta:text:small)
+        type="char"
+        element_count=80
+        ;;
+      ta:text:*)
+        type="char"
+        element_count=256
+        ;;
+      ta:string:*)
+        type="string"
+        ;;
       waterfall:test:*:waveform)
         element_count=64
         ;;

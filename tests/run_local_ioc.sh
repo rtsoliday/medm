@@ -186,6 +186,22 @@ join_cavput_array_values() {
   printf -v "${out_name}" '%s' "${joined}"
 }
 
+text_to_cavput_char_csv() {
+  local out_name="$1"
+  local text="$2"
+  local joined=""
+  local byte=""
+
+  for byte in $(printf '%s\0' "${text}" | od -An -v -t u1); do
+    if [[ -n "${joined}" ]]; then
+      joined+='\,'
+    fi
+    joined+="${byte}"
+  done
+
+  printf -v "${out_name}" '%s' "${joined}"
+}
+
 put_waveform_batch() {
   local prefix="$1"
   local waveform_points="$2"
@@ -1499,6 +1515,135 @@ set_text_fonts_test_pvs() {
   return 0
 }
 
+set_text_area_test_pvs() {
+  local prefix="$1"
+  local main_text=""
+  local readonly_text=""
+  local nowrap_text=""
+  local fixed_text=""
+  local explicit_text=""
+  local enter_text=""
+  local focus_text=""
+  local small_text=""
+  local baseline_text=""
+  local tabs_text=""
+  printf -v main_text '%s\n%s\n%s' \
+      "Main read/write buffer" \
+      "Line 2 seeded by run_local_ioc.sh" \
+      "Line 3: punctuation [] {} = : ; and spaces"
+  printf -v readonly_text '%s\n%s\n%s' \
+      "Read-only monitor" \
+      "External updates should redraw here" \
+      "Typing must stay disabled in execute mode"
+  printf -v nowrap_text '%s%s%s' \
+      "This is one deliberately long line seeded into a DBF_CHAR waveform " \
+      "so no-wrap mode must use horizontal scrolling instead of reflowing " \
+      "the text."
+  printf -v fixed_text '%s\n%s\n%s' \
+      "Fixed-column wrapping target:" \
+      "123456789012345678901234567890123456" \
+      "Each line should wrap near column 36."
+  printf -v explicit_text '%s\n%s' \
+      "Explicit commit target" \
+      "Edit this text, then right-click Commit or Revert."
+  printf -v enter_text '%s\n%s' \
+      "Enter commit target" \
+      "Press Shift+Enter for a newline."
+  printf -v focus_text '%s\n%s' \
+      "Focus-lost commit target" \
+      "Changes write when focus leaves."
+  printf -v small_text '%s\n%s\n%s' "tiny" "wrap" "fit"
+  printf -v baseline_text '%s%s' \
+      "A/B baseline text uses the same PV in both boxes. " \
+      "Only wordWrap differs, so wrapping regressions should be obvious."
+  printf -v tabs_text '%s\n%s\n%s' \
+      "Tab behavior target" \
+      "This widget lets Tab move focus." \
+      "Other widgets insert spaces."
+  local -a text_area_char_pvs=(
+    "ta:text:main"
+    "ta:text:readonly"
+    "ta:text:nowrap"
+    "ta:text:fixed"
+    "ta:text:explicit"
+    "ta:text:enter"
+    "ta:text:focus"
+    "ta:text:small"
+    "ta:text:baseline"
+    "ta:text:tabs"
+  )
+  local -a text_area_char_texts=(
+    "${main_text}"
+    "${readonly_text}"
+    "${nowrap_text}"
+    "${fixed_text}"
+    "${explicit_text}"
+    "${enter_text}"
+    "${focus_text}"
+    "${small_text}"
+    "${baseline_text}"
+    "${tabs_text}"
+  )
+  local -a text_area_numeric_values=(
+    # pv value lopr hopr prec
+    "ta:number:fallback 42.125 -100 100 3"
+  )
+  local -a text_area_string_values=(
+    # pv value
+    "ta:string:single READY_TEXT"
+  )
+
+  echo "Initializing text area PVs for tests/test_TextArea.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local index pv full_pv csv entry value lopr hopr prec
+    for index in "${!text_area_char_pvs[@]}"; do
+      pv="${text_area_char_pvs[${index}]}"
+      full_pv="${prefix}${pv}"
+      text_to_cavput_char_csv csv "${text_area_char_texts[${index}]}"
+      if ! "${CAVPUT_BIN}" "-list=${full_pv}=${csv}" >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      for entry in "${text_area_numeric_values[@]}"; do
+        read -r pv value lopr hopr prec <<< "${entry}"
+        full_pv="${prefix}${pv}"
+        if ! "${CAVPUT_BIN}" \
+            "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+            >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      for entry in "${text_area_string_values[@]}"; do
+        read -r pv value <<< "${entry}"
+        full_pv="${prefix}${pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${value}" >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Text area PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize text area PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_text_entry_test_pvs() {
   local prefix="$1"
   local -a text_entry_numeric_values=(
@@ -1707,6 +1852,7 @@ set_polygon_test_pvs "${PV_PREFIX}" || true
 set_oval_test_pvs "${PV_PREFIX}" || true
 set_text_test_pvs "${PV_PREFIX}" || true
 set_text_fonts_test_pvs "${PV_PREFIX}" || true
+set_text_area_test_pvs "${PV_PREFIX}" || true
 set_text_entry_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true

@@ -635,6 +635,7 @@ public:
 
     appendVisible(textElements_);
     appendVisible(textEntryElements_);
+    appendVisible(textAreaElements_);
     appendVisible(sliderElements_);
     appendVisible(wheelSwitchElements_);
     appendVisible(choiceButtonElements_);
@@ -775,6 +776,9 @@ public:
       if (dynamic_cast<TextEntryElement *>(widget)) {
         return QStringLiteral("Text Entry");
       }
+      if (dynamic_cast<TextAreaElement *>(widget)) {
+        return QStringLiteral("Text Area");
+      }
       if (dynamic_cast<SliderElement *>(widget)) {
         return QStringLiteral("Slider");
       }
@@ -883,6 +887,7 @@ public:
 
     considerList(textElements_);
     considerList(textEntryElements_);
+    considerList(textAreaElements_);
     considerList(sliderElements_);
     considerList(wheelSwitchElements_);
     considerList(choiceButtonElements_);
@@ -3059,6 +3064,7 @@ protected:
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
+            || state->createTool == CreateTool::kTextArea
             || state->createTool == CreateTool::kSlider
             || state->createTool == CreateTool::kWheelSwitch
             || state->createTool == CreateTool::kChoiceButton
@@ -3383,6 +3389,7 @@ private:
   TextElement *loadTextElement(const AdlNode &textNode);
   TextMonitorElement *loadTextMonitorElement(const AdlNode &textUpdateNode);
   TextEntryElement *loadTextEntryElement(const AdlNode &textEntryNode);
+  TextAreaElement *loadTextAreaElement(const AdlNode &textAreaNode);
   SliderElement *loadSliderElement(const AdlNode &valuatorNode);
   WheelSwitchElement *loadWheelSwitchElement(const AdlNode &wheelNode);
   ChoiceButtonElement *loadChoiceButtonElement(const AdlNode &choiceNode);
@@ -3492,6 +3499,8 @@ private:
   ChoiceButtonStacking parseChoiceButtonStacking(const QString &value) const;
   RelatedDisplayVisual parseRelatedDisplayVisual(const QString &value) const;
   RelatedDisplayMode parseRelatedDisplayMode(const QString &value) const;
+  TextAreaWrapMode parseTextAreaWrapMode(const QString &value) const;
+  TextAreaCommitMode parseTextAreaCommitMode(const QString &value) const;
   void applyChannelProperties(const AdlNode &node,
     const std::function<void(int, const QString &)> &setter,
     int baseChannelIndex, int letterStartIndex) const;
@@ -3638,6 +3647,9 @@ private:
   QList<TextEntryElement *> textEntryElements_;
   TextEntryElement *selectedTextEntryElement_ = nullptr;
   QHash<TextEntryElement *, TextEntryRuntime *> textEntryRuntimes_;
+  QList<TextAreaElement *> textAreaElements_;
+  TextAreaElement *selectedTextAreaElement_ = nullptr;
+  QHash<TextAreaElement *, TextAreaRuntime *> textAreaRuntimes_;
   QList<SliderElement *> sliderElements_;
   SliderElement *selectedSliderElement_ = nullptr;
   QHash<SliderElement *, SliderRuntime *> sliderRuntimes_;
@@ -3816,6 +3828,15 @@ private:
     }
     selectedTextEntryElement_->setSelected(false);
     selectedTextEntryElement_ = nullptr;
+  }
+
+  void clearTextAreaSelection()
+  {
+    if (!selectedTextAreaElement_) {
+      return;
+    }
+    selectedTextAreaElement_->setSelected(false);
+    selectedTextAreaElement_ = nullptr;
   }
 
   void clearSliderSelection()
@@ -4084,6 +4105,10 @@ private:
       textEntry->setSelected(selected);
       return;
     }
+    if (auto *textArea = dynamic_cast<TextAreaElement *>(widget)) {
+      textArea->setSelected(selected);
+      return;
+    }
     if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
       slider->setSelected(selected);
       return;
@@ -4253,6 +4278,12 @@ private:
     if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
       if (selectedTextEntryElement_ == textEntry) {
         selectedTextEntryElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *textArea = dynamic_cast<TextAreaElement *>(widget)) {
+      if (selectedTextAreaElement_ == textArea) {
+        selectedTextAreaElement_ = nullptr;
       }
       return;
     }
@@ -4465,6 +4496,13 @@ private:
     if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
       if (selectedTextEntryElement_ == textEntry) {
         clearTextEntrySelection();
+        clearTextAreaSelection();
+        return;
+      }
+    }
+    if (auto *textArea = dynamic_cast<TextAreaElement *>(widget)) {
+      if (selectedTextAreaElement_ == textArea) {
+        clearTextAreaSelection();
         return;
       }
     }
@@ -4690,6 +4728,7 @@ private:
     }
     appendUnique(selectedTextElement_);
     appendUnique(selectedTextEntryElement_);
+    appendUnique(selectedTextAreaElement_);
     appendUnique(selectedSliderElement_);
     appendUnique(selectedWheelSwitchElement_);
     appendUnique(selectedChoiceButtonElement_);
@@ -4783,6 +4822,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -4841,6 +4881,7 @@ private:
   void removeWheelSwitchRuntime(WheelSwitchElement *element);
   void removeTextMonitorRuntime(TextMonitorElement *element);
   void removeTextEntryRuntime(TextEntryElement *element);
+  void removeTextAreaRuntime(TextAreaElement *element);
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -4860,6 +4901,8 @@ private:
       removeTextRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, TextEntryElement>) {
       removeTextEntryRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, TextAreaElement>) {
+      removeTextAreaRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, SliderElement>) {
       removeSliderRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, WheelSwitchElement>) {
@@ -5066,6 +5109,37 @@ private:
       });
       if (removeOriginal) {
         cutSelectedElement(textEntryElements_, selectedTextEntryElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedTextAreaElement_) {
+      TextAreaElement *element = selectedTextAreaElement_;
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = target.translateRectForPaste(geometry, offset);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        TextAreaElement *newElement = target.loadTextAreaElement(nodeCopy);
+        if (newElement) {
+          target.selectTextAreaElement(newElement);
+          target.showResourcePaletteForTextArea(newElement);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(textAreaElements_, selectedTextAreaElement_);
         finalizeCut();
       }
       return true;
@@ -6425,6 +6499,7 @@ private:
   {
     return !multiSelection_.isEmpty() || selectedTextElement_
         || selectedTextEntryElement_
+        || selectedTextAreaElement_
         || selectedSliderElement_ || selectedWheelSwitchElement_
         || selectedChoiceButtonElement_ || selectedMenuElement_
         || selectedMessageButtonElement_ || selectedShellCommandElement_
@@ -6449,6 +6524,7 @@ private:
   bool hasSelectableElements() const
   {
     return !textElements_.isEmpty() || !textEntryElements_.isEmpty()
+        || !textAreaElements_.isEmpty()
         || !sliderElements_.isEmpty() || !wheelSwitchElements_.isEmpty()
         || !choiceButtonElements_.isEmpty() || !menuElements_.isEmpty()
         || !messageButtonElements_.isEmpty() || !shellCommandElements_.isEmpty()
@@ -6491,6 +6567,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -6833,6 +6910,166 @@ private:
         },
         [this, element](const PvLimits &limits) {
           element->setLimits(limits);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForTextArea(TextAreaElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForTextArea(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth * 2) {
+            adjusted.setWidth(kMinimumTextWidth * 2);
+          }
+          if (adjusted.height() < kMinimumTextHeight * 3) {
+            adjusted.setHeight(kMinimumTextHeight * 3);
+          }
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->format();
+        },
+        [this, element](TextMonitorFormat format) {
+          element->setFormat(format);
+          markDirty();
+        },
+        [element]() {
+          return element->precision();
+        },
+        [this, element](int precision) {
+          element->setPrecision(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->precisionSource();
+        },
+        [this, element](PvLimitSource source) {
+          element->setPrecisionSource(source);
+          markDirty();
+        },
+        [element]() {
+          return element->precisionDefault();
+        },
+        [this, element](int precision) {
+          element->setPrecisionDefault(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->channel();
+        },
+        [this, element](const QString &value) {
+          element->setChannel(value);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
+          markDirty();
+        },
+        [element]() {
+          return element->isReadOnly();
+        },
+        [this, element](bool readOnly) {
+          element->setReadOnly(readOnly);
+          markDirty();
+        },
+        [element]() {
+          return element->wordWrap();
+        },
+        [this, element](bool wordWrap) {
+          element->setWordWrap(wordWrap);
+          markDirty();
+        },
+        [element]() {
+          return element->lineWrapMode();
+        },
+        [this, element](TextAreaWrapMode mode) {
+          element->setLineWrapMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->wrapColumnWidth();
+        },
+        [this, element](int width) {
+          element->setWrapColumnWidth(width);
+          markDirty();
+        },
+        [element]() {
+          return element->showVerticalScrollBar();
+        },
+        [this, element](bool visible) {
+          element->setShowVerticalScrollBar(visible);
+          markDirty();
+        },
+        [element]() {
+          return element->showHorizontalScrollBar();
+        },
+        [this, element](bool visible) {
+          element->setShowHorizontalScrollBar(visible);
+          markDirty();
+        },
+        [element]() {
+          return element->commitMode();
+        },
+        [this, element](TextAreaCommitMode mode) {
+          element->setCommitMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->tabInsertsSpaces();
+        },
+        [this, element](bool enabled) {
+          element->setTabInsertsSpaces(enabled);
+          markDirty();
+        },
+        [element]() {
+          return element->tabWidth();
+        },
+        [this, element](int width) {
+          element->setTabWidth(width);
+          markDirty();
+        },
+        [element]() {
+          return element->fontFamily();
+        },
+        [this, element](const QString &family) {
+          element->setFontFamily(family);
           markDirty();
         });
   }
@@ -9634,6 +9871,8 @@ private:
       appendChannelArray(AdlWriter::collectChannels(element));
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
+      appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {
@@ -9727,6 +9966,7 @@ public:
     appendList(textElements_);
     appendList(textMonitorElements_);
     appendList(textEntryElements_);
+    appendList(textAreaElements_);
     appendList(sliderElements_);
     appendList(wheelSwitchElements_);
     appendList(choiceButtonElements_);
@@ -10007,6 +10247,35 @@ private:
       return;
     }
 
+    if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
+      if (auto *runtime = textAreaRuntimes_.value(element, nullptr)) {
+        channelName = runtime->channelName_;
+      } else {
+        channelName = element->channel();
+      }
+      dialog->setTextMonitorCallbacks(
+          channelName,
+          [element]() { return element->limits().precisionSource; },
+          [element](PvLimitSource source) {
+            PvLimits limits = element->limits();
+            limits.precisionSource = source;
+            element->setLimits(limits);
+          },
+          [element]() { return element->limits().precisionDefault; },
+          [element](int value) {
+            PvLimits limits = element->limits();
+            limits.precisionDefault = value;
+            element->setLimits(limits);
+          },
+          [element]() { return element->update(); },
+          [element]() { return element->limits(); },
+          [element](const PvLimits &limits) { element->setLimits(limits); },
+          [element]() { return element->displayLowLimit(); },
+          [element]() { return element->displayHighLimit(); });
+      dialog->showForTextMonitor();
+      return;
+    }
+
     if (auto *element = dynamic_cast<SliderElement *>(widget)) {
       if (auto *runtime = sliderRuntimes_.value(element, nullptr)) {
         channelName = runtime->channelName_;
@@ -10221,6 +10490,9 @@ private:
     if (dynamic_cast<TextEntryElement *>(widget)) {
       return QStringLiteral("Text Entry");
     }
+    if (dynamic_cast<TextAreaElement *>(widget)) {
+      return QStringLiteral("Text Area");
+    }
     if (dynamic_cast<SliderElement *>(widget)) {
       return QStringLiteral("Slider");
     }
@@ -10344,6 +10616,12 @@ private:
       }
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       if (auto *runtime = textEntryRuntimes_.value(element, nullptr)) {
+        addRef(runtime->channelName_);
+      } else {
+        addRef(element->channel());
+      }
+    } else if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
+      if (auto *runtime = textAreaRuntimes_.value(element, nullptr)) {
         addRef(runtime->channelName_);
       } else {
         addRef(element->channel());
@@ -11179,6 +11457,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11215,6 +11494,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11241,6 +11521,44 @@ private:
     selectedTextEntryElement_->setSelected(true);
   }
 
+  void selectTextAreaElement(TextAreaElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedTextAreaElement_) {
+      selectedTextAreaElement_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearTextAreaSelection();
+    clearSliderSelection();
+    clearWheelSwitchSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedTextAreaElement_ = element;
+    selectedTextAreaElement_->setSelected(true);
+  }
+
   void selectSliderElement(SliderElement *element)
   {
     if (!element) {
@@ -11252,6 +11570,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11289,6 +11608,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11326,6 +11646,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11363,6 +11684,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11400,6 +11722,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11437,6 +11760,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11474,6 +11798,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11511,6 +11836,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11547,6 +11873,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -11583,6 +11910,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11619,6 +11947,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11655,6 +11984,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11691,6 +12021,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11728,6 +12059,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11765,6 +12097,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11801,6 +12134,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11838,6 +12172,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11873,6 +12208,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11909,6 +12245,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11944,6 +12281,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -11980,6 +12318,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -12016,6 +12355,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -12050,6 +12390,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -12085,6 +12426,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -12120,6 +12462,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -12155,6 +12498,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -12190,6 +12534,7 @@ private:
     clearDisplaySelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearChoiceButtonSelection();
     clearMenuSelection();
@@ -12226,6 +12571,9 @@ private:
     }
     if (selectedTextEntryElement_) {
       return selectedTextEntryElement_;
+    }
+    if (selectedTextAreaElement_) {
+      return selectedTextAreaElement_;
     }
     if (selectedSliderElement_) {
       return selectedSliderElement_;
@@ -12328,6 +12676,10 @@ private:
     } else if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
       selectTextEntryElement(textEntry);
       showResourcePaletteForTextEntry(textEntry);
+      handled = true;
+    } else if (auto *textArea = dynamic_cast<TextAreaElement *>(widget)) {
+      selectTextAreaElement(textArea);
+      showResourcePaletteForTextArea(textArea);
       handled = true;
     } else if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
       selectSliderElement(slider);
@@ -14001,6 +14353,7 @@ private:
 
     considerList(textElements_);
     considerList(textEntryElements_);
+    considerList(textAreaElements_);
     considerList(sliderElements_);
     considerList(wheelSwitchElements_);
     considerList(choiceButtonElements_);
@@ -14055,6 +14408,7 @@ private:
     clearOvalSelection();
     clearTextSelection();
     clearTextEntrySelection();
+    clearTextAreaSelection();
     clearSliderSelection();
     clearWheelSwitchSelection();
     clearChoiceButtonSelection();
@@ -14165,6 +14519,16 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createTextEntryElement(rect);
+      break;
+    case CreateTool::kTextArea:
+      if (rect.width() < kMinimumTextWidth * 2) {
+        rect.setWidth(kMinimumTextWidth * 2);
+      }
+      if (rect.height() < kMinimumTextHeight * 3) {
+        rect.setHeight(kMinimumTextHeight * 3);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createTextAreaElement(rect);
       break;
     case CreateTool::kSlider:
       if (rect.width() < kMinimumSliderWidth) {
@@ -15074,6 +15438,36 @@ private:
     textEntryElements_.append(element);
     selectTextEntryElement(element);
     showResourcePaletteForTextEntry(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
+  void createTextAreaElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create Text Area"));
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth * 2) {
+      target.setWidth(kMinimumTextWidth * 2);
+    }
+    if (target.height() < kMinimumTextHeight * 3) {
+      target.setHeight(kMinimumTextHeight * 3);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new TextAreaElement(displayArea_);
+    element->setFont(font());
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    textAreaElements_.append(element);
+    selectTextAreaElement(element);
+    showResourcePaletteForTextArea(element);
     deactivateCreateTool();
     markDirty();
   }
@@ -16006,6 +16400,7 @@ private:
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kTextEntry
+            || state->createTool == CreateTool::kTextArea
             || state->createTool == CreateTool::kSlider
             || state->createTool == CreateTool::kWheelSwitch
             || state->createTool == CreateTool::kChoiceButton
@@ -16729,6 +17124,7 @@ private:
     };
 
     if (attemptSingleChannelRuntime(textEntryRuntimes_) ||
+        attemptSingleChannelRuntime(textAreaRuntimes_) ||
         attemptSingleChannelRuntime(sliderRuntimes_) ||
         attemptSingleChannelRuntime(wheelSwitchRuntimes_) ||
         attemptSingleChannelRuntime(choiceButtonRuntimes_) ||
@@ -17015,6 +17411,14 @@ private:
         addMenuAction(controllersMenu, QStringLiteral("Text Entry"));
     QObject::connect(textEntryAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kTextEntry);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
+    auto *textAreaAction =
+        addMenuAction(controllersMenu, QStringLiteral("Text Area"));
+    QObject::connect(textAreaAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kTextArea);
       if (!lastContextMenuGlobalPos_.isNull()) {
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
@@ -17566,6 +17970,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
   for (TextEntryElement *e : textEntryElements_) {
     scaleWidget(e);
   }
+  for (TextAreaElement *e : textAreaElements_) {
+    scaleWidget(e);
+  }
   for (SliderElement *e : sliderElements_) {
     scaleWidget(e);
   }
@@ -17844,6 +18251,13 @@ inline bool DisplayWindow::isTestAutomationReady() const
   if (!allWidgetsReady(textMonitorElements_, textMonitorRuntimes_,
           [](TextMonitorElement *element) { return element->channel(0); },
           [](TextMonitorRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(textAreaElements_, textAreaRuntimes_,
+          [](TextAreaElement *element) { return element->channel(); },
+          [](TextAreaRuntime *runtime) {
             return runtime->initialUpdateTracked_;
           })) {
     return false;
@@ -18643,6 +19057,79 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
           entry->hasExplicitLimitsData(), entry->hasExplicitLimitsBlock(),
           entry->hasExplicitPrecisionData(),
           entry->hasExplicitLowLimitData(), entry->hasExplicitHighLimitData(),
+          true);
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *area = dynamic_cast<TextAreaElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("text_area {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(area));
+      const QColor areaForeground = resolvedForegroundColor(area,
+          area->foregroundColor());
+      const QColor areaBackground = resolvedBackgroundColor(area,
+          area->backgroundColor());
+      AdlWriter::writeControlSection(stream, 1, area->channel(),
+          AdlWriter::medmColorIndex(areaForeground),
+          AdlWriter::medmColorIndex(areaBackground));
+      if (area->colorMode() != TextColorMode::kStatic) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("clrmod=\"%1\"")
+                .arg(AdlWriter::colorModeString(area->colorMode())));
+      }
+      if (area->format() != TextMonitorFormat::kDecimal) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("format=\"%1\"")
+                .arg(AdlWriter::textMonitorFormatString(area->format())));
+      }
+      if (area->isReadOnly()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("readOnly=1"));
+      }
+      if (!area->wordWrap()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("wordWrap=0"));
+      }
+      if (area->lineWrapMode() != TextAreaWrapMode::kWidgetWidth) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("lineWrapMode=\"%1\"")
+                .arg(AdlWriter::textAreaWrapModeString(
+                    area->lineWrapMode())));
+      }
+      if (area->wrapColumnWidth() != 80) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("wrapColumnWidth=%1")
+                .arg(area->wrapColumnWidth()));
+      }
+      if (!area->showVerticalScrollBar()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("showVerticalScrollBar=0"));
+      }
+      if (area->showHorizontalScrollBar()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("showHorizontalScrollBar=1"));
+      }
+      if (area->commitMode() != TextAreaCommitMode::kCtrlEnter) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("commitMode=\"%1\"")
+                .arg(AdlWriter::textAreaCommitModeString(
+                    area->commitMode())));
+      }
+      if (!area->tabInsertsSpaces()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("tabInsertsSpaces=0"));
+      }
+      if (area->tabWidth() != 8) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("tabWidth=%1").arg(area->tabWidth()));
+      }
+      if (!area->fontFamily().trimmed().isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("fontFamily=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(area->fontFamily())));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, area->limits(),
+          area->hasExplicitLimitsData(), area->hasExplicitLimitsBlock(),
+          area->hasExplicitPrecisionData(),
+          area->hasExplicitLowLimitData(), area->hasExplicitHighLimitData(),
           true);
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
@@ -19870,6 +20357,79 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *area = dynamic_cast<TextAreaElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text_area {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(area));
+    const QColor areaForeground = resolveForeground(area,
+        area->foregroundColor());
+    const QColor areaBackground = resolveBackground(area,
+        area->backgroundColor());
+    AdlWriter::writeControlSection(stream, next, area->channel(),
+        AdlWriter::medmColorIndex(areaForeground),
+        AdlWriter::medmColorIndex(areaBackground));
+    if (area->colorMode() != TextColorMode::kStatic) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("clrmod=\"%1\"")
+              .arg(AdlWriter::colorModeString(area->colorMode())));
+    }
+    if (area->format() != TextMonitorFormat::kDecimal) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("format=\"%1\"")
+              .arg(AdlWriter::textMonitorFormatString(area->format())));
+    }
+    if (area->isReadOnly()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("readOnly=1"));
+    }
+    if (!area->wordWrap()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("wordWrap=0"));
+    }
+    if (area->lineWrapMode() != TextAreaWrapMode::kWidgetWidth) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("lineWrapMode=\"%1\"")
+              .arg(AdlWriter::textAreaWrapModeString(area->lineWrapMode())));
+    }
+    if (area->wrapColumnWidth() != 80) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("wrapColumnWidth=%1")
+              .arg(area->wrapColumnWidth()));
+    }
+    if (!area->showVerticalScrollBar()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("showVerticalScrollBar=0"));
+    }
+    if (area->showHorizontalScrollBar()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("showHorizontalScrollBar=1"));
+    }
+    if (area->commitMode() != TextAreaCommitMode::kCtrlEnter) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("commitMode=\"%1\"")
+              .arg(AdlWriter::textAreaCommitModeString(
+                  area->commitMode())));
+    }
+    if (!area->tabInsertsSpaces()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("tabInsertsSpaces=0"));
+    }
+    if (area->tabWidth() != 8) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("tabWidth=%1").arg(area->tabWidth()));
+    }
+    if (!area->fontFamily().trimmed().isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("fontFamily=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(area->fontFamily())));
+    }
+    AdlWriter::writeLimitsSection(stream, next, area->limits(),
+      area->hasExplicitLimitsData(), area->hasExplicitLimitsBlock(),
+      area->hasExplicitPrecisionData(),
+      area->hasExplicitLowLimitData(), area->hasExplicitHighLimitData(),
+      true);
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *slider = dynamic_cast<SliderElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("valuator {"));
@@ -20966,6 +21526,8 @@ inline void DisplayWindow::clearAllElements()
           removeTextRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, TextEntryElement *>) {
           removeTextEntryRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, TextAreaElement *>) {
+          removeTextAreaRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, SliderElement *>) {
           removeSliderRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, WheelSwitchElement *>) {
@@ -21023,6 +21585,7 @@ inline void DisplayWindow::clearAllElements()
   };
   clearList(textElements_);
   clearList(textEntryElements_);
+  clearList(textAreaElements_);
   clearList(sliderElements_);
   clearList(wheelSwitchElements_);
   clearList(choiceButtonElements_);
@@ -21504,6 +22067,44 @@ inline RelatedDisplayMode DisplayWindow::parseRelatedDisplayMode(
   return RelatedDisplayMode::kAdd;
 }
 
+inline TextAreaWrapMode DisplayWindow::parseTextAreaWrapMode(
+    const QString &value) const
+{
+  QString normalized = value.trimmed().toLower();
+  normalized.replace(QChar('-'), QChar(' '));
+  normalized.replace(QChar('_'), QChar(' '));
+  const QString compact = QString(normalized).remove(QChar(' '));
+
+  if (compact == QStringLiteral("nowrap")) {
+    return TextAreaWrapMode::kNoWrap;
+  }
+  if (compact == QStringLiteral("fixedcolumnwidth")) {
+    return TextAreaWrapMode::kFixedColumnWidth;
+  }
+  return TextAreaWrapMode::kWidgetWidth;
+}
+
+inline TextAreaCommitMode DisplayWindow::parseTextAreaCommitMode(
+    const QString &value) const
+{
+  QString normalized = value.trimmed().toLower();
+  normalized.replace(QChar('-'), QChar(' '));
+  normalized.replace(QChar('_'), QChar(' '));
+  const QString compact = QString(normalized).remove(QChar(' '));
+
+  if (compact == QStringLiteral("enter")) {
+    return TextAreaCommitMode::kEnter;
+  }
+  if (compact == QStringLiteral("onfocuslost")
+      || compact == QStringLiteral("focuslost")) {
+    return TextAreaCommitMode::kOnFocusLost;
+  }
+  if (compact == QStringLiteral("explicit")) {
+    return TextAreaCommitMode::kExplicit;
+  }
+  return TextAreaCommitMode::kCtrlEnter;
+}
+
 inline QString channelValueWithLegacyFallback(const AdlNode &node)
 {
   QString value = propertyValue(node, QStringLiteral("chan"));
@@ -21739,6 +22340,7 @@ inline QRect DisplayWindow::widgetGeometryForSerialization(
 inline bool DisplayWindow::isControlWidget(const QWidget *widget) const
 {
   return dynamic_cast<const TextEntryElement *>(widget)
+      || dynamic_cast<const TextAreaElement *>(widget)
       || dynamic_cast<const SliderElement *>(widget)
       || dynamic_cast<const WheelSwitchElement *>(widget)
       || dynamic_cast<const ChoiceButtonElement *>(widget)
@@ -22524,6 +23126,90 @@ inline QJsonObject DisplayWindow::testStateObject() const
         valueKind = "char_array";
         break;
       case TextMonitorRuntime::ValueKind::kNone:
+      default:
+        valueKind = "none";
+        break;
+      }
+      widgetObject[QStringLiteral("value_kind")] = QLatin1String(valueKind);
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (TextAreaElement *element : textAreaElements_) {
+    if (!element) {
+      continue;
+    }
+    TextAreaRuntime *runtime = textAreaRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "text_area", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("format")] =
+        AdlWriter::textMonitorFormatString(element->format());
+    widgetObject[QStringLiteral("foreground")] =
+        colorToString(element->foregroundColor());
+    widgetObject[QStringLiteral("background")] =
+        colorToString(element->backgroundColor());
+    widgetObject[QStringLiteral("read_only")] = element->isReadOnly();
+    widgetObject[QStringLiteral("word_wrap")] = element->wordWrap();
+    widgetObject[QStringLiteral("line_wrap_mode")] =
+        AdlWriter::textAreaWrapModeString(element->lineWrapMode());
+    widgetObject[QStringLiteral("wrap_column_width")] =
+        element->wrapColumnWidth();
+    widgetObject[QStringLiteral("show_vertical_scroll_bar")] =
+        element->showVerticalScrollBar();
+    widgetObject[QStringLiteral("show_horizontal_scroll_bar")] =
+        element->showHorizontalScrollBar();
+    widgetObject[QStringLiteral("commit_mode")] =
+        AdlWriter::textAreaCommitModeString(element->commitMode());
+    widgetObject[QStringLiteral("tab_inserts_spaces")] =
+        element->tabInsertsSpaces();
+    widgetObject[QStringLiteral("tab_width")] = element->tabWidth();
+    widgetObject[QStringLiteral("execute_mode")] = element->isExecuteMode();
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("write_access")] = runtime->lastWriteAccess_;
+      widgetObject[QStringLiteral("native_field_type")] = runtime->fieldType_;
+      widgetObject[QStringLiteral("element_count")] =
+          static_cast<qint64>(runtime->elementCount_);
+      widgetObject[QStringLiteral("requested_type")] = runtime->requestedType_;
+      widgetObject[QStringLiteral("requested_count")] =
+          static_cast<qint64>(runtime->requestedCount_);
+      widgetObject[QStringLiteral("byte_count")] = runtime->lastBytesValue_.size();
+      widgetObject[QStringLiteral("has_numeric_value")] =
+          runtime->hasNumericValue_;
+      widgetObject[QStringLiteral("has_string_value")] =
+          runtime->hasStringValue_;
+      if (runtime->hasNumericValue_) {
+        widgetObject[QStringLiteral("numeric_value")] =
+            runtime->lastNumericValue_;
+      }
+      if (runtime->hasStringValue_) {
+        widgetObject[QStringLiteral("string_value")] =
+            runtime->lastStringValue_;
+      }
+      if (!runtime->enumStrings_.isEmpty()) {
+        widgetObject[QStringLiteral("labels")] =
+            stringListToJson(runtime->enumStrings_);
+      }
+      const char *valueKind = "none";
+      switch (runtime->valueKind_) {
+      case TextAreaRuntime::ValueKind::kNumeric:
+        valueKind = "numeric";
+        break;
+      case TextAreaRuntime::ValueKind::kString:
+        valueKind = "string";
+        break;
+      case TextAreaRuntime::ValueKind::kEnum:
+        valueKind = "enum";
+        break;
+      case TextAreaRuntime::ValueKind::kCharArray:
+        valueKind = "char_array";
+        break;
+      case TextAreaRuntime::ValueKind::kNone:
       default:
         valueKind = "none";
         break;
@@ -23580,6 +24266,265 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
   element->show();
   element->setSelected(false);
   textEntryElements_.append(element);
+  ensureElementInStack(element);
+  return element;
+}
+
+inline TextAreaElement *DisplayWindow::loadTextAreaElement(
+    const AdlNode &textAreaNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  auto parseBoolProperty = [](const QString &value, bool defaultValue) {
+    const QString normalized = value.trimmed().toLower();
+    if (normalized.isEmpty()) {
+      return defaultValue;
+    }
+    if (normalized == QStringLiteral("1")
+        || normalized == QStringLiteral("true")
+        || normalized == QStringLiteral("yes")
+        || normalized == QStringLiteral("on")) {
+      return true;
+    }
+    if (normalized == QStringLiteral("0")
+        || normalized == QStringLiteral("false")
+        || normalized == QStringLiteral("no")
+        || normalized == QStringLiteral("off")) {
+      return false;
+    }
+    bool ok = false;
+    const int numeric = normalized.toInt(&ok);
+    return ok ? numeric != 0 : defaultValue;
+  };
+
+  QRect geometry = parseObjectGeometry(textAreaNode);
+  geometry.translate(currentElementOffset_);
+  const QRect originalGeometry = geometry;
+  auto *element = new TextAreaElement(parent);
+  element->setFont(font());
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+  element->setHasExplicitLimitsBlock(false);
+  element->setHasExplicitLimitsData(false);
+  element->setHasExplicitLowLimitData(false);
+  element->setHasExplicitHighLimitData(false);
+  element->setHasExplicitPrecisionData(false);
+
+  const QString formatValue = propertyValue(textAreaNode,
+      QStringLiteral("format"));
+  if (!formatValue.isEmpty()) {
+    element->setFormat(parseTextMonitorFormat(formatValue));
+  }
+
+  const QString colorModeValue = propertyValue(textAreaNode,
+      QStringLiteral("clrmod"));
+  if (!colorModeValue.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorModeValue));
+  }
+
+  element->setReadOnly(parseBoolProperty(
+      propertyValue(textAreaNode, QStringLiteral("readOnly")),
+      element->isReadOnly()));
+  element->setWordWrap(parseBoolProperty(
+      propertyValue(textAreaNode, QStringLiteral("wordWrap")),
+      element->wordWrap()));
+
+  const QString lineWrapModeValue = propertyValue(textAreaNode,
+      QStringLiteral("lineWrapMode"));
+  if (!lineWrapModeValue.isEmpty()) {
+    element->setLineWrapMode(parseTextAreaWrapMode(lineWrapModeValue));
+  }
+
+  bool ok = false;
+  const QString wrapColumnWidthValue = propertyValue(textAreaNode,
+      QStringLiteral("wrapColumnWidth"));
+  const int wrapColumnWidth = wrapColumnWidthValue.toInt(&ok);
+  if (ok) {
+    element->setWrapColumnWidth(wrapColumnWidth);
+  }
+
+  element->setShowVerticalScrollBar(parseBoolProperty(
+      propertyValue(textAreaNode, QStringLiteral("showVerticalScrollBar")),
+      element->showVerticalScrollBar()));
+  element->setShowHorizontalScrollBar(parseBoolProperty(
+      propertyValue(textAreaNode, QStringLiteral("showHorizontalScrollBar")),
+      element->showHorizontalScrollBar()));
+
+  const QString commitModeValue = propertyValue(textAreaNode,
+      QStringLiteral("commitMode"));
+  if (!commitModeValue.isEmpty()) {
+    element->setCommitMode(parseTextAreaCommitMode(commitModeValue));
+  }
+
+  element->setTabInsertsSpaces(parseBoolProperty(
+      propertyValue(textAreaNode, QStringLiteral("tabInsertsSpaces")),
+      element->tabInsertsSpaces()));
+  ok = false;
+  const QString tabWidthValue = propertyValue(textAreaNode,
+      QStringLiteral("tabWidth"));
+  const int tabWidth = tabWidthValue.toInt(&ok);
+  if (ok) {
+    element->setTabWidth(tabWidth);
+  }
+
+  const QString fontFamilyValue = propertyValue(textAreaNode,
+      QStringLiteral("fontFamily"));
+  if (!fontFamilyValue.isEmpty()) {
+    element->setFontFamily(fontFamilyValue);
+  }
+
+  if (const AdlNode *control = ::findChild(textAreaNode,
+          QStringLiteral("control"))) {
+    const QString channel = channelValueWithLegacyFallback(*control);
+    if (!channel.trimmed().isEmpty()) {
+      element->setChannel(channel.trimmed());
+    }
+
+    ok = false;
+    const QString clrStr = propertyValue(*control, QStringLiteral("clr"));
+    const int clrIndex = clrStr.toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+
+    ok = false;
+    const QString bclrStr = propertyValue(*control, QStringLiteral("bclr"));
+    const int bclrIndex = bclrStr.toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  if (const AdlNode *limitsNode = ::findChild(textAreaNode,
+          QStringLiteral("limits"))) {
+    element->setHasExplicitLimitsBlock(true);
+    PvLimits limits = element->limits();
+
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+    bool hasExplicitLimitsData = false;
+    bool hasExplicitLowLimitData = false;
+    bool hasExplicitHighLimitData = false;
+    bool hasExplicitPrecisionData = false;
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
+      hasExplicitLimitsData = true;
+      hasExplicitLowLimitData = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool okValue = false;
+      const double value = prop->value.toDouble(&okValue);
+      if (okValue) {
+        limits.lowDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool okValue = false;
+      const double value = prop->value.toDouble(&okValue);
+      if (okValue) {
+        limits.lowDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitLowLimitData = true;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
+      hasExplicitLimitsData = true;
+      hasExplicitHighLimitData = true;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool okValue = false;
+      const double value = prop->value.toDouble(&okValue);
+      if (okValue) {
+        limits.highDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool okValue = false;
+      const double value = prop->value.toDouble(&okValue);
+      if (okValue) {
+        limits.highDefault = value;
+        hasExplicitLimitsData = true;
+        hasExplicitHighLimitData = true;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+      hasExplicitPrecisionData = true;
+    }
+
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool okValue = false;
+      const int value = prop->value.toInt(&okValue);
+      if (okValue) {
+        limits.precisionDefault = value;
+        hasExplicitPrecisionData = true;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool okValue = false;
+      const int value = prop->value.toInt(&okValue);
+      if (okValue) {
+        limits.precisionDefault = value;
+        hasExplicitPrecisionData = true;
+      }
+    }
+
+    element->setLimits(limits);
+    element->setHasExplicitLimitsData(hasExplicitLimitsData);
+    element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
+    element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
+    element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
+  }
+
+  auto channelSetter = [element](int, const QString &value) {
+    const QString trimmed = value.trimmed();
+    if (!trimmed.isEmpty()) {
+      element->setChannel(trimmed);
+    }
+  };
+
+  applyChannelProperties(textAreaNode, channelSetter, 0, 1);
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  textAreaElements_.append(element);
   ensureElementInStack(element);
   return element;
 }
@@ -28383,6 +29328,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadTextMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("text entry")) {
     loaded = loadTextEntryElement(node) != nullptr;
+  } else if (name == QStringLiteral("text_area")) {
+    loaded = loadTextAreaElement(node) != nullptr;
   } else if (name == QStringLiteral("valuator")) {
     loaded = loadSliderElement(node) != nullptr;
   } else if (name == QStringLiteral("wheel switch")) {
@@ -28618,6 +29565,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(compositeRuntimes_, compositeElements_.size());
   reserveRuntime(textRuntimes_, textElements_.size());
   reserveRuntime(textEntryRuntimes_, textEntryElements_.size());
+  reserveRuntime(textAreaRuntimes_, textAreaElements_.size());
   reserveRuntime(rectangleRuntimes_, rectangleElements_.size());
   reserveRuntime(imageRuntimes_, imageElements_.size());
   reserveRuntime(heatmapRuntimes_, heatmapElements_.size());
@@ -28673,7 +29621,8 @@ inline void DisplayWindow::enterExecuteMode()
 
   /* Report element counts for timing diagnostics */
   int totalWidgets = compositeElements_.size() + textElements_.size() +
-      textEntryElements_.size() + rectangleElements_.size() +
+      textEntryElements_.size() + textAreaElements_.size() +
+      rectangleElements_.size() +
       imageElements_.size() + heatmapElements_.size() +
       waterfallPlotElements_.size() + ovalElements_.size() + arcElements_.size() +
       lineElements_.size() + polylineElements_.size() + polygonElements_.size() +
@@ -28722,6 +29671,19 @@ inline void DisplayWindow::enterExecuteMode()
     if (!textEntryRuntimes_.contains(element)) {
       auto *runtime = new TextEntryRuntime(element);
       textEntryRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating text area runtimes", textAreaElements_.size());
+  for (TextAreaElement *element : textAreaElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!textAreaRuntimes_.contains(element)) {
+      auto *runtime = new TextAreaRuntime(element);
+      textAreaRuntimes_.insert(element, runtime);
       runtime->start();
 
     }
@@ -29116,6 +30078,18 @@ inline void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  for (auto it = textAreaRuntimes_.begin(); it != textAreaRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  textAreaRuntimes_.clear();
+  for (TextAreaElement *element : textAreaElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = expressionChannelRuntimes_.begin();
       it != expressionChannelRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
@@ -29449,6 +30423,17 @@ inline void DisplayWindow::removeTextEntryRuntime(TextEntryElement *element)
     return;
   }
   if (auto *runtime = textEntryRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeTextAreaRuntime(TextAreaElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = textAreaRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

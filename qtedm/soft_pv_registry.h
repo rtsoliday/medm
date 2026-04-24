@@ -22,6 +22,9 @@ struct SoftPvInfoSnapshot
   int producerCount = 0;
   int connectedProducerCount = 0;
   int subscriberCount = 0;
+  bool producedByExpressionChannel = false;
+  QString expressionCalc;
+  QStringList expressionChannels;
 };
 
 class SoftPvRegistry : public QObject, public SubscriptionOwner
@@ -42,6 +45,9 @@ public:
   void publishArrayValue(const QString &name, const QVector<double> &values);
   void setControlInfo(const QString &name, double low, double high,
       short precision, const QString &units = QString());
+  void setExpressionChannelInfo(const QString &name, const QString &calc,
+      const QStringList &channels);
+  void clearExpressionChannelInfo(const QString &name);
   void setConnected(const QString &name, bool connected);
 
   bool putValue(const QString &name, double value);
@@ -100,6 +106,9 @@ private:
     double high = 0.0;
     short precision = -1;
     QString units;
+    bool producedByExpressionChannel = false;
+    QString expressionCalc;
+    QStringList expressionChannels;
     QVector<Subscriber> subscribers;
     int dispatchDepth = 0;
     bool cleanupPending = false;

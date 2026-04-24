@@ -245,6 +245,38 @@ void SoftPvRegistry::setControlInfo(const QString &name, double low,
   }
 }
 
+void SoftPvRegistry::setExpressionChannelInfo(const QString &name,
+    const QString &calc, const QStringList &channels)
+{
+  assertMainThread();
+
+  Entry *entry = findEntry(name);
+  if (!entry) {
+    return;
+  }
+
+  entry->producedByExpressionChannel = true;
+  entry->expressionCalc = calc.trimmed();
+  entry->expressionChannels.clear();
+  for (const QString &channel : channels) {
+    entry->expressionChannels.append(channel.trimmed());
+  }
+}
+
+void SoftPvRegistry::clearExpressionChannelInfo(const QString &name)
+{
+  assertMainThread();
+
+  Entry *entry = findEntry(name);
+  if (!entry) {
+    return;
+  }
+
+  entry->producedByExpressionChannel = false;
+  entry->expressionCalc.clear();
+  entry->expressionChannels.clear();
+}
+
 void SoftPvRegistry::setConnected(const QString &name, bool connected)
 {
   assertMainThread();
@@ -384,6 +416,10 @@ bool SoftPvRegistry::infoSnapshot(const QString &name,
   snapshot.producerCount = entry->producerCount;
   snapshot.connectedProducerCount = entry->connectedProducerCount;
   snapshot.subscriberCount = entry->subscribers.size();
+  snapshot.producedByExpressionChannel =
+      entry->producedByExpressionChannel;
+  snapshot.expressionCalc = entry->expressionCalc;
+  snapshot.expressionChannels = entry->expressionChannels;
   return true;
 }
 

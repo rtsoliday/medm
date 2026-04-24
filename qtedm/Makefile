@@ -130,6 +130,7 @@ qtedm_SRC = qtedm.cc \
             thermometer_runtime.cc \
             channel_access_context.cc \
             shared_channel_manager.cc \
+            subscription_handle.cc \
             soft_pv_registry.cc \
             pvaSDDS.cc \
             pva_bridge.cc \
@@ -376,7 +377,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_adl_parser \
                         test_adl_writer \
                         test_text_format_utils \
-                        test_runtime_utils
+                        test_runtime_utils \
+                        test_soft_pv_registry
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 
@@ -394,6 +396,9 @@ test_text_format_utils_OBJS = $(OBJ_DIR)/test_text_format_utils.$(OBJEXT) \
                               $(OBJ_DIR)/text_format_utils.$(OBJEXT)
 test_runtime_utils_OBJS = $(OBJ_DIR)/test_runtime_utils.$(OBJEXT) \
                           $(OBJ_DIR)/runtime_utils.$(OBJEXT)
+test_soft_pv_registry_OBJS = $(OBJ_DIR)/test_soft_pv_registry.$(OBJEXT) \
+                             $(OBJ_DIR)/soft_pv_registry.$(OBJEXT) \
+                             $(OBJ_DIR)/subscription_handle.$(OBJEXT)
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)

@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include <QDebug>
+#include <QStringList>
 
 #include <db_access.h>
 
@@ -75,6 +76,13 @@ void ExpressionChannelRuntime::start()
   SoftPvRegistry::instance().setConnected(outputName_, true);
 
   const QString calcExpression = element_->calc().trimmed();
+  QStringList expressionChannels;
+  for (int i = 0; i < static_cast<int>(subscriptions_.size()); ++i) {
+    expressionChannels.append(element_->channel(i).trimmed());
+  }
+  SoftPvRegistry::instance().setExpressionChannelInfo(outputName_,
+      calcExpression, expressionChannels);
+
   if (!calcExpression.isEmpty()) {
     QString normalized = RuntimeUtils::normalizeCalcExpression(calcExpression);
     QByteArray infix = normalized.toLatin1();
@@ -126,6 +134,7 @@ void ExpressionChannelRuntime::stop()
   }
 
   SoftPvRegistry::instance().setConnected(outputName_, false);
+  SoftPvRegistry::instance().clearExpressionChannelInfo(outputName_);
   SoftPvRegistry::instance().unregisterName(outputName_);
 
   outputName_.clear();

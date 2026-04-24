@@ -3625,6 +3625,9 @@ private:
     bool hasUnits = false;
     QStringList states;
     bool hasStates = false;
+    bool producedByExpressionChannel = false;
+    QString expressionCalc;
+    QStringList expressionChannels;
     QString error;
   };
   bool executeContextMenuInitialized_ = false;
@@ -10981,6 +10984,36 @@ private:
       stream << '\n';
     }
 
+    if (details.producedByExpressionChannel) {
+      stream << "EXPRESSION CHANNEL\n";
+      stream << "CALC FIELD: "
+             << (details.expressionCalc.isEmpty()
+                 ? QStringLiteral("Not Available")
+                 : details.expressionCalc)
+             << '\n';
+
+      bool hasReferencedChannel = false;
+      static const char *kInputLabels[] = {"A", "B", "C", "D"};
+      for (int i = 0; i < details.expressionChannels.size(); ++i) {
+        const QString channel = details.expressionChannels.at(i).trimmed();
+        if (channel.isEmpty()) {
+          continue;
+        }
+        if (!hasReferencedChannel) {
+          stream << "REFERENCED CHANNELS:\n";
+          hasReferencedChannel = true;
+        }
+        const QString label = i < 4
+            ? QString::fromLatin1(kInputLabels[i])
+            : QString::number(i + 1);
+        stream << "CHANNEL " << label << ": " << channel << '\n';
+      }
+      if (!hasReferencedChannel) {
+        stream << "REFERENCED CHANNELS: None\n";
+      }
+      stream << '\n';
+    }
+
     return result;
   }
 
@@ -11093,6 +11126,14 @@ private:
     details.status = 0;
     details.hasTimestamp = snapshot.hasTimestamp;
     details.timestamp = snapshot.timestamp;
+    details.producedByExpressionChannel =
+        snapshot.producedByExpressionChannel;
+    details.expressionCalc = snapshot.expressionCalc;
+    details.expressionChannels = snapshot.expressionChannels;
+    if (details.producedByExpressionChannel) {
+      details.desc = QStringLiteral("QtEDM expression channel local soft PV");
+      details.recordType = QStringLiteral("EXPR_SOFTPV");
+    }
 
     if (snapshot.connected && snapshot.hasValue) {
       details.value = QString::number(snapshot.value, 'g', 12);

@@ -1,0 +1,1105 @@
+file {
+  name="QtEDM_Demo.adl"
+  version=030122
+}
+display {
+  object {
+    x=80
+    y=80
+    width=1560
+    height=860
+  }
+  clr=14
+  bclr=4
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+text {
+  object {
+    x=20
+    y=10
+    width=1520
+    height=24
+  }
+  "basic attribute" {
+    clr=54
+  }
+  textix="QtEDM Widget Demo"
+  align="horiz. centered"
+}
+text {
+  object {
+    x=20
+    y=38
+    width=1520
+    height=16
+  }
+  "basic attribute" {
+    clr=30
+  }
+  textix="All live values come from process-local demo soft PVs; no external IOC or PVs are required."
+  align="horiz. centered"
+}
+rectangle {
+  object {
+    x=20
+    y=68
+    width=740
+    height=260
+  }
+  "basic attribute" {
+    clr=7
+    fill="outline"
+    width=2
+  }
+}
+text {
+  object {
+    x=32
+    y=78
+    width=700
+    height=18
+  }
+  "basic attribute" {
+    clr=53
+  }
+  textix="Monitors"
+}
+text {
+  object {
+    x=42
+    y=107
+    width=130
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Text Monitor"
+}
+"text update" {
+  object {
+    x=186
+    y=103
+    width=205
+    height=20
+  }
+  monitor {
+    chan="__qtedm_demo:wave"
+    clr=14
+    bclr=4
+  }
+  format="decimal"
+  align="horiz. centered"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=1
+  }
+}
+text {
+  object {
+    x=42
+    y=134
+    width=140
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Expression Output"
+}
+"text update" {
+  object {
+    x=186
+    y=130
+    width=205
+    height=20
+  }
+  monitor {
+    chan="__qtedm_demo:expr"
+    clr=14
+    bclr=4
+  }
+  format="decimal"
+  align="horiz. centered"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=150
+    prec=1
+  }
+}
+meter {
+  object {
+    x=400
+    y=96
+    width=150
+    height=112
+  }
+  monitor {
+    chan="__qtedm_demo:wave"
+    clr=14
+    bclr=4
+  }
+  label="limits"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=0
+  }
+}
+text {
+  object {
+    x=425
+    y=210
+    width=100
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Meter"
+  align="horiz. centered"
+}
+bar {
+  object {
+    x=42
+    y=176
+    width=70
+    height=128
+  }
+  monitor {
+    chan="__qtedm_demo:ramp"
+    clr=15
+    bclr=4
+  }
+  direction="up"
+  fillmod="from edge"
+  label="limits"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=0
+  }
+}
+text {
+  object {
+    x=30
+    y=306
+    width=68
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Bar"
+  align="horiz. centered"
+}
+thermometer {
+  object {
+    x=132
+    y=176
+    width=90
+    height=128
+  }
+  monitor {
+    chan="__qtedm_demo:wave"
+    clr=20
+    bclr=4
+  }
+  label="limits"
+  showValue=1
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=0
+  }
+}
+text {
+  object {
+    x=119
+    y=306
+    width=96
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Thermometer"
+  align="horiz. centered"
+}
+indicator {
+  object {
+    x=245
+    y=185
+    width=88
+    height=118
+  }
+  monitor {
+    chan="__qtedm_demo:ramp"
+    clr=25
+    bclr=4
+  }
+  direction="up"
+  label="limits"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=0
+  }
+}
+text {
+  object {
+    x=237
+    y=306
+    width=104
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Scale Monitor"
+  align="horiz. centered"
+}
+byte {
+  object {
+    x=430
+    y=242
+    width=180
+    height=28
+  }
+  monitor {
+    chan="__qtedm_demo:bits"
+    clr=14
+    bclr=4
+  }
+  direction="right"
+  sbit=0
+  ebit=7
+}
+text {
+  object {
+    x=430
+    y=274
+    width=180
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Byte Monitor"
+  align="horiz. centered"
+}
+led_monitor {
+  object {
+    x=640
+    y=112
+    width=54
+    height=54
+  }
+  monitor {
+    chan="__qtedm_demo:binary"
+    clr=14
+    bclr=4
+  }
+  colorMode="discrete"
+  stateCount=2
+  shape="round"
+  bezel=1
+  onColor=15
+  offColor=20
+}
+text {
+  object {
+    x=604
+    y=170
+    width=126
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="LED Monitor"
+  align="horiz. centered"
+}
+rectangle {
+  object {
+    x=780
+    y=68
+    width=760
+    height=260
+  }
+  "basic attribute" {
+    clr=7
+    fill="outline"
+    width=2
+  }
+}
+text {
+  object {
+    x=792
+    y=78
+    width=700
+    height=18
+  }
+  "basic attribute" {
+    clr=53
+  }
+  textix="Controls"
+}
+text {
+  object {
+    x=804
+    y=107
+    width=110
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Menu"
+}
+menu {
+  object {
+    x=925
+    y=101
+    width=180
+    height=24
+  }
+  control {
+    chan="__qtedm_demo:mode"
+    clr=14
+    bclr=4
+  }
+}
+text {
+  object {
+    x=1165
+    y=107
+    width=105
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Text Entry"
+}
+"text entry" {
+  object {
+    x=1285
+    y=101
+    width=220
+    height=24
+  }
+  control {
+    chan="__qtedm_demo:wave"
+    clr=14
+    bclr=4
+  }
+  format="decimal"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=1
+  }
+}
+text {
+  object {
+    x=804
+    y=144
+    width=120
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Choice Button"
+}
+"choice button" {
+  object {
+    x=925
+    y=138
+    width=180
+    height=20
+  }
+  control {
+    chan="__qtedm_demo:mode"
+    clr=14
+    bclr=4
+  }
+  stacking="column"
+}
+text {
+  object {
+    x=1165
+    y=144
+    width=105
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Text Area"
+}
+text_area {
+  object {
+    x=1285
+    y=138
+    width=220
+    height=86
+  }
+  control {
+    chan="__qtedm_demo:text"
+    clr=14
+    bclr=4
+  }
+  readOnly=0
+  wordWrap=1
+  showVerticalScrollBar=1
+  showHorizontalScrollBar=0
+  commitMode="enter"
+}
+text {
+  object {
+    x=804
+    y=238
+    width=70
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Slider"
+}
+valuator {
+  object {
+    x=885
+    y=224
+    width=300
+    height=54
+  }
+  control {
+    chan="__qtedm_demo:wave"
+    clr=14
+    bclr=4
+  }
+  direction="right"
+  label="limits"
+  dPrecision=1
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=1
+  }
+}
+text {
+  object {
+    x=1210
+    y=238
+    width=105
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Wheel Switch"
+}
+"wheel switch" {
+  object {
+    x=1325
+    y=229
+    width=170
+    height=50
+  }
+  control {
+    chan="__qtedm_demo:wave"
+    clr=14
+    bclr=4
+  }
+  format="000.0"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=1
+  }
+}
+text {
+  object {
+    x=804
+    y=292
+    width=116
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Message Button"
+}
+"message button" {
+  object {
+    x=930
+    y=285
+    width=126
+    height=30
+  }
+  control {
+    chan="__qtedm_demo:button"
+    clr=14
+    bclr=4
+  }
+  label="Press"
+  press_msg="1"
+  release_msg="0"
+}
+"text update" {
+  object {
+    x=1075
+    y=289
+    width=70
+    height=22
+  }
+  monitor {
+    chan="__qtedm_demo:button"
+    clr=14
+    bclr=4
+  }
+  format="decimal"
+  align="horiz. centered"
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=1
+    prec=0
+  }
+}
+expression_channel {
+  object {
+    x=1190
+    y=282
+    width=320
+    height=36
+  }
+  variable="__qtedm_demo:expr"
+  calc="A*1.5"
+  channelA="__qtedm_demo:wave"
+  initialValue=75
+  eventSignal="onAnyChange"
+  clr=30
+  bclr=4
+  precision=1
+}
+rectangle {
+  object {
+    x=20
+    y=344
+    width=1520
+    height=280
+  }
+  "basic attribute" {
+    clr=7
+    fill="outline"
+    width=2
+  }
+}
+text {
+  object {
+    x=32
+    y=354
+    width=700
+    height=18
+  }
+  "basic attribute" {
+    clr=53
+  }
+  textix="Plots"
+}
+"strip chart" {
+  object {
+    x=42
+    y=388
+    width=340
+    height=205
+  }
+  plotcom {
+    title="Strip Chart"
+    xlabel="time"
+    ylabel="value"
+    clr=14
+    bclr=4
+  }
+  period=60
+  units="seconds"
+  pen[0] {
+    chan="__qtedm_demo:wave"
+    clr=25
+    limits {
+      loprSrc="default"
+      hoprSrc="default"
+      precSrc="default"
+      lopr=0
+      hopr=100
+      prec=0
+    }
+  }
+}
+"cartesian plot" {
+  object {
+    x=410
+    y=388
+    width=360
+    height=205
+  }
+  plotcom {
+    title="Cartesian Plot"
+    xlabel="sample"
+    ylabel="value"
+    clr=14
+    bclr=7
+  }
+  style="line"
+  count=64
+  erase_oldest="plot last n pts"
+  drawMajor=1
+  drawMinor=0
+  trace[0] {
+    xdata="__qtedm_demo:profile:x"
+    ydata="__qtedm_demo:profile:y"
+    data_clr=20
+    yaxis=0
+    yside=0
+  }
+  x_axis {
+    rangeStyle="user specified"
+    minRange=0
+    maxRange=63
+  }
+  y1_axis {
+    rangeStyle="user specified"
+    minRange=0
+    maxRange=100
+  }
+}
+heatmap {
+  object {
+    x=805
+    y=388
+    width=330
+    height=205
+  }
+  dataPv="__qtedm_demo:heatmap"
+  title="Heatmap"
+  xDim=8
+  yDim=8
+  colorMap="rainbow"
+  preserveAspectRatio=1
+  showTopProfile=1
+  showRightProfile=1
+}
+waterfall_plot {
+  object {
+    x=1170
+    y=388
+    width=330
+    height=205
+  }
+  plotcom {
+    title="Waterfall"
+    xlabel="sample"
+    ylabel="history"
+    clr=14
+    bclr=4
+  }
+  data {
+    chan="__qtedm_demo:waterfall"
+  }
+  historyCount=32
+  colorMap="turbo"
+  intensityScale="auto"
+  showLegend=1
+  showGrid=1
+  samplePeriod=0.5
+  units="seconds"
+}
+rectangle {
+  object {
+    x=20
+    y=640
+    width=1520
+    height=200
+  }
+  "basic attribute" {
+    clr=7
+    fill="outline"
+    width=2
+  }
+}
+text {
+  object {
+    x=32
+    y=650
+    width=700
+    height=18
+  }
+  "basic attribute" {
+    clr=53
+  }
+  textix="Graphics, Images, Groups, and Navigation"
+}
+text {
+  object {
+    x=42
+    y=676
+    width=130
+    height=22
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Text Widget"
+  align="horiz. centered"
+}
+rectangle {
+  object {
+    x=72
+    y=714
+    width=90
+    height=52
+  }
+  "basic attribute" {
+    clr=25
+    fill="solid"
+    width=2
+  }
+}
+text {
+  object {
+    x=62
+    y=774
+    width=110
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Rectangle"
+  align="horiz. centered"
+}
+oval {
+  object {
+    x=220
+    y=714
+    width=92
+    height=52
+  }
+  "basic attribute" {
+    clr=15
+    fill="solid"
+    width=2
+  }
+}
+text {
+  object {
+    x=211
+    y=774
+    width=110
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Oval"
+  align="horiz. centered"
+}
+arc {
+  object {
+    x=380
+    y=704
+    width=112
+    height=70
+  }
+  "basic attribute" {
+    clr=30
+    fill="outline"
+    width=3
+  }
+  begin=640
+  path=20480
+}
+text {
+  object {
+    x=381
+    y=778
+    width=110
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Arc"
+  align="horiz. centered"
+}
+polyline {
+  object {
+    x=540
+    y=710
+    width=110
+    height=54
+  }
+  "basic attribute" {
+    clr=20
+    width=4
+  }
+  points {
+    (548,754)
+    (640,718)
+  }
+}
+text {
+  object {
+    x=540
+    y=774
+    width=110
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Line"
+  align="horiz. centered"
+}
+polyline {
+  object {
+    x=700
+    y=710
+    width=124
+    height=54
+  }
+  "basic attribute" {
+    clr=26
+    width=3
+  }
+  points {
+    (708,754)
+    (744,720)
+    (780,748)
+    (816,716)
+  }
+}
+text {
+  object {
+    x=707
+    y=774
+    width=110
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Polyline"
+  align="horiz. centered"
+}
+polygon {
+  object {
+    x=870
+    y=710
+    width=110
+    height=54
+  }
+  "basic attribute" {
+    clr=35
+    fill="solid"
+    width=2
+  }
+  points {
+    (925,714)
+    (970,756)
+    (880,756)
+  }
+}
+text {
+  object {
+    x=870
+    y=774
+    width=110
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Polygon"
+  align="horiz. centered"
+}
+image {
+  object {
+    x=1040
+    y=690
+    width=80
+    height=80
+  }
+  type="tiff"
+  "image name"=":/icons/QtEDM.png"
+}
+text {
+  object {
+    x=1034
+    y=774
+    width=92
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Image"
+  align="horiz. centered"
+}
+composite {
+  object {
+    x=1165
+    y=684
+    width=110
+    height=90
+  }
+  "composite name"="Composite"
+  children {
+    rectangle {
+      object {
+        x=1178
+        y=696
+        width=84
+        height=54
+      }
+      "basic attribute" {
+        clr=3
+        fill="solid"
+        width=1
+      }
+    }
+    text {
+      object {
+        x=1178
+        y=714
+        width=84
+        height=18
+      }
+      "basic attribute" {
+        clr=14
+      }
+      textix="Group"
+      align="horiz. centered"
+    }
+  }
+}
+text {
+  object {
+    x=1165
+    y=774
+    width=110
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Composite"
+  align="horiz. centered"
+}
+"related display" {
+  object {
+    x=1320
+    y=682
+    width=150
+    height=28
+  }
+  display[0] {
+    label="Open Demo"
+    name=":/demo/QtEDM_Demo.adl"
+  }
+  clr=14
+  bclr=4
+  label="Related"
+}
+text {
+  object {
+    x=1312
+    y=714
+    width=166
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Related Display"
+  align="horiz. centered"
+}
+"shell command" {
+  object {
+    x=1320
+    y=744
+    width=150
+    height=28
+  }
+  label="Shell"
+  clr=14
+  bclr=4
+  command[0] {
+    label="Echo"
+    name="echo"
+    args="QtEDM demo shell command"
+  }
+}
+text {
+  object {
+    x=1312
+    y=776
+    width=166
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Shell Command"
+  align="horiz. centered"
+}
+text {
+  object {
+    x=40
+    y=808
+    width=1480
+    height=16
+  }
+  "basic attribute" {
+    clr=30
+  }
+  textix="The Expression Channel block in this demo publishes __qtedm_demo:expr; switch to edit mode to see and inspect it."
+  align="horiz. centered"
+}

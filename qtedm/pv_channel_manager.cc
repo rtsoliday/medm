@@ -44,6 +44,10 @@ SubscriptionHandle PvChannelManager::subscribe(
 bool PvChannelManager::putValue(const QString &pvName, double value)
 {
   ParsedPvName parsed = parsePvName(pvName);
+  if (parsed.protocol == PvProtocol::kCa
+      && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
+    return SoftPvRegistry::instance().putValue(parsed.pvName, value);
+  }
   if (parsed.protocol == PvProtocol::kPva) {
     return PvaChannelManager::instance().putValue(pvName, value);
   }
@@ -53,6 +57,10 @@ bool PvChannelManager::putValue(const QString &pvName, double value)
 bool PvChannelManager::putValue(const QString &pvName, const QString &value)
 {
   ParsedPvName parsed = parsePvName(pvName);
+  if (parsed.protocol == PvProtocol::kCa
+      && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
+    return SoftPvRegistry::instance().putValue(parsed.pvName, value);
+  }
   if (parsed.protocol == PvProtocol::kPva) {
     return PvaChannelManager::instance().putValue(pvName, value);
   }
@@ -62,6 +70,10 @@ bool PvChannelManager::putValue(const QString &pvName, const QString &value)
 bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value)
 {
   ParsedPvName parsed = parsePvName(pvName);
+  if (parsed.protocol == PvProtocol::kCa
+      && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
+    return SoftPvRegistry::instance().putValue(parsed.pvName, value);
+  }
   if (parsed.protocol == PvProtocol::kPva) {
     return PvaChannelManager::instance().putValue(pvName, value);
   }
@@ -72,6 +84,10 @@ bool PvChannelManager::putCharArrayValue(const QString &pvName,
     const QByteArray &value)
 {
   ParsedPvName parsed = parsePvName(pvName);
+  if (parsed.protocol == PvProtocol::kCa
+      && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
+    return SoftPvRegistry::instance().putCharArrayValue(parsed.pvName, value);
+  }
   if (parsed.protocol == PvProtocol::kPva) {
     return PvaChannelManager::instance().putValue(pvName,
         QString::fromLatin1(value));
@@ -83,6 +99,10 @@ bool PvChannelManager::putArrayValue(const QString &pvName,
     const QVector<double> &values)
 {
   ParsedPvName parsed = parsePvName(pvName);
+  if (parsed.protocol == PvProtocol::kCa
+      && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
+    return SoftPvRegistry::instance().putArrayValue(parsed.pvName, values);
+  }
   if (parsed.protocol == PvProtocol::kPva) {
     return PvaChannelManager::instance().putArrayValue(pvName, values);
   }

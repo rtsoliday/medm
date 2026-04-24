@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/demo">
+    <file alias="QtEDM_Demo.adl">demo/QtEDM_Demo.adl</file>
+  </qresource>
+</RCC>

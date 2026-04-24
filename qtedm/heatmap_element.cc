@@ -462,8 +462,8 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
 
   QRect heatmapRect = layout.heatmapRect;
   const QRect legendRect = layout.legendRect;
-  const QRect topProfileRect = layout.topProfileRect;
-  const QRect rightProfileRect = layout.rightProfileRect;
+  QRect topProfileRect = layout.topProfileRect;
+  QRect rightProfileRect = layout.rightProfileRect;
 
   if (preserveAspectRatio_ && !cachedImage_.isNull()) {
     int iw = cachedImage_.width();
@@ -489,6 +489,15 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
     }
   }
 
+  if (!topProfileRect.isEmpty()) {
+    topProfileRect = QRect(heatmapRect.left(),
+        heatmapRect.top() - topProfileRect.height() - 2,
+        heatmapRect.width(), topProfileRect.height());
+  }
+  if (!rightProfileRect.isEmpty()) {
+    rightProfileRect = QRect(heatmapRect.right() + 3, heatmapRect.top(),
+        rightProfileRect.width(), heatmapRect.height());
+  }
 
   lastHeatmapRect_ = heatmapRect;
 

@@ -41,7 +41,9 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QResource>
+#include <QVector>
 
+#include <cmath>
 #include <climits>
 #include <cstring>
 #include <cstdio>
@@ -89,6 +91,7 @@ typedef int Status;
 #include "main_window_controller.h"
 #include "memory_tracker.h"
 #include "object_palette_dialog.h"
+#include "soft_pv_registry.h"
 #include "startup_timing.h"
 #include "statistics_window.h"
 #include "window_utils.h"
@@ -317,6 +320,144 @@ void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
     }
   }
 }
+
+class DemoSoftPvDriver : public QObject
+{
+public:
+  explicit DemoSoftPvDriver(QObject *parent = nullptr)
+    : QObject(parent)
+  {
+    auto registerChannel = [this](const QString &name, bool writable) {
+      SoftPvRegistry::instance().registerName(name, writable);
+      SoftPvRegistry::instance().setConnected(name, true);
+      registeredChannels_.append({name, writable});
+    };
+
+    registerChannel(kWaveName, true);
+    registerChannel(kRampName, true);
+    registerChannel(kBinaryName, true);
+    registerChannel(kButtonName, true);
+    registerChannel(kModeName, true);
+    registerChannel(kTextName, true);
+    registerChannel(kBitsName, false);
+    registerChannel(kProfileXName, false);
+    registerChannel(kProfileYName, false);
+    registerChannel(kHeatmapName, false);
+    registerChannel(kWaterfallName, false);
+
+    auto &registry = SoftPvRegistry::instance();
+    registry.setControlInfo(kWaveName, 0.0, 100.0, 1);
+    registry.setControlInfo(kRampName, 0.0, 100.0, 1);
+    registry.setControlInfo(kBinaryName, 0.0, 1.0, 0);
+    registry.setControlInfo(kButtonName, 0.0, 1.0, 0);
+    registry.setControlInfo(kBitsName, 0.0, 255.0, 0);
+    registry.setControlInfo(kProfileXName, 0.0,
+        static_cast<double>(kProfilePointCount - 1), 0);
+    registry.setControlInfo(kProfileYName, 0.0, 100.0, 1);
+    registry.setControlInfo(kHeatmapName, 0.0, 100.0, 1);
+    registry.setControlInfo(kWaterfallName, 0.0, 100.0, 1);
+    registry.publishStringValue(kTextName,
+        QStringLiteral("This text lives in a process-local demo PV."));
+    registry.publishValue(kButtonName, 0.0);
+
+    connect(&timer_, &QTimer::timeout, this,
+        [this]() { publishFrame(); });
+    publishFrame();
+    timer_.start(500);
+  }
+
+  ~DemoSoftPvDriver() override
+  {
+    timer_.stop();
+    for (int i = static_cast<int>(registeredChannels_.size()) - 1; i >= 0; --i) {
+      const RegisteredChannel &channel = registeredChannels_.at(i);
+      SoftPvRegistry::instance().setConnected(channel.name, false);
+      SoftPvRegistry::instance().unregisterName(channel.name, channel.writable);
+    }
+  }
+
+private:
+  struct RegisteredChannel
+  {
+    QString name;
+    bool writable = false;
+  };
+
+  void publishFrame()
+  {
+    phase_ += 0.22;
+    const double wave = 50.0 + 35.0 * std::sin(phase_);
+    const double ramp = std::fmod(phase_ * 12.0, 100.0);
+    const double binary = std::sin(phase_ * 0.7) >= 0.0 ? 1.0 : 0.0;
+    const dbr_enum_t mode =
+        static_cast<dbr_enum_t>(static_cast<int>(phase_) % 3);
+
+    auto &registry = SoftPvRegistry::instance();
+    registry.publishValue(kWaveName, wave);
+    registry.publishValue(kRampName, ramp);
+    registry.publishValue(kBinaryName, binary);
+    registry.publishValue(kBitsName,
+        static_cast<double>((static_cast<int>(phase_ * 11.0) & 0xff)));
+    registry.publishEnumValue(kModeName, mode,
+        {QStringLiteral("Off"), QStringLiteral("Standby"),
+            QStringLiteral("On")});
+
+    QVector<double> xValues;
+    QVector<double> yValues;
+    xValues.reserve(kProfilePointCount);
+    yValues.reserve(kProfilePointCount);
+    for (int i = 0; i < kProfilePointCount; ++i) {
+      const double x = static_cast<double>(i);
+      xValues.append(x);
+      yValues.append(50.0 + 35.0 * std::sin(phase_ + x / 6.0));
+    }
+    registry.publishArrayValue(kProfileXName, xValues);
+    registry.publishArrayValue(kProfileYName, yValues);
+
+    QVector<double> heatmap;
+    heatmap.reserve(kHeatmapWidth * kHeatmapHeight);
+    for (int y = 0; y < kHeatmapHeight; ++y) {
+      for (int x = 0; x < kHeatmapWidth; ++x) {
+        const double dx = static_cast<double>(x) - 3.5;
+        const double dy = static_cast<double>(y) - 3.5;
+        heatmap.append(50.0 + 45.0 * std::sin(
+            phase_ + std::sqrt(dx * dx + dy * dy)));
+      }
+    }
+    registry.publishArrayValue(kHeatmapName, heatmap);
+    registry.publishArrayValue(kWaterfallName, yValues);
+  }
+
+  static constexpr int kProfilePointCount = 64;
+  static constexpr int kHeatmapWidth = 8;
+  static constexpr int kHeatmapHeight = 8;
+  static inline const QString kWaveName =
+      QStringLiteral("__qtedm_demo:wave");
+  static inline const QString kRampName =
+      QStringLiteral("__qtedm_demo:ramp");
+  static inline const QString kBinaryName =
+      QStringLiteral("__qtedm_demo:binary");
+  static inline const QString kButtonName =
+      QStringLiteral("__qtedm_demo:button");
+  static inline const QString kModeName =
+      QStringLiteral("__qtedm_demo:mode");
+  static inline const QString kTextName =
+      QStringLiteral("__qtedm_demo:text");
+  static inline const QString kBitsName =
+      QStringLiteral("__qtedm_demo:bits");
+  static inline const QString kProfileXName =
+      QStringLiteral("__qtedm_demo:profile:x");
+  static inline const QString kProfileYName =
+      QStringLiteral("__qtedm_demo:profile:y");
+  static inline const QString kHeatmapName =
+      QStringLiteral("__qtedm_demo:heatmap");
+  static inline const QString kWaterfallName =
+      QStringLiteral("__qtedm_demo:waterfall");
+
+  QVector<RegisteredChannel> registeredChannels_;
+  QTimer timer_;
+  double phase_ = 0.0;
+};
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
 constexpr int kMaxCharsInClientMessage = 20;
@@ -551,6 +692,7 @@ int main(int argc, char *argv[])
   QApplication app(argc, argv);
   QTEDM_TIMING_MARK("QApplication created");
   Q_INIT_RESOURCE(icons);
+  Q_INIT_RESOURCE(demo);
 
   const QStringList args = QCoreApplication::arguments();
   CommandLineOptions options = parseCommandLine(args);
@@ -955,6 +1097,7 @@ int main(int argc, char *argv[])
         showHelpBrowser(&win, QStringLiteral("QtEDM Help - Overview"),
             QStringLiteral(":/help/QtEDM.html"), fixed13Font, palette);
       });
+  auto *demoAct = helpMenu->addAction("&Demo");
   auto *onVersionAct = helpMenu->addAction("&Version");
   QObject::connect(onVersionAct, &QAction::triggered, &win,
       [&win, &fixed13Font, &fixed10Font, &palette]() {
@@ -1650,6 +1793,28 @@ int main(int argc, char *argv[])
             fixed10Font, fixed13Font, weakState);
       });
   mainWindowController->setDisplayWindowRegistrar(registerDisplayWindow);
+
+  QObject::connect(demoAct, &QAction::triggered, &win,
+      [state, &win, displayPalette, &palette, fixed10Font, fixed13Font,
+          registerDisplayWindow]() {
+        auto *displayWin = new DisplayWindow(displayPalette, palette,
+            fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
+        new DemoSoftPvDriver(displayWin);
+
+        QString errorMessage;
+        if (!displayWin->loadFromFile(
+                QStringLiteral(":/demo/QtEDM_Demo.adl"), &errorMessage)) {
+          const QString message = errorMessage.isEmpty()
+              ? QStringLiteral("Failed to open the QtEDM demo display.")
+              : errorMessage;
+          QMessageBox::critical(&win, QStringLiteral("Demo"), message);
+          delete displayWin;
+          return;
+        }
+
+        registerDisplayWindow(displayWin);
+        displayWin->enterExecuteMode();
+      });
 
   QObject::connect(newAct, &QAction::triggered, &win,
       [state, displayPalette, fixed10Font, &palette, fixed13Font,

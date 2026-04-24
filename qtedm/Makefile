@@ -21,10 +21,16 @@ endif
 PROD_LIBS :=
 
 ifeq ($(OS), Windows)
-  QT_VERSION := 6
-  QT_CORE_PKG := Qt6Core
-  QT_TEST_PKG := Qt6Test
-  QT_DIR ?= C:\\Qt\\6.8.2\\msvc2022_64
+  QT_VERSION ?= 6
+  ifeq ($(QT_VERSION),5)
+    QT_DIR ?= C:\\Qt\\5.15.2\\msvc2019_64
+  else ifeq ($(QT_VERSION),6)
+    QT_DIR ?= C:\\Qt\\6.8.2\\msvc2022_64
+  else
+    $(error Unsupported QT_VERSION=$(QT_VERSION). Use QT_VERSION=5 or QT_VERSION=6.)
+  endif
+  QT_CORE_PKG := Qt$(QT_VERSION)Core
+  QT_TEST_PKG := Qt$(QT_VERSION)Test
   QT_DIR_FWD := $(subst \\,/,$(QT_DIR))
   QT_WIDGETS_CFLAGS := -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg"
   QT_TEST_CFLAGS := -I"$(QT_DIR_FWD)/include/QtTest"
@@ -190,7 +196,7 @@ CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 ifeq ($(OS), Windows)
  CCFLAGS += /std:c++20 /Zc:__cplusplus /permissive- $(QT_WIDGETS_CFLAGS)
- LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt6PrintSupport.lib Qt6Svg.lib Qt6Widgets.lib Qt6Gui.lib Qt6Core.lib
+ LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt$(QT_VERSION)PrintSupport.lib Qt$(QT_VERSION)Svg.lib Qt$(QT_VERSION)Widgets.lib Qt$(QT_VERSION)Gui.lib Qt$(QT_VERSION)Core.lib
 else
  CCFLAGS += $(shell pkg-config --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
  LDFLAGS += $(shell pkg-config --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
@@ -198,7 +204,7 @@ endif
 
 ifeq ($(OS), Windows)
   QT_TEST_CFLAGS :=
-  QT_TEST_LIBS := Qt6Test.lib
+  QT_TEST_LIBS := Qt$(QT_VERSION)Test.lib
   QT_TEST_AVAILABLE := 1
 else
   QT_TEST_AVAILABLE := $(shell pkg-config --exists $(QT_TEST_PKG) 2>/dev/null && echo 1)
@@ -317,6 +323,7 @@ include ../Makefile.build
 
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
+qtedm_OBJS += $(OBJ_DIR)/demo_rcc.$(OBJEXT)
 
 $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | $(OBJ_DIR)
 	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
@@ -327,6 +334,11 @@ $(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html \
                                | $(OBJ_DIR)
 	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
+
+$(OBJ_DIR)/demo_rcc.$(OBJEXT): resources/demo.qrc \
+                               resources/demo/QtEDM_Demo.adl | $(OBJ_DIR)
+	$(QT_RCC) -name demo resources/demo.qrc -o $(OBJ_DIR)/demo_rcc.cpp
+	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/demo_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/moc_cartesian_plot_element.cpp: cartesian_plot_element.h | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@

@@ -1,0 +1,723 @@
+
+file {
+	name="/home/SOLIDAY/github/medm/tests/test_TextArea.adl"
+	version=030122
+}
+display {
+	object {
+		x=90
+		y=48
+		width=1840
+		height=1240
+	}
+	clr=14
+	bclr=4
+	cmap=""
+	gridSpacing=5
+	gridOn=0
+	snapToGrid=0
+}
+"color map" {
+	ncolors=65
+	colors {
+		ffffff,
+		ececec,
+		dadada,
+		c8c8c8,
+		bbbbbb,
+		aeaeae,
+		9e9e9e,
+		919191,
+		858585,
+		787878,
+		696969,
+		5a5a5a,
+		464646,
+		2d2d2d,
+		000000,
+		00d800,
+		1ebb00,
+		339900,
+		2d7f00,
+		216c00,
+		fd0000,
+		de1309,
+		be190b,
+		a01207,
+		820400,
+		5893ff,
+		597ee1,
+		4b6ec7,
+		3a5eab,
+		27548d,
+		fbf34a,
+		f9da3c,
+		eeb62b,
+		e19015,
+		cd6100,
+		ffb0ff,
+		d67fe2,
+		ae4ebc,
+		8b1a96,
+		610a75,
+		a4aaff,
+		8793e2,
+		6a73c1,
+		4d52a4,
+		343386,
+		c7bb6d,
+		b79d5c,
+		a47e3c,
+		7d5627,
+		58340f,
+		99ffff,
+		73dfff,
+		4ea5f9,
+		2a63e4,
+		0a00b8,
+		ebf1b5,
+		d4db9d,
+		bbc187,
+		a6a462,
+		8b8239,
+		73ff6b,
+		52da3b,
+		3cb420,
+		289315,
+		1a7309,
+	}
+}
+text {
+	object {
+		x=24
+		y=10
+		width=1790
+		height=24
+	}
+	"basic attribute" {
+		clr=54
+	}
+	textix="Text Area Harness: QtEDM multiline DBF_CHAR waveform editor"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=24
+		y=38
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="QtEDM-only widget: MEDM skips text_area blocks; compare QtEDM edit mode, execute mode, and saved ADL output."
+}
+text {
+	object {
+		x=24
+		y=58
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=50
+	}
+	textix="Focus areas: multiline char-waveform display, wrapping, scroll bars, read-only state, commit modes, fallback PV types, and invalid-channel rendering."
+}
+text {
+	object {
+		x=24
+		y=78
+		width=1790
+		height=16
+	}
+	"basic attribute" {
+		clr=2
+	}
+	textix="Start tests/run_local_ioc.sh before execute-mode checks; it seeds ta:text:* char waveforms and scalar fallback PVs."
+}
+rectangle {
+	object {
+		x=20
+		y=108
+		width=1800
+		height=660
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=118
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section A: Visual matrix (wrapping, scroll bars, read-only, alarm, commit modes, fallback types)"
+}
+text {
+	object {
+		x=70
+		y=154
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="default wrap, Ctrl+Enter"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=410
+		y=154
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="read-only monitor"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=750
+		y=154
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="no wrap + horizontal scroll"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1090
+		y=154
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="fixed column width"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1430
+		y=154
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="alarm-color UDF probe"
+	align="horiz. centered"
+}
+text_area {
+	object {
+		x=70
+		y=178
+		width=260
+		height=120
+	}
+	control {
+		chan="ta:text:main"
+		clr=14
+		bclr=4
+	}
+	format="string"
+}
+text_area {
+	object {
+		x=410
+		y=178
+		width=260
+		height=120
+	}
+	control {
+		chan="ta:text:readonly"
+		clr=14
+		bclr=1
+	}
+	format="string"
+	readOnly=1
+}
+text_area {
+	object {
+		x=750
+		y=178
+		width=260
+		height=120
+	}
+	control {
+		chan="ta:text:nowrap"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	wordWrap=0
+	lineWrapMode="noWrap"
+	showHorizontalScrollBar=1
+}
+text_area {
+	object {
+		x=1090
+		y=178
+		width=260
+		height=120
+	}
+	control {
+		chan="ta:text:fixed"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	lineWrapMode="fixedColumnWidth"
+	wrapColumnWidth=36
+}
+text_area {
+	object {
+		x=1430
+		y=178
+		width=260
+		height=120
+	}
+	control {
+		chan="ta:text:alarm_probe"
+		clr=14
+		bclr=4
+	}
+	clrmod="alarm"
+	format="string"
+	readOnly=1
+}
+text {
+	object {
+		x=70
+		y=336
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="explicit commit"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=410
+		y=336
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="Enter commits"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=750
+		y=336
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="focus-lost commit"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1090
+		y=336
+		width=130
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="tiny"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1250
+		y=336
+		width=200
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="blank channel"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1490
+		y=336
+		width=220
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="DBR_STRING fallback"
+	align="horiz. centered"
+}
+text_area {
+	object {
+		x=70
+		y=360
+		width=260
+		height=115
+	}
+	control {
+		chan="ta:text:explicit"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	commitMode="explicit"
+}
+text_area {
+	object {
+		x=410
+		y=360
+		width=260
+		height=115
+	}
+	control {
+		chan="ta:text:enter"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	commitMode="enter"
+}
+text_area {
+	object {
+		x=750
+		y=360
+		width=260
+		height=115
+	}
+	control {
+		chan="ta:text:focus"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	commitMode="onFocusLost"
+}
+text_area {
+	object {
+		x=1090
+		y=360
+		width=130
+		height=78
+	}
+	control {
+		chan="ta:text:small"
+		clr=14
+		bclr=4
+	}
+	format="string"
+}
+text_area {
+	object {
+		x=1250
+		y=360
+		width=200
+		height=78
+	}
+	control {
+		chan=""
+		clr=14
+		bclr=4
+	}
+	clrmod="alarm"
+	format="string"
+	readOnly=1
+}
+text_area {
+	object {
+		x=1490
+		y=360
+		width=220
+		height=78
+	}
+	control {
+		chan="ta:string:single"
+		clr=14
+		bclr=4
+	}
+	format="string"
+}
+text {
+	object {
+		x=70
+		y=510
+		width=610
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="A/B baseline: same PV, only wordWrap differs"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=750
+		y=510
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="numeric fallback"
+	align="horiz. centered"
+}
+text {
+	object {
+		x=1090
+		y=510
+		width=260
+		height=16
+	}
+	"basic attribute" {
+		clr=55
+	}
+	textix="tab inserts focus"
+	align="horiz. centered"
+}
+text_area {
+	object {
+		x=70
+		y=534
+		width=260
+		height=112
+	}
+	control {
+		chan="ta:text:baseline"
+		clr=14
+		bclr=4
+	}
+	format="string"
+}
+text_area {
+	object {
+		x=410
+		y=534
+		width=260
+		height=112
+	}
+	control {
+		chan="ta:text:baseline"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	wordWrap=0
+}
+text_area {
+	object {
+		x=750
+		y=534
+		width=260
+		height=112
+	}
+	control {
+		chan="ta:number:fallback"
+		clr=14
+		bclr=4
+	}
+}
+text_area {
+	object {
+		x=1090
+		y=534
+		width=260
+		height=112
+	}
+	control {
+		chan="ta:text:tabs"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	tabInsertsSpaces=0
+	tabWidth=4
+}
+rectangle {
+	object {
+		x=20
+		y=790
+		width=1800
+		height=400
+	}
+	"basic attribute" {
+		clr=7
+		fill="outline"
+		width=2
+	}
+}
+text {
+	object {
+		x=30
+		y=800
+		width=760
+		height=18
+	}
+	"basic attribute" {
+		clr=53
+	}
+	textix="Section B: Execute-mode behavior checklist"
+}
+text {
+	object {
+		x=40
+		y=836
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="1) ta:text:main: type multiple lines, confirm Enter inserts newline, Ctrl+Enter commits, and updates persist after focus changes."
+}
+text {
+	object {
+		x=40
+		y=860
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="2) ta:text:explicit: edit the text, right-click the editor, use Commit and Revert, and confirm local dirty text is protected from incoming updates."
+}
+text {
+	object {
+		x=40
+		y=884
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="3) ta:text:enter and ta:text:focus: compare commit timing; Shift+Enter should still insert a newline in Enter-commit mode."
+}
+text {
+	object {
+		x=40
+		y=908
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="4) ta:text:readonly and ta:text:alarm_probe: verify read-only interaction, alarm coloring, and hatch/invalid appearance for untouched UDF data."
+}
+text {
+	object {
+		x=40
+		y=932
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="5) ta:text:nowrap, ta:text:fixed, ta:text:small, and ta:text:baseline: resize or compare scroll bars, clipping, and wrap behavior."
+}
+text {
+	object {
+		x=40
+		y=956
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="6) ta:string:single should display and edit as a single-line DBR_STRING fallback; ta:number:fallback should format numeric input as text."
+}
+text {
+	object {
+		x=40
+		y=980
+		width=1700
+		height=16
+	}
+	"basic attribute" {
+		clr=30
+	}
+	textix="7) ta:text:tabs: press Tab and confirm focus traversal; the other text areas should insert spaces when Tab is typed inside the editor."
+}
+text_area {
+	object {
+		x=50
+		y=1028
+		width=520
+		height=120
+	}
+	control {
+		chan="ta:text:main"
+		clr=14
+		bclr=4
+	}
+	format="string"
+}
+text_area {
+	object {
+		x=640
+		y=1028
+		width=520
+		height=120
+	}
+	control {
+		chan="ta:text:explicit"
+		clr=14
+		bclr=4
+	}
+	format="string"
+	commitMode="explicit"
+}
+text_area {
+	object {
+		x=1230
+		y=1028
+		width=360
+		height=120
+	}
+	control {
+		chan="ta:text:readonly"
+		clr=14
+		bclr=1
+	}
+	format="string"
+	readOnly=1
+}

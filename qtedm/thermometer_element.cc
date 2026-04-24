@@ -28,6 +28,7 @@ constexpr qreal kMinimumTrackExtent = 24.0;
 constexpr qreal kMinimumTrackExtentNoDecorations = 12.0;
 constexpr qreal kMinimumAxisExtent = 12.0;
 constexpr qreal kAxisSpacing = 4.0;
+constexpr qreal kBevelWidth = 2.0;
 constexpr qreal kLayoutPadding = 4.0;
 constexpr qreal kMinimumStemWidth = 4.0;
 constexpr qreal kMinimumBulbDiameter = 10.0;
@@ -548,7 +549,27 @@ void ThermometerElement::paintEvent(QPaintEvent *event)
   QWidget::paintEvent(event);
 
   QPainter painter(this);
+  painter.setRenderHint(QPainter::Antialiasing, false);
+
   painter.fillRect(rect(), effectiveBackground());
+
+  // Paint 2-pixel raised bevel around outer edge, matching BarMonitorElement.
+  const QColor bg = effectiveBackground();
+  QRect bevelOuter = rect().adjusted(0, 0, -1, -1);
+  painter.setPen(QPen(bg.lighter(135), 1));
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+  painter.setPen(QPen(bg.darker(145), 1));
+  painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+  painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
+
+  QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
+  painter.setPen(QPen(bg.lighter(150), 1));
+  painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+  painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+  painter.setPen(QPen(bg.darker(170), 1));
+  painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+  painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
   if (executeMode_ && !runtimeConnected_) {
     painter.fillRect(rect(), Qt::white);
@@ -558,8 +579,9 @@ void ThermometerElement::paintEvent(QPaintEvent *event)
     return;
   }
 
-  const qreal padding = (label_ == MeterLabel::kNoDecorations) ? 1.0
-      : kLayoutPadding;
+  const qreal padding = (label_ == MeterLabel::kNoDecorations)
+      ? 0.0
+      : (kLayoutPadding + kBevelWidth);
   const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
   if (!contentRect.isValid() || contentRect.isEmpty()) {
     if (selected_) {

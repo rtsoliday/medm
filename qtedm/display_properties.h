@@ -190,6 +190,12 @@ enum class HeatmapRotation
   k270,
 };
 
+enum class HeatmapProfileMode
+{
+  kAbsolute,
+  kAveraged,
+};
+
 enum class WaterfallScrollDirection
 {
   kTopToBottom,

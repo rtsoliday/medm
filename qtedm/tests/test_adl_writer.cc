@@ -31,6 +31,7 @@ private slots:
   void writesDynamicAttributeSection();
   void writesLimitsSection();
   void writesTextAreaEnumStrings();
+  void writesHeatmapProfileModeEnumStrings();
   void omitsDefaultCartesianAxisSection();
 };
 
@@ -94,6 +95,14 @@ void TestAdlWriter::writesTextAreaEnumStrings()
       TextAreaCommitMode::kOnFocusLost), QStringLiteral("onFocusLost"));
   QCOMPARE(AdlWriter::textAreaCommitModeString(
       TextAreaCommitMode::kExplicit), QStringLiteral("explicit"));
+}
+
+void TestAdlWriter::writesHeatmapProfileModeEnumStrings()
+{
+  QCOMPARE(AdlWriter::heatmapProfileModeString(
+      HeatmapProfileMode::kAbsolute), QStringLiteral("absolute"));
+  QCOMPARE(AdlWriter::heatmapProfileModeString(
+      HeatmapProfileMode::kAveraged), QStringLiteral("averaged"));
 }
 
 void TestAdlWriter::omitsDefaultCartesianAxisSection()

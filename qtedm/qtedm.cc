@@ -1,5 +1,6 @@
 #include <QAction>
 #include <QApplication>
+#include <QByteArray>
 #include <QCoreApplication>
 #include <QColor>
 #include <QDir>
@@ -43,6 +44,7 @@
 #include <QResource>
 #include <QVector>
 
+#include <algorithm>
 #include <cmath>
 #include <climits>
 #include <cstring>
@@ -346,18 +348,25 @@ public:
     registerChannel(kWaterfallName, false);
 
     auto &registry = SoftPvRegistry::instance();
-    registry.setControlInfo(kWaveName, 0.0, 100.0, 1);
-    registry.setControlInfo(kRampName, 0.0, 100.0, 1);
+    registry.setControlInfo(kWaveName, 0.0, 100.0, kFloatingPrecision);
+    registry.setControlInfo(kRampName, 0.0, 100.0, kFloatingPrecision);
     registry.setControlInfo(kBinaryName, 0.0, 1.0, 0);
     registry.setControlInfo(kButtonName, 0.0, 1.0, 0);
     registry.setControlInfo(kBitsName, 0.0, 255.0, 0);
     registry.setControlInfo(kProfileXName, 0.0,
         static_cast<double>(kProfilePointCount - 1), 0);
-    registry.setControlInfo(kProfileYName, 0.0, 100.0, 1);
-    registry.setControlInfo(kHeatmapName, 0.0, 100.0, 1);
-    registry.setControlInfo(kWaterfallName, 0.0, 100.0, 1);
-    registry.publishStringValue(kTextName,
-        QStringLiteral("This text lives in a process-local demo PV."));
+    registry.setControlInfo(kProfileYName, 0.0, 100.0, kFloatingPrecision);
+    registry.setControlInfo(kHeatmapName, 0.0, 100.0, kFloatingPrecision);
+    registry.setControlInfo(kWaterfallName, 0.0, 100.0,
+        kFloatingPrecision);
+    QByteArray initialText(1024, '\0');
+    const QByteArray textBytes = QByteArrayLiteral(
+        "Demo text PV line 1.\n"
+        "Demo text PV line 2.\n"
+        "Demo text PV line 3.");
+    std::copy(textBytes.constData(), textBytes.constData() + textBytes.size(),
+        initialText.data());
+    registry.publishCharArrayValue(kTextName, initialText);
     registry.publishValue(kButtonName, 0.0);
 
     connect(&timer_, &QTimer::timeout, this,
@@ -431,6 +440,7 @@ private:
   static constexpr int kProfilePointCount = 64;
   static constexpr int kHeatmapWidth = 8;
   static constexpr int kHeatmapHeight = 8;
+  static constexpr short kFloatingPrecision = 6;
   static inline const QString kWaveName =
       QStringLiteral("__qtedm_demo:wave");
   static inline const QString kRampName =

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <tuple>
 
 #include <QFontMetrics>
@@ -26,6 +27,9 @@ constexpr int kLegendPadding = 6;
 constexpr int kLegendNumberPadding = 12;
 constexpr int kTitleFontHeight = 24;
 constexpr int kLegendFontHeight = 12;
+constexpr int kRaisedFrameThickness = 2;
+constexpr int kRaisedFrameLeftGap = 2;
+constexpr int kRaisedFrameBottomGap = 2;
 
 struct HeatmapLayout
 {
@@ -81,6 +85,31 @@ QVector<QRgb> getHeatmapPalette(HeatmapColorMap map, bool invert) {
     palette[i] = qRgb(r, g, b);
   }
   return palette;
+}
+
+void drawRaisedFrame(QPainter &painter, const QRect &outerRect,
+    const QColor &background)
+{
+  if (!outerRect.isValid() || outerRect.isEmpty()) {
+    return;
+  }
+
+  const QColor lightShadow = background.lighter(150);
+  const QColor darkShadow = background.darker(150);
+
+  for (int i = 0; i < kRaisedFrameThickness; ++i) {
+    painter.setPen(QPen(lightShadow, 1));
+    painter.drawLine(outerRect.left() + i, outerRect.top() + i,
+        outerRect.right() - i, outerRect.top() + i);
+    painter.drawLine(outerRect.left() + i, outerRect.top() + i,
+        outerRect.left() + i, outerRect.bottom() - i);
+
+    painter.setPen(QPen(darkShadow, 1));
+    painter.drawLine(outerRect.left() + i, outerRect.bottom() - i,
+        outerRect.right() - i, outerRect.bottom() - i);
+    painter.drawLine(outerRect.right() - i, outerRect.top() + i,
+        outerRect.right() - i, outerRect.bottom() - i);
+  }
 }
 }
 
@@ -241,6 +270,20 @@ void HeatmapElement::setColorMap(HeatmapColorMap colorMap)
   invalidateCache();
 }
 
+HeatmapProfileMode HeatmapElement::profileMode() const
+{
+  return profileMode_;
+}
+
+void HeatmapElement::setProfileMode(HeatmapProfileMode mode)
+{
+  if (profileMode_ == mode) {
+    return;
+  }
+  profileMode_ = mode;
+  invalidateCache();
+}
+
 
 bool HeatmapElement::preserveAspectRatio() const
 {
@@ -364,7 +407,12 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
 
-  const QRect drawRect = rect().adjusted(0, 0, -1, -1);
+  const QRect frameRect = rect();
+  const QRect selectionRect = rect().adjusted(0, 0, -1, -1);
+  const QRect drawRect = rect().adjusted(
+      kRaisedFrameThickness + kRaisedFrameLeftGap,
+      kRaisedFrameThickness, -kRaisedFrameThickness,
+      -(kRaisedFrameThickness + kRaisedFrameBottomGap));
   const QFont titleFont = medmTextFieldFont(kTitleFontHeight);
   const QFont titleFontToUse = titleFont.family().isEmpty()
       ? font()
@@ -598,11 +646,10 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
     }
   }
 
-  painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
-  painter.drawRect(drawRect);
+  drawRaisedFrame(painter, frameRect, backgroundColor());
 
   if (isSelected()) {
-    drawSelectionOutline(painter, drawRect);
+    drawSelectionOutline(painter, selectionRect);
   }
 }
 
@@ -790,15 +837,22 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
   QVector<int> topCounts;
   QVector<int> rightCounts;
   const bool computeProfiles = showTopProfile_ || showRightProfile_;
+  const bool averageProfiles =
+      computeProfiles && profileMode_ == HeatmapProfileMode::kAveraged;
   if (computeProfiles) {
     topProfileData_.resize(zoomedWidth);
-    topProfileData_.fill(0.0);
     rightProfileData_.resize(zoomedHeight);
-    rightProfileData_.fill(0.0);
-    topCounts.resize(zoomedWidth);
-    topCounts.fill(0);
-    rightCounts.resize(zoomedHeight);
-    rightCounts.fill(0);
+    if (averageProfiles) {
+      topProfileData_.fill(0.0);
+      rightProfileData_.fill(0.0);
+      topCounts.resize(zoomedWidth);
+      topCounts.fill(0);
+      rightCounts.resize(zoomedHeight);
+      rightCounts.fill(0);
+    } else {
+      topProfileData_.fill(std::numeric_limits<double>::quiet_NaN());
+      rightProfileData_.fill(std::numeric_limits<double>::quiet_NaN());
+    }
   }
 
   // Calculate min/max and accumulate profile data over the visible zoomed
@@ -825,10 +879,21 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
         }
         if (computeProfiles) {
           const int zx = x - xStart;
-          topProfileData_[zx] += v;
-          topCounts[zx]++;
-          rightProfileData_[zy] += v;
-          rightCounts[zy]++;
+          if (averageProfiles) {
+            topProfileData_[zx] += v;
+            topCounts[zx]++;
+            rightProfileData_[zy] += v;
+            rightCounts[zy]++;
+          } else {
+            if (std::isnan(topProfileData_[zx])
+                || v > topProfileData_[zx]) {
+              topProfileData_[zx] = v;
+            }
+            if (std::isnan(rightProfileData_[zy])
+                || v > rightProfileData_[zy]) {
+              rightProfileData_[zy] = v;
+            }
+          }
         }
       }
     } else {
@@ -851,10 +916,21 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
         }
         if (computeProfiles) {
           const int zx = x - xStart;
-          topProfileData_[zx] += v;
-          topCounts[zx]++;
-          rightProfileData_[zy] += v;
-          rightCounts[zy]++;
+          if (averageProfiles) {
+            topProfileData_[zx] += v;
+            topCounts[zx]++;
+            rightProfileData_[zy] += v;
+            rightCounts[zy]++;
+          } else {
+            if (std::isnan(topProfileData_[zx])
+                || v > topProfileData_[zx]) {
+              topProfileData_[zx] = v;
+            }
+            if (std::isnan(rightProfileData_[zy])
+                || v > rightProfileData_[zy]) {
+              rightProfileData_[zy] = v;
+            }
+          }
         }
       }
     }
@@ -877,7 +953,7 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
 
   const double range = maxValue - minValue;
 
-  if (computeProfiles) {
+  if (averageProfiles) {
     for (int x = 0; x < zoomedWidth; ++x) {
       if (topCounts[x] > 0) {
         topProfileData_[x] /= topCounts[x];
@@ -892,7 +968,9 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
         rightProfileData_[y] = std::numeric_limits<double>::quiet_NaN();
       }
     }
+  }
 
+  if (computeProfiles) {
     // Apply flips
     if (flipHorizontal_) {
       std::reverse(topProfileData_.begin(), topProfileData_.end());

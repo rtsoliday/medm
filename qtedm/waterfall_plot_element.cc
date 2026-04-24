@@ -32,6 +32,7 @@ constexpr int kTickGap = 4;
 constexpr int kLegendWidth = 14;
 constexpr int kLegendPadding = 6;
 constexpr int kMinimumTimeViewPixels = 8;
+constexpr int kRaisedFrameThickness = 2;
 
 QColor effectiveColor(const QWidget *widget, const QColor &candidate,
     QPalette::ColorRole role, const QColor &fallback)
@@ -130,6 +131,31 @@ QFont waterfallPlotFont(const QWidget *widget, int height)
   return medmFont.family().isEmpty()
       ? widget->font()
       : medmFont;
+}
+
+void drawRaisedFrame(QPainter &painter, const QRect &outerRect,
+    const QColor &background)
+{
+  if (!outerRect.isValid() || outerRect.isEmpty()) {
+    return;
+  }
+
+  const QColor lightShadow = background.lighter(150);
+  const QColor darkShadow = background.darker(150);
+
+  for (int i = 0; i < kRaisedFrameThickness; ++i) {
+    painter.setPen(QPen(lightShadow, 1));
+    painter.drawLine(outerRect.left() + i, outerRect.top() + i,
+        outerRect.right() - i, outerRect.top() + i);
+    painter.drawLine(outerRect.left() + i, outerRect.top() + i,
+        outerRect.left() + i, outerRect.bottom() - i);
+
+    painter.setPen(QPen(darkShadow, 1));
+    painter.drawLine(outerRect.left() + i, outerRect.bottom() - i,
+        outerRect.right() - i, outerRect.bottom() - i);
+    painter.drawLine(outerRect.right() - i, outerRect.top() + i,
+        outerRect.right() - i, outerRect.bottom() - i);
+  }
 }
 
 } // namespace
@@ -637,9 +663,12 @@ void WaterfallPlotElement::paintEvent(QPaintEvent *event)
       QPalette::Window, QColor(Qt::white));
   const QColor plotForeground = effectiveColor(this, foregroundColor_,
       QPalette::WindowText, QColor(Qt::black));
-  const QRect bounds = rect().adjusted(0, 0, -1, -1);
+  const QRect frameRect = rect();
+  const QRect selectionRect = rect().adjusted(0, 0, -1, -1);
+  const QRect bounds = rect().adjusted(kRaisedFrameThickness,
+      kRaisedFrameThickness, -kRaisedFrameThickness, -kRaisedFrameThickness);
 
-  painter.fillRect(bounds, plotBackground);
+  painter.fillRect(rect(), plotBackground);
 
   const QFont titleFont = waterfallPlotFont(this, kTitleFontHeight);
   const QFont labelFont = waterfallPlotFont(this, kAxisLabelFontHeight);
@@ -831,10 +860,9 @@ void WaterfallPlotElement::paintEvent(QPaintEvent *event)
         QStringLiteral("Disconnected"));
   }
 
-  painter.setPen(QPen(plotForeground, 1));
-  painter.drawRect(bounds);
+  drawRaisedFrame(painter, frameRect, plotBackground);
   if (selected_) {
-    drawSelectionOutline(painter, bounds);
+    drawSelectionOutline(painter, selectionRect);
   }
 }
 

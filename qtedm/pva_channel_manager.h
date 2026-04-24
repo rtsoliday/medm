@@ -28,6 +28,8 @@ public:
     QString host;
     QString value;
     bool hasValue = false;
+    QVector<double> arrayValues;
+    bool isArray = false;
     short severity = 0;
     double hopr = 0.0;
     double lopr = 0.0;

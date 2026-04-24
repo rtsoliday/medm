@@ -31,6 +31,7 @@ QString heatmapDimensionSourceString(HeatmapDimensionSource source);
 QString heatmapOrderString(HeatmapOrder order);
 QString heatmapColorMapString(HeatmapColorMap map);
 QString heatmapRotationString(HeatmapRotation rot);
+QString heatmapProfileModeString(HeatmapProfileMode mode);
 QString waterfallScrollDirectionString(WaterfallScrollDirection direction);
 QString waterfallIntensityScaleString(WaterfallIntensityScale scale);
 QString waterfallEraseModeString(WaterfallEraseMode mode);

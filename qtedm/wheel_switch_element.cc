@@ -40,6 +40,7 @@ constexpr short kInvalidSeverity = 3;
 constexpr int kWheelSwitchDefaultFormatWidth = 6;
 constexpr int kWheelSwitchDefaultFormatPrecision = 2;
 constexpr char kWheelSwitchDefaultFormat[] = "% 6.2f";
+constexpr qreal kWheelSwitchBevelWidth = 2.0;
 
 struct WheelSwitchFormatInfo
 {
@@ -119,6 +120,26 @@ QColor blendedColor(const QColor &base, int factor)
   adjusted = factor > 100 ? adjusted.lighter(factor) : adjusted.darker(200 - factor);
 
   return adjusted;
+}
+
+void drawRaisedBoundary(QPainter &painter, const QRect &bounds,
+    const QColor &background)
+{
+  const QRect bevelOuter = bounds.adjusted(0, 0, -1, -1);
+  painter.setPen(QPen(background.lighter(135), 1));
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
+  painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
+  painter.setPen(QPen(background.darker(145), 1));
+  painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
+  painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
+
+  const QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
+  painter.setPen(QPen(background.lighter(150), 1));
+  painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
+  painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
+  painter.setPen(QPen(background.darker(170), 1));
+  painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
+  painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 }
 
 QString calculatedWheelSwitchFormat(double low, double high, int precision)
@@ -723,8 +744,7 @@ void WheelSwitchElement::mousePressEvent(QMouseEvent *event)
 
   setFocus(Qt::MouseFocusReason);
 
-  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
-  const Layout layout = layoutForRect(outer);
+  const Layout layout = layoutForRect(contentRect());
   bool handled = false;
 
   for (int i = 0; i < static_cast<int>(layout.columns.size()); ++i) {
@@ -806,8 +826,7 @@ void WheelSwitchElement::leaveEvent(QEvent *event)
 void WheelSwitchElement::focusInEvent(QFocusEvent *event)
 {
   if (isInteractive()) {
-    const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
-    const Layout layout = layoutForRect(outer);
+    const Layout layout = layoutForRect(contentRect());
     if (selectedSlotIndex_ < 0 || selectedSlotIndex_ >= static_cast<int>(layout.columns.size())
         || !layout.columns.at(selectedSlotIndex_).hasButtons) {
       selectedSlotIndex_ = defaultSlotIndex(layout);
@@ -838,8 +857,7 @@ void WheelSwitchElement::wheelEvent(QWheelEvent *event)
     return;
   }
 
-  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
-  const Layout layout = layoutForRect(outer);
+  const Layout layout = layoutForRect(contentRect());
   int slotIndex = -1;
   double step = 0.0;
   if (!selectedSlotStep(layout, event->modifiers(), &slotIndex, &step)) {
@@ -882,8 +900,7 @@ void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
     return;
   }
 
-  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
-  const Layout layout = layoutForRect(outer);
+  const Layout layout = layoutForRect(contentRect());
 
   const QString text = event->text();
   if (!(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier
@@ -997,16 +1014,11 @@ void WheelSwitchElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, true);
 
-  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
-  painter.fillRect(outer, effectiveBackground());
+  const QColor bg = effectiveBackground();
+  painter.fillRect(rect(), bg);
+  drawRaisedBoundary(painter, rect(), bg);
 
-  QPen borderPen(Qt::black);
-  borderPen.setWidthF(1.0);
-  painter.setPen(borderPen);
-  painter.setBrush(Qt::NoBrush);
-  painter.drawRect(outer);
-
-  const Layout layout = layoutForRect(outer);
+  const Layout layout = layoutForRect(contentRect());
   const bool enabled = isInteractive();
 
   if (layout.valueRect.height() > 6.0 && layout.valueRect.width() > 6.0) {
@@ -1127,7 +1139,8 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   //   }
   // }
 
-  layout.font = wheelSwitchFontForHeight(height());
+  layout.font = wheelSwitchFontForHeight(
+      static_cast<int>(std::round(bounds.height())));
   if (layout.font.family().isEmpty()) {
     layout.font = font();
   }
@@ -1441,10 +1454,16 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   return layout;
 }
 
+QRectF WheelSwitchElement::contentRect() const
+{
+  return QRectF(rect()).adjusted(kWheelSwitchBevelWidth,
+      kWheelSwitchBevelWidth, -kWheelSwitchBevelWidth,
+      -kWheelSwitchBevelWidth);
+}
+
 void WheelSwitchElement::updateHoverState(const QPointF &pos)
 {
-  const QRectF outer = rect().adjusted(qreal(0.5), qreal(0.5), qreal(-0.5), qreal(-0.5));
-  const Layout layout = layoutForRect(outer);
+  const Layout layout = layoutForRect(contentRect());
 
   int newIndex = -1;
   RepeatDirection newDirection = RepeatDirection::kNone;

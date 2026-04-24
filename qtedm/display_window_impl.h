@@ -64,6 +64,7 @@
 #include "pv_info_dialog.h"
 #include "pv_limits_dialog.h"
 #include "pva_info_snapshot.h"
+#include "runtime_utils.h"
 #include "strip_chart_data_dialog.h"
 #include "cursor_utils.h"
 
@@ -71,6 +72,8 @@ namespace {
 constexpr double kChannelRetryTimeoutSeconds = 1.0;
 constexpr double kPvInfoTimeoutSeconds = 1.0;
 constexpr qint64 kEpicsEpochOffsetSeconds = 631152000; // 1990-01-01 -> 1970-01-01
+constexpr unsigned long kPvInfoArrayFetchLimit = 100000;
+constexpr int kPvInfoArrayPreviewCount = 5;
 constexpr int kResizeDebounceMs = 80;
 constexpr char kWidgetHasDynamicAttributeProperty[] =
     "_adlHasDynamicAttribute";
@@ -2141,10 +2144,9 @@ public:
         if (ch.isEmpty()) {
           ch = QStringLiteral("Pen%1").arg(p);
         }
-        // Skip duplicate column names
-        QString sanitizedName = ch;
-        sanitizedName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
-            QStringLiteral("_"));
+        // Skip duplicate SDDS column names
+        QString sanitizedName = RuntimeUtils::sanitizeSddsColumnName(ch,
+            QStringLiteral("Pen%1").arg(p));
         if (usedColumnNames.contains(sanitizedName)) {
           continue;  // Skip this pen - duplicate column name
         }
@@ -2191,9 +2193,9 @@ public:
 
       // Define columns for each active pen
       for (int i = 0; i < activePenIndices.size(); ++i) {
-        QString colName = channelNames[i];
-        colName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
-            QStringLiteral("_"));
+        const QString colName = RuntimeUtils::sanitizeSddsColumnName(
+            channelNames[i], QStringLiteral("Pen%1")
+                .arg(activePenIndices[i]));
         stream << QStringLiteral("&column name=%1, type=double, "
             "description=\"%2\" &end\n")
             .arg(colName)
@@ -2352,9 +2354,8 @@ public:
         if (xCh.isEmpty()) {
           xCh = QStringLiteral("X%1").arg(t);
         }
-        info.xColName = xCh;
-        info.xColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
-            QStringLiteral("_"));
+        info.xColName = RuntimeUtils::sanitizeSddsColumnName(xCh,
+            QStringLiteral("X%1").arg(t));
 
         // Determine Y column name
         QString yCh = plot->traceYChannel(t);
@@ -2364,9 +2365,8 @@ public:
         if (yCh.isEmpty()) {
           yCh = QStringLiteral("Trace%1").arg(t);
         }
-        info.yColName = yCh;
-        info.yColName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_]")),
-            QStringLiteral("_"));
+        info.yColName = RuntimeUtils::sanitizeSddsColumnName(yCh,
+            QStringLiteral("Trace%1").arg(t));
 
         // If X and Y column names are the same, append suffix
         if (info.xColName == info.yColName) {
@@ -3532,6 +3532,7 @@ private:
   HeatmapOrder parseHeatmapOrder(const QString &value) const;
   HeatmapRotation parseHeatmapRotation(const QString &value) const;
   HeatmapColorMap parseHeatmapColorMap(const QString &value) const;
+  HeatmapProfileMode parseHeatmapProfileMode(const QString &value) const;
   bool parseHeatmapBool(const QString &value) const;
   WaterfallScrollDirection parseWaterfallScrollDirection(
       const QString &value) const;
@@ -3601,6 +3602,11 @@ private:
     chid channelId = nullptr;
   };
 
+  struct PvInfoContent {
+    QString text;
+    QVector<PvInfoArrayData> arrays;
+  };
+
   struct PvInfoChannelDetails {
     QString name;
     QString desc;
@@ -3625,6 +3631,9 @@ private:
     bool hasUnits = false;
     QStringList states;
     bool hasStates = false;
+    bool hasArrayData = false;
+    PvInfoArrayData arrayData;
+    QString arrayMessage;
     bool producedByExpressionChannel = false;
     QString expressionCalc;
     QStringList expressionChannels;
@@ -6108,11 +6117,12 @@ private:
       const HeatmapRotation rotation = element->rotation();
       const bool showTopProfile = element->showTopProfile();
       const bool showRightProfile = element->showRightProfile();
+      const HeatmapProfileMode profileMode = element->profileMode();
       prepareClipboard([geometry, title, dataChannel, xSource, ySource, xDim,
                            yDim, xDimChannel, yDimChannel, order, colorMap,
                            invertGreyscale, preserveAspectRatio,
                            flipHorizontal, flipVertical, rotation,
-                           showTopProfile, showRightProfile](
+                           showTopProfile, showRightProfile, profileMode](
                            DisplayWindow &target, const QPoint &offset) {
         if (!target.displayArea_) {
           return;
@@ -6137,6 +6147,7 @@ private:
         newElement->setRotation(rotation);
         newElement->setShowTopProfile(showTopProfile);
         newElement->setShowRightProfile(showRightProfile);
+        newElement->setProfileMode(profileMode);
         newElement->show();
         target.ensureElementInStack(newElement);
         target.heatmapElements_.append(newElement);
@@ -9055,6 +9066,11 @@ private:
           element->setShowRightProfile(show);
           markDirty();
         },
+        [element]() { return element->profileMode(); },
+        [this, element](HeatmapProfileMode mode) {
+          element->setProfileMode(mode);
+          markDirty();
+        },
         [element]() { return element->preserveAspectRatio(); },
         [this, element](bool preserve) {
           element->setPreserveAspectRatio(preserve);
@@ -10113,24 +10129,24 @@ private:
     const QPoint globalPos = mapToGlobal(windowPos);
     lastContextMenuGlobalPos_ = globalPos;
 
-    QString content;
+    PvInfoContent content;
     if (widget) {
-      content = buildPvInfoText(widget);
+      content = buildPvInfoContent(widget);
     } else {
-      content = buildPvInfoBackgroundText();
+      content.text = buildPvInfoBackgroundText();
     }
 
     cancelPvInfoPickMode();
     showPvInfoContent(content);
   }
 
-  void showPvInfoContent(const QString &text)
+  void showPvInfoContent(const PvInfoContent &content)
   {
     PvInfoDialog *dialog = ensurePvInfoDialog();
     if (!dialog) {
       return;
     }
-    dialog->setContent(text);
+    dialog->setContent(content.text, content.arrays);
     dialog->show();
     dialog->raise();
     dialog->activateWindow();
@@ -10837,10 +10853,10 @@ private:
     return refs;
   }
 
-  QString buildPvInfoText(QWidget *widget) const
+  PvInfoContent buildPvInfoContent(QWidget *widget) const
   {
-    QString result;
-    QTextStream stream(&result);
+    PvInfoContent content;
+    QTextStream stream(&content.text);
     setUtf8Encoding(stream);
 
     const QString objectLabel = pvInfoElementLabel(widget);
@@ -10865,6 +10881,9 @@ private:
       PvInfoChannelDetails details;
       if (populatePvInfoDetails(channel, ref.channelId, details)) {
         stream << formatPvInfoSection(details);
+        if (details.hasArrayData) {
+          content.arrays.append(details.arrayData);
+        }
       } else {
         stream << channel << '\n';
         stream << "======================================\n";
@@ -10882,7 +10901,144 @@ private:
       stream << "No process variables are associated with this object.\n\n";
     }
 
-    return result;
+    return content;
+  }
+
+  QString pvInfoTypeName(chtype fieldType) const
+  {
+    if (fieldType < 0) {
+      return QStringLiteral("Unknown");
+    }
+    if (const char *typeName = dbf_type_to_text(fieldType)) {
+      return QString::fromLatin1(typeName);
+    }
+    return QStringLiteral("Unknown");
+  }
+
+  QString formatPvInfoNumericValue(double value, int precision = -1) const
+  {
+    if (std::isnan(value)) {
+      return QStringLiteral("nan");
+    }
+    if (!std::isfinite(value)) {
+      return value < 0.0 ? QStringLiteral("-inf") : QStringLiteral("inf");
+    }
+    if (precision >= 0) {
+      return QString::number(value, 'f', std::clamp(precision, 0, 17));
+    }
+    return QString::number(value, 'g', 12);
+  }
+
+  QString decodePvInfoCharArray(const QByteArray &bytes) const
+  {
+    QByteArray payload = bytes;
+    const int nullIndex = payload.indexOf('\0');
+    if (nullIndex >= 0) {
+      payload.truncate(nullIndex);
+    }
+    return QString::fromLatin1(payload.constData(), payload.size());
+  }
+
+  QString compactPvInfoTextPreview(QString text) const
+  {
+    text.replace(QStringLiteral("\r\n"), QStringLiteral("\\n"));
+    text.replace(QLatin1Char('\r'), QStringLiteral("\\r"));
+    text.replace(QLatin1Char('\n'), QStringLiteral("\\n"));
+    text.replace(QLatin1Char('\t'), QStringLiteral("\\t"));
+    constexpr int kPreviewLimit = 160;
+    if (text.size() > kPreviewLimit) {
+      text = text.left(kPreviewLimit) + QStringLiteral("...");
+    }
+    return text;
+  }
+
+  QString formatPvInfoArrayElement(const PvInfoArrayData &array,
+      int index) const
+  {
+    if (index < 0 || index >= array.elementCount()) {
+      return QStringLiteral("n/a");
+    }
+    if (array.isCharArray) {
+      const unsigned char value =
+          static_cast<unsigned char>(array.byteValues.at(index));
+      return QString::number(static_cast<int>(value));
+    }
+    if (array.isStringArray) {
+      return array.stringValues.value(index);
+    }
+    return formatPvInfoNumericValue(array.numericValues.value(index),
+        array.hasPrecision ? array.precision : -1);
+  }
+
+  QString formatPvInfoArrayPreview(const PvInfoArrayData &array) const
+  {
+    const int count = array.elementCount();
+    if (count <= 0) {
+      return QStringLiteral("Not Available");
+    }
+
+    QStringList values;
+    const int headCount = std::min(count, kPvInfoArrayPreviewCount);
+    for (int i = 0; i < headCount; ++i) {
+      values.append(QStringLiteral("[%1]=%2")
+          .arg(i).arg(formatPvInfoArrayElement(array, i)));
+    }
+    if (count > kPvInfoArrayPreviewCount + 1) {
+      values.append(QStringLiteral("..."));
+    }
+    if (count > kPvInfoArrayPreviewCount) {
+      values.append(QStringLiteral("[%1]=%2")
+          .arg(count - 1)
+          .arg(formatPvInfoArrayElement(array, count - 1)));
+    }
+    return values.join(QStringLiteral(", "));
+  }
+
+  QString formatPvInfoArrayStats(const QVector<double> &values,
+      int precision = -1) const
+  {
+    if (values.isEmpty()) {
+      return QStringLiteral("Not Available");
+    }
+    bool haveFinite = false;
+    double minimum = 0.0;
+    double maximum = 0.0;
+    double sum = 0.0;
+    int finiteCount = 0;
+    for (double value : values) {
+      if (!std::isfinite(value)) {
+        continue;
+      }
+      if (!haveFinite) {
+        minimum = value;
+        maximum = value;
+        haveFinite = true;
+      } else {
+        minimum = std::min(minimum, value);
+        maximum = std::max(maximum, value);
+      }
+      sum += value;
+      ++finiteCount;
+    }
+    if (!haveFinite || finiteCount <= 0) {
+      return QStringLiteral("Not Available");
+    }
+    const double mean = sum / static_cast<double>(finiteCount);
+    return QStringLiteral("%1 / %2 / %3")
+        .arg(formatPvInfoNumericValue(minimum, precision))
+        .arg(formatPvInfoNumericValue(maximum, precision))
+        .arg(formatPvInfoNumericValue(mean, precision));
+  }
+
+  void applyPvInfoArrayMetadata(PvInfoArrayData &array,
+      const PvInfoChannelDetails &details) const
+  {
+    array.channelName = details.name;
+    array.typeName = pvInfoTypeName(details.fieldType);
+    array.units = details.units;
+    array.hasUnits = details.hasUnits;
+    array.precision = details.precision;
+    array.hasPrecision = details.hasPrecision;
   }
 
   QString formatPvInfoSection(const PvInfoChannelDetails &details) const
@@ -10890,11 +11046,6 @@ private:
     QString result;
     QTextStream stream(&result);
     setUtf8Encoding(stream);
-
-    const char *typeName = nullptr;
-    if (details.fieldType >= 0) {
-      typeName = dbf_type_to_text(details.fieldType);
-    }
 
     QString access;
     if (details.readAccess) {
@@ -10915,30 +11066,62 @@ private:
     stream << "======================================\n";
     stream << "DESC: " << descValue << '\n';
     stream << "RTYP: " << rtypValue << '\n';
-    stream << "TYPE: "
-           << (typeName ? QString::fromLatin1(typeName)
-                        : QStringLiteral("Unknown"))
-           << '\n';
+    stream << "TYPE: " << pvInfoTypeName(details.fieldType) << '\n';
     stream << "COUNT: " << details.elementCount << '\n';
-        stream << "UNITS: "
-          << (details.hasUnits
-             ? details.units
-             : QStringLiteral("Not Available"))
-          << '\n';
+    stream << "UNITS: "
+           << (details.hasUnits ? details.units
+                                : QStringLiteral("Not Available"))
+           << '\n';
     stream << "ACCESS: " << access << '\n';
     stream << "HOST: "
            << (details.host.isEmpty() ? QStringLiteral("Unknown")
                                       : details.host)
            << '\n';
 
-    const QString valueLabel = (details.elementCount > 1)
-        ? QStringLiteral("FIRST VALUE")
-        : QStringLiteral("VALUE");
-    const QString valueText = details.hasValue
-        ? details.value
-        : (details.value.isEmpty() ? QStringLiteral("Not Available")
-                                   : details.value);
-    stream << valueLabel << ": " << valueText << '\n';
+    if (details.elementCount > 1) {
+      stream << "VALUE: array[" << details.elementCount << "] "
+             << pvInfoTypeName(details.fieldType) << '\n';
+      if (details.hasArrayData) {
+        if (details.arrayData.isCharArray) {
+          const QString textPreview = compactPvInfoTextPreview(
+              details.arrayData.textValue.isEmpty()
+                  ? decodePvInfoCharArray(details.arrayData.byteValues)
+                  : details.arrayData.textValue);
+          stream << "TEXT PREVIEW: "
+                 << (textPreview.isEmpty() ? QStringLiteral("(empty)")
+                                           : textPreview)
+                 << '\n';
+        }
+        stream << "PREVIEW: "
+               << formatPvInfoArrayPreview(details.arrayData) << '\n';
+        if (!details.arrayData.isCharArray
+            && !details.arrayData.isStringArray
+            && !details.arrayData.numericValues.isEmpty()) {
+          stream << "MIN/MAX/MEAN: "
+                 << formatPvInfoArrayStats(details.arrayData.numericValues,
+                     details.arrayData.hasPrecision
+                         ? details.arrayData.precision
+                         : -1)
+                 << '\n';
+        }
+        stream << "ARRAY VIEW: Available\n";
+      } else {
+        const QString valueText = details.hasValue
+            ? details.value
+            : (details.value.isEmpty() ? QStringLiteral("Not Available")
+                                       : details.value);
+        stream << "FIRST VALUE: " << valueText << '\n';
+        if (!details.arrayMessage.isEmpty()) {
+          stream << "ARRAY VIEW: " << details.arrayMessage << '\n';
+        }
+      }
+    } else {
+      const QString valueText = details.hasValue
+          ? details.value
+          : (details.value.isEmpty() ? QStringLiteral("Not Available")
+                                     : details.value);
+      stream << "VALUE: " << valueText << '\n';
+    }
 
     if (details.hasTimestamp) {
       stream << "STAMP: " << formatPvInfoTimestamp(details.timestamp) << '\n';
@@ -11117,13 +11300,22 @@ private:
     details.name = channelName.trimmed();
     details.desc = QStringLiteral("QtEDM local soft PV");
     details.recordType = QStringLiteral("SOFTPV");
-    details.fieldType = DBF_DOUBLE;
-    details.elementCount = 1;
+    details.fieldType = snapshot.fieldType;
+    details.elementCount = snapshot.elementCount;
     details.readAccess = true;
     details.writeAccess = false;
     details.host = QStringLiteral("QtEDM Local");
     details.severity = snapshot.connected ? NO_ALARM : INVALID_ALARM;
     details.status = 0;
+    details.lopr = snapshot.low;
+    details.hopr = snapshot.high;
+    details.hasLimits = snapshot.hasControlInfo;
+    details.precision = snapshot.precision;
+    details.hasPrecision = snapshot.precision >= 0;
+    details.units = snapshot.units;
+    details.hasUnits = !snapshot.units.trimmed().isEmpty();
+    details.states = snapshot.enumStrings;
+    details.hasStates = !details.states.isEmpty();
     details.hasTimestamp = snapshot.hasTimestamp;
     details.timestamp = snapshot.timestamp;
     details.producedByExpressionChannel =
@@ -11136,8 +11328,29 @@ private:
     }
 
     if (snapshot.connected && snapshot.hasValue) {
-      details.value = QString::number(snapshot.value, 'g', 12);
+      if (snapshot.isString) {
+        details.value = snapshot.stringValue;
+      } else if (snapshot.isEnum && !snapshot.enumStrings.isEmpty()
+          && snapshot.enumValue
+              < static_cast<dbr_enum_t>(snapshot.enumStrings.size())) {
+        details.value = snapshot.enumStrings.at(
+            static_cast<int>(snapshot.enumValue));
+      } else {
+        details.value = formatPvInfoNumericValue(snapshot.value,
+            details.hasPrecision ? details.precision : -1);
+      }
       details.hasValue = true;
+      if (snapshot.isCharArray || snapshot.isArray) {
+        details.hasArrayData = true;
+        applyPvInfoArrayMetadata(details.arrayData, details);
+        if (snapshot.isCharArray) {
+          details.arrayData.isCharArray = true;
+          details.arrayData.byteValues = snapshot.charArrayValue;
+          details.arrayData.textValue = snapshot.stringValue;
+        } else {
+          details.arrayData.numericValues = snapshot.arrayValues;
+        }
+      }
     } else if (!snapshot.connected) {
       details.value = QStringLiteral("Disconnected");
     } else {
@@ -11146,6 +11359,219 @@ private:
 
     details.error.clear();
     return true;
+  }
+
+  bool fetchCaPvInfoArray(chid channelId,
+      PvInfoChannelDetails &details) const
+  {
+    if (!channelId || details.elementCount <= 1 || !details.readAccess) {
+      return false;
+    }
+    if (details.elementCount > kPvInfoArrayFetchLimit) {
+      details.arrayMessage = QStringLiteral(
+          "Detailed view not loaded automatically for %1 elements "
+          "(limit %2).")
+          .arg(details.elementCount)
+          .arg(kPvInfoArrayFetchLimit);
+      return false;
+    }
+
+    chtype requestType = -1;
+    switch (details.fieldType) {
+    case DBF_STRING:
+      requestType = DBR_TIME_STRING;
+      break;
+    case DBF_ENUM:
+      requestType = DBR_TIME_ENUM;
+      break;
+    case DBF_CHAR:
+      requestType = DBR_TIME_CHAR;
+      break;
+    case DBF_SHORT:
+      requestType = DBR_TIME_SHORT;
+      break;
+    case DBF_LONG:
+      requestType = DBR_TIME_LONG;
+      break;
+    case DBF_FLOAT:
+      requestType = DBR_TIME_FLOAT;
+      break;
+    case DBF_DOUBLE:
+      requestType = DBR_TIME_DOUBLE;
+      break;
+    default:
+      details.arrayMessage = QStringLiteral(
+          "Detailed array view is not available for this field type.");
+      return false;
+    }
+
+    const unsigned long count = details.elementCount;
+    const unsigned long bufferSize = dbr_size_n(requestType, count);
+    if (bufferSize == 0 || bufferSize > static_cast<unsigned long>(INT_MAX)) {
+      details.arrayMessage = QStringLiteral(
+          "Detailed array view is too large to allocate.");
+      return false;
+    }
+    QByteArray buffer(static_cast<int>(bufferSize), '\0');
+    int status = ca_array_get(requestType, count, channelId, buffer.data());
+    if (status != ECA_NORMAL) {
+      details.arrayMessage = QStringLiteral("Array read failed: %1")
+          .arg(QString::fromLatin1(ca_message(status)));
+      return false;
+    }
+    status = ca_pend_io(kPvInfoTimeoutSeconds);
+    if (status != ECA_NORMAL) {
+      details.arrayMessage = QStringLiteral("Array read timeout: %1")
+          .arg(QString::fromLatin1(ca_message(status)));
+      return false;
+    }
+
+    PvInfoArrayData array;
+    applyPvInfoArrayMetadata(array, details);
+
+    switch (requestType) {
+    case DBR_TIME_STRING: {
+      const auto *value =
+          reinterpret_cast<const dbr_time_string *>(buffer.constData());
+      details.timestamp = value->stamp;
+      details.hasTimestamp = true;
+      details.severity = value->severity;
+      details.status = value->status;
+      array.isStringArray = true;
+      const dbr_string_t *strings = &value->value;
+      for (unsigned long i = 0; i < count; ++i) {
+        array.stringValues.append(QString::fromLatin1(strings[i]));
+      }
+      if (!array.stringValues.isEmpty()) {
+        details.value = array.stringValues.first();
+        details.hasValue = true;
+      }
+      break;
+    }
+    case DBR_TIME_ENUM: {
+      const auto *value =
+          reinterpret_cast<const dbr_time_enum *>(buffer.constData());
+      details.timestamp = value->stamp;
+      details.hasTimestamp = true;
+      details.severity = value->severity;
+      details.status = value->status;
+      array.numericValues.resize(static_cast<int>(count));
+      const dbr_enum_t *values = &value->value;
+      for (unsigned long i = 0; i < count; ++i) {
+        array.numericValues[static_cast<int>(i)] =
+            static_cast<double>(values[i]);
+      }
+      if (!array.numericValues.isEmpty()) {
+        details.value = formatPvInfoNumericValue(array.numericValues.first());
+        details.hasValue = true;
+      }
+      break;
+    }
+    case DBR_TIME_CHAR: {
+      const auto *value =
+          reinterpret_cast<const dbr_time_char *>(buffer.constData());
+      details.timestamp = value->stamp;
+      details.hasTimestamp = true;
+      details.severity = value->severity;
+      details.status = value->status;
+      array.isCharArray = true;
+      const char *bytes = reinterpret_cast<const char *>(&value->value);
+      array.byteValues = QByteArray(bytes, static_cast<int>(count));
+      array.textValue = decodePvInfoCharArray(array.byteValues);
+      if (!array.textValue.isEmpty()) {
+        details.value = array.textValue;
+      } else if (!array.byteValues.isEmpty()) {
+        details.value = QString::number(static_cast<int>(
+            static_cast<unsigned char>(array.byteValues.at(0))));
+      }
+      details.hasValue = true;
+      break;
+    }
+    case DBR_TIME_SHORT: {
+      const auto *value =
+          reinterpret_cast<const dbr_time_short *>(buffer.constData());
+      details.timestamp = value->stamp;
+      details.hasTimestamp = true;
+      details.severity = value->severity;
+      details.status = value->status;
+      array.numericValues.resize(static_cast<int>(count));
+      const dbr_short_t *values = &value->value;
+      for (unsigned long i = 0; i < count; ++i) {
+        array.numericValues[static_cast<int>(i)] =
+            static_cast<double>(values[i]);
+      }
+      if (!array.numericValues.isEmpty()) {
+        details.value = formatPvInfoNumericValue(array.numericValues.first());
+        details.hasValue = true;
+      }
+      break;
+    }
+    case DBR_TIME_LONG: {
+      const auto *value =
+          reinterpret_cast<const dbr_time_long *>(buffer.constData());
+      details.timestamp = value->stamp;
+      details.hasTimestamp = true;
+      details.severity = value->severity;
+      details.status = value->status;
+      array.numericValues.resize(static_cast<int>(count));
+      const dbr_long_t *values = &value->value;
+      for (unsigned long i = 0; i < count; ++i) {
+        array.numericValues[static_cast<int>(i)] =
+            static_cast<double>(values[i]);
+      }
+      if (!array.numericValues.isEmpty()) {
+        details.value = formatPvInfoNumericValue(array.numericValues.first());
+        details.hasValue = true;
+      }
+      break;
+    }
+    case DBR_TIME_FLOAT: {
+      const auto *value =
+          reinterpret_cast<const dbr_time_float *>(buffer.constData());
+      details.timestamp = value->stamp;
+      details.hasTimestamp = true;
+      details.severity = value->severity;
+      details.status = value->status;
+      array.numericValues.resize(static_cast<int>(count));
+      const dbr_float_t *values = &value->value;
+      for (unsigned long i = 0; i < count; ++i) {
+        array.numericValues[static_cast<int>(i)] =
+            static_cast<double>(values[i]);
+      }
+      if (!array.numericValues.isEmpty()) {
+        details.value = formatPvInfoNumericValue(array.numericValues.first(),
+            details.hasPrecision ? details.precision : -1);
+        details.hasValue = true;
+      }
+      break;
+    }
+    case DBR_TIME_DOUBLE: {
+      const auto *value =
+          reinterpret_cast<const dbr_time_double *>(buffer.constData());
+      details.timestamp = value->stamp;
+      details.hasTimestamp = true;
+      details.severity = value->severity;
+      details.status = value->status;
+      array.numericValues.resize(static_cast<int>(count));
+      const dbr_double_t *values = &value->value;
+      for (unsigned long i = 0; i < count; ++i) {
+        array.numericValues[static_cast<int>(i)] =
+            static_cast<double>(values[i]);
+      }
+      if (!array.numericValues.isEmpty()) {
+        details.value = formatPvInfoNumericValue(array.numericValues.first(),
+            details.hasPrecision ? details.precision : -1);
+        details.hasValue = true;
+      }
+      break;
+    }
+    default:
+      return false;
+    }
+
+    details.arrayData = array;
+    details.hasArrayData = array.elementCount() > 0;
+    return details.hasArrayData;
   }
 
   bool populatePvInfoDetails(const QString &channelName, chid existingChid,
@@ -11179,6 +11605,11 @@ private:
       details.hasUnits = snapshot.hasUnits;
       details.states = snapshot.states;
       details.hasStates = snapshot.hasStates;
+      if (snapshot.isArray && !snapshot.arrayValues.isEmpty()) {
+        details.hasArrayData = true;
+        applyPvInfoArrayMetadata(details.arrayData, details);
+        details.arrayData.numericValues = snapshot.arrayValues;
+      }
       if (!snapshot.connected) {
         details.error = QStringLiteral("PVA channel is not connected.");
         return false;
@@ -11322,6 +11753,10 @@ private:
     }
     default:
       break;
+    }
+
+    if (details.elementCount > 1) {
+      fetchCaPvInfoArray(channelId, details);
     }
 
     details.desc = fetchPvInfoRelatedField(trimmed, QStringLiteral(".DESC"));
@@ -20007,6 +20442,12 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       if (heatmap->showRightProfile()) {
         AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showRightProfile=\"yes\""));
       }
+      if (heatmap->profileMode() != HeatmapProfileMode::kAbsolute) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("profileMode=\"%1\"")
+                .arg(AdlWriter::heatmapProfileModeString(
+                    heatmap->profileMode())));
+      }
       if (!heatmap->invertGreyscale()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("invertGreyscale=\"false\""));
@@ -21317,6 +21758,12 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (heatmap->showRightProfile()) {
       AdlWriter::writeIndentedLine(stream, next, QStringLiteral("showRightProfile=\"yes\""));
     }
+    if (heatmap->profileMode() != HeatmapProfileMode::kAbsolute) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("profileMode=\"%1\"")
+              .arg(AdlWriter::heatmapProfileModeString(
+                  heatmap->profileMode())));
+    }
     if (!heatmap->invertGreyscale()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("invertGreyscale=\"false\""));
@@ -22616,6 +23063,17 @@ inline HeatmapColorMap DisplayWindow::parseHeatmapColorMap(
   if (normalized == QStringLiteral("rainbow")) return HeatmapColorMap::kRainbow;
   if (normalized == QStringLiteral("turbo")) return HeatmapColorMap::kTurbo;
   return HeatmapColorMap::kGrayscale;
+}
+
+inline HeatmapProfileMode DisplayWindow::parseHeatmapProfileMode(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.contains(QStringLiteral("averag"))
+      || normalized == QStringLiteral("avg")) {
+    return HeatmapProfileMode::kAveraged;
+  }
+  return HeatmapProfileMode::kAbsolute;
 }
 
 inline bool DisplayWindow::parseHeatmapBool(
@@ -27988,6 +28446,13 @@ inline HeatmapElement *DisplayWindow::loadHeatmapElement(
   QString showRightProfileValue = propertyValue(heatmapNode, QStringLiteral("showRightProfile"));
   if (!showRightProfileValue.isEmpty()) {
     element->setShowRightProfile(parseHeatmapBool(showRightProfileValue));
+  }
+  QString profileModeValue = propertyValue(heatmapNode, QStringLiteral("profileMode"));
+  if (profileModeValue.isEmpty()) {
+    profileModeValue = propertyValue(heatmapNode, QStringLiteral("profiles"));
+  }
+  if (!profileModeValue.isEmpty()) {
+    element->setProfileMode(parseHeatmapProfileMode(profileModeValue));
   }
 
   if (currentCompositeOwner_) {

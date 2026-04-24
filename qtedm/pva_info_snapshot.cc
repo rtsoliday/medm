@@ -19,6 +19,8 @@ bool getPvaInfoSnapshot(const QString &pvName, PvaInfoSnapshot &snapshot)
   snapshot.host = pvaSnapshot.host;
   snapshot.value = pvaSnapshot.value;
   snapshot.hasValue = pvaSnapshot.hasValue;
+  snapshot.arrayValues = pvaSnapshot.arrayValues;
+  snapshot.isArray = pvaSnapshot.isArray;
   snapshot.severity = pvaSnapshot.severity;
   snapshot.hopr = pvaSnapshot.hopr;
   snapshot.lopr = pvaSnapshot.lopr;

@@ -725,6 +725,19 @@ public:
         }
       });
 
+    heatmapProfileModeCombo_ = new QComboBox;
+    heatmapProfileModeCombo_->setFont(valueFont_);
+    heatmapProfileModeCombo_->setAutoFillBackground(true);
+    heatmapProfileModeCombo_->addItem(QStringLiteral("Absolute Profiles"));
+    heatmapProfileModeCombo_->addItem(QStringLiteral("Averaged Profiles"));
+    QObject::connect(heatmapProfileModeCombo_,
+      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+      this, [this](int index) {
+        if (heatmapProfileModeSetter_) {
+          heatmapProfileModeSetter_(heatmapProfileModeFromIndex(index));
+        }
+      });
+
     int heatmapRow = 0;
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Title"), heatmapTitleEdit_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Data PV"), heatmapDataChannelEdit_);
@@ -787,6 +800,8 @@ public:
                      });
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Rotation"),
            heatmapRotationCombo_);
+    addRow(heatmapLayout, heatmapRow++, QStringLiteral("Profile Mode"),
+      heatmapProfileModeCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Top Profile"),
       heatmapShowTopProfileCombo_);
     addRow(heatmapLayout, heatmapRow++, QStringLiteral("Show Right Profile"),
@@ -8196,6 +8211,8 @@ public:
       std::function<void(bool)> showTopProfileSetter,
       std::function<bool()> showRightProfileGetter,
       std::function<void(bool)> showRightProfileSetter,
+      std::function<HeatmapProfileMode()> profileModeGetter,
+      std::function<void(HeatmapProfileMode)> profileModeSetter,
       std::function<bool()> preserveAspectRatioGetter,
       std::function<void(bool)> preserveAspectRatioSetter,
       std::function<bool()> flipHorizontalGetter,
@@ -8246,6 +8263,8 @@ public:
     heatmapShowTopProfileSetter_ = std::move(showTopProfileSetter);
     heatmapShowRightProfileGetter_ = std::move(showRightProfileGetter);
     heatmapShowRightProfileSetter_ = std::move(showRightProfileSetter);
+    heatmapProfileModeGetter_ = std::move(profileModeGetter);
+    heatmapProfileModeSetter_ = std::move(profileModeSetter);
 
     QRect heatmapGeometry = geometryGetter_ ? geometryGetter_() : QRect();
     if (heatmapGeometry.width() <= 0) {
@@ -8367,6 +8386,13 @@ public:
           ? heatmapShowRightProfileGetter_()
           : false;
       heatmapShowRightProfileCombo_->setCurrentIndex(heatmapBoolToIndex(show));
+    }
+    if (heatmapProfileModeCombo_) {
+      const QSignalBlocker blocker(heatmapProfileModeCombo_);
+      const HeatmapProfileMode mode = heatmapProfileModeGetter_
+          ? heatmapProfileModeGetter_()
+          : HeatmapProfileMode::kAbsolute;
+      heatmapProfileModeCombo_->setCurrentIndex(heatmapProfileModeToIndex(mode));
     }
 
     updateHeatmapDimensionControls();
@@ -10039,6 +10065,11 @@ public:
       const QSignalBlocker blocker(heatmapShowRightProfileCombo_);
       heatmapShowRightProfileCombo_->setCurrentIndex(heatmapBoolToIndex(false));
     }
+    if (heatmapProfileModeCombo_) {
+      const QSignalBlocker blocker(heatmapProfileModeCombo_);
+      heatmapProfileModeCombo_->setCurrentIndex(
+          heatmapProfileModeToIndex(HeatmapProfileMode::kAbsolute));
+    }
     if (waterfallEraseModeCombo_) {
       const QSignalBlocker blocker(waterfallEraseModeCombo_);
       waterfallEraseModeCombo_->setCurrentIndex(
@@ -10152,6 +10183,8 @@ public:
     heatmapShowTopProfileSetter_ = {};
     heatmapShowRightProfileGetter_ = {};
     heatmapShowRightProfileSetter_ = {};
+    heatmapProfileModeGetter_ = {};
+    heatmapProfileModeSetter_ = {};
     waterfallForegroundGetter_ = {};
     waterfallForegroundSetter_ = {};
     waterfallBackgroundGetter_ = {};
@@ -13169,6 +13202,17 @@ private:
     return order == HeatmapOrder::kColumnMajor ? 1 : 0;
   }
 
+  HeatmapProfileMode heatmapProfileModeFromIndex(int index) const
+  {
+    return index == 1 ? HeatmapProfileMode::kAveraged
+                      : HeatmapProfileMode::kAbsolute;
+  }
+
+  int heatmapProfileModeToIndex(HeatmapProfileMode mode) const
+  {
+    return mode == HeatmapProfileMode::kAveraged ? 1 : 0;
+  }
+
   bool heatmapBoolFromIndex(int index) const
   {
     return index == 1;
@@ -13770,6 +13814,7 @@ private:
   QComboBox *heatmapFlipHorizontalCombo_ = nullptr;
   QComboBox *heatmapFlipVerticalCombo_ = nullptr;
   QComboBox *heatmapRotationCombo_ = nullptr;
+  QComboBox *heatmapProfileModeCombo_ = nullptr;
   QComboBox *heatmapShowTopProfileCombo_ = nullptr;
   QComboBox *heatmapShowRightProfileCombo_ = nullptr;
   QPushButton *waterfallForegroundButton_ = nullptr;
@@ -14904,6 +14949,8 @@ private:
   std::function<void(bool)> heatmapShowTopProfileSetter_;
   std::function<bool()> heatmapShowRightProfileGetter_;
   std::function<void(bool)> heatmapShowRightProfileSetter_;
+  std::function<HeatmapProfileMode()> heatmapProfileModeGetter_;
+  std::function<void(HeatmapProfileMode)> heatmapProfileModeSetter_;
   std::function<QColor()> waterfallForegroundGetter_;
   std::function<void(const QColor &)> waterfallForegroundSetter_;
   std::function<QColor()> waterfallBackgroundGetter_;

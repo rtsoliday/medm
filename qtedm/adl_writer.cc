@@ -166,6 +166,17 @@ QString heatmapRotationString(HeatmapRotation rot)
   }
 }
 
+QString heatmapProfileModeString(HeatmapProfileMode mode)
+{
+  switch (mode) {
+  case HeatmapProfileMode::kAveraged:
+    return QStringLiteral("averaged");
+  case HeatmapProfileMode::kAbsolute:
+  default:
+    return QStringLiteral("absolute");
+  }
+}
+
 QString waterfallScrollDirectionString(WaterfallScrollDirection direction)
 {
   switch (direction) {

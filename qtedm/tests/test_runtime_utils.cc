@@ -10,6 +10,7 @@ private slots:
   void appendsNullTerminatorOnce();
   void normalizesCalcExpressions();
   void detectsNumericFieldTypes();
+  void sanitizesSddsColumnNames();
 };
 
 void TestRuntimeUtils::appendsNullTerminatorOnce()
@@ -34,6 +35,20 @@ void TestRuntimeUtils::detectsNumericFieldTypes()
   QVERIFY(RuntimeUtils::isNumericFieldType(DBR_DOUBLE));
   QVERIFY(RuntimeUtils::isNumericFieldType(DBR_LONG));
   QVERIFY(!RuntimeUtils::isNumericFieldType(DBR_STRING));
+}
+
+void TestRuntimeUtils::sanitizesSddsColumnNames()
+{
+  QCOMPARE(RuntimeUtils::sanitizeSddsColumnName(
+      QStringLiteral("__qtedm_demo:wave")), QStringLiteral("qtedm_demo_wave"));
+  QCOMPARE(RuntimeUtils::sanitizeSddsColumnName(
+      QStringLiteral("_PV")), QStringLiteral("PV"));
+  QCOMPARE(RuntimeUtils::sanitizeSddsColumnName(
+      QStringLiteral("prefix:signal.VAL")), QStringLiteral("prefix_signal_VAL"));
+  QCOMPARE(RuntimeUtils::sanitizeSddsColumnName(
+      QStringLiteral("___"), QStringLiteral("_Pen0")), QStringLiteral("Pen0"));
+  QCOMPARE(RuntimeUtils::sanitizeSddsColumnName(
+      QStringLiteral("___")), QStringLiteral("Column"));
 }
 
 QTEST_APPLESS_MAIN(TestRuntimeUtils)

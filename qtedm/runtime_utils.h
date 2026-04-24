@@ -25,4 +25,10 @@ QString normalizeCalcExpression(const QString &expr);
  * Returns true for DBR_CHAR, DBR_SHORT, DBR_LONG, DBR_FLOAT, DBR_DOUBLE. */
 bool isNumericFieldType(chtype fieldType);
 
+/* Convert a PV/channel label into an SDDS-safe column name.
+ * Invalid identifier characters become underscores, and leading underscores
+ * are stripped because SDDS rejects names that start with '_'. */
+QString sanitizeSddsColumnName(const QString &name,
+    const QString &fallback = QString());
+
 } // namespace RuntimeUtils

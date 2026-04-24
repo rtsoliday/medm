@@ -463,6 +463,8 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
 
   if (data.hasValue) {
     snapshot.hasValue = true;
+    snapshot.isArray = data.isArray;
+    snapshot.arrayValues = data.arrayValues;
     if (data.isString) {
       snapshot.value = data.stringValue;
     } else if (data.isEnum && !data.enumStrings.isEmpty()) {

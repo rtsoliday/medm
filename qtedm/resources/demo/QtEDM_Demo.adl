@@ -99,7 +99,7 @@ text {
     precSrc="default"
     lopr=0
     hopr=100
-    prec=1
+    prec=2
   }
 }
 text {
@@ -134,7 +134,7 @@ text {
     precSrc="default"
     lopr=0
     hopr=150
-    prec=1
+    prec=2
   }
 }
 meter {
@@ -156,7 +156,7 @@ meter {
     precSrc="default"
     lopr=0
     hopr=100
-    prec=0
+    prec=2
   }
 }
 text {
@@ -176,7 +176,7 @@ bar {
   object {
     x=42
     y=176
-    width=70
+    width=80
     height=128
   }
   monitor {
@@ -193,12 +193,12 @@ bar {
     precSrc="default"
     lopr=0
     hopr=100
-    prec=0
+    prec=2
   }
 }
 text {
   object {
-    x=30
+    x=43
     y=306
     width=68
     height=14
@@ -229,12 +229,12 @@ thermometer {
     precSrc="default"
     lopr=0
     hopr=100
-    prec=0
+    prec=2
   }
 }
 text {
   object {
-    x=119
+    x=129
     y=306
     width=96
     height=14
@@ -248,9 +248,9 @@ text {
 indicator {
   object {
     x=245
-    y=185
+    y=176
     width=88
-    height=118
+    height=128
   }
   monitor {
     chan="__qtedm_demo:ramp"
@@ -265,7 +265,7 @@ indicator {
     precSrc="default"
     lopr=0
     hopr=100
-    prec=0
+    prec=2
   }
 }
 text {
@@ -423,7 +423,7 @@ text {
     precSrc="default"
     lopr=0
     hopr=100
-    prec=1
+    prec=2
   }
 }
 text {
@@ -466,9 +466,9 @@ text {
 }
 text_area {
   object {
-    x=1285
+    x=1275
     y=138
-    width=220
+    width=260
     height=86
   }
   control {
@@ -480,7 +480,7 @@ text_area {
   wordWrap=1
   showVerticalScrollBar=1
   showHorizontalScrollBar=0
-  commitMode="enter"
+  commitMode="ctrlEnter"
 }
 text {
   object {
@@ -508,14 +508,14 @@ valuator {
   }
   direction="right"
   label="limits"
-  dPrecision=1
+  dPrecision=2
   limits {
     loprSrc="default"
     hoprSrc="default"
     precSrc="default"
     lopr=0
     hopr=100
-    prec=1
+    prec=2
   }
 }
 text {
@@ -542,14 +542,14 @@ text {
     clr=14
     bclr=4
   }
-  format="000.0"
+  format="% 10.2f"
   limits {
     loprSrc="default"
     hoprSrc="default"
     precSrc="default"
     lopr=0
     hopr=100
-    prec=1
+    prec=2
   }
 }
 text {
@@ -600,7 +600,7 @@ text {
     precSrc="default"
     lopr=0
     hopr=1
-    prec=0
+    prec=2
   }
 }
 expression_channel {
@@ -617,7 +617,7 @@ expression_channel {
   eventSignal="onAnyChange"
   clr=30
   bclr=4
-  precision=1
+  precision=2
 }
 rectangle {
   object {
@@ -669,7 +669,7 @@ text {
       precSrc="default"
       lopr=0
       hopr=100
-      prec=0
+      prec=6
     }
   }
 }
@@ -685,7 +685,7 @@ text {
     xlabel="sample"
     ylabel="value"
     clr=14
-    bclr=7
+    bclr=4
   }
   style="line"
   count=64
@@ -722,7 +722,7 @@ heatmap {
   xDim=8
   yDim=8
   colorMap="rainbow"
-  preserveAspectRatio=1
+  preserveAspectRatio=0
   showTopProfile=1
   showRightProfile=1
 }

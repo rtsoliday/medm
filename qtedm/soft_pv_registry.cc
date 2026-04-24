@@ -409,7 +409,50 @@ bool SoftPvRegistry::infoSnapshot(const QString &name,
   snapshot.registered = (entry->preparedCount > 0 || entry->producerCount > 0);
   snapshot.connected = entry->connectedProducerCount > 0;
   snapshot.hasValue = entry->hasValue;
+  snapshot.hasControlInfo = entry->hasControlInfo;
+  snapshot.low = entry->low;
+  snapshot.high = entry->high;
+  snapshot.precision = entry->precision;
+  snapshot.units = entry->units;
   snapshot.value = entry->value;
+  switch (entry->valueKind) {
+  case ValueKind::kString:
+    snapshot.fieldType = DBF_STRING;
+    snapshot.elementCount = 1;
+    snapshot.stringValue = entry->stringValue;
+    snapshot.isString = true;
+    break;
+  case ValueKind::kEnum:
+    snapshot.fieldType = DBF_ENUM;
+    snapshot.elementCount = 1;
+    snapshot.enumValue = entry->enumValue;
+    snapshot.enumStrings = entry->enumStrings;
+    snapshot.stringValue = entry->stringValue;
+    snapshot.isEnum = true;
+    break;
+  case ValueKind::kCharArray:
+    snapshot.fieldType = DBF_CHAR;
+    snapshot.elementCount =
+        static_cast<unsigned long>(entry->charArrayValue.size());
+    snapshot.stringValue = entry->stringValue;
+    snapshot.charArrayValue = entry->charArrayValue;
+    snapshot.isCharArray = true;
+    snapshot.isString = true;
+    break;
+  case ValueKind::kArray:
+    snapshot.fieldType = DBF_DOUBLE;
+    snapshot.elementCount =
+        static_cast<unsigned long>(entry->arrayValues.size());
+    snapshot.arrayValues = entry->arrayValues;
+    snapshot.isArray = true;
+    break;
+  case ValueKind::kNumeric:
+  case ValueKind::kNone:
+  default:
+    snapshot.fieldType = DBF_DOUBLE;
+    snapshot.elementCount = 1;
+    break;
+  }
   snapshot.timestamp = entry->timestamp;
   snapshot.hasTimestamp = entry->hasTimestamp;
   snapshot.preparedCount = entry->preparedCount;

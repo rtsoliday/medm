@@ -49,6 +49,9 @@ public:
   HeatmapColorMap colorMap() const;
   void setColorMap(HeatmapColorMap colorMap);
 
+  HeatmapProfileMode profileMode() const;
+  void setProfileMode(HeatmapProfileMode mode);
+
   bool showTopProfile() const;
   void setShowTopProfile(bool show);
 
@@ -129,6 +132,7 @@ private:
   bool flipHorizontal_ = false;
   bool flipVertical_ = false;
   HeatmapRotation rotation_ = HeatmapRotation::kNone;
+  HeatmapProfileMode profileMode_ = HeatmapProfileMode::kAbsolute;
   QVector<double> topProfileData_;
   double topProfileMin_ = 0.0;
   double topProfileMax_ = 0.0;

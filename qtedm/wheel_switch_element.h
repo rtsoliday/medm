@@ -123,6 +123,7 @@ private:
   QColor valueForeground() const;
   QColor buttonFillColor(bool isUp, bool pressed, bool enabled) const;
   Layout layoutForRect(const QRectF &bounds) const;
+  QRectF contentRect() const;
   void paintButton(QPainter &painter, const QRectF &rect, bool isUp,
     bool pressed, bool enabled, bool hovered) const;
   void paintValueDisplay(QPainter &painter, const Layout &layout) const;

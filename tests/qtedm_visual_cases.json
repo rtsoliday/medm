@@ -118,6 +118,18 @@
     }
   },
   {
+    "name": "wave_table_visual",
+    "display": "tests/visual_WaveTable.adl",
+    "golden": "tests/golden/test_WaveTable.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 500,
+      "max_mean_absolute_delta": 0.08,
+      "max_channel_delta": 200
+    }
+  },
+  {
     "name": "waterfall_plot_visual",
     "display": "tests/visual_WaterfallPlot.adl",
     "golden": "tests/golden/test_WaterfallPlot.png",

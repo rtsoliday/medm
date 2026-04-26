@@ -70,6 +70,7 @@ struct SharedChannelData
   /* Last received value - stored in multiple formats for flexibility */
   double numericValue = 0.0;
   QString stringValue;
+  QStringList stringArrayValue;
   dbr_enum_t enumValue = 0;
   QVector<double> arrayValues;
   QByteArray charArrayValue;

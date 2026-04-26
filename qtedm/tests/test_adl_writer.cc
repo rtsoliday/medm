@@ -33,6 +33,7 @@ private slots:
   void writesTextAreaEnumStrings();
   void writesHeatmapProfileModeEnumStrings();
   void writesPvTableColumnStrings();
+  void writesWaveTableEnumStrings();
   void omitsDefaultCartesianAxisSection();
 };
 
@@ -114,6 +115,22 @@ void TestAdlWriter::writesPvTableColumnStrings()
       QStringLiteral("units"));
   QCOMPARE(AdlWriter::pvTableColumnString(QStringLiteral("bogus")),
       QString());
+}
+
+void TestAdlWriter::writesWaveTableEnumStrings()
+{
+  QCOMPARE(AdlWriter::waveTableLayoutString(WaveTableLayout::kGrid),
+      QStringLiteral("grid"));
+  QCOMPARE(AdlWriter::waveTableLayoutString(WaveTableLayout::kColumn),
+      QStringLiteral("column"));
+  QCOMPARE(AdlWriter::waveTableValueFormatString(
+      WaveTableValueFormat::kScientific), QStringLiteral("scientific"));
+  QCOMPARE(AdlWriter::waveTableValueFormatString(
+      WaveTableValueFormat::kEngineering), QStringLiteral("engineering"));
+  QCOMPARE(AdlWriter::waveTableCharModeString(WaveTableCharMode::kString),
+      QStringLiteral("string"));
+  QCOMPARE(AdlWriter::waveTableCharModeString(WaveTableCharMode::kBytes),
+      QStringLiteral("bytes"));
 }
 
 void TestAdlWriter::omitsDefaultCartesianAxisSection()

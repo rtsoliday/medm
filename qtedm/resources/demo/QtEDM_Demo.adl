@@ -1148,6 +1148,39 @@ pv_table {
 }
 text {
   object {
+    x=800
+    y=866
+    width=220
+    height=18
+  }
+  "basic attribute" {
+    clr=53
+  }
+  textix="Waveform Table"
+}
+wave_table {
+  object {
+    x=800
+    y=890
+    width=720
+    height=105
+  }
+  "basic attribute" {
+    clr=0
+    bclr=14
+  }
+  chan="__qtedm_demo:profile:y"
+  colorMode="alarm"
+  showHeaders=1
+  layout="grid"
+  columns=8
+  maxElements=32
+  indexBase=0
+  valueFormat="default"
+  charMode="string"
+}
+text {
+  object {
     x=40
     y=808
     width=1480

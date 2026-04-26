@@ -692,6 +692,9 @@ void SharedChannelManager::onDeferredValueNotify(quint64 channelInstanceId)
     valueChanged = true;
   } else if (data.isEnum && data.enumValue != channel->lastNotifiedEnum) {
     valueChanged = true;
+  } else if (data.isArray || data.isCharArray
+      || !data.stringArrayValue.isEmpty()) {
+    valueChanged = true;
   }
   if (!valueChanged) {
     return;
@@ -905,6 +908,7 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
   data.isEnum = false;
   data.isCharArray = false;
   data.isArray = false;
+  data.stringArrayValue.clear();
   data.arrayValues.clear();
   data.charArrayValue.clear();
 
@@ -1047,6 +1051,15 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     data.numericValue = static_cast<double>(val->value);
     data.isEnum = true;
     data.isNumeric = true;
+    if (args.count > 1) {
+      data.isArray = true;
+      data.arrayValues.resize(args.count);
+      const dbr_enum_t *src = &val->value;
+      double *dst = data.arrayValues.data();
+      for (long i = 0; i < args.count; ++i) {
+        dst[i] = static_cast<double>(src[i]);
+      }
+    }
     /* String value from enum strings if available */
     if (data.hasControlInfo && val->value < data.enumStrings.size()) {
       data.stringValue = data.enumStrings.at(val->value);
@@ -1062,6 +1075,16 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     data.hasTimestamp = true;
     data.stringValue = QString::fromLatin1(val->value);
     data.isString = true;
+    if (args.count > 1) {
+      data.isArray = true;
+      data.stringArrayValue.clear();
+      data.stringArrayValue.reserve(static_cast<int>(args.count));
+      const char *base = reinterpret_cast<const char *>(&val->value);
+      for (long i = 0; i < args.count; ++i) {
+        data.stringArrayValue.append(QString::fromLatin1(
+            base + i * MAX_STRING_SIZE));
+      }
+    }
     break;
   }
   default:
@@ -1087,6 +1110,10 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     valueChanged = true;
   } else if (data.isEnum && data.enumValue != channel->lastNotifiedEnum) {
     /* Enum value changed */
+    valueChanged = true;
+  } else if (data.isArray || data.isCharArray
+      || !data.stringArrayValue.isEmpty()) {
+    /* Array payloads may change while their first scalar value is stable. */
     valueChanged = true;
   }
 

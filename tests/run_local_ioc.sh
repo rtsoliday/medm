@@ -751,6 +751,79 @@ set_pv_table_test_pvs() {
   return 1
 }
 
+set_wave_table_test_pvs() {
+  local prefix="$1"
+  local waveform_points=64
+  local -a waveform_field_values=(
+    # pv lopr hopr prec
+    "wavetable:test:doubleWave   0   200   0"
+    "wavetable:test:intWave      0   200   0"
+    "wavetable:test:shortWave    0   300   0"
+    "wavetable:test:limitedWave  0    20   0"
+  )
+
+  echo "Initializing waveform table PVs for tests/test_WaveformTable.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv lopr hopr prec full_pv
+    for entry in "${waveform_field_values[@]}"; do
+      read -r pv lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      local -a double_values=()
+      local -a int_values=()
+      local -a short_values=()
+      local -a limited_values=()
+      local i
+      for ((i = 0; i < waveform_points; ++i)); do
+        double_values+=("${i}")
+        int_values+=("$((100 + i))")
+        short_values+=("$((200 + i))")
+        if ((i < 8)); then
+          limited_values+=("$((10 + i))")
+        fi
+      done
+      local double_csv int_csv short_csv limited_csv char_csv
+      join_cavput_array_values double_csv "${double_values[@]}"
+      join_cavput_array_values int_csv "${int_values[@]}"
+      join_cavput_array_values short_csv "${short_values[@]}"
+      join_cavput_array_values limited_csv "${limited_values[@]}"
+      text_to_cavput_char_csv char_csv "QtEDM Waveform Table"
+      local cavput_list=""
+      cavput_list+="${prefix}wavetable:test:doubleWave=${double_csv},"
+      cavput_list+="${prefix}wavetable:test:intWave=${int_csv},"
+      cavput_list+="${prefix}wavetable:test:shortWave=${short_csv},"
+      cavput_list+="${prefix}wavetable:test:limitedWave=${limited_csv},"
+      cavput_list+="${prefix}wavetable:test:charWave=${char_csv},"
+      cavput_list+="${prefix}wavetable:test:enumValue=2,"
+      cavput_list+="${prefix}wavetable:test:stringValue=READY"
+      if ! "${CAVPUT_BIN}" "-list=${cavput_list}" >/dev/null 2>&1; then
+        initialized=0
+      fi
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Wave table PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize waveform table PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_waterfall_plot_test_pvs() {
   local prefix="$1"
   local waveform_points=64
@@ -1908,6 +1981,7 @@ set_meter_test_pvs "${PV_PREFIX}" || true
 set_strip_chart_test_pvs "${PV_PREFIX}" || true
 set_cartesian_plot_test_pvs "${PV_PREFIX}" || true
 set_pv_table_test_pvs "${PV_PREFIX}" || true
+set_wave_table_test_pvs "${PV_PREFIX}" || true
 set_waterfall_plot_test_pvs "${PV_PREFIX}" || true
 if [[ "${QTEDM_WATERFALL_DRIVER_MODE:-dynamic}" != "static" ]]; then
   start_waterfall_plot_test_driver "${PV_PREFIX}" || true

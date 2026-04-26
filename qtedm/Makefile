@@ -175,6 +175,9 @@ qtedm_SRC = qtedm.cc \
             waterfall_plot_runtime.cc \
             pv_table_element.cc \
             pv_table_runtime.cc \
+            wave_table_model.cc \
+            wave_table_element.cc \
+            wave_table_runtime.cc \
             composite_element.cc \
             composite_runtime.cc \
             cartesian_axis_dialog.cc \
@@ -379,6 +382,7 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_adl_parser \
                         test_adl_writer \
                         test_text_format_utils \
+                        test_wave_table_model \
                         test_runtime_utils \
                         test_soft_pv_registry
 
@@ -396,6 +400,9 @@ test_adl_writer_OBJS = $(OBJ_DIR)/test_adl_writer.$(OBJEXT) \
                        $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_text_format_utils_OBJS = $(OBJ_DIR)/test_text_format_utils.$(OBJEXT) \
                               $(OBJ_DIR)/text_format_utils.$(OBJEXT)
+test_wave_table_model_OBJS = $(OBJ_DIR)/test_wave_table_model.$(OBJEXT) \
+                             $(OBJ_DIR)/wave_table_model.$(OBJEXT) \
+                             $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_runtime_utils_OBJS = $(OBJ_DIR)/test_runtime_utils.$(OBJEXT) \
                           $(OBJ_DIR)/runtime_utils.$(OBJEXT)
 test_soft_pv_registry_OBJS = $(OBJ_DIR)/test_soft_pv_registry.$(OBJEXT) \

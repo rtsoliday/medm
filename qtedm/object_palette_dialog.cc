@@ -416,6 +416,8 @@ ObjectPaletteDialog::monitorButtons()
           waterfall25_height, CreateTool::kWaterfallPlot},
       {QStringLiteral("PV Table"), pvTable25_bits, pvTable25_width,
           pvTable25_height, CreateTool::kPvTable},
+      {QStringLiteral("Waveform Table"), waveTable25_bits, waveTable25_width,
+          waveTable25_height, CreateTool::kWaveTable},
       {QStringLiteral("Strip Chart"), stripChart25_bits, stripChart25_width,
           stripChart25_height, CreateTool::kStripChart},
       {QStringLiteral("Text Monitor"), textUpdate25_bits,

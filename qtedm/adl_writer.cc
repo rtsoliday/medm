@@ -212,6 +212,51 @@ QString waterfallEraseModeString(WaterfallEraseMode mode)
       : QStringLiteral("ifnotzero");
 }
 
+QString waveTableLayoutString(WaveTableLayout layout)
+{
+  switch (layout) {
+  case WaveTableLayout::kRow:
+    return QStringLiteral("row");
+  case WaveTableLayout::kColumn:
+    return QStringLiteral("column");
+  case WaveTableLayout::kGrid:
+  default:
+    return QStringLiteral("grid");
+  }
+}
+
+QString waveTableValueFormatString(WaveTableValueFormat format)
+{
+  switch (format) {
+  case WaveTableValueFormat::kFixed:
+    return QStringLiteral("fixed");
+  case WaveTableValueFormat::kScientific:
+    return QStringLiteral("scientific");
+  case WaveTableValueFormat::kHex:
+    return QStringLiteral("hex");
+  case WaveTableValueFormat::kEngineering:
+    return QStringLiteral("engineering");
+  case WaveTableValueFormat::kDefault:
+  default:
+    return QStringLiteral("default");
+  }
+}
+
+QString waveTableCharModeString(WaveTableCharMode mode)
+{
+  switch (mode) {
+  case WaveTableCharMode::kBytes:
+    return QStringLiteral("bytes");
+  case WaveTableCharMode::kAscii:
+    return QStringLiteral("ascii");
+  case WaveTableCharMode::kNumeric:
+    return QStringLiteral("numeric");
+  case WaveTableCharMode::kString:
+  default:
+    return QStringLiteral("string");
+  }
+}
+
 QString meterLabelString(MeterLabel label)
 {
   switch (label) {

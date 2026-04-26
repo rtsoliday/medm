@@ -112,6 +112,31 @@ row_count="$(wc -l < "${tmp_pvs}" | tr -d ' ')"
       ta:string:*)
         type="string"
         ;;
+      wavetable:test:charWave)
+        type="char"
+        element_count=64
+        ;;
+      wavetable:test:enumValue)
+        type="enum"
+        enum_strings='"IDLE,READY,RUN,FAULT"'
+        ;;
+      wavetable:test:intWave)
+        type="int"
+        element_count=64
+        ;;
+      wavetable:test:limitedWave)
+        element_count=8
+        ;;
+      wavetable:test:shortWave)
+        type="short"
+        element_count=64
+        ;;
+      wavetable:test:stringValue)
+        type="string"
+        ;;
+      wavetable:test:*Wave)
+        element_count=64
+        ;;
       waterfall:test:*:waveform)
         element_count=64
         ;;

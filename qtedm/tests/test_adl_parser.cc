@@ -16,6 +16,7 @@ private slots:
   void parsesLedMonitorBlock();
   void parsesTextAreaBlock();
   void parsesPvTableBlock();
+  void parsesWaveTableBlock();
   void rejectsMalformedInput();
 };
 
@@ -333,6 +334,54 @@ void TestAdlParser::parsesPvTableBlock()
       QStringLiteral("Beam Current"));
   QCOMPARE(propertyValue(*row0, QStringLiteral("chan")),
       QStringLiteral("pvtable:test:beamCurrent"));
+}
+
+void TestAdlParser::parsesWaveTableBlock()
+{
+  const QString text = QStringLiteral(
+      "wave_table {\n"
+      "  object {\n"
+      "    x=40\n"
+      "    y=80\n"
+      "    width=520\n"
+      "    height=220\n"
+      "  }\n"
+      "  \"basic attribute\" {\n"
+      "    clr=14\n"
+      "    bclr=4\n"
+      "  }\n"
+      "  chan=\"wavetable:test:doubleWave\"\n"
+      "  colorMode=\"alarm\"\n"
+      "  showHeaders=1\n"
+      "  layout=\"grid\"\n"
+      "  columns=8\n"
+      "  maxElements=32\n"
+      "  indexBase=1\n"
+      "  valueFormat=\"scientific\"\n"
+      "  charMode=\"bytes\"\n"
+      "}\n");
+
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(text, &errorMessage);
+
+  QVERIFY2(root.has_value(), qPrintable(errorMessage));
+
+  const AdlNode *tableNode = ::findChild(*root, QStringLiteral("wave_table"));
+  QVERIFY(tableNode);
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("chan")),
+      QStringLiteral("wavetable:test:doubleWave"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("layout")),
+      QStringLiteral("grid"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("columns")),
+      QStringLiteral("8"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("maxElements")),
+      QStringLiteral("32"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("indexBase")),
+      QStringLiteral("1"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("valueFormat")),
+      QStringLiteral("scientific"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("charMode")),
+      QStringLiteral("bytes"));
 }
 
 void TestAdlParser::rejectsMalformedInput()

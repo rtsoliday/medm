@@ -5,7 +5,7 @@ SDDS1
 &column name=EnumStrings, type=string, description="Comma-separated enum state labels" &end
 &column name=ElementCount, type=long, description="PV element count" &end
 &data mode=ascii &end
-270
+277
 "CRYO:PRESS:HEAD05" "double" "" 1
 "CRYO:PRESS:TAIL33" "double" "" 1
 "CRYO:TEMP:LOOP77" "double" "" 1
@@ -261,6 +261,13 @@ SDDS1
 "waterfall:test:epsilon:waveform" "double" "" 64
 "waterfall:test:gamma:trigger" "double" "" 1
 "waterfall:test:gamma:waveform" "double" "" 64
+"wavetable:test:charWave" "char" "" 64
+"wavetable:test:doubleWave" "double" "" 64
+"wavetable:test:enumValue" "enum" "IDLE,READY,RUN,FAULT" 1
+"wavetable:test:intWave" "int" "" 64
+"wavetable:test:limitedWave" "double" "" 8
+"wavetable:test:shortWave" "short" "" 64
+"wavetable:test:stringValue" "string" "" 1
 "weirdChan" "double" "" 1
 "wheel:phi" "double" "" 1
 "wheel:test:A1" "double" "" 1

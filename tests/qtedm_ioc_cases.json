@@ -621,6 +621,341 @@
     }
   },
   {
+    "name": "wave_table_live_numeric_update",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:doubleWave"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "wavetable:test:doubleWave",
+        "value": "50\\,51\\,52\\,53\\,54\\,55\\,56\\,57\\,58\\,59\\,60\\,61\\,62\\,63\\,64\\,65\\,66\\,67\\,68\\,69\\,70\\,71\\,72\\,73\\,74\\,75\\,76\\,77\\,78\\,79\\,80\\,81"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "layout": "grid",
+      "columns": 8,
+      "max_elements": 32,
+      "displayed_element_count": 32,
+      "row_count": 4,
+      "column_count": 8,
+      "cell_text_sample": [
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "55",
+        "56",
+        "57",
+        "58",
+        "59",
+        "60",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_native_int_column",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:intWave"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "native_field_type": 5,
+      "native_element_count": 64,
+      "received_element_count": 64,
+      "layout": "column",
+      "index_base": 1,
+      "max_elements": 16,
+      "displayed_element_count": 16,
+      "row_count": 16,
+      "column_count": 2,
+      "cell_text_sample": [
+        "100",
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+        "106",
+        "107",
+        "108",
+        "109",
+        "110",
+        "111",
+        "112",
+        "113",
+        "114",
+        "115"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_native_short_column",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:shortWave"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "native_field_type": 1,
+      "native_element_count": 64,
+      "received_element_count": 64,
+      "layout": "column",
+      "index_base": 1,
+      "max_elements": 16,
+      "displayed_element_count": 16,
+      "row_count": 16,
+      "column_count": 2,
+      "cell_text_sample": [
+        "200",
+        "201",
+        "202",
+        "203",
+        "204",
+        "205",
+        "206",
+        "207",
+        "208",
+        "209",
+        "210",
+        "211",
+        "212",
+        "213",
+        "214",
+        "215"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_limited_waveform_count",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:limitedWave"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "native_element_count": 8,
+      "received_element_count": 8,
+      "layout": "grid",
+      "columns": 8,
+      "max_elements": 32,
+      "displayed_element_count": 8,
+      "row_count": 1,
+      "column_count": 8,
+      "cell_text_sample": [
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_char_string_mode",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:charWave",
+      "geometry": {
+        "x": 470,
+        "y": 220,
+        "width": 370,
+        "height": 105
+      }
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "native_field_type": 4,
+      "native_element_count": 64,
+      "received_element_count": 64,
+      "layout": "row",
+      "char_mode": "string",
+      "displayed_element_count": 1,
+      "row_count": 1,
+      "column_count": 1,
+      "cell_text_sample": [
+        "QtEDM Waveform Table"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_char_bytes_mode",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:charWave",
+      "geometry": {
+        "x": 470,
+        "y": 350,
+        "width": 370,
+        "height": 145
+      }
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "layout": "grid",
+      "char_mode": "bytes",
+      "max_elements": 16,
+      "displayed_element_count": 16,
+      "row_count": 2,
+      "column_count": 8,
+      "cell_text_sample": [
+        "0x51",
+        "0x74",
+        "0x45",
+        "0x44",
+        "0x4d",
+        "0x20",
+        "0x57",
+        "0x61",
+        "0x76",
+        "0x65",
+        "0x66",
+        "0x6f",
+        "0x72",
+        "0x6d",
+        "0x20",
+        "0x54"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_char_ascii_mode",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:charWave",
+      "geometry": {
+        "x": 20,
+        "y": 690,
+        "width": 820,
+        "height": 105
+      }
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "layout": "grid",
+      "char_mode": "ascii",
+      "max_elements": 16,
+      "displayed_element_count": 16,
+      "row_count": 2,
+      "column_count": 8,
+      "cell_text_sample": [
+        "Q",
+        "t",
+        "E",
+        "D",
+        "M",
+        " ",
+        "W",
+        "a",
+        "v",
+        "e",
+        "f",
+        "o",
+        "r",
+        "m",
+        " ",
+        "T"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_scalar_enum_fallback",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:enumValue"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "native_field_type": 3,
+      "native_element_count": 1,
+      "received_element_count": 1,
+      "layout": "row",
+      "displayed_element_count": 1,
+      "row_count": 1,
+      "column_count": 1,
+      "cell_text_sample": [
+        "RUN"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_scalar_string_fallback",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": "wavetable:test:stringValue"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "native_field_type": 0,
+      "native_element_count": 1,
+      "received_element_count": 1,
+      "layout": "row",
+      "displayed_element_count": 1,
+      "row_count": 1,
+      "column_count": 1,
+      "cell_text_sample": [
+        "READY"
+      ]
+    }
+  },
+  {
+    "name": "wave_table_disconnected_blank_channel",
+    "display": "tests/test_WaveformTable.adl",
+    "selector": {
+      "type": "wave_table",
+      "channel": ""
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "connected": false,
+      "initial_update": false,
+      "native_element_count": 0,
+      "received_element_count": 0,
+      "displayed_element_count": 0,
+      "row_count": 1,
+      "column_count": 8,
+      "status_text": "Disconnected native=0 received=0 displayed=0"
+    }
+  },
+  {
     "name": "waterfall_plot_live_buffer",
     "display": "tests/test_WaterfallPlot.adl",
     "selector": {

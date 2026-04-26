@@ -5,6 +5,7 @@
 #endif
 
 #include <cmath>
+#include <algorithm>
 #include <memory>
 #include <type_traits>
 #include <cstring>
@@ -58,6 +59,8 @@
 #include "display_properties.h"
 #include "pv_table_element.h"
 #include "pv_table_runtime.h"
+#include "wave_table_element.h"
+#include "wave_table_runtime.h"
 #include "statistics_tracker.h"
 #include "startup_timing.h"
 #include "display_list_dialog.h"
@@ -902,6 +905,7 @@ public:
     considerList(relatedDisplayElements_);
     considerList(textMonitorElements_);
     considerList(pvTableElements_);
+    considerList(waveTableElements_);
     considerList(meterElements_);
     considerList(barMonitorElements_);
     considerList(thermometerElements_);
@@ -3067,6 +3071,7 @@ protected:
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kPvTable
+            || state->createTool == CreateTool::kWaveTable
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kTextArea
             || state->createTool == CreateTool::kSlider
@@ -3393,6 +3398,7 @@ private:
   TextElement *loadTextElement(const AdlNode &textNode);
   TextMonitorElement *loadTextMonitorElement(const AdlNode &textUpdateNode);
   PvTableElement *loadPvTableElement(const AdlNode &pvTableNode);
+  WaveTableElement *loadWaveTableElement(const AdlNode &waveTableNode);
   TextEntryElement *loadTextEntryElement(const AdlNode &textEntryNode);
   TextAreaElement *loadTextAreaElement(const AdlNode &textAreaNode);
   SliderElement *loadSliderElement(const AdlNode &valuatorNode);
@@ -3692,6 +3698,9 @@ private:
   QList<PvTableElement *> pvTableElements_;
   QHash<PvTableElement *, PvTableRuntime *> pvTableRuntimes_;
   PvTableElement *selectedPvTable_ = nullptr;
+  QList<WaveTableElement *> waveTableElements_;
+  QHash<WaveTableElement *, WaveTableRuntime *> waveTableRuntimes_;
+  WaveTableElement *selectedWaveTable_ = nullptr;
   QList<MeterElement *> meterElements_;
   QHash<MeterElement *, MeterRuntime *> meterRuntimes_;
   MeterElement *selectedMeterElement_ = nullptr;
@@ -3940,6 +3949,15 @@ private:
     selectedPvTable_ = nullptr;
   }
 
+  void clearWaveTableSelection()
+  {
+    if (!selectedWaveTable_) {
+      return;
+    }
+    selectedWaveTable_->setSelected(false);
+    selectedWaveTable_ = nullptr;
+  }
+
   void clearMeterSelection()
   {
     if (!selectedMeterElement_) {
@@ -4174,6 +4192,10 @@ private:
       pvTable->setSelected(selected);
       return;
     }
+    if (auto *waveTable = dynamic_cast<WaveTableElement *>(widget)) {
+      waveTable->setSelected(selected);
+      return;
+    }
     if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
       meter->setSelected(selected);
       return;
@@ -4371,6 +4393,12 @@ private:
     if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
       if (selectedPvTable_ == pvTable) {
         selectedPvTable_ = nullptr;
+      }
+      return;
+    }
+    if (auto *waveTable = dynamic_cast<WaveTableElement *>(widget)) {
+      if (selectedWaveTable_ == waveTable) {
+        selectedWaveTable_ = nullptr;
       }
       return;
     }
@@ -4591,12 +4619,20 @@ private:
       if (selectedTextMonitorElement_ == textMonitor) {
         clearTextMonitorSelection();
         clearPvTableSelection();
+        clearWaveTableSelection();
         return;
       }
     }
     if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
       if (selectedPvTable_ == pvTable) {
         clearPvTableSelection();
+        clearWaveTableSelection();
+        return;
+      }
+    }
+    if (auto *waveTable = dynamic_cast<WaveTableElement *>(widget)) {
+      if (selectedWaveTable_ == waveTable) {
+        clearWaveTableSelection();
         return;
       }
     }
@@ -4784,6 +4820,7 @@ private:
     appendUnique(selectedRelatedDisplayElement_);
     appendUnique(selectedTextMonitorElement_);
     appendUnique(selectedPvTable_);
+    appendUnique(selectedWaveTable_);
     appendUnique(selectedMeterElement_);
     appendUnique(selectedBarMonitorElement_);
     appendUnique(selectedThermometerElement_);
@@ -4879,6 +4916,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -4929,6 +4967,7 @@ private:
   void removeWheelSwitchRuntime(WheelSwitchElement *element);
   void removeTextMonitorRuntime(TextMonitorElement *element);
   void removePvTableRuntime(PvTableElement *element);
+  void removeWaveTableRuntime(WaveTableElement *element);
   void removeTextEntryRuntime(TextEntryElement *element);
   void removeTextAreaRuntime(TextAreaElement *element);
 
@@ -4958,6 +4997,8 @@ private:
       removeWheelSwitchRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, PvTableElement>) {
       removePvTableRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, WaveTableElement>) {
+      removeWaveTableRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MeterElement>) {
       removeMeterRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, BarMonitorElement>) {
@@ -5565,6 +5606,42 @@ private:
 
       if (removeOriginal) {
         cutSelectedElement(pvTableElements_, selectedPvTable_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedWaveTable_) {
+      WaveTableElement *element = selectedWaveTable_;
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = target.translateRectForPaste(geometry, offset);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        WaveTableElement *newElement = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          newElement = target.loadWaveTableElement(nodeCopy);
+        }
+        if (newElement) {
+          target.selectWaveTableElement(newElement);
+          target.showResourcePaletteForWaveTable(newElement);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(waveTableElements_, selectedWaveTable_);
         finalizeCut();
       }
       return true;
@@ -6666,6 +6743,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -7731,6 +7809,90 @@ private:
         },
         std::move(labelGetters), std::move(labelSetters),
         std::move(channelGetters), std::move(channelSetters));
+  }
+
+  void showResourcePaletteForWaveTable(WaveTableElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForWaveTable(
+        [this, element]() { return widgetDisplayRect(element); },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth * 4) {
+            adjusted.setWidth(kMinimumTextWidth * 4);
+          }
+          if (adjusted.height() < kMinimumTextHeight * 4) {
+            adjusted.setHeight(kMinimumTextHeight * 4);
+          }
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() { return element->foregroundColor(); },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->backgroundColor(); },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->colorMode(); },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() { return element->showHeaders(); },
+        [this, element](bool show) {
+          element->setShowHeaders(show);
+          markDirty();
+        },
+        [element]() { return element->channel(); },
+        [this, element](const QString &channel) {
+          element->setChannel(channel);
+          if (auto *runtime = waveTableRuntimes_.value(element, nullptr)) {
+            runtime->stop();
+            runtime->start();
+          }
+          markDirty();
+        },
+        [element]() { return element->layoutMode(); },
+        [this, element](WaveTableLayout layout) {
+          element->setLayoutMode(layout);
+          markDirty();
+        },
+        [element]() { return element->columnCountSetting(); },
+        [this, element](int columns) {
+          element->setColumnCountSetting(columns);
+          markDirty();
+        },
+        [element]() { return element->maxElements(); },
+        [this, element](int maxElements) {
+          element->setMaxElements(maxElements);
+          markDirty();
+        },
+        [element]() { return element->indexBase(); },
+        [this, element](int indexBase) {
+          element->setIndexBase(indexBase);
+          markDirty();
+        },
+        [element]() { return element->valueFormat(); },
+        [this, element](WaveTableValueFormat format) {
+          element->setValueFormat(format);
+          markDirty();
+        },
+        [element]() { return element->charMode(); },
+        [this, element](WaveTableCharMode mode) {
+          element->setCharMode(mode);
+          markDirty();
+        });
   }
 
   void showResourcePaletteForTextMonitor(TextMonitorElement *element)
@@ -9985,6 +10147,8 @@ private:
           return candidate;
         } else if (dynamic_cast<WaterfallPlotElement *>(candidate)) {
           return candidate;
+        } else if (dynamic_cast<WaveTableElement *>(candidate)) {
+          return candidate;
         } else if (auto *text = dynamic_cast<TextElement *>(candidate)) {
           if (text->colorMode() == TextColorMode::kStatic
               && text->visibilityMode() == TextVisibilityMode::kStatic) {
@@ -10039,6 +10203,8 @@ private:
       for (const PvTableRowConfig &row : rows) {
         appendChannel(row.channel);
       }
+    } else if (auto *element = dynamic_cast<WaveTableElement *>(widget)) {
+      appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
@@ -10136,6 +10302,7 @@ public:
     appendList(textElements_);
     appendList(textMonitorElements_);
     appendList(pvTableElements_);
+    appendList(waveTableElements_);
     appendList(textEntryElements_);
     appendList(textAreaElements_);
     appendList(sliderElements_);
@@ -10661,6 +10828,9 @@ private:
     if (dynamic_cast<PvTableElement *>(widget)) {
       return QStringLiteral("PV Table");
     }
+    if (dynamic_cast<WaveTableElement *>(widget)) {
+      return QStringLiteral("Waveform Table");
+    }
     if (dynamic_cast<TextEntryElement *>(widget)) {
       return QStringLiteral("Text Entry");
     }
@@ -10793,6 +10963,8 @@ private:
       for (const PvTableRowConfig &row : rows) {
         addRef(row.channel);
       }
+    } else if (auto *element = dynamic_cast<WaveTableElement *>(widget)) {
+      addRef(element->channel());
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       if (auto *runtime = textEntryRuntimes_.value(element, nullptr)) {
         addRef(runtime->channelName_);
@@ -12103,6 +12275,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12141,6 +12314,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12180,6 +12354,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12219,6 +12394,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12258,6 +12434,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12297,6 +12474,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12336,6 +12514,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12375,6 +12554,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12414,6 +12594,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12453,6 +12634,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12491,6 +12673,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12530,6 +12713,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12546,6 +12730,46 @@ private:
     clearCompositeSelection();
     selectedPvTable_ = element;
     selectedPvTable_->setSelected(true);
+  }
+
+  void selectWaveTableElement(WaveTableElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedWaveTable_) {
+      selectedWaveTable_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearTextAreaSelection();
+    clearSliderSelection();
+    clearWheelSwitchSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearPvTableSelection();
+    clearWaveTableSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedWaveTable_ = element;
+    selectedWaveTable_->setSelected(true);
   }
 
   void selectMeterElement(MeterElement *element)
@@ -12569,6 +12793,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
     clearCartesianPlotSelection();
@@ -12606,6 +12831,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12644,6 +12870,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12682,6 +12909,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12720,6 +12948,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12759,6 +12988,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12798,6 +13028,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12836,6 +13067,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12875,6 +13107,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12912,6 +13145,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12950,6 +13184,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12987,6 +13222,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13025,6 +13261,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13063,6 +13300,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13099,6 +13337,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13136,6 +13375,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13173,6 +13413,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13210,6 +13451,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13247,6 +13489,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13306,6 +13549,9 @@ private:
     }
     if (selectedPvTable_) {
       return selectedPvTable_;
+    }
+    if (selectedWaveTable_) {
+      return selectedWaveTable_;
     }
     if (selectedMeterElement_) {
       return selectedMeterElement_;
@@ -13374,6 +13620,7 @@ private:
     }
     clearMultiSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     if (!dynamic_cast<ExpressionChannelElement *>(widget)) {
       clearExpressionChannelSelection();
     }
@@ -13425,6 +13672,10 @@ private:
     } else if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
       selectPvTableElement(pvTable);
       showResourcePaletteForPvTable(pvTable);
+      handled = true;
+    } else if (auto *waveTable = dynamic_cast<WaveTableElement *>(widget)) {
+      selectWaveTableElement(waveTable);
+      showResourcePaletteForWaveTable(waveTable);
       handled = true;
     } else if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
       selectMeterElement(meter);
@@ -15075,6 +15326,8 @@ private:
     considerList(shellCommandElements_);
     considerList(relatedDisplayElements_);
     considerList(textMonitorElements_);
+    considerList(pvTableElements_);
+    considerList(waveTableElements_);
     considerList(meterElements_);
     considerList(barMonitorElements_);
     considerList(thermometerElements_);
@@ -15131,6 +15384,7 @@ private:
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
     clearPvTableSelection();
+    clearWaveTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -15233,6 +15487,16 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createPvTableElement(rect);
+      break;
+    case CreateTool::kWaveTable:
+      if (rect.width() < kMinimumTextWidth * 4) {
+        rect.setWidth(kMinimumTextWidth * 4);
+      }
+      if (rect.height() < kMinimumTextHeight * 4) {
+        rect.setHeight(kMinimumTextHeight * 4);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createWaveTableElement(rect);
       break;
     case CreateTool::kTextEntry:
       if (rect.width() < kMinimumTextWidth) {
@@ -16174,6 +16438,43 @@ private:
     }
     selectPvTableElement(element);
     showResourcePaletteForPvTable(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
+  void createWaveTableElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create Waveform Table"));
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth * 4) {
+      target.setWidth(kMinimumTextWidth * 4);
+    }
+    if (target.height() < kMinimumTextHeight * 4) {
+      target.setHeight(kMinimumTextHeight * 4);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new WaveTableElement(displayArea_);
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    waveTableElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!waveTableRuntimes_.contains(element)) {
+        auto *runtime = new WaveTableRuntime(element);
+        waveTableRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectWaveTableElement(element);
+    showResourcePaletteForWaveTable(element);
     deactivateCreateTool();
     markDirty();
   }
@@ -17166,6 +17467,7 @@ private:
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
             || state->createTool == CreateTool::kPvTable
+            || state->createTool == CreateTool::kWaveTable
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kTextArea
             || state->createTool == CreateTool::kSlider
@@ -18097,6 +18399,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
+    auto *waveTableAction =
+        addMenuAction(monitorsMenu, QStringLiteral("Waveform Table"));
+    QObject::connect(waveTableAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kWaveTable);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     auto *meterAction = addMenuAction(monitorsMenu, QStringLiteral("Meter"));
     QObject::connect(meterAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kMeter);
@@ -18775,6 +19085,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
   for (PvTableElement *e : pvTableElements_) {
     scaleWidget(e);
   }
+  for (WaveTableElement *e : waveTableElements_) {
+    scaleWidget(e);
+  }
   for (MeterElement *e : meterElements_) {
     scaleWidget(e);
   }
@@ -19092,6 +19405,13 @@ inline bool DisplayWindow::isTestAutomationReady() const
   if (!allWidgetsReady(ledMonitorElements_, ledMonitorRuntimes_,
           [](LedMonitorElement *element) { return element->channel(); },
           [](LedMonitorRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(waveTableElements_, waveTableRuntimes_,
+          [](WaveTableElement *element) { return element->channel(); },
+          [](WaveTableRuntime *runtime) {
             return runtime->initialUpdateTracked_;
           })) {
     return false;
@@ -20793,6 +21113,50 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       continue;
     }
 
+    if (auto *waveTable = dynamic_cast<WaveTableElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("wave_table {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(waveTable));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("\"basic attribute\" {"));
+      AdlWriter::writeIndentedLine(stream, 2,
+          QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+              resolvedForegroundColor(waveTable,
+                  waveTable->foregroundColor()))));
+      AdlWriter::writeIndentedLine(stream, 2,
+          QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+              resolvedBackgroundColor(waveTable,
+                  waveTable->backgroundColor()))));
+      AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("chan=\"%1\"").arg(
+              AdlWriter::escapeAdlString(waveTable->channel())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("colorMode=\"%1\"").arg(
+              AdlWriter::colorModeString(waveTable->colorMode())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("showHeaders=%1").arg(
+              waveTable->showHeaders() ? 1 : 0));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("layout=\"%1\"").arg(
+              AdlWriter::waveTableLayoutString(waveTable->layoutMode())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("columns=%1").arg(
+              waveTable->columnCountSetting()));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("maxElements=%1").arg(waveTable->maxElements()));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("indexBase=%1").arg(waveTable->indexBase()));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("valueFormat=\"%1\"").arg(
+              AdlWriter::waveTableValueFormatString(
+                  waveTable->valueFormat())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("charMode=\"%1\"").arg(
+              AdlWriter::waveTableCharModeString(waveTable->charMode())));
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("waterfall_plot {"));
@@ -22144,6 +22508,45 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *waveTable = dynamic_cast<WaveTableElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("wave_table {"));
+    AdlWriter::writeObjectSection(stream, next, serializedGeometry(waveTable));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("\"basic attribute\" {"));
+    AdlWriter::writeIndentedLine(stream, next + 1,
+        QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+            resolveForeground(waveTable, waveTable->foregroundColor()))));
+    AdlWriter::writeIndentedLine(stream, next + 1,
+        QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+            resolveBackground(waveTable, waveTable->backgroundColor()))));
+    AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("chan=\"%1\"").arg(
+            AdlWriter::escapeAdlString(waveTable->channel())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("colorMode=\"%1\"").arg(
+            AdlWriter::colorModeString(waveTable->colorMode())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("showHeaders=%1").arg(waveTable->showHeaders() ? 1 : 0));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("layout=\"%1\"").arg(
+            AdlWriter::waveTableLayoutString(waveTable->layoutMode())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("columns=%1").arg(waveTable->columnCountSetting()));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("maxElements=%1").arg(waveTable->maxElements()));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("indexBase=%1").arg(waveTable->indexBase()));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("valueFormat=\"%1\"").arg(
+            AdlWriter::waveTableValueFormatString(waveTable->valueFormat())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("charMode=\"%1\"").arg(
+            AdlWriter::waveTableCharModeString(waveTable->charMode())));
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("waterfall_plot {"));
@@ -22396,6 +22799,8 @@ inline void DisplayWindow::clearAllElements()
           removeTextMonitorRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, PvTableElement *>) {
           removePvTableRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, WaveTableElement *>) {
+          removeWaveTableRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MeterElement *>) {
           removeMeterRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, BarMonitorElement *>) {
@@ -22457,6 +22862,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(relatedDisplayElements_);
   clearList(textMonitorElements_);
   clearList(pvTableElements_);
+  clearList(waveTableElements_);
   clearList(meterElements_);
   clearList(barMonitorElements_);
   clearList(thermometerElements_);
@@ -24404,6 +24810,61 @@ inline QJsonObject DisplayWindow::testStateObject() const
     widgets.append(widgetObject);
   }
 
+  for (WaveTableElement *element : waveTableElements_) {
+    if (!element) {
+      continue;
+    }
+    WaveTableRuntime *runtime = waveTableRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "wave_table", element, element->channel());
+    widgetObject[QStringLiteral("channel")] = element->channel();
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    appendColorState(widgetObject, element->foregroundColor(),
+        element->backgroundColor());
+    widgetObject[QStringLiteral("show_headers")] = element->showHeaders();
+    widgetObject[QStringLiteral("layout")] =
+        WaveTableElement::layoutToString(element->layoutMode());
+    widgetObject[QStringLiteral("columns")] =
+        element->columnCountSetting();
+    widgetObject[QStringLiteral("max_elements")] = element->maxElements();
+    widgetObject[QStringLiteral("index_base")] = element->indexBase();
+    widgetObject[QStringLiteral("value_format")] =
+        WaveTableElement::valueFormatToString(element->valueFormat());
+    widgetObject[QStringLiteral("char_mode")] =
+        WaveTableElement::charModeToString(element->charMode());
+    widgetObject[QStringLiteral("connected")] =
+        element->runtimeConnected();
+    widgetObject[QStringLiteral("severity")] = element->runtimeSeverity();
+    widgetObject[QStringLiteral("native_field_type")] =
+        element->nativeFieldType();
+    widgetObject[QStringLiteral("native_element_count")] =
+        static_cast<qint64>(element->nativeElementCount());
+    widgetObject[QStringLiteral("received_element_count")] =
+        static_cast<qint64>(element->receivedElementCount());
+    widgetObject[QStringLiteral("displayed_element_count")] =
+        element->displayedElementCount();
+    widgetObject[QStringLiteral("row_count")] = element->tableRowCount();
+    widgetObject[QStringLiteral("column_count")] = element->tableColumnCount();
+    widgetObject[QStringLiteral("status_text")] = element->runtimeStatusText();
+    QJsonArray sample;
+    const QVector<QString> values = element->displayedValues();
+    const int sampleCount = std::min(values.size(), 16);
+    for (int i = 0; i < sampleCount; ++i) {
+      sample.append(values.at(i));
+    }
+    widgetObject[QStringLiteral("cell_text_sample")] = sample;
+    if (runtime) {
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("requested_type")] =
+          static_cast<qint64>(runtime->requestedType_);
+      widgetObject[QStringLiteral("requested_count")] =
+          static_cast<qint64>(runtime->requestedCount_);
+    }
+    widgets.append(widgetObject);
+  }
+
   for (WaterfallPlotElement *element : waterfallPlotElements_) {
     if (!element) {
       continue;
@@ -25070,6 +25531,100 @@ inline PvTableElement *DisplayWindow::loadPvTableElement(
     if (!pvTableRuntimes_.contains(element)) {
       auto *runtime = new PvTableRuntime(element);
       pvTableRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
+  return element;
+}
+
+inline WaveTableElement *DisplayWindow::loadWaveTableElement(
+    const AdlNode &waveTableNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(waveTableNode);
+  geometry.translate(currentElementOffset_);
+  const QRect originalGeometry = geometry;
+  auto *element = new WaveTableElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  if (const AdlNode *basic = ::findChild(waveTableNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const int clrIndex =
+        propertyValue(*basic, QStringLiteral("clr")).toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+    ok = false;
+    const int bclrIndex =
+        propertyValue(*basic, QStringLiteral("bclr")).toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  element->setChannel(channelValueWithLegacyFallback(waveTableNode));
+  const QString colorMode =
+      propertyValue(waveTableNode, QStringLiteral("colorMode"));
+  if (!colorMode.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorMode));
+  }
+  const QString showHeaders =
+      propertyValue(waveTableNode, QStringLiteral("showHeaders"));
+  if (!showHeaders.isEmpty()) {
+    element->setShowHeaders(showHeaders.toInt() != 0);
+  }
+  const QString layout = propertyValue(waveTableNode, QStringLiteral("layout"));
+  if (!layout.isEmpty()) {
+    element->setLayoutString(layout);
+  }
+  bool ok = false;
+  const int columns =
+      propertyValue(waveTableNode, QStringLiteral("columns")).toInt(&ok);
+  if (ok) {
+    element->setColumnCountSetting(columns);
+  }
+  ok = false;
+  const int maxElements =
+      propertyValue(waveTableNode, QStringLiteral("maxElements")).toInt(&ok);
+  if (ok) {
+    element->setMaxElements(maxElements);
+  }
+  ok = false;
+  const int indexBase =
+      propertyValue(waveTableNode, QStringLiteral("indexBase")).toInt(&ok);
+  if (ok) {
+    element->setIndexBase(indexBase);
+  }
+  const QString valueFormat =
+      propertyValue(waveTableNode, QStringLiteral("valueFormat"));
+  if (!valueFormat.isEmpty()) {
+    element->setValueFormatString(valueFormat);
+  }
+  const QString charMode =
+      propertyValue(waveTableNode, QStringLiteral("charMode"));
+  if (!charMode.isEmpty()) {
+    element->setCharModeString(charMode);
+  }
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  waveTableElements_.append(element);
+  ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!waveTableRuntimes_.contains(element)) {
+      auto *runtime = new WaveTableRuntime(element);
+      waveTableRuntimes_.insert(element, runtime);
       runtime->start();
     }
   }
@@ -30327,6 +30882,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadTextMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("pv_table")) {
     loaded = loadPvTableElement(node) != nullptr;
+  } else if (name == QStringLiteral("wave_table")) {
+    loaded = loadWaveTableElement(node) != nullptr;
   } else if (name == QStringLiteral("text entry")) {
     loaded = loadTextEntryElement(node) != nullptr;
   } else if (name == QStringLiteral("text_area")) {
@@ -30589,6 +31146,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(wheelSwitchRuntimes_, wheelSwitchElements_.size());
   reserveRuntime(textMonitorRuntimes_, textMonitorElements_.size());
   reserveRuntime(pvTableRuntimes_, pvTableElements_.size());
+  reserveRuntime(waveTableRuntimes_, waveTableElements_.size());
   reserveRuntime(choiceButtonRuntimes_, choiceButtonElements_.size());
   reserveRuntime(menuRuntimes_, menuElements_.size());
   reserveRuntime(messageButtonRuntimes_, messageButtonElements_.size());
@@ -30635,6 +31193,7 @@ inline void DisplayWindow::enterExecuteMode()
       expressionChannelElements_.size() +
       sliderElements_.size() + wheelSwitchElements_.size() +
       textMonitorElements_.size() + pvTableElements_.size() +
+      waveTableElements_.size() +
       choiceButtonElements_.size() +
       menuElements_.size() + messageButtonElements_.size() +
       shellCommandElements_.size() + relatedDisplayElements_.size();
@@ -30907,6 +31466,7 @@ inline void DisplayWindow::enterExecuteMode()
   }
   int controlCount = sliderElements_.size() + wheelSwitchElements_.size() +
       textMonitorElements_.size() + pvTableElements_.size() +
+      waveTableElements_.size() +
       choiceButtonElements_.size() + menuElements_.size() +
       messageButtonElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating control runtimes", controlCount);
@@ -30966,6 +31526,18 @@ inline void DisplayWindow::enterExecuteMode()
     if (!pvTableRuntimes_.contains(element)) {
       auto *runtime = new PvTableRuntime(element);
       pvTableRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
+  for (WaveTableElement *element : waveTableElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!waveTableRuntimes_.contains(element)) {
+      auto *runtime = new WaveTableRuntime(element);
+      waveTableRuntimes_.insert(element, runtime);
       runtime->start();
 
     }
@@ -31365,12 +31937,24 @@ inline void DisplayWindow::leaveExecuteMode()
     }
   }
   pvTableRuntimes_.clear();
+  for (auto it = waveTableRuntimes_.begin(); it != waveTableRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  waveTableRuntimes_.clear();
   for (TextMonitorElement *element : textMonitorElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
   }
   for (PvTableElement *element : pvTableElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (WaveTableElement *element : waveTableElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
@@ -31707,6 +32291,17 @@ inline void DisplayWindow::removePvTableRuntime(PvTableElement *element)
     return;
   }
   if (auto *runtime = pvTableRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeWaveTableRuntime(WaveTableElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = waveTableRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

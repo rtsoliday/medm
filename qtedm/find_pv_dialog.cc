@@ -38,6 +38,7 @@
 #include "slider_element.h"
 #include "strip_chart_element.h"
 #include "text_element.h"
+#include "wave_table_element.h"
 #include "text_entry_element.h"
 #include "text_monitor_element.h"
 #include "wheel_switch_element.h"
@@ -407,6 +408,9 @@ QString FindPvDialog::elementTypeLabel(QWidget *widget) const
   if (dynamic_cast<PvTableElement *>(widget)) {
     return QStringLiteral("PV Table");
   }
+  if (dynamic_cast<WaveTableElement *>(widget)) {
+    return QStringLiteral("Waveform Table");
+  }
   if (dynamic_cast<TextEntryElement *>(widget)) {
     return QStringLiteral("Text Entry");
   }
@@ -511,6 +515,8 @@ QStringList FindPvDialog::channelsForWidget(QWidget *widget) const
     for (const PvTableRowConfig &row : rows) {
       appendChannel(row.channel);
     }
+  } else if (auto *element = dynamic_cast<WaveTableElement *>(widget)) {
+    appendChannel(element->channel());
   } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
     appendChannel(element->channel());
   } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {

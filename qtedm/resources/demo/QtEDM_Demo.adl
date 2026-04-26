@@ -7,7 +7,7 @@ display {
     x=80
     y=80
     width=1560
-    height=860
+    height=1030
   }
   clr=14
   bclr=4
@@ -1089,6 +1089,62 @@ text {
   }
   textix="Shell Command"
   align="horiz. centered"
+}
+rectangle {
+  object {
+    x=20
+    y=856
+    width=1520
+    height=150
+  }
+  "basic attribute" {
+    clr=7
+    fill="outline"
+    width=2
+  }
+}
+text {
+  object {
+    x=42
+    y=866
+    width=180
+    height=18
+  }
+  "basic attribute" {
+    clr=53
+  }
+  textix="PV Table"
+}
+pv_table {
+  object {
+    x=42
+    y=890
+    width=720
+    height=105
+  }
+  "basic attribute" {
+    clr=0
+    bclr=14
+  }
+  colorMode="alarm"
+  showHeaders=1
+  columns="label,pv,value,severity"
+  row {
+    label="Wave"
+    chan="__qtedm_demo:wave"
+  }
+  row {
+    label="Ramp"
+    chan="__qtedm_demo:ramp"
+  }
+  row {
+    label="Mode"
+    chan="__qtedm_demo:mode"
+  }
+  row {
+    label="Binary"
+    chan="__qtedm_demo:binary"
+  }
 }
 text {
   object {

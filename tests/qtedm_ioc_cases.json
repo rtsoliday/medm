@@ -588,6 +588,39 @@
     }
   },
   {
+    "name": "pv_table_live_numeric_update",
+    "display": "tests/test_PVTable.adl",
+    "selector": {
+      "type": "pv_table",
+      "geometry": {
+        "x": 20,
+        "y": 40,
+        "width": 800,
+        "height": 240
+      }
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "pvtable:test:beamCurrent",
+        "value": "33.75"
+      }
+    ],
+    "expect": {
+      "row_count": 5,
+      "columns": "label,pv,value,units,severity",
+      "show_headers": true,
+      "color_mode": "alarm",
+      "row_severities": [
+        0,
+        0,
+        3,
+        0,
+        2
+      ]
+    }
+  },
+  {
     "name": "waterfall_plot_live_buffer",
     "display": "tests/test_WaterfallPlot.adl",
     "selector": {

@@ -675,6 +675,82 @@ set_cartesian_plot_test_pvs() {
   return 1
 }
 
+set_pv_table_test_pvs() {
+  local prefix="$1"
+  local -a numeric_init_values=(
+    # pv value lopr hopr prec
+    "pvtable:test:beamCurrent   12.50   0     100   2"
+    "pvtable:test:temperature   23.5  -40     120   1"
+  )
+  local -a enum_init_values=(
+    # pv value
+    "pvtable:test:mode 1"
+    "pvtable:test:majorAlarm 1"
+  )
+  local -a string_init_values=(
+    # pv value
+    "pvtable:test:status READY"
+  )
+
+  echo "Initializing PV table PVs for tests/test_PVTable.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${numeric_init_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      for entry in "${enum_init_values[@]}"; do
+        read -r pv value <<< "${entry}"
+        full_pv="${prefix}${pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${value}" \
+            >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      full_pv="${prefix}pvtable:test:majorAlarm"
+      if ! "${CAVPUT_BIN}" "-list=${full_pv}.ONSV=MAJOR,${full_pv}=1" \
+          >/dev/null 2>&1; then
+        initialized=0
+      fi
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      for entry in "${string_init_values[@]}"; do
+        read -r pv value <<< "${entry}"
+        full_pv="${prefix}${pv}"
+        if ! "${CAVPUT_BIN}" "-list=${full_pv}=${value}" \
+            >/dev/null 2>&1; then
+          initialized=0
+          break
+        fi
+      done
+    fi
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "PV table PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize PV table PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_waterfall_plot_test_pvs() {
   local prefix="$1"
   local waveform_points=64
@@ -1831,6 +1907,7 @@ set_led_monitor_test_pvs "${PV_PREFIX}" || true
 set_meter_test_pvs "${PV_PREFIX}" || true
 set_strip_chart_test_pvs "${PV_PREFIX}" || true
 set_cartesian_plot_test_pvs "${PV_PREFIX}" || true
+set_pv_table_test_pvs "${PV_PREFIX}" || true
 set_waterfall_plot_test_pvs "${PV_PREFIX}" || true
 if [[ "${QTEDM_WATERFALL_DRIVER_MODE:-dynamic}" != "static" ]]; then
   start_waterfall_plot_test_driver "${PV_PREFIX}" || true

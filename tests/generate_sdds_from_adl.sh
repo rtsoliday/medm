@@ -79,6 +79,17 @@ row_count="$(wc -l < "${tmp_pvs}" | tr -d ' ')"
       tm:string:status)
         type="string"
         ;;
+      pvtable:test:mode)
+        type="enum"
+        enum_strings='"OFF,ON,AUTO,ERROR"'
+        ;;
+      pvtable:test:majorAlarm)
+        type="enum"
+        enum_strings='"OK,ALARM"'
+        ;;
+      pvtable:test:status)
+        type="string"
+        ;;
       mn:*|cb:*)
         type="enum"
         enum_strings='"OFF,ON,AUTO,ERROR"'

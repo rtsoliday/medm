@@ -30,6 +30,7 @@
 #include "oval_element.h"
 #include "polygon_element.h"
 #include "polyline_element.h"
+#include "pv_table_element.h"
 #include "rectangle_element.h"
 #include "related_display_element.h"
 #include "scale_monitor_element.h"
@@ -403,6 +404,9 @@ QString FindPvDialog::elementTypeLabel(QWidget *widget) const
   if (dynamic_cast<TextMonitorElement *>(widget)) {
     return QStringLiteral("Text Monitor");
   }
+  if (dynamic_cast<PvTableElement *>(widget)) {
+    return QStringLiteral("PV Table");
+  }
   if (dynamic_cast<TextEntryElement *>(widget)) {
     return QStringLiteral("Text Entry");
   }
@@ -502,6 +506,11 @@ QStringList FindPvDialog::channelsForWidget(QWidget *widget) const
     appendChannelArray(AdlWriter::collectChannels(element));
   } else if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
     appendChannelArray(AdlWriter::collectChannels(element));
+  } else if (auto *element = dynamic_cast<PvTableElement *>(widget)) {
+    const QVector<PvTableRowConfig> rows = element->rows();
+    for (const PvTableRowConfig &row : rows) {
+      appendChannel(row.channel);
+    }
   } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
     appendChannel(element->channel());
   } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {

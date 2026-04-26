@@ -269,6 +269,21 @@ display {
 }
 "related display" {
 	object {
+		x=740
+		y=220
+		width=160
+		height=40
+	}
+	display[0] {
+		label="PVTable"
+		name="tests/test_PVTable.adl"
+	}
+	clr=14
+	bclr=4
+	label="-PVTable"
+}
+"related display" {
+	object {
 		x=380
 		y=120
 		width=160

@@ -40,7 +40,9 @@ QString barDirectionString(BarDirection direction);
 QString barFillModeString(BarFill fill);
 QString ledShapeString(LedShape shape);
 QString timeUnitsString(TimeUnits units);
+QString pvTableColumnString(const QString &column);
 QString channelFieldName(int index);
+
 QString textMonitorFormatString(TextMonitorFormat format);
 QString textAreaWrapModeString(TextAreaWrapMode mode);
 QString textAreaCommitModeString(TextAreaCommitMode mode);

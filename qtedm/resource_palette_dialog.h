@@ -52,6 +52,7 @@
 class ResourcePaletteDialog : public QDialog
 {
 public:
+  static constexpr int kPvTableRowCount = 8;
   ResourcePaletteDialog(const QPalette &basePalette, const QFont &labelFont,
       const QFont &valueFont, QWidget *parent = nullptr)
     : QDialog(parent)
@@ -1335,6 +1336,114 @@ public:
         textMonitorPvLimitsButton_);
   textMonitorLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(textMonitorSection_);
+
+    pvTableSection_ = new QWidget(entriesWidget_);
+    auto *pvTableLayout = new QGridLayout(pvTableSection_);
+    pvTableLayout->setContentsMargins(0, 0, 0, 0);
+    pvTableLayout->setHorizontalSpacing(12);
+    pvTableLayout->setVerticalSpacing(6);
+
+    pvTableForegroundButton_ = createColorButton(
+        basePalette.color(QPalette::WindowText));
+    QObject::connect(pvTableForegroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(pvTableForegroundButton_,
+              QStringLiteral("PV Table Foreground"),
+              pvTableForegroundSetter_);
+        });
+
+    pvTableBackgroundButton_ = createColorButton(
+        basePalette.color(QPalette::Window));
+    QObject::connect(pvTableBackgroundButton_, &QPushButton::clicked, this,
+        [this]() {
+          openColorPalette(pvTableBackgroundButton_,
+              QStringLiteral("PV Table Background"),
+              pvTableBackgroundSetter_);
+        });
+
+    pvTableColorModeCombo_ = new QComboBox;
+    pvTableColorModeCombo_->setFont(valueFont_);
+    pvTableColorModeCombo_->setAutoFillBackground(true);
+    pvTableColorModeCombo_->addItem(QStringLiteral("Static"));
+    pvTableColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    pvTableColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(pvTableColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (pvTableColorModeSetter_) {
+            pvTableColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    pvTableShowHeadersCombo_ = createBooleanComboBox();
+    QObject::connect(pvTableShowHeadersCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (pvTableShowHeadersSetter_) {
+            pvTableShowHeadersSetter_(index != 0);
+          }
+        });
+
+    pvTableColumnsEdit_ = createLineEdit();
+    committedTexts_.insert(pvTableColumnsEdit_, pvTableColumnsEdit_->text());
+    pvTableColumnsEdit_->installEventFilter(this);
+    QObject::connect(pvTableColumnsEdit_, &QLineEdit::returnPressed, this,
+        [this]() { commitPvTableColumns(); });
+    QObject::connect(pvTableColumnsEdit_, &QLineEdit::editingFinished, this,
+        [this]() { commitPvTableColumns(); });
+
+    pvTableRowsWidget_ = new QWidget(pvTableSection_);
+    auto *pvTableRowsLayout = new QGridLayout(pvTableRowsWidget_);
+    pvTableRowsLayout->setContentsMargins(0, 0, 0, 0);
+    pvTableRowsLayout->setHorizontalSpacing(8);
+    pvTableRowsLayout->setVerticalSpacing(4);
+    auto *pvTableRowHeader = new QLabel(QStringLiteral("Row"));
+    pvTableRowHeader->setFont(labelFont_);
+    pvTableRowHeader->setAlignment(Qt::AlignCenter);
+    pvTableRowsLayout->addWidget(pvTableRowHeader, 0, 0);
+    auto *pvTableLabelHeader = new QLabel(QStringLiteral("Label"));
+    pvTableLabelHeader->setFont(labelFont_);
+    pvTableLabelHeader->setAlignment(Qt::AlignCenter);
+    pvTableRowsLayout->addWidget(pvTableLabelHeader, 0, 1);
+    auto *pvTableChannelHeader = new QLabel(QStringLiteral("Channel"));
+    pvTableChannelHeader->setFont(labelFont_);
+    pvTableChannelHeader->setAlignment(Qt::AlignCenter);
+    pvTableRowsLayout->addWidget(pvTableChannelHeader, 0, 2);
+    for (int i = 0; i < kPvTableRowCount; ++i) {
+      auto *rowLabel = new QLabel(QStringLiteral("%1").arg(i + 1));
+      rowLabel->setFont(labelFont_);
+      rowLabel->setAlignment(Qt::AlignCenter);
+      pvTableRowsLayout->addWidget(rowLabel, i + 1, 0);
+
+      pvTableRowLabelEdits_[i] = createLineEdit();
+      committedTexts_.insert(pvTableRowLabelEdits_[i], pvTableRowLabelEdits_[i]->text());
+      pvTableRowLabelEdits_[i]->installEventFilter(this);
+      QObject::connect(pvTableRowLabelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitPvTableRowLabel(i); });
+      QObject::connect(pvTableRowLabelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitPvTableRowLabel(i); });
+      pvTableRowsLayout->addWidget(pvTableRowLabelEdits_[i], i + 1, 1);
+
+      pvTableRowChannelEdits_[i] = createLineEdit();
+      committedTexts_.insert(pvTableRowChannelEdits_[i], pvTableRowChannelEdits_[i]->text());
+      pvTableRowChannelEdits_[i]->installEventFilter(this);
+      QObject::connect(pvTableRowChannelEdits_[i], &QLineEdit::returnPressed, this,
+          [this, i]() { commitPvTableRowChannel(i); });
+      QObject::connect(pvTableRowChannelEdits_[i], &QLineEdit::editingFinished, this,
+          [this, i]() { commitPvTableRowChannel(i); });
+      pvTableRowsLayout->addWidget(pvTableRowChannelEdits_[i], i + 1, 2);
+    }
+    pvTableRowsLayout->setColumnStretch(1, 1);
+    pvTableRowsLayout->setColumnStretch(2, 1);
+
+    addRow(pvTableLayout, 0, QStringLiteral("Foreground"), pvTableForegroundButton_);
+    addRow(pvTableLayout, 1, QStringLiteral("Background"), pvTableBackgroundButton_);
+    addRow(pvTableLayout, 2, QStringLiteral("Color Mode"), pvTableColorModeCombo_);
+    addRow(pvTableLayout, 3, QStringLiteral("Show Headers"), pvTableShowHeadersCombo_);
+    addRow(pvTableLayout, 4, QStringLiteral("Columns"), pvTableColumnsEdit_);
+    addRow(pvTableLayout, 5, QStringLiteral("Rows"), pvTableRowsWidget_);
+    pvTableLayout->setRowStretch(6, 1);
+    entriesLayout->addWidget(pvTableSection_);
 
     textEntrySection_ = new QWidget(entriesWidget_);
     auto *textEntryLayout = new QGridLayout(textEntrySection_);
@@ -3591,6 +3700,7 @@ public:
   textEntrySection_->setVisible(false);
   textAreaSection_->setVisible(false);
   textMonitorSection_->setVisible(false);
+  pvTableSection_->setVisible(false);
   meterSection_->setVisible(false);
   barSection_->setVisible(false);
   thermometerSection_->setVisible(false);
@@ -5541,6 +5651,99 @@ public:
       elementLabel_->setText(QStringLiteral("Related Display"));
     }
 
+    showPaletteWithoutActivating();
+  }
+
+  void showForPvTable(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<bool()> showHeadersGetter,
+      std::function<void(bool)> showHeadersSetter,
+      std::function<QString()> columnsGetter,
+      std::function<void(const QString &)> columnsSetter,
+      std::array<std::function<QString()>, kPvTableRowCount> rowLabelGetters,
+      std::array<std::function<void(const QString &)>, kPvTableRowCount> rowLabelSetters,
+      std::array<std::function<QString()>, kPvTableRowCount> rowChannelGetters,
+      std::array<std::function<void(const QString &)>, kPvTableRowCount> rowChannelSetters)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kPvTable;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    pvTableForegroundGetter_ = std::move(foregroundGetter);
+    pvTableForegroundSetter_ = std::move(foregroundSetter);
+    pvTableBackgroundGetter_ = std::move(backgroundGetter);
+    pvTableBackgroundSetter_ = std::move(backgroundSetter);
+    pvTableColorModeGetter_ = std::move(colorModeGetter);
+    pvTableColorModeSetter_ = std::move(colorModeSetter);
+    pvTableShowHeadersGetter_ = std::move(showHeadersGetter);
+    pvTableShowHeadersSetter_ = std::move(showHeadersSetter);
+    pvTableColumnsGetter_ = std::move(columnsGetter);
+    pvTableColumnsSetter_ = std::move(columnsSetter);
+    pvTableRowLabelGetters_ = std::move(rowLabelGetters);
+    pvTableRowLabelSetters_ = std::move(rowLabelSetters);
+    pvTableRowChannelGetters_ = std::move(rowChannelGetters);
+    pvTableRowChannelSetters_ = std::move(rowChannelSetters);
+
+    QRect geometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (geometry.width() <= 0) {
+      geometry.setWidth(kMinimumTextWidth * 4);
+    }
+    if (geometry.height() <= 0) {
+      geometry.setHeight(kMinimumTextHeight * 4);
+    }
+    lastCommittedGeometry_ = geometry;
+    updateGeometryEdits(geometry);
+
+    if (pvTableForegroundButton_) {
+      setColorButtonColor(pvTableForegroundButton_,
+          pvTableForegroundGetter_ ? pvTableForegroundGetter_()
+                                   : palette().color(QPalette::WindowText));
+    }
+    if (pvTableBackgroundButton_) {
+      setColorButtonColor(pvTableBackgroundButton_,
+          pvTableBackgroundGetter_ ? pvTableBackgroundGetter_()
+                                   : palette().color(QPalette::Window));
+    }
+    if (pvTableColorModeCombo_) {
+      const QSignalBlocker blocker(pvTableColorModeCombo_);
+      pvTableColorModeCombo_->setCurrentIndex(colorModeToIndex(
+          pvTableColorModeGetter_ ? pvTableColorModeGetter_()
+                                  : TextColorMode::kAlarm));
+    }
+    if (pvTableShowHeadersCombo_) {
+      const QSignalBlocker blocker(pvTableShowHeadersCombo_);
+      pvTableShowHeadersCombo_->setCurrentIndex(
+          (pvTableShowHeadersGetter_ && pvTableShowHeadersGetter_()) ? 1 : 0);
+    }
+    if (pvTableColumnsEdit_) {
+      const QString value = pvTableColumnsGetter_ ? pvTableColumnsGetter_() : QString();
+      const QSignalBlocker blocker(pvTableColumnsEdit_);
+      pvTableColumnsEdit_->setText(value);
+      committedTexts_[pvTableColumnsEdit_] = value;
+    }
+    for (int i = 0; i < kPvTableRowCount; ++i) {
+      if (pvTableRowLabelEdits_[i]) {
+        const QString value = pvTableRowLabelGetters_[i] ? pvTableRowLabelGetters_[i]() : QString();
+        const QSignalBlocker blocker(pvTableRowLabelEdits_[i]);
+        pvTableRowLabelEdits_[i]->setText(value);
+        committedTexts_[pvTableRowLabelEdits_[i]] = value;
+      }
+      if (pvTableRowChannelEdits_[i]) {
+        const QString value = pvTableRowChannelGetters_[i] ? pvTableRowChannelGetters_[i]() : QString();
+        const QSignalBlocker blocker(pvTableRowChannelEdits_[i]);
+        pvTableRowChannelEdits_[i]->setText(value);
+        committedTexts_[pvTableRowChannelEdits_[i]] = value;
+      }
+    }
+    elementLabel_->setText(QStringLiteral("PV Table"));
     showPaletteWithoutActivating();
   }
 
@@ -9681,6 +9884,13 @@ public:
       resetLineEdit(edit);
     }
     resetLineEdit(textMonitorChannelEdit_);
+    resetLineEdit(pvTableColumnsEdit_);
+    for (QLineEdit *edit : pvTableRowLabelEdits_) {
+      resetLineEdit(edit);
+    }
+    for (QLineEdit *edit : pvTableRowChannelEdits_) {
+      resetLineEdit(edit);
+    }
     if (textMonitorPvLimitsButton_) {
       textMonitorPvLimitsButton_->setEnabled(false);
     }
@@ -10335,6 +10545,7 @@ private:
     kMessageButton,
     kShellCommand,
     kRelatedDisplay,
+    kPvTable,
     kTextMonitor,
     kMeter,
     kBarMonitor,
@@ -10487,6 +10698,7 @@ private:
           revertLineEdit(edit);
         }
         if (edit == textMonitorChannelEdit_
+            || edit == pvTableColumnsEdit_
             || edit == textAreaChannelEdit_
             || edit == textAreaWrapColumnWidthEdit_
             || edit == textAreaTabWidthEdit_
@@ -10666,6 +10878,11 @@ private:
       const bool relatedVisible = kind == SelectionKind::kRelatedDisplay;
       relatedDisplaySection_->setVisible(relatedVisible);
       relatedDisplaySection_->setEnabled(relatedVisible);
+    }
+    if (pvTableSection_) {
+      const bool pvTableVisible = kind == SelectionKind::kPvTable;
+      pvTableSection_->setVisible(pvTableVisible);
+      pvTableSection_->setEnabled(pvTableVisible);
     }
     if (textMonitorSection_) {
       const bool monitorVisible = kind == SelectionKind::kTextMonitor;
@@ -11500,6 +11717,48 @@ private:
     const QString value = edit->text();
     relatedDisplayEntryArgsSetters_[index](value);
     committedTexts_[edit] = value;
+  }
+
+  void commitPvTableColumns()
+  {
+    if (!pvTableColumnsEdit_) {
+      return;
+    }
+    if (!pvTableColumnsSetter_) {
+      revertLineEdit(pvTableColumnsEdit_);
+      return;
+    }
+    const QString value = pvTableColumnsEdit_->text();
+    pvTableColumnsSetter_(value);
+    committedTexts_[pvTableColumnsEdit_] = value;
+  }
+
+  void commitPvTableRowLabel(int index)
+  {
+    if (index < 0 || index >= kPvTableRowCount || !pvTableRowLabelEdits_[index]) {
+      return;
+    }
+    if (!pvTableRowLabelSetters_[index]) {
+      revertLineEdit(pvTableRowLabelEdits_[index]);
+      return;
+    }
+    const QString value = pvTableRowLabelEdits_[index]->text();
+    pvTableRowLabelSetters_[index](value);
+    committedTexts_[pvTableRowLabelEdits_[index]] = value;
+  }
+
+  void commitPvTableRowChannel(int index)
+  {
+    if (index < 0 || index >= kPvTableRowCount || !pvTableRowChannelEdits_[index]) {
+      return;
+    }
+    if (!pvTableRowChannelSetters_[index]) {
+      revertLineEdit(pvTableRowChannelEdits_[index]);
+      return;
+    }
+    const QString value = pvTableRowChannelEdits_[index]->text();
+    pvTableRowChannelSetters_[index](value);
+    committedTexts_[pvTableRowChannelEdits_[index]] = value;
   }
 
   void commitTextMonitorChannel()
@@ -13838,6 +14097,15 @@ private:
   QComboBox *waterfallShowGridCombo_ = nullptr;
   QLineEdit *waterfallSamplePeriodEdit_ = nullptr;
   QComboBox *waterfallUnitsCombo_ = nullptr;
+  QWidget *pvTableSection_ = nullptr;
+  QPushButton *pvTableForegroundButton_ = nullptr;
+  QPushButton *pvTableBackgroundButton_ = nullptr;
+  QComboBox *pvTableColorModeCombo_ = nullptr;
+  QComboBox *pvTableShowHeadersCombo_ = nullptr;
+  QLineEdit *pvTableColumnsEdit_ = nullptr;
+  QWidget *pvTableRowsWidget_ = nullptr;
+  std::array<QLineEdit *, kPvTableRowCount> pvTableRowLabelEdits_{};
+  std::array<QLineEdit *, kPvTableRowCount> pvTableRowChannelEdits_{};
   QWidget *textMonitorSection_ = nullptr;
   QPushButton *textMonitorForegroundButton_ = nullptr;
   QPushButton *textMonitorBackgroundButton_ = nullptr;
@@ -14519,6 +14787,20 @@ private:
   std::function<void(PvLimitSource)> textMonitorPrecisionSourceSetter_;
   std::function<int()> textMonitorPrecisionDefaultGetter_;
   std::function<void(int)> textMonitorPrecisionDefaultSetter_;
+  std::function<QColor()> pvTableForegroundGetter_;
+  std::function<void(const QColor &)> pvTableForegroundSetter_;
+  std::function<QColor()> pvTableBackgroundGetter_;
+  std::function<void(const QColor &)> pvTableBackgroundSetter_;
+  std::function<TextColorMode()> pvTableColorModeGetter_;
+  std::function<void(TextColorMode)> pvTableColorModeSetter_;
+  std::function<bool()> pvTableShowHeadersGetter_;
+  std::function<void(bool)> pvTableShowHeadersSetter_;
+  std::function<QString()> pvTableColumnsGetter_;
+  std::function<void(const QString &)> pvTableColumnsSetter_;
+  std::array<std::function<QString()>, kPvTableRowCount> pvTableRowLabelGetters_{};
+  std::array<std::function<void(const QString &)>, kPvTableRowCount> pvTableRowLabelSetters_{};
+  std::array<std::function<QString()>, kPvTableRowCount> pvTableRowChannelGetters_{};
+  std::array<std::function<void(const QString &)>, kPvTableRowCount> pvTableRowChannelSetters_{};
   std::function<TextColorMode()> textMonitorColorModeGetter_;
   std::function<void(TextColorMode)> textMonitorColorModeSetter_;
   std::function<QString()> textMonitorChannelGetter_;

@@ -15,6 +15,7 @@ private slots:
   void parsesExpressionChannelBlock();
   void parsesLedMonitorBlock();
   void parsesTextAreaBlock();
+  void parsesPvTableBlock();
   void rejectsMalformedInput();
 };
 
@@ -284,6 +285,54 @@ void TestAdlParser::parsesTextAreaBlock()
       QStringLiteral("14"));
   QCOMPARE(propertyValue(*controlNode, QStringLiteral("bclr")),
       QStringLiteral("4"));
+}
+
+void TestAdlParser::parsesPvTableBlock()
+{
+  const QString text = QStringLiteral(
+      "pv_table {\n"
+      "  object {\n"
+      "    x=40\n"
+      "    y=80\n"
+      "    width=520\n"
+      "    height=220\n"
+      "  }\n"
+      "  \"basic attribute\" {\n"
+      "    clr=14\n"
+      "    bclr=4\n"
+      "  }\n"
+      "  colorMode=\"alarm\"\n"
+      "  showHeaders=1\n"
+      "  columns=\"label,pv,value,severity\"\n"
+      "  row {\n"
+      "    label=\"Beam Current\"\n"
+      "    chan=\"pvtable:test:beamCurrent\"\n"
+      "  }\n"
+      "  row {\n"
+      "    label=\"Mode\"\n"
+      "    chan=\"pvtable:test:mode\"\n"
+      "  }\n"
+      "}\n");
+
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(text, &errorMessage);
+
+  QVERIFY2(root.has_value(), qPrintable(errorMessage));
+
+  const AdlNode *tableNode = ::findChild(*root, QStringLiteral("pv_table"));
+  QVERIFY(tableNode);
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("colorMode")),
+      QStringLiteral("alarm"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("showHeaders")),
+      QStringLiteral("1"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("columns")),
+      QStringLiteral("label,pv,value,severity"));
+  const AdlNode *row0 = ::findChild(*tableNode, QStringLiteral("row"));
+  QVERIFY(row0);
+  QCOMPARE(propertyValue(*row0, QStringLiteral("label")),
+      QStringLiteral("Beam Current"));
+  QCOMPARE(propertyValue(*row0, QStringLiteral("chan")),
+      QStringLiteral("pvtable:test:beamCurrent"));
 }
 
 void TestAdlParser::rejectsMalformedInput()

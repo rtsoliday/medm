@@ -47,6 +47,7 @@ enum class CreateTool {
   kCartesianPlot,
   kHeatmap,
   kWaterfallPlot,
+  kPvTable,
   kExpressionChannel,
   kRectangle,
   kOval,

@@ -56,6 +56,8 @@
 
 #include "channel_access_context.h"
 #include "display_properties.h"
+#include "pv_table_element.h"
+#include "pv_table_runtime.h"
 #include "statistics_tracker.h"
 #include "startup_timing.h"
 #include "display_list_dialog.h"
@@ -899,6 +901,7 @@ public:
     considerList(shellCommandElements_);
     considerList(relatedDisplayElements_);
     considerList(textMonitorElements_);
+    considerList(pvTableElements_);
     considerList(meterElements_);
     considerList(barMonitorElements_);
     considerList(thermometerElements_);
@@ -3063,6 +3066,7 @@ protected:
         }
         if (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
+            || state->createTool == CreateTool::kPvTable
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kTextArea
             || state->createTool == CreateTool::kSlider
@@ -3388,6 +3392,7 @@ private:
   bool loadDisplaySection(const AdlNode &displayNode);
   TextElement *loadTextElement(const AdlNode &textNode);
   TextMonitorElement *loadTextMonitorElement(const AdlNode &textUpdateNode);
+  PvTableElement *loadPvTableElement(const AdlNode &pvTableNode);
   TextEntryElement *loadTextEntryElement(const AdlNode &textEntryNode);
   TextAreaElement *loadTextAreaElement(const AdlNode &textAreaNode);
   SliderElement *loadSliderElement(const AdlNode &valuatorNode);
@@ -3684,6 +3689,9 @@ private:
   QList<TextMonitorElement *> textMonitorElements_;
   QHash<TextMonitorElement *, TextMonitorRuntime *> textMonitorRuntimes_;
   TextMonitorElement *selectedTextMonitorElement_ = nullptr;
+  QList<PvTableElement *> pvTableElements_;
+  QHash<PvTableElement *, PvTableRuntime *> pvTableRuntimes_;
+  PvTableElement *selectedPvTable_ = nullptr;
   QList<MeterElement *> meterElements_;
   QHash<MeterElement *, MeterRuntime *> meterRuntimes_;
   MeterElement *selectedMeterElement_ = nullptr;
@@ -3923,6 +3931,15 @@ private:
     selectedTextMonitorElement_ = nullptr;
   }
 
+  void clearPvTableSelection()
+  {
+    if (!selectedPvTable_) {
+      return;
+    }
+    selectedPvTable_->setSelected(false);
+    selectedPvTable_ = nullptr;
+  }
+
   void clearMeterSelection()
   {
     if (!selectedMeterElement_) {
@@ -4153,6 +4170,10 @@ private:
       textMonitor->setSelected(selected);
       return;
     }
+    if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
+      pvTable->setSelected(selected);
+      return;
+    }
     if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
       meter->setSelected(selected);
       return;
@@ -4344,6 +4365,12 @@ private:
     if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
       if (selectedTextMonitorElement_ == textMonitor) {
         selectedTextMonitorElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
+      if (selectedPvTable_ == pvTable) {
+        selectedPvTable_ = nullptr;
       }
       return;
     }
@@ -4563,6 +4590,13 @@ private:
     if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
       if (selectedTextMonitorElement_ == textMonitor) {
         clearTextMonitorSelection();
+        clearPvTableSelection();
+        return;
+      }
+    }
+    if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
+      if (selectedPvTable_ == pvTable) {
+        clearPvTableSelection();
         return;
       }
     }
@@ -4749,6 +4783,7 @@ private:
     appendUnique(selectedShellCommandElement_);
     appendUnique(selectedRelatedDisplayElement_);
     appendUnique(selectedTextMonitorElement_);
+    appendUnique(selectedPvTable_);
     appendUnique(selectedMeterElement_);
     appendUnique(selectedBarMonitorElement_);
     appendUnique(selectedThermometerElement_);
@@ -4843,6 +4878,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -4892,6 +4928,7 @@ private:
   void removeExpressionChannelRuntime(ExpressionChannelElement *element);
   void removeWheelSwitchRuntime(WheelSwitchElement *element);
   void removeTextMonitorRuntime(TextMonitorElement *element);
+  void removePvTableRuntime(PvTableElement *element);
   void removeTextEntryRuntime(TextEntryElement *element);
   void removeTextAreaRuntime(TextAreaElement *element);
 
@@ -4919,6 +4956,8 @@ private:
       removeSliderRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, WheelSwitchElement>) {
       removeWheelSwitchRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, PvTableElement>) {
+      removePvTableRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MeterElement>) {
       removeMeterRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, BarMonitorElement>) {
@@ -5490,6 +5529,42 @@ private:
       });
       if (removeOriginal) {
         cutSelectedElement(textMonitorElements_, selectedTextMonitorElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedPvTable_) {
+      PvTableElement *element = selectedPvTable_;
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = target.translateRectForPaste(geometry, offset);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        PvTableElement *newElement = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          newElement = target.loadPvTableElement(nodeCopy);
+        }
+        if (newElement) {
+          target.selectPvTableElement(newElement);
+          target.showResourcePaletteForPvTable(newElement);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(pvTableElements_, selectedPvTable_);
         finalizeCut();
       }
       return true;
@@ -6590,6 +6665,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -7585,6 +7661,76 @@ private:
         std::move(labelGetters), std::move(labelSetters), std::move(nameGetters),
         std::move(nameSetters), std::move(argsGetters), std::move(argsSetters),
         std::move(modeGetters), std::move(modeSetters));
+  }
+
+  void showResourcePaletteForPvTable(PvTableElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+
+    std::array<std::function<QString()>, 8> labelGetters{};
+    std::array<std::function<void(const QString &)>, 8> labelSetters{};
+    std::array<std::function<QString()>, 8> channelGetters{};
+    std::array<std::function<void(const QString &)>, 8> channelSetters{};
+    for (int i = 0; i < 8; ++i) {
+      labelGetters[i] = [element, i]() { return element->rowLabelText(i); };
+      labelSetters[i] = [this, element, i](const QString &value) {
+        element->setRowLabelText(i, value);
+        markDirty();
+      };
+      channelGetters[i] = [element, i]() { return element->rowChannelText(i); };
+      channelSetters[i] = [this, element, i](const QString &value) {
+        element->setRowChannelText(i, value);
+        markDirty();
+      };
+    }
+
+    dialog->showForPvTable(
+        [this, element]() { return widgetDisplayRect(element); },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth * 4) {
+            adjusted.setWidth(kMinimumTextWidth * 4);
+          }
+          if (adjusted.height() < kMinimumTextHeight * 4) {
+            adjusted.setHeight(kMinimumTextHeight * 4);
+          }
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() { return element->foregroundColor(); },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->backgroundColor(); },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() { return element->colorMode(); },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() { return element->showHeaders(); },
+        [this, element](bool show) {
+          element->setShowHeaders(show);
+          markDirty();
+        },
+        [element]() { return element->columnsString(); },
+        [this, element](const QString &columns) {
+          element->setColumnsString(columns);
+          markDirty();
+        },
+        std::move(labelGetters), std::move(labelSetters),
+        std::move(channelGetters), std::move(channelSetters));
   }
 
   void showResourcePaletteForTextMonitor(TextMonitorElement *element)
@@ -9888,6 +10034,11 @@ private:
       }
     } else if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
       appendChannelArray(AdlWriter::collectChannels(element));
+    } else if (auto *element = dynamic_cast<PvTableElement *>(widget)) {
+      const QVector<PvTableRowConfig> rows = element->rows();
+      for (const PvTableRowConfig &row : rows) {
+        appendChannel(row.channel);
+      }
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
@@ -9984,6 +10135,7 @@ public:
 
     appendList(textElements_);
     appendList(textMonitorElements_);
+    appendList(pvTableElements_);
     appendList(textEntryElements_);
     appendList(textAreaElements_);
     appendList(sliderElements_);
@@ -10506,6 +10658,9 @@ private:
     if (dynamic_cast<TextMonitorElement *>(widget)) {
       return QStringLiteral("Text Monitor");
     }
+    if (dynamic_cast<PvTableElement *>(widget)) {
+      return QStringLiteral("PV Table");
+    }
     if (dynamic_cast<TextEntryElement *>(widget)) {
       return QStringLiteral("Text Entry");
     }
@@ -10632,6 +10787,11 @@ private:
         for (const QString &channel : rawChannels) {
           addRef(channel);
         }
+      }
+    } else if (auto *element = dynamic_cast<PvTableElement *>(widget)) {
+      const QVector<PvTableRowConfig> rows = element->rows();
+      for (const PvTableRowConfig &row : rows) {
+        addRef(row.channel);
       }
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       if (auto *runtime = textEntryRuntimes_.value(element, nullptr)) {
@@ -11942,6 +12102,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -11979,6 +12140,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12017,6 +12179,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12055,6 +12218,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12093,6 +12257,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12131,6 +12296,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12169,6 +12335,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12207,6 +12374,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12245,6 +12413,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12283,6 +12452,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12320,6 +12490,7 @@ private:
     clearMessageButtonSelection();
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12336,6 +12507,45 @@ private:
     clearCompositeSelection();
     selectedTextMonitorElement_ = element;
     selectedTextMonitorElement_->setSelected(true);
+  }
+
+  void selectPvTableElement(PvTableElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedPvTable_) {
+      selectedPvTable_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearTextAreaSelection();
+    clearSliderSelection();
+    clearWheelSwitchSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearPvTableSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedPvTable_ = element;
+    selectedPvTable_->setSelected(true);
   }
 
   void selectMeterElement(MeterElement *element)
@@ -12358,6 +12568,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
     clearCartesianPlotSelection();
@@ -12394,6 +12605,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12431,6 +12643,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12468,6 +12681,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12505,6 +12719,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12543,6 +12758,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12581,6 +12797,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12618,6 +12835,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12656,6 +12874,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12692,6 +12911,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12729,6 +12949,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12765,6 +12986,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12802,6 +13024,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12839,6 +13062,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12874,6 +13098,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12910,6 +13135,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12946,6 +13172,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -12982,6 +13209,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13018,6 +13246,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -13074,6 +13303,9 @@ private:
     }
     if (selectedTextMonitorElement_) {
       return selectedTextMonitorElement_;
+    }
+    if (selectedPvTable_) {
+      return selectedPvTable_;
     }
     if (selectedMeterElement_) {
       return selectedMeterElement_;
@@ -13141,6 +13373,7 @@ private:
       return false;
     }
     clearMultiSelection();
+    clearPvTableSelection();
     if (!dynamic_cast<ExpressionChannelElement *>(widget)) {
       clearExpressionChannelSelection();
     }
@@ -13188,6 +13421,10 @@ private:
     } else if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
       selectTextMonitorElement(textMonitor);
       showResourcePaletteForTextMonitor(textMonitor);
+      handled = true;
+    } else if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
+      selectPvTableElement(pvTable);
+      showResourcePaletteForPvTable(pvTable);
       handled = true;
     } else if (auto *meter = dynamic_cast<MeterElement *>(widget)) {
       selectMeterElement(meter);
@@ -14893,6 +15130,7 @@ private:
     clearShellCommandSelection();
     clearRelatedDisplaySelection();
     clearTextMonitorSelection();
+    clearPvTableSelection();
     clearMeterSelection();
     clearScaleMonitorSelection();
     clearStripChartSelection();
@@ -14985,6 +15223,16 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createTextMonitorElement(rect);
+      break;
+    case CreateTool::kPvTable:
+      if (rect.width() < kMinimumTextWidth * 4) {
+        rect.setWidth(kMinimumTextWidth * 4);
+      }
+      if (rect.height() < kMinimumTextHeight * 4) {
+        rect.setHeight(kMinimumTextHeight * 4);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createPvTableElement(rect);
       break;
     case CreateTool::kTextEntry:
       if (rect.width() < kMinimumTextWidth) {
@@ -15884,6 +16132,48 @@ private:
     textMonitorElements_.append(element);
     selectTextMonitorElement(element);
     showResourcePaletteForTextMonitor(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
+
+  void createPvTableElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create PV Table"));
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth * 4) {
+      target.setWidth(kMinimumTextWidth * 4);
+    }
+    if (target.height() < kMinimumTextHeight * 4) {
+      target.setHeight(kMinimumTextHeight * 4);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new PvTableElement(displayArea_);
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    QVector<PvTableRowConfig> rows;
+    rows.append({QStringLiteral("PV 1"), QString()});
+    rows.append({QStringLiteral("PV 2"), QString()});
+    element->setRows(rows);
+    element->show();
+    ensureElementInStack(element);
+    pvTableElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!pvTableRuntimes_.contains(element)) {
+        auto *runtime = new PvTableRuntime(element);
+        pvTableRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectPvTableElement(element);
+    showResourcePaletteForPvTable(element);
     deactivateCreateTool();
     markDirty();
   }
@@ -16875,6 +17165,7 @@ private:
     const bool crossCursorActive = state
         && (state->createTool == CreateTool::kText
             || state->createTool == CreateTool::kTextMonitor
+            || state->createTool == CreateTool::kPvTable
             || state->createTool == CreateTool::kTextEntry
             || state->createTool == CreateTool::kTextArea
             || state->createTool == CreateTool::kSlider
@@ -17798,6 +18089,14 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
+    auto *pvTableAction =
+        addMenuAction(monitorsMenu, QStringLiteral("PV Table"));
+    QObject::connect(pvTableAction, &QAction::triggered, this, [this]() {
+      activateCreateTool(CreateTool::kPvTable);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     auto *meterAction = addMenuAction(monitorsMenu, QStringLiteral("Meter"));
     QObject::connect(meterAction, &QAction::triggered, this, [this]() {
       activateCreateTool(CreateTool::kMeter);
@@ -18471,6 +18770,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     scaleWidget(e);
   }
   for (TextMonitorElement *e : textMonitorElements_) {
+    scaleWidget(e);
+  }
+  for (PvTableElement *e : pvTableElements_) {
     scaleWidget(e);
   }
   for (MeterElement *e : meterElements_) {
@@ -20456,6 +20758,41 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       continue;
     }
 
+    if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("pv_table {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(pvTable));
+      AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("\"basic attribute\" {"));
+      AdlWriter::writeIndentedLine(stream, 2,
+          QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+              resolvedForegroundColor(pvTable, pvTable->foregroundColor()))));
+      AdlWriter::writeIndentedLine(stream, 2,
+          QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+              resolvedBackgroundColor(pvTable, pvTable->backgroundColor()))));
+      AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("colorMode=\"%1\"").arg(
+              AdlWriter::colorModeString(pvTable->colorMode())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("showHeaders=%1").arg(pvTable->showHeaders() ? 1 : 0));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("columns=\"%1\"").arg(
+              AdlWriter::escapeAdlString(pvTable->columnsString())));
+      for (const PvTableRowConfig &row : pvTable->rows()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("row {"));
+        if (!row.label.trimmed().isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("label=\"%1\"").arg(
+                  AdlWriter::escapeAdlString(row.label)));
+        }
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("chan=\"%1\"").arg(
+                AdlWriter::escapeAdlString(row.channel)));
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
     if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
           QStringLiteral("waterfall_plot {"));
@@ -21772,6 +22109,41 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("pv_table {"));
+    AdlWriter::writeObjectSection(stream, next, serializedGeometry(pvTable));
+    AdlWriter::writeIndentedLine(stream, next, QStringLiteral("\"basic attribute\" {"));
+    AdlWriter::writeIndentedLine(stream, next + 1,
+        QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+            resolveForeground(pvTable, pvTable->foregroundColor()))));
+    AdlWriter::writeIndentedLine(stream, next + 1,
+        QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+            resolveBackground(pvTable, pvTable->backgroundColor()))));
+    AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("colorMode=\"%1\"").arg(
+            AdlWriter::colorModeString(pvTable->colorMode())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("showHeaders=%1").arg(pvTable->showHeaders() ? 1 : 0));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("columns=\"%1\"").arg(
+            AdlWriter::escapeAdlString(pvTable->columnsString())));
+    for (const PvTableRowConfig &row : pvTable->rows()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("row {"));
+      if (!row.label.trimmed().isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next + 1,
+            QStringLiteral("label=\"%1\"").arg(
+                AdlWriter::escapeAdlString(row.label)));
+      }
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("chan=\"%1\"").arg(
+              AdlWriter::escapeAdlString(row.channel)));
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *waterfall = dynamic_cast<WaterfallPlotElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
         QStringLiteral("waterfall_plot {"));
@@ -22022,6 +22394,8 @@ inline void DisplayWindow::clearAllElements()
           removeWheelSwitchRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, TextMonitorElement *>) {
           removeTextMonitorRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, PvTableElement *>) {
+          removePvTableRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, MeterElement *>) {
           removeMeterRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, BarMonitorElement *>) {
@@ -22082,6 +22456,7 @@ inline void DisplayWindow::clearAllElements()
   clearList(shellCommandElements_);
   clearList(relatedDisplayElements_);
   clearList(textMonitorElements_);
+  clearList(pvTableElements_);
   clearList(meterElements_);
   clearList(barMonitorElements_);
   clearList(thermometerElements_);
@@ -23984,6 +24359,51 @@ inline QJsonObject DisplayWindow::testStateObject() const
     widgets.append(widgetObject);
   }
 
+  for (PvTableElement *element : pvTableElements_) {
+    if (!element) {
+      continue;
+    }
+    PvTableRuntime *runtime = pvTableRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "pv_table", element, QString());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    appendColorState(widgetObject, element->foregroundColor(),
+        element->backgroundColor());
+    widgetObject[QStringLiteral("show_headers")] = element->showHeaders();
+    widgetObject[QStringLiteral("columns")] = element->columnsString();
+    const QVector<PvTableRowConfig> rows = element->rows();
+    widgetObject[QStringLiteral("row_count")] = rows.size();
+    QJsonArray rowChannels;
+    for (const PvTableRowConfig &row : rows) {
+      rowChannels.append(row.channel);
+    }
+    widgetObject[QStringLiteral("row_channels")] = rowChannels;
+    if (runtime) {
+      QJsonArray rowConnected;
+      QJsonArray rowTexts;
+      QJsonArray rowSeverities;
+      bool allConnected = true;
+      for (const auto &rowStatePtr : runtime->rows_) {
+        if (!rowStatePtr) {
+          continue;
+        }
+        const auto &rowState = *rowStatePtr;
+        rowConnected.append(rowState.connected);
+        rowTexts.append(runtime->formatRowValue(rowState));
+        rowSeverities.append(rowState.lastSeverity);
+        if (!rowState.connected) {
+          allConnected = false;
+        }
+      }
+      widgetObject[QStringLiteral("connected")] = allConnected;
+      widgetObject[QStringLiteral("row_connected")] = rowConnected;
+      widgetObject[QStringLiteral("row_display_texts")] = rowTexts;
+      widgetObject[QStringLiteral("row_severities")] = rowSeverities;
+    }
+    widgets.append(widgetObject);
+  }
+
   for (WaterfallPlotElement *element : waterfallPlotElements_) {
     if (!element) {
       continue;
@@ -24580,6 +25000,79 @@ inline TextMonitorElement *DisplayWindow::loadTextMonitorElement(
   element->setSelected(false);
   textMonitorElements_.append(element);
   ensureElementInStack(element);
+  return element;
+}
+
+
+inline PvTableElement *DisplayWindow::loadPvTableElement(
+    const AdlNode &pvTableNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(pvTableNode);
+  geometry.translate(currentElementOffset_);
+  const QRect originalGeometry = geometry;
+  auto *element = new PvTableElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  if (const AdlNode *basic = ::findChild(pvTableNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const int clrIndex = propertyValue(*basic, QStringLiteral("clr")).toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+    ok = false;
+    const int bclrIndex = propertyValue(*basic, QStringLiteral("bclr")).toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString colorMode = propertyValue(pvTableNode, QStringLiteral("colorMode"));
+  if (!colorMode.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorMode));
+  }
+  const QString showHeaders = propertyValue(pvTableNode, QStringLiteral("showHeaders"));
+  if (!showHeaders.isEmpty()) {
+    element->setShowHeaders(showHeaders.toInt() != 0);
+  }
+  element->setColumnsString(propertyValue(pvTableNode, QStringLiteral("columns")));
+
+  QVector<PvTableRowConfig> rows;
+  for (const AdlNode &child : pvTableNode.children) {
+    if (child.name == QStringLiteral("row")) {
+      PvTableRowConfig row;
+      row.label = propertyValue(child, QStringLiteral("label"));
+      row.channel = channelValueWithLegacyFallback(child);
+      if (row.label.trimmed().isEmpty()) {
+        row.label = row.channel.trimmed();
+      }
+      rows.append(row);
+    }
+  }
+  element->setRows(rows);
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  pvTableElements_.append(element);
+  ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!pvTableRuntimes_.contains(element)) {
+      auto *runtime = new PvTableRuntime(element);
+      pvTableRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -29832,6 +30325,8 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
   } else if (name == QStringLiteral("text update")
       || name == QStringLiteral("text monitor")) {
     loaded = loadTextMonitorElement(node) != nullptr;
+  } else if (name == QStringLiteral("pv_table")) {
+    loaded = loadPvTableElement(node) != nullptr;
   } else if (name == QStringLiteral("text entry")) {
     loaded = loadTextEntryElement(node) != nullptr;
   } else if (name == QStringLiteral("text_area")) {
@@ -30093,6 +30588,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(sliderRuntimes_, sliderElements_.size());
   reserveRuntime(wheelSwitchRuntimes_, wheelSwitchElements_.size());
   reserveRuntime(textMonitorRuntimes_, textMonitorElements_.size());
+  reserveRuntime(pvTableRuntimes_, pvTableElements_.size());
   reserveRuntime(choiceButtonRuntimes_, choiceButtonElements_.size());
   reserveRuntime(menuRuntimes_, menuElements_.size());
   reserveRuntime(messageButtonRuntimes_, messageButtonElements_.size());
@@ -30138,7 +30634,8 @@ inline void DisplayWindow::enterExecuteMode()
       byteMonitorElements_.size() + ledMonitorElements_.size() +
       expressionChannelElements_.size() +
       sliderElements_.size() + wheelSwitchElements_.size() +
-      textMonitorElements_.size() + choiceButtonElements_.size() +
+      textMonitorElements_.size() + pvTableElements_.size() +
+      choiceButtonElements_.size() +
       menuElements_.size() + messageButtonElements_.size() +
       shellCommandElements_.size() + relatedDisplayElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Total widgets to start", totalWidgets);
@@ -30409,8 +30906,9 @@ inline void DisplayWindow::enterExecuteMode()
     }
   }
   int controlCount = sliderElements_.size() + wheelSwitchElements_.size() +
-      textMonitorElements_.size() + choiceButtonElements_.size() +
-      menuElements_.size() + messageButtonElements_.size();
+      textMonitorElements_.size() + pvTableElements_.size() +
+      choiceButtonElements_.size() + menuElements_.size() +
+      messageButtonElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating control runtimes", controlCount);
   for (ExpressionChannelElement *element : expressionChannelElements_) {
     if (!element) {
@@ -30456,6 +30954,18 @@ inline void DisplayWindow::enterExecuteMode()
     if (!textMonitorRuntimes_.contains(element)) {
       auto *runtime = new TextMonitorRuntime(element);
       textMonitorRuntimes_.insert(element, runtime);
+      runtime->start();
+
+    }
+  }
+  for (PvTableElement *element : pvTableElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!pvTableRuntimes_.contains(element)) {
+      auto *runtime = new PvTableRuntime(element);
+      pvTableRuntimes_.insert(element, runtime);
       runtime->start();
 
     }
@@ -30848,7 +31358,19 @@ inline void DisplayWindow::leaveExecuteMode()
     }
   }
   textMonitorRuntimes_.clear();
+  for (auto it = pvTableRuntimes_.begin(); it != pvTableRuntimes_.end(); ++it) {
+    if (it.value()) {
+      it.value()->stop();
+      it.value()->deleteLater();
+    }
+  }
+  pvTableRuntimes_.clear();
   for (TextMonitorElement *element : textMonitorElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (PvTableElement *element : pvTableElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
@@ -31173,6 +31695,18 @@ inline void DisplayWindow::removeTextMonitorRuntime(TextMonitorElement *element)
     return;
   }
   if (auto *runtime = textMonitorRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+
+inline void DisplayWindow::removePvTableRuntime(PvTableElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = pvTableRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

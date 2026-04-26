@@ -281,6 +281,19 @@ QString timeUnitsString(TimeUnits units)
   }
 }
 
+QString pvTableColumnString(const QString &column)
+{
+  const QString token = column.trimmed().toLower();
+  if (token == QStringLiteral("label")
+      || token == QStringLiteral("pv")
+      || token == QStringLiteral("value")
+      || token == QStringLiteral("units")
+      || token == QStringLiteral("severity")) {
+    return token;
+  }
+  return QString();
+}
+
 QString cartesianPlotStyleString(CartesianPlotStyle style)
 {
   switch (style) {

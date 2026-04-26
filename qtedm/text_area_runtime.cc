@@ -265,7 +265,13 @@ void TextAreaRuntime::handleChannelConnection(bool connected,
       valueKind_ = ValueKind::kString;
     }
 
-    if (desiredType != requestedType_ || desiredCount != requestedCount_) {
+    /* A count of zero already subscribes using the native element count. */
+    const bool wildcardCountSatisfied = desiredType == requestedType_
+        && requestedCount_ == 0 && desiredCount == elementCount_;
+    if (wildcardCountSatisfied) {
+      requestedCount_ = desiredCount;
+    } else if (desiredType != requestedType_
+        || desiredCount != requestedCount_) {
       resubscribe(desiredType, desiredCount);
       return;
     }

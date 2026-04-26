@@ -5,7 +5,7 @@ SDDS1
 &column name=EnumStrings, type=string, description="Comma-separated enum state labels" &end
 &column name=ElementCount, type=long, description="PV element count" &end
 &data mode=ascii &end
-265
+270
 "CRYO:PRESS:HEAD05" "double" "" 1
 "CRYO:PRESS:TAIL33" "double" "" 1
 "CRYO:TEMP:LOOP77" "double" "" 1
@@ -160,6 +160,11 @@ SDDS1
 "mn:slow:9126" "enum" "OFF,ON,AUTO,ERROR" 1
 "mn:test:7841" "enum" "OFF,ON,AUTO,ERROR" 1
 "mn:util:5092" "enum" "OFF,ON,AUTO,ERROR" 1
+"pvtable:test:beamCurrent" "double" "" 1
+"pvtable:test:majorAlarm" "enum" "OK,ALARM" 1
+"pvtable:test:mode" "enum" "OFF,ON,AUTO,ERROR" 1
+"pvtable:test:status" "string" "" 1
+"pvtable:test:temperature" "double" "" 1
 "random:ws:epsilon" "double" "" 1
 "scale:test:alpha" "double" "" 1
 "scale:test:beta" "double" "" 1

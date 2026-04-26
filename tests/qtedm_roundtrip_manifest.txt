@@ -14,6 +14,7 @@ test_Menu.adl
 test_MessageButton.adl
 test_Meter.adl
 test_Oval.adl
+test_PVTable.adl
 test_Polygon.adl
 test_RelatedDisplay.adl
 test_ScaleMonitor.adl

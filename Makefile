@@ -43,8 +43,8 @@ ifeq ($(HAVE_QT), 1)
 endif
 
 .PHONY: all $(DIRS) clean distclean check-motif check-qt final-check \
-        test test-qtedm test-qtedm-cli test-qtedm-unit test-qtedm-ioc \
-        test-qtedm-visual
+        test tests test-qtedm test-qtedm-cli test-qtedm-unit \
+        test-qtedm-ioc test-qtedm-visual
 
 all: check-motif $(DIRS) final-check
 
@@ -113,6 +113,8 @@ endif
 ifeq ($(HAVE_QT), 1)
 test: test-qtedm
 
+tests: test
+
 test-qtedm: qtedm
 	$(MAKE) -C qtedm test
 
@@ -128,7 +130,7 @@ test-qtedm-ioc: qtedm
 test-qtedm-visual: qtedm
 	$(MAKE) -C qtedm test-visual
 else
-test test-qtedm test-qtedm-cli test-qtedm-unit test-qtedm-ioc test-qtedm-visual:
+test tests test-qtedm test-qtedm-cli test-qtedm-unit test-qtedm-ioc test-qtedm-visual:
 	@echo "Qt development libraries are required to run qtedm tests."
 	@exit 1
 endif

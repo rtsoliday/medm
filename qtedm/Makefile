@@ -173,6 +173,8 @@ qtedm_SRC = qtedm.cc \
             heatmap_runtime.cc \
             waterfall_plot_element.cc \
             waterfall_plot_runtime.cc \
+            pv_table_element.cc \
+            pv_table_runtime.cc \
             composite_element.cc \
             composite_runtime.cc \
             cartesian_axis_dialog.cc \
@@ -428,11 +430,13 @@ else
 	@exit 1
 endif
 
-tests: check-qt-test $(QTEDM_UNIT_TEST_BINARIES)
+build-tests: check-qt-test $(QTEDM_UNIT_TEST_BINARIES)
+
+tests: test
 
 test: test-cli test-unit test-ioc test-visual
 
-test-unit: tests
+test-unit: build-tests
 	@set -e; \
 	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/qtedm-unit.XXXXXX"); \
 	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
@@ -462,6 +466,6 @@ clean-tests:
 	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS) \
 	  $(QTEDM_VISUAL_TEST_TOOLS)
 
-.PHONY: tests test test-unit test-cli test-ioc test-visual clean-tests check-qt-test
+.PHONY: tests test build-tests test-unit test-cli test-ioc test-visual clean-tests check-qt-test
 
 .NOTPARALLEL: test

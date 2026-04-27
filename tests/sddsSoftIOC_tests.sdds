@@ -5,7 +5,7 @@ SDDS1
 &column name=EnumStrings, type=string, description="Comma-separated enum state labels" &end
 &column name=ElementCount, type=long, description="PV element count" &end
 &data mode=ascii &end
-277
+297
 "CRYO:PRESS:HEAD05" "double" "" 1
 "CRYO:PRESS:TAIL33" "double" "" 1
 "CRYO:TEMP:LOOP77" "double" "" 1
@@ -196,6 +196,26 @@ SDDS1
 "slider:test:upsilon" "double" "" 1
 "slider:test:xi" "double" "" 1
 "slider:test:zeta" "double" "" 1
+"sp:test:alarm:readback" "double" "" 1
+"sp:test:alarm:setpoint" "double" "" 1
+"sp:test:baseline:readback" "double" "" 1
+"sp:test:baseline:setpoint" "double" "" 1
+"sp:test:compact:readback" "double" "" 1
+"sp:test:compact:setpoint" "double" "" 1
+"sp:test:hidden:readback" "double" "" 1
+"sp:test:hidden:setpoint" "double" "" 1
+"sp:test:limit:readback" "double" "" 1
+"sp:test:limit:setpoint" "double" "" 1
+"sp:test:narrow:readback" "double" "" 1
+"sp:test:narrow:setpoint" "double" "" 1
+"sp:test:negative:readback" "double" "" 1
+"sp:test:negative:setpoint" "double" "" 1
+"sp:test:nobuttons:readback" "double" "" 1
+"sp:test:nobuttons:setpoint" "double" "" 1
+"sp:test:units:readback" "double" "" 1
+"sp:test:units:setpoint" "double" "" 1
+"sp:test:wide:readback" "double" "" 1
+"sp:test:wide:setpoint" "double" "" 1
 "strip:test:alpha" "double" "" 1
 "strip:test:beta" "double" "" 1
 "strip:test:delta" "double" "" 1

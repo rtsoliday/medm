@@ -34,6 +34,7 @@
 #include "rectangle_element.h"
 #include "related_display_element.h"
 #include "scale_monitor_element.h"
+#include "setpoint_control_element.h"
 #include "shell_command_element.h"
 #include "slider_element.h"
 #include "strip_chart_element.h"
@@ -414,6 +415,9 @@ QString FindPvDialog::elementTypeLabel(QWidget *widget) const
   if (dynamic_cast<TextEntryElement *>(widget)) {
     return QStringLiteral("Text Entry");
   }
+  if (dynamic_cast<SetpointControlElement *>(widget)) {
+    return QStringLiteral("Setpoint Control");
+  }
   if (dynamic_cast<SliderElement *>(widget)) {
     return QStringLiteral("Slider");
   }
@@ -519,6 +523,9 @@ QStringList FindPvDialog::channelsForWidget(QWidget *widget) const
     appendChannel(element->channel());
   } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
     appendChannel(element->channel());
+  } else if (auto *element = dynamic_cast<SetpointControlElement *>(widget)) {
+    appendChannel(element->setpointChannel());
+    appendChannel(element->readbackChannel());
   } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {
     appendChannel(element->channel());
   } else if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {

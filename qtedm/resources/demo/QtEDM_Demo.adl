@@ -347,7 +347,7 @@ rectangle {
     x=780
     y=68
     width=760
-    height=260
+    height=276
   }
   "basic attribute" {
     clr=7
@@ -618,6 +618,45 @@ expression_channel {
   clr=30
   bclr=4
   precision=2
+}
+text {
+  object {
+    x=804
+    y=322
+    width=110
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Setpoint"
+}
+setpoint_control {
+  object {
+    x=930
+    y=316
+    width=570
+    height=26
+  }
+  "basic attribute" {
+    clr=14
+    bclr=4
+  }
+  label="Voltage"
+  setpoint="__qtedm_demo:setpoint"
+  readback="__qtedm_demo:readback"
+  colorMode="static"
+  format="decimal"
+  toleranceMode="absolute"
+  tolerance=0.25
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    precSrc="default"
+    lopr=0
+    hopr=100
+    prec=2
+  }
 }
 rectangle {
   object {

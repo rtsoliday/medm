@@ -1858,6 +1858,62 @@ set_text_entry_test_pvs() {
   return 1
 }
 
+set_setpoint_control_test_pvs() {
+  local prefix="$1"
+  local -a setpoint_control_numeric_values=(
+    # pv value lopr hopr prec
+    "sp:test:compact:setpoint    12.5       0       100       2"
+    "sp:test:compact:readback    12.25      0       100       2"
+    "sp:test:alarm:setpoint      47.5     -10       110       2"
+    "sp:test:alarm:readback      49.0     -10       110       2"
+    "sp:test:units:setpoint       5.125     0        10       3"
+    "sp:test:units:readback       5.125     0        10       3"
+    "sp:test:hidden:setpoint     66.0       0       100       1"
+    "sp:test:hidden:readback     61.0       0       100       1"
+    "sp:test:wide:setpoint       80.0       0       120       1"
+    "sp:test:wide:readback       78.5       0       120       1"
+    "sp:test:narrow:setpoint      3.14     -5         5       2"
+    "sp:test:narrow:readback      3.00     -5         5       2"
+    "sp:test:nobuttons:setpoint  25         0        50       0"
+    "sp:test:nobuttons:readback  25         0        50       0"
+    "sp:test:baseline:setpoint   40         0       100       1"
+    "sp:test:baseline:readback   39.75      0       100       1"
+    "sp:test:limit:setpoint      75        10        90       1"
+    "sp:test:limit:readback      74.5      10        90       1"
+    "sp:test:negative:setpoint  -12.5     -50        50       2"
+    "sp:test:negative:readback  -12.0     -50        50       2"
+  )
+
+  echo "Initializing setpoint control PVs for tests/test_SetpointControl.adl"
+  set_local_ca_env
+
+  local retries=20
+  local delay=0.25
+  local initialized=0
+  for _ in $(seq 1 "${retries}"); do
+    initialized=1
+    local entry pv value lopr hopr prec full_pv
+    for entry in "${setpoint_control_numeric_values[@]}"; do
+      read -r pv value lopr hopr prec <<< "${entry}"
+      full_pv="${prefix}${pv}"
+      if ! "${CAVPUT_BIN}" \
+          "-list=${full_pv}.LOPR=${lopr},${full_pv}.HOPR=${hopr},${full_pv}.PREC=${prec},${full_pv}=${value}" \
+          >/dev/null 2>&1; then
+        initialized=0
+        break
+      fi
+    done
+    if [[ "${initialized}" -eq 1 ]]; then
+      echo "Setpoint control PV initialization complete."
+      return 0
+    fi
+    sleep "${delay}"
+  done
+
+  echo "Warning: Failed to initialize setpoint control PV values after ${retries} retries." >&2
+  return 1
+}
+
 set_wheel_switch_test_pvs() {
   local prefix="$1"
   local -a wheel_switch_init_values=(
@@ -2005,6 +2061,7 @@ set_text_test_pvs "${PV_PREFIX}" || true
 set_text_fonts_test_pvs "${PV_PREFIX}" || true
 set_text_area_test_pvs "${PV_PREFIX}" || true
 set_text_entry_test_pvs "${PV_PREFIX}" || true
+set_setpoint_control_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 if [[ -n "${READY_FILE}" ]]; then

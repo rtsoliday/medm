@@ -494,6 +494,17 @@ QString textAreaCommitModeString(TextAreaCommitMode mode)
   }
 }
 
+QString setpointToleranceModeString(SetpointToleranceMode mode)
+{
+  switch (mode) {
+  case SetpointToleranceMode::kAbsolute:
+    return QStringLiteral("absolute");
+  case SetpointToleranceMode::kNone:
+  default:
+    return QStringLiteral("none");
+  }
+}
+
 QString choiceButtonStackingString(ChoiceButtonStacking stacking)
 {
   switch (stacking) {

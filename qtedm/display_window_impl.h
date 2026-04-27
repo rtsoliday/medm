@@ -643,6 +643,7 @@ public:
 
     appendVisible(textElements_);
     appendVisible(textEntryElements_);
+    appendVisible(setpointControlElements_);
     appendVisible(textAreaElements_);
     appendVisible(sliderElements_);
     appendVisible(wheelSwitchElements_);
@@ -895,6 +896,7 @@ public:
 
     considerList(textElements_);
     considerList(textEntryElements_);
+    considerList(setpointControlElements_);
     considerList(textAreaElements_);
     considerList(sliderElements_);
     considerList(wheelSwitchElements_);
@@ -3073,6 +3075,7 @@ protected:
             || state->createTool == CreateTool::kPvTable
             || state->createTool == CreateTool::kWaveTable
             || state->createTool == CreateTool::kTextEntry
+            || state->createTool == CreateTool::kSetpointControl
             || state->createTool == CreateTool::kTextArea
             || state->createTool == CreateTool::kSlider
             || state->createTool == CreateTool::kWheelSwitch
@@ -3400,6 +3403,8 @@ private:
   PvTableElement *loadPvTableElement(const AdlNode &pvTableNode);
   WaveTableElement *loadWaveTableElement(const AdlNode &waveTableNode);
   TextEntryElement *loadTextEntryElement(const AdlNode &textEntryNode);
+  SetpointControlElement *loadSetpointControlElement(
+      const AdlNode &setpointControlNode);
   TextAreaElement *loadTextAreaElement(const AdlNode &textAreaNode);
   SliderElement *loadSliderElement(const AdlNode &valuatorNode);
   WheelSwitchElement *loadWheelSwitchElement(const AdlNode &wheelNode);
@@ -3670,6 +3675,10 @@ private:
   QList<TextEntryElement *> textEntryElements_;
   TextEntryElement *selectedTextEntryElement_ = nullptr;
   QHash<TextEntryElement *, TextEntryRuntime *> textEntryRuntimes_;
+  QList<SetpointControlElement *> setpointControlElements_;
+  SetpointControlElement *selectedSetpointControl_ = nullptr;
+  QHash<SetpointControlElement *, SetpointControlRuntime *>
+      setpointControlRuntimes_;
   QList<TextAreaElement *> textAreaElements_;
   TextAreaElement *selectedTextAreaElement_ = nullptr;
   QHash<TextAreaElement *, TextAreaRuntime *> textAreaRuntimes_;
@@ -3852,11 +3861,20 @@ private:
 
   void clearTextEntrySelection()
   {
-    if (!selectedTextEntryElement_) {
+    if (selectedTextEntryElement_) {
+      selectedTextEntryElement_->setSelected(false);
+      selectedTextEntryElement_ = nullptr;
+    }
+    clearSetpointControlSelection();
+  }
+
+  void clearSetpointControlSelection()
+  {
+    if (!selectedSetpointControl_) {
       return;
     }
-    selectedTextEntryElement_->setSelected(false);
-    selectedTextEntryElement_ = nullptr;
+    selectedSetpointControl_->setSelected(false);
+    selectedSetpointControl_ = nullptr;
   }
 
   void clearTextAreaSelection()
@@ -4152,6 +4170,10 @@ private:
       textEntry->setSelected(selected);
       return;
     }
+    if (auto *setpoint = dynamic_cast<SetpointControlElement *>(widget)) {
+      setpoint->setSelected(selected);
+      return;
+    }
     if (auto *textArea = dynamic_cast<TextAreaElement *>(widget)) {
       textArea->setSelected(selected);
       return;
@@ -4333,6 +4355,12 @@ private:
     if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
       if (selectedTextEntryElement_ == textEntry) {
         selectedTextEntryElement_ = nullptr;
+      }
+      return;
+    }
+    if (auto *setpoint = dynamic_cast<SetpointControlElement *>(widget)) {
+      if (selectedSetpointControl_ == setpoint) {
+        selectedSetpointControl_ = nullptr;
       }
       return;
     }
@@ -4564,6 +4592,12 @@ private:
       if (selectedTextEntryElement_ == textEntry) {
         clearTextEntrySelection();
         clearTextAreaSelection();
+        return;
+      }
+    }
+    if (auto *setpoint = dynamic_cast<SetpointControlElement *>(widget)) {
+      if (selectedSetpointControl_ == setpoint) {
+        clearSetpointControlSelection();
         return;
       }
     }
@@ -4810,6 +4844,7 @@ private:
     }
     appendUnique(selectedTextElement_);
     appendUnique(selectedTextEntryElement_);
+    appendUnique(selectedSetpointControl_);
     appendUnique(selectedTextAreaElement_);
     appendUnique(selectedSliderElement_);
     appendUnique(selectedWheelSwitchElement_);
@@ -4969,6 +5004,7 @@ private:
   void removePvTableRuntime(PvTableElement *element);
   void removeWaveTableRuntime(WaveTableElement *element);
   void removeTextEntryRuntime(TextEntryElement *element);
+  void removeSetpointControlRuntime(SetpointControlElement *element);
   void removeTextAreaRuntime(TextAreaElement *element);
 
   template <typename ElementType>
@@ -4989,6 +5025,8 @@ private:
       removeTextRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, TextEntryElement>) {
       removeTextEntryRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, SetpointControlElement>) {
+      removeSetpointControlRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, TextAreaElement>) {
       removeTextAreaRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, SliderElement>) {
@@ -5201,6 +5239,42 @@ private:
       });
       if (removeOriginal) {
         cutSelectedElement(textEntryElements_, selectedTextEntryElement_);
+        finalizeCut();
+      }
+      return true;
+    }
+
+    if (selectedSetpointControl_) {
+      SetpointControlElement *element = selectedSetpointControl_;
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        QRect desired = target.translateRectForPaste(geometry, offset);
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy, desired);
+        SetpointControlElement *newElement = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          newElement = target.loadSetpointControlElement(nodeCopy);
+        }
+        if (newElement) {
+          target.selectSetpointControlElement(newElement);
+          target.showResourcePaletteForSetpointControl(newElement);
+          target.markDirty();
+        }
+      });
+
+      if (removeOriginal) {
+        cutSelectedElement(setpointControlElements_, selectedSetpointControl_);
         finalizeCut();
       }
       return true;
@@ -6665,6 +6739,7 @@ private:
   {
     return !multiSelection_.isEmpty() || selectedTextElement_
         || selectedTextEntryElement_
+        || selectedSetpointControl_
         || selectedTextAreaElement_
         || selectedSliderElement_ || selectedWheelSwitchElement_
         || selectedChoiceButtonElement_ || selectedMenuElement_
@@ -6690,6 +6765,7 @@ private:
   bool hasSelectableElements() const
   {
     return !textElements_.isEmpty() || !textEntryElements_.isEmpty()
+        || !setpointControlElements_.isEmpty()
         || !textAreaElements_.isEmpty()
         || !sliderElements_.isEmpty() || !wheelSwitchElements_.isEmpty()
         || !choiceButtonElements_.isEmpty() || !menuElements_.isEmpty()
@@ -7078,6 +7154,131 @@ private:
         },
         [this, element](const PvLimits &limits) {
           element->setLimits(limits);
+          markDirty();
+        });
+  }
+
+  void showResourcePaletteForSetpointControl(SetpointControlElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    ResourcePaletteDialog *dialog = ensureResourcePalette();
+    if (!dialog) {
+      return;
+    }
+    dialog->showForSetpointControl(
+        [this, element]() {
+          return widgetDisplayRect(element);
+        },
+        [this, element](const QRect &newGeometry) {
+          QRect adjusted = newGeometry;
+          if (adjusted.width() < kMinimumTextWidth * 3) {
+            adjusted.setWidth(kMinimumTextWidth * 3);
+          }
+          if (adjusted.height() < kMinimumTextHeight * 2) {
+            adjusted.setHeight(kMinimumTextHeight * 2);
+          }
+          const QRect constrained = adjustRectToDisplayArea(adjusted);
+          setWidgetDisplayRect(element, constrained);
+          markDirty();
+        },
+        [element]() {
+          return element->foregroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setForegroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->backgroundColor();
+        },
+        [this, element](const QColor &color) {
+          element->setBackgroundColor(color);
+          markDirty();
+        },
+        [element]() {
+          return element->format();
+        },
+        [this, element](TextMonitorFormat format) {
+          element->setFormat(format);
+          markDirty();
+        },
+        [element]() {
+          return element->precision();
+        },
+        [this, element](int precision) {
+          element->setPrecision(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->precisionSource();
+        },
+        [this, element](PvLimitSource source) {
+          element->setPrecisionSource(source);
+          markDirty();
+        },
+        [element]() {
+          return element->precisionDefault();
+        },
+        [this, element](int precision) {
+          element->setPrecisionDefault(precision);
+          markDirty();
+        },
+        [element]() {
+          return element->colorMode();
+        },
+        [this, element](TextColorMode mode) {
+          element->setColorMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->setpointChannel();
+        },
+        [this, element](const QString &value) {
+          element->setSetpointChannel(value);
+          markDirty();
+        },
+        [element]() {
+          return element->readbackChannel();
+        },
+        [this, element](const QString &value) {
+          element->setReadbackChannel(value);
+          markDirty();
+        },
+        [element]() {
+          return element->label();
+        },
+        [this, element](const QString &value) {
+          element->setLabel(value);
+          markDirty();
+        },
+        [element]() {
+          return element->limits();
+        },
+        [this, element](const PvLimits &limits) {
+          element->setLimits(limits);
+          markDirty();
+        },
+        [element]() {
+          return element->toleranceMode();
+        },
+        [this, element](SetpointToleranceMode mode) {
+          element->setToleranceMode(mode);
+          markDirty();
+        },
+        [element]() {
+          return element->tolerance();
+        },
+        [this, element](double tolerance) {
+          element->setTolerance(tolerance);
+          markDirty();
+        },
+        [element]() {
+          return element->showReadback();
+        },
+        [this, element](bool show) {
+          element->setShowReadback(show);
           markDirty();
         });
   }
@@ -10207,6 +10408,9 @@ private:
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
       appendChannel(element->channel());
+    } else if (auto *element = dynamic_cast<SetpointControlElement *>(widget)) {
+      appendChannel(element->setpointChannel());
+      appendChannel(element->readbackChannel());
     } else if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
       appendChannel(element->channel());
     } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {
@@ -10304,6 +10508,7 @@ public:
     appendList(pvTableElements_);
     appendList(waveTableElements_);
     appendList(textEntryElements_);
+    appendList(setpointControlElements_);
     appendList(textAreaElements_);
     appendList(sliderElements_);
     appendList(wheelSwitchElements_);
@@ -10834,6 +11039,9 @@ private:
     if (dynamic_cast<TextEntryElement *>(widget)) {
       return QStringLiteral("Text Entry");
     }
+    if (dynamic_cast<SetpointControlElement *>(widget)) {
+      return QStringLiteral("Setpoint Control");
+    }
     if (dynamic_cast<TextAreaElement *>(widget)) {
       return QStringLiteral("Text Area");
     }
@@ -10971,6 +11179,9 @@ private:
       } else {
         addRef(element->channel());
       }
+    } else if (auto *element = dynamic_cast<SetpointControlElement *>(widget)) {
+      addRef(element->setpointChannel());
+      addRef(element->readbackChannel());
     } else if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
       if (auto *runtime = textAreaRuntimes_.value(element, nullptr)) {
         addRef(runtime->channelName_);
@@ -12333,6 +12544,47 @@ private:
     selectedTextEntryElement_->setSelected(true);
   }
 
+  void selectSetpointControlElement(SetpointControlElement *element)
+  {
+    if (!element) {
+      return;
+    }
+    if (selectedSetpointControl_) {
+      selectedSetpointControl_->setSelected(false);
+    }
+    clearDisplaySelection();
+    clearTextSelection();
+    clearTextEntrySelection();
+    clearSetpointControlSelection();
+    clearTextAreaSelection();
+    clearSliderSelection();
+    clearWheelSwitchSelection();
+    clearChoiceButtonSelection();
+    clearMenuSelection();
+    clearMessageButtonSelection();
+    clearShellCommandSelection();
+    clearRelatedDisplaySelection();
+    clearTextMonitorSelection();
+    clearPvTableSelection();
+    clearWaveTableSelection();
+    clearMeterSelection();
+    clearScaleMonitorSelection();
+    clearStripChartSelection();
+    clearCartesianPlotSelection();
+    clearBarMonitorSelection();
+    clearByteMonitorSelection();
+    clearRectangleSelection();
+    clearImageSelection();
+    clearOvalSelection();
+    clearArcSelection();
+    clearLineSelection();
+    clearPolylineSelection();
+    clearPolygonSelection();
+    clearCompositeSelection();
+    selectedSetpointControl_ = element;
+    selectedSetpointControl_->setSelected(true);
+  }
+
   void selectTextAreaElement(TextAreaElement *element)
   {
     if (!element) {
@@ -13520,6 +13772,9 @@ private:
     if (selectedTextEntryElement_) {
       return selectedTextEntryElement_;
     }
+    if (selectedSetpointControl_) {
+      return selectedSetpointControl_;
+    }
     if (selectedTextAreaElement_) {
       return selectedTextAreaElement_;
     }
@@ -13632,6 +13887,11 @@ private:
     } else if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
       selectTextEntryElement(textEntry);
       showResourcePaletteForTextEntry(textEntry);
+      handled = true;
+    } else if (auto *setpoint =
+        dynamic_cast<SetpointControlElement *>(widget)) {
+      selectSetpointControlElement(setpoint);
+      showResourcePaletteForSetpointControl(setpoint);
       handled = true;
     } else if (auto *textArea = dynamic_cast<TextAreaElement *>(widget)) {
       selectTextAreaElement(textArea);
@@ -15317,6 +15577,7 @@ private:
 
     considerList(textElements_);
     considerList(textEntryElements_);
+    considerList(setpointControlElements_);
     considerList(textAreaElements_);
     considerList(sliderElements_);
     considerList(wheelSwitchElements_);
@@ -15507,6 +15768,16 @@ private:
       }
       rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
       createTextEntryElement(rect);
+      break;
+    case CreateTool::kSetpointControl:
+      if (rect.width() < kMinimumTextWidth * 3) {
+        rect.setWidth(kMinimumTextWidth * 3);
+      }
+      if (rect.height() < kMinimumTextHeight * 2) {
+        rect.setHeight(kMinimumTextHeight * 2);
+      }
+      rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+      createSetpointControlElement(rect);
       break;
     case CreateTool::kTextArea:
       if (rect.width() < kMinimumTextWidth * 2) {
@@ -16505,6 +16776,44 @@ private:
     textEntryElements_.append(element);
     selectTextEntryElement(element);
     showResourcePaletteForTextEntry(element);
+    deactivateCreateTool();
+    markDirty();
+  }
+
+  void createSetpointControlElement(const QRect &rect)
+  {
+    if (!displayArea_) {
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Create Setpoint Control"));
+    QRect target = rect;
+    if (target.width() < kMinimumTextWidth * 3) {
+      target.setWidth(kMinimumTextWidth * 3);
+    }
+    if (target.height() < kMinimumTextHeight * 2) {
+      target.setHeight(kMinimumTextHeight * 2);
+    }
+    target = adjustRectToDisplayArea(target);
+    if (target.width() <= 0 || target.height() <= 0) {
+      return;
+    }
+    auto *element = new SetpointControlElement(displayArea_);
+    element->setFont(font());
+    element->setGeometry(target);
+    recordWidgetOriginalGeometry(element, target);
+    element->show();
+    ensureElementInStack(element);
+    setpointControlElements_.append(element);
+    if (executeModeActive_) {
+      element->setExecuteMode(true);
+      if (!setpointControlRuntimes_.contains(element)) {
+        auto *runtime = new SetpointControlRuntime(element);
+        setpointControlRuntimes_.insert(element, runtime);
+        runtime->start();
+      }
+    }
+    selectSetpointControlElement(element);
+    showResourcePaletteForSetpointControl(element);
     deactivateCreateTool();
     markDirty();
   }
@@ -18500,6 +18809,15 @@ private:
         QCursor::setPos(lastContextMenuGlobalPos_);
       }
     });
+    auto *setpointControlAction =
+        addMenuAction(controllersMenu, QStringLiteral("Setpoint Control"));
+    QObject::connect(setpointControlAction, &QAction::triggered, this,
+        [this]() {
+      activateCreateTool(CreateTool::kSetpointControl);
+      if (!lastContextMenuGlobalPos_.isNull()) {
+        QCursor::setPos(lastContextMenuGlobalPos_);
+      }
+    });
     auto *textAreaAction =
         addMenuAction(controllersMenu, QStringLiteral("Text Area"));
     QObject::connect(textAreaAction, &QAction::triggered, this, [this]() {
@@ -19053,6 +19371,9 @@ inline void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     scaleWidget(e);
   }
   for (TextEntryElement *e : textEntryElements_) {
+    scaleWidget(e);
+  }
+  for (SetpointControlElement *e : setpointControlElements_) {
     scaleWidget(e);
   }
   for (TextAreaElement *e : textAreaElements_) {
@@ -20156,6 +20477,63 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
           entry->hasExplicitPrecisionData(),
           entry->hasExplicitLowLimitData(), entry->hasExplicitHighLimitData(),
           true);
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
+      continue;
+    }
+
+    if (auto *setpoint = dynamic_cast<SetpointControlElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("setpoint_control {"));
+      AdlWriter::writeObjectSection(stream, 1,
+          serializedGeometry(setpoint));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("\"basic attribute\" {"));
+      AdlWriter::writeIndentedLine(stream, 2,
+          QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+              resolvedForegroundColor(setpoint,
+                  setpoint->foregroundColor()))));
+      AdlWriter::writeIndentedLine(stream, 2,
+          QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+              resolvedBackgroundColor(setpoint,
+                  setpoint->backgroundColor()))));
+      AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      const QString label = setpoint->label();
+      if (!label.trimmed().isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(label)));
+      }
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("setpoint=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(
+                  setpoint->setpointChannel())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("readback=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(
+                  setpoint->readbackChannel())));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("colorMode=\"%1\"")
+              .arg(AdlWriter::colorModeString(setpoint->colorMode())));
+      if (setpoint->format() != TextMonitorFormat::kDecimal) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("format=\"%1\"")
+                .arg(AdlWriter::textMonitorFormatString(
+                    setpoint->format())));
+      }
+      if (setpoint->toleranceMode() != SetpointToleranceMode::kNone) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("toleranceMode=\"%1\"")
+                .arg(AdlWriter::setpointToleranceModeString(
+                    setpoint->toleranceMode())));
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("tolerance=%1")
+                .arg(QString::number(setpoint->tolerance(), 'g', 15)));
+      }
+      if (!setpoint->showReadback()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("showReadback=0"));
+      }
+      AdlWriter::writeLimitsSection(stream, 1, setpoint->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
@@ -21540,6 +21918,59 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return;
   }
 
+  if (auto *setpoint = dynamic_cast<SetpointControlElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("setpoint_control {"));
+    AdlWriter::writeObjectSection(stream, next,
+        serializedGeometry(setpoint));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("\"basic attribute\" {"));
+    AdlWriter::writeIndentedLine(stream, next + 1,
+        QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+            resolveForeground(setpoint, setpoint->foregroundColor()))));
+    AdlWriter::writeIndentedLine(stream, next + 1,
+        QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+            resolveBackground(setpoint, setpoint->backgroundColor()))));
+    AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    const QString label = setpoint->label();
+    if (!label.trimmed().isEmpty()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(label)));
+    }
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("setpoint=\"%1\"")
+            .arg(AdlWriter::escapeAdlString(setpoint->setpointChannel())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("readback=\"%1\"")
+            .arg(AdlWriter::escapeAdlString(setpoint->readbackChannel())));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("colorMode=\"%1\"")
+            .arg(AdlWriter::colorModeString(setpoint->colorMode())));
+    if (setpoint->format() != TextMonitorFormat::kDecimal) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("format=\"%1\"")
+              .arg(AdlWriter::textMonitorFormatString(
+                  setpoint->format())));
+    }
+    if (setpoint->toleranceMode() != SetpointToleranceMode::kNone) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("toleranceMode=\"%1\"")
+              .arg(AdlWriter::setpointToleranceModeString(
+                  setpoint->toleranceMode())));
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("tolerance=%1")
+              .arg(QString::number(setpoint->tolerance(), 'g', 15)));
+    }
+    if (!setpoint->showReadback()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("showReadback=0"));
+    }
+    AdlWriter::writeLimitsSection(stream, next, setpoint->limits());
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
   if (auto *area = dynamic_cast<TextAreaElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("text_area {"));
     AdlWriter::writeObjectSection(stream, next,
@@ -22789,6 +23220,8 @@ inline void DisplayWindow::clearAllElements()
           removeTextRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, TextEntryElement *>) {
           removeTextEntryRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, SetpointControlElement *>) {
+          removeSetpointControlRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, TextAreaElement *>) {
           removeTextAreaRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, SliderElement *>) {
@@ -22852,6 +23285,7 @@ inline void DisplayWindow::clearAllElements()
   };
   clearList(textElements_);
   clearList(textEntryElements_);
+  clearList(setpointControlElements_);
   clearList(textAreaElements_);
   clearList(sliderElements_);
   clearList(wheelSwitchElements_);
@@ -23609,6 +24043,7 @@ inline QRect DisplayWindow::widgetGeometryForSerialization(
 inline bool DisplayWindow::isControlWidget(const QWidget *widget) const
 {
   return dynamic_cast<const TextEntryElement *>(widget)
+      || dynamic_cast<const SetpointControlElement *>(widget)
       || dynamic_cast<const TextAreaElement *>(widget)
       || dynamic_cast<const SliderElement *>(widget)
       || dynamic_cast<const WheelSwitchElement *>(widget)
@@ -25814,6 +26249,246 @@ inline TextEntryElement *DisplayWindow::loadTextEntryElement(
   element->setSelected(false);
   textEntryElements_.append(element);
   ensureElementInStack(element);
+  return element;
+}
+
+inline SetpointControlElement *DisplayWindow::loadSetpointControlElement(
+    const AdlNode &setpointControlNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(setpointControlNode);
+  geometry.translate(currentElementOffset_);
+  const QRect originalGeometry = geometry;
+  auto *element = new SetpointControlElement(parent);
+  element->setFont(font());
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  if (const AdlNode *basic = ::findChild(setpointControlNode,
+          QStringLiteral("basic attribute"))) {
+    bool ok = false;
+    const int clrIndex =
+        propertyValue(*basic, QStringLiteral("clr")).toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+    ok = false;
+    const int bclrIndex =
+        propertyValue(*basic, QStringLiteral("bclr")).toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  if (const AdlNode *control = ::findChild(setpointControlNode,
+          QStringLiteral("control"))) {
+    const QString channel = channelValueWithLegacyFallback(*control);
+    if (!channel.trimmed().isEmpty()) {
+      element->setSetpointChannel(channel.trimmed());
+    }
+    bool ok = false;
+    const int clrIndex =
+        propertyValue(*control, QStringLiteral("clr")).toInt(&ok);
+    if (ok) {
+      element->setForegroundColor(colorForIndex(clrIndex));
+    }
+    ok = false;
+    const int bclrIndex =
+        propertyValue(*control, QStringLiteral("bclr")).toInt(&ok);
+    if (ok) {
+      element->setBackgroundColor(colorForIndex(bclrIndex));
+    }
+  }
+
+  const QString label = propertyValue(setpointControlNode,
+      QStringLiteral("label"));
+  if (!label.isEmpty()) {
+    element->setLabel(label);
+  }
+
+  const QString setpoint = propertyValue(setpointControlNode,
+      QStringLiteral("setpoint"));
+  if (!setpoint.trimmed().isEmpty()) {
+    element->setSetpointChannel(setpoint.trimmed());
+  } else {
+    const QString channel = channelValueWithLegacyFallback(setpointControlNode);
+    if (!channel.trimmed().isEmpty()) {
+      element->setSetpointChannel(channel.trimmed());
+    }
+  }
+
+  QString readback = propertyValue(setpointControlNode,
+      QStringLiteral("readback"));
+  if (readback.trimmed().isEmpty()) {
+    readback = propertyValue(setpointControlNode,
+        QStringLiteral("readbackPv"));
+  }
+  if (readback.trimmed().isEmpty()) {
+    readback = propertyValue(setpointControlNode,
+        QStringLiteral("readbackChannel"));
+  }
+  if (!readback.trimmed().isEmpty()) {
+    element->setReadbackChannel(readback.trimmed());
+  }
+
+  const QString colorMode = propertyValue(setpointControlNode,
+      QStringLiteral("colorMode"));
+  if (!colorMode.isEmpty()) {
+    element->setColorMode(parseTextColorMode(colorMode));
+  } else {
+    const QString clrmod = propertyValue(setpointControlNode,
+        QStringLiteral("clrmod"));
+    if (!clrmod.isEmpty()) {
+      element->setColorMode(parseTextColorMode(clrmod));
+    }
+  }
+
+  const QString format = propertyValue(setpointControlNode,
+      QStringLiteral("format"));
+  if (!format.isEmpty()) {
+    element->setFormat(parseTextMonitorFormat(format));
+  }
+
+  const QString toleranceMode = propertyValue(setpointControlNode,
+      QStringLiteral("toleranceMode"));
+  if (!toleranceMode.isEmpty()) {
+    element->setToleranceModeString(toleranceMode);
+  }
+
+  bool ok = false;
+  const double tolerance = propertyValue(setpointControlNode,
+      QStringLiteral("tolerance")).toDouble(&ok);
+  if (ok) {
+    element->setTolerance(tolerance);
+  }
+
+  auto parseBool = [](const QString &value, bool defaultValue) {
+    const QString normalized = value.trimmed().toLower();
+    if (normalized.isEmpty()) {
+      return defaultValue;
+    }
+    return normalized != QStringLiteral("0")
+        && normalized != QStringLiteral("false")
+        && normalized != QStringLiteral("no");
+  };
+
+  element->setShowReadback(parseBool(propertyValue(setpointControlNode,
+      QStringLiteral("showReadback")), element->showReadback()));
+
+  if (const AdlNode *limitsNode = ::findChild(setpointControlNode,
+          QStringLiteral("limits"))) {
+    PvLimits limits = element->limits();
+    bool hasLowSource = false;
+    bool hasHighSource = false;
+    bool hasPrecisionSource = false;
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("loprSrc"))) {
+      limits.lowSource = parseLimitSource(prop->value);
+      hasLowSource = true;
+    }
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("lopr"))) {
+      bool valueOk = false;
+      const double value = prop->value.toDouble(&valueOk);
+      if (valueOk) {
+        limits.lowDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("loprDefault"))) {
+      bool valueOk = false;
+      const double value = prop->value.toDouble(&valueOk);
+      if (valueOk) {
+        limits.lowDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hoprSrc"))) {
+      limits.highSource = parseLimitSource(prop->value);
+      hasHighSource = true;
+    }
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("hopr"))) {
+      bool valueOk = false;
+      const double value = prop->value.toDouble(&valueOk);
+      if (valueOk) {
+        limits.highDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("hoprDefault"))) {
+      bool valueOk = false;
+      const double value = prop->value.toDouble(&valueOk);
+      if (valueOk) {
+        limits.highDefault = value;
+      }
+    }
+
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("precSrc"))) {
+      limits.precisionSource = parseLimitSource(prop->value);
+      hasPrecisionSource = true;
+    }
+    if (const AdlProperty *prop = ::findProperty(*limitsNode,
+            QStringLiteral("prec"))) {
+      bool valueOk = false;
+      const int value = prop->value.toInt(&valueOk);
+      if (valueOk) {
+        limits.precisionDefault = value;
+      }
+    } else if (const AdlProperty *prop = ::findProperty(*limitsNode,
+                   QStringLiteral("precDefault"))) {
+      bool valueOk = false;
+      const int value = prop->value.toInt(&valueOk);
+      if (valueOk) {
+        limits.precisionDefault = value;
+      }
+    }
+    if (!hasLowSource) {
+      limits.lowSource = PvLimitSource::kChannel;
+    }
+    if (!hasHighSource) {
+      limits.highSource = PvLimitSource::kChannel;
+    }
+    if (!hasPrecisionSource) {
+      limits.precisionSource = PvLimitSource::kChannel;
+    }
+    element->setLimits(limits);
+  }
+
+  auto channelSetter = [element](int index, const QString &value) {
+    const QString trimmed = value.trimmed();
+    if (trimmed.isEmpty()) {
+      return;
+    }
+    if (index == 0) {
+      element->setSetpointChannel(trimmed);
+    } else if (index == 1) {
+      element->setReadbackChannel(trimmed);
+    }
+  };
+  applyChannelProperties(setpointControlNode, channelSetter, 0, 1);
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+
+  element->show();
+  element->setSelected(false);
+  setpointControlElements_.append(element);
+  ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    if (!setpointControlRuntimes_.contains(element)) {
+      auto *runtime = new SetpointControlRuntime(element);
+      setpointControlRuntimes_.insert(element, runtime);
+      runtime->start();
+    }
+  }
   return element;
 }
 
@@ -30886,6 +31561,9 @@ inline bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadWaveTableElement(node) != nullptr;
   } else if (name == QStringLiteral("text entry")) {
     loaded = loadTextEntryElement(node) != nullptr;
+  } else if (name == QStringLiteral("setpoint_control")
+      || name == QStringLiteral("setpoint control")) {
+    loaded = loadSetpointControlElement(node) != nullptr;
   } else if (name == QStringLiteral("text_area")) {
     loaded = loadTextAreaElement(node) != nullptr;
   } else if (name == QStringLiteral("valuator")) {
@@ -31123,6 +31801,7 @@ inline void DisplayWindow::enterExecuteMode()
   reserveRuntime(compositeRuntimes_, compositeElements_.size());
   reserveRuntime(textRuntimes_, textElements_.size());
   reserveRuntime(textEntryRuntimes_, textEntryElements_.size());
+  reserveRuntime(setpointControlRuntimes_, setpointControlElements_.size());
   reserveRuntime(textAreaRuntimes_, textAreaElements_.size());
   reserveRuntime(rectangleRuntimes_, rectangleElements_.size());
   reserveRuntime(imageRuntimes_, imageElements_.size());
@@ -31181,7 +31860,8 @@ inline void DisplayWindow::enterExecuteMode()
 
   /* Report element counts for timing diagnostics */
   int totalWidgets = compositeElements_.size() + textElements_.size() +
-      textEntryElements_.size() + textAreaElements_.size() +
+      textEntryElements_.size() + setpointControlElements_.size() +
+      textAreaElements_.size() +
       rectangleElements_.size() +
       imageElements_.size() + heatmapElements_.size() +
       waterfallPlotElements_.size() + ovalElements_.size() + arcElements_.size() +
@@ -31235,6 +31915,19 @@ inline void DisplayWindow::enterExecuteMode()
       textEntryRuntimes_.insert(element, runtime);
       runtime->start();
 
+    }
+  }
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating setpoint control runtimes",
+      setpointControlElements_.size());
+  for (SetpointControlElement *element : setpointControlElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    if (!setpointControlRuntimes_.contains(element)) {
+      auto *runtime = new SetpointControlRuntime(element);
+      setpointControlRuntimes_.insert(element, runtime);
+      runtime->start();
     }
   }
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating text area runtimes", textAreaElements_.size());
@@ -31464,7 +32157,8 @@ inline void DisplayWindow::enterExecuteMode()
 
     }
   }
-  int controlCount = sliderElements_.size() + wheelSwitchElements_.size() +
+  int controlCount = setpointControlElements_.size()
+      + sliderElements_.size() + wheelSwitchElements_.size() +
       textMonitorElements_.size() + pvTableElements_.size() +
       waveTableElements_.size() +
       choiceButtonElements_.size() + menuElements_.size() +
@@ -31662,6 +32356,19 @@ inline void DisplayWindow::leaveExecuteMode()
   }
   textEntryRuntimes_.clear();
   for (TextEntryElement *element : textEntryElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
+  for (auto it = setpointControlRuntimes_.begin();
+       it != setpointControlRuntimes_.end(); ++it) {
+    if (auto *runtime = it.value()) {
+      runtime->stop();
+      runtime->deleteLater();
+    }
+  }
+  setpointControlRuntimes_.clear();
+  for (SetpointControlElement *element : setpointControlElements_) {
     if (element) {
       element->setExecuteMode(false);
     }
@@ -32035,6 +32742,18 @@ inline void DisplayWindow::removeTextEntryRuntime(TextEntryElement *element)
     return;
   }
   if (auto *runtime = textEntryRuntimes_.take(element)) {
+    runtime->stop();
+    runtime->deleteLater();
+  }
+}
+
+inline void DisplayWindow::removeSetpointControlRuntime(
+    SetpointControlElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (auto *runtime = setpointControlRuntimes_.take(element)) {
     runtime->stop();
     runtime->deleteLater();
   }

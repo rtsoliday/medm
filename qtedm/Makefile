@@ -106,6 +106,8 @@ qtedm_SRC = qtedm.cc \
             text_runtime.cc \
             text_entry_element.cc \
             text_entry_runtime.cc \
+            setpoint_control_element.cc \
+            setpoint_control_runtime.cc \
             text_area_element.cc \
             text_area_runtime.cc \
             message_button_element.cc \

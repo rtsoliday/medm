@@ -1691,6 +1691,161 @@ public:
     textEntryLayout->setRowStretch(6, 1);
     entriesLayout->addWidget(textEntrySection_);
 
+    setpointControlSection_ = new QWidget(entriesWidget_);
+    auto *setpointLayout = new QGridLayout(setpointControlSection_);
+    setpointLayout->setContentsMargins(0, 0, 0, 0);
+    setpointLayout->setHorizontalSpacing(12);
+    setpointLayout->setVerticalSpacing(6);
+
+    setpointControlForegroundButton_ =
+        createColorButton(basePalette.color(QPalette::WindowText));
+    QObject::connect(setpointControlForegroundButton_, &QPushButton::clicked,
+        this, [this]() {
+          openColorPalette(setpointControlForegroundButton_,
+              QStringLiteral("Setpoint Control Foreground"),
+              setpointControlForegroundSetter_);
+        });
+
+    setpointControlBackgroundButton_ =
+        createColorButton(basePalette.color(QPalette::Window));
+    QObject::connect(setpointControlBackgroundButton_, &QPushButton::clicked,
+        this, [this]() {
+          openColorPalette(setpointControlBackgroundButton_,
+              QStringLiteral("Setpoint Control Background"),
+              setpointControlBackgroundSetter_);
+        });
+
+    setpointControlFormatCombo_ = new QComboBox;
+    setpointControlFormatCombo_->setFont(valueFont_);
+    setpointControlFormatCombo_->setAutoFillBackground(true);
+    setpointControlFormatCombo_->addItem(QStringLiteral("Decimal"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Exponential"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Engineering"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Compact"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Truncated"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Hexadecimal"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Octal"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("String"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Sexagesimal"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Sexagesimal (H:M:S)"));
+    setpointControlFormatCombo_->addItem(QStringLiteral("Sexagesimal (D:M:S)"));
+    QObject::connect(setpointControlFormatCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (setpointControlFormatSetter_) {
+            setpointControlFormatSetter_(textMonitorFormatFromIndex(index));
+          }
+        });
+
+    setpointControlColorModeCombo_ = new QComboBox;
+    setpointControlColorModeCombo_->setFont(valueFont_);
+    setpointControlColorModeCombo_->setAutoFillBackground(true);
+    setpointControlColorModeCombo_->addItem(QStringLiteral("Static"));
+    setpointControlColorModeCombo_->addItem(QStringLiteral("Alarm"));
+    setpointControlColorModeCombo_->addItem(QStringLiteral("Discrete"));
+    QObject::connect(setpointControlColorModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (setpointControlColorModeSetter_) {
+            setpointControlColorModeSetter_(colorModeFromIndex(index));
+          }
+        });
+
+    setpointControlLabelEdit_ = createLineEdit();
+    committedTexts_.insert(setpointControlLabelEdit_,
+        setpointControlLabelEdit_->text());
+    setpointControlLabelEdit_->installEventFilter(this);
+    QObject::connect(setpointControlLabelEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitSetpointControlLabel(); });
+    QObject::connect(setpointControlLabelEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitSetpointControlLabel(); });
+
+    setpointControlSetpointEdit_ = createLineEdit();
+    committedTexts_.insert(setpointControlSetpointEdit_,
+        setpointControlSetpointEdit_->text());
+    setpointControlSetpointEdit_->installEventFilter(this);
+    QObject::connect(setpointControlSetpointEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitSetpointControlSetpoint(); });
+    QObject::connect(setpointControlSetpointEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitSetpointControlSetpoint(); });
+
+    setpointControlReadbackEdit_ = createLineEdit();
+    committedTexts_.insert(setpointControlReadbackEdit_,
+        setpointControlReadbackEdit_->text());
+    setpointControlReadbackEdit_->installEventFilter(this);
+    QObject::connect(setpointControlReadbackEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitSetpointControlReadback(); });
+    QObject::connect(setpointControlReadbackEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitSetpointControlReadback(); });
+
+    setpointControlToleranceModeCombo_ = new QComboBox;
+    setpointControlToleranceModeCombo_->setFont(valueFont_);
+    setpointControlToleranceModeCombo_->setAutoFillBackground(true);
+    setpointControlToleranceModeCombo_->addItem(QStringLiteral("None"));
+    setpointControlToleranceModeCombo_->addItem(QStringLiteral("Absolute"));
+    QObject::connect(setpointControlToleranceModeCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (!setpointControlToleranceModeSetter_) {
+            return;
+          }
+          setpointControlToleranceModeSetter_(
+              index == 1 ? SetpointToleranceMode::kAbsolute
+                         : SetpointToleranceMode::kNone);
+        });
+
+    setpointControlToleranceEdit_ = createLineEdit();
+    setpointControlToleranceEdit_->setValidator(new QDoubleValidator(
+        0.0, std::numeric_limits<double>::max(), 12,
+        setpointControlToleranceEdit_));
+    committedTexts_.insert(setpointControlToleranceEdit_,
+        setpointControlToleranceEdit_->text());
+    setpointControlToleranceEdit_->installEventFilter(this);
+    QObject::connect(setpointControlToleranceEdit_, &QLineEdit::returnPressed,
+        this, [this]() { commitSetpointControlTolerance(); });
+    QObject::connect(setpointControlToleranceEdit_, &QLineEdit::editingFinished,
+        this, [this]() { commitSetpointControlTolerance(); });
+
+    setpointControlShowReadbackCombo_ = createBooleanComboBox();
+    QObject::connect(setpointControlShowReadbackCombo_,
+        static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, [this](int index) {
+          if (setpointControlShowReadbackSetter_) {
+            setpointControlShowReadbackSetter_(index != 0);
+          }
+        });
+
+    setpointControlPvLimitsButton_ = createActionButton(
+        QStringLiteral("Channel Limits..."));
+    setpointControlPvLimitsButton_->setEnabled(false);
+    QObject::connect(setpointControlPvLimitsButton_, &QPushButton::clicked,
+        this, [this]() { openSetpointControlPvLimitsDialog(); });
+
+    addRow(setpointLayout, 0, QStringLiteral("Foreground"),
+        setpointControlForegroundButton_);
+    addRow(setpointLayout, 1, QStringLiteral("Background"),
+        setpointControlBackgroundButton_);
+    addRow(setpointLayout, 2, QStringLiteral("Format"),
+        setpointControlFormatCombo_);
+    addRow(setpointLayout, 3, QStringLiteral("Color Mode"),
+        setpointControlColorModeCombo_);
+    addRow(setpointLayout, 4, QStringLiteral("Label"),
+        setpointControlLabelEdit_);
+    addRow(setpointLayout, 5, QStringLiteral("Setpoint"),
+        setpointControlSetpointEdit_);
+    addRow(setpointLayout, 6, QStringLiteral("Readback"),
+        setpointControlReadbackEdit_);
+    addRow(setpointLayout, 7, QStringLiteral("Tolerance Mode"),
+        setpointControlToleranceModeCombo_);
+    addRow(setpointLayout, 8, QStringLiteral("Tolerance"),
+        setpointControlToleranceEdit_);
+    addRow(setpointLayout, 9, QStringLiteral("Show Readback"),
+        setpointControlShowReadbackCombo_);
+    addRow(setpointLayout, 10, QStringLiteral("Channel Limits"),
+        setpointControlPvLimitsButton_);
+    setpointLayout->setRowStretch(11, 1);
+    entriesLayout->addWidget(setpointControlSection_);
+
     textAreaSection_ = new QWidget(entriesWidget_);
     auto *textAreaLayout = new QGridLayout(textAreaSection_);
     textAreaLayout->setContentsMargins(0, 0, 0, 0);
@@ -3855,6 +4010,7 @@ public:
   lineSection_->setVisible(false);
   textSection_->setVisible(false);
   textEntrySection_->setVisible(false);
+  setpointControlSection_->setVisible(false);
   textAreaSection_->setVisible(false);
   textMonitorSection_->setVisible(false);
   pvTableSection_->setVisible(false);
@@ -4429,6 +4585,173 @@ public:
 
     if (elementLabel_) {
       elementLabel_->setText(QStringLiteral("Text Entry"));
+    }
+
+    showPaletteWithoutActivating();
+  }
+
+  void showForSetpointControl(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      std::function<QColor()> foregroundGetter,
+      std::function<void(const QColor &)> foregroundSetter,
+      std::function<QColor()> backgroundGetter,
+      std::function<void(const QColor &)> backgroundSetter,
+      std::function<TextMonitorFormat()> formatGetter,
+      std::function<void(TextMonitorFormat)> formatSetter,
+      std::function<int()> precisionGetter,
+      std::function<void(int)> precisionSetter,
+      std::function<PvLimitSource()> precisionSourceGetter,
+      std::function<void(PvLimitSource)> precisionSourceSetter,
+      std::function<int()> precisionDefaultGetter,
+      std::function<void(int)> precisionDefaultSetter,
+      std::function<TextColorMode()> colorModeGetter,
+      std::function<void(TextColorMode)> colorModeSetter,
+      std::function<QString()> setpointGetter,
+      std::function<void(const QString &)> setpointSetter,
+      std::function<QString()> readbackGetter,
+      std::function<void(const QString &)> readbackSetter,
+      std::function<QString()> labelGetter,
+      std::function<void(const QString &)> labelSetter,
+      std::function<PvLimits()> limitsGetter,
+      std::function<void(const PvLimits &)> limitsSetter,
+      std::function<SetpointToleranceMode()> toleranceModeGetter,
+      std::function<void(SetpointToleranceMode)> toleranceModeSetter,
+      std::function<double()> toleranceGetter,
+      std::function<void(double)> toleranceSetter,
+      std::function<bool()> showReadbackGetter,
+      std::function<void(bool)> showReadbackSetter)
+  {
+    clearSelectionState();
+    selectionKind_ = SelectionKind::kSetpointControl;
+    updateSectionVisibility(selectionKind_);
+
+    geometryGetter_ = std::move(geometryGetter);
+    geometrySetter_ = std::move(geometrySetter);
+    setpointControlForegroundGetter_ = std::move(foregroundGetter);
+    setpointControlForegroundSetter_ = std::move(foregroundSetter);
+    setpointControlBackgroundGetter_ = std::move(backgroundGetter);
+    setpointControlBackgroundSetter_ = std::move(backgroundSetter);
+    setpointControlFormatGetter_ = std::move(formatGetter);
+    setpointControlFormatSetter_ = std::move(formatSetter);
+    setpointControlPrecisionGetter_ = std::move(precisionGetter);
+    setpointControlPrecisionSetter_ = std::move(precisionSetter);
+    setpointControlPrecisionSourceGetter_ = std::move(precisionSourceGetter);
+    setpointControlPrecisionSourceSetter_ = std::move(precisionSourceSetter);
+    setpointControlPrecisionDefaultGetter_ = std::move(precisionDefaultGetter);
+    setpointControlPrecisionDefaultSetter_ = std::move(precisionDefaultSetter);
+    setpointControlColorModeGetter_ = std::move(colorModeGetter);
+    setpointControlColorModeSetter_ = std::move(colorModeSetter);
+    setpointControlSetpointGetter_ = std::move(setpointGetter);
+    setpointControlSetpointSetter_ = std::move(setpointSetter);
+    setpointControlReadbackGetter_ = std::move(readbackGetter);
+    setpointControlReadbackSetter_ = std::move(readbackSetter);
+    setpointControlLabelGetter_ = std::move(labelGetter);
+    setpointControlLabelSetter_ = std::move(labelSetter);
+    setpointControlLimitsGetter_ = std::move(limitsGetter);
+    setpointControlLimitsSetter_ = std::move(limitsSetter);
+    setpointControlToleranceModeGetter_ = std::move(toleranceModeGetter);
+    setpointControlToleranceModeSetter_ = std::move(toleranceModeSetter);
+    setpointControlToleranceGetter_ = std::move(toleranceGetter);
+    setpointControlToleranceSetter_ = std::move(toleranceSetter);
+    setpointControlShowReadbackGetter_ = std::move(showReadbackGetter);
+    setpointControlShowReadbackSetter_ = std::move(showReadbackSetter);
+
+    QRect elementGeometry = geometryGetter_ ? geometryGetter_() : QRect();
+    if (elementGeometry.width() <= 0) {
+      elementGeometry.setWidth(kMinimumTextWidth * 3);
+    }
+    if (elementGeometry.height() <= 0) {
+      elementGeometry.setHeight(kMinimumTextHeight * 2);
+    }
+    lastCommittedGeometry_ = elementGeometry;
+    updateGeometryEdits(elementGeometry);
+
+    if (setpointControlForegroundButton_) {
+      const QColor color = setpointControlForegroundGetter_
+          ? setpointControlForegroundGetter_()
+          : palette().color(QPalette::WindowText);
+      setColorButtonColor(setpointControlForegroundButton_,
+          color.isValid() ? color : palette().color(QPalette::WindowText));
+    }
+    if (setpointControlBackgroundButton_) {
+      const QColor color = setpointControlBackgroundGetter_
+          ? setpointControlBackgroundGetter_()
+          : palette().color(QPalette::Window);
+      setColorButtonColor(setpointControlBackgroundButton_,
+          color.isValid() ? color : palette().color(QPalette::Window));
+    }
+    if (setpointControlFormatCombo_) {
+      const QSignalBlocker blocker(setpointControlFormatCombo_);
+      const int index = setpointControlFormatGetter_
+          ? textMonitorFormatToIndex(setpointControlFormatGetter_())
+          : textMonitorFormatToIndex(TextMonitorFormat::kDecimal);
+      setpointControlFormatCombo_->setCurrentIndex(index);
+    }
+    if (setpointControlColorModeCombo_) {
+      const QSignalBlocker blocker(setpointControlColorModeCombo_);
+      const int index = setpointControlColorModeGetter_
+          ? colorModeToIndex(setpointControlColorModeGetter_())
+          : colorModeToIndex(TextColorMode::kAlarm);
+      setpointControlColorModeCombo_->setCurrentIndex(index);
+    }
+    if (setpointControlLabelEdit_) {
+      const QString label = setpointControlLabelGetter_
+          ? setpointControlLabelGetter_() : QString();
+      const QSignalBlocker blocker(setpointControlLabelEdit_);
+      setpointControlLabelEdit_->setText(label);
+      committedTexts_[setpointControlLabelEdit_] =
+          setpointControlLabelEdit_->text();
+    }
+    if (setpointControlSetpointEdit_) {
+      const QString channel = setpointControlSetpointGetter_
+          ? setpointControlSetpointGetter_() : QString();
+      const QSignalBlocker blocker(setpointControlSetpointEdit_);
+      setpointControlSetpointEdit_->setText(channel);
+      committedTexts_[setpointControlSetpointEdit_] =
+          setpointControlSetpointEdit_->text();
+    }
+    if (setpointControlReadbackEdit_) {
+      const QString channel = setpointControlReadbackGetter_
+          ? setpointControlReadbackGetter_() : QString();
+      const QSignalBlocker blocker(setpointControlReadbackEdit_);
+      setpointControlReadbackEdit_->setText(channel);
+      committedTexts_[setpointControlReadbackEdit_] =
+          setpointControlReadbackEdit_->text();
+    }
+    if (setpointControlToleranceModeCombo_) {
+      const QSignalBlocker blocker(setpointControlToleranceModeCombo_);
+      const SetpointToleranceMode mode = setpointControlToleranceModeGetter_
+          ? setpointControlToleranceModeGetter_()
+          : SetpointToleranceMode::kNone;
+      setpointControlToleranceModeCombo_->setCurrentIndex(
+          mode == SetpointToleranceMode::kAbsolute ? 1 : 0);
+    }
+    if (setpointControlToleranceEdit_) {
+      const double tolerance = setpointControlToleranceGetter_
+          ? setpointControlToleranceGetter_() : 0.0;
+      const QSignalBlocker blocker(setpointControlToleranceEdit_);
+      setpointControlToleranceEdit_->setText(
+          QString::number(tolerance, 'g', 12));
+      committedTexts_[setpointControlToleranceEdit_] =
+          setpointControlToleranceEdit_->text();
+    }
+    if (setpointControlShowReadbackCombo_) {
+      const QSignalBlocker blocker(setpointControlShowReadbackCombo_);
+      const bool show = setpointControlShowReadbackGetter_
+          ? setpointControlShowReadbackGetter_() : true;
+      setpointControlShowReadbackCombo_->setCurrentIndex(show ? 1 : 0);
+    }
+    if (setpointControlPvLimitsButton_) {
+      setpointControlPvLimitsButton_->setEnabled(
+          static_cast<bool>(setpointControlPrecisionSourceGetter_)
+          && static_cast<bool>(setpointControlPrecisionSourceSetter_)
+          && static_cast<bool>(setpointControlPrecisionDefaultGetter_)
+          && static_cast<bool>(setpointControlPrecisionDefaultSetter_)
+          && static_cast<bool>(setpointControlLimitsGetter_)
+          && static_cast<bool>(setpointControlLimitsSetter_));
+    }
+    if (elementLabel_) {
+      elementLabel_->setText(QStringLiteral("Setpoint Control"));
     }
 
     showPaletteWithoutActivating();
@@ -9467,6 +9790,34 @@ public:
     textEntryChannelSetter_ = {};
     textEntryLimitsGetter_ = {};
     textEntryLimitsSetter_ = {};
+    setpointControlForegroundGetter_ = {};
+    setpointControlForegroundSetter_ = {};
+    setpointControlBackgroundGetter_ = {};
+    setpointControlBackgroundSetter_ = {};
+    setpointControlFormatGetter_ = {};
+    setpointControlFormatSetter_ = {};
+    setpointControlPrecisionGetter_ = {};
+    setpointControlPrecisionSetter_ = {};
+    setpointControlPrecisionSourceGetter_ = {};
+    setpointControlPrecisionSourceSetter_ = {};
+    setpointControlPrecisionDefaultGetter_ = {};
+    setpointControlPrecisionDefaultSetter_ = {};
+    setpointControlColorModeGetter_ = {};
+    setpointControlColorModeSetter_ = {};
+    setpointControlSetpointGetter_ = {};
+    setpointControlSetpointSetter_ = {};
+    setpointControlReadbackGetter_ = {};
+    setpointControlReadbackSetter_ = {};
+    setpointControlLabelGetter_ = {};
+    setpointControlLabelSetter_ = {};
+    setpointControlLimitsGetter_ = {};
+    setpointControlLimitsSetter_ = {};
+    setpointControlToleranceModeGetter_ = {};
+    setpointControlToleranceModeSetter_ = {};
+    setpointControlToleranceGetter_ = {};
+    setpointControlToleranceSetter_ = {};
+    setpointControlShowReadbackGetter_ = {};
+    setpointControlShowReadbackSetter_ = {};
     textAreaForegroundGetter_ = {};
     textAreaForegroundSetter_ = {};
     textAreaBackgroundGetter_ = {};
@@ -9716,6 +10067,9 @@ public:
     }
     if (textEntryPvLimitsButton_) {
       textEntryPvLimitsButton_->setEnabled(false);
+    }
+    if (setpointControlPvLimitsButton_) {
+      setpointControlPvLimitsButton_->setEnabled(false);
     }
     if (textAreaPvLimitsButton_) {
       textAreaPvLimitsButton_->setEnabled(false);
@@ -10186,6 +10540,10 @@ public:
     }
     updateTextChannelDependentControls();
     resetLineEdit(textEntryChannelEdit_);
+    resetLineEdit(setpointControlLabelEdit_);
+    resetLineEdit(setpointControlSetpointEdit_);
+    resetLineEdit(setpointControlReadbackEdit_);
+    resetLineEdit(setpointControlToleranceEdit_);
     resetLineEdit(choiceButtonChannelEdit_);
     resetLineEdit(menuChannelEdit_);
     resetLineEdit(messageButtonLabelEdit_);
@@ -10859,6 +11217,7 @@ private:
     kLine,
     kText,
     kTextEntry,
+    kSetpointControl,
     kTextArea,
     kSlider,
     kWheelSwitch,
@@ -11025,6 +11384,10 @@ private:
             || edit == waveTableChannelEdit_
             || edit == waveTableColumnsEdit_
             || edit == waveTableMaxElementsEdit_
+            || edit == setpointControlLabelEdit_
+            || edit == setpointControlSetpointEdit_
+            || edit == setpointControlReadbackEdit_
+            || edit == setpointControlToleranceEdit_
             || edit == textAreaChannelEdit_
             || edit == textAreaWrapColumnWidthEdit_
             || edit == textAreaTabWidthEdit_
@@ -11156,6 +11519,11 @@ private:
       const bool textEntryVisible = kind == SelectionKind::kTextEntry;
       textEntrySection_->setVisible(textEntryVisible);
       textEntrySection_->setEnabled(textEntryVisible);
+    }
+    if (setpointControlSection_) {
+      const bool setpointVisible = kind == SelectionKind::kSetpointControl;
+      setpointControlSection_->setVisible(setpointVisible);
+      setpointControlSection_->setEnabled(setpointVisible);
     }
     if (textAreaSection_) {
       const bool textAreaVisible = kind == SelectionKind::kTextArea;
@@ -11664,6 +12032,70 @@ private:
     const QString value = textEntryChannelEdit_->text();
     textEntryChannelSetter_(value);
     committedTexts_[textEntryChannelEdit_] = value;
+  }
+
+  void commitSetpointControlLabel()
+  {
+    if (!setpointControlLabelEdit_) {
+      return;
+    }
+    if (!setpointControlLabelSetter_) {
+      revertLineEdit(setpointControlLabelEdit_);
+      return;
+    }
+    const QString value = setpointControlLabelEdit_->text();
+    setpointControlLabelSetter_(value);
+    committedTexts_[setpointControlLabelEdit_] = value;
+  }
+
+  void commitSetpointControlSetpoint()
+  {
+    if (!setpointControlSetpointEdit_) {
+      return;
+    }
+    if (!setpointControlSetpointSetter_) {
+      revertLineEdit(setpointControlSetpointEdit_);
+      return;
+    }
+    const QString value = setpointControlSetpointEdit_->text();
+    setpointControlSetpointSetter_(value);
+    committedTexts_[setpointControlSetpointEdit_] = value;
+    updateSetpointControlLimitsFromDialog();
+  }
+
+  void commitSetpointControlReadback()
+  {
+    if (!setpointControlReadbackEdit_) {
+      return;
+    }
+    if (!setpointControlReadbackSetter_) {
+      revertLineEdit(setpointControlReadbackEdit_);
+      return;
+    }
+    const QString value = setpointControlReadbackEdit_->text();
+    setpointControlReadbackSetter_(value);
+    committedTexts_[setpointControlReadbackEdit_] = value;
+  }
+
+  void commitSetpointControlTolerance()
+  {
+    if (!setpointControlToleranceEdit_) {
+      return;
+    }
+    if (!setpointControlToleranceSetter_) {
+      revertLineEdit(setpointControlToleranceEdit_);
+      return;
+    }
+    bool ok = false;
+    double value = setpointControlToleranceEdit_->text().toDouble(&ok);
+    if (!ok || !std::isfinite(value) || value < 0.0) {
+      revertLineEdit(setpointControlToleranceEdit_);
+      return;
+    }
+    setpointControlToleranceSetter_(value);
+    const QString text = QString::number(value, 'g', 12);
+    setpointControlToleranceEdit_->setText(text);
+    committedTexts_[setpointControlToleranceEdit_] = text;
   }
 
   void commitTextAreaChannel()
@@ -12962,6 +13394,27 @@ private:
           textEntryPrecisionDefaultSetter_,
           [this]() { updateTextEntryLimitsFromDialog(); },
           textEntryLimitsGetter_, textEntryLimitsSetter_);
+    } else {
+      pvLimitsDialog_->clearTargets();
+    }
+  }
+
+  void updateSetpointControlLimitsFromDialog()
+  {
+    if (!pvLimitsDialog_) {
+      return;
+    }
+    if (setpointControlPrecisionSourceGetter_) {
+      const QString channelLabel = setpointControlSetpointGetter_
+              ? setpointControlSetpointGetter_()
+              : QString();
+      pvLimitsDialog_->setTextEntryCallbacks(channelLabel,
+          setpointControlPrecisionSourceGetter_,
+          setpointControlPrecisionSourceSetter_,
+          setpointControlPrecisionDefaultGetter_,
+          setpointControlPrecisionDefaultSetter_,
+          [this]() { updateSetpointControlLimitsFromDialog(); },
+          setpointControlLimitsGetter_, setpointControlLimitsSetter_);
     } else {
       pvLimitsDialog_->clearTargets();
     }
@@ -14623,6 +15076,18 @@ private:
   QComboBox *textEntryColorModeCombo_ = nullptr;
   QLineEdit *textEntryChannelEdit_ = nullptr;
   QPushButton *textEntryPvLimitsButton_ = nullptr;
+  QWidget *setpointControlSection_ = nullptr;
+  QPushButton *setpointControlForegroundButton_ = nullptr;
+  QPushButton *setpointControlBackgroundButton_ = nullptr;
+  QComboBox *setpointControlFormatCombo_ = nullptr;
+  QComboBox *setpointControlColorModeCombo_ = nullptr;
+  QLineEdit *setpointControlLabelEdit_ = nullptr;
+  QLineEdit *setpointControlSetpointEdit_ = nullptr;
+  QLineEdit *setpointControlReadbackEdit_ = nullptr;
+  QComboBox *setpointControlToleranceModeCombo_ = nullptr;
+  QLineEdit *setpointControlToleranceEdit_ = nullptr;
+  QComboBox *setpointControlShowReadbackCombo_ = nullptr;
+  QPushButton *setpointControlPvLimitsButton_ = nullptr;
   QWidget *textAreaSection_ = nullptr;
   QPushButton *textAreaForegroundButton_ = nullptr;
   QPushButton *textAreaBackgroundButton_ = nullptr;
@@ -14962,6 +15427,22 @@ private:
     }
     if (textEntryChannelEdit_) {
       committedTexts_[textEntryChannelEdit_] = textEntryChannelEdit_->text();
+    }
+    if (setpointControlLabelEdit_) {
+      committedTexts_[setpointControlLabelEdit_] =
+          setpointControlLabelEdit_->text();
+    }
+    if (setpointControlSetpointEdit_) {
+      committedTexts_[setpointControlSetpointEdit_] =
+          setpointControlSetpointEdit_->text();
+    }
+    if (setpointControlReadbackEdit_) {
+      committedTexts_[setpointControlReadbackEdit_] =
+          setpointControlReadbackEdit_->text();
+    }
+    if (setpointControlToleranceEdit_) {
+      committedTexts_[setpointControlToleranceEdit_] =
+          setpointControlToleranceEdit_->text();
     }
     if (textAreaChannelEdit_) {
       committedTexts_[textAreaChannelEdit_] = textAreaChannelEdit_->text();
@@ -15349,6 +15830,34 @@ private:
   std::function<void(const QString &)> textEntryChannelSetter_;
   std::function<PvLimits()> textEntryLimitsGetter_;
   std::function<void(const PvLimits &)> textEntryLimitsSetter_;
+  std::function<QColor()> setpointControlForegroundGetter_;
+  std::function<void(const QColor &)> setpointControlForegroundSetter_;
+  std::function<QColor()> setpointControlBackgroundGetter_;
+  std::function<void(const QColor &)> setpointControlBackgroundSetter_;
+  std::function<TextMonitorFormat()> setpointControlFormatGetter_;
+  std::function<void(TextMonitorFormat)> setpointControlFormatSetter_;
+  std::function<int()> setpointControlPrecisionGetter_;
+  std::function<void(int)> setpointControlPrecisionSetter_;
+  std::function<PvLimitSource()> setpointControlPrecisionSourceGetter_;
+  std::function<void(PvLimitSource)> setpointControlPrecisionSourceSetter_;
+  std::function<int()> setpointControlPrecisionDefaultGetter_;
+  std::function<void(int)> setpointControlPrecisionDefaultSetter_;
+  std::function<TextColorMode()> setpointControlColorModeGetter_;
+  std::function<void(TextColorMode)> setpointControlColorModeSetter_;
+  std::function<QString()> setpointControlSetpointGetter_;
+  std::function<void(const QString &)> setpointControlSetpointSetter_;
+  std::function<QString()> setpointControlReadbackGetter_;
+  std::function<void(const QString &)> setpointControlReadbackSetter_;
+  std::function<QString()> setpointControlLabelGetter_;
+  std::function<void(const QString &)> setpointControlLabelSetter_;
+  std::function<PvLimits()> setpointControlLimitsGetter_;
+  std::function<void(const PvLimits &)> setpointControlLimitsSetter_;
+  std::function<SetpointToleranceMode()> setpointControlToleranceModeGetter_;
+  std::function<void(SetpointToleranceMode)> setpointControlToleranceModeSetter_;
+  std::function<double()> setpointControlToleranceGetter_;
+  std::function<void(double)> setpointControlToleranceSetter_;
+  std::function<bool()> setpointControlShowReadbackGetter_;
+  std::function<void(bool)> setpointControlShowReadbackSetter_;
   std::function<QColor()> textAreaForegroundGetter_;
   std::function<void(const QColor &)> textAreaForegroundSetter_;
   std::function<QColor()> textAreaBackgroundGetter_;
@@ -16031,6 +16540,39 @@ private:
         textEntryPrecisionDefaultSetter_,
         [this]() { updateTextEntryLimitsFromDialog(); }, textEntryLimitsGetter_,
         textEntryLimitsSetter_);
+    positionPvLimitsDialog(dialog);
+    dialog->showForTextEntry();
+  }
+
+  void openSetpointControlPvLimitsDialog()
+  {
+    PvLimitsDialog *dialog = ensurePvLimitsDialog();
+    if (!dialog) {
+      return;
+    }
+    if (!setpointControlPrecisionSourceGetter_
+        || !setpointControlPrecisionSourceSetter_
+        || !setpointControlPrecisionDefaultGetter_
+        || !setpointControlPrecisionDefaultSetter_
+        || !setpointControlLimitsGetter_
+        || !setpointControlLimitsSetter_) {
+      dialog->clearTargets();
+      positionPvLimitsDialog(dialog);
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+      return;
+    }
+    const QString channelLabel = setpointControlSetpointGetter_
+        ? setpointControlSetpointGetter_()
+        : QString();
+    dialog->setTextEntryCallbacks(channelLabel,
+        setpointControlPrecisionSourceGetter_,
+        setpointControlPrecisionSourceSetter_,
+        setpointControlPrecisionDefaultGetter_,
+        setpointControlPrecisionDefaultSetter_,
+        [this]() { updateSetpointControlLimitsFromDialog(); },
+        setpointControlLimitsGetter_, setpointControlLimitsSetter_);
     positionPvLimitsDialog(dialog);
     dialog->showForTextEntry();
   }

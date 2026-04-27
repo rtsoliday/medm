@@ -341,6 +341,8 @@ public:
     registerChannel(kButtonName, true);
     registerChannel(kModeName, true);
     registerChannel(kTextName, true);
+    registerChannel(kSetpointName, true);
+    registerChannel(kReadbackName, false);
     registerChannel(kBitsName, false);
     registerChannel(kProfileXName, false);
     registerChannel(kProfileYName, false);
@@ -352,6 +354,10 @@ public:
     registry.setControlInfo(kRampName, 0.0, 100.0, kFloatingPrecision);
     registry.setControlInfo(kBinaryName, 0.0, 1.0, 0);
     registry.setControlInfo(kButtonName, 0.0, 1.0, 0);
+    registry.setControlInfo(kSetpointName, 0.0, 100.0, kFloatingPrecision,
+        QStringLiteral("V"));
+    registry.setControlInfo(kReadbackName, 0.0, 100.0, kFloatingPrecision,
+        QStringLiteral("V"));
     registry.setControlInfo(kBitsName, 0.0, 255.0, 0);
     registry.setControlInfo(kProfileXName, 0.0,
         static_cast<double>(kProfilePointCount - 1), 0);
@@ -368,6 +374,8 @@ public:
         initialText.data());
     registry.publishCharArrayValue(kTextName, initialText);
     registry.publishValue(kButtonName, 0.0);
+    registry.publishValue(kSetpointName, setpointTarget_);
+    registry.publishValue(kReadbackName, setpointReadback_);
 
     connect(&timer_, &QTimer::timeout, this,
         [this]() { publishFrame(); });
@@ -405,6 +413,13 @@ private:
     registry.publishValue(kWaveName, wave);
     registry.publishValue(kRampName, ramp);
     registry.publishValue(kBinaryName, binary);
+    SoftPvInfoSnapshot setpointSnapshot;
+    if (registry.infoSnapshot(kSetpointName, setpointSnapshot)
+        && setpointSnapshot.hasValue) {
+      setpointTarget_ = std::clamp(setpointSnapshot.value, 0.0, 100.0);
+    }
+    setpointReadback_ += (setpointTarget_ - setpointReadback_) * 0.35;
+    registry.publishValue(kReadbackName, setpointReadback_);
     registry.publishValue(kBitsName,
         static_cast<double>((static_cast<int>(phase_ * 11.0) & 0xff)));
     registry.publishEnumValue(kModeName, mode,
@@ -453,6 +468,10 @@ private:
       QStringLiteral("__qtedm_demo:mode");
   static inline const QString kTextName =
       QStringLiteral("__qtedm_demo:text");
+  static inline const QString kSetpointName =
+      QStringLiteral("__qtedm_demo:setpoint");
+  static inline const QString kReadbackName =
+      QStringLiteral("__qtedm_demo:readback");
   static inline const QString kBitsName =
       QStringLiteral("__qtedm_demo:bits");
   static inline const QString kProfileXName =
@@ -467,6 +486,8 @@ private:
   QVector<RegisteredChannel> registeredChannels_;
   QTimer timer_;
   double phase_ = 0.0;
+  double setpointTarget_ = 42.0;
+  double setpointReadback_ = 40.0;
 };
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)

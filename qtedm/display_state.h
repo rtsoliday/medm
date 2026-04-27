@@ -35,6 +35,7 @@ enum class CreateTool {
   kChoiceButton,
   kMenu,
   kMessageButton,
+  kSetpointControl,
   kShellCommand,
   kRelatedDisplay,
   kMeter,

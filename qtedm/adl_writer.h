@@ -49,6 +49,7 @@ QString channelFieldName(int index);
 QString textMonitorFormatString(TextMonitorFormat format);
 QString textAreaWrapModeString(TextAreaWrapMode mode);
 QString textAreaCommitModeString(TextAreaCommitMode mode);
+QString setpointToleranceModeString(SetpointToleranceMode mode);
 QString choiceButtonStackingString(ChoiceButtonStacking stacking);
 QString relatedDisplayVisualString(RelatedDisplayVisual visual);
 QString relatedDisplayModeString(RelatedDisplayMode mode);

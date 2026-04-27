@@ -49,6 +49,12 @@ enum class TextAreaCommitMode
   kExplicit,
 };
 
+enum class SetpointToleranceMode
+{
+  kNone,
+  kAbsolute,
+};
+
 enum class ChoiceButtonStacking
 {
   kColumn,

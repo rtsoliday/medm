@@ -18,6 +18,7 @@ test_PVTable.adl
 test_Polygon.adl
 test_RelatedDisplay.adl
 test_ScaleMonitor.adl
+test_SetpointControl.adl
 test_ShellCommand.adl
 test_Slider.adl
 test_StripChart.adl

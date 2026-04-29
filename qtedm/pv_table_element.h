@@ -89,6 +89,10 @@ public:
   bool showHeaders() const;
   void setShowHeaders(bool show);
 
+  int fontSize() const;
+  bool hasExplicitFontSize() const;
+  void setFontSize(int pointSize);
+
   QVector<PvTableModel::Column> columns() const;
   QString columnsString() const;
   void setColumns(const QVector<PvTableModel::Column> &columns);
@@ -127,6 +131,7 @@ private:
   void updateHeaderVisibility();
   bool ensureRowIndex(int index);
   void updateRuntimeState(int row);
+  void applyFontSize();
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
   static QVector<PvTableModel::Column> parseColumns(const QString &columns);
@@ -139,6 +144,7 @@ private:
   QColor backgroundColor_;
   TextColorMode colorMode_ = TextColorMode::kAlarm;
   bool showHeaders_ = true;
+  int fontSize_ = 0;
   bool executeMode_ = false;
   QVector<PvTableModel::Column> columns_;
   QVector<PvTableRowConfig> rows_;

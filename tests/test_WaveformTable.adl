@@ -124,6 +124,7 @@ wave_table {
 	chan="wavetable:test:doubleWave"
 	colorMode="alarm"
 	showHeaders=1
+	fontSize=13
 	layout="grid"
 	columns=8
 	maxElements=32

@@ -33,6 +33,10 @@ public:
   bool showHeaders() const;
   void setShowHeaders(bool show);
 
+  int fontSize() const;
+  bool hasExplicitFontSize() const;
+  void setFontSize(int pointSize);
+
   QString channel() const;
   void setChannel(const QString &channel);
 
@@ -100,6 +104,7 @@ private:
   void updateHeaderVisibility();
   void updateModelConfiguration();
   void updateRuntimeStatus();
+  void applyFontSize();
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
 
@@ -109,6 +114,7 @@ private:
   QColor backgroundColor_;
   TextColorMode colorMode_ = TextColorMode::kAlarm;
   bool showHeaders_ = true;
+  int fontSize_ = 0;
   QString channel_;
   WaveTableLayout layout_ = WaveTableLayout::kGrid;
   int columnCount_ = 8;

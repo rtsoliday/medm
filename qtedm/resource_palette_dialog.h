@@ -53,6 +53,8 @@ class ResourcePaletteDialog : public QDialog
 {
 public:
   static constexpr int kPvTableRowCount = 8;
+  static constexpr int kTableFontSizeMin = 1;
+  static constexpr int kTableFontSizeMax = 200;
   ResourcePaletteDialog(const QPalette &basePalette, const QFont &labelFont,
       const QFont &valueFont, QWidget *parent = nullptr)
     : QDialog(parent)
@@ -1384,6 +1386,11 @@ public:
           }
         });
 
+    pvTableFontSizeSpin_ = createFontSizeSpinBox();
+    QObject::connect(pvTableFontSizeSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) { commitPvTableFontSize(value); });
+
     pvTableColumnsEdit_ = createLineEdit();
     committedTexts_.insert(pvTableColumnsEdit_, pvTableColumnsEdit_->text());
     pvTableColumnsEdit_->installEventFilter(this);
@@ -1440,9 +1447,10 @@ public:
     addRow(pvTableLayout, 1, QStringLiteral("Background"), pvTableBackgroundButton_);
     addRow(pvTableLayout, 2, QStringLiteral("Color Mode"), pvTableColorModeCombo_);
     addRow(pvTableLayout, 3, QStringLiteral("Show Headers"), pvTableShowHeadersCombo_);
-    addRow(pvTableLayout, 4, QStringLiteral("Columns"), pvTableColumnsEdit_);
-    addRow(pvTableLayout, 5, QStringLiteral("Rows"), pvTableRowsWidget_);
-    pvTableLayout->setRowStretch(6, 1);
+    addRow(pvTableLayout, 4, QStringLiteral("Font Size"), pvTableFontSizeSpin_);
+    addRow(pvTableLayout, 5, QStringLiteral("Columns"), pvTableColumnsEdit_);
+    addRow(pvTableLayout, 6, QStringLiteral("Rows"), pvTableRowsWidget_);
+    pvTableLayout->setRowStretch(7, 1);
     entriesLayout->addWidget(pvTableSection_);
 
     waveTableSection_ = new QWidget(entriesWidget_);
@@ -1491,6 +1499,11 @@ public:
             waveTableShowHeadersSetter_(index != 0);
           }
         });
+
+    waveTableFontSizeSpin_ = createFontSizeSpinBox();
+    QObject::connect(waveTableFontSizeSpin_,
+        static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+        [this](int value) { commitWaveTableFontSize(value); });
 
     waveTableChannelEdit_ = createLineEdit();
     committedTexts_.insert(waveTableChannelEdit_, waveTableChannelEdit_->text());
@@ -1585,21 +1598,23 @@ public:
         waveTableColorModeCombo_);
     addRow(waveTableLayout, 3, QStringLiteral("Show Headers"),
         waveTableShowHeadersCombo_);
-    addRow(waveTableLayout, 4, QStringLiteral("Channel"),
+    addRow(waveTableLayout, 4, QStringLiteral("Font Size"),
+        waveTableFontSizeSpin_);
+    addRow(waveTableLayout, 5, QStringLiteral("Channel"),
         waveTableChannelEdit_);
-    addRow(waveTableLayout, 5, QStringLiteral("Layout"),
+    addRow(waveTableLayout, 6, QStringLiteral("Layout"),
         waveTableLayoutCombo_);
-    addRow(waveTableLayout, 6, QStringLiteral("Columns"),
+    addRow(waveTableLayout, 7, QStringLiteral("Columns"),
         waveTableColumnsEdit_);
-    addRow(waveTableLayout, 7, QStringLiteral("Max Elements"),
+    addRow(waveTableLayout, 8, QStringLiteral("Max Elements"),
         waveTableMaxElementsEdit_);
-    addRow(waveTableLayout, 8, QStringLiteral("Index Base"),
+    addRow(waveTableLayout, 9, QStringLiteral("Index Base"),
         waveTableIndexBaseCombo_);
-    addRow(waveTableLayout, 9, QStringLiteral("Value Format"),
+    addRow(waveTableLayout, 10, QStringLiteral("Value Format"),
         waveTableValueFormatCombo_);
-    addRow(waveTableLayout, 10, QStringLiteral("Char Mode"),
+    addRow(waveTableLayout, 11, QStringLiteral("Char Mode"),
         waveTableCharModeCombo_);
-    waveTableLayout->setRowStretch(11, 1);
+    waveTableLayout->setRowStretch(12, 1);
     entriesLayout->addWidget(waveTableSection_);
 
     textEntrySection_ = new QWidget(entriesWidget_);
@@ -6167,6 +6182,8 @@ public:
       std::function<void(TextColorMode)> colorModeSetter,
       std::function<bool()> showHeadersGetter,
       std::function<void(bool)> showHeadersSetter,
+      std::function<int()> fontSizeGetter,
+      std::function<void(int)> fontSizeSetter,
       std::function<QString()> columnsGetter,
       std::function<void(const QString &)> columnsSetter,
       std::array<std::function<QString()>, kPvTableRowCount> rowLabelGetters,
@@ -6188,6 +6205,8 @@ public:
     pvTableColorModeSetter_ = std::move(colorModeSetter);
     pvTableShowHeadersGetter_ = std::move(showHeadersGetter);
     pvTableShowHeadersSetter_ = std::move(showHeadersSetter);
+    pvTableFontSizeGetter_ = std::move(fontSizeGetter);
+    pvTableFontSizeSetter_ = std::move(fontSizeSetter);
     pvTableColumnsGetter_ = std::move(columnsGetter);
     pvTableColumnsSetter_ = std::move(columnsSetter);
     pvTableRowLabelGetters_ = std::move(rowLabelGetters);
@@ -6226,6 +6245,14 @@ public:
       pvTableShowHeadersCombo_->setCurrentIndex(
           (pvTableShowHeadersGetter_ && pvTableShowHeadersGetter_()) ? 1 : 0);
     }
+    if (pvTableFontSizeSpin_) {
+      const QSignalBlocker blocker(pvTableFontSizeSpin_);
+      pvTableFontSizeSpin_->setValue(tableFontSizeValue(
+          pvTableFontSizeGetter_ ? pvTableFontSizeGetter_()
+                                 : defaultTableFontSize()));
+      pvTableFontSizeSpin_->setEnabled(
+          static_cast<bool>(pvTableFontSizeSetter_));
+    }
     if (pvTableColumnsEdit_) {
       const QString value = pvTableColumnsGetter_ ? pvTableColumnsGetter_() : QString();
       const QSignalBlocker blocker(pvTableColumnsEdit_);
@@ -6260,6 +6287,8 @@ public:
       std::function<void(TextColorMode)> colorModeSetter,
       std::function<bool()> showHeadersGetter,
       std::function<void(bool)> showHeadersSetter,
+      std::function<int()> fontSizeGetter,
+      std::function<void(int)> fontSizeSetter,
       std::function<QString()> channelGetter,
       std::function<void(const QString &)> channelSetter,
       std::function<WaveTableLayout()> layoutGetter,
@@ -6289,6 +6318,8 @@ public:
     waveTableColorModeSetter_ = std::move(colorModeSetter);
     waveTableShowHeadersGetter_ = std::move(showHeadersGetter);
     waveTableShowHeadersSetter_ = std::move(showHeadersSetter);
+    waveTableFontSizeGetter_ = std::move(fontSizeGetter);
+    waveTableFontSizeSetter_ = std::move(fontSizeSetter);
     waveTableChannelGetter_ = std::move(channelGetter);
     waveTableChannelSetter_ = std::move(channelSetter);
     waveTableLayoutGetter_ = std::move(layoutGetter);
@@ -6336,6 +6367,14 @@ public:
           (waveTableShowHeadersGetter_ && waveTableShowHeadersGetter_())
               ? 1
               : 0);
+    }
+    if (waveTableFontSizeSpin_) {
+      const QSignalBlocker blocker(waveTableFontSizeSpin_);
+      waveTableFontSizeSpin_->setValue(tableFontSizeValue(
+          waveTableFontSizeGetter_ ? waveTableFontSizeGetter_()
+                                   : defaultTableFontSize()));
+      waveTableFontSizeSpin_->setEnabled(
+          static_cast<bool>(waveTableFontSizeSetter_));
     }
     if (waveTableChannelEdit_) {
       const QString value =
@@ -9772,6 +9811,54 @@ public:
     textMonitorColorModeSetter_ = {};
     textMonitorChannelGetter_ = {};
     textMonitorChannelSetter_ = {};
+    pvTableForegroundGetter_ = {};
+    pvTableForegroundSetter_ = {};
+    pvTableBackgroundGetter_ = {};
+    pvTableBackgroundSetter_ = {};
+    pvTableColorModeGetter_ = {};
+    pvTableColorModeSetter_ = {};
+    pvTableShowHeadersGetter_ = {};
+    pvTableShowHeadersSetter_ = {};
+    pvTableFontSizeGetter_ = {};
+    pvTableFontSizeSetter_ = {};
+    pvTableColumnsGetter_ = {};
+    pvTableColumnsSetter_ = {};
+    for (auto &getter : pvTableRowLabelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : pvTableRowLabelSetters_) {
+      setter = {};
+    }
+    for (auto &getter : pvTableRowChannelGetters_) {
+      getter = {};
+    }
+    for (auto &setter : pvTableRowChannelSetters_) {
+      setter = {};
+    }
+    waveTableForegroundGetter_ = {};
+    waveTableForegroundSetter_ = {};
+    waveTableBackgroundGetter_ = {};
+    waveTableBackgroundSetter_ = {};
+    waveTableColorModeGetter_ = {};
+    waveTableColorModeSetter_ = {};
+    waveTableShowHeadersGetter_ = {};
+    waveTableShowHeadersSetter_ = {};
+    waveTableFontSizeGetter_ = {};
+    waveTableFontSizeSetter_ = {};
+    waveTableChannelGetter_ = {};
+    waveTableChannelSetter_ = {};
+    waveTableLayoutGetter_ = {};
+    waveTableLayoutSetter_ = {};
+    waveTableColumnsGetter_ = {};
+    waveTableColumnsSetter_ = {};
+    waveTableMaxElementsGetter_ = {};
+    waveTableMaxElementsSetter_ = {};
+    waveTableIndexBaseGetter_ = {};
+    waveTableIndexBaseSetter_ = {};
+    waveTableValueFormatGetter_ = {};
+    waveTableValueFormatSetter_ = {};
+    waveTableCharModeGetter_ = {};
+    waveTableCharModeSetter_ = {};
     textEntryForegroundGetter_ = {};
     textEntryForegroundSetter_ = {};
     textEntryBackgroundGetter_ = {};
@@ -10561,6 +10648,11 @@ public:
       resetLineEdit(edit);
     }
     resetLineEdit(textMonitorChannelEdit_);
+    if (pvTableFontSizeSpin_) {
+      const QSignalBlocker blocker(pvTableFontSizeSpin_);
+      pvTableFontSizeSpin_->setValue(defaultTableFontSize());
+      pvTableFontSizeSpin_->setEnabled(false);
+    }
     resetLineEdit(pvTableColumnsEdit_);
     for (QLineEdit *edit : pvTableRowLabelEdits_) {
       resetLineEdit(edit);
@@ -10569,6 +10661,11 @@ public:
       resetLineEdit(edit);
     }
     resetLineEdit(waveTableChannelEdit_);
+    if (waveTableFontSizeSpin_) {
+      const QSignalBlocker blocker(waveTableFontSizeSpin_);
+      waveTableFontSizeSpin_->setValue(defaultTableFontSize());
+      waveTableFontSizeSpin_->setEnabled(false);
+    }
     resetLineEdit(waveTableColumnsEdit_);
     resetLineEdit(waveTableMaxElementsEdit_);
     if (textMonitorPvLimitsButton_) {
@@ -11246,6 +11343,26 @@ private:
     kDiscrete,
   };
 
+  int tableFontSizeValue(int value) const
+  {
+    return std::clamp(value, kTableFontSizeMin, kTableFontSizeMax);
+  }
+
+  int defaultTableFontSize() const
+  {
+    if (valueFont_.pointSize() > 0) {
+      return tableFontSizeValue(valueFont_.pointSize());
+    }
+    if (valueFont_.pointSizeF() > 0.0) {
+      return tableFontSizeValue(static_cast<int>(
+          valueFont_.pointSizeF() + 0.5));
+    }
+    if (valueFont_.pixelSize() > 0) {
+      return tableFontSizeValue(valueFont_.pixelSize());
+    }
+    return 10;
+  }
+
   QLineEdit *createLineEdit()
   {
     auto *edit = new QLineEdit;
@@ -11290,6 +11407,21 @@ private:
     combo->addItem(QStringLiteral("false"));
     combo->addItem(QStringLiteral("true"));
     return combo;
+  }
+
+  QSpinBox *createFontSizeSpinBox()
+  {
+    auto *spin = new QSpinBox;
+    spin->setFont(valueFont_);
+    spin->setAutoFillBackground(true);
+    QPalette spinPalette = palette();
+    spinPalette.setColor(QPalette::Base, Qt::white);
+    spinPalette.setColor(QPalette::Text, Qt::black);
+    spin->setPalette(spinPalette);
+    spin->setRange(kTableFontSizeMin, kTableFontSizeMax);
+    spin->setSingleStep(1);
+    spin->setAccelerated(true);
+    return spin;
   }
 
   void addRow(QGridLayout *layout, int row, const QString &label,
@@ -12496,6 +12628,26 @@ private:
     committedTexts_[pvTableColumnsEdit_] = value;
   }
 
+  void commitPvTableFontSize(int value)
+  {
+    if (!pvTableFontSizeSpin_) {
+      return;
+    }
+    if (!pvTableFontSizeSetter_) {
+      const QSignalBlocker blocker(pvTableFontSizeSpin_);
+      pvTableFontSizeSpin_->setValue(tableFontSizeValue(
+          pvTableFontSizeGetter_ ? pvTableFontSizeGetter_()
+                                 : defaultTableFontSize()));
+      return;
+    }
+    pvTableFontSizeSetter_(tableFontSizeValue(value));
+    if (pvTableFontSizeGetter_) {
+      const QSignalBlocker blocker(pvTableFontSizeSpin_);
+      pvTableFontSizeSpin_->setValue(tableFontSizeValue(
+          pvTableFontSizeGetter_()));
+    }
+  }
+
   void commitPvTableRowLabel(int index)
   {
     if (index < 0 || index >= kPvTableRowCount || !pvTableRowLabelEdits_[index]) {
@@ -12522,6 +12674,26 @@ private:
     const QString value = pvTableRowChannelEdits_[index]->text();
     pvTableRowChannelSetters_[index](value);
     committedTexts_[pvTableRowChannelEdits_[index]] = value;
+  }
+
+  void commitWaveTableFontSize(int value)
+  {
+    if (!waveTableFontSizeSpin_) {
+      return;
+    }
+    if (!waveTableFontSizeSetter_) {
+      const QSignalBlocker blocker(waveTableFontSizeSpin_);
+      waveTableFontSizeSpin_->setValue(tableFontSizeValue(
+          waveTableFontSizeGetter_ ? waveTableFontSizeGetter_()
+                                   : defaultTableFontSize()));
+      return;
+    }
+    waveTableFontSizeSetter_(tableFontSizeValue(value));
+    if (waveTableFontSizeGetter_) {
+      const QSignalBlocker blocker(waveTableFontSizeSpin_);
+      waveTableFontSizeSpin_->setValue(tableFontSizeValue(
+          waveTableFontSizeGetter_()));
+    }
   }
 
   void commitWaveTableChannel()
@@ -15045,6 +15217,7 @@ private:
   QPushButton *pvTableBackgroundButton_ = nullptr;
   QComboBox *pvTableColorModeCombo_ = nullptr;
   QComboBox *pvTableShowHeadersCombo_ = nullptr;
+  QSpinBox *pvTableFontSizeSpin_ = nullptr;
   QLineEdit *pvTableColumnsEdit_ = nullptr;
   QWidget *pvTableRowsWidget_ = nullptr;
   std::array<QLineEdit *, kPvTableRowCount> pvTableRowLabelEdits_{};
@@ -15054,6 +15227,7 @@ private:
   QPushButton *waveTableBackgroundButton_ = nullptr;
   QComboBox *waveTableColorModeCombo_ = nullptr;
   QComboBox *waveTableShowHeadersCombo_ = nullptr;
+  QSpinBox *waveTableFontSizeSpin_ = nullptr;
   QLineEdit *waveTableChannelEdit_ = nullptr;
   QComboBox *waveTableLayoutCombo_ = nullptr;
   QLineEdit *waveTableColumnsEdit_ = nullptr;
@@ -15778,6 +15952,8 @@ private:
   std::function<void(TextColorMode)> pvTableColorModeSetter_;
   std::function<bool()> pvTableShowHeadersGetter_;
   std::function<void(bool)> pvTableShowHeadersSetter_;
+  std::function<int()> pvTableFontSizeGetter_;
+  std::function<void(int)> pvTableFontSizeSetter_;
   std::function<QString()> pvTableColumnsGetter_;
   std::function<void(const QString &)> pvTableColumnsSetter_;
   std::array<std::function<QString()>, kPvTableRowCount> pvTableRowLabelGetters_{};
@@ -15792,6 +15968,8 @@ private:
   std::function<void(TextColorMode)> waveTableColorModeSetter_;
   std::function<bool()> waveTableShowHeadersGetter_;
   std::function<void(bool)> waveTableShowHeadersSetter_;
+  std::function<int()> waveTableFontSizeGetter_;
+  std::function<void(int)> waveTableFontSizeSetter_;
   std::function<QString()> waveTableChannelGetter_;
   std::function<void(const QString &)> waveTableChannelSetter_;
   std::function<WaveTableLayout()> waveTableLayoutGetter_;

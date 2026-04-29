@@ -733,6 +733,7 @@ way.</p>
     <tr><td><code>columns</code></td><td>Comma-separated subset of <code>label</code>, <code>pv</code>, <code>value</code>, <code>units</code>, and <code>severity</code>.</td></tr>
     <tr><td><code>colorMode</code></td><td><code>static</code> or <code>alarm</code> foreground coloring.</td></tr>
     <tr><td><code>showHeaders</code></td><td>Shows or hides the table column headers.</td></tr>
+    <tr><td><code>fontSize</code></td><td>Manual table font size using MEDM legacy font-size units. In alias font mode, QtEDM uses the nearest larger MEDM alias when available and falls back to a scalable font for larger requested sizes.</td></tr>
     <tr><td><code>row</code></td><td>One table row with a <code>label</code> and monitored <code>chan</code>.</td></tr>
   </table>
   <p>Example ADL fragment:</p>
@@ -744,6 +745,7 @@ way.</p>
   }
   colorMode="alarm"
   showHeaders=1
+  fontSize=12
   columns="label,pv,value,units,severity"
   row {
     label="Beam Current"
@@ -776,6 +778,7 @@ way.</p>
     <tr><td><code>chan</code></td><td>Waveform, array, or scalar fallback PV to monitor.</td></tr>
     <tr><td><code>layout</code></td><td><code>grid</code>, <code>row</code>, or <code>column</code> sample arrangement.</td></tr>
     <tr><td><code>columns</code></td><td>Grid column count. Column layout always shows Index and Value columns.</td></tr>
+    <tr><td><code>fontSize</code></td><td>Manual table font size using MEDM legacy font-size units. In alias font mode, QtEDM uses the nearest larger MEDM alias when available and falls back to a scalable font for larger requested sizes.</td></tr>
     <tr><td><code>maxElements</code></td><td>Maximum displayed samples. A value of zero allows the runtime default limit.</td></tr>
     <tr><td><code>indexBase</code></td><td>Index labels start at zero or one.</td></tr>
     <tr><td><code>valueFormat</code></td><td><code>default</code>, <code>fixed</code>, <code>scientific</code>, <code>hex</code>, or <code>engineering</code> numeric formatting.</td></tr>
@@ -791,6 +794,7 @@ way.</p>
   chan="BPM:WAVEFORM"
   colorMode="alarm"
   showHeaders=1
+  fontSize=12
   layout="grid"
   columns=8
   maxElements=256

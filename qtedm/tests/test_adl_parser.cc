@@ -304,6 +304,7 @@ void TestAdlParser::parsesPvTableBlock()
       "  }\n"
       "  colorMode=\"alarm\"\n"
       "  showHeaders=1\n"
+      "  fontSize=14\n"
       "  columns=\"label,pv,value,severity\"\n"
       "  row {\n"
       "    label=\"Beam Current\"\n"
@@ -326,6 +327,8 @@ void TestAdlParser::parsesPvTableBlock()
       QStringLiteral("alarm"));
   QCOMPARE(propertyValue(*tableNode, QStringLiteral("showHeaders")),
       QStringLiteral("1"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("fontSize")),
+      QStringLiteral("14"));
   QCOMPARE(propertyValue(*tableNode, QStringLiteral("columns")),
       QStringLiteral("label,pv,value,severity"));
   const AdlNode *row0 = ::findChild(*tableNode, QStringLiteral("row"));
@@ -353,6 +356,7 @@ void TestAdlParser::parsesWaveTableBlock()
       "  chan=\"wavetable:test:doubleWave\"\n"
       "  colorMode=\"alarm\"\n"
       "  showHeaders=1\n"
+      "  fontSize=13\n"
       "  layout=\"grid\"\n"
       "  columns=8\n"
       "  maxElements=32\n"
@@ -370,6 +374,8 @@ void TestAdlParser::parsesWaveTableBlock()
   QVERIFY(tableNode);
   QCOMPARE(propertyValue(*tableNode, QStringLiteral("chan")),
       QStringLiteral("wavetable:test:doubleWave"));
+  QCOMPARE(propertyValue(*tableNode, QStringLiteral("fontSize")),
+      QStringLiteral("13"));
   QCOMPARE(propertyValue(*tableNode, QStringLiteral("layout")),
       QStringLiteral("grid"));
   QCOMPARE(propertyValue(*tableNode, QStringLiteral("columns")),

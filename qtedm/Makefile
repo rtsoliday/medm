@@ -384,6 +384,7 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_adl_parser \
                         test_adl_writer \
                         test_text_format_utils \
+                        test_legacy_fonts \
                         test_wave_table_model \
                         test_runtime_utils \
                         test_soft_pv_registry
@@ -402,6 +403,8 @@ test_adl_writer_OBJS = $(OBJ_DIR)/test_adl_writer.$(OBJEXT) \
                        $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_text_format_utils_OBJS = $(OBJ_DIR)/test_text_format_utils.$(OBJEXT) \
                               $(OBJ_DIR)/text_format_utils.$(OBJEXT)
+test_legacy_fonts_OBJS = $(OBJ_DIR)/test_legacy_fonts.$(OBJEXT) \
+                         $(OBJ_DIR)/legacy_fonts.$(OBJEXT)
 test_wave_table_model_OBJS = $(OBJ_DIR)/test_wave_table_model.$(OBJEXT) \
                              $(OBJ_DIR)/wave_table_model.$(OBJEXT) \
                              $(OBJ_DIR)/medm_colors.$(OBJEXT)

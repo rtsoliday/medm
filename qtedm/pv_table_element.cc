@@ -3,13 +3,42 @@
 #include <algorithm>
 
 #include <QCoreApplication>
+#include <QFontMetrics>
 #include <QHeaderView>
 #include <QPalette>
 #include <QResizeEvent>
 
+#include "legacy_fonts.h"
 #include "medm_colors.h"
 #include "pv_name_utils.h"
 #include "window_utils.h"
+
+namespace {
+
+constexpr int kMinimumTableFontSize = 1;
+constexpr int kMaximumTableFontSize = 200;
+constexpr int kDefaultTableFontSize = 10;
+
+int clampedTableFontSize(int pointSize)
+{
+  return std::clamp(pointSize, kMinimumTableFontSize, kMaximumTableFontSize);
+}
+
+int pointSizeForFont(const QFont &font)
+{
+  if (font.pointSize() > 0) {
+    return font.pointSize();
+  }
+  if (font.pointSizeF() > 0.0) {
+    return static_cast<int>(font.pointSizeF() + 0.5);
+  }
+  if (font.pixelSize() > 0) {
+    return font.pixelSize();
+  }
+  return kDefaultTableFontSize;
+}
+
+} // namespace
 
 PvTableModel::PvTableModel(QObject *parent)
   : QAbstractTableModel(parent)
@@ -277,6 +306,29 @@ void PvTableElement::setShowHeaders(bool show)
   updateHeaderVisibility();
 }
 
+int PvTableElement::fontSize() const
+{
+  if (fontSize_ > 0) {
+    return fontSize_;
+  }
+  return clampedTableFontSize(pointSizeForFont(font()));
+}
+
+bool PvTableElement::hasExplicitFontSize() const
+{
+  return fontSize_ > 0;
+}
+
+void PvTableElement::setFontSize(int pointSize)
+{
+  const int clamped = clampedTableFontSize(pointSize);
+  if (fontSize_ == clamped && pointSizeForFont(font()) == clamped) {
+    return;
+  }
+  fontSize_ = clamped;
+  applyFontSize();
+}
+
 QVector<PvTableModel::Column> PvTableElement::columns() const
 {
   return columns_;
@@ -506,6 +558,23 @@ void PvTableElement::updateRuntimeState(int row)
     return;
   }
   model_->setRuntimeState(row, runtimeStates_.at(row));
+}
+
+void PvTableElement::applyFontSize()
+{
+  if (fontSize_ <= 0) {
+    return;
+  }
+  const QFont tableFont = LegacyFonts::fontForLegacySize(font(), fontSize_);
+  QTableView::setFont(tableFont);
+  horizontalHeader()->setFont(tableFont);
+  verticalHeader()->setFont(tableFont);
+
+  const int rowHeight = std::max(1, QFontMetrics(tableFont).height() + 6);
+  verticalHeader()->setDefaultSectionSize(rowHeight);
+  horizontalHeader()->setMinimumHeight(rowHeight);
+  resizeRowsToContents();
+  viewport()->update();
 }
 
 QColor PvTableElement::defaultForegroundColor() const

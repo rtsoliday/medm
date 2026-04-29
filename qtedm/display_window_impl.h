@@ -8003,6 +8003,11 @@ private:
           element->setShowHeaders(show);
           markDirty();
         },
+        [element]() { return element->fontSize(); },
+        [this, element](int pointSize) {
+          element->setFontSize(pointSize);
+          markDirty();
+        },
         [element]() { return element->columnsString(); },
         [this, element](const QString &columns) {
           element->setColumnsString(columns);
@@ -8053,6 +8058,11 @@ private:
         [element]() { return element->showHeaders(); },
         [this, element](bool show) {
           element->setShowHeaders(show);
+          markDirty();
+        },
+        [element]() { return element->fontSize(); },
+        [this, element](int pointSize) {
+          element->setFontSize(pointSize);
           markDirty();
         },
         [element]() { return element->channel(); },
@@ -21472,6 +21482,10 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
               AdlWriter::colorModeString(pvTable->colorMode())));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("showHeaders=%1").arg(pvTable->showHeaders() ? 1 : 0));
+      if (pvTable->hasExplicitFontSize()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("fontSize=%1").arg(pvTable->fontSize()));
+      }
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("columns=\"%1\"").arg(
               AdlWriter::escapeAdlString(pvTable->columnsString())));
@@ -21514,6 +21528,10 @@ inline void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("showHeaders=%1").arg(
               waveTable->showHeaders() ? 1 : 0));
+      if (waveTable->hasExplicitFontSize()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("fontSize=%1").arg(waveTable->fontSize()));
+      }
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("layout=\"%1\"").arg(
               AdlWriter::waveTableLayoutString(waveTable->layoutMode())));
@@ -22920,6 +22938,10 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
             AdlWriter::colorModeString(pvTable->colorMode())));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("showHeaders=%1").arg(pvTable->showHeaders() ? 1 : 0));
+    if (pvTable->hasExplicitFontSize()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("fontSize=%1").arg(pvTable->fontSize()));
+    }
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("columns=\"%1\"").arg(
             AdlWriter::escapeAdlString(pvTable->columnsString())));
@@ -22959,6 +22981,10 @@ inline void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
             AdlWriter::colorModeString(waveTable->colorMode())));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("showHeaders=%1").arg(waveTable->showHeaders() ? 1 : 0));
+    if (waveTable->hasExplicitFontSize()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("fontSize=%1").arg(waveTable->fontSize()));
+    }
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("layout=\"%1\"").arg(
             AdlWriter::waveTableLayoutString(waveTable->layoutMode())));
@@ -25212,6 +25238,9 @@ inline QJsonObject DisplayWindow::testStateObject() const
     appendColorState(widgetObject, element->foregroundColor(),
         element->backgroundColor());
     widgetObject[QStringLiteral("show_headers")] = element->showHeaders();
+    widgetObject[QStringLiteral("font_size")] = element->fontSize();
+    widgetObject[QStringLiteral("has_explicit_font_size")] =
+        element->hasExplicitFontSize();
     widgetObject[QStringLiteral("columns")] = element->columnsString();
     const QVector<PvTableRowConfig> rows = element->rows();
     widgetObject[QStringLiteral("row_count")] = rows.size();
@@ -25258,6 +25287,9 @@ inline QJsonObject DisplayWindow::testStateObject() const
     appendColorState(widgetObject, element->foregroundColor(),
         element->backgroundColor());
     widgetObject[QStringLiteral("show_headers")] = element->showHeaders();
+    widgetObject[QStringLiteral("font_size")] = element->fontSize();
+    widgetObject[QStringLiteral("has_explicit_font_size")] =
+        element->hasExplicitFontSize();
     widgetObject[QStringLiteral("layout")] =
         WaveTableElement::layoutToString(element->layoutMode());
     widgetObject[QStringLiteral("columns")] =
@@ -25937,6 +25969,12 @@ inline PvTableElement *DisplayWindow::loadPvTableElement(
   if (!showHeaders.isEmpty()) {
     element->setShowHeaders(showHeaders.toInt() != 0);
   }
+  bool ok = false;
+  const int fontSize =
+      propertyValue(pvTableNode, QStringLiteral("fontSize")).toInt(&ok);
+  if (ok) {
+    element->setFontSize(fontSize);
+  }
   element->setColumnsString(propertyValue(pvTableNode, QStringLiteral("columns")));
 
   QVector<PvTableRowConfig> rows;
@@ -26014,11 +26052,16 @@ inline WaveTableElement *DisplayWindow::loadWaveTableElement(
   if (!showHeaders.isEmpty()) {
     element->setShowHeaders(showHeaders.toInt() != 0);
   }
+  bool ok = false;
+  const int fontSize =
+      propertyValue(waveTableNode, QStringLiteral("fontSize")).toInt(&ok);
+  if (ok) {
+    element->setFontSize(fontSize);
+  }
   const QString layout = propertyValue(waveTableNode, QStringLiteral("layout"));
   if (!layout.isEmpty()) {
     element->setLayoutString(layout);
   }
-  bool ok = false;
   const int columns =
       propertyValue(waveTableNode, QStringLiteral("columns")).toInt(&ok);
   if (ok) {

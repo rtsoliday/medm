@@ -124,6 +124,7 @@ pv_table {
 	}
 	colorMode="alarm"
 	showHeaders=1
+	fontSize=14
 	columns="label,pv,value,units,severity"
 	row {
 		label="Beam Current"

@@ -119,6 +119,27 @@ QFont loadBitstreamCharterBold(int pixelSize)
       QFont::Bold, QFont::PreferDefault);
 }
 
+int resolvedPointSize(const QFont &font)
+{
+  const QFontInfo info(font);
+  if (info.pointSize() > 0) {
+    return info.pointSize();
+  }
+  if (info.pointSizeF() > 0.0) {
+    return static_cast<int>(info.pointSizeF() + 0.5);
+  }
+  return 0;
+}
+
+int resolvedPixelSize(const QFont &font)
+{
+  const QFontInfo info(font);
+  if (info.pixelSize() > 0) {
+    return info.pixelSize();
+  }
+  return 0;
+}
+
 bool isBitstreamCharterXLFD(const QString &key, int *pixelSize)
 {
   if (!key.startsWith(QStringLiteral("-bitstream-charter-bold-r-normal--"))) {
@@ -200,6 +221,58 @@ void applyWidgetDMAliasMode(QHash<QString, QFont> &fonts,
       fonts.insert(aliasKey, font);
     }
   }
+}
+
+bool smallestAliasFontAtLeast(int size, QFont *font)
+{
+  QFont bestFont;
+  int bestPixelSize = 0;
+
+  for (const WidgetDMAliasEntry &entry : kWidgetDMAliasEntries) {
+    const QFont candidate =
+        LegacyFonts::font(QString::fromLatin1(entry.alias));
+    if (candidate.family().isEmpty()) {
+      continue;
+    }
+    const int candidatePixelSize = resolvedPixelSize(candidate);
+    if (candidatePixelSize < size) {
+      continue;
+    }
+    if (bestPixelSize == 0 || candidatePixelSize < bestPixelSize) {
+      bestFont = candidate;
+      bestPixelSize = candidatePixelSize;
+    }
+  }
+
+  if (bestPixelSize <= 0 || !font) {
+    return false;
+  }
+  *font = bestFont;
+  return true;
+}
+
+QFont scalableFallbackFont(const QFont &basis, int size)
+{
+  QFont font = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
+  if (font.family().isEmpty()) {
+    font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+  }
+  if (font.family().isEmpty()) {
+    font = basis;
+  }
+
+  font.setFixedPitch(basis.fixedPitch());
+  font.setStyleHint(basis.fixedPitch() ? QFont::TypeWriter
+                                       : basis.styleHint(),
+      QFont::PreferOutline);
+  font.setStyleStrategy(QFont::PreferOutline);
+  font.setWeight(basis.weight());
+  font.setBold(basis.bold());
+  font.setItalic(basis.italic());
+  font.setUnderline(basis.underline());
+  font.setStrikeOut(basis.strikeOut());
+  font.setPixelSize(size);
+  return font;
 }
 
 QHash<QString, QFont> &fontCache()
@@ -345,6 +418,34 @@ QFont fontOrDefault(const QString &key, const QFont &fallback)
     return candidate;
   }
   return fallback;
+}
+
+QFont fontForLegacySize(const QFont &basis, int size)
+{
+  if (size <= 0) {
+    return basis;
+  }
+
+  QFont alias;
+  if (smallestAliasFontAtLeast(size, &alias)) {
+    return alias;
+  }
+
+  QFont requested = basis;
+  if (basis.pixelSize() > 0 || resolvedPixelSize(basis) > 0) {
+    requested.setPixelSize(size);
+    if (resolvedPixelSize(requested) >= size) {
+      return requested;
+    }
+  }
+
+  requested = basis;
+  requested.setPointSize(size);
+  if (resolvedPointSize(requested) >= size) {
+    return requested;
+  }
+
+  return scalableFallbackFont(basis, size);
 }
 
 void setWidgetDMAliasMode(WidgetDMAliasMode mode)

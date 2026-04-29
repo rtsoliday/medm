@@ -51,9 +51,11 @@ bool parseSexagesimalField(const char *text, char delimiter, int &sign,
   }
 
   if (*next == delimiter) {
-    ++next;
-    while (*next == ' ' || *next == '\t') {
+    if (delimiter != '\0') {
       ++next;
+      while (*next == ' ' || *next == '\t') {
+        ++next;
+      }
     }
     return true;
   }
@@ -70,9 +72,11 @@ bool parseSexagesimalField(const char *text, char delimiter, int &sign,
     ++next;
   }
   if (*next == delimiter) {
-    ++next;
-    while (*next == ' ' || *next == '\t') {
+    if (delimiter != '\0') {
       ++next;
+      while (*next == ' ' || *next == '\t') {
+        ++next;
+      }
     }
   }
 

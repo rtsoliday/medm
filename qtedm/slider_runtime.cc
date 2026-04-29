@@ -9,6 +9,7 @@
 
 #include <db_access.h>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "pv_channel_manager.h"
 #include "runtime_utils.h"
@@ -248,5 +249,8 @@ void SliderRuntime::handleActivation(double value)
   if (!PvChannelManager::instance().putValue(channelName_, value)) {
     qWarning() << "Failed to write slider value" << value << "to"
                << channelName_;
+    return;
   }
+  AuditLogger::instance().logPut(channelName_, value,
+      QStringLiteral("Slider"));
 }

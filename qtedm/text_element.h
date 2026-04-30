@@ -15,7 +15,7 @@
 #include <QString>
 #include <QTimer>
 
-#include "display_properties.h"
+#include "text_properties.h"
 
 class TextOverflowWidget;
 

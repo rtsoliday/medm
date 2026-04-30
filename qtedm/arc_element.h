@@ -5,7 +5,7 @@
 #include <QString>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "graphic_properties.h"
 #include "graphic_shape_element.h"
 
 class ArcElement : public GraphicShapeElement

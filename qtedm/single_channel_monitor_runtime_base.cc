@@ -15,8 +15,10 @@
 #include "scale_monitor_element.h"
 #include "thermometer_element.h"
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "soft_pv_registry.h"
+#include "startup_timing.h"
 #include "statistics_tracker.h"
 
 extern "C" {

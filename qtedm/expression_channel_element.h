@@ -5,7 +5,7 @@
 #include <QColor>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "graphic_properties.h"
 
 class QPaintEvent;
 

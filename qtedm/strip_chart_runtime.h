@@ -7,8 +7,8 @@
 #include <array>
 #include <utility>
 
-#include "display_properties.h"
-#include "pv_channel_manager.h"
+#include "strip_chart_properties.h"
+#include "channel_subscription.h"
 
 class StripChartElement;
 

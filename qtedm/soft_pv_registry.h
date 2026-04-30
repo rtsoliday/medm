@@ -7,7 +7,7 @@
 #include <QStringList>
 #include <QVector>
 
-#include "shared_channel_manager.h"
+#include "channel_subscription.h"
 
 struct SoftPvInfoSnapshot
 {

@@ -5,7 +5,18 @@ ifeq ($(findstring CYGWIN, $(OS)),CYGWIN)
     OS := Windows
 endif
 
-OBJ_DIR = O.$(OS)-$(ARCH)
+DEV_BUILD ?= 0
+USE_CCACHE ?= 0
+CCACHE ?= ccache
+
+BASE_OBJ_DIR = O.$(OS)-$(ARCH)
+DEV_OBJ_DIR = O.$(OS)-$(ARCH)-dev
+
+OBJ_DIR = $(BASE_OBJ_DIR)
+ifeq ($(DEV_BUILD),1)
+  OBJ_DIR = $(DEV_OBJ_DIR)
+endif
+
 BIN_DIR = $(DD)../bin/$(OS)-$(ARCH)
 LIB_DIR = $(DD)../lib/$(OS)-$(ARCH)
 
@@ -459,6 +470,36 @@ ifeq ($(OS), Windows)
   #-subsystem:windows  Specifies that the application is a Windows GUI application, which affects the entry point and subsystem settings.
   #-dll          Instructs the linker to create a dynamic-link library (DLL) instead of an executable.
 
+endif
+
+ifeq ($(DEV_BUILD),1)
+  ifeq ($(OS), Windows)
+    CFLAGS := $(filter-out -Ox -GL,$(CFLAGS)) -Od -Zi
+    CCFLAGS := $(filter-out -Ox -GL,$(CCFLAGS)) -Od -Zi
+    LINKEXE := $(filter-out -LTCG -opt:ref -release,$(LINKEXE)) /debug
+    LINKDLL := $(filter-out -LTCG -opt:ref -release,$(LINKDLL)) /debug
+  else
+    CFLAGS := $(filter-out -O3 -g,$(CFLAGS)) -Og -g1
+    CCFLAGS := $(filter-out -O3 -g,$(CCFLAGS)) -Og -g1
+    ifeq ($(OS), Linux)
+      CFLAGS += -fno-var-tracking-assignments
+      CCFLAGS += -fno-var-tracking-assignments
+    endif
+  endif
+endif
+
+ifeq ($(USE_CCACHE),1)
+  ifeq ($(OS), Windows)
+    $(warning USE_CCACHE=1 is not supported by this Windows make profile; continuing without ccache)
+  else
+    CCACHE_AVAILABLE := $(shell command -v $(firstword $(CCACHE)) >/dev/null 2>&1 && echo 1)
+    ifeq ($(CCACHE_AVAILABLE),1)
+      CC := $(CCACHE) $(CC)
+      CCC := $(CCACHE) $(CCC)
+    else
+      $(warning USE_CCACHE=1 requested but '$(CCACHE)' was not found; continuing without ccache)
+    endif
+  endif
 endif
 
 ifeq ($(OS),Windows)

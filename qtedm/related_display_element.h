@@ -8,7 +8,7 @@
 #include <QVector>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "display_entry_types.h"
 
 class QPaintEvent;
 class QPainter;

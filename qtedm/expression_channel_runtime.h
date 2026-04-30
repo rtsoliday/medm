@@ -5,7 +5,7 @@
 #include <QObject>
 #include <QString>
 
-#include "pv_channel_manager.h"
+#include "channel_subscription.h"
 
 class ExpressionChannelElement;
 

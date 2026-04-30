@@ -9,12 +9,9 @@
 #include <QObject>
 #include <QString>
 
-#include <cadef.h>
-
-#include "display_properties.h"
+#include "channel_subscription.h"
+#include "text_properties.h"
 #include "element_runtime_traits.h"
-#include "pv_channel_manager.h"
-#include "startup_timing.h"
 
 class RectangleElement;
 class ImageElement;

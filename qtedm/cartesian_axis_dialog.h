@@ -7,7 +7,7 @@
 #include <QFont>
 #include <QPalette>
 
-#include "display_properties.h"
+#include "cartesian_plot_properties.h"
 
 class QComboBox;
 class QLabel;

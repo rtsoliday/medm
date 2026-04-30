@@ -10,11 +10,8 @@
 #include <type_traits>
 #include <utility>
 
-#include <cadef.h>
-
+#include "channel_subscription.h"
 #include "element_runtime_traits.h"
-#include "pv_channel_manager.h"
-#include "startup_timing.h"
 
 class DisplayWindow;
 

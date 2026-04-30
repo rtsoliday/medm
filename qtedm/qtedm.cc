@@ -84,7 +84,7 @@ typedef int Status;
 #include "audit_logger.h"
 #include "audit_log_viewer_dialog.h"
 #include "command_line_options.h"
-#include "display_properties.h"
+#include "display_common_properties.h"
 #include "display_state.h"
 #include "display_list_dialog.h"
 #include "display_window.h"

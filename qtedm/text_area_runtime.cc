@@ -13,7 +13,9 @@
 
 #include "audit_logger.h"
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
+#include "startup_timing.h"
 #include "statistics_tracker.h"
 #include "text_area_element.h"
 #include "text_format_utils.h"

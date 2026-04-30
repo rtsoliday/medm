@@ -8,7 +8,8 @@
 #include <QPixmap>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "monitor_properties.h"
+#include "strip_chart_properties.h"
 
 class QTimer;
 

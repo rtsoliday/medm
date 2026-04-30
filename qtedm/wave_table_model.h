@@ -6,7 +6,8 @@
 #include <QVariant>
 #include <QVector>
 
-#include "display_properties.h"
+#include "text_properties.h"
+#include "wave_table_properties.h"
 
 struct WaveTableRuntimeState
 {

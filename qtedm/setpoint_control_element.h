@@ -6,7 +6,9 @@
 #include <QString>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "control_properties.h"
+#include "monitor_properties.h"
+#include "text_properties.h"
 
 class QLabel;
 class QLineEdit;

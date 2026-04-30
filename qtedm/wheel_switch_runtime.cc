@@ -14,6 +14,7 @@
 #include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "wheel_switch_element.h"
+#include "startup_timing.h"
 #include "statistics_tracker.h"
 
 namespace {

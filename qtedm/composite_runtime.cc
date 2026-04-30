@@ -1,6 +1,6 @@
 #include "composite_runtime.h"
 #include "composite_element.h"
-#include "display_properties.h"
+#include "text_properties.h"
 #include "channel_access_context.h"
 #include "pv_channel_manager.h"
 #include "statistics_tracker.h"

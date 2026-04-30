@@ -6,7 +6,7 @@
 #include <QSize>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "graphic_properties.h"
 #include "graphic_shape_element.h"
 
 class RectangleElement : public GraphicShapeElement

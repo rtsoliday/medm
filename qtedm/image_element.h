@@ -5,7 +5,7 @@
 #include <QWidget>
 #include <QMovie>
 
-#include "display_properties.h"
+#include "graphic_properties.h"
 #include "graphic_shape_element.h"
 
 class ImageElement : public GraphicShapeElement

@@ -7,11 +7,9 @@
 #include <QStringList>
 #include <QByteArray>
 
-#include "startup_timing.h"
+#include "channel_subscription.h"
 
 #include <utility>
-
-#include "pv_channel_manager.h"
 
 class TextEntryElement;
 

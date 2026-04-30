@@ -5,6 +5,7 @@
 #include <QByteArray>
 
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "pv_table_element.h"
 #include "pv_name_utils.h"
 

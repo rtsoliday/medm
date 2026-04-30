@@ -6,7 +6,7 @@
 #include <QFont>
 #include <QString>
 
-#include "display_properties.h"
+#include "monitor_properties.h"
 
 class QComboBox;
 class QLabel;

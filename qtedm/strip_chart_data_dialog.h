@@ -17,7 +17,8 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
-#include "display_properties.h"
+#include "monitor_properties.h"
+#include "strip_chart_properties.h"
 
 class ColorPaletteDialog;
 class StripChartElement;

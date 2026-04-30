@@ -13,8 +13,8 @@
 #  define MEDM_CARTESIAN_PLOT_DEBUG 0
 #endif
 
-#include "display_properties.h"
-#include "pv_channel_manager.h"
+#include "cartesian_plot_properties.h"
+#include "channel_subscription.h"
 
 class CartesianPlotElement;
 

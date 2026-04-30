@@ -11,6 +11,7 @@
 #include <db_access.h>
 
 #include "channel_access_context.h"
+#include "pv_channel_manager.h"
 #include "pv_protocol.h"
 #include "runtime_utils.h"
 #include "statistics_tracker.h"

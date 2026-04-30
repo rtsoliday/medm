@@ -169,9 +169,9 @@ endif
 
 $(OBJ_DIR)/%.$(OBJEXT): %.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) $(DEPFLAGS) $(if $(filter $(notdir $<), $(LIBRARY_SRC)),$(LIBRARY_CFLAGS)) -c $< $(OUTPUT)
-$(OBJ_DIR)/%.$(OBJEXT): %.cc | $(OBJ_DIR)
+$(OBJ_DIR)/%.$(OBJEXT): %.cc $(EXTRA_CXX_OBJ_DEPS) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) $(if $(filter $(notdir $<), $(LIBRARY_SRC)),$(LIBRARY_CCFLAGS)) -c $< $(OUTPUT)
-$(OBJ_DIR)/%.$(OBJEXT): %.cpp | $(OBJ_DIR)
+$(OBJ_DIR)/%.$(OBJEXT): %.cpp $(EXTRA_CXX_OBJ_DEPS) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) $(if $(filter $(notdir $<), $(LIBRARY_SRC)),$(LIBRARY_CCFLAGS)) -c $< $(OUTPUT)
 $(BIN_DIR)/%: %
 	cp -f $< $@

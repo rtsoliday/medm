@@ -5,8 +5,7 @@
 #include <QPointer>
 #include <QString>
 
-#include "display_properties.h"
-#include "pv_channel_manager.h"
+#include "channel_subscription.h"
 
 class HeatmapElement;
 

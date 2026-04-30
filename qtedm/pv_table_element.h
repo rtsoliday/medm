@@ -9,7 +9,7 @@
 #include <QTableView>
 #include <QVector>
 
-#include "display_properties.h"
+#include "text_properties.h"
 
 struct PvTableRowConfig
 {

@@ -6,9 +6,7 @@
 #include <QStringList>
 #include <QVector>
 
-#include <cadef.h>
-
-#include "pv_channel_manager.h"
+#include "channel_subscription.h"
 
 class WaveTableElement;
 

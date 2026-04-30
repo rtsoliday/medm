@@ -4,7 +4,8 @@
 #include <QString>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "monitor_properties.h"
+#include "text_properties.h"
 
 class MeterElement : public QWidget
 {

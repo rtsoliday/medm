@@ -9,7 +9,16 @@
 #include <QString>
 #include <QVector>
 
-#include "display_properties.h"
+#include "cartesian_plot_properties.h"
+#include "control_properties.h"
+#include "display_entry_types.h"
+#include "graphic_properties.h"
+#include "heatmap_properties.h"
+#include "monitor_properties.h"
+#include "text_properties.h"
+#include "time_units.h"
+#include "waterfall_plot_properties.h"
+#include "wave_table_properties.h"
 
 class QTextStream;
 

@@ -4,7 +4,7 @@
 #include <QSize>
 #include <QString>
 
-#include "display_properties.h"
+#include "monitor_properties.h"
 
 // Returns a font compatible with MEDM sizing rules for Text Entry widgets.
 // Uses the (0.90 * height) - 4 constraint formula from medmTextEntry.c.

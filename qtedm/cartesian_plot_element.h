@@ -11,7 +11,7 @@
 #include <QVector>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "cartesian_plot_properties.h"
 
 class QPaintEvent;
 class QPainter;

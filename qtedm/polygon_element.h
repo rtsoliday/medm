@@ -10,7 +10,7 @@
 #include <QVector>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "graphic_properties.h"
 #include "graphic_shape_element.h"
 
 class PolygonElement : public GraphicShapeElement

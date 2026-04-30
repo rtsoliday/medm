@@ -7,8 +7,7 @@
 
 #include <utility>
 
-#include "pv_channel_manager.h"
-#include "startup_timing.h"
+#include "channel_subscription.h"
 
 class SliderElement;
 

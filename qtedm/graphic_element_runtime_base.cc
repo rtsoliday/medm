@@ -12,6 +12,7 @@
 #include "image_element.h"
 #include "runtime_utils.h"
 #include "pv_channel_manager.h"
+#include "startup_timing.h"
 
 /* External C functions for MEDM calc expression evaluation */
 extern "C" {

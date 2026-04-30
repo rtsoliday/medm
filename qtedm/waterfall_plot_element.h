@@ -8,7 +8,9 @@
 #include <QVector>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "heatmap_properties.h"
+#include "time_units.h"
+#include "waterfall_plot_properties.h"
 
 class QEvent;
 class QMouseEvent;

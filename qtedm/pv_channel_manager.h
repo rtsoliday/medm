@@ -1,7 +1,7 @@
 #pragma once
 
+#include "channel_subscription.h"
 #include "pv_protocol.h"
-#include "shared_channel_manager.h"
 
 class PvChannelManager
 {

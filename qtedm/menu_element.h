@@ -7,7 +7,7 @@
 
 #include <functional>
 
-#include "display_properties.h"
+#include "text_properties.h"
 
 class QPaintEvent;
 class QResizeEvent;

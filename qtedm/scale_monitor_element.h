@@ -5,7 +5,8 @@
 #include <QWidget>
 #include <QRectF>
 
-#include "display_properties.h"
+#include "monitor_properties.h"
+#include "text_properties.h"
 
 class QFontMetricsF;
 

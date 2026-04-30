@@ -1,4 +1,4 @@
-#include "shared_channel_manager.h"
+#include "channel_subscription.h"
 
 SubscriptionHandle::SubscriptionHandle(quint64 id, SubscriptionOwner *owner)
   : id_(id)

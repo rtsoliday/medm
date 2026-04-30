@@ -12,6 +12,7 @@
 #include "text_monitor_element.h"
 #include "text_format_utils.h"
 #include "pv_channel_manager.h"
+#include "startup_timing.h"
 
 #include <cvtFast.h>
 #include <db_access.h>

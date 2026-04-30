@@ -4,11 +4,7 @@
 #include <QString>
 #include <QStringList>
 
-#include <cadef.h>
-
-#include "display_properties.h"
-#include "pv_channel_manager.h"
-#include "startup_timing.h"
+#include "channel_subscription.h"
 
 class TextMonitorElement;
 

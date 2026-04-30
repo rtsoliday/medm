@@ -9,6 +9,7 @@
 
 #include "channel_access_context.h"
 #include "expression_channel_element.h"
+#include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "soft_pv_registry.h"
 

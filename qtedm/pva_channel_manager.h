@@ -6,8 +6,8 @@
 #include <QObject>
 #include <QTimer>
 
+#include "channel_subscription.h"
 #include "pv_protocol.h"
-#include "shared_channel_manager.h"
 
 struct PVA_OVERALL;
 struct PvaBridgeChannel;

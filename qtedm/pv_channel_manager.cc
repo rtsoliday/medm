@@ -4,6 +4,7 @@
 
 #include "channel_access_context.h"
 #include "pva_channel_manager.h"
+#include "shared_channel_manager.h"
 #include "soft_pv_registry.h"
 
 PvChannelManager &PvChannelManager::instance()

@@ -6,7 +6,7 @@
 #include <QString>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "text_properties.h"
 
 class QPainter;
 

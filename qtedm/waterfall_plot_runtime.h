@@ -8,8 +8,8 @@
 
 #include <utility>
 
-#include "display_properties.h"
-#include "pv_channel_manager.h"
+#include "waterfall_plot_properties.h"
+#include "channel_subscription.h"
 
 class WaterfallPlotElement;
 

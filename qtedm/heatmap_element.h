@@ -11,7 +11,7 @@
 #include <QWheelEvent>
 #include <QTimer>
 
-#include "display_properties.h"
+#include "heatmap_properties.h"
 #include "graphic_shape_element.h"
 
 class HeatmapElement : public GraphicShapeElement

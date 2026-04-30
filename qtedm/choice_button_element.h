@@ -9,7 +9,8 @@
 
 #include <functional>
 
-#include "display_properties.h"
+#include "control_properties.h"
+#include "text_properties.h"
 
 class QAbstractButton;
 class QButtonGroup;

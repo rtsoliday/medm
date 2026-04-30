@@ -10,6 +10,8 @@ EPICS_BASE := $(abspath $(EPICS_BASE))
 
 include ../Makefile.rules
 
+.DEFAULT_GOAL := all
+
 # Detect if libCom.a was built with readline support by checking for an
 # unresolved readline symbol in the EPICS archive for the active platform.
 LIBCOM_PATH := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a
@@ -92,12 +94,25 @@ ifneq ($(OS), Windows)
 endif
 
 PROD = qtedm
+QTEDM_PCH ?= 0
+QTEDM_PCH_ENABLED = 0
+QTEDM_PCH_SOURCE = qtedm_pch.h
+
+ifeq ($(QTEDM_PCH),1)
+  ifeq ($(OS), Linux)
+    QTEDM_PCH_ENABLED = 1
+    OBJ_DIR := $(OBJ_DIR)-pch
+  else
+    $(warning QTEDM_PCH=1 is only supported by this Linux make profile; continuing without PCH)
+  endif
+endif
 
 qtedm_SRC = qtedm.cc \
             command_line_options.cc \
             adl_parser.cc \
             audit_logger.cc \
             legacy_fonts.cc \
+            display_window.cc \
             window_utils.cc \
             adl_writer.cc \
             main_window_controller.cc \
@@ -187,6 +202,7 @@ qtedm_SRC = qtedm.cc \
             audit_log_viewer_dialog.cc \
             find_pv_dialog.cc \
             object_palette_dialog.cc \
+            resource_palette_dialog.cc \
             color_palette_dialog.cc \
             pv_limits_dialog.cc \
             pv_info_dialog.cc \
@@ -199,6 +215,7 @@ qtedm_SRC = qtedm.cc \
             update_coordinator.cc
 
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
+QTEDM_PCH_FILE :=
 
 CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
@@ -327,24 +344,44 @@ ifeq ($(OS), Windows)
 $(PVA_CXX17_OBJS): CCFLAGS := $(filter-out /std:c++20 /permissive-,$(CCFLAGS)) /std:c++17
 endif
 
+ifeq ($(QTEDM_PCH_ENABLED),1)
+  QTEDM_PCH_WORK_HEADER = $(OBJ_DIR)/qtedm_pch.h
+  QTEDM_PCH_FILE = $(QTEDM_PCH_WORK_HEADER).gch
+  EXTRA_CXX_OBJ_DEPS += $(QTEDM_PCH_FILE)
+  CCFLAGS += -include $(QTEDM_PCH_WORK_HEADER)
+endif
+
+ifneq ($(QTEDM_PCH_FILE),)
+QTEDM_PCH_CCFLAGS = $(filter-out -include $(QTEDM_PCH_WORK_HEADER),$(CCFLAGS))
+
+$(QTEDM_PCH_WORK_HEADER): $(QTEDM_PCH_SOURCE) | $(OBJ_DIR)
+	cp -f $< $@
+
+$(QTEDM_PCH_FILE): $(QTEDM_PCH_WORK_HEADER) | $(OBJ_DIR)
+	$(CCC) $(QTEDM_PCH_CCFLAGS) -x c++-header $< -o $@
+endif
+
 include ../Makefile.build
 
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/demo_rcc.$(OBJEXT)
 
-$(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png | $(OBJ_DIR)
+$(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png \
+                                 $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html \
                                $(wildcard ../docs/images/qtedm-widgets/*.png) \
+                               $(QTEDM_PCH_FILE) \
                                | $(OBJ_DIR)
 	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/demo_rcc.$(OBJEXT): resources/demo.qrc \
-                               resources/demo/QtEDM_Demo.adl | $(OBJ_DIR)
+                               resources/demo/QtEDM_Demo.adl \
+                               $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(QT_RCC) -name demo resources/demo.qrc -o $(OBJ_DIR)/demo_rcc.cpp
 	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/demo_rcc.cpp $(RCC_OBJ_OUT)$@
 
@@ -418,10 +455,12 @@ qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
 
-$(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc | $(OBJ_DIR)
+$(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc \
+                             $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(QT_TEST_CFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
-$(OBJ_DIR)/qtedm_image_compare.$(OBJEXT): tests/qtedm_image_compare.cc | $(OBJ_DIR)
+$(OBJ_DIR)/qtedm_image_compare.$(OBJEXT): tests/qtedm_image_compare.cc \
+                                          $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
 define link_qtedm_unit_test

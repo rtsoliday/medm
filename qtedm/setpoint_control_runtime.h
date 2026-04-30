@@ -7,7 +7,7 @@
 
 #include <utility>
 
-#include "pv_channel_manager.h"
+#include "channel_subscription.h"
 
 class SetpointControlElement;
 

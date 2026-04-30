@@ -6,7 +6,8 @@
 #include <QLabel>
 #include <QString>
 
-#include "display_properties.h"
+#include "monitor_properties.h"
+#include "text_properties.h"
 
 class QResizeEvent;
 class QPaintEvent;

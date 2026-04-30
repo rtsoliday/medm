@@ -8,7 +8,7 @@
 #include <QPointer>
 #include <QWidget>
 
-#include "display_properties.h"
+#include "text_properties.h"
 
 class CompositeElement : public QWidget
 {

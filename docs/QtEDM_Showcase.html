@@ -1,0 +1,1824 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QtEDM | Modern EPICS Display Management</title>
+  <meta name="description" content="A modern Qt display manager for EPICS sites that keeps MEDM ADL compatibility while adding contemporary operator and engineering workflows.">
+  <style>
+    :root {
+      --ink: #181915;
+      --ink-soft: #34362d;
+      --surface: #f4f6ee;
+      --surface-strong: #ffffff;
+      --line: #d9ded0;
+      --line-dark: #2d3029;
+      --green: #00a676;
+      --green-dark: #08785b;
+      --cyan: #247ba0;
+      --amber: #f2b705;
+      --red: #d84b2a;
+      --gray: #b8bbb4;
+      --shadow: 0 18px 50px rgba(17, 18, 15, 0.2);
+      --max: 1160px;
+    }
+
+    * {
+      box-sizing: border-box;
+      letter-spacing: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--surface);
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      overflow-x: hidden;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .skip-link {
+      position: absolute;
+      left: 16px;
+      top: 12px;
+      z-index: 20;
+      padding: 8px 12px;
+      background: var(--surface-strong);
+      border: 1px solid var(--line-dark);
+      border-radius: 6px;
+      transform: translateY(-140%);
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(244, 246, 238, 0.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+
+    .nav-shell {
+      width: min(calc(100% - 32px), var(--max));
+      min-height: 68px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1rem;
+    }
+
+    .brand img {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+
+    .nav-links a {
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: #35372f;
+    }
+
+    .nav-links a:hover,
+    .nav-links a:focus-visible {
+      background: #e7ebdf;
+      outline: none;
+    }
+
+    .hero {
+      position: relative;
+      height: 72svh;
+      min-height: 0;
+      max-height: 760px;
+      overflow: hidden;
+      color: #f7f8f1;
+      background: #10110e url("images/qtedm-widgets/heatmap.png") center / cover no-repeat;
+      isolation: isolate;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      background: rgba(10, 11, 9, 0.64);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0 0;
+      z-index: -1;
+      height: 42%;
+      background: rgba(10, 11, 9, 0.52);
+    }
+
+    .hero-stage {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.92;
+      pointer-events: none;
+    }
+
+    .hero-screen {
+      position: absolute;
+      overflow: hidden;
+      border: 1px solid rgba(244, 246, 238, 0.38);
+      border-radius: 8px;
+      background: #b8bbb4;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-screen img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero-screen.primary {
+      right: max(22px, calc((100vw - var(--max)) / 2));
+      bottom: 54px;
+      width: min(640px, 48vw);
+      aspect-ratio: 707 / 318;
+    }
+
+    .hero-screen.secondary {
+      left: max(18px, calc((100vw - var(--max)) / 2));
+      top: 54px;
+      width: min(520px, 40vw);
+      aspect-ratio: 600 / 220;
+    }
+
+    .hero-screen.tertiary {
+      right: 14vw;
+      top: 80px;
+      width: min(430px, 32vw);
+      aspect-ratio: 600 / 200;
+    }
+
+    .hero-copy {
+      width: min(calc(100% - 32px), var(--max));
+      height: 100%;
+      min-height: 0;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 54px 0 74px;
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      width: fit-content;
+      max-width: 100%;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 8px 10px;
+      border: 1px solid rgba(244, 246, 238, 0.42);
+      border-radius: 6px;
+      background: rgba(15, 16, 14, 0.58);
+      font-size: 0.86rem;
+      font-weight: 750;
+    }
+
+    .hero-kicker span {
+      min-width: 0;
+    }
+
+    .hero-kicker img {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      box-shadow: 0 0 0 1px rgba(244, 246, 238, 0.24);
+    }
+
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: 5.2rem;
+      line-height: 0.94;
+      font-weight: 900;
+    }
+
+    .hero-subtitle {
+      max-width: min(520px, 100%);
+      margin-top: 22px;
+      font-size: 1.28rem;
+      line-height: 1.45;
+      color: #f0f3e9;
+      font-weight: 520;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 32px;
+      max-width: 560px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 44px;
+      padding: 11px 15px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      font-weight: 780;
+      min-width: 0;
+      text-shadow: none;
+      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+    }
+
+    .button:hover,
+    .button:focus-visible {
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .button.primary {
+      color: #0d110d;
+      background: var(--amber);
+      border-color: #ffd659;
+    }
+
+    .button.secondary {
+      color: #f8faf3;
+      background: rgba(244, 246, 238, 0.12);
+      border-color: rgba(244, 246, 238, 0.46);
+    }
+
+    .button svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+    }
+
+    .signal-strip {
+      background: var(--ink);
+      color: #f6f8ef;
+      border-block: 1px solid #2c2e28;
+    }
+
+    .signal-strip .inner {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      background: #30332b;
+    }
+
+    .signal {
+      min-height: 108px;
+      padding: 18px;
+      background: var(--ink);
+    }
+
+    .signal b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 1.38rem;
+      line-height: 1.1;
+    }
+
+    .signal span {
+      color: #cfd4c6;
+      font-size: 0.94rem;
+    }
+
+    section {
+      padding: 84px 0;
+    }
+
+    .section-inner {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+    }
+
+    .section-heading {
+      max-width: 760px;
+      margin: 0 0 34px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 10px;
+      color: var(--green-dark);
+      font-size: 0.82rem;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 2.55rem;
+      line-height: 1.08;
+    }
+
+    .section-heading p {
+      margin-top: 14px;
+      color: var(--ink-soft);
+      font-size: 1.08rem;
+    }
+
+    .case-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .lead-panel {
+      padding: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      box-shadow: 0 12px 34px rgba(20, 21, 17, 0.08);
+    }
+
+    .lead-panel h3,
+    .feature-card h3,
+    .gallery-card h3,
+    .comparison-card h3,
+    .source-card h3,
+    .timeline-step h3,
+    .proof-point h3 {
+      margin: 0;
+      font-size: 1.22rem;
+      line-height: 1.22;
+    }
+
+    .lead-panel p {
+      margin-top: 12px;
+      color: var(--ink-soft);
+    }
+
+    .proof-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .proof-point {
+      padding: 20px;
+      border-left: 5px solid var(--green);
+      background: #ebefe4;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .proof-point:nth-child(2) {
+      border-color: var(--cyan);
+    }
+
+    .proof-point:nth-child(3) {
+      border-color: var(--red);
+    }
+
+    .proof-point p {
+      margin-top: 8px;
+      color: var(--ink-soft);
+      font-size: 0.97rem;
+    }
+
+    .dark-band {
+      color: #f5f7ef;
+      background: #141511;
+    }
+
+    .dark-band h2 {
+      color: #f5f7ef;
+    }
+
+    .dark-band .section-heading p {
+      color: #d8ddcf;
+    }
+
+    .dark-band .eyebrow {
+      color: var(--amber);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .feature-card {
+      min-height: 238px;
+      padding: 22px;
+      border: 1px solid #383b33;
+      border-radius: 8px;
+      background: #1d1f1a;
+    }
+
+    .feature-card svg {
+      width: 34px;
+      height: 34px;
+      margin-bottom: 18px;
+      color: var(--amber);
+    }
+
+    .feature-card p {
+      margin-top: 12px;
+      color: #cbd0c3;
+      font-size: 0.96rem;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .comparison-card {
+      min-height: 280px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--cyan);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      box-shadow: 0 10px 28px rgba(20, 21, 17, 0.08);
+    }
+
+    .comparison-card.featured {
+      border-top-color: var(--amber);
+    }
+
+    .comparison-card:nth-child(3) {
+      border-top-color: var(--green);
+    }
+
+    .comparison-card:nth-child(4) {
+      border-top-color: var(--red);
+    }
+
+    .comparison-label {
+      display: inline-block;
+      margin-bottom: 14px;
+      padding: 5px 8px;
+      color: #11130f;
+      background: #e8edde;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .comparison-card p {
+      margin-top: 12px;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .gallery-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      box-shadow: 0 10px 28px rgba(20, 21, 17, 0.08);
+    }
+
+    .gallery-card img {
+      width: 100%;
+      aspect-ratio: 3 / 1.32;
+      object-fit: cover;
+      background: var(--gray);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .gallery-card .copy {
+      padding: 18px;
+    }
+
+    .gallery-card p {
+      margin-top: 8px;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    .visual-showcase {
+      margin-top: 34px;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .console-frame {
+      overflow: hidden;
+      border: 1px solid #22251f;
+      border-radius: 8px;
+      background: #151611;
+      box-shadow: 0 18px 44px rgba(20, 21, 17, 0.22);
+    }
+
+    .console-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      color: #eff3e8;
+      border-bottom: 1px solid #30332b;
+      background: #20221c;
+      font-weight: 800;
+    }
+
+    .console-bar span:last-child {
+      color: var(--amber);
+      font-size: 0.86rem;
+    }
+
+    .console-grid {
+      display: grid;
+      grid-template-columns: 1.18fr 0.82fr;
+      gap: 10px;
+      padding: 10px;
+      background: #0f100d;
+    }
+
+    .console-grid img {
+      width: 100%;
+      height: 100%;
+      min-height: 160px;
+      object-fit: cover;
+      border: 1px solid #4b4e47;
+      border-radius: 6px;
+      background: var(--gray);
+    }
+
+    .console-grid .wide {
+      grid-column: span 2;
+      min-height: 210px;
+    }
+
+    .demo-gif {
+      width: 100%;
+      padding: 10px;
+      background: #0f100d;
+      border-top: 1px solid #30332b;
+    }
+
+    .visual-note {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+    }
+
+    .visual-note p {
+      margin-top: 12px;
+      color: var(--ink-soft);
+    }
+
+    .compatibility-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      box-shadow: 0 10px 28px rgba(20, 21, 17, 0.08);
+    }
+
+    .compatibility-table {
+      width: 100%;
+      min-width: 780px;
+      border-collapse: collapse;
+    }
+
+    .compatibility-table th,
+    .compatibility-table td {
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .compatibility-table th {
+      color: #f5f7ef;
+      background: #181915;
+      font-size: 0.86rem;
+      text-transform: uppercase;
+    }
+
+    .compatibility-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .compatibility-table td:nth-child(2) {
+      color: var(--green-dark);
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .compatibility-note {
+      margin-top: 14px;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    .operator-band {
+      background: #eef1e8;
+    }
+
+    .operator-layout {
+      display: grid;
+      grid-template-columns: 0.82fr 1.18fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .operator-copy {
+      max-width: 490px;
+    }
+
+    .operator-copy h2 {
+      margin-top: 8px;
+    }
+
+    .operator-copy p {
+      margin-top: 16px;
+      color: var(--ink-soft);
+      font-size: 1.03rem;
+    }
+
+    .operator-list {
+      margin: 24px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 12px;
+    }
+
+    .operator-list li {
+      padding: 13px 14px;
+      border-left: 4px solid var(--cyan);
+      background: var(--surface-strong);
+      border-radius: 0 8px 8px 0;
+      font-weight: 700;
+    }
+
+    .display-wall {
+      display: grid;
+      grid-template-columns: 1fr 0.84fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .display-wall img {
+      width: 100%;
+      height: 100%;
+      min-height: 154px;
+      object-fit: cover;
+      border: 1px solid var(--line-dark);
+      border-radius: 8px;
+      background: var(--gray);
+      box-shadow: 0 14px 34px rgba(20, 21, 17, 0.16);
+    }
+
+    .display-wall .tall {
+      grid-row: span 2;
+      min-height: 332px;
+    }
+
+    .migration-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      counter-reset: step;
+    }
+
+    .timeline-step {
+      position: relative;
+      min-height: 240px;
+      padding: 62px 20px 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+    }
+
+    .timeline-step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 20px;
+      top: 18px;
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      color: #10120f;
+      background: var(--amber);
+      border-radius: 6px;
+      font-weight: 900;
+    }
+
+    .timeline-step p {
+      margin-top: 10px;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    .faq-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .faq-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      box-shadow: 0 8px 22px rgba(20, 21, 17, 0.06);
+    }
+
+    .faq-item summary {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-height: 64px;
+      padding: 16px 18px;
+      cursor: pointer;
+      color: var(--ink);
+      font-weight: 850;
+      list-style: none;
+    }
+
+    .faq-item summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .faq-item summary::after {
+      content: "+";
+      margin-left: auto;
+      color: var(--green-dark);
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    .faq-item[open] summary::after {
+      content: "-";
+    }
+
+    .faq-item p {
+      padding: 0 18px 18px;
+      color: var(--ink-soft);
+    }
+
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .source-card {
+      min-height: 220px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      box-shadow: 0 10px 28px rgba(20, 21, 17, 0.08);
+    }
+
+    .source-card p {
+      margin-top: 10px;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    .source-card a {
+      display: inline-flex;
+      margin-top: 16px;
+      color: var(--green-dark);
+      font-weight: 850;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+      overflow-wrap: anywhere;
+    }
+
+    .contact-note a {
+      color: var(--green-dark);
+      font-weight: 850;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    .contact-note {
+      margin-top: 16px;
+      padding: 18px 20px;
+      border-left: 5px solid var(--amber);
+      border-radius: 0 8px 8px 0;
+      background: #fff8df;
+      color: var(--ink-soft);
+    }
+
+    .cta {
+      padding: 74px 0;
+      color: #f5f7ef;
+      background: #151611;
+    }
+
+    .cta-grid {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 0.9fr;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .cta h2 {
+      color: #f5f7ef;
+    }
+
+    .cta p {
+      max-width: 680px;
+      margin-top: 14px;
+      color: #d8ddcf;
+      font-size: 1.04rem;
+    }
+
+    .command-box {
+      overflow: hidden;
+      border: 1px solid #3c4038;
+      border-radius: 8px;
+      background: #0e0f0d;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+    }
+
+    .command-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      color: #e9eee2;
+      border-bottom: 1px solid #34372f;
+      background: #1f211c;
+      font-weight: 750;
+    }
+
+    .command-title span:last-child {
+      color: var(--amber);
+      font-size: 0.88rem;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow-x: auto;
+      color: #edf5e7;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.93rem;
+      line-height: 1.65;
+    }
+
+    .site-footer {
+      padding: 28px 0;
+      color: #cfd4c6;
+      background: #11120f;
+      border-top: 1px solid #2b2e27;
+      font-size: 0.92rem;
+    }
+
+    .footer-inner {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: #f4f6ee;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    .footer-credit {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 18px auto 0;
+      padding-top: 18px;
+      color: #aeb6a7;
+      border-top: 1px solid #2b2e27;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .hero-screen.secondary {
+        animation: floatA 8s ease-in-out infinite;
+      }
+
+      .hero-screen.tertiary {
+        animation: floatB 9s ease-in-out infinite;
+      }
+
+      @keyframes floatA {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(8px); }
+      }
+
+      @keyframes floatB {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-7px); }
+      }
+    }
+
+    @media (max-width: 980px) {
+      .nav-links {
+        display: none;
+      }
+
+      h1 {
+        font-size: 4rem;
+      }
+
+      .hero-subtitle {
+        font-size: 1.12rem;
+      }
+
+      .hero-screen.primary {
+        width: 74vw;
+        right: -8vw;
+        bottom: 34px;
+      }
+
+      .hero-screen.secondary {
+        width: 64vw;
+        left: -18vw;
+        top: 44px;
+      }
+
+      .hero-screen.tertiary {
+        display: none;
+      }
+
+      .signal-strip .inner,
+      .case-grid,
+      .operator-layout,
+      .visual-showcase,
+      .faq-grid,
+      .cta-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .feature-grid,
+      .comparison-grid,
+      .source-grid,
+      .migration-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .gallery {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 660px) {
+      .nav-shell {
+        width: min(calc(100% - 64px), 350px);
+        margin-left: 32px;
+        margin-right: auto;
+        min-height: 58px;
+      }
+
+      .brand span {
+        font-size: 0.95rem;
+      }
+
+      .hero {
+        height: 72svh;
+        min-height: 0;
+      }
+
+      .hero-copy {
+        width: min(calc(100% - 64px), 350px);
+        margin-left: 32px;
+        margin-right: auto;
+        height: 100%;
+        min-height: 0;
+        padding: 42px 0 44px;
+      }
+
+      .hero-kicker {
+        font-size: 0.78rem;
+        align-items: flex-start;
+        width: 100%;
+      }
+
+      .hero-kicker span {
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      h1 {
+        font-size: 3.1rem;
+      }
+
+      .hero-subtitle {
+        margin-top: 16px;
+        font-size: 1rem;
+      }
+
+      .hero-actions {
+        width: 100%;
+        max-width: 100%;
+        margin-top: 24px;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      section {
+        padding: 58px 0;
+      }
+
+      h2 {
+        font-size: 2rem;
+      }
+
+      .section-inner,
+      .cta-grid,
+      .footer-inner,
+      .footer-credit {
+        width: min(calc(100% - 64px), 350px);
+        margin-left: 32px;
+        margin-right: auto;
+      }
+
+      .signal-strip .inner {
+        width: min(calc(100% - 64px), 350px);
+        margin-left: 32px;
+        margin-right: auto;
+      }
+
+      .signal-strip .inner,
+      .feature-grid,
+      .comparison-grid,
+      .gallery,
+      .console-grid,
+      .source-grid,
+      .migration-grid,
+      .display-wall {
+        grid-template-columns: 1fr;
+      }
+
+      .console-grid .wide {
+        grid-column: auto;
+      }
+
+      .compatibility-wrap {
+        overflow-x: visible;
+      }
+
+      .compatibility-table,
+      .compatibility-table tbody,
+      .compatibility-table tr,
+      .compatibility-table td {
+        display: block;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .compatibility-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      .compatibility-table tr {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .compatibility-table tr:last-child {
+        border-bottom: 0;
+      }
+
+      .compatibility-table td {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 8px 14px;
+        border-bottom: 0;
+        white-space: normal;
+      }
+
+      .compatibility-table td::before {
+        content: attr(data-label);
+        color: var(--ink);
+        font-size: 0.72rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      .lead-panel {
+        padding: 22px;
+      }
+
+      .display-wall .tall {
+        grid-row: auto;
+        min-height: 210px;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .footer-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .nav-shell,
+      .hero-copy,
+      .signal-strip .inner,
+      .section-inner,
+      .cta-grid,
+      .footer-inner,
+      .footer-credit {
+        width: min(calc(100% - 64px), 350px);
+        margin-left: 32px;
+        margin-right: auto;
+      }
+    }
+
+    @media (max-height: 650px) {
+      .hero,
+      .hero-copy {
+        min-height: 0;
+      }
+
+      .hero-copy {
+        padding: 44px 0 56px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <nav class="nav-shell" aria-label="Primary navigation">
+      <a class="brand" href="#">
+        <img src="images/assets/QtEDM.png" alt="QtEDM logo">
+        <span>QtEDM for EPICS</span>
+      </a>
+      <div class="nav-links">
+        <a href="#why">Why Switch</a>
+        <a href="#compare">Compare</a>
+        <a href="#widgets">Widgets</a>
+        <a href="#faq">FAQ</a>
+        <a href="#source">Source</a>
+        <a href="#operators">Operators</a>
+        <a href="#migration">Migration</a>
+        <a href="QtEDM.html">Reference</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-stage" aria-hidden="true">
+        <div class="hero-screen secondary">
+          <img src="images/qtedm-widgets/waterfall-plot.png" alt="">
+        </div>
+        <div class="hero-screen tertiary">
+          <img src="images/qtedm-widgets/cartesian-plot.png" alt="">
+        </div>
+        <div class="hero-screen primary">
+          <img src="images/qtedm-widgets/heatmap.png" alt="">
+        </div>
+      </div>
+
+      <div class="hero-copy">
+        <div class="hero-kicker">
+          <img src="images/assets/QtEDM.png" alt="">
+          <span>Modern display management for existing EPICS screens</span>
+        </div>
+        <h1 id="hero-title">QtEDM</h1>
+        <p class="hero-subtitle">
+          Keep your MEDM ADL investment, move to a modern Qt foundation, and give
+          operators richer plotting, export, search, and audit workflows without
+          forcing a wholesale display rewrite.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="QtEDM.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/>
+            </svg>
+            Read the Reference
+          </a>
+          <a class="button secondary" href="QtEDM_Announcement.pdf">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/>
+            </svg>
+            Share the Brief
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <aside class="signal-strip" aria-label="QtEDM highlights">
+      <div class="inner">
+        <div class="signal">
+          <b>ADL-first</b>
+          <span>Reads and writes the same core display format used by MEDM.</span>
+        </div>
+        <div class="signal">
+          <b>Qt5 / Qt6</b>
+          <span>Built on a maintained toolkit for native Linux, macOS, and Windows deployments.</span>
+        </div>
+        <div class="signal">
+          <b>CA + PVA</b>
+          <span>Supports Channel Access and PVAccess process variable names.</span>
+        </div>
+        <div class="signal">
+          <b>Dual path</b>
+          <span>Deploy next to MEDM and migrate displays at your own pace.</span>
+        </div>
+      </div>
+    </aside>
+
+    <section id="why" class="operator-band">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">Why EPICS sites pay attention</span>
+          <h2>A practical successor to MEDM, not a restart.</h2>
+          <p>
+            QtEDM keeps the habits, files, and operating model that existing
+            facilities already depend on, then adds the parts people expect from
+            contemporary control-room software.
+          </p>
+        </div>
+
+        <div class="case-grid">
+          <article class="lead-panel">
+            <h3>Preserve the display library you already have.</h3>
+            <p>
+              Facilities have decades of operational knowledge embedded in ADL
+              files. QtEDM reads those displays directly, supports the standard
+              MEDM widget set, and keeps edit and execute workflows familiar for
+              operators and controls engineers.
+            </p>
+          </article>
+
+          <div class="proof-list">
+            <article class="proof-point">
+              <h3>Modern toolkit</h3>
+              <p>Qt reduces dependence on aging Motif packaging and improves font, rendering, and desktop integration options.</p>
+            </article>
+            <article class="proof-point">
+              <h3>Operational gains</h3>
+              <p>Find PV, PV details, image export, data export, zoom, pan, and audit logs solve everyday control-room friction.</p>
+            </article>
+            <article class="proof-point">
+              <h3>Controlled transition</h3>
+              <p>Run QtEDM alongside MEDM on the same ADL files to verify 100% backwards compatibility.</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="compare">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">Where QtEDM fits</span>
+          <h2>Choose it when ADL compatibility is the adoption blocker.</h2>
+          <p>
+            EPICS sites have several display-manager choices. QtEDM is aimed at
+            the specific gap between proven MEDM screen libraries and the need
+            for a maintained Qt runtime.
+          </p>
+        </div>
+
+        <div class="comparison-grid">
+          <article class="comparison-card featured">
+            <span class="comparison-label">QtEDM</span>
+            <h3>Modern path for MEDM sites</h3>
+            <p>
+              Best when the facility already owns a large ADL library and wants
+              a Qt-based runtime, familiar operator behavior, and incremental
+              rollout rather than display conversion.
+            </p>
+          </article>
+
+          <article class="comparison-card">
+            <span class="comparison-label">MEDM</span>
+            <h3>Legacy baseline</h3>
+            <p>
+              Best when exact Motif-era behavior is still required. QtEDM keeps
+              the same core display format while reducing dependence on aging
+              Motif packaging and rendering behavior.
+            </p>
+          </article>
+
+          <article class="comparison-card">
+            <span class="comparison-label">caQtDM</span>
+            <h3>Qt display-manager peer</h3>
+            <p>
+              Best evaluated as another Qt-native EPICS display option. QtEDM's
+              distinguishing case is preserving MEDM-style ADL workflows in the
+              same source family as MEDM itself.
+            </p>
+          </article>
+
+          <article class="comparison-card">
+            <span class="comparison-label">Phoebus / CSS</span>
+            <h3>Broader control-system platform</h3>
+            <p>
+              Best when a site is adopting that ecosystem. QtEDM is the lighter
+              transition path when the priority is opening existing MEDM ADL
+              screens with minimal operator retraining.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="dark-band">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">What improves</span>
+          <h2>Familiar screens, stronger day-to-day workflows.</h2>
+          <p>
+            The value is not only that QtEDM opens legacy screens. It keeps the
+            familiar display model while adding the runtime features current
+            operations expect.
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 19V5m0 14h16M8 15l3-4 3 2 4-7"/>
+            </svg>
+            <h3>Interactive plots</h3>
+            <p>Zoom and pan Cartesian plots in execute mode, then export plot data to CSV or SDDS for follow-up analysis.</p>
+          </article>
+
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M7 7l10 10M17 7 7 17"/>
+            </svg>
+            <h3>More signal views</h3>
+            <p>Use QtEDM-only widgets such as Heatmap, Waterfall Plot, PV Table, Waveform Table, LED Monitor, and Thermometer.</p>
+          </article>
+
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"/>
+            </svg>
+            <h3>Find the PV</h3>
+            <p>Search process variables across open displays and inspect connection status, update rate, and severity in one place.</p>
+          </article>
+
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            <h3>Audit every write</h3>
+            <p>Record control widget value changes with timestamp, user, widget type, PV name, value, and display file.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="widgets">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">Widget coverage</span>
+          <h2>MEDM compatibility with room for modern diagnostics.</h2>
+          <p>
+            Existing graphics, monitors, controls, plots, related displays, and
+            shell commands remain part of the workflow. QtEDM adds new views
+            where the EPICS community has outgrown the old toolkit.
+          </p>
+        </div>
+
+        <div class="gallery">
+          <article class="gallery-card">
+            <img src="images/qtedm-widgets/cartesian-plot.png" alt="QtEDM Cartesian Plot widget with red and blue traces">
+            <div class="copy">
+              <h3>Cartesian Plot</h3>
+              <p>Cursor-centered wheel zoom, axis-specific zoom, drag panning, reset, and export support for engineering analysis.</p>
+            </div>
+          </article>
+
+          <article class="gallery-card">
+            <img src="images/qtedm-widgets/waterfall-plot.png" alt="QtEDM Waterfall Plot showing beam profile over time">
+            <div class="copy">
+              <h3>Waterfall Plot</h3>
+              <p>A QtEDM-only monitor for waveform-versus-time data with zoom, pan, hover readback, image export, and buffered data export.</p>
+            </div>
+          </article>
+
+          <article class="gallery-card">
+            <img src="images/qtedm-widgets/heatmap.png" alt="QtEDM Heatmap widget showing two 2-D array images">
+            <div class="copy">
+              <h3>Heatmap</h3>
+              <p>Render array PVs as 2-D images with profile displays for beam, camera, and detector-style use cases.</p>
+            </div>
+          </article>
+
+          <article class="gallery-card">
+            <img src="images/qtedm-widgets/led-monitor.png" alt="QtEDM LED Monitor examples">
+            <div class="copy">
+              <h3>LED Monitor</h3>
+              <p>Compact status lamps for dense operator screens where state needs to be visible immediately.</p>
+            </div>
+          </article>
+
+          <article class="gallery-card">
+            <img src="images/qtedm-widgets/wheel-switch.png" alt="QtEDM Wheel Switch controller examples">
+            <div class="copy">
+              <h3>Wheel Switch</h3>
+              <p>Classic MEDM control behavior preserved for existing operator habits and display designs.</p>
+            </div>
+          </article>
+
+          <article class="gallery-card">
+            <img src="images/qtedm-widgets/related-display.png" alt="QtEDM Related Display button examples">
+            <div class="copy">
+              <h3>Related Display</h3>
+              <p>Keep macro-driven display navigation and launch patterns that large EPICS screen libraries rely on.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="visual-showcase">
+          <div class="console-frame" aria-label="Animated QtEDM Help Demo display with live soft PV values">
+            <div class="console-bar">
+              <span>Live QtEDM demo display</span>
+              <span>Help -> Demo capture</span>
+            </div>
+            <img class="demo-gif" src="images/assets/qtedm-demo-live.gif" alt="Animated GIF of the QtEDM Help Demo display with changing values, plots, heatmap, PV table, and waveform table">
+          </div>
+
+          <article class="visual-note">
+            <span class="eyebrow">Control-room ready</span>
+            <h3>One display language, richer diagnostic screens.</h3>
+            <p>
+              This capture follows the same Help -> Demo path in QtEDM, so
+              reviewers see the built-in soft PVs, changing values, plots,
+              tables, and image displays without requiring an external IOC.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="compatibility" class="operator-band">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">Compatibility matrix</span>
+          <h2>The transition boundaries are explicit.</h2>
+          <p>
+            QtEDM is strongest when teams understand which displays remain in
+            the shared MEDM subset and which screens intentionally adopt
+            QtEDM-only features.
+          </p>
+        </div>
+
+        <div class="compatibility-wrap">
+          <table class="compatibility-table">
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th>QtEDM status</th>
+                <th>Transition note</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-label="Capability">Existing MEDM ADL display files</td>
+                <td data-label="Status">Supported</td>
+                <td data-label="Note">QtEDM reads and writes the same core ADL format used by MEDM.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">Standard MEDM widget set</td>
+                <td data-label="Status">Supported</td>
+                <td data-label="Note">Graphics, monitors, controls, plots, related displays, and shell commands remain part of the workflow.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">QtEDM-only widgets</td>
+                <td data-label="Status">Extension</td>
+                <td data-label="Note">Text Area, Heatmap, PV Table, Waveform Table, Waterfall Plot, Thermometer, LED Monitor, and Expression Channel are QtEDM ADL extensions.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">Round-trip back to legacy MEDM</td>
+                <td data-label="Status">Shared subset</td>
+                <td data-label="Note">MEDM can use the common ADL subset; displays that rely on QtEDM-only blocks are not behaviorally compatible with legacy MEDM.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">EPICS Channel Access and PVAccess names</td>
+                <td data-label="Status">Supported</td>
+                <td data-label="Note">Use normal CA PV names or the <code>pva://</code> prefix when PVAccess is required.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">Qt toolkit version</td>
+                <td data-label="Status">Qt5 / Qt6</td>
+                <td data-label="Note">Qt6 is preferred when available, with Qt5 fallback support in the build notes.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">Native desktop platforms</td>
+                <td data-label="Status">Linux / macOS / Windows</td>
+                <td data-label="Note">QtEDM works natively on Linux, macOS, and Windows when the local Qt, EPICS, SDDS, font, and packaging dependencies are satisfied.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="compatibility-note">
+          Use this as a planning guide, then validate representative facility
+          displays with local fonts, macros, EPICS environment, and operator
+          launch scripts.
+        </p>
+      </div>
+    </section>
+
+    <section id="operators" class="operator-band">
+      <div class="section-inner operator-layout">
+        <div class="operator-copy">
+          <span class="eyebrow">For operators and engineers</span>
+          <h2>Make existing screens feel maintained again.</h2>
+          <p>
+            QtEDM is intentionally recognizable to MEDM users. The difference is
+            that modern plotting, export, search, fonts, and logging are built
+            into the runtime instead of bolted onto operating procedures.
+          </p>
+          <ul class="operator-list">
+            <li>Open ADL screens directly in edit or execute mode.</li>
+            <li>Use macro substitution and related displays for existing launch flows.</li>
+            <li>Export displays to PNG, SVG, JPEG, or BMP for reports and documentation.</li>
+            <li>Use expression channels for local derived values without IOC-side logic.</li>
+          </ul>
+        </div>
+
+        <div class="display-wall" aria-label="QtEDM widget screenshots">
+          <img class="tall" src="images/qtedm-widgets/strip-chart.png" alt="QtEDM Strip Chart widget examples">
+          <img src="images/qtedm-widgets/meter.png" alt="QtEDM Meter widget examples">
+          <img src="images/qtedm-widgets/thermometer.png" alt="QtEDM Thermometer widget examples">
+        </div>
+      </div>
+    </section>
+
+    <section id="migration">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">Adoption path</span>
+          <h2>A migration strategy facilities can actually run.</h2>
+          <p>
+            The strongest selling point for a control-system display manager is
+            not novelty. It is the ability to improve the platform without
+            breaking operating rhythm.
+          </p>
+        </div>
+
+        <div class="migration-grid">
+          <article class="timeline-step">
+            <h3>Install beside MEDM</h3>
+            <p>Build QtEDM from the same source distribution and keep the legacy executable available during validation.</p>
+          </article>
+
+          <article class="timeline-step">
+            <h3>Open real ADL files</h3>
+            <p>Start with representative screens, compare display fidelity, and document any local edge cases.</p>
+          </article>
+
+          <article class="timeline-step">
+            <h3>Move targeted workflows</h3>
+            <p>Adopt QtEDM first where export, plotting, PV search, or Motif packaging pain is already costing time.</p>
+          </article>
+
+          <article class="timeline-step">
+            <h3>Grow with confidence</h3>
+            <p>Use automated CLI, unit, IOC, and visual tests to keep compatibility measurable as adoption expands.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="operator-band">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">FAQ</span>
+          <h2>Questions EPICS teams usually ask first.</h2>
+          <p>
+            These answers are intentionally practical: they frame how to test
+            QtEDM with existing displays before a facility-wide switch.
+          </p>
+        </div>
+
+        <div class="faq-grid">
+          <details class="faq-item" open>
+            <summary>Will my MEDM screens open?</summary>
+            <p>
+              QtEDM is designed to read existing MEDM ADL files and support the
+              standard MEDM widget set. Validate representative screens locally,
+              especially displays that depend on site-specific fonts, scripts,
+              macros, or window-management behavior.
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary>Can QtEDM run beside MEDM?</summary>
+            <p>
+              Yes. The recommended migration path is to install QtEDM as a
+              separate executable, keep MEDM available for edge cases, and move
+              operators to QtEDM display by display.
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary>What if a display uses QtEDM-only widgets?</summary>
+            <p>
+              QtEDM-only widgets extend ADL for newer use cases. Those displays
+              should be treated as QtEDM displays and not as fully compatible
+              legacy MEDM screens.
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary>Does it support PVAccess?</summary>
+            <p>
+              QtEDM supports Channel Access and accepts <code>pva://</code> PV
+              prefixes when PVAccess is required.
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary>How do we build confidence before switching?</summary>
+            <p>
+              Use the CLI, unit, IOC, and visual regression tests in this
+              repository, then review important facility screens side by side
+              with MEDM before changing operator launch scripts.
+            </p>
+          </details>
+
+          <details class="faq-item">
+            <summary>What platforms should we target first?</summary>
+            <p>
+              QtEDM works natively on Linux, macOS, and Windows. Start with the
+              platform your operators already use, then validate local Qt,
+              EPICS, SDDS, font, and packaging constraints.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section id="source">
+      <div class="section-inner">
+        <div class="section-heading">
+          <span class="eyebrow">Source, docs, and feedback</span>
+          <h2>Additional information</h2>
+        </div>
+
+        <div class="source-grid">
+          <article class="source-card">
+            <h3>Current QtEDM source</h3>
+            <p>Review the active MEDM / QtEDM source distribution and project history on GitHub.</p>
+            <a href="https://github.com/rtsoliday/medm">github.com/rtsoliday/medm</a>
+          </article>
+
+          <article class="source-card">
+            <h3>EPICS Extensions</h3>
+            <p>Use the EPICS Extensions MEDM page for background on the long-running display-manager family.</p>
+            <a href="http://www.aps.anl.gov/epics/extensions/medm/">EPICS Extensions MEDM</a>
+          </article>
+
+          <article class="source-card">
+            <h3>Local documentation</h3>
+            <p>Open the full QtEDM reference manual, announcement brief, and repository build notes from this checkout.</p>
+            <a href="QtEDM.html">QtEDM Reference Manual</a>
+          </article>
+        </div>
+
+        <p class="contact-note">
+          For QtEDM problems, comments, or questions, contact
+          <a href="mailto:soliday@anl.gov">soliday@anl.gov</a>. Useful bug
+          reports include the QtEDM version, operating system, EPICS Base
+          version, launch command, display files, and enough detail to reproduce
+          the issue.
+        </p>
+      </div>
+    </section>
+
+    <section class="cta" aria-labelledby="cta-title">
+      <div class="cta-grid">
+        <div>
+          <h2 id="cta-title">Put QtEDM in front of your EPICS team.</h2>
+          <p>
+            The next useful conversation is concrete: build it, open familiar
+            displays, compare behavior, and show where QtEDM removes current
+            operational friction.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="../README.md">Build Notes</a>
+            <a class="button secondary" href="QtEDM_Announcement.md">Announcement Text</a>
+          </div>
+        </div>
+
+        <div class="command-box" aria-label="QtEDM quick start commands">
+          <div class="command-title">
+            <span>Quick local demo</span>
+            <span>from repository root</span>
+          </div>
+          <pre><code>make -j4
+bin/&lt;arch&gt;/qtedm
+# Then choose Help -> Demo for the live soft-PV demo.
+
+make test-qtedm
+xdg-open docs/QtEDM.html</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span>QtEDM is part of the MEDM / QtEDM Display Manager Suite.</span>
+      <div class="footer-links">
+        <a href="QtEDM.html">Reference Manual</a>
+        <a href="QtEDM_Announcement.pdf">PDF Brief</a>
+        <a href="../README.md">Repository README</a>
+      </div>
+    </div>
+    <p class="footer-credit">
+      QtEDM was developed by Robert Soliday at Argonne National Laboratory.
+      MEDM was originally developed by Mark Anderson, with significant
+      contributions from Frederick Vong and Kenneth Evans Jr.
+    </p>
+  </footer>
+</body>
+</html>

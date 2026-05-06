@@ -4,11 +4,13 @@
 
 QtEDM is the modern Qt implementation in this repository (`qtedm/`).
 It uses EPICS Channel Access / PVAccess and reads the same `.adl` display
-format used by MEDM.
+format used by MEDM. QtEDM runs natively on Linux, macOS, and Windows when the
+local Qt, EPICS Base, and SDDS build dependencies are available.
 
-### Linux Prerequisites
+### Prerequisites
 
-- Build tools: `gcc`, `g++`, `make`, `pkg-config`
+- Build tools: GNU Make-compatible build environment, `pkg-config`, and a
+	platform C/C++ compiler. On Linux this is typically `gcc` and `g++`.
 - EPICS Base (required): place an `epics-base` checkout at the same directory
 	level as this repository (for example, `../epics-base` when you are in
 	`medm/`).
@@ -22,7 +24,7 @@ format used by MEDM.
 	- `moc` and `rcc` must be available
 - SDDS source tree (required for building shared support libraries used by QtEDM)
 
-Typical Debian/Ubuntu packages:
+Typical Debian/Ubuntu packages for a Linux build:
 
 ```bash
 sudo apt-get install build-essential pkg-config qt6-base-dev qt6-svg-dev
@@ -67,10 +69,14 @@ make
 ```
 
 Notes:
-- On Linux, `qtedm` can be built without Motif, but full top-level builds
-	and support libraries may still require SDDS and/or prebuilt local libs.
+- `qtedm` can be built without Motif. Full top-level builds and support
+	libraries may still require SDDS and/or prebuilt local libs. Building the
+	legacy `medm` executable requires Motif/X11 where available.
 - If Qt is missing, the top-level build exits with an error after dependency
 	checks.
+- On macOS and Windows, use the equivalent native compiler, Qt development
+	tools, EPICS Base, and SDDS setup for that platform. The repository uses the
+	same `.adl` display files across platforms.
 
 ### Automated QtEDM Tests
 

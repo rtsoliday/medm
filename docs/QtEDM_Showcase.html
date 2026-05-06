@@ -662,12 +662,13 @@
     .visual-showcase {
       margin-top: 34px;
       display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 24px;
-      align-items: stretch;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
+      justify-items: center;
     }
 
     .console-frame {
+      width: min(100%, 960px);
       overflow: hidden;
       border: 1px solid #22251f;
       border-radius: 8px;
@@ -716,13 +717,15 @@
     }
 
     .demo-gif {
-      width: 100%;
-      padding: 10px;
+      width: 960px;
+      max-width: 100%;
+      height: auto;
       background: #0f100d;
       border-top: 1px solid #30332b;
     }
 
     .visual-note {
+      width: min(100%, 960px);
       padding: 24px;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1724,7 +1727,7 @@
               <span>Live QtEDM demo display</span>
               <span>Help -> Demo capture</span>
             </div>
-            <img class="demo-gif" src="images/assets/qtedm-demo-live.gif" alt="Animated GIF of the QtEDM Help Demo display with changing values, plots, heatmap, PV table, and waveform table">
+            <img class="demo-gif" src="images/assets/qtedm-demo-live.gif" width="960" height="634" alt="Animated GIF of the QtEDM Help Demo display with changing values, plots, heatmap, PV table, and waveform table">
           </div>
 
           <article class="visual-note">

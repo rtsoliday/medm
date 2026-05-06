@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>QtEDM | Modern EPICS Display Management</title>
-  <meta name="description" content="A modern Qt display manager for EPICS sites that keeps MEDM ADL compatibility while adding contemporary operator and engineering workflows.">
+  <meta name="description" content="A modern Qt display manager from Argonne National Laboratory for EPICS sites that keeps MEDM ADL compatibility while adding contemporary operator and engineering workflows.">
   <style>
     :root {
       --ink: #181915;
@@ -13,6 +13,9 @@
       --surface-strong: #ffffff;
       --line: #d9ded0;
       --line-dark: #2d3029;
+      --anl-blue: #005ea8;
+      --anl-blue-dark: #003e6f;
+      --aps-cyan: #00a3e0;
       --green: #00a676;
       --green-dark: #08785b;
       --cyan: #247ba0;
@@ -81,6 +84,59 @@
       backdrop-filter: blur(10px);
     }
 
+    .institution-bar {
+      color: #f7fbff;
+      background: var(--anl-blue-dark);
+      border-bottom: 4px solid var(--aps-cyan);
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    .institution-inner {
+      width: min(calc(100% - 32px), var(--max));
+      min-height: 42px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .anl-home {
+      flex: 0 0 auto;
+      padding: 5px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0;
+    }
+
+    .anl-home:hover,
+    .anl-home:focus-visible {
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+    }
+
+    .institution-name {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      color: #e9f4fb;
+    }
+
+    .institution-name strong {
+      color: #ffffff;
+      font-size: 1.02rem;
+    }
+
+    .facility-note {
+      color: #cce4f4;
+      text-align: right;
+      font-size: 0.8rem;
+    }
+
     .nav-shell {
       width: min(calc(100% - 32px), var(--max));
       min-height: 68px;
@@ -141,7 +197,7 @@
       position: absolute;
       inset: 0;
       z-index: -2;
-      background: rgba(10, 11, 9, 0.64);
+      background: linear-gradient(90deg, rgba(0, 62, 111, 0.82), rgba(10, 11, 9, 0.66) 46%, rgba(10, 11, 9, 0.76));
     }
 
     .hero::after {
@@ -332,6 +388,59 @@
     .signal span {
       color: #cfd4c6;
       font-size: 0.94rem;
+    }
+
+    .provenance-band {
+      padding: 58px 0;
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .provenance-layout {
+      display: grid;
+      grid-template-columns: 1fr 0.82fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .provenance-copy h2 {
+      max-width: 720px;
+    }
+
+    .provenance-copy p {
+      max-width: 730px;
+      margin-top: 14px;
+      color: var(--ink-soft);
+      font-size: 1.07rem;
+    }
+
+    .provenance-panel {
+      padding: 24px;
+      border-top: 6px solid var(--anl-blue);
+      border-radius: 8px;
+      background: #eef6fb;
+      box-shadow: 0 10px 28px rgba(0, 62, 111, 0.12);
+    }
+
+    .provenance-panel span {
+      display: block;
+      color: var(--anl-blue-dark);
+      font-size: 0.78rem;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .provenance-panel strong {
+      display: block;
+      margin-top: 6px;
+      color: var(--ink);
+      font-size: 1.26rem;
+      line-height: 1.18;
+    }
+
+    .provenance-panel p {
+      margin-top: 12px;
+      color: var(--ink-soft);
     }
 
     section {
@@ -936,6 +1045,27 @@
       font-size: 0.92rem;
     }
 
+    .footer-origin {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto 22px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #2b2e27;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .footer-origin strong {
+      color: #ffffff;
+      font-size: 1.08rem;
+    }
+
+    .footer-origin span {
+      color: #a9cee6;
+      text-align: right;
+    }
+
     .footer-inner {
       width: min(calc(100% - 32px), var(--max));
       margin: 0 auto;
@@ -987,6 +1117,17 @@
     }
 
     @media (max-width: 980px) {
+      .institution-inner {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        padding: 10px 0;
+      }
+
+      .facility-note {
+        width: 100%;
+        text-align: left;
+      }
+
       .nav-links {
         display: none;
       }
@@ -1017,6 +1158,7 @@
 
       .signal-strip .inner,
       .case-grid,
+      .provenance-layout,
       .operator-layout,
       .visual-showcase,
       .faq-grid,
@@ -1042,6 +1184,19 @@
         margin-left: 32px;
         margin-right: auto;
         min-height: 58px;
+      }
+
+      .institution-inner {
+        width: min(calc(100% - 64px), 350px);
+        margin-left: 32px;
+        margin-right: auto;
+      }
+
+      .institution-name {
+        width: 100%;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
       }
 
       .brand span {
@@ -1102,6 +1257,7 @@
 
       .section-inner,
       .cta-grid,
+      .footer-origin,
       .footer-inner,
       .footer-credit {
         width: min(calc(100% - 64px), 350px);
@@ -1196,6 +1352,15 @@
         align-items: flex-start;
         flex-direction: column;
       }
+
+      .footer-origin {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .footer-origin span {
+        text-align: left;
+      }
     }
 
     @media (max-width: 480px) {
@@ -1204,6 +1369,7 @@
       .signal-strip .inner,
       .section-inner,
       .cta-grid,
+      .footer-origin,
       .footer-inner,
       .footer-credit {
         width: min(calc(100% - 64px), 350px);
@@ -1228,6 +1394,16 @@
   <a class="skip-link" href="#main">Skip to content</a>
 
   <header class="site-header">
+    <div class="institution-bar" aria-label="Argonne and Advanced Photon Source identity">
+      <div class="institution-inner">
+        <a class="anl-home" href="https://www.anl.gov/">ANL Home</a>
+        <div class="institution-name">
+          <span>Argonne National Laboratory</span>
+          <strong>Advanced Photon Source</strong>
+        </div>
+        <span class="facility-note">A U.S. Department of Energy Office of Science User Facility</span>
+      </div>
+    </div>
     <nav class="nav-shell" aria-label="Primary navigation">
       <a class="brand" href="#">
         <img src="images/assets/QtEDM.png" alt="QtEDM logo">
@@ -1263,13 +1439,14 @@
       <div class="hero-copy">
         <div class="hero-kicker">
           <img src="images/assets/QtEDM.png" alt="">
-          <span>Modern display management for existing EPICS screens</span>
+          <span>Argonne National Laboratory / Advanced Photon Source software for EPICS</span>
         </div>
         <h1 id="hero-title">QtEDM</h1>
         <p class="hero-subtitle">
-          Keep your MEDM ADL investment, move to a modern Qt foundation, and give
-          operators richer plotting, export, search, and audit workflows without
-          forcing a wholesale display rewrite.
+          Developed at Argonne National Laboratory, QtEDM keeps your MEDM ADL
+          investment, moves to a modern Qt foundation, and gives operators
+          richer plotting, export, search, and audit workflows without forcing a
+          wholesale display rewrite.
         </p>
         <div class="hero-actions">
           <a class="button primary" href="QtEDM.html">
@@ -1291,6 +1468,10 @@
     <aside class="signal-strip" aria-label="QtEDM highlights">
       <div class="inner">
         <div class="signal">
+          <b>Argonne / APS</b>
+          <span>Developed at Argonne National Laboratory for EPICS controls work.</span>
+        </div>
+        <div class="signal">
           <b>ADL-first</b>
           <span>Reads and writes the same core display format used by MEDM.</span>
         </div>
@@ -1302,12 +1483,33 @@
           <b>CA + PVA</b>
           <span>Supports Channel Access and PVAccess process variable names.</span>
         </div>
-        <div class="signal">
-          <b>Dual path</b>
-          <span>Deploy next to MEDM and migrate displays at your own pace.</span>
-        </div>
       </div>
     </aside>
+
+    <section class="provenance-band" aria-labelledby="provenance-title">
+      <div class="section-inner provenance-layout">
+        <div class="provenance-copy">
+          <span class="eyebrow">Argonne software provenance</span>
+          <h2 id="provenance-title">Built from the Advanced Photon Source controls tradition.</h2>
+          <p>
+            QtEDM is part of the MEDM / QtEDM Display Manager Suite developed
+            at Argonne National Laboratory for EPICS display management. It
+            carries forward the practical controls heritage of MEDM while giving
+            EPICS teams a native Qt path for current workstations.
+          </p>
+        </div>
+        <aside class="provenance-panel" aria-label="Advanced Photon Source context">
+          <span>Advanced Photon Source</span>
+          <strong>Argonne National Laboratory controls software</strong>
+          <p>
+            APS is a DOE Office of Science user facility operated by Argonne
+            National Laboratory. QtEDM should be evaluated in that institutional
+            context: production EPICS displays, long-lived operations, and
+            compatibility with existing MEDM screen libraries.
+          </p>
+        </aside>
+      </div>
+    </section>
 
     <section id="why" class="operator-band">
       <div class="section-inner">
@@ -1806,6 +2008,10 @@ xdg-open docs/QtEDM.html</code></pre>
   </main>
 
   <footer class="site-footer">
+    <div class="footer-origin">
+      <strong>Argonne National Laboratory</strong>
+      <span>Advanced Photon Source / U.S. DOE Office of Science User Facility</span>
+    </div>
     <div class="footer-inner">
       <span>QtEDM is part of the MEDM / QtEDM Display Manager Suite.</span>
       <div class="footer-links">

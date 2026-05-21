@@ -28554,7 +28554,13 @@ CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
   std::array<bool, kCartesianPlotTraceCount> loadedTraceSideExplicit{};
   std::array<bool, kCartesianPlotTraceCount> loadedTraceUsesRight{};
   std::array<bool, kCartesianPlotTraceCount> loadedTraceDefined{};
-  loadedTraceAxes.fill(CartesianPlotYAxis::kY1);
+  for (int traceIndex = 0; traceIndex < kCartesianPlotTraceCount;
+       ++traceIndex) {
+    loadedTraceAxes[traceIndex] =
+        defaultCartesianPlotYAxisForTrace(traceIndex);
+    loadedTraceUsesRight[traceIndex] =
+        defaultCartesianPlotUsesRightAxisForTrace(traceIndex);
+  }
 
   for (const auto &child : cartesianNode.children) {
     if (!child.name.startsWith(QStringLiteral("trace"), Qt::CaseInsensitive)) {
@@ -28637,12 +28643,9 @@ CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     }
 
     if (!axisSideEstablished[axisBucket]) {
-      const bool usesRight = loadedTraceSideExplicit[traceIndex]
-          ? loadedTraceUsesRight[traceIndex]
-          : element->traceUsesRightAxis(traceIndex);
-      if (loadedTraceSideExplicit[traceIndex]) {
-        element->setTraceUsesRightAxis(traceIndex, usesRight, true);
-      }
+      const bool usesRight = loadedTraceUsesRight[traceIndex];
+      element->setTraceUsesRightAxis(traceIndex, usesRight,
+          loadedTraceSideExplicit[traceIndex]);
       axisSideEstablished[axisBucket] = true;
       axisSideValues[axisBucket] = usesRight;
     } else {

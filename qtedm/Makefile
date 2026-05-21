@@ -424,6 +424,7 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_legacy_fonts \
                         test_wave_table_model \
                         test_runtime_utils \
+                        test_cartesian_plot_properties \
                         test_soft_pv_registry
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
@@ -447,6 +448,8 @@ test_wave_table_model_OBJS = $(OBJ_DIR)/test_wave_table_model.$(OBJEXT) \
                              $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_runtime_utils_OBJS = $(OBJ_DIR)/test_runtime_utils.$(OBJEXT) \
                           $(OBJ_DIR)/runtime_utils.$(OBJEXT)
+test_cartesian_plot_properties_OBJS = \
+  $(OBJ_DIR)/test_cartesian_plot_properties.$(OBJEXT)
 test_soft_pv_registry_OBJS = $(OBJ_DIR)/test_soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/subscription_handle.$(OBJEXT)

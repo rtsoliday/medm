@@ -453,10 +453,8 @@ CartesianPlotElement::CartesianPlotElement(QWidget *parent)
   yLabels_[3] = QString();  // Empty by default
   for (int i = 0; i < traceCount(); ++i) {
     traces_[i].color = defaultTraceColor(i);
-    if (i > 0) {
-      traces_[i].yAxis = CartesianPlotYAxis::kY2;
-      traces_[i].usesRightAxis = true;
-    }
+    traces_[i].yAxis = defaultCartesianPlotYAxisForTrace(i);
+    traces_[i].usesRightAxis = defaultCartesianPlotUsesRightAxisForTrace(i);
   }
   for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
     axisStyles_[axis] = CartesianPlotAxisStyle::kLinear;

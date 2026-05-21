@@ -65,3 +65,14 @@ constexpr int kCartesianAxisCount = 5;
 constexpr int kCartesianPlotMaximumSampleCount = 256;
 constexpr int kMinimumCartesianPlotWidth = 160;
 constexpr int kMinimumCartesianPlotHeight = 93;
+
+inline CartesianPlotYAxis defaultCartesianPlotYAxisForTrace(int traceIndex)
+{
+  return traceIndex <= 0 ? CartesianPlotYAxis::kY1
+                         : CartesianPlotYAxis::kY2;
+}
+
+inline bool defaultCartesianPlotUsesRightAxisForTrace(int traceIndex)
+{
+  return traceIndex > 0;
+}

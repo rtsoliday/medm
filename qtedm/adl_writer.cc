@@ -177,6 +177,17 @@ QString heatmapProfileModeString(HeatmapProfileMode mode)
   }
 }
 
+QString heatmapRangeModeString(HeatmapRangeMode mode)
+{
+  switch (mode) {
+  case HeatmapRangeMode::kManual:
+    return QStringLiteral("manual");
+  case HeatmapRangeMode::kAuto:
+  default:
+    return QStringLiteral("auto");
+  }
+}
+
 QString waterfallScrollDirectionString(WaterfallScrollDirection direction)
 {
   switch (direction) {

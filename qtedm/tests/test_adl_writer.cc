@@ -32,6 +32,7 @@ private slots:
   void writesLimitsSection();
   void writesTextAreaEnumStrings();
   void writesHeatmapProfileModeEnumStrings();
+  void writesHeatmapRangeModeEnumStrings();
   void writesPvTableColumnStrings();
   void writesWaveTableEnumStrings();
   void omitsDefaultCartesianAxisSection();
@@ -105,6 +106,14 @@ void TestAdlWriter::writesHeatmapProfileModeEnumStrings()
       HeatmapProfileMode::kAbsolute), QStringLiteral("absolute"));
   QCOMPARE(AdlWriter::heatmapProfileModeString(
       HeatmapProfileMode::kAveraged), QStringLiteral("averaged"));
+}
+
+void TestAdlWriter::writesHeatmapRangeModeEnumStrings()
+{
+  QCOMPARE(AdlWriter::heatmapRangeModeString(
+      HeatmapRangeMode::kAuto), QStringLiteral("auto"));
+  QCOMPARE(AdlWriter::heatmapRangeModeString(
+      HeatmapRangeMode::kManual), QStringLiteral("manual"));
 }
 
 void TestAdlWriter::writesPvTableColumnStrings()

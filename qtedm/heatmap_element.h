@@ -52,6 +52,15 @@ public:
   HeatmapProfileMode profileMode() const;
   void setProfileMode(HeatmapProfileMode mode);
 
+  HeatmapRangeMode rangeMode() const;
+  void setRangeMode(HeatmapRangeMode mode);
+
+  double rangeMinimum() const;
+  void setRangeMinimum(double value);
+
+  double rangeMaximum() const;
+  void setRangeMaximum(double value);
+
   bool showTopProfile() const;
   void setShowTopProfile(bool show);
 
@@ -133,6 +142,9 @@ private:
   bool flipVertical_ = false;
   HeatmapRotation rotation_ = HeatmapRotation::kNone;
   HeatmapProfileMode profileMode_ = HeatmapProfileMode::kAbsolute;
+  HeatmapRangeMode rangeMode_ = HeatmapRangeMode::kAuto;
+  double rangeMinimum_ = 0.0;
+  double rangeMaximum_ = 1.0;
   QVector<double> topProfileData_;
   double topProfileMin_ = 0.0;
   double topProfileMax_ = 0.0;

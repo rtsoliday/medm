@@ -24,7 +24,7 @@ namespace {
 constexpr int kDefaultDimension = 10;
 constexpr int kLegendBarWidth = 12;
 constexpr int kLegendPadding = 6;
-constexpr int kLegendNumberPadding = 12;
+constexpr int kLegendMinimumLabelWidth = 24;
 constexpr int kTitleFontHeight = 24;
 constexpr int kLegendFontHeight = 12;
 constexpr int kRaisedFrameThickness = 2;
@@ -284,6 +284,51 @@ void HeatmapElement::setProfileMode(HeatmapProfileMode mode)
   invalidateCache();
 }
 
+HeatmapRangeMode HeatmapElement::rangeMode() const
+{
+  return rangeMode_;
+}
+
+void HeatmapElement::setRangeMode(HeatmapRangeMode mode)
+{
+  if (rangeMode_ == mode) {
+    return;
+  }
+  rangeMode_ = mode;
+  runtimeRangeValid_ = false;
+  runtimeMinValue_ = 0.0;
+  runtimeMaxValue_ = 0.0;
+  invalidateCache();
+}
+
+double HeatmapElement::rangeMinimum() const
+{
+  return rangeMinimum_;
+}
+
+void HeatmapElement::setRangeMinimum(double value)
+{
+  if (!std::isfinite(value) || qFuzzyCompare(rangeMinimum_, value)) {
+    return;
+  }
+  rangeMinimum_ = value;
+  invalidateCache();
+}
+
+double HeatmapElement::rangeMaximum() const
+{
+  return rangeMaximum_;
+}
+
+void HeatmapElement::setRangeMaximum(double value)
+{
+  if (!std::isfinite(value) || qFuzzyCompare(rangeMaximum_, value)) {
+    return;
+  }
+  rangeMaximum_ = value;
+  invalidateCache();
+}
+
 
 bool HeatmapElement::preserveAspectRatio() const
 {
@@ -467,16 +512,17 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
         && runtimeRangeValid_;
     const QString minLabel = QString::number(runtimeMinValue_, 'g', 6);
     const QString maxLabel = QString::number(runtimeMaxValue_, 'g', 6);
-    const int labelWidth = std::max(legendMetrics.horizontalAdvance(minLabel),
-        legendMetrics.horizontalAdvance(maxLabel));
+    const int labelWidth = std::max(kLegendMinimumLabelWidth,
+        std::max(legendMetrics.horizontalAdvance(minLabel),
+            legendMetrics.horizontalAdvance(maxLabel)) + 2);
     return std::tuple<bool, QString, QString, int>(canShowLegend, minLabel,
         maxLabel, labelWidth);
   };
 
   auto [canShowLegend, minLabel, maxLabel, labelWidth] = computeLegendMetrics();
   HeatmapLayout layout = computeLayout(
-      kLegendBarWidth + kLegendPadding + labelWidth + kLegendPadding
-          + kLegendNumberPadding,
+      kLegendPadding + kLegendBarWidth + kLegendPadding + labelWidth
+          + kLegendPadding,
       canShowLegend);
 
   QSize desiredRenderSize = renderTargetSize(layout.heatmapRect.size());
@@ -485,8 +531,8 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
     std::tie(canShowLegend, minLabel, maxLabel, labelWidth) =
         computeLegendMetrics();
     layout = computeLayout(
-        kLegendBarWidth + kLegendPadding + labelWidth + kLegendPadding
-            + kLegendNumberPadding,
+        kLegendPadding + kLegendBarWidth + kLegendPadding + labelWidth
+            + kLegendPadding,
         canShowLegend);
     desiredRenderSize = renderTargetSize(layout.heatmapRect.size());
     if (cachedRenderSize_ != desiredRenderSize) {
@@ -494,8 +540,8 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
       std::tie(canShowLegend, minLabel, maxLabel, labelWidth) =
           computeLegendMetrics();
       layout = computeLayout(
-          kLegendBarWidth + kLegendPadding + labelWidth + kLegendPadding
-              + kLegendNumberPadding,
+          kLegendPadding + kLegendBarWidth + kLegendPadding + labelWidth
+              + kLegendPadding,
           canShowLegend);
     }
   }
@@ -620,9 +666,9 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
     painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
     painter.drawLine(legendRect.topLeft(), legendRect.bottomLeft());
 
-    QRect barRect = legendRect.adjusted(kLegendPadding,
-      kLegendPadding, -kLegendPadding - labelWidth - kLegendNumberPadding,
-      -kLegendPadding);
+    QRect barRect(legendRect.left() + kLegendPadding,
+      legendRect.top() + kLegendPadding, kLegendBarWidth,
+      legendRect.height() - 2 * kLegendPadding);
     if (barRect.height() > 4 && barRect.width() > 0) {
       const QImage &barImage = legendBarImage(barRect.size());
       if (!barImage.isNull()) {
@@ -632,9 +678,9 @@ void HeatmapElement::paintEvent(QPaintEvent *event)
       painter.drawRect(barRect.adjusted(0, 0, -1, -1));
     }
 
-    QRect labelRect = legendRect.adjusted(
-      kLegendPadding + kLegendBarWidth + kLegendPadding, kLegendPadding,
-      -kLegendPadding - kLegendNumberPadding, -kLegendPadding);
+    QRect labelRect(barRect.right() + 1 + kLegendPadding,
+      legendRect.top() + kLegendPadding, labelWidth,
+      legendRect.height() - 2 * kLegendPadding);
     painter.setPen(QPen(borderColor(), 1, Qt::SolidLine));
     if (!legendFont.family().isEmpty()) {
       painter.setFont(legendFont);
@@ -942,8 +988,17 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
     return;
   }
   
-  // Apply standard runtime range logic
-  if (runtimeRangeValid_) {
+  if (rangeMode_ == HeatmapRangeMode::kManual) {
+    minValue = rangeMinimum_;
+    maxValue = rangeMaximum_;
+    if (!std::isfinite(minValue) || !std::isfinite(maxValue)) {
+      minValue = 0.0;
+      maxValue = 1.0;
+    }
+    if (!(maxValue > minValue)) {
+      maxValue = minValue + 1.0;
+    }
+  } else if (runtimeRangeValid_) {
     minValue = std::min(minValue, runtimeMinValue_);
     maxValue = std::max(maxValue, runtimeMaxValue_);
   }

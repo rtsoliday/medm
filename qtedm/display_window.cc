@@ -8734,6 +8734,21 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
         element->setInvertGreyscale(invert);
         markDirty();
       },
+      [element]() { return element->rangeMode(); },
+      [this, element](HeatmapRangeMode mode) {
+        element->setRangeMode(mode);
+        markDirty();
+      },
+      [element]() { return element->rangeMinimum(); },
+      [this, element](double value) {
+        element->setRangeMinimum(value);
+        markDirty();
+      },
+      [element]() { return element->rangeMaximum(); },
+      [this, element](double value) {
+        element->setRangeMaximum(value);
+        markDirty();
+      },
       [element]() { return element->showTopProfile(); },
       [this, element](bool show) {
         element->setShowTopProfile(show);
@@ -20766,6 +20781,22 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
                 .arg(AdlWriter::heatmapProfileModeString(
                     heatmap->profileMode())));
       }
+      if (heatmap->rangeMode() != HeatmapRangeMode::kAuto) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("rangeMode=\"%1\"")
+                .arg(AdlWriter::heatmapRangeModeString(
+                    heatmap->rangeMode())));
+      }
+      if (std::abs(heatmap->rangeMinimum()) > 1e-12) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("rangeMin=%1")
+                .arg(QString::number(heatmap->rangeMinimum(), 'g', 15)));
+      }
+      if (std::abs(heatmap->rangeMaximum() - 1.0) > 1e-12) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("rangeMax=%1")
+                .arg(QString::number(heatmap->rangeMaximum(), 'g', 15)));
+      }
       if (!heatmap->invertGreyscale()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("invertGreyscale=\"false\""));
@@ -22222,6 +22253,22 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::heatmapProfileModeString(
                   heatmap->profileMode())));
     }
+    if (heatmap->rangeMode() != HeatmapRangeMode::kAuto) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("rangeMode=\"%1\"")
+              .arg(AdlWriter::heatmapRangeModeString(
+                  heatmap->rangeMode())));
+    }
+    if (std::abs(heatmap->rangeMinimum()) > 1e-12) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("rangeMin=%1")
+              .arg(QString::number(heatmap->rangeMinimum(), 'g', 15)));
+    }
+    if (std::abs(heatmap->rangeMaximum() - 1.0) > 1e-12) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("rangeMax=%1")
+              .arg(QString::number(heatmap->rangeMaximum(), 'g', 15)));
+    }
     if (!heatmap->invertGreyscale()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("invertGreyscale=\"false\""));
@@ -23624,6 +23671,17 @@ HeatmapProfileMode DisplayWindow::parseHeatmapProfileMode(
     return HeatmapProfileMode::kAveraged;
   }
   return HeatmapProfileMode::kAbsolute;
+}
+
+HeatmapRangeMode DisplayWindow::parseHeatmapRangeMode(
+    const QString &value) const
+{
+  const QString normalized = value.trimmed().toLower();
+  if (normalized.contains(QStringLiteral("manual"))
+      || normalized.contains(QStringLiteral("user"))) {
+    return HeatmapRangeMode::kManual;
+  }
+  return HeatmapRangeMode::kAuto;
 }
 
 bool DisplayWindow::parseHeatmapBool(
@@ -29530,6 +29588,28 @@ HeatmapElement *DisplayWindow::loadHeatmapElement(
   }
   if (!profileModeValue.isEmpty()) {
     element->setProfileMode(parseHeatmapProfileMode(profileModeValue));
+  }
+
+  QString rangeModeValue = propertyValue(heatmapNode,
+      QStringLiteral("rangeMode"));
+  if (rangeModeValue.isEmpty()) {
+    rangeModeValue = propertyValue(heatmapNode, QStringLiteral("rangeStyle"));
+  }
+  if (!rangeModeValue.isEmpty()) {
+    element->setRangeMode(parseHeatmapRangeMode(rangeModeValue));
+  }
+  const QString rangeMinValue = propertyValue(heatmapNode,
+      QStringLiteral("rangeMin"));
+  const double rangeMin = rangeMinValue.toDouble(&ok);
+  if (ok && std::isfinite(rangeMin)) {
+    element->setRangeMinimum(rangeMin);
+  }
+  ok = false;
+  const QString rangeMaxValue = propertyValue(heatmapNode,
+      QStringLiteral("rangeMax"));
+  const double rangeMax = rangeMaxValue.toDouble(&ok);
+  if (ok && std::isfinite(rangeMax)) {
+    element->setRangeMaximum(rangeMax);
   }
 
   if (currentCompositeOwner_) {

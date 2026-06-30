@@ -694,6 +694,12 @@ public:
       std::function<void(HeatmapColorMap)> colorMapSetter,
       std::function<bool()> invertGreyscaleGetter,
       std::function<void(bool)> invertGreyscaleSetter,
+      std::function<HeatmapRangeMode()> rangeModeGetter,
+      std::function<void(HeatmapRangeMode)> rangeModeSetter,
+      std::function<double()> rangeMinGetter,
+      std::function<void(double)> rangeMinSetter,
+      std::function<double()> rangeMaxGetter,
+      std::function<void(double)> rangeMaxSetter,
       std::function<bool()> showTopProfileGetter,
       std::function<void(bool)> showTopProfileSetter,
       std::function<bool()> showRightProfileGetter,
@@ -890,6 +896,9 @@ private:
 
 
   void updateHeatmapDimensionControls();
+
+
+  void updateHeatmapRangeControls();
 
 
   void updateWaterfallDependentControls();
@@ -1237,6 +1246,12 @@ private:
   void commitHeatmapYDimensionChannel();
 
 
+  void commitHeatmapRangeMinimum();
+
+
+  void commitHeatmapRangeMaximum();
+
+
   void commitWaterfallTitle();
 
 
@@ -1359,6 +1374,12 @@ private:
 
 
   int heatmapProfileModeToIndex(HeatmapProfileMode mode) const;
+
+
+  HeatmapRangeMode heatmapRangeModeFromIndex(int index) const;
+
+
+  int heatmapRangeModeToIndex(HeatmapRangeMode mode) const;
 
 
   bool heatmapBoolFromIndex(int index) const;
@@ -1530,6 +1551,9 @@ private:
   QComboBox *heatmapOrderCombo_ = nullptr;
   QComboBox *heatmapColorMapCombo_ = nullptr;
   QComboBox *heatmapInvertGreyscaleCombo_ = nullptr;
+  QComboBox *heatmapRangeModeCombo_ = nullptr;
+  QLineEdit *heatmapRangeMinEdit_ = nullptr;
+  QLineEdit *heatmapRangeMaxEdit_ = nullptr;
   QComboBox *heatmapPreserveAspectRatioCombo_ = nullptr;
   QComboBox *heatmapFlipHorizontalCombo_ = nullptr;
   QComboBox *heatmapFlipVerticalCombo_ = nullptr;
@@ -2378,6 +2402,12 @@ private:
   std::function<void(HeatmapColorMap)> heatmapColorMapSetter_;
   std::function<bool()> heatmapInvertGreyscaleGetter_;
   std::function<void(bool)> heatmapInvertGreyscaleSetter_;
+  std::function<HeatmapRangeMode()> heatmapRangeModeGetter_;
+  std::function<void(HeatmapRangeMode)> heatmapRangeModeSetter_;
+  std::function<double()> heatmapRangeMinGetter_;
+  std::function<void(double)> heatmapRangeMinSetter_;
+  std::function<double()> heatmapRangeMaxGetter_;
+  std::function<void(double)> heatmapRangeMaxSetter_;
   std::function<bool()> heatmapPreserveAspectRatioGetter_;
   std::function<void(bool)> heatmapPreserveAspectRatioSetter_;
   std::function<bool()> heatmapFlipHorizontalGetter_;

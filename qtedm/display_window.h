@@ -982,6 +982,7 @@ private:
   HeatmapRotation parseHeatmapRotation(const QString &value) const;
   HeatmapColorMap parseHeatmapColorMap(const QString &value) const;
   HeatmapProfileMode parseHeatmapProfileMode(const QString &value) const;
+  HeatmapRangeMode parseHeatmapRangeMode(const QString &value) const;
   bool parseHeatmapBool(const QString &value) const;
   WaterfallScrollDirection parseWaterfallScrollDirection(
       const QString &value) const;

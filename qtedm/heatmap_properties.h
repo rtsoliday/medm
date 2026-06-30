@@ -36,5 +36,11 @@ enum class HeatmapProfileMode
   kAveraged,
 };
 
+enum class HeatmapRangeMode
+{
+  kAuto,
+  kManual,
+};
+
 constexpr int kMinimumHeatmapWidth = 40;
 constexpr int kMinimumHeatmapHeight = 40;

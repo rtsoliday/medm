@@ -676,6 +676,36 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
       }
     });
 
+  heatmapRangeModeCombo_ = new QComboBox;
+  heatmapRangeModeCombo_->setFont(valueFont_);
+  heatmapRangeModeCombo_->setAutoFillBackground(true);
+  heatmapRangeModeCombo_->addItem(QStringLiteral("Auto"));
+  heatmapRangeModeCombo_->addItem(QStringLiteral("Manual"));
+  QObject::connect(heatmapRangeModeCombo_,
+    static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+    this, [this](int index) {
+      if (heatmapRangeModeSetter_) {
+        heatmapRangeModeSetter_(heatmapRangeModeFromIndex(index));
+      }
+      updateHeatmapRangeControls();
+    });
+
+  heatmapRangeMinEdit_ = createLineEdit();
+  committedTexts_.insert(heatmapRangeMinEdit_, heatmapRangeMinEdit_->text());
+  heatmapRangeMinEdit_->installEventFilter(this);
+  QObject::connect(heatmapRangeMinEdit_, &QLineEdit::returnPressed, this,
+    [this]() { commitHeatmapRangeMinimum(); });
+  QObject::connect(heatmapRangeMinEdit_, &QLineEdit::editingFinished, this,
+    [this]() { commitHeatmapRangeMinimum(); });
+
+  heatmapRangeMaxEdit_ = createLineEdit();
+  committedTexts_.insert(heatmapRangeMaxEdit_, heatmapRangeMaxEdit_->text());
+  heatmapRangeMaxEdit_->installEventFilter(this);
+  QObject::connect(heatmapRangeMaxEdit_, &QLineEdit::returnPressed, this,
+    [this]() { commitHeatmapRangeMaximum(); });
+  QObject::connect(heatmapRangeMaxEdit_, &QLineEdit::editingFinished, this,
+    [this]() { commitHeatmapRangeMaximum(); });
+
   heatmapPreserveAspectRatioCombo_ = new QComboBox;
   heatmapPreserveAspectRatioCombo_->setFont(valueFont_);
   heatmapPreserveAspectRatioCombo_->setAutoFillBackground(true);
@@ -741,6 +771,12 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
   addRow(heatmapLayout, heatmapRow++, QStringLiteral("Color Map"), heatmapColorMapCombo_);
   addRow(heatmapLayout, heatmapRow++, QStringLiteral("Invert Color Scale"),
     heatmapInvertGreyscaleCombo_);
+  addRow(heatmapLayout, heatmapRow++, QStringLiteral("Range Mode"),
+    heatmapRangeModeCombo_);
+  addRow(heatmapLayout, heatmapRow++, QStringLiteral("Range Minimum"),
+    heatmapRangeMinEdit_);
+  addRow(heatmapLayout, heatmapRow++, QStringLiteral("Range Maximum"),
+    heatmapRangeMaxEdit_);
   addRow(heatmapLayout, heatmapRow++, QStringLiteral("Preserve Aspect Ratio"),
     heatmapPreserveAspectRatioCombo_);
 
@@ -798,6 +834,7 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
     heatmapShowRightProfileCombo_);
   heatmapLayout->setRowStretch(heatmapRow, 1);
   updateHeatmapDimensionControls();
+  updateHeatmapRangeControls();
   entriesLayout->addWidget(heatmapSection_);
 
   waterfallSection_ = new QWidget(entriesWidget_);
@@ -9140,6 +9177,12 @@ void ResourcePaletteDialog::showForHeatmap(std::function<QRect()> geometryGetter
     std::function<void(HeatmapColorMap)> colorMapSetter,
     std::function<bool()> invertGreyscaleGetter,
     std::function<void(bool)> invertGreyscaleSetter,
+    std::function<HeatmapRangeMode()> rangeModeGetter,
+    std::function<void(HeatmapRangeMode)> rangeModeSetter,
+    std::function<double()> rangeMinGetter,
+    std::function<void(double)> rangeMinSetter,
+    std::function<double()> rangeMaxGetter,
+    std::function<void(double)> rangeMaxSetter,
     std::function<bool()> showTopProfileGetter,
     std::function<void(bool)> showTopProfileSetter,
     std::function<bool()> showRightProfileGetter,
@@ -9184,6 +9227,12 @@ void ResourcePaletteDialog::showForHeatmap(std::function<QRect()> geometryGetter
   heatmapColorMapSetter_ = std::move(colorMapSetter);
   heatmapInvertGreyscaleGetter_ = std::move(invertGreyscaleGetter);
   heatmapInvertGreyscaleSetter_ = std::move(invertGreyscaleSetter);
+  heatmapRangeModeGetter_ = std::move(rangeModeGetter);
+  heatmapRangeModeSetter_ = std::move(rangeModeSetter);
+  heatmapRangeMinGetter_ = std::move(rangeMinGetter);
+  heatmapRangeMinSetter_ = std::move(rangeMinSetter);
+  heatmapRangeMaxGetter_ = std::move(rangeMaxGetter);
+  heatmapRangeMaxSetter_ = std::move(rangeMaxSetter);
   heatmapPreserveAspectRatioGetter_ = std::move(preserveAspectRatioGetter);
   heatmapPreserveAspectRatioSetter_ = std::move(preserveAspectRatioSetter);
   heatmapFlipHorizontalGetter_ = std::move(flipHorizontalGetter);
@@ -9286,6 +9335,25 @@ void ResourcePaletteDialog::showForHeatmap(std::function<QRect()> geometryGetter
     const bool invert = heatmapInvertGreyscaleGetter_ ? heatmapInvertGreyscaleGetter_() : false;
     heatmapInvertGreyscaleCombo_->setCurrentIndex(heatmapBoolToIndex(invert));
   }
+  if (heatmapRangeModeCombo_) {
+    const QSignalBlocker blocker(heatmapRangeModeCombo_);
+    const HeatmapRangeMode mode = heatmapRangeModeGetter_
+        ? heatmapRangeModeGetter_()
+        : HeatmapRangeMode::kAuto;
+    heatmapRangeModeCombo_->setCurrentIndex(heatmapRangeModeToIndex(mode));
+  }
+  if (heatmapRangeMinEdit_) {
+    const double value = heatmapRangeMinGetter_ ? heatmapRangeMinGetter_() : 0.0;
+    const QSignalBlocker blocker(heatmapRangeMinEdit_);
+    heatmapRangeMinEdit_->setText(QString::number(value, 'g', 7));
+    committedTexts_[heatmapRangeMinEdit_] = heatmapRangeMinEdit_->text();
+  }
+  if (heatmapRangeMaxEdit_) {
+    const double value = heatmapRangeMaxGetter_ ? heatmapRangeMaxGetter_() : 1.0;
+    const QSignalBlocker blocker(heatmapRangeMaxEdit_);
+    heatmapRangeMaxEdit_->setText(QString::number(value, 'g', 7));
+    committedTexts_[heatmapRangeMaxEdit_] = heatmapRangeMaxEdit_->text();
+  }
   if (heatmapPreserveAspectRatioCombo_) {
     const QSignalBlocker blocker(heatmapPreserveAspectRatioCombo_);
     const bool preserve = heatmapPreserveAspectRatioGetter_ ? heatmapPreserveAspectRatioGetter_() : true;
@@ -9329,6 +9397,7 @@ void ResourcePaletteDialog::showForHeatmap(std::function<QRect()> geometryGetter
   }
 
   updateHeatmapDimensionControls();
+  updateHeatmapRangeControls();
   elementLabel_->setText(QStringLiteral("Heatmap"));
   showPaletteWithoutActivating();
 }
@@ -11083,6 +11152,21 @@ void ResourcePaletteDialog::clearSelectionState()
     const QSignalBlocker blocker(heatmapInvertGreyscaleCombo_);
     heatmapInvertGreyscaleCombo_->setCurrentIndex(1);
   }
+  if (heatmapRangeModeCombo_) {
+    const QSignalBlocker blocker(heatmapRangeModeCombo_);
+    heatmapRangeModeCombo_->setCurrentIndex(
+        heatmapRangeModeToIndex(HeatmapRangeMode::kAuto));
+  }
+  if (heatmapRangeMinEdit_) {
+    const QSignalBlocker blocker(heatmapRangeMinEdit_);
+    heatmapRangeMinEdit_->setText(QStringLiteral("0"));
+    committedTexts_[heatmapRangeMinEdit_] = heatmapRangeMinEdit_->text();
+  }
+  if (heatmapRangeMaxEdit_) {
+    const QSignalBlocker blocker(heatmapRangeMaxEdit_);
+    heatmapRangeMaxEdit_->setText(QStringLiteral("1"));
+    committedTexts_[heatmapRangeMaxEdit_] = heatmapRangeMaxEdit_->text();
+  }
   if (heatmapPreserveAspectRatioCombo_) {
     const QSignalBlocker blocker(heatmapPreserveAspectRatioCombo_);
     heatmapPreserveAspectRatioCombo_->setCurrentIndex(0);
@@ -11213,6 +11297,12 @@ void ResourcePaletteDialog::clearSelectionState()
   heatmapColorMapSetter_ = {};
   heatmapInvertGreyscaleGetter_ = {};
   heatmapInvertGreyscaleSetter_ = {};
+  heatmapRangeModeGetter_ = {};
+  heatmapRangeModeSetter_ = {};
+  heatmapRangeMinGetter_ = {};
+  heatmapRangeMinSetter_ = {};
+  heatmapRangeMaxGetter_ = {};
+  heatmapRangeMaxSetter_ = {};
   heatmapPreserveAspectRatioGetter_ = {};
   heatmapPreserveAspectRatioSetter_ = {};
   heatmapFlipHorizontalGetter_ = {};
@@ -11901,6 +11991,19 @@ void ResourcePaletteDialog::updateHeatmapDimensionControls()
   setFieldEnabled(heatmapXDimChannelEdit_, xFromChannel);
   setFieldEnabled(heatmapYDimEdit_, !yFromChannel);
   setFieldEnabled(heatmapYDimChannelEdit_, yFromChannel);
+}
+
+
+
+void ResourcePaletteDialog::updateHeatmapRangeControls()
+{
+  const bool manualRange = heatmapRangeModeCombo_
+      && heatmapRangeModeCombo_->currentIndex()
+          == heatmapRangeModeToIndex(HeatmapRangeMode::kManual);
+  setFieldEnabled(heatmapRangeMinEdit_,
+      manualRange && static_cast<bool>(heatmapRangeMinSetter_));
+  setFieldEnabled(heatmapRangeMaxEdit_,
+      manualRange && static_cast<bool>(heatmapRangeMaxSetter_));
 }
 
 
@@ -14255,6 +14358,48 @@ void ResourcePaletteDialog::commitHeatmapYDimensionChannel()
 
 
 
+void ResourcePaletteDialog::commitHeatmapRangeMinimum()
+{
+  if (!heatmapRangeMinEdit_) {
+    return;
+  }
+  if (!heatmapRangeMinSetter_) {
+    revertLineEdit(heatmapRangeMinEdit_);
+    return;
+  }
+  bool ok = false;
+  const double value = heatmapRangeMinEdit_->text().toDouble(&ok);
+  if (!ok || !std::isfinite(value)) {
+    revertLineEdit(heatmapRangeMinEdit_);
+    return;
+  }
+  heatmapRangeMinSetter_(value);
+  committedTexts_[heatmapRangeMinEdit_] = heatmapRangeMinEdit_->text();
+}
+
+
+
+void ResourcePaletteDialog::commitHeatmapRangeMaximum()
+{
+  if (!heatmapRangeMaxEdit_) {
+    return;
+  }
+  if (!heatmapRangeMaxSetter_) {
+    revertLineEdit(heatmapRangeMaxEdit_);
+    return;
+  }
+  bool ok = false;
+  const double value = heatmapRangeMaxEdit_->text().toDouble(&ok);
+  if (!ok || !std::isfinite(value)) {
+    revertLineEdit(heatmapRangeMaxEdit_);
+    return;
+  }
+  heatmapRangeMaxSetter_(value);
+  committedTexts_[heatmapRangeMaxEdit_] = heatmapRangeMaxEdit_->text();
+}
+
+
+
 void ResourcePaletteDialog::commitWaterfallTitle()
 {
   if (!waterfallTitleEdit_) {
@@ -14944,6 +15089,21 @@ HeatmapProfileMode ResourcePaletteDialog::heatmapProfileModeFromIndex(int index)
 int ResourcePaletteDialog::heatmapProfileModeToIndex(HeatmapProfileMode mode) const
 {
   return mode == HeatmapProfileMode::kAveraged ? 1 : 0;
+}
+
+
+
+HeatmapRangeMode ResourcePaletteDialog::heatmapRangeModeFromIndex(int index) const
+{
+  return index == 1 ? HeatmapRangeMode::kManual
+                    : HeatmapRangeMode::kAuto;
+}
+
+
+
+int ResourcePaletteDialog::heatmapRangeModeToIndex(HeatmapRangeMode mode) const
+{
+  return mode == HeatmapRangeMode::kManual ? 1 : 0;
 }
 
 

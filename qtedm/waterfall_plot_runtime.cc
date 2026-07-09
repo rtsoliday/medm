@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include <QDateTime>
 #include <QDebug>
@@ -251,10 +252,17 @@ void WaterfallPlotRuntime::handleDataValue(const SharedChannelData &data)
 
 void WaterfallPlotRuntime::handleCountValue(const SharedChannelData &data)
 {
-  if (!data.isNumeric) {
+  if (!data.isNumeric || !std::isfinite(data.numericValue)) {
     return;
   }
-  countFromChannel_ = std::max(0, static_cast<int>(std::llround(data.numericValue)));
+  if (data.numericValue <= 0.0) {
+    countFromChannel_ = 0;
+  } else if (data.numericValue
+      >= static_cast<double>(std::numeric_limits<int>::max())) {
+    countFromChannel_ = std::numeric_limits<int>::max();
+  } else {
+    countFromChannel_ = static_cast<int>(std::llround(data.numericValue));
+  }
 }
 
 void WaterfallPlotRuntime::handleTriggerValue(const SharedChannelData &data)

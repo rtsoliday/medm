@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <QByteArray>
+
 #include <cvtFast.h>
 
 namespace TextFormatUtils {
@@ -38,6 +40,31 @@ int clampPrecision(int precision)
   return precision;
 }
 
+QString formatNonFinite(double value)
+{
+  if (std::isnan(value)) {
+    return QStringLiteral("NaN");
+  }
+  return std::signbit(value) ? QStringLiteral("-Inf")
+                             : QStringLiteral("+Inf");
+}
+
+long saturatedLongFromDouble(double value, bool roundToNearest)
+{
+  if (std::isnan(value)) {
+    return 0;
+  }
+  if (value <= static_cast<double>(std::numeric_limits<long>::min())) {
+    return std::numeric_limits<long>::min();
+  }
+  if (value >= static_cast<double>(std::numeric_limits<long>::max())) {
+    return std::numeric_limits<long>::max();
+  }
+  const double converted = roundToNearest ? std::round(value)
+                                          : std::trunc(value);
+  return static_cast<long>(converted);
+}
+
 /* Format value with engineering notation (powers of 10 in multiples of 3). */
 void localCvtDoubleToExpNotationString(double value, char *textField,
     unsigned short precision)
@@ -46,63 +73,48 @@ void localCvtDoubleToExpNotationString(double value, char *textField,
     return;
   }
 
+  if (!std::isfinite(value)) {
+    const QByteArray text = formatNonFinite(value).toLatin1();
+    std::snprintf(textField, kMaxTextField, "%s", text.constData());
+    return;
+  }
+
   double absVal = std::fabs(value);
   bool isNegative = value < 0.0;
   double scaled = absVal;
   int exponent = 0;
   char buffer[kMaxTextField];
-  int index = 0;
-
-  auto appendChar = [&](char ch) {
-    if (index < kMaxTextField - 1) {
-      textField[index++] = ch;
-    }
-  };
-
-  auto appendString = [&](const char *source) {
-    if (!source) {
-      return;
-    }
-    while (*source != '\0' && index < kMaxTextField - 1) {
-      textField[index++] = *source++;
-    }
-  };
 
   if (absVal < 1.0) {
     if (absVal != 0.0) {
       while (scaled < 1.0) {
         scaled *= 1000.0;
-        exponent += 3;
+        exponent -= 3;
       }
     }
-    localCvtDoubleToString(scaled, buffer, precision);
-    if (isNegative) {
-      appendChar('-');
+  } else {
+    while (scaled >= 1000.0) {
+      scaled *= 0.001;
+      exponent += 3;
     }
-    appendString(buffer);
-    appendChar('e');
-    appendChar((exponent == 0) ? '+' : '-');
-    appendChar(static_cast<char>('0' + exponent / 10));
-    appendChar(static_cast<char>('0' + exponent % 10));
-    textField[index] = '\0';
-    return;
-  }
-
-  while (scaled >= 1000.0) {
-    scaled *= 0.001;
-    exponent += 3;
   }
 
   localCvtDoubleToString(scaled, buffer, precision);
+  QByteArray formatted;
+  formatted.reserve(32);
   if (isNegative) {
-    appendChar('-');
+    formatted.append('-');
   }
-  appendString(buffer);
-  appendChar('e');
-  appendChar('+');
-  appendChar(static_cast<char>('0' + exponent / 10));
-  appendChar(static_cast<char>('0' + exponent % 10));
-  textField[index] = '\0';
+  formatted.append(buffer);
+  formatted.append('e');
+  formatted.append(exponent < 0 ? '-' : '+');
+  formatted.append(QByteArray::number(std::abs(exponent)).rightJustified(
+      2, '0'));
+  const int copyLength = static_cast<int>(std::min<qsizetype>(
+      formatted.size(), kMaxTextField - 1));
+  std::memcpy(textField, formatted.constData(),
+      static_cast<size_t>(copyLength));
+  textField[copyLength] = '\0';
 }
 
 /* Convert a scalar value into a colon-separated sexagesimal string.
@@ -110,6 +122,10 @@ void localCvtDoubleToExpNotationString(double value, char *textField,
  * and fractional portions are expanded into minutes and seconds. */
 QString makeSexagesimal(double value, unsigned short precision)
 {
+  if (!std::isfinite(value)) {
+    return formatNonFinite(value);
+  }
+
   constexpr unsigned short kMaxPrecision = 8;
   if (precision > kMaxPrecision) {
     precision = kMaxPrecision;
@@ -169,9 +185,11 @@ QString formatHex(long value)
     return QString::fromLatin1(buffer);
   }
 
-  bool negative = value < 0;
-  unsigned long magnitude = negative ? static_cast<unsigned long>(-value)
-      : static_cast<unsigned long>(value);
+  const bool negative = value < 0;
+  unsigned long magnitude = static_cast<unsigned long>(value);
+  if (negative) {
+    magnitude = 0UL - magnitude;
+  }
   char digits[sizeof(long) * 2 + 1];
   int index = 0;
   while (magnitude != 0 && index < static_cast<int>(sizeof(digits))) {
@@ -203,9 +221,11 @@ QString formatOctal(long value)
     return QString::fromLatin1(buffer);
   }
 
-  bool negative = value < 0;
-  unsigned long magnitude = negative ? static_cast<unsigned long>(-value)
-      : static_cast<unsigned long>(value);
+  const bool negative = value < 0;
+  unsigned long magnitude = static_cast<unsigned long>(value);
+  if (negative) {
+    magnitude = 0UL - magnitude;
+  }
   char digits[sizeof(long) * 3];
   int index = 0;
   while (magnitude != 0 && index < static_cast<int>(sizeof(digits))) {

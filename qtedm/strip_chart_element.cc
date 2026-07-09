@@ -41,6 +41,25 @@ constexpr int kMaxSampleBurst = 32;
 
 constexpr int kDefaultPenColorIndex = 14;
 
+qint64 roundedPositiveInterval(double value)
+{
+  if (!std::isfinite(value) || value <= 0.0) {
+    return 1;
+  }
+  if (value >= static_cast<double>(std::numeric_limits<qint64>::max())) {
+    return std::numeric_limits<qint64>::max();
+  }
+  return std::max<qint64>(1, static_cast<qint64>(std::llround(value)));
+}
+
+qint64 saturatingAdd(qint64 base, qint64 increment)
+{
+  if (increment > std::numeric_limits<qint64>::max() - base) {
+    return std::numeric_limits<qint64>::max();
+  }
+  return base + increment;
+}
+
 // Calculate axis label font size based on widget dimensions (mimics MEDM)
 int calculateLabelFontSize(int widgetWidth, int widgetHeight)
 {
@@ -1991,7 +2010,8 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
   if (nextAdvanceTimeMs_ == 0) {
     appendSampleColumn();
     lastSampleMs_ = nowMs;
-    nextAdvanceTimeMs_ = nowMs + static_cast<qint64>(std::llround(sampleIntervalMs_));
+    nextAdvanceTimeMs_ = saturatingAdd(nowMs,
+        roundedPositiveInterval(sampleIntervalMs_));
     return;
   }
 
@@ -2010,7 +2030,8 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
   }
 
   // Advance nextAdvanceTimeMs_ by the interval * totalPixels (MEDM-style)
-  nextAdvanceTimeMs_ += static_cast<qint64>(std::llround(interval * totalPixels));
+  nextAdvanceTimeMs_ = saturatingAdd(nextAdvanceTimeMs_,
+      roundedPositiveInterval(interval * totalPixels));
   lastSampleMs_ = nowMs;
 }
 

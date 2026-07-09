@@ -93,12 +93,14 @@ QString formatNumericValue(TextMonitorFormat format, double value, int precision
     cvtDoubleToCompactString(value, buffer, digits);
     return QString::fromLatin1(buffer);
   case TextMonitorFormat::kTruncated:
-    cvtLongToString(static_cast<long>(value), buffer);
+    cvtLongToString(TextFormatUtils::saturatedLongFromDouble(value), buffer);
     return QString::fromLatin1(buffer);
   case TextMonitorFormat::kHexadecimal:
-    return TextFormatUtils::formatHex(static_cast<long>(value));
+    return TextFormatUtils::formatHex(
+        TextFormatUtils::saturatedLongFromDouble(value));
   case TextMonitorFormat::kOctal:
-    return TextFormatUtils::formatOctal(static_cast<long>(value));
+    return TextFormatUtils::formatOctal(
+        TextFormatUtils::saturatedLongFromDouble(value));
   case TextMonitorFormat::kSexagesimal:
     return TextFormatUtils::makeSexagesimal(value, digits);
   case TextMonitorFormat::kSexagesimalHms:

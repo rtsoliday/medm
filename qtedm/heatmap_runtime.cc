@@ -3,6 +3,8 @@
 #include <QDebug>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 #include <db_access.h>
 
@@ -155,7 +157,10 @@ void HeatmapRuntime::subscribeDimensionChannel(ChannelState &state,
       DBR_TIME_LONG,
       1,
       [this, &state](const SharedChannelData &data) {
-        if (!data.isNumeric) {
+        if (!data.isNumeric || !std::isfinite(data.numericValue)
+            || data.numericValue <= 0.0
+            || data.numericValue
+                > static_cast<double>(std::numeric_limits<int>::max())) {
           return;
         }
         const int value = static_cast<int>(data.numericValue);

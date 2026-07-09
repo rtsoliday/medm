@@ -20787,12 +20787,12 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
                 .arg(AdlWriter::heatmapRangeModeString(
                     heatmap->rangeMode())));
       }
-      if (std::abs(heatmap->rangeMinimum()) > 1e-12) {
+      if (AdlWriter::isNonDefaultDouble(heatmap->rangeMinimum(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("rangeMin=%1")
                 .arg(QString::number(heatmap->rangeMinimum(), 'g', 15)));
       }
-      if (std::abs(heatmap->rangeMaximum() - 1.0) > 1e-12) {
+      if (AdlWriter::isNonDefaultDouble(heatmap->rangeMaximum(), 1.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("rangeMax=%1")
                 .arg(QString::number(heatmap->rangeMaximum(), 'g', 15)));
@@ -20977,12 +20977,12 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
                 .arg(AdlWriter::waterfallIntensityScaleString(
                     waterfall->intensityScale())));
       }
-      if (std::abs(waterfall->intensityMin()) > 1e-12) {
+      if (AdlWriter::isNonDefaultDouble(waterfall->intensityMin(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("intensityMin=%1")
                 .arg(QString::number(waterfall->intensityMin(), 'g', 15)));
       }
-      if (std::abs(waterfall->intensityMax() - 1.0) > 1e-12) {
+      if (AdlWriter::isNonDefaultDouble(waterfall->intensityMax(), 1.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("intensityMax=%1")
                 .arg(QString::number(waterfall->intensityMax(), 'g', 15)));
@@ -20993,7 +20993,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (waterfall->showGrid()) {
         AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showGrid=1"));
       }
-      if (std::abs(waterfall->samplePeriod()) > 1e-12) {
+      if (AdlWriter::isNonDefaultDouble(waterfall->samplePeriod(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("samplePeriod=%1")
                 .arg(QString::number(waterfall->samplePeriod(), 'g', 15)));
@@ -22259,12 +22259,12 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::heatmapRangeModeString(
                   heatmap->rangeMode())));
     }
-    if (std::abs(heatmap->rangeMinimum()) > 1e-12) {
+    if (AdlWriter::isNonDefaultDouble(heatmap->rangeMinimum(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("rangeMin=%1")
               .arg(QString::number(heatmap->rangeMinimum(), 'g', 15)));
     }
-    if (std::abs(heatmap->rangeMaximum() - 1.0) > 1e-12) {
+    if (AdlWriter::isNonDefaultDouble(heatmap->rangeMaximum(), 1.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("rangeMax=%1")
               .arg(QString::number(heatmap->rangeMaximum(), 'g', 15)));
@@ -22444,12 +22444,12 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
               .arg(AdlWriter::waterfallIntensityScaleString(
                   waterfall->intensityScale())));
     }
-    if (std::abs(waterfall->intensityMin()) > 1e-12) {
+    if (AdlWriter::isNonDefaultDouble(waterfall->intensityMin(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("intensityMin=%1")
               .arg(QString::number(waterfall->intensityMin(), 'g', 15)));
     }
-    if (std::abs(waterfall->intensityMax() - 1.0) > 1e-12) {
+    if (AdlWriter::isNonDefaultDouble(waterfall->intensityMax(), 1.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("intensityMax=%1")
               .arg(QString::number(waterfall->intensityMax(), 'g', 15)));
@@ -22462,7 +22462,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("showGrid=1"));
     }
-    if (std::abs(waterfall->samplePeriod()) > 1e-12) {
+    if (AdlWriter::isNonDefaultDouble(waterfall->samplePeriod(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("samplePeriod=%1")
               .arg(QString::number(waterfall->samplePeriod(), 'g', 15)));

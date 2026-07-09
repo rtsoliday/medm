@@ -24,11 +24,13 @@ namespace {
 using RuntimeUtils::kInvalidSeverity;
 using RuntimeUtils::isNumericFieldType;
 using TextFormatUtils::formatHex;
+using TextFormatUtils::formatNonFinite;
 using TextFormatUtils::formatOctal;
 using TextFormatUtils::kMaxTextField;
 using TextFormatUtils::kPi;
 using TextFormatUtils::localCvtDoubleToExpNotationString;
 using TextFormatUtils::makeSexagesimal;
+using TextFormatUtils::saturatedLongFromDouble;
 
 bool parseSexagesimalField(const char *text, char delimiter, int &sign,
     const char *&next, double &value)
@@ -585,6 +587,9 @@ QString TextAreaRuntime::formatNumeric(double value, int precision) const
   if (!element_) {
     return QString();
   }
+  if (!std::isfinite(value)) {
+    return formatNonFinite(value);
+  }
 
   const unsigned short epicsPrecision = static_cast<unsigned short>(precision);
   char buffer[kMaxTextField];
@@ -605,12 +610,12 @@ QString TextAreaRuntime::formatNumeric(double value, int precision) const
     cvtDoubleToCompactString(value, buffer, epicsPrecision);
     break;
   case TextMonitorFormat::kTruncated:
-    cvtLongToString(static_cast<long>(value), buffer);
+    cvtLongToString(saturatedLongFromDouble(value), buffer);
     break;
   case TextMonitorFormat::kHexadecimal:
-    return formatHex(static_cast<long>(std::llround(value)));
+    return formatHex(saturatedLongFromDouble(value, true));
   case TextMonitorFormat::kOctal:
-    return formatOctal(static_cast<long>(std::llround(value)));
+    return formatOctal(saturatedLongFromDouble(value, true));
   case TextMonitorFormat::kSexagesimal:
     return makeSexagesimal(value, epicsPrecision);
   case TextMonitorFormat::kSexagesimalHms:
@@ -657,8 +662,10 @@ bool TextAreaRuntime::parseNumericInput(const QString &text, double &value) cons
     return ok;
   case TextMonitorFormat::kSexagesimal:
   case TextMonitorFormat::kSexagesimalHms:
-  case TextMonitorFormat::kSexagesimalDms:
-    return parseSexagesimal(trimmed, value);
+  case TextMonitorFormat::kSexagesimalDms: {
+    const bool parsed = parseSexagesimal(trimmed, value);
+    return parsed && std::isfinite(value);
+  }
   case TextMonitorFormat::kDecimal:
   case TextMonitorFormat::kExponential:
   case TextMonitorFormat::kEngineering:
@@ -666,7 +673,7 @@ bool TextAreaRuntime::parseNumericInput(const QString &text, double &value) cons
   case TextMonitorFormat::kString:
   default:
     value = trimmed.toDouble(&ok);
-    return ok;
+    return ok && std::isfinite(value);
   }
 }
 
@@ -726,6 +733,11 @@ bool TextAreaRuntime::parseEnumInput(const QString &text, short &value) const
   bool ok = false;
   const int numeric = trimmed.toInt(&ok);
   if (ok) {
+    if (numeric < 0
+        || numeric > static_cast<int>(std::numeric_limits<dbr_enum_t>::max())
+        || (!enumStrings_.isEmpty() && numeric >= enumStrings_.size())) {
+      return false;
+    }
     value = static_cast<short>(numeric);
     return true;
   }

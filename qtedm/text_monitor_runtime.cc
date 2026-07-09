@@ -25,7 +25,9 @@ using TextFormatUtils::kPi;
 using TextFormatUtils::clampPrecision;
 using TextFormatUtils::localCvtDoubleToExpNotationString;
 using TextFormatUtils::makeSexagesimal;
+using TextFormatUtils::saturatedLongFromDouble;
 using TextFormatUtils::formatHex;
+using TextFormatUtils::formatNonFinite;
 using TextFormatUtils::formatOctal;
 
 } // namespace
@@ -349,6 +351,9 @@ QString TextMonitorRuntime::formatNumeric(double value, int precision) const
   if (!element_) {
     return QString();
   }
+  if (!std::isfinite(value)) {
+    return formatNonFinite(value);
+  }
 
   unsigned short epicsPrecision = static_cast<unsigned short>(precision);
   char buffer[kMaxTextField];
@@ -369,12 +374,12 @@ QString TextMonitorRuntime::formatNumeric(double value, int precision) const
     cvtDoubleToCompactString(value, buffer, epicsPrecision);
     break;
   case TextMonitorFormat::kTruncated:
-    cvtLongToString(static_cast<long>(value), buffer);
+    cvtLongToString(saturatedLongFromDouble(value), buffer);
     break;
   case TextMonitorFormat::kHexadecimal:
-    return formatHex(static_cast<long>(value));
+    return formatHex(saturatedLongFromDouble(value));
   case TextMonitorFormat::kOctal:
-    return formatOctal(static_cast<long>(value));
+    return formatOctal(saturatedLongFromDouble(value));
   case TextMonitorFormat::kSexagesimal: {
     return makeSexagesimal(value, epicsPrecision);
   }

@@ -90,6 +90,10 @@ QString formatCartesianAxisValue(double value, CartesianPlotAxisStyle style,
   if (!std::isfinite(value)) {
     return QString();
   }
+  if (value <= static_cast<double>(std::numeric_limits<qint64>::min())
+      || value >= static_cast<double>(std::numeric_limits<qint64>::max())) {
+    return QString::number(value, 'g', 6);
+  }
   const qint64 epochSeconds = static_cast<qint64>(std::llround(value));
   const QDateTime timestamp = QDateTime::fromSecsSinceEpoch(epochSeconds);
   if (!timestamp.isValid()) {

@@ -28,6 +28,7 @@ class TestAdlWriter : public QObject
 
 private slots:
   void escapesSpecialCharacters();
+  void preservesSmallNonDefaultDoubles();
   void writesDynamicAttributeSection();
   void writesLimitsSection();
   void writesTextAreaEnumStrings();
@@ -42,6 +43,14 @@ void TestAdlWriter::escapesSpecialCharacters()
 {
   QCOMPARE(AdlWriter::escapeAdlString(QStringLiteral("a\"b\nc\t\\")),
       QStringLiteral("a\\\"b\\nc\\t\\\\"));
+}
+
+void TestAdlWriter::preservesSmallNonDefaultDoubles()
+{
+  QVERIFY(AdlWriter::isNonDefaultDouble(1e-13, 0.0));
+  QVERIFY(AdlWriter::isNonDefaultDouble(1.0 - 1e-13, 1.0));
+  QVERIFY(!AdlWriter::isNonDefaultDouble(0.0, 0.0));
+  QVERIFY(!AdlWriter::isNonDefaultDouble(1.0, 1.0));
 }
 
 void TestAdlWriter::writesDynamicAttributeSection()

@@ -331,7 +331,8 @@ QString WaveTableRuntime::formatNumeric(double value) const
   case WaveTableValueFormat::kScientific:
     return QString::number(value, 'e', precision);
   case WaveTableValueFormat::kHex:
-    return TextFormatUtils::formatHex(static_cast<long>(std::llround(value)));
+    return TextFormatUtils::formatHex(
+        TextFormatUtils::saturatedLongFromDouble(value, true));
   case WaveTableValueFormat::kEngineering: {
     char buffer[TextFormatUtils::kMaxTextField];
     TextFormatUtils::localCvtDoubleToExpNotationString(value, buffer,
@@ -349,9 +350,13 @@ QString WaveTableRuntime::formatNumeric(double value) const
 
 QString WaveTableRuntime::formatEnum(double value) const
 {
-  const int index = static_cast<int>(std::llround(value));
-  if (index >= 0 && index < enumStrings_.size()) {
-    return enumStrings_.at(index);
+  if (std::isfinite(value) && !enumStrings_.isEmpty()
+      && value >= -0.5
+      && value < static_cast<double>(enumStrings_.size()) - 0.5) {
+    const int index = static_cast<int>(std::llround(value));
+    if (index >= 0 && index < enumStrings_.size()) {
+      return enumStrings_.at(index);
+    }
   }
   return formatNumeric(value);
 }

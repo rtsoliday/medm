@@ -284,6 +284,12 @@ private:
 
     QString value = parseToken();
 
+    if (parseError_) {
+
+      return std::nullopt;
+
+    }
+
     if (value.isNull() && index_ == valueStart) {
 
       setError(QStringLiteral("Expected value"));
@@ -319,6 +325,12 @@ private:
     }
 
     QString name = parseToken();
+
+    if (parseError_) {
+
+      return std::nullopt;
+
+    }
 
     if (name.isEmpty() && peek() != QChar('{')) {
 
@@ -440,6 +452,8 @@ private:
 
   {
 
+    parseError_ = true;
+
     if (errorMessage_) {
 
       *errorMessage_ = message;
@@ -455,6 +469,8 @@ private:
   QString *errorMessage_ = nullptr;
 
   int index_ = 0;
+
+  bool parseError_ = false;
 
 };
 

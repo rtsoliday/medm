@@ -17,8 +17,15 @@ constexpr double kPi = 3.14159265358979323846;
  * Returns 0 if negative, kMaxPrecision if too large. */
 int clampPrecision(int precision);
 
+/* Format a non-finite value without passing it through integer conversions. */
+QString formatNonFinite(double value);
+
+/* Convert a double to long without undefined behavior outside long's range. */
+long saturatedLongFromDouble(double value, bool roundToNearest = false);
+
 /* Convert a double to engineering-style exponential notation.
- * Exponents are emitted in multiples of three using e+NN / e-NN.
+ * Exponents are emitted in multiples of three using e+NN / e-NN, growing
+ * to three digits when required by the range of a double.
  * textField must be at least kMaxTextField bytes. */
 void localCvtDoubleToExpNotationString(double value, char *textField,
     unsigned short precision);

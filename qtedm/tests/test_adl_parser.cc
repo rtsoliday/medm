@@ -18,6 +18,7 @@ private slots:
   void parsesPvTableBlock();
   void parsesWaveTableBlock();
   void rejectsMalformedInput();
+  void rejectsTopLevelUnterminatedString();
 };
 
 void TestAdlParser::parsesMinimalFixture()
@@ -409,6 +410,16 @@ void TestAdlParser::rejectsMalformedInput()
     QVERIFY(!root.has_value());
     QVERIFY(!errorMessage.isEmpty());
   }
+}
+
+void TestAdlParser::rejectsTopLevelUnterminatedString()
+{
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(
+      QStringLiteral("name=\"unterminated"), &errorMessage);
+
+  QVERIFY(!root.has_value());
+  QCOMPARE(errorMessage, QStringLiteral("Unterminated string literal"));
 }
 
 QTEST_APPLESS_MAIN(TestAdlParser)

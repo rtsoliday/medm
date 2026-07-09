@@ -754,6 +754,10 @@ QSize HeatmapElement::effectiveDimensions() const
   if (effectiveX <= 0 || effectiveY <= 0) {
     return QSize();
   }
+  const qint64 cellCount = static_cast<qint64>(effectiveX) * effectiveY;
+  if (cellCount > std::numeric_limits<int>::max()) {
+    return QSize();
+  }
   return QSize(effectiveX, effectiveY);
 }
 
@@ -824,7 +828,8 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
 
   const int width = dims.width();
   const int height = dims.height();
-  const int totalCells = width * height;
+  const int totalCells = static_cast<int>(
+      static_cast<qint64>(width) * height);
   if (totalCells <= 0) {
     cachedRenderSize_ = QSize();
     cachedImage_ = QImage();
@@ -837,7 +842,8 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
   if (isExecuteMode()) {
     if (runtimeSharedValues_) {
       dataValues = runtimeSharedValues_.get();
-      dataCount = runtimeSharedSize_;
+      dataCount = static_cast<int>(std::min(runtimeSharedSize_,
+          static_cast<size_t>(std::numeric_limits<int>::max())));
     } else {
       dataValues = runtimeValues_.constData();
       dataCount = runtimeValues_.size();
@@ -869,6 +875,25 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
     
     if (xEnd <= xStart) xEnd = xStart + 1;
     if (yEnd <= yStart) yEnd = yStart + 1;
+  }
+
+  if (order_ == HeatmapOrder::kRowMajor) {
+    const int populatedWidth = std::min(width, available);
+    const int populatedHeight = static_cast<int>(
+        (static_cast<qint64>(available) + width - 1) / width);
+    xEnd = std::min(xEnd, populatedWidth);
+    yEnd = std::min(yEnd, populatedHeight);
+  } else {
+    const int populatedWidth = static_cast<int>(
+        (static_cast<qint64>(available) + height - 1) / height);
+    const int populatedHeight = std::min(height, available);
+    xEnd = std::min(xEnd, populatedWidth);
+    yEnd = std::min(yEnd, populatedHeight);
+  }
+  if (xStart >= xEnd || yStart >= yEnd) {
+    cachedRenderSize_ = QSize();
+    cachedImage_ = QImage();
+    return;
   }
   
   const int zoomedWidth = xEnd - xStart;
@@ -1110,15 +1135,21 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
   const QVector<QRgb> &palette = cachedPalette();
 
   for (int dy = 0; dy < renderSize.height(); ++dy) {
-    const int srcYStart = yStart + (dy * zoomedHeight) / renderSize.height();
-    int srcYEnd = yStart + ((dy + 1) * zoomedHeight) / renderSize.height();
+    const int srcYStart = yStart + static_cast<int>(
+        (static_cast<qint64>(dy) * zoomedHeight) / renderSize.height());
+    int srcYEnd = yStart + static_cast<int>(
+        (static_cast<qint64>(dy + 1) * zoomedHeight)
+            / renderSize.height());
     srcYEnd = std::max(srcYStart + 1, srcYEnd);
     srcYEnd = std::min(srcYEnd, yEnd);
 
     QRgb *scanLine = reinterpret_cast<QRgb*>(cachedImage_.scanLine(dy));
     for (int dx = 0; dx < renderSize.width(); ++dx) {
-      const int srcXStart = xStart + (dx * zoomedWidth) / renderSize.width();
-      int srcXEnd = xStart + ((dx + 1) * zoomedWidth) / renderSize.width();
+      const int srcXStart = xStart + static_cast<int>(
+          (static_cast<qint64>(dx) * zoomedWidth) / renderSize.width());
+      int srcXEnd = xStart + static_cast<int>(
+          (static_cast<qint64>(dx + 1) * zoomedWidth)
+              / renderSize.width());
       srcXEnd = std::max(srcXStart + 1, srcXEnd);
       srcXEnd = std::min(srcXEnd, xEnd);
 

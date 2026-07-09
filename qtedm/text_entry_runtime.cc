@@ -25,11 +25,13 @@ namespace {
 using RuntimeUtils::kInvalidSeverity;
 using RuntimeUtils::isNumericFieldType;
 using TextFormatUtils::formatHex;
+using TextFormatUtils::formatNonFinite;
 using TextFormatUtils::formatOctal;
 using TextFormatUtils::kMaxTextField;
 using TextFormatUtils::kPi;
 using TextFormatUtils::localCvtDoubleToExpNotationString;
 using TextFormatUtils::makeSexagesimal;
+using TextFormatUtils::saturatedLongFromDouble;
 
 bool parseSexagesimalField(const char *text, char delimiter, int &sign,
     const char *&next, double &value)
@@ -552,6 +554,9 @@ QString TextEntryRuntime::formatNumeric(double value, int precision) const
   if (!element_) {
     return QString();
   }
+  if (!std::isfinite(value)) {
+    return formatNonFinite(value);
+  }
 
   unsigned short epicsPrecision = static_cast<unsigned short>(precision);
   char buffer[kMaxTextField];
@@ -572,12 +577,12 @@ QString TextEntryRuntime::formatNumeric(double value, int precision) const
     cvtDoubleToCompactString(value, buffer, epicsPrecision);
     break;
   case TextMonitorFormat::kTruncated:
-    cvtLongToString(static_cast<long>(value), buffer);
+    cvtLongToString(saturatedLongFromDouble(value), buffer);
     break;
   case TextMonitorFormat::kHexadecimal:
-    return formatHex(static_cast<long>(std::llround(value)));
+    return formatHex(saturatedLongFromDouble(value, true));
   case TextMonitorFormat::kOctal:
-    return formatOctal(static_cast<long>(std::llround(value)));
+    return formatOctal(saturatedLongFromDouble(value, true));
   case TextMonitorFormat::kSexagesimal:
     return makeSexagesimal(value, epicsPrecision);
   case TextMonitorFormat::kSexagesimalHms:
@@ -623,19 +628,19 @@ bool TextEntryRuntime::parseNumericInput(const QString &text,
     if (!parseSexagesimal(trimmed, value)) {
       return false;
     }
-    return true;
+    return std::isfinite(value);
   case TextMonitorFormat::kSexagesimalHms:
     if (!parseSexagesimal(trimmed, value)) {
       return false;
     }
     value *= kPi / 12.0;
-    return true;
+    return std::isfinite(value);
   case TextMonitorFormat::kSexagesimalDms:
     if (!parseSexagesimal(trimmed, value)) {
       return false;
     }
     value *= kPi / 180.0;
-    return true;
+    return std::isfinite(value);
   case TextMonitorFormat::kTruncated:
   case TextMonitorFormat::kCompact:
   case TextMonitorFormat::kEngineering:
@@ -648,7 +653,7 @@ bool TextEntryRuntime::parseNumericInput(const QString &text,
 
   value = trimmed.toDouble(&ok);
   if (ok) {
-    return true;
+    return std::isfinite(value);
   }
 
   if (trimmed.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive)) {
@@ -659,7 +664,7 @@ bool TextEntryRuntime::parseNumericInput(const QString &text,
   }
 
   value = trimmed.toDouble(&ok);
-  return ok;
+  return ok && std::isfinite(value);
 }
 
 bool TextEntryRuntime::parseSexagesimal(const QString &text,

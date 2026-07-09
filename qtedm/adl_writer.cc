@@ -54,6 +54,11 @@ QString escapeAdlString(const QString &value)
   return result;
 }
 
+bool isNonDefaultDouble(double value, double defaultValue)
+{
+  return value != defaultValue;
+}
+
 QString colorModeString(TextColorMode mode)
 {
   switch (mode) {

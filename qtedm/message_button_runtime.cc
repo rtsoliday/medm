@@ -315,19 +315,20 @@ bool MessageButtonRuntime::sendEnumValue(const QString &value)
   if (!matched) {
     bool ok = false;
     const double numeric = value.toDouble(&ok);
-    if (!ok) {
+    if (!ok || !std::isfinite(numeric)) {
       qWarning() << "Failed to map message" << value << "to enumeration for"
                  << channelName_;
       return false;
     }
-    long rounded = static_cast<long>(std::llround(numeric));
-    if (rounded < 0) {
-      rounded = 0;
+    const double maximum = static_cast<double>(
+        std::numeric_limits<dbr_enum_t>::max());
+    if (numeric <= 0.0) {
+      toSend = 0;
+    } else if (numeric >= maximum) {
+      toSend = std::numeric_limits<dbr_enum_t>::max();
+    } else {
+      toSend = static_cast<dbr_enum_t>(std::llround(numeric));
     }
-    if (rounded > std::numeric_limits<dbr_enum_t>::max()) {
-      rounded = std::numeric_limits<dbr_enum_t>::max();
-    }
-    toSend = static_cast<dbr_enum_t>(rounded);
   }
 
   if (!PvChannelManager::instance().putValue(channelName_, toSend)) {
@@ -344,7 +345,7 @@ bool MessageButtonRuntime::sendNumericValue(const QString &value)
 {
   bool ok = false;
   double numeric = value.toDouble(&ok);
-  if (!ok) {
+  if (!ok || !std::isfinite(numeric)) {
     qWarning() << "Failed to convert message" << value << "to numeric for"
                << channelName_;
     return false;

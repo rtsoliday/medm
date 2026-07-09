@@ -30,6 +30,7 @@ constexpr int kMedmPvaVersionNumber = 40000;
 QString indentString(int level);
 void writeIndentedLine(QTextStream &stream, int level, const QString &text);
 QString escapeAdlString(const QString &value);
+bool isNonDefaultDouble(double value, double defaultValue);
 QString colorModeString(TextColorMode mode);
 QString visibilityModeString(TextVisibilityMode mode);
 QString lineStyleString(RectangleLineStyle style);

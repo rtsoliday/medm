@@ -972,7 +972,7 @@ void TextAreaElement::updateFontForGeometry()
 
   int longest = 0;
   for (const QString &line : lines) {
-    longest = std::max(longest, line.size());
+    longest = std::max(longest, static_cast<int>(line.size()));
   }
   if (longest <= 0) {
     longest = std::max(8, wrapColumnWidth_);

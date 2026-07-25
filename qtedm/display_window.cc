@@ -24682,7 +24682,8 @@ QJsonObject DisplayWindow::testStateObject() const
     widgetObject[QStringLiteral("status_text")] = element->runtimeStatusText();
     QJsonArray sample;
     const QVector<QString> values = element->displayedValues();
-    const int sampleCount = std::min(values.size(), 16);
+    const int sampleCount =
+        static_cast<int>(std::min<qsizetype>(values.size(), 16));
     for (int i = 0; i < sampleCount; ++i) {
       sample.append(values.at(i));
     }

@@ -1196,7 +1196,8 @@ void CartesianPlotRuntime::rebuildVectorPoints(TraceState &trace)
     if (trace.xVector.isEmpty() || trace.yVector.isEmpty()) {
       break;
     }
-    const int native = std::min(trace.xVector.size(), trace.yVector.size());
+    const int native = static_cast<int>(
+        std::min(trace.xVector.size(), trace.yVector.size()));
     const int capacity = effectiveCapacity(native, false);
     const int limit = std::min(capacity, native);
     trace.vectorPoints.reserve(limit);

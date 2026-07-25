@@ -42,7 +42,8 @@ ifeq ($(OS), Linux)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
     $(Z_LIB) $(if $(LIBCOM_NEEDS_READLINE),-lreadline) $(PROD_SYS_LIBS)
-  PROD_SYS_LIBS += $(XM_LIB) $(XMU_LIB) $(XT_LIB) $(X11_LIB) $(XEXT_LIB)
+  PROD_SYS_LIBS += $(XM_LIB) $(MOTIF_STATIC_DEP_LIBS) $(XMU_LIB) $(XT_LIB) \
+    $(X11_LIB) $(XEXT_LIB)
 endif
 
 ifeq ($(OS), Darwin)
@@ -57,7 +58,8 @@ ifeq ($(OS), Darwin)
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
     $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) $(Z_LIB) $(PROD_SYS_LIBS)
-  PROD_SYS_LIBS += $(XM_LIB) $(XMU_LIB) $(XT_LIB) $(X11_LIB) $(XEXT_LIB)
+  PROD_SYS_LIBS += $(XM_LIB) $(MOTIF_STATIC_DEP_LIBS) $(XMU_LIB) $(XT_LIB) \
+    $(X11_LIB) $(XEXT_LIB)
   PROD_SYS_LIBS += $(XFT_LIB) $(FONTCONFIG_LIB) $(SM_LIB) $(ICE_LIB) $(XP_LIB) $(XAU_LIB) $(JPEG_LIB) $(PNG_LIB) $(ICONV_LIB)
 endif
 

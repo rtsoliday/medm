@@ -66,14 +66,20 @@ ifeq ($(OS), Windows)
   QT_RCC := "$(QT_DIR_FWD)/bin/rcc.exe"
   RCC_OBJ_OUT := /Fo
 else
-  QT_RCC_DIR := $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
-  ifeq ($(QT_RCC_DIR),)
+  QT_RCC_DIRS := \
+    $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null) \
+    $(shell pkg-config --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null) \
+    $(shell pkg-config --variable=bindir $(QT_CORE_PKG) 2>/dev/null)
+  QT_RCC := $(firstword $(wildcard $(addsuffix /rcc,$(QT_RCC_DIRS))))
+  ifeq ($(strip $(QT_RCC)),)
     ifeq ($(OS), Darwin)
       QT_RCC := $(firstword $(wildcard \
               /opt/homebrew/bin/rcc \
               /opt/homebrew/opt/qt@6/bin/rcc \
               /opt/homebrew/opt/qt/bin/rcc \
+              /opt/local/libexec/qt6/libexec/rcc \
               /opt/local/libexec/qt6/bin/rcc \
+              /opt/local/libexec/qt5/bin/rcc \
               /usr/local/opt/qt@6/bin/rcc \
               /usr/local/opt/qt/bin/rcc \
               /usr/bin/rcc))
@@ -83,8 +89,6 @@ else
     else
       QT_RCC := rcc
     endif
-  else
-    QT_RCC := $(QT_RCC_DIR)/rcc
   endif
   RCC_OBJ_OUT := -o 
 endif

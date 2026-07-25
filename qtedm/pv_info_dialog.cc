@@ -476,7 +476,7 @@ private:
       return;
     }
     const int current = std::clamp(channelCombo_->currentIndex(), 0,
-        arrays_.size() - 1);
+        static_cast<int>(arrays_.size()) - 1);
     QString fileName = QFileDialog::getSaveFileName(this,
         QStringLiteral("Save Array CSV"),
         QDir::currentPath() + QDir::separator()

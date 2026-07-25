@@ -114,6 +114,26 @@ XM_LIB = $(firstword $(wildcard \
          $(addsuffix /libXm.dylib, $(LIB_DIRS)) \
          $(addsuffix /libXm.so, $(LIB_DIRS)) \
          $(addsuffix /libXm.a, $(LIB_DIRS))))
+
+# A shared Motif library records its X11 dependencies, but a static archive
+# does not.  Prefer dependencies from the directory containing libXm so a
+# MacPorts archive is paired with MacPorts libraries instead of XQuartz ones.
+find_motif_dependency = $(firstword $(wildcard \
+                          $(addsuffix /lib$(1).dylib,$(MOTIF_DEP_LIB_DIRS)) \
+                          $(addsuffix /lib$(1).so,$(MOTIF_DEP_LIB_DIRS)) \
+                          $(addsuffix /lib$(1).a,$(MOTIF_DEP_LIB_DIRS))))
+MOTIF_STATIC_DEP_LIBS =
+ifneq ($(filter %.a,$(XM_LIB)),)
+  MOTIF_LIB_DIR := $(patsubst %/,%,$(dir $(XM_LIB)))
+  MOTIF_DEP_LIB_DIRS := $(MOTIF_LIB_DIR) \
+                        $(filter-out $(MOTIF_LIB_DIR),$(LIB_DIRS))
+  MOTIF_STATIC_DEP_LIBS := \
+    $(call find_motif_dependency,Xrandr) \
+    $(call find_motif_dependency,Xrender) \
+    $(call find_motif_dependency,Xcursor) \
+    $(call find_motif_dependency,Xpm)
+endif
+
 XMU_LIB = $(firstword $(wildcard \
           $(addsuffix /libXmu.dylib, $(LIB_DIRS)) \
           $(addsuffix /libXmu.so, $(LIB_DIRS)) \

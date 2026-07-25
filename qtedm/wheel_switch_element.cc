@@ -276,7 +276,8 @@ WheelSwitchFormatInfo wheelSwitchFormatInfo(const QString &format,
   }
 
   info.digitSize = std::max(0,
-      info.zeroString.size() - info.prefixSize - info.postfixSize);
+      static_cast<int>(info.zeroString.size()) - info.prefixSize
+          - info.postfixSize);
   for (int i = 0; i < info.digitSize; ++i) {
     if (info.zeroString.at(info.prefixSize + info.digitSize - 1 - i)
         == QLatin1Char('.')) {

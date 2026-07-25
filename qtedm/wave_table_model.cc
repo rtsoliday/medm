@@ -108,7 +108,7 @@ QVariant WaveTableModel::headerData(int section, Qt::Orientation orientation,
 
   const int startIndex = section * columnCount_;
   const int lastIndex = std::min(startIndex + columnCount_ - 1,
-      std::max(0, values_.size() - 1));
+      std::max(0, static_cast<int>(values_.size()) - 1));
   if (values_.isEmpty()) {
     return QString();
   }
@@ -258,12 +258,13 @@ QVector<QString> WaveTableModel::values() const
 int WaveTableModel::displayRowCount() const
 {
   if (layout_ == WaveTableLayout::kColumn) {
-    return std::max(1, values_.size());
+    return std::max(1, static_cast<int>(values_.size()));
   }
   if (layout_ == WaveTableLayout::kRow) {
     return 1;
   }
-  return std::max(1, (values_.size() + columnCount_ - 1) / columnCount_);
+  return std::max(1, (static_cast<int>(values_.size()) + columnCount_ - 1)
+      / columnCount_);
 }
 
 int WaveTableModel::displayColumnCount() const
@@ -272,7 +273,7 @@ int WaveTableModel::displayColumnCount() const
     return 2;
   }
   if (layout_ == WaveTableLayout::kRow) {
-    return std::max(1, values_.size());
+    return std::max(1, static_cast<int>(values_.size()));
   }
   return std::max(1, columnCount_);
 }

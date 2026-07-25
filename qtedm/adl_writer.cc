@@ -46,7 +46,8 @@ QString escapeAdlString(const QString &value)
         result.append(ch);
       } else {
         result.append(QStringLiteral("\\x%1")
-            .arg(ch.unicode(), 2, 16, QLatin1Char('0')));
+            .arg(static_cast<unsigned int>(ch.unicode()), 2, 16,
+                QLatin1Char('0')));
       }
       break;
     }

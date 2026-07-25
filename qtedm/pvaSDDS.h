@@ -20,6 +20,14 @@
  * R. Soliday,
  */
 
+#ifndef MEDM_QTEDM_PVASDDS_H
+#define MEDM_QTEDM_PVASDDS_H
+
+#include <cstdint>
+#include <cstdio>
+#include <string>
+#include <vector>
+
 #include "pv/pvaClient.h"
 #include "pv/pvaClientMultiChannel.h"
 #include "pv/pvEnumerated.h"
@@ -161,7 +169,9 @@ typedef struct PVA_DATA_ALL_READINGS
   long numPutElements;
   long numMonitorElements;
   long numGetReadings;
+  long numGetReadingsAllocated;
   long numMonitorReadings;
+  uint64_t monitorGeneration;
   bool numeric;
   bool nonnumeric;
   bool pvEnumeratedStructure;
@@ -172,6 +182,7 @@ typedef struct PVA_DATA_ALL_READINGS
   PVA_DATA *monitorData;
   double mean, median, sigma, min, max, spread, stDev, rms, MAD;
   bool haveGetPtr, havePutPtr, haveMonitorPtr;
+  bool putPrepared;
   char *units;
   double displayLimitLow;
   double displayLimitHigh;
@@ -192,6 +203,9 @@ typedef struct PVA_OVERALL
 {
   epics::pvaClient::PvaClientPtr pvaClientPtr;
   std::vector<epics::pvaClient::PvaClientMultiChannelPtr> pvaClientMultiChannelPtr;
+  epics::pvaClient::PvaClientChannelArray pvaClientChannelArray;
+  std::vector<long> pvaClientGetOwner;
+  std::vector<std::string> pvaClientGetRequest;
   int numMultiChannels;
   std::vector<epics::pvaClient::PvaClientGetPtr> pvaClientGetPtr;
   std::vector<epics::pvaClient::PvaClientPutPtr> pvaClientPutPtr;
@@ -274,3 +288,5 @@ long PutNTEnumValue(PVA_OVERALL *pva, long index);
 long PutScalarValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr);
 long PutScalarArrayValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr);
 long PutStructureValue(PVA_OVERALL *pva, long index, epics::pvData::PVFieldPtr PVFieldPtr);
+
+#endif

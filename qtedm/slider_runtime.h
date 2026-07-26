@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "channel_subscription.h"
+#include "runtime_utils.h"
 
 class SliderElement;
 
@@ -52,16 +53,5 @@ private:
 template <typename Func>
 inline void SliderRuntime::invokeOnElement(Func &&func)
 {
-  if (!element_) {
-    return;
-  }
-  QPointer<SliderElement> target = element_;
-  QMetaObject::invokeMethod(element_.data(),
-      [target, func = std::forward<Func>(func)]() mutable {
-        if (!target) {
-          return;
-        }
-        func(target.data());
-      },
-      Qt::QueuedConnection);
+  RuntimeUtils::invokeOnObject(element_, std::forward<Func>(func));
 }

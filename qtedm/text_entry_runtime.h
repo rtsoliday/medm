@@ -8,6 +8,7 @@
 #include <QByteArray>
 
 #include "channel_subscription.h"
+#include "runtime_utils.h"
 
 #include <utility>
 
@@ -81,17 +82,6 @@ private:
 template <typename Func>
 inline void TextEntryRuntime::invokeOnElement(Func &&func)
 {
-  if (!element_) {
-    return;
-  }
-  QPointer<TextEntryElement> target = element_;
-  QPointer<TextEntryRuntime> self(this);
-  QMetaObject::invokeMethod(element_.data(),
-      [target, self, func = std::forward<Func>(func)]() mutable {
-        if (!target || !self) {
-          return;
-        }
-        func(target.data());
-      },
-      Qt::QueuedConnection);
+  RuntimeUtils::invokeOnObject(element_, QPointer<TextEntryRuntime>(this),
+      std::forward<Func>(func));
 }

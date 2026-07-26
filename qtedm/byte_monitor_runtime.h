@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "channel_subscription.h"
+#include "runtime_utils.h"
 
 class ByteMonitorElement;
 
@@ -47,16 +48,5 @@ private:
 template <typename Func>
 inline void ByteMonitorRuntime::invokeOnElement(Func &&func)
 {
-  if (!element_) {
-    return;
-  }
-  QPointer<ByteMonitorElement> target = element_;
-  QMetaObject::invokeMethod(element_.data(),
-      [target, func = std::forward<Func>(func)]() mutable {
-        if (!target) {
-          return;
-        }
-        func(target.data());
-      },
-      Qt::QueuedConnection);
+  RuntimeUtils::invokeOnObject(element_, std::forward<Func>(func));
 }

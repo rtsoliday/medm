@@ -9,6 +9,8 @@ class TestSoftPvRegistry : public QObject
 private slots:
   void expressionChannelInfoRoundTrips();
   void arrayInfoSnapshotsIncludePayloads();
+  void deliveryModesCoalesceAndRetainNewestValue();
+  void callbackMayRemoveLastProducerAndSubscription();
 };
 
 void TestSoftPvRegistry::expressionChannelInfoRoundTrips()
@@ -84,6 +86,82 @@ void TestSoftPvRegistry::arrayInfoSnapshotsIncludePayloads()
   registry.unregisterName(arrayName);
 }
 
-QTEST_APPLESS_MAIN(TestSoftPvRegistry)
+void TestSoftPvRegistry::deliveryModesCoalesceAndRetainNewestValue()
+{
+  auto &registry = SoftPvRegistry::instance();
+  const QString name = QStringLiteral("__test:delivery_modes");
+  registry.registerName(name);
+  registry.setConnected(name, true);
+
+  int passiveValues = 0;
+  int realtimeValues = 0;
+  int connectionChanges = 0;
+  double passiveLatest = 0.0;
+  double realtimeLatest = 0.0;
+
+  SubscriptionHandle passive = registry.subscribe(name,
+      [&](const SharedChannelData &data) {
+        ++passiveValues;
+        passiveLatest = data.numericValue;
+      },
+      [&](bool, const SharedChannelData &) { ++connectionChanges; });
+  SubscriptionHandle realtime = registry.subscribe(name,
+      [&](const SharedChannelData &data) {
+        ++realtimeValues;
+        realtimeLatest = data.numericValue;
+      },
+      nullptr, nullptr, ChannelDeliveryMode::kRealtime);
+
+  QCOMPARE(connectionChanges, 1);
+  registry.publishValue(name, 1.0);
+  QCOMPARE(passiveValues, 1);
+  QCOMPARE(realtimeValues, 1);
+
+  QTest::qWait(20);
+  registry.publishValue(name, 2.0);
+  registry.publishValue(name, 3.0);
+  QCOMPARE(passiveValues, 1);
+  QCOMPARE(realtimeValues, 1);
+
+  QTest::qWait(100);
+  QCOMPARE(realtimeValues, 2);
+  QCOMPARE(realtimeLatest, 3.0);
+  QCOMPARE(passiveValues, 1);
+
+  QTest::qWait(110);
+  QCOMPARE(passiveValues, 2);
+  QCOMPARE(passiveLatest, 3.0);
+
+  registry.setConnected(name, false);
+  QCOMPARE(connectionChanges, 2);
+  passive.reset();
+  realtime.reset();
+  registry.unregisterName(name);
+}
+
+void TestSoftPvRegistry::callbackMayRemoveLastProducerAndSubscription()
+{
+  auto &registry = SoftPvRegistry::instance();
+  const QString name = QStringLiteral("__test:self_removing_callback");
+  registry.registerName(name);
+  registry.setConnected(name, true);
+
+  int callbacks = 0;
+  SubscriptionHandle subscription;
+  subscription = registry.subscribe(name,
+      [&](const SharedChannelData &) {
+        ++callbacks;
+        registry.unregisterName(name);
+        subscription.reset();
+      });
+
+  registry.publishValue(name, 1.0);
+  QCOMPARE(callbacks, 1);
+
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(!registry.infoSnapshot(name, snapshot));
+}
+
+QTEST_GUILESS_MAIN(TestSoftPvRegistry)
 
 #include "test_soft_pv_registry.moc"

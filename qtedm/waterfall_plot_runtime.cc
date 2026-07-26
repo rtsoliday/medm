@@ -157,7 +157,9 @@ void WaterfallPlotRuntime::subscribeChannel(ChannelState &state,
       },
       [this, &state, kind](bool connected, const SharedChannelData &data) {
         handleConnection(state, kind, connected, data);
-      });
+      },
+      nullptr,
+      ChannelDeliveryMode::kRealtime);
 }
 
 void WaterfallPlotRuntime::handleConnection(ChannelState &state,

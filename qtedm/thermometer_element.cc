@@ -12,12 +12,14 @@
 #include <QPaintEvent>
 #include <QPalette>
 #include <QPen>
+#include <QResizeEvent>
 
 #include <cvtFast.h>
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
 #include "text_format_utils.h"
+#include "update_coordinator.h"
 namespace {
 
 constexpr double kSampleNormalizedValue = 0.65;
@@ -121,31 +123,6 @@ QString formatNumericValue(TextMonitorFormat format, double value, int precision
 
 } // namespace
 
-struct ThermometerElement::Layout
-{
-  QRectF bodyRect;
-  QRectF axisRect;
-  QRectF readbackRect;
-  QRectF channelRect;
-  QRectF outerStemRect;
-  QRectF outerBulbRect;
-  QRectF innerStemRect;
-  QRectF innerBulbRect;
-  QPainterPath outerPath;
-  QPainterPath innerPath;
-  QString channelText;
-  QString readbackText;
-  QString lowLabel;
-  QString highLabel;
-  qreal scaleTop = 0.0;
-  qreal scaleBottom = 0.0;
-  qreal lineHeight = 0.0;
-  bool showAxis = false;
-  bool showLimits = false;
-  bool showReadback = false;
-  bool showChannel = false;
-};
-
 ThermometerElement::ThermometerElement(QWidget *parent)
   : QWidget(parent)
 {
@@ -183,6 +160,7 @@ void ThermometerElement::setForegroundColor(const QColor &color)
     return;
   }
   foregroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -197,6 +175,7 @@ void ThermometerElement::setBackgroundColor(const QColor &color)
     return;
   }
   backgroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -211,6 +190,7 @@ void ThermometerElement::setTextColor(const QColor &color)
     return;
   }
   textColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -225,6 +205,7 @@ void ThermometerElement::setColorMode(TextColorMode mode)
     return;
   }
   colorMode_ = mode;
+  invalidateStaticCache();
   update();
 }
 
@@ -268,6 +249,7 @@ void ThermometerElement::setLabel(MeterLabel label)
     return;
   }
   label_ = label;
+  invalidateStaticCache();
   update();
 }
 
@@ -283,6 +265,7 @@ void ThermometerElement::setDirection(BarDirection direction)
     return;
   }
   direction_ = BarDirection::kUp;
+  invalidateStaticCache();
   update();
 }
 
@@ -297,6 +280,7 @@ void ThermometerElement::setFormat(TextMonitorFormat format)
     return;
   }
   format_ = format;
+  invalidateStaticCache();
   update();
 }
 
@@ -311,6 +295,7 @@ void ThermometerElement::setShowValue(bool showValue)
     return;
   }
   showValue_ = showValue;
+  invalidateStaticCache();
   update();
 }
 
@@ -340,6 +325,7 @@ void ThermometerElement::setLimits(const PvLimits &limits)
     runtimePrecision_ = limits_.precisionDefault;
     runtimeValue_ = defaultSampleValue();
   }
+  invalidateStaticCache();
   update();
 }
 
@@ -406,6 +392,7 @@ void ThermometerElement::setChannel(const QString &channel)
   }
   channel_ = normalized;
   setToolTip(QString());
+  invalidateStaticCache();
   update();
 }
 
@@ -437,6 +424,7 @@ void ThermometerElement::setExecuteMode(bool execute)
     return;
   }
   executeMode_ = execute;
+  invalidateStaticCache();
   clearRuntimeState();
   applyRuntimeVisibility();
 }
@@ -452,6 +440,7 @@ void ThermometerElement::setRuntimeConnected(bool connected)
     return;
   }
   runtimeConnected_ = connected;
+  invalidateStaticCache();
   if (!runtimeConnected_) {
     runtimeSeverity_ = kInvalidSeverity;
     runtimeLimitsValid_ = false;
@@ -498,7 +487,7 @@ void ThermometerElement::setRuntimeValue(double value)
   runtimeValue_ = value;
   hasRuntimeValue_ = true;
   if (executeMode_ && runtimeConnected_ && changed) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this, dynamicRegion());
   }
 }
 
@@ -513,6 +502,7 @@ void ThermometerElement::setRuntimeLimits(double low, double high)
   runtimeLow_ = low;
   runtimeHigh_ = high;
   runtimeLimitsValid_ = true;
+  invalidateStaticCache();
   if (executeMode_) {
     update();
   }
@@ -525,6 +515,7 @@ void ThermometerElement::setRuntimePrecision(int precision)
     return;
   }
   runtimePrecision_ = clamped;
+  invalidateStaticCache();
   if (executeMode_) {
     update();
   }
@@ -542,6 +533,7 @@ void ThermometerElement::clearRuntimeState()
   runtimeSeverity_ = kInvalidSeverity;
   runtimeVisible_ = true;
   direction_ = BarDirection::kUp;
+  invalidateStaticCache();
   applyRuntimeVisibility();
   update();
 }
@@ -550,14 +542,80 @@ void ThermometerElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
 
+  if (executeMode_ && !runtimeConnected_) {
+    QPainter disconnectedPainter(this);
+    disconnectedPainter.fillRect(rect(), Qt::white);
+    if (selected_) {
+      paintSelectionOverlay(disconnectedPainter);
+    }
+    return;
+  }
+
+  ensureStaticCache();
+
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
+  painter.drawPixmap(0, 0, staticCache_);
+  painter.setFont(cachedLabelFont_);
 
+  if (!cachedLayout_.outerPath.isEmpty() && !cachedLayout_.innerPath.isEmpty()) {
+    paintFill(painter, cachedLayout_);
+    Layout dynamicLayout = cachedLayout_;
+    dynamicLayout.readbackText = formattedSampleValue();
+    paintLabels(painter, dynamicLayout, false, true);
+  }
+
+  if (selected_) {
+    paintSelectionOverlay(painter);
+  }
+}
+
+void ThermometerElement::resizeEvent(QResizeEvent *event)
+{
+  QWidget::resizeEvent(event);
+  invalidateStaticCache();
+}
+
+void ThermometerElement::changeEvent(QEvent *event)
+{
+  QWidget::changeEvent(event);
+  invalidateStaticCache();
+}
+
+void ThermometerElement::invalidateStaticCache()
+{
+  staticCacheDirty_ = true;
+}
+
+void ThermometerElement::ensureStaticCache()
+{
+  const qreal dpr = devicePixelRatioF();
+  if (!staticCacheDirty_ && !staticCache_.isNull()
+      && cachedLogicalSize_ == size()
+      && qFuzzyCompare(cachedDevicePixelRatio_, dpr)) {
+    return;
+  }
+
+  cachedLogicalSize_ = size();
+  cachedDevicePixelRatio_ = dpr;
+  if (size().isEmpty()) {
+    staticCache_ = QPixmap();
+    cachedLayout_ = Layout();
+    return;
+  }
+
+  const QSize pixelSize(qMax(1, qCeil(width() * dpr)),
+      qMax(1, qCeil(height() * dpr)));
+  staticCache_ = QPixmap(pixelSize);
+  staticCache_.setDevicePixelRatio(dpr);
+  staticCache_.fill(Qt::transparent);
+
+  QPainter painter(&staticCache_);
+  painter.setRenderHint(QPainter::Antialiasing, false);
   painter.fillRect(rect(), effectiveBackground());
 
-  // Paint 2-pixel raised bevel around outer edge, matching BarMonitorElement.
   const QColor bg = effectiveBackground();
-  QRect bevelOuter = rect().adjusted(0, 0, -1, -1);
+  const QRect bevelOuter = rect().adjusted(0, 0, -1, -1);
   painter.setPen(QPen(bg.lighter(135), 1));
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
@@ -565,7 +623,7 @@ void ThermometerElement::paintEvent(QPaintEvent *event)
   painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
   painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
 
-  QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
+  const QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
   painter.setPen(QPen(bg.lighter(150), 1));
   painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
   painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
@@ -573,50 +631,38 @@ void ThermometerElement::paintEvent(QPaintEvent *event)
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
-  if (executeMode_ && !runtimeConnected_) {
-    painter.fillRect(rect(), Qt::white);
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
-
   const qreal padding = (label_ == MeterLabel::kNoDecorations)
-      ? 0.0
-      : (kLayoutPadding + kBevelWidth);
-  const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
-  if (!contentRect.isValid() || contentRect.isEmpty()) {
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
+      ? 0.0 : (kLayoutPadding + kBevelWidth);
+  const QRectF content = rect().adjusted(padding, padding, -padding, -padding);
 
-  QFont labelFont = painter.font();
+  cachedLabelFont_ = painter.font();
   const int preferredPixelHeight = static_cast<int>(
       std::max(1.0, rect().height() / 9.0));
-  labelFont.setPixelSize(std::clamp(preferredPixelHeight, 4, 34));
-  painter.setFont(labelFont);
-  const QFontMetricsF metrics(labelFont);
+  cachedLabelFont_.setPixelSize(std::clamp(preferredPixelHeight, 4, 34));
+  painter.setFont(cachedLabelFont_);
+  cachedLayout_ = calculateLayout(content, QFontMetricsF(cachedLabelFont_));
 
-  const Layout layout = calculateLayout(contentRect, metrics);
-  if (layout.outerPath.isEmpty() || layout.innerPath.isEmpty()) {
-    if (selected_) {
-      paintSelectionOverlay(painter);
+  if (!cachedLayout_.outerPath.isEmpty() && !cachedLayout_.innerPath.isEmpty()) {
+    paintTrack(painter, cachedLayout_);
+    if (cachedLayout_.showAxis) {
+      paintAxis(painter, cachedLayout_);
     }
-    return;
+    paintLabels(painter, cachedLayout_, true, false);
   }
+  staticCacheDirty_ = false;
+}
 
-  paintTrack(painter, layout);
-  paintFill(painter, layout);
-  if (layout.showAxis) {
-    paintAxis(painter, layout);
+QRegion ThermometerElement::dynamicRegion() const
+{
+  if (staticCacheDirty_ || cachedLayout_.innerPath.isEmpty()) {
+    return QRegion(rect());
   }
-  paintLabels(painter, layout);
-
-  if (selected_) {
-    paintSelectionOverlay(painter);
+  QRegion region(cachedLayout_.innerPath.boundingRect().toAlignedRect()
+      .adjusted(-2, -2, 2, 2));
+  if (cachedLayout_.showReadback) {
+    region |= cachedLayout_.readbackRect.toAlignedRect().adjusted(-2, -2, 2, 2);
   }
+  return region;
 }
 
 ThermometerElement::Layout ThermometerElement::calculateLayout(
@@ -919,7 +965,7 @@ void ThermometerElement::paintAxis(QPainter &painter, const Layout &layout) cons
 }
 
 void ThermometerElement::paintLabels(QPainter &painter,
-    const Layout &layout) const
+    const Layout &layout, bool paintStatic, bool paintReadback) const
 {
   if (label_ == MeterLabel::kNone || label_ == MeterLabel::kNoDecorations) {
     return;
@@ -936,7 +982,8 @@ void ThermometerElement::paintLabels(QPainter &painter,
       : QColor(Qt::black);
   painter.setBrush(Qt::NoBrush);
 
-  if (label_ == MeterLabel::kOutline && !layout.outerPath.isEmpty()) {
+  if (paintStatic && label_ == MeterLabel::kOutline
+      && !layout.outerPath.isEmpty()) {
     QPen pen(Qt::black);
     pen.setStyle(Qt::DotLine);
     pen.setWidth(1);
@@ -944,14 +991,14 @@ void ThermometerElement::paintLabels(QPainter &painter,
     painter.drawPath(layout.outerPath);
   }
 
-  if (layout.showChannel && layout.channelRect.isValid()
+  if (paintStatic && layout.showChannel && layout.channelRect.isValid()
       && !layout.channelRect.isEmpty()) {
     painter.setPen(overlayTextColor);
     painter.drawText(layout.channelRect.adjusted(2.0, 0.0, -2.0, 0.0),
         Qt::AlignHCenter | Qt::AlignVCenter, layout.channelText);
   }
 
-  if (layout.showReadback && layout.readbackRect.isValid()
+  if (paintReadback && layout.showReadback && layout.readbackRect.isValid()
       && !layout.readbackRect.isEmpty()) {
     const QFontMetricsF fm(painter.font());
     const qreal textWidth = fm.boundingRect(layout.readbackText).width();

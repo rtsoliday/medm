@@ -219,7 +219,9 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::initializeChannels()
         },
         [this, idx](bool connected, const SharedChannelData &) {
           handleChannelConnection(idx, connected);
-        });
+        },
+        nullptr,
+        ChannelDeliveryMode::kRealtime);
   }
 }
 

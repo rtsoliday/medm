@@ -85,7 +85,7 @@ void PvTableRuntime::subscribeRow(int row)
 
   RowSubscription &state = *rows_[row];
   if (state.channel.isEmpty()) {
-    element_->setRowConnected(row, false);
+    element_->setRowRuntimeState(row, PvTableRuntimeRowState());
     return;
   }
 
@@ -150,7 +150,7 @@ void PvTableRuntime::handleChannelConnection(int row, bool connected,
         return;
       }
     }
-    element_->setRowConnected(row, true);
+    applyRowState(row);
   } else {
     state.valueKind = ValueKind::kNone;
     state.hasNumericValue = false;
@@ -158,10 +158,7 @@ void PvTableRuntime::handleChannelConnection(int row, bool connected,
     state.enumStrings.clear();
     state.units.clear();
     state.lastSeverity = kInvalidAlarmSeverity;
-    element_->setRowConnected(row, false);
-    element_->setRowSeverity(row, kInvalidAlarmSeverity);
-    element_->setRowValue(row, QString());
-    element_->setRowMetadata(row, QString());
+    applyRowState(row);
   }
 }
 
@@ -285,8 +282,10 @@ void PvTableRuntime::applyRowState(int row)
     return;
   }
   const RowSubscription &state = *rows_[row];
-  element_->setRowConnected(row, state.connected);
-  element_->setRowSeverity(row, state.lastSeverity);
-  element_->setRowValue(row, formatRowValue(state));
-  element_->setRowMetadata(row, state.units);
+  PvTableRuntimeRowState rowState;
+  rowState.connected = state.connected;
+  rowState.severity = state.lastSeverity;
+  rowState.valueText = formatRowValue(state);
+  rowState.units = state.units;
+  element_->setRowRuntimeState(row, rowState);
 }

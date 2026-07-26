@@ -427,7 +427,8 @@ void CartesianPlotRuntime::subscribeChannel(ChannelState &state,
       },
       [this, context](bool canRead, bool canWrite) {
         handleAccessRights(context, canRead, canWrite);
-      });
+      },
+      ChannelDeliveryMode::kRealtime);
 }
 
 void CartesianPlotRuntime::unsubscribeChannel(ChannelState &state)

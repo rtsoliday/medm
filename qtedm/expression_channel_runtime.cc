@@ -115,7 +115,9 @@ void ExpressionChannelRuntime::start()
         },
         [this, i](bool connected, const SharedChannelData &) {
           handleChannelConnection(i, connected);
-        });
+        },
+        nullptr,
+        ChannelDeliveryMode::kRealtime);
   }
 
   const double initialValue = element_->initialValue();

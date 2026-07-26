@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QColor>
+#include <QFont>
+#include <QPixmap>
+#include <QRectF>
+#include <QRegion>
 #include <QString>
 #include <QWidget>
 
@@ -58,6 +62,8 @@ public:
 
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
+  void changeEvent(QEvent *event) override;
 
 private:
   QColor effectiveForeground() const;
@@ -76,7 +82,10 @@ private:
   void paintNeedle(QPainter &painter, const QRectF &dialRect) const;
   void paintLabels(QPainter &painter, const QRectF &dialRect,
       const QRectF &limitsRect, const QRectF &valueRect,
-      const QRectF &channelRect) const;
+      const QRectF &channelRect, bool paintStatic, bool paintReadback) const;
+  void invalidateStaticCache();
+  void ensureStaticCache();
+  QRegion dynamicRegion() const;
   double normalizedSampleValue() const;
   QString formattedSampleValue() const;
 
@@ -101,4 +110,13 @@ private:
   int runtimePrecision_ = -1;
   double runtimeValue_ = 0.0;
   short runtimeSeverity_ = 0;
+  QPixmap staticCache_;
+  QFont cachedLabelFont_;
+  QRectF cachedDialRect_;
+  QRectF cachedLimitsRect_;
+  QRectF cachedReadbackRect_;
+  QRectF cachedChannelRect_;
+  QSize cachedLogicalSize_;
+  qreal cachedDevicePixelRatio_ = 0.0;
+  bool staticCacheDirty_ = true;
 };

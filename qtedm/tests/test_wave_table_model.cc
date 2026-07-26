@@ -10,6 +10,8 @@ private slots:
   void mapsGridCellsAndHeaders();
   void mapsColumnCellsWithOneBasedIndex();
   void showsStatusWhenEmpty();
+  void updatesSameShapeWithoutModelReset();
+  void emitsOnlyRolesAffectedByRuntimeState();
 };
 
 void TestWaveTableModel::mapsGridCellsAndHeaders()
@@ -69,6 +71,60 @@ void TestWaveTableModel::showsStatusWhenEmpty()
   QCOMPARE(model.rowCount(), 1);
   QCOMPARE(model.columnCount(), 8);
   QVERIFY(model.cellText(0, 0).startsWith(QStringLiteral("Disconnected")));
+}
+
+void TestWaveTableModel::updatesSameShapeWithoutModelReset()
+{
+  WaveTableModel model;
+  model.setLayout(WaveTableLayout::kColumn);
+  model.setValues({QStringLiteral("A"), QStringLiteral("B"),
+      QStringLiteral("C")});
+  QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
+  QSignalSpy changedSpy(&model, &QAbstractItemModel::dataChanged);
+
+  model.setValues({QStringLiteral("A"), QStringLiteral("new"),
+      QStringLiteral("C")});
+
+  QCOMPARE(resetSpy.count(), 0);
+  QCOMPARE(changedSpy.count(), 1);
+  const QList<QVariant> arguments = changedSpy.takeFirst();
+  QCOMPARE(qvariant_cast<QModelIndex>(arguments.at(0)), model.index(1, 1));
+  QCOMPARE(qvariant_cast<QModelIndex>(arguments.at(1)), model.index(1, 1));
+  QCOMPARE(qvariant_cast<QVector<int>>(arguments.at(2)),
+      QVector<int>({Qt::DisplayRole}));
+}
+
+void TestWaveTableModel::emitsOnlyRolesAffectedByRuntimeState()
+{
+  WaveTableModel model;
+  model.setValues({QStringLiteral("A"), QStringLiteral("B")});
+  QSignalSpy changedSpy(&model, &QAbstractItemModel::dataChanged);
+
+  WaveTableRuntimeState state;
+  state.connected = true;
+  state.severity = 1;
+  state.receivedElementCount = 2;
+  model.setRuntimeState(state);
+
+  QCOMPARE(changedSpy.count(), 1);
+  QList<QVariant> arguments = changedSpy.takeFirst();
+  QCOMPARE(qvariant_cast<QVector<int>>(arguments.at(2)),
+      QVector<int>({Qt::ForegroundRole}));
+
+  state.receivedElementCount = 3;
+  model.setRuntimeState(state);
+  QCOMPARE(changedSpy.count(), 0);
+
+  model.clearValues();
+  changedSpy.clear();
+  state.receivedElementCount = 4;
+  model.setRuntimeState(state);
+  QCOMPARE(changedSpy.count(), 1);
+  arguments = changedSpy.takeFirst();
+  QCOMPARE(qvariant_cast<QModelIndex>(arguments.at(0)), model.index(0, 0));
+  QCOMPARE(qvariant_cast<QModelIndex>(arguments.at(1)), model.index(0, 0));
+  QCOMPARE(qvariant_cast<QVector<int>>(arguments.at(2)),
+      QVector<int>({Qt::DisplayRole}));
 }
 
 QTEST_APPLESS_MAIN(TestWaveTableModel)

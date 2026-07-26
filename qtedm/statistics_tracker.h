@@ -1,7 +1,8 @@
 #pragma once
 
+#include <atomic>
+
 #include <QElapsedTimer>
-#include <QMutex>
 
 #include <utility>
 
@@ -41,17 +42,16 @@ public:
 private:
   StatisticsTracker();
 
-  mutable QMutex mutex_;
   QElapsedTimer intervalTimer_;
   bool timerInitialized_ = false;
 
-  int channelCount_ = 0;
-  int channelConnected_ = 0;
-  int objectCount_ = 0;
-  int updateRequestQueued_ = 0;
+  std::atomic<int> channelCount_{0};
+  std::atomic<int> channelConnected_{0};
+  std::atomic<int> objectCount_{0};
+  std::atomic<int> updateRequestQueued_{0};
 
-  int caEventCount_ = 0;
-  int updateRequestCount_ = 0;
-  int updateDiscardCount_ = 0;
-  int updateExecutedCount_ = 0;
+  std::atomic<int> caEventCount_{0};
+  std::atomic<int> updateRequestCount_{0};
+  std::atomic<int> updateDiscardCount_{0};
+  std::atomic<int> updateExecutedCount_{0};
 };

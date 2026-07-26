@@ -1,13 +1,13 @@
 #include "statistics_tracker.h"
 
-#include <algorithm>
-
-#include <QMutexLocker>
-
 namespace {
-int clampNonNegative(int value)
+void decrementNonNegative(std::atomic<int> &counter)
 {
-  return std::max(value, 0);
+  int current = counter.load(std::memory_order_relaxed);
+  while (current > 0
+      && !counter.compare_exchange_weak(current, current - 1,
+          std::memory_order_relaxed, std::memory_order_relaxed)) {
+  }
 }
 }
 
@@ -25,65 +25,55 @@ StatisticsTracker::StatisticsTracker()
 
 void StatisticsTracker::registerDisplayObjectStarted()
 {
-  QMutexLocker locker(&mutex_);
-  ++objectCount_;
+  objectCount_.fetch_add(1, std::memory_order_relaxed);
 }
 
 void StatisticsTracker::registerDisplayObjectStopped()
 {
-  QMutexLocker locker(&mutex_);
-  objectCount_ = clampNonNegative(objectCount_ - 1);
+  decrementNonNegative(objectCount_);
 }
 
 void StatisticsTracker::registerChannelCreated()
 {
-  QMutexLocker locker(&mutex_);
-  ++channelCount_;
+  channelCount_.fetch_add(1, std::memory_order_relaxed);
 }
 
 void StatisticsTracker::registerChannelDestroyed()
 {
-  QMutexLocker locker(&mutex_);
-  channelCount_ = clampNonNegative(channelCount_ - 1);
+  decrementNonNegative(channelCount_);
 }
 
 void StatisticsTracker::registerChannelConnected()
 {
-  QMutexLocker locker(&mutex_);
-  ++channelConnected_;
+  channelConnected_.fetch_add(1, std::memory_order_relaxed);
 }
 
 void StatisticsTracker::registerChannelDisconnected()
 {
-  QMutexLocker locker(&mutex_);
-  channelConnected_ = clampNonNegative(channelConnected_ - 1);
+  decrementNonNegative(channelConnected_);
 }
 
 void StatisticsTracker::registerCaEvent()
 {
-  QMutexLocker locker(&mutex_);
-  ++caEventCount_;
+  caEventCount_.fetch_add(1, std::memory_order_relaxed);
 }
 
 void StatisticsTracker::registerUpdateRequest(bool accepted)
 {
-  QMutexLocker locker(&mutex_);
   if (accepted) {
-    ++updateRequestCount_;
+    updateRequestCount_.fetch_add(1, std::memory_order_relaxed);
   } else {
-    ++updateDiscardCount_;
+    updateDiscardCount_.fetch_add(1, std::memory_order_relaxed);
   }
 }
 
 void StatisticsTracker::registerUpdateExecuted()
 {
-  QMutexLocker locker(&mutex_);
-  ++updateExecutedCount_;
+  updateExecutedCount_.fetch_add(1, std::memory_order_relaxed);
 }
 
 StatisticsSnapshot StatisticsTracker::snapshotAndReset()
 {
-  QMutexLocker locker(&mutex_);
   if (!timerInitialized_) {
     intervalTimer_.start();
     timerInitialized_ = true;
@@ -93,37 +83,37 @@ StatisticsSnapshot StatisticsTracker::snapshotAndReset()
 
   StatisticsSnapshot snapshot;
   snapshot.intervalSeconds = interval;
-  snapshot.channelCount = channelCount_;
-  snapshot.channelConnected = channelConnected_;
-  snapshot.objectCount = objectCount_;
-  snapshot.caEventCount = caEventCount_;
-  snapshot.updateRequestCount = updateRequestCount_;
-  snapshot.updateDiscardCount = updateDiscardCount_;
-  snapshot.updateExecuted = updateExecutedCount_;
-  snapshot.updateRequestQueued = updateRequestQueued_;
-
-  caEventCount_ = 0;
-  updateRequestCount_ = 0;
-  updateDiscardCount_ = 0;
-  updateExecutedCount_ = 0;
+  snapshot.channelCount = channelCount_.load(std::memory_order_relaxed);
+  snapshot.channelConnected =
+      channelConnected_.load(std::memory_order_relaxed);
+  snapshot.objectCount = objectCount_.load(std::memory_order_relaxed);
+  snapshot.caEventCount =
+      caEventCount_.exchange(0, std::memory_order_relaxed);
+  snapshot.updateRequestCount =
+      updateRequestCount_.exchange(0, std::memory_order_relaxed);
+  snapshot.updateDiscardCount =
+      updateDiscardCount_.exchange(0, std::memory_order_relaxed);
+  snapshot.updateExecuted =
+      updateExecutedCount_.exchange(0, std::memory_order_relaxed);
+  snapshot.updateRequestQueued =
+      updateRequestQueued_.load(std::memory_order_relaxed);
 
   return snapshot;
 }
 
 void StatisticsTracker::reset()
 {
-  QMutexLocker locker(&mutex_);
-  caEventCount_ = 0;
-  updateRequestCount_ = 0;
-  updateDiscardCount_ = 0;
-  updateExecutedCount_ = 0;
-  updateRequestQueued_ = 0;
+  caEventCount_.store(0, std::memory_order_relaxed);
+  updateRequestCount_.store(0, std::memory_order_relaxed);
+  updateDiscardCount_.store(0, std::memory_order_relaxed);
+  updateExecutedCount_.store(0, std::memory_order_relaxed);
+  updateRequestQueued_.store(0, std::memory_order_relaxed);
   intervalTimer_.restart();
   timerInitialized_ = true;
 }
 
 std::pair<int, int> StatisticsTracker::channelCounts() const
 {
-  QMutexLocker locker(&mutex_);
-  return {channelCount_, channelConnected_};
+  return {channelCount_.load(std::memory_order_relaxed),
+      channelConnected_.load(std::memory_order_relaxed)};
 }

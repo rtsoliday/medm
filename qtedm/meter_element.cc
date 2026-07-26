@@ -12,6 +12,10 @@
 #include <QPaintEvent>
 #include <QPainterPath>
 #include <QPalette>
+#include <QResizeEvent>
+#include <QtMath>
+
+#include "update_coordinator.h"
 
 namespace {
 
@@ -213,6 +217,7 @@ void MeterElement::setForegroundColor(const QColor &color)
     return;
   }
   foregroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -227,6 +232,7 @@ void MeterElement::setBackgroundColor(const QColor &color)
     return;
   }
   backgroundColor_ = color;
+  invalidateStaticCache();
   update();
 }
 
@@ -241,6 +247,7 @@ void MeterElement::setColorMode(TextColorMode mode)
     return;
   }
   colorMode_ = mode;
+  invalidateStaticCache();
   update();
 }
 
@@ -255,6 +262,7 @@ void MeterElement::setLabel(MeterLabel label)
     return;
   }
   label_ = label;
+  invalidateStaticCache();
   update();
 }
 
@@ -284,6 +292,7 @@ void MeterElement::setLimits(const PvLimits &limits)
     runtimePrecision_ = limits_.precisionDefault;
     runtimeValue_ = defaultSampleValue();
   }
+  invalidateStaticCache();
   update();
 }
 
@@ -350,6 +359,7 @@ void MeterElement::setChannel(const QString &channel)
   }
   channel_ = normalized;
   setToolTip(QString());
+  invalidateStaticCache();
   update();
 }
 
@@ -359,6 +369,7 @@ void MeterElement::setExecuteMode(bool execute)
     return;
   }
   executeMode_ = execute;
+  invalidateStaticCache();
   clearRuntimeState();
 }
 
@@ -373,6 +384,7 @@ void MeterElement::setRuntimeConnected(bool connected)
     return;
   }
   runtimeConnected_ = connected;
+  invalidateStaticCache();
   if (!runtimeConnected_) {
     runtimeSeverity_ = kInvalidSeverity;
     hasRuntimeValue_ = false;
@@ -390,6 +402,7 @@ void MeterElement::setRuntimeSeverity(short severity)
   }
   runtimeSeverity_ = clamped;
   if (executeMode_ && colorMode_ == TextColorMode::kAlarm) {
+    invalidateStaticCache();
     update();
   }
 }
@@ -405,7 +418,7 @@ void MeterElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (executeMode_ && runtimeConnected_ && changed) {
-    update();
+    UpdateCoordinator::instance().requestUpdate(this, dynamicRegion());
   }
 }
 
@@ -422,6 +435,7 @@ void MeterElement::setRuntimeLimits(double low, double high)
   runtimeLimitsValid_ = true;
   if (executeMode_) {
     runtimeValue_ = clampToLimits(runtimeValue_);
+    invalidateStaticCache();
     update();
   }
 }
@@ -434,6 +448,7 @@ void MeterElement::setRuntimePrecision(int precision)
   }
   runtimePrecision_ = clamped;
   if (executeMode_) {
+    invalidateStaticCache();
     update();
   }
 }
@@ -448,6 +463,7 @@ void MeterElement::clearRuntimeState()
   runtimePrecision_ = -1;
   runtimeValue_ = defaultSampleValue();
   runtimeSeverity_ = kInvalidSeverity;
+  invalidateStaticCache();
   if (executeMode_) {
     update();
   } else {
@@ -459,75 +475,119 @@ void MeterElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
 
+  if (executeMode_ && !runtimeConnected_) {
+    QPainter disconnectedPainter(this);
+    disconnectedPainter.fillRect(rect(), Qt::white);
+    if (selected_) {
+      paintSelectionOverlay(disconnectedPainter);
+    }
+    return;
+  }
+
+  ensureStaticCache();
+
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, true);
-
-  const QColor bgColor = effectiveBackground();
-  painter.fillRect(rect(), bgColor);
-
-  drawRaisedBevel(painter, rect(), bgColor, kBevelDepth);
-
-  if (executeMode_ && !runtimeConnected_) {
-    painter.fillRect(rect(), Qt::white);
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
+  painter.drawPixmap(0, 0, staticCache_);
+  painter.setFont(cachedLabelFont_);
+  if (cachedDialRect_.isValid() && !cachedDialRect_.isEmpty()) {
+    paintNeedle(painter, cachedDialRect_);
   }
-
-  const QRectF bounds = rect().adjusted(6.0, 6.0, -6.0, -6.0);
-  if (bounds.width() <= 0.0 || bounds.height() <= 0.0) {
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
-
-  QFont labelFont = painter.font();
-  qreal fontSize = std::max(8.0, height() / 8.0);
-  labelFont.setPointSizeF(fontSize);
-  painter.setFont(labelFont);
-  QFontMetricsF metrics(labelFont);
-
-  MeterLayout layout = calculateLayout(bounds, label_, metrics);
-
-  // If dial doesn't have enough width (needs width >= 2*height for semicircle),
-  // iteratively shrink font to give dial more vertical room
-  const qreal minFontSize = 6.0;
-  while (fontSize > minFontSize && layout.dialRect.isValid() && 
-         !layout.dialRect.isEmpty()) {
-    const qreal dialWidth = layout.dialRect.width();
-    // Check if dial width (plus margin) fits within widget width
-    if (dialWidth + 12.0 >= width()) {
-      break;  // Dial fits properly
-    }
-    // Shrink font and recalculate layout
-    fontSize -= 0.5;
-    if (fontSize < minFontSize) {
-      fontSize = minFontSize;
-      labelFont.setPointSizeF(fontSize);
-      metrics = QFontMetricsF(labelFont);
-      layout = calculateLayout(bounds, label_, metrics);
-      break;
-    }
-    labelFont.setPointSizeF(fontSize);
-    metrics = QFontMetricsF(labelFont);
-    layout = calculateLayout(bounds, label_, metrics);
-  }
-
-  painter.setFont(labelFont);
-
-  if (layout.dialRect.isValid() && !layout.dialRect.isEmpty()) {
-    paintDial(painter, layout.dialRect);
-    paintTicks(painter, layout.dialRect);
-    paintNeedle(painter, layout.dialRect);
-  }
-  paintLabels(painter, layout.dialRect, layout.limitsRect,
-      layout.readbackRect, layout.channelRect);
+  paintLabels(painter, cachedDialRect_, cachedLimitsRect_,
+      cachedReadbackRect_, cachedChannelRect_, false, true);
 
   if (selected_) {
     paintSelectionOverlay(painter);
   }
+}
+
+void MeterElement::resizeEvent(QResizeEvent *event)
+{
+  QWidget::resizeEvent(event);
+  invalidateStaticCache();
+}
+
+void MeterElement::changeEvent(QEvent *event)
+{
+  QWidget::changeEvent(event);
+  invalidateStaticCache();
+}
+
+void MeterElement::invalidateStaticCache()
+{
+  staticCacheDirty_ = true;
+}
+
+void MeterElement::ensureStaticCache()
+{
+  const qreal dpr = devicePixelRatioF();
+  if (!staticCacheDirty_ && !staticCache_.isNull()
+      && cachedLogicalSize_ == size()
+      && qFuzzyCompare(cachedDevicePixelRatio_, dpr)) {
+    return;
+  }
+
+  cachedLogicalSize_ = size();
+  cachedDevicePixelRatio_ = dpr;
+  if (size().isEmpty()) {
+    staticCache_ = QPixmap();
+    cachedDialRect_ = QRectF();
+    return;
+  }
+
+  const QSize pixelSize(qMax(1, qCeil(width() * dpr)),
+      qMax(1, qCeil(height() * dpr)));
+  staticCache_ = QPixmap(pixelSize);
+  staticCache_.setDevicePixelRatio(dpr);
+  staticCache_.fill(Qt::transparent);
+
+  QPainter painter(&staticCache_);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  const QColor bgColor = effectiveBackground();
+  painter.fillRect(rect(), bgColor);
+  drawRaisedBevel(painter, rect(), bgColor, kBevelDepth);
+
+  const QRectF bounds = rect().adjusted(6.0, 6.0, -6.0, -6.0);
+  cachedLabelFont_ = painter.font();
+  qreal fontSize = std::max(8.0, height() / 8.0);
+  cachedLabelFont_.setPointSizeF(fontSize);
+  QFontMetricsF metrics(cachedLabelFont_);
+  MeterLayout layout = calculateLayout(bounds, label_, metrics);
+
+  const qreal minFontSize = 6.0;
+  while (fontSize > minFontSize && layout.dialRect.isValid()
+      && !layout.dialRect.isEmpty()
+      && layout.dialRect.width() + 12.0 < width()) {
+    fontSize = std::max(minFontSize, fontSize - 0.5);
+    cachedLabelFont_.setPointSizeF(fontSize);
+    metrics = QFontMetricsF(cachedLabelFont_);
+    layout = calculateLayout(bounds, label_, metrics);
+  }
+
+  cachedDialRect_ = layout.dialRect;
+  cachedLimitsRect_ = layout.limitsRect;
+  cachedReadbackRect_ = layout.readbackRect;
+  cachedChannelRect_ = layout.channelRect;
+  painter.setFont(cachedLabelFont_);
+  if (cachedDialRect_.isValid() && !cachedDialRect_.isEmpty()) {
+    paintDial(painter, cachedDialRect_);
+    paintTicks(painter, cachedDialRect_);
+  }
+  paintLabels(painter, cachedDialRect_, cachedLimitsRect_,
+      cachedReadbackRect_, cachedChannelRect_, true, false);
+  staticCacheDirty_ = false;
+}
+
+QRegion MeterElement::dynamicRegion() const
+{
+  if (staticCacheDirty_) {
+    return QRegion(rect());
+  }
+  QRegion region(cachedDialRect_.toAlignedRect().adjusted(-4, -4, 4, 4));
+  if (label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel) {
+    region |= cachedReadbackRect_.toAlignedRect().adjusted(-4, -4, 4, 4);
+  }
+  return region;
 }
 
 QColor MeterElement::effectiveForeground() const
@@ -800,7 +860,7 @@ void MeterElement::paintNeedle(QPainter &painter, const QRectF &dialRect) const
 
 void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
     const QRectF &limitsRect, const QRectF &valueRect,
-    const QRectF &channelRect) const
+    const QRectF &channelRect, bool paintStatic, bool paintReadback) const
 {
   const QColor foreground = effectiveForeground();
   const QColor background = effectiveBackground();
@@ -808,7 +868,8 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
   painter.setBrush(Qt::NoBrush);
   painter.setPen(Qt::black);
 
-  if (label_ == MeterLabel::kOutline && dialRect.isValid() && !dialRect.isEmpty()) {
+  if (paintStatic && label_ == MeterLabel::kOutline
+      && dialRect.isValid() && !dialRect.isEmpty()) {
     QPen outlinePen(foreground.darker(150));
     outlinePen.setStyle(Qt::DotLine);
     outlinePen.setWidth(1);
@@ -827,7 +888,7 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
     painter.setPen(Qt::black);
   }
 
-  if (label_ == MeterLabel::kChannel) {
+  if (paintStatic && label_ == MeterLabel::kChannel) {
     const QString text = channel_.trimmed();
     if (!text.isEmpty()) {
       QRectF textRect = channelRect;
@@ -860,52 +921,56 @@ void MeterElement::paintLabels(QPainter &painter, const QRectF &dialRect,
     }
   }
 
-  QRectF limitsArea = limitsRect;
-  if (!limitsArea.isValid() || limitsArea.isEmpty()) {
-    limitsArea = QRectF(rect().left() + 6.0,
-        rect().bottom() - painter.fontMetrics().height() - 6.0,
-        rect().width() - 12.0, painter.fontMetrics().height());
-  }
-  const double lowLimit = effectiveLowLimit();
-  const double highLimit = effectiveHighLimit();
-  const QString lowText = formatValue(lowLimit);
-  const QString highText = formatValue(highLimit);
-
-  const QFont originalFont = painter.font();
-  QFont limitsFont = originalFont;
-  QFontMetricsF limitsFm(limitsFont);
-  qreal lowWidth = limitsFm.horizontalAdvance(lowText);
-  qreal highWidth = limitsFm.horizontalAdvance(highText);
-  qreal totalWidth = lowWidth + highWidth;
-  const qreal availableWidth = limitsArea.width();
-  const qreal minGap = 4.0;
-
-  if (totalWidth + minGap > availableWidth && limitsFont.pointSizeF() > 6.0) {
-    const qreal requiredWidth = availableWidth - minGap;
-    qreal newSize = limitsFont.pointSizeF();
-    
-    while (totalWidth > requiredWidth && newSize > 6.0) {
-      newSize = std::max(6.0, newSize - 0.5);
-      limitsFont.setPointSizeF(newSize);
-      limitsFm = QFontMetricsF(limitsFont);
-      lowWidth = limitsFm.horizontalAdvance(lowText);
-      highWidth = limitsFm.horizontalAdvance(highText);
-      totalWidth = lowWidth + highWidth;
+  if (paintStatic) {
+    QRectF limitsArea = limitsRect;
+    if (!limitsArea.isValid() || limitsArea.isEmpty()) {
+      limitsArea = QRectF(rect().left() + 6.0,
+          rect().bottom() - painter.fontMetrics().height() - 6.0,
+          rect().width() - 12.0, painter.fontMetrics().height());
     }
-    
-    painter.setFont(limitsFont);
+    const QString lowText = formatValue(effectiveLowLimit());
+    const QString highText = formatValue(effectiveHighLimit());
+    const QFont originalFont = painter.font();
+    QFont limitsFont = originalFont;
+    QFontMetricsF limitsFm(limitsFont);
+    qreal lowWidth = limitsFm.horizontalAdvance(lowText);
+    qreal highWidth = limitsFm.horizontalAdvance(highText);
+    qreal totalWidth = lowWidth + highWidth;
+    const qreal availableWidth = limitsArea.width();
+    const qreal minGap = 4.0;
+
+    if (totalWidth + minGap > availableWidth
+        && limitsFont.pointSizeF() > 6.0) {
+      const qreal requiredWidth = availableWidth - minGap;
+      qreal newSize = limitsFont.pointSizeF();
+      while (totalWidth > requiredWidth && newSize > 6.0) {
+        newSize = std::max(6.0, newSize - 0.5);
+        limitsFont.setPointSizeF(newSize);
+        limitsFm = QFontMetricsF(limitsFont);
+        lowWidth = limitsFm.horizontalAdvance(lowText);
+        highWidth = limitsFm.horizontalAdvance(highText);
+        totalWidth = lowWidth + highWidth;
+      }
+      painter.setFont(limitsFont);
+    }
+
+    painter.drawText(limitsArea, Qt::AlignLeft | Qt::AlignVCenter, lowText);
+    painter.drawText(limitsArea, Qt::AlignRight | Qt::AlignVCenter, highText);
+    painter.setFont(originalFont);
   }
 
-  painter.drawText(limitsArea, Qt::AlignLeft | Qt::AlignVCenter, lowText);
-  painter.drawText(limitsArea, Qt::AlignRight | Qt::AlignVCenter, highText);
-
-  painter.setFont(originalFont);
-
-  if (label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel) {
+  if (paintReadback
+      && (label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel)) {
     QRectF valueArea = valueRect;
     if (!valueArea.isValid() || valueArea.isEmpty()) {
-      valueArea = QRectF(limitsArea.left(), limitsArea.bottom() + 2.0,
-          limitsArea.width(), limitsArea.height());
+      QRectF fallbackLimits = limitsRect;
+      if (!fallbackLimits.isValid() || fallbackLimits.isEmpty()) {
+        fallbackLimits = QRectF(rect().left() + 6.0,
+            rect().bottom() - painter.fontMetrics().height() - 6.0,
+            rect().width() - 12.0, painter.fontMetrics().height());
+      }
+      valueArea = QRectF(fallbackLimits.left(), fallbackLimits.bottom() + 2.0,
+          fallbackLimits.width(), fallbackLimits.height());
     }
 
     const QString valueText = formattedSampleValue();

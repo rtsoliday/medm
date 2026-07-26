@@ -56,8 +56,11 @@ DisplayWindow::DisplayWindow(const QPalette &displayPalette, const QPalette &uiP
 
   undoStack_ = new QUndoStack(this);
   undoStack_->setUndoLimit(100);
-  cleanStateSnapshot_ = serializeStateForUndo(filePath_);
-  lastCommittedState_ = cleanStateSnapshot_;
+  if (auto sharedState = state_.lock();
+      !sharedState || sharedState->editMode) {
+    cleanStateSnapshot_ = serializeStateForUndo(filePath_);
+    lastCommittedState_ = cleanStateSnapshot_;
+  }
   undoStack_->setClean();
   QObject::connect(undoStack_, &QUndoStack::cleanChanged, this,
       [this](bool) {
@@ -373,6 +376,14 @@ void DisplayWindow::handleEditModeChanged(bool editMode)
     }
   } else if (executeModeActive_) {
     leaveExecuteMode();
+  }
+  if (editMode && cleanStateSnapshot_.isEmpty()) {
+    cleanStateSnapshot_ = serializeStateForUndo(filePath_);
+    lastCommittedState_ = cleanStateSnapshot_;
+    if (undoStack_) {
+      undoStack_->clear();
+      undoStack_->setClean();
+    }
   }
 }
 
@@ -19231,20 +19242,31 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
     undoStack_->setClean();
     suppressUndoCapture_ = previousSuppress;
   }
-  /* Defer undo snapshot for large files to avoid blocking the UI during load.
-   * For files with many elements (>1000), create the snapshot asynchronously
-   * using a zero-delay timer so the UI can display the loaded file first. */
+  const auto sharedState = state_.lock();
+  const bool editingEnabled = !sharedState || sharedState->editMode;
   const int totalElements = elementStack_.size();
-  if (totalElements < 1000) {
-    cleanStateSnapshot_ = serializeStateForUndo(filePath_);
-    lastCommittedState_ = cleanStateSnapshot_;
-  } else {
-    /* Use a timer to defer the snapshot creation until the event loop runs */
-    QTimer::singleShot(0, this, [this, filePath]() {
-      QTEDM_TIMING_MARK("loadFromFile: Creating deferred undo snapshot");
-      cleanStateSnapshot_ = serializeStateForUndo(filePath);
+  if (editingEnabled) {
+    /* Defer undo snapshot for large files to avoid blocking the UI during
+     * load. Execute-only displays skip serialization entirely. */
+    if (totalElements < 1000) {
+      cleanStateSnapshot_ = serializeStateForUndo(filePath_);
       lastCommittedState_ = cleanStateSnapshot_;
-    });
+    } else {
+      QTimer::singleShot(0, this, [this, filePath]() {
+        const auto currentState = state_.lock();
+        if (currentState && !currentState->editMode) {
+          cleanStateSnapshot_.clear();
+          lastCommittedState_.clear();
+          return;
+        }
+        QTEDM_TIMING_MARK("loadFromFile: Creating deferred undo snapshot");
+        cleanStateSnapshot_ = serializeStateForUndo(filePath);
+        lastCommittedState_ = cleanStateSnapshot_;
+      });
+    }
+  } else {
+    cleanStateSnapshot_.clear();
+    lastCommittedState_.clear();
   }
   updateDirtyFromUndoStack();
 

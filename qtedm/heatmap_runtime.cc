@@ -140,7 +140,9 @@ void HeatmapRuntime::subscribeDataChannel()
       [this](const SharedChannelData &data) { handleDataValue(data); },
       [this](bool connected, const SharedChannelData &data) {
         handleDataConnection(connected, data);
-      });
+      },
+      nullptr,
+      ChannelDeliveryMode::kRealtime);
 }
 
 void HeatmapRuntime::subscribeDimensionChannel(ChannelState &state,
@@ -227,7 +229,6 @@ void HeatmapRuntime::handleDataValue(const SharedChannelData &data)
 
   {
     auto &stats = StatisticsTracker::instance();
-    stats.registerCaEvent();
     stats.registerUpdateRequest(true);
     stats.registerUpdateExecuted();
   }

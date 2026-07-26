@@ -150,7 +150,6 @@ void WheelSwitchRuntime::handleChannelData(const SharedChannelData &data)
 
   {
     auto &stats = StatisticsTracker::instance();
-    stats.registerCaEvent();
     stats.registerUpdateRequest(true);
     stats.registerUpdateExecuted();
   }

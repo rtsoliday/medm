@@ -19,14 +19,15 @@ SubscriptionHandle PvChannelManager::subscribe(
     long elementCount,
     ChannelValueCallback valueCallback,
     ChannelConnectionCallback connectionCallback,
-    ChannelAccessRightsCallback accessRightsCallback)
+    ChannelAccessRightsCallback accessRightsCallback,
+    ChannelDeliveryMode deliveryMode)
 {
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
     return SoftPvRegistry::instance().subscribe(parsed.pvName,
         std::move(valueCallback), std::move(connectionCallback),
-        std::move(accessRightsCallback));
+        std::move(accessRightsCallback), deliveryMode);
   }
 
   ChannelAccessContext::instance().ensureInitializedForProtocol(parsed.protocol);
@@ -34,12 +35,12 @@ SubscriptionHandle PvChannelManager::subscribe(
   if (parsed.protocol == PvProtocol::kPva) {
     return PvaChannelManager::instance().subscribe(pvName, requestedType,
         elementCount, std::move(valueCallback), std::move(connectionCallback),
-        std::move(accessRightsCallback));
+        std::move(accessRightsCallback), deliveryMode);
   }
 
   return SharedChannelManager::instance().subscribe(pvName, requestedType,
       elementCount, std::move(valueCallback), std::move(connectionCallback),
-      std::move(accessRightsCallback));
+      std::move(accessRightsCallback), deliveryMode);
 }
 
 bool PvChannelManager::putValue(const QString &pvName, double value)

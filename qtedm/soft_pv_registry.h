@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -79,7 +80,8 @@ public:
       const QString &name,
       ChannelValueCallback valueCallback,
       ChannelConnectionCallback connectionCallback = nullptr,
-      ChannelAccessRightsCallback accessRightsCallback = nullptr);
+      ChannelAccessRightsCallback accessRightsCallback = nullptr,
+      ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive);
 
 private:
   enum class ValueKind
@@ -98,6 +100,13 @@ private:
     ChannelValueCallback valueCallback;
     ChannelConnectionCallback connectionCallback;
     ChannelAccessRightsCallback accessRightsCallback;
+    ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive;
+  };
+
+  struct DeliveryState
+  {
+    qint64 lastNotifyTimeMs = -1;
+    bool notifyPending = false;
   };
 
   struct Entry
@@ -125,7 +134,9 @@ private:
     bool producedByExpressionChannel = false;
     QString expressionCalc;
     QStringList expressionChannels;
-    QVector<Subscriber> subscribers;
+    QHash<quint64, Subscriber> subscribers;
+    DeliveryState passiveDelivery;
+    DeliveryState realtimeDelivery;
     int dispatchDepth = 0;
     bool cleanupPending = false;
   };
@@ -142,7 +153,11 @@ private:
   void clearValue(Entry *entry);
   SharedChannelData buildData(const Entry &entry) const;
   void dispatchConnectionCallbacks(Entry *entry);
-  void dispatchValueCallbacks(Entry *entry);
+  void dispatchValueCallbacks(Entry *entry,
+      ChannelDeliveryMode deliveryMode);
+  void notifyAllSubscribers(Entry *entry, bool force = false);
+  void notifySubscribers(Entry *entry,
+      ChannelDeliveryMode deliveryMode, bool force = false);
   void dispatchAccessRightsCallbacks(Entry *entry);
   void cleanupEntryIfUnused(Entry *entry);
   void assertMainThread() const;
@@ -150,4 +165,5 @@ private:
   QHash<QString, Entry *> entries_;
   QHash<quint64, Entry *> subscriptionToEntry_;
   quint64 nextSubscriptionId_ = 1;
+  QElapsedTimer deliveryTimer_;
 };

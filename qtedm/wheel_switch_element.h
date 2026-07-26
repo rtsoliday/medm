@@ -87,6 +87,7 @@ protected:
   void focusInEvent(QFocusEvent *event) override;
   void focusOutEvent(QFocusEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
+  void changeEvent(QEvent *event) override;
 
 private:
   enum class RepeatDirection
@@ -124,6 +125,8 @@ private:
   QColor valueForeground() const;
   QColor buttonFillColor(bool isUp, bool pressed, bool enabled) const;
   Layout layoutForRect(const QRectF &bounds) const;
+  void updateLayoutValueState(Layout &layout) const;
+  void invalidateLayoutCache();
   QRectF contentRect() const;
   void paintButton(QPainter &painter, const QRectF &rect, bool isUp,
     bool pressed, bool enabled, bool hovered) const;
@@ -201,4 +204,10 @@ private:
   int selectedSlotIndex_ = -1;
   bool keyboardEntryActive_ = false;
   QString keyboardEntryText_;
+  mutable Layout cachedLayout_;
+  mutable QRectF cachedLayoutBounds_;
+  mutable int cachedTextLength_ = -1;
+  mutable int cachedDecimalIndex_ = -1;
+  mutable bool cachedKeyboardEntryActive_ = false;
+  mutable bool layoutCacheValid_ = false;
 };

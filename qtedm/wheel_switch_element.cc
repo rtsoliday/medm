@@ -455,6 +455,7 @@ void WheelSwitchElement::setPrecision(double precision)
     return;
   }
   precision_ = precision;
+  invalidateLayoutCache();
   update();
 }
 
@@ -477,6 +478,7 @@ void WheelSwitchElement::setFormat(const QString &format)
 
   }
   format_ = trimmed;
+  invalidateLayoutCache();
   update();
 }
 
@@ -509,6 +511,7 @@ void WheelSwitchElement::setLimits(const PvLimits &limits)
     runtimeValue_ = defaultSampleValue();
     hasRuntimeValue_ = false;
   }
+  invalidateLayoutCache();
   update();
 }
 
@@ -584,6 +587,7 @@ void WheelSwitchElement::setExecuteMode(bool execute)
     return;
   }
   executeMode_ = execute;
+  invalidateLayoutCache();
   stopRepeating();
   clearRuntimeState();
   updateCursor();
@@ -640,6 +644,7 @@ void WheelSwitchElement::setRuntimeLimits(double low, double high)
   runtimeLow_ = low;
   runtimeHigh_ = high;
   runtimeLimitsValid_ = true;
+  invalidateLayoutCache();
   if (executeMode_) {
     update();
   }
@@ -652,6 +657,7 @@ void WheelSwitchElement::setRuntimePrecision(int precision)
     return;
   }
   runtimePrecision_ = clamped;
+  invalidateLayoutCache();
   if (executeMode_) {
     update();
   }
@@ -671,7 +677,9 @@ void WheelSwitchElement::setRuntimeValue(double value)
   runtimeValue_ = clamped;
   hasRuntimeValue_ = true;
   if (changed) {
-    UpdateCoordinator::instance().requestUpdate(this);
+    const QRegion region = layoutCacheValid_
+        ? QRegion(cachedLayoutBounds_.toAlignedRect()) : QRegion(rect());
+    UpdateCoordinator::instance().requestUpdate(this, region);
   }
 }
 
@@ -695,6 +703,7 @@ void WheelSwitchElement::clearRuntimeState()
   selectedSlotIndex_ = -1;
   keyboardEntryActive_ = false;
   keyboardEntryText_.clear();
+  invalidateLayoutCache();
   if (repeatTimer_) {
     repeatTimer_->stop();
     repeatTimer_->setSingleShot(true);
@@ -1104,12 +1113,31 @@ QColor WheelSwitchElement::valueForeground() const
 
 WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bounds) const
 {
+  const QString currentText = displayText();
+  int currentDecimalIndex = currentText.indexOf('.');
+  if (currentDecimalIndex < 0) {
+    currentDecimalIndex = currentText.size();
+  }
+  if (layoutCacheValid_ && cachedLayoutBounds_ == bounds
+      && cachedTextLength_ == currentText.size()
+      && cachedDecimalIndex_ == currentDecimalIndex
+      && cachedKeyboardEntryActive_ == keyboardEntryActive_) {
+    Layout layout = cachedLayout_;
+    layout.text = currentText;
+    for (int i = 0; i < static_cast<int>(layout.columns.size())
+         && i < currentText.size(); ++i) {
+      layout.columns[static_cast<std::size_t>(i)].character = currentText.at(i);
+    }
+    updateLayoutValueState(layout);
+    return layout;
+  }
+
   Layout layout{};
   layout.outer = bounds;
   const WheelSwitchFormatInfo formatInfo = wheelSwitchFormatInfo(format_,
       effectiveLowLimit(), effectiveHighLimit(), effectivePrecision());
   const QString templateText = formatInfo.zeroString;
-  layout.text = displayText();
+  layout.text = currentText;
 
   // Find decimal positions in both template and current text
   // The decimal is within the digit area (excluding prefix and postfix)
@@ -1126,11 +1154,6 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
     templateDecimalIndex = prefixSize + digitSize;
   }
   
-  int currentDecimalIndex = layout.text.indexOf('.');
-  if (currentDecimalIndex < 0) {
-    currentDecimalIndex = layout.text.size();
-  }
-
   // Count digits after decimal in template to determine how many go left vs right
   // (currently not used but may be needed for future enhancements)
   // int digitsAfterDecimal = 0;
@@ -1416,8 +1439,18 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
     startX += width;
   }
 
-  // Apply button visibility logic similar to medm's set_button_visibility
-  // Hide buttons that would cause values to exceed limits
+  cachedLayout_ = layout;
+  cachedLayoutBounds_ = bounds;
+  cachedTextLength_ = currentText.size();
+  cachedDecimalIndex_ = currentDecimalIndex;
+  cachedKeyboardEntryActive_ = keyboardEntryActive_;
+  layoutCacheValid_ = true;
+  updateLayoutValueState(layout);
+  return layout;
+}
+
+void WheelSwitchElement::updateLayoutValueState(Layout &layout) const
+{
   const double value = displayedValue();
   const double lowLimit = effectiveLowLimit();
   const double highLimit = effectiveHighLimit();
@@ -1452,7 +1485,17 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
     slot.showDownButton = !hideDown;
   }
 
-  return layout;
+}
+
+void WheelSwitchElement::invalidateLayoutCache()
+{
+  layoutCacheValid_ = false;
+}
+
+void WheelSwitchElement::changeEvent(QEvent *event)
+{
+  QWidget::changeEvent(event);
+  invalidateLayoutCache();
 }
 
 QRectF WheelSwitchElement::contentRect() const

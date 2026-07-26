@@ -7,6 +7,7 @@
 #include <QHeaderView>
 #include <QPalette>
 #include <QResizeEvent>
+#include <QTimer>
 
 #include "legacy_fonts.h"
 #include "pv_name_utils.h"
@@ -61,7 +62,14 @@ QString severityText(short severity, bool connected)
 WaveTableElement::WaveTableElement(QWidget *parent)
   : QTableView(parent)
   , model_(new WaveTableModel(this))
+  , valueUpdateTimer_(new QTimer(this))
 {
+  valueUpdateTimer_->setSingleShot(true);
+  valueUpdateTimer_->setInterval(200);
+  valueUpdateTimer_->setTimerType(Qt::CoarseTimer);
+  connect(valueUpdateTimer_, &QTimer::timeout, this,
+      [this]() { flushPendingValues(); });
+
   setModel(model_);
   setSelectionMode(QAbstractItemView::NoSelection);
   setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -291,6 +299,13 @@ bool WaveTableElement::isExecuteMode() const
 
 void WaveTableElement::setConnected(bool connected)
 {
+  if (runtimeState_.connected == connected
+      && (connected || runtimeState_.severity == 3)) {
+    return;
+  }
+  if (!connected) {
+    cancelPendingValues();
+  }
   runtimeState_.connected = connected;
   if (!connected) {
     runtimeState_.severity = 3;
@@ -301,6 +316,9 @@ void WaveTableElement::setConnected(bool connected)
 
 void WaveTableElement::setSeverity(short severity)
 {
+  if (runtimeState_.severity == severity) {
+    return;
+  }
   runtimeState_.severity = severity;
   model_->setRuntimeState(runtimeState_);
   updateRuntimeStatus();
@@ -309,8 +327,15 @@ void WaveTableElement::setSeverity(short severity)
 void WaveTableElement::setMetadata(short nativeFieldType,
     long nativeElementCount, const QString &units, int precision)
 {
+  const long clampedElementCount = std::max<long>(0, nativeElementCount);
+  if (runtimeState_.nativeFieldType == nativeFieldType
+      && runtimeState_.nativeElementCount == clampedElementCount
+      && runtimeState_.units == units
+      && runtimeState_.precision == precision) {
+    return;
+  }
   runtimeState_.nativeFieldType = nativeFieldType;
-  runtimeState_.nativeElementCount = std::max<long>(0, nativeElementCount);
+  runtimeState_.nativeElementCount = clampedElementCount;
   runtimeState_.units = units;
   runtimeState_.precision = precision;
   model_->setRuntimeState(runtimeState_);
@@ -321,13 +346,24 @@ void WaveTableElement::setValues(const QVector<QString> &values,
     long receivedElementCount)
 {
   runtimeState_.receivedElementCount = std::max<long>(0, receivedElementCount);
-  model_->setRuntimeState(runtimeState_);
-  model_->setValues(values);
-  updateRuntimeStatus();
+  if (!runtimeState_.connected) {
+    cancelPendingValues();
+    model_->setRuntimeState(runtimeState_);
+    model_->setValues(values);
+    updateRuntimeStatus();
+    return;
+  }
+
+  pendingValues_ = values;
+  hasPendingValues_ = true;
+  if (!valueUpdateTimer_->isActive()) {
+    valueUpdateTimer_->start();
+  }
 }
 
 void WaveTableElement::clearRuntimeState()
 {
+  cancelPendingValues();
   runtimeState_ = WaveTableRuntimeState();
   model_->setRuntimeState(runtimeState_);
   model_->clearValues();
@@ -600,6 +636,26 @@ void WaveTableElement::applyFontSize()
   horizontalHeader()->setMinimumHeight(rowHeight);
   resizeRowsToContents();
   viewport()->update();
+}
+
+void WaveTableElement::flushPendingValues()
+{
+  if (!hasPendingValues_) {
+    return;
+  }
+  QVector<QString> values;
+  values.swap(pendingValues_);
+  hasPendingValues_ = false;
+  model_->setRuntimeState(runtimeState_);
+  model_->setValues(values);
+  updateRuntimeStatus();
+}
+
+void WaveTableElement::cancelPendingValues()
+{
+  valueUpdateTimer_->stop();
+  pendingValues_.clear();
+  hasPendingValues_ = false;
 }
 
 QColor WaveTableElement::defaultForegroundColor() const

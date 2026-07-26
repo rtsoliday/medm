@@ -793,9 +793,26 @@ void StripChartElement::paintEvent(QPaintEvent *event)
         const QRect plotArea = cachedLayout_.chartRect.adjusted(1, 1, -1, -1);
         ensurePenCache(plotArea);
         if (!penCache_.isNull()) {
-          // After full redraw, data fills the entire cache - just display it directly
-          // The paintRuntimePens function handles positioning correctly
-          painter.drawPixmap(plotArea.topLeft(), penCache_);
+          const int cacheWidth = penCache_.width();
+          const int cacheHeight = penCache_.height();
+          if (sampleHistoryLength_ >= cacheWidth && circularWriteSlot_ > 0
+              && circularWriteSlot_ < cacheWidth) {
+            const auto segmentWidths =
+                circularDisplayWidths(cacheWidth, circularWriteSlot_);
+            const int rightWidth = segmentWidths[0];
+            const int leftWidth = segmentWidths[1];
+            painter.drawPixmap(
+                QRect(plotArea.left(), plotArea.top(), rightWidth, cacheHeight),
+                penCache_,
+                QRect(circularWriteSlot_, 0, rightWidth, cacheHeight));
+            painter.drawPixmap(
+                QRect(plotArea.left() + rightWidth, plotArea.top(),
+                    leftWidth, cacheHeight),
+                penCache_,
+                QRect(0, 0, leftWidth, cacheHeight));
+          } else {
+            painter.drawPixmap(plotArea.topLeft(), penCache_);
+          }
         }
       }
     } else {
@@ -847,6 +864,13 @@ void StripChartElement::resizeEvent(QResizeEvent *event)
   } else {
     cachedChartWidth_ = 0;
   }
+}
+
+void StripChartElement::changeEvent(QEvent *event)
+{
+  QWidget::changeEvent(event);
+  invalidateStaticCache();
+  invalidatePenCache();
 }
 
 StripChartElement::Layout StripChartElement::calculateLayout(
@@ -1907,13 +1931,15 @@ void StripChartElement::handleRefreshTimer()
   }
   expectedRefreshTimeMs_ = nowMs + currentRefreshIntervalMs_;
 
-  maybeAppendSamples(nowMs);
+  const int appendedColumns = maybeAppendSamples(nowMs);
 
   // Use update() to queue a paint event. This doesn't block the timer
   // callback, allowing the event loop to process other events. Multiple
   // update() calls will be coalesced into a single paint, and the paint
   // will draw all accumulated columns at once.
-  update();
+  if (appendedColumns > 0) {
+    update();
+  }
 
   // Always use the adaptive refresh interval for the timer
   // This ensures consistent timing that can be adjusted for slow networks
@@ -1973,18 +1999,18 @@ void StripChartElement::enforceSampleCapacity(int capacity)
   sampleHistoryLength_ = newLength;
 }
 
-void StripChartElement::maybeAppendSamples(qint64 nowMs)
+int StripChartElement::maybeAppendSamples(qint64 nowMs)
 {
   if (!allDefinedPensConnectedAndReadable()) {
     lastSampleMs_ = nowMs;
     nextAdvanceTimeMs_ = 0;
-    return;
+    return 0;
   }
 
   if (!anyPenReady()) {
     lastSampleMs_ = nowMs;
     nextAdvanceTimeMs_ = 0;
-    return;
+    return 0;
   }
 
   if (cachedChartWidth_ <= 0) {
@@ -1992,7 +2018,7 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
     if (width <= 0) {
       lastSampleMs_ = nowMs;
       nextAdvanceTimeMs_ = 0;
-      return;
+      return 0;
     }
     updateSamplingGeometry(width);
   }
@@ -2012,12 +2038,12 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
     lastSampleMs_ = nowMs;
     nextAdvanceTimeMs_ = saturatingAdd(nowMs,
         roundedPositiveInterval(sampleIntervalMs_));
-    return;
+    return 1;
   }
 
   // MEDM-style: check if current time exceeds nextAdvanceTime
   if (nowMs < nextAdvanceTimeMs_) {
-    return;
+    return 0;
   }
 
   // Calculate how many pixels (columns) need to be drawn
@@ -2033,6 +2059,7 @@ void StripChartElement::maybeAppendSamples(qint64 nowMs)
   nextAdvanceTimeMs_ = saturatingAdd(nextAdvanceTimeMs_,
       roundedPositiveInterval(interval * totalPixels));
   lastSampleMs_ = nowMs;
+  return totalPixels;
 }
 
 void StripChartElement::appendSampleColumn()
@@ -2042,6 +2069,7 @@ void StripChartElement::appendSampleColumn()
     return;
   }
 
+  const bool bufferWasFull = sampleHistoryLength_ >= capacity;
   const double missingValue = std::numeric_limits<double>::quiet_NaN();
   for (Pen &pen : pens_) {
     double sampleValue = missingValue;
@@ -2088,15 +2116,18 @@ void StripChartElement::appendSampleColumn()
   if (autoscale_) {
     autoscaleLimitsValid_ = false;
     invalidateStaticCache();  // Y-axis labels may change
+    penCacheDirty_ = true;
   }
 
   // Track new columns for incremental pen drawing
   ++newSampleColumns_;
   
-  // Always mark pen cache dirty so that paintRuntimePens is called
-  // to properly render the scrolling data. The incremental update path
-  // doesn't handle scrolling correctly.
-  penCacheDirty_ = true;
+  // Before the history fills the plot, samples are right-aligned and require a
+  // full redraw. Afterwards the cache is a true circular image and only the
+  // overwritten columns need repainting.
+  if (!bufferWasFull) {
+    penCacheDirty_ = true;
+  }
 }
 
 bool StripChartElement::anyPenConnected() const

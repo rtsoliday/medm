@@ -6,7 +6,6 @@
 #include <limits>
 
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QDebug>
 #include <QTimer>
 
@@ -18,7 +17,8 @@
 namespace {
 /* Minimum interval between subscriber notifications per channel (100ms = 10Hz max).
  * This rate limits high-frequency PV updates to reduce CPU load. */
-constexpr qint64 kMinNotifyIntervalMs = 100;
+constexpr qint64 kRealtimeNotifyIntervalMs = 100;
+constexpr qint64 kPassiveNotifyIntervalMs = 200;
 /* Idle time after the last connection change before reporting completion. */
 constexpr int kConnectionCompletionIdleMs = 100;
 std::atomic<SharedChannelManager *> gSharedChannelManager{nullptr};
@@ -72,6 +72,7 @@ SharedChannelManager::SharedChannelManager()
   gSharedChannelManager.store(this, std::memory_order_release);
   acceptingCallbacks_.store(true, std::memory_order_release);
   connectionCompletionTimer_.setSingleShot(true);
+  deliveryTimer_.start();
   connect(&connectionCompletionTimer_, &QTimer::timeout,
       this, &SharedChannelManager::reportConnectionCompletion);
   if (QCoreApplication *core = QCoreApplication::instance()) {
@@ -93,7 +94,8 @@ SubscriptionHandle SharedChannelManager::subscribe(
     long elementCount,
     ChannelValueCallback valueCallback,
     ChannelConnectionCallback connectionCallback,
-    ChannelAccessRightsCallback accessRightsCallback)
+    ChannelAccessRightsCallback accessRightsCallback,
+    ChannelDeliveryMode deliveryMode)
 {
   if (pvName.trimmed().isEmpty() || !valueCallback) {
     return SubscriptionHandle();
@@ -122,8 +124,9 @@ SubscriptionHandle SharedChannelManager::subscribe(
   sub.valueCallback = std::move(valueCallback);
   sub.connectionCallback = std::move(connectionCallback);
   sub.accessRightsCallback = std::move(accessRightsCallback);
+  sub.deliveryMode = deliveryMode;
 
-  channel->subscribers.append(sub);
+  channel->subscribers.insert(subId, std::move(sub));
   subscriptionToChannel_.insert(subId, channel);
 
   if (channel->connected) {
@@ -143,14 +146,7 @@ void SharedChannelManager::unsubscribe(quint64 subscriptionId)
   SharedChannel *channel = it.value();
   subscriptionToChannel_.erase(it);
 
-  /* Remove subscriber from channel */
-  auto &subs = channel->subscribers;
-  for (int i = 0; i < subs.size(); ++i) {
-    if (subs[i].id == subscriptionId) {
-      subs.removeAt(i);
-      break;
-    }
-  }
+  channel->subscribers.remove(subscriptionId);
 
   /* Destroy channel if no more subscribers */
   destroyChannelIfUnused(channel);
@@ -217,12 +213,8 @@ SharedChannelManager::Subscriber *SharedChannelManager::findSubscriber(
     return nullptr;
   }
 
-  for (Subscriber &sub : channel->subscribers) {
-    if (sub.id == subscriptionId) {
-      return &sub;
-    }
-  }
-  return nullptr;
+  auto it = channel->subscribers.find(subscriptionId);
+  return it == channel->subscribers.end() ? nullptr : &it.value();
 }
 
 void SharedChannelManager::dispatchConnectionCallbacks(SharedChannel *channel,
@@ -234,9 +226,7 @@ void SharedChannelManager::dispatchConnectionCallbacks(SharedChannel *channel,
 
   QList<quint64> subscriberIds;
   subscriberIds.reserve(channel->subscribers.size());
-  for (const Subscriber &sub : channel->subscribers) {
-    subscriberIds.append(sub.id);
-  }
+  subscriberIds = channel->subscribers.keys();
 
   const SharedChannelData data = channel->cachedData;
   ++channel->dispatchDepth;
@@ -255,7 +245,8 @@ void SharedChannelManager::dispatchConnectionCallbacks(SharedChannel *channel,
   }
 }
 
-void SharedChannelManager::dispatchValueCallbacks(SharedChannel *channel)
+void SharedChannelManager::dispatchValueCallbacks(SharedChannel *channel,
+    ChannelDeliveryMode deliveryMode)
 {
   if (!channel) {
     return;
@@ -263,15 +254,13 @@ void SharedChannelManager::dispatchValueCallbacks(SharedChannel *channel)
 
   QList<quint64> subscriberIds;
   subscriberIds.reserve(channel->subscribers.size());
-  for (const Subscriber &sub : channel->subscribers) {
-    subscriberIds.append(sub.id);
-  }
+  subscriberIds = channel->subscribers.keys();
 
   const SharedChannelData data = channel->cachedData;
   ++channel->dispatchDepth;
   for (quint64 subscriberId : subscriberIds) {
     Subscriber *sub = findSubscriber(channel, subscriberId);
-    if (!sub || !sub->valueCallback) {
+    if (!sub || sub->deliveryMode != deliveryMode || !sub->valueCallback) {
       continue;
     }
     auto callback = sub->valueCallback;
@@ -293,9 +282,7 @@ void SharedChannelManager::dispatchAccessRightsCallbacks(SharedChannel *channel,
 
   QList<quint64> subscriberIds;
   subscriberIds.reserve(channel->subscribers.size());
-  for (const Subscriber &sub : channel->subscribers) {
-    subscriberIds.append(sub.id);
-  }
+  subscriberIds = channel->subscribers.keys();
 
   ++channel->dispatchDepth;
   for (quint64 subscriberId : subscriberIds) {
@@ -409,6 +396,7 @@ void SharedChannelManager::destroyChannelIfUnused(SharedChannel *channel)
       ca_set_puser(channel->channelId, nullptr);
       if (channel->connected) {
         StatisticsTracker::instance().registerChannelDisconnected();
+        connectedChannelCount_ = std::max(0, connectedChannelCount_ - 1);
       }
       ca_clear_channel(channel->channelId);
       StatisticsTracker::instance().registerChannelDestroyed();
@@ -663,7 +651,8 @@ void SharedChannelManager::onValueReceived(quint64 channelInstanceId,
   handleValue(channel, args);
 }
 
-void SharedChannelManager::onDeferredValueNotify(quint64 channelInstanceId)
+void SharedChannelManager::onDeferredValueNotify(quint64 channelInstanceId,
+    ChannelDeliveryMode deliveryMode)
 {
   if (!acceptingCallbacks_.load(std::memory_order_acquire)) {
     return;
@@ -673,53 +662,22 @@ void SharedChannelManager::onDeferredValueNotify(quint64 channelInstanceId)
     return;
   }
 
-  channel->notifyPending = false;
+  DeliveryState &delivery =
+      deliveryMode == ChannelDeliveryMode::kPassive
+      ? channel->passiveDelivery : channel->realtimeDelivery;
+  if (!delivery.notifyPending) {
+    return;
+  }
+  delivery.notifyPending = false;
 
   SharedChannelData &data = channel->cachedData;
   if (!data.hasValue) {
     return;
   }
 
-  bool valueChanged = false;
-  if (channel->lastNotifiedSeverity < 0) {
-    valueChanged = true;
-  } else if (data.severity != channel->lastNotifiedSeverity) {
-    valueChanged = true;
-  } else if (data.isNumeric && data.numericValue != channel->lastNotifiedValue) {
-    valueChanged = true;
-  } else if (data.isString && data.stringValue != channel->lastNotifiedString) {
-    valueChanged = true;
-  } else if (data.isEnum && data.enumValue != channel->lastNotifiedEnum) {
-    valueChanged = true;
-  } else if (data.isArray || data.isCharArray
-      || !data.stringArrayValue.isEmpty()) {
-    valueChanged = true;
-  }
-  if (!valueChanged) {
-    return;
-  }
-
-  const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-  if (channel->lastNotifyTimeMs > 0) {
-    const qint64 elapsedMs = nowMs - channel->lastNotifyTimeMs;
-    if (elapsedMs < kMinNotifyIntervalMs) {
-      const int delayMs = static_cast<int>(kMinNotifyIntervalMs - elapsedMs);
-      channel->notifyPending = true;
-      QTimer::singleShot(delayMs, this, [this, channelInstanceId]() {
-        onDeferredValueNotify(channelInstanceId);
-      });
-      return;
-    }
-  }
-
-  channel->lastNotifyTimeMs = nowMs;
-  channel->lastNotifiedValue = data.numericValue;
-  channel->lastNotifiedSeverity = data.severity;
-  channel->lastNotifiedString = data.stringValue;
-  channel->lastNotifiedEnum = data.enumValue;
+  delivery.lastNotifyTimeMs = deliveryTimer_.elapsed();
   ++channel->updateCount;
-
-  dispatchValueCallbacks(channel);
+  dispatchValueCallbacks(channel, deliveryMode);
 }
 
 void SharedChannelManager::onControlInfoReceived(quint64 channelInstanceId,
@@ -772,8 +730,10 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
   if (connected) {
     if (!wasConnected) {
       StatisticsTracker::instance().registerChannelConnected();
-      ++totalConnectionsMade_;
-      lastConnectedPvName_ = channel->key.pvName;
+      ++connectedChannelCount_;
+      if (StartupTiming::instance().isEnabled()) {
+        ++totalConnectionsMade_;
+        lastConnectedPvName_ = channel->key.pvName;
       /* Report first connection for timing diagnostics */
       if (!firstConnectionReported_) {
         firstConnectionReported_ = true;
@@ -811,6 +771,7 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
         QTEDM_TIMING_MARK_COUNT("All PVs connected, total", totalConnectionsMade_);
         QTEDM_TIMING_MARK_DETAIL("Last PV connection", channel->key.pvName);
       }
+      }
     }
 
     /* Native type info is already set by onConnectionChanged() which 
@@ -822,6 +783,7 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
   } else {
     if (wasConnected) {
       StatisticsTracker::instance().registerChannelDisconnected();
+      connectedChannelCount_ = std::max(0, connectedChannelCount_ - 1);
     }
 
     /* Clear cached value state on disconnect */
@@ -850,53 +812,54 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
 
   StatisticsTracker::instance().registerCaEvent();
 
-  /* Track values for timing diagnostics */
-  bool isFirstValueForChannel = !channel->cachedData.hasValue;
-  if (isFirstValueForChannel) {
-    ++totalValuesReceived_;
-    lastValuePvName_ = channel->key.pvName;
-  }
-  /* Report first value for timing diagnostics */
-  if (!firstValueReported_) {
-    firstValueReported_ = true;
-    QTEDM_TIMING_MARK_DETAIL("First PV value received", channel->key.pvName);
-  }
-  /* Report value milestones */
-  int connectedCount = connectedChannelCount();
-  if (connectedCount > 0 && isFirstValueForChannel) {
-    int pct = (totalValuesReceived_ * 100) / connectedCount;
-    if (!value10Reported_ && pct >= 10) {
-      value10Reported_ = true;
-      QTEDM_TIMING_MARK_COUNT("PV values: 10% complete", totalValuesReceived_);
+  if (StartupTiming::instance().isEnabled()) {
+    /* Track values for timing diagnostics only when explicitly enabled. */
+    const bool isFirstValueForChannel = !channel->cachedData.hasValue;
+    if (isFirstValueForChannel) {
+      ++totalValuesReceived_;
+      lastValuePvName_ = channel->key.pvName;
     }
-    if (!value25Reported_ && pct >= 25) {
-      value25Reported_ = true;
-      QTEDM_TIMING_MARK_COUNT("PV values: 25% complete", totalValuesReceived_);
+    if (!firstValueReported_) {
+      firstValueReported_ = true;
+      QTEDM_TIMING_MARK_DETAIL("First PV value received", channel->key.pvName);
     }
-    if (!value50Reported_ && pct >= 50) {
-      value50Reported_ = true;
-      QTEDM_TIMING_MARK_COUNT("PV values: 50% complete", totalValuesReceived_);
+    const int connectedCount = connectedChannelCount_;
+    if (connectedCount > 0 && isFirstValueForChannel) {
+      const int pct = (totalValuesReceived_ * 100) / connectedCount;
+      if (!value10Reported_ && pct >= 10) {
+        value10Reported_ = true;
+        QTEDM_TIMING_MARK_COUNT("PV values: 10% complete", totalValuesReceived_);
+      }
+      if (!value25Reported_ && pct >= 25) {
+        value25Reported_ = true;
+        QTEDM_TIMING_MARK_COUNT("PV values: 25% complete", totalValuesReceived_);
+      }
+      if (!value50Reported_ && pct >= 50) {
+        value50Reported_ = true;
+        QTEDM_TIMING_MARK_COUNT("PV values: 50% complete", totalValuesReceived_);
+      }
+      if (!value75Reported_ && pct >= 75) {
+        value75Reported_ = true;
+        QTEDM_TIMING_MARK_COUNT("PV values: 75% complete", totalValuesReceived_);
+      }
+      if (!value90Reported_ && pct >= 90) {
+        value90Reported_ = true;
+        QTEDM_TIMING_MARK_COUNT("PV values: 90% complete", totalValuesReceived_);
+      }
     }
-    if (!value75Reported_ && pct >= 75) {
-      value75Reported_ = true;
-      QTEDM_TIMING_MARK_COUNT("PV values: 75% complete", totalValuesReceived_);
+    if (!lastValueReported_ && isFirstValueForChannel
+        && totalValuesReceived_ == connectedCount) {
+      lastValueReported_ = true;
+      QTEDM_TIMING_MARK_COUNT("All PVs have values, total",
+          totalValuesReceived_);
+      QTEDM_TIMING_MARK_DETAIL("PV values: all complete",
+          QStringLiteral("values for %1 of %2 connected PVs")
+              .arg(totalValuesReceived_)
+              .arg(connectedCount));
+      QTEDM_TIMING_MARK_DETAIL("Last PV value received",
+          channel->key.pvName);
+      StartupUiSettlingTracker::instance().markAllPvValuesReceived();
     }
-    if (!value90Reported_ && pct >= 90) {
-      value90Reported_ = true;
-      QTEDM_TIMING_MARK_COUNT("PV values: 90% complete", totalValuesReceived_);
-    }
-  }
-  /* Check if all channels have received at least one value */
-  if (!lastValueReported_ && isFirstValueForChannel &&
-      totalValuesReceived_ == connectedCount) {
-    lastValueReported_ = true;
-    QTEDM_TIMING_MARK_COUNT("All PVs have values, total", totalValuesReceived_);
-    QTEDM_TIMING_MARK_DETAIL("PV values: all complete",
-        QStringLiteral("values for %1 of %2 connected PVs")
-            .arg(totalValuesReceived_)
-            .arg(connectedCount));
-    QTEDM_TIMING_MARK_DETAIL("Last PV value received", channel->key.pvName);
-    StartupUiSettlingTracker::instance().markAllPvValuesReceived();
   }
 
   SharedChannelData &data = channel->cachedData;
@@ -1121,38 +1084,50 @@ void SharedChannelManager::handleValue(SharedChannel *channel,
     return;
   }
 
-  /* Rate limit subscriber notifications to reduce CPU load from high-frequency PVs.
-   * Always notify on the first value, then enforce minimum interval between updates. */
-  const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-  if (channel->lastNotifyTimeMs > 0) {
-    const qint64 elapsedMs = nowMs - channel->lastNotifyTimeMs;
-    if (elapsedMs < kMinNotifyIntervalMs) {
-      /* Defer notification to preserve throttling while guaranteeing delivery
-       * of the latest value (prevents stale displays when updates stop). */
-      if (!channel->notifyPending) {
-        const int delayMs = static_cast<int>(kMinNotifyIntervalMs - elapsedMs);
-        channel->notifyPending = true;
-        const quint64 channelInstanceId = channel->instanceId;
-        QTimer::singleShot(delayMs, this, [this, channelInstanceId]() {
-          onDeferredValueNotify(channelInstanceId);
-        });
-      }
-      return;
-    }
-  }
-  channel->lastNotifyTimeMs = nowMs;
+  const bool forceImmediate = channel->lastNotifiedSeverity < 0
+      || data.severity != channel->lastNotifiedSeverity;
 
-  /* Update last notified values for next comparison */
+  /* Update comparison state as soon as the newest value is retained. Pending
+   * deliveries do not need to rescan or compare the payload. */
   channel->lastNotifiedValue = data.numericValue;
   channel->lastNotifiedSeverity = data.severity;
   channel->lastNotifiedString = data.stringValue;
   channel->lastNotifiedEnum = data.enumValue;
 
-  /* Count this update for statistics (only updates passed to subscribers) */
-  ++channel->updateCount;
-
-  /* Notify all subscribers */
-  dispatchValueCallbacks(channel);
+  const auto requestDelivery =
+      [this, channel, forceImmediate](ChannelDeliveryMode deliveryMode) {
+        DeliveryState &delivery =
+            deliveryMode == ChannelDeliveryMode::kPassive
+            ? channel->passiveDelivery : channel->realtimeDelivery;
+        const qint64 interval =
+            deliveryMode == ChannelDeliveryMode::kPassive
+            ? kPassiveNotifyIntervalMs : kRealtimeNotifyIntervalMs;
+        const qint64 nowMs = deliveryTimer_.elapsed();
+        const qint64 elapsedMs = nowMs - delivery.lastNotifyTimeMs;
+        if (!forceImmediate && delivery.lastNotifyTimeMs >= 0
+            && elapsedMs < interval) {
+          if (!delivery.notifyPending) {
+            delivery.notifyPending = true;
+            const quint64 channelInstanceId = channel->instanceId;
+            QTimer::singleShot(static_cast<int>(interval - elapsedMs), this,
+                [this, channelInstanceId, deliveryMode]() {
+                  onDeferredValueNotify(channelInstanceId, deliveryMode);
+                });
+          }
+          return;
+        }
+        delivery.lastNotifyTimeMs = nowMs;
+        delivery.notifyPending = false;
+        ++channel->updateCount;
+        dispatchValueCallbacks(channel, deliveryMode);
+      };
+  ++channel->dispatchDepth;
+  requestDelivery(ChannelDeliveryMode::kRealtime);
+  requestDelivery(ChannelDeliveryMode::kPassive);
+  --channel->dispatchDepth;
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
 
       
 }
@@ -1212,7 +1187,13 @@ void SharedChannelManager::handleControlInfo(SharedChannel *channel,
 
   /* Re-notify subscribers so they get the control info */
   if (data.hasValue) {
-    dispatchValueCallbacks(channel);
+    ++channel->dispatchDepth;
+    dispatchValueCallbacks(channel, ChannelDeliveryMode::kRealtime);
+    dispatchValueCallbacks(channel, ChannelDeliveryMode::kPassive);
+    --channel->dispatchDepth;
+    if (channel->dispatchDepth == 0 && channel->destroyPending) {
+      destroyChannelIfUnused(channel);
+    }
   }
 }
 
@@ -1327,15 +1308,24 @@ void SharedChannelManager::notifySubscribersForLocalNumericPut(
     return;
   }
 
-  channel->lastNotifyTimeMs = QDateTime::currentMSecsSinceEpoch();
-  channel->notifyPending = false;
+  const qint64 nowMs = deliveryTimer_.elapsed();
+  channel->realtimeDelivery.lastNotifyTimeMs = nowMs;
+  channel->realtimeDelivery.notifyPending = false;
+  channel->passiveDelivery.lastNotifyTimeMs = nowMs;
+  channel->passiveDelivery.notifyPending = false;
   channel->lastNotifiedValue = value;
   channel->lastNotifiedSeverity = data.severity;
   channel->lastNotifiedString = data.stringValue;
   channel->lastNotifiedEnum = data.enumValue;
   ++channel->updateCount;
 
-  dispatchValueCallbacks(channel);
+  ++channel->dispatchDepth;
+  dispatchValueCallbacks(channel, ChannelDeliveryMode::kRealtime);
+  dispatchValueCallbacks(channel, ChannelDeliveryMode::kPassive);
+  --channel->dispatchDepth;
+  if (channel->dispatchDepth == 0 && channel->destroyPending) {
+    destroyChannelIfUnused(channel);
+  }
 }
 
 bool SharedChannelManager::putValue(const QString &pvName, const QString &value)
@@ -1542,13 +1532,7 @@ int SharedChannelManager::totalSubscriptionCount() const
 
 int SharedChannelManager::connectedChannelCount() const
 {
-  int count = 0;
-  for (const auto *channel : channels_) {
-    if (channel->connected) {
-      ++count;
-    }
-  }
-  return count;
+  return connectedChannelCount_;
 }
 
 QList<ChannelSummary> SharedChannelManager::channelSummaries() const
@@ -1704,6 +1688,7 @@ void SharedChannelManager::shutdown()
   channels_.clear();
   instanceIdToChannel_.clear();
   subscriptionToChannel_.clear();
+  connectedChannelCount_ = 0;
   if (canUseCa) {
     ca_flush_io();
   }

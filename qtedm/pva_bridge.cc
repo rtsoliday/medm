@@ -48,8 +48,10 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
     ExtractPVAControlInfo(channel->pva);
   }
 
-  PvaBridgeData data = channel->cachedData;
+  PvaBridgeData data;
   data.connected = channel->cachedData.connected;
+  data.canRead = channel->cachedData.canRead;
+  data.canWrite = channel->cachedData.canWrite;
   data.severity = channel->pva->pvaData[0].alarmSeverity;
   data.status = 0;
   data.hasControlInfo = false;
@@ -312,6 +314,11 @@ bool pvaBridgeGetData(const PvaBridgeChannel *channel, PvaBridgeData *data)
 
   *data = channel->impl.cachedData;
   return true;
+}
+
+const PvaBridgeData *pvaBridgeData(const PvaBridgeChannel *channel)
+{
+  return channel ? &channel->impl.cachedData : nullptr;
 }
 
 bool pvaBridgePutDouble(PvaBridgeChannel *channel, double value)

@@ -1,9 +1,10 @@
 #pragma once
 
-#include <QVector>
-#include <QTimer>
-#include <QPointer>
 #include <QElapsedTimer>
+#include <QHash>
+#include <QPointer>
+#include <QRegion>
+#include <QTimer>
 
 class QWidget;
 
@@ -38,7 +39,8 @@ public:
    * next coordinator tick. Multiple requests for the same widget
    * are automatically coalesced.
    */
-  void requestUpdate(QWidget *widget);
+  void requestUpdate(QWidget *widget,
+      const QRegion &dirtyRegion = QRegion());
 
   /**
    * @brief Set the update interval in milliseconds.
@@ -72,8 +74,15 @@ private:
   void processPendingUpdates();
 
 private:
+  struct PendingUpdate
+  {
+    QPointer<QWidget> widget;
+    QRegion dirtyRegion;
+    bool fullUpdate = false;
+  };
+
   QTimer *timer_ = nullptr;
-  QVector<QPointer<QWidget>> pendingWidgets_;
+  QHash<QWidget *, PendingUpdate> pendingWidgets_;
   int baseIntervalMs_ = 200;     // Base interval (5Hz default)
   int currentIntervalMs_ = 200;  // Current interval (may be increased by throttling)
 

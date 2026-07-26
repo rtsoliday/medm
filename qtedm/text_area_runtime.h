@@ -8,6 +8,7 @@
 #include <QByteArray>
 
 #include "channel_subscription.h"
+#include "runtime_utils.h"
 
 #include <utility>
 
@@ -80,17 +81,6 @@ private:
 template <typename Func>
 inline void TextAreaRuntime::invokeOnElement(Func &&func)
 {
-  if (!element_) {
-    return;
-  }
-  QPointer<TextAreaElement> target = element_;
-  QPointer<TextAreaRuntime> self(this);
-  QMetaObject::invokeMethod(element_.data(),
-      [target, self, func = std::forward<Func>(func)]() mutable {
-        if (!target || !self) {
-          return;
-        }
-        func(target.data());
-      },
-      Qt::QueuedConnection);
+  RuntimeUtils::invokeOnObject(element_, QPointer<TextAreaRuntime>(this),
+      std::forward<Func>(func));
 }

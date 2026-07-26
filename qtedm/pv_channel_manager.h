@@ -14,7 +14,8 @@ public:
       long elementCount,
       ChannelValueCallback valueCallback,
       ChannelConnectionCallback connectionCallback = nullptr,
-      ChannelAccessRightsCallback accessRightsCallback = nullptr);
+      ChannelAccessRightsCallback accessRightsCallback = nullptr,
+      ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive);
 
   bool putValue(const QString &pvName, double value);
   bool putValue(const QString &pvName, const QString &value);

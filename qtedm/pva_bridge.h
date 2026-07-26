@@ -49,6 +49,7 @@ int pvaBridgePoll(PvaBridgeChannel *channel, bool *connectionChanged,
 void pvaBridgeSetMonitoringPaused(PvaBridgeChannel *channel, bool paused);
 
 bool pvaBridgeGetData(const PvaBridgeChannel *channel, PvaBridgeData *data);
+const PvaBridgeData *pvaBridgeData(const PvaBridgeChannel *channel);
 
 bool pvaBridgePutDouble(PvaBridgeChannel *channel, double value);
 bool pvaBridgePutString(PvaBridgeChannel *channel, const std::string &value);

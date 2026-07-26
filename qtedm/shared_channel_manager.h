@@ -56,7 +56,8 @@ public:
       long elementCount,
       ChannelValueCallback valueCallback,
       ChannelConnectionCallback connectionCallback = nullptr,
-      ChannelAccessRightsCallback accessRightsCallback = nullptr);
+      ChannelAccessRightsCallback accessRightsCallback = nullptr,
+      ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive);
 
   /* Perform a ca_put operation through a shared channel.
    * Creates a temporary channel if none exists. */
@@ -96,6 +97,13 @@ private:
     ChannelValueCallback valueCallback;
     ChannelConnectionCallback connectionCallback;
     ChannelAccessRightsCallback accessRightsCallback;
+    ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive;
+  };
+
+  struct DeliveryState
+  {
+    qint64 lastNotifyTimeMs = -1;
+    bool notifyPending = false;
   };
 
   struct SharedChannel
@@ -110,10 +118,10 @@ private:
     bool canRead = false;
     bool canWrite = false;
     SharedChannelData cachedData;
-    QList<Subscriber> subscribers;
+    QHash<quint64, Subscriber> subscribers;
     int updateCount = 0;  /* Updates since last reset for rate calc */
-    qint64 lastNotifyTimeMs = 0;  /* Time of last subscriber notification */
-    bool notifyPending = false;  /* Deferred notify scheduled */
+    DeliveryState passiveDelivery;
+    DeliveryState realtimeDelivery;
     int dispatchDepth = 0;  /* Active callback dispatches using this channel */
     bool destroyPending = false;  /* Delay destruction until dispatch completes */
     /* Last notified values for change detection */
@@ -139,7 +147,8 @@ private:
   void deliverInitialState(quint64 subscriptionId);
   Subscriber *findSubscriber(SharedChannel *channel, quint64 subscriptionId);
   void dispatchConnectionCallbacks(SharedChannel *channel, bool connected);
-  void dispatchValueCallbacks(SharedChannel *channel);
+  void dispatchValueCallbacks(SharedChannel *channel,
+      ChannelDeliveryMode deliveryMode);
   void dispatchAccessRightsCallbacks(SharedChannel *channel,
       bool canRead, bool canWrite);
 
@@ -164,7 +173,8 @@ private Q_SLOTS:
                            short nativeType, long nativeCount);
   void onValueReceived(quint64 channelInstanceId, QByteArray eventData, int status,
                        long type, long count);
-  void onDeferredValueNotify(quint64 channelInstanceId);
+  void onDeferredValueNotify(quint64 channelInstanceId,
+      ChannelDeliveryMode deliveryMode);
   void onControlInfoReceived(quint64 channelInstanceId, QByteArray eventData,
                              int status, long type);
   void onAccessRightsChanged(quint64 channelInstanceId, bool canRead,
@@ -177,10 +187,12 @@ private:
   QHash<quint64, SharedChannel *> instanceIdToChannel_;
   bool flushScheduled_ = false;
   QHash<quint64, SharedChannel *> subscriptionToChannel_;
+  int connectedChannelCount_ = 0;
   quint64 nextChannelInstanceId_ = 1;
   quint64 nextSubscriptionId_ = 1;
   QElapsedTimer updateRateTimer_;
   bool updateRateTimerStarted_ = false;
+  QElapsedTimer deliveryTimer_;
   bool firstConnectionReported_ = false;
   bool firstValueReported_ = false;
   int totalConnectionsMade_ = 0;

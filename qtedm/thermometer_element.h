@@ -1,7 +1,11 @@
 #pragma once
 
 #include <QColor>
+#include <QFont>
+#include <QPainterPath>
+#include <QPixmap>
 #include <QRectF>
+#include <QRegion>
 #include <QString>
 #include <QWidget>
 
@@ -11,7 +15,9 @@
 #include "text_properties.h"
 
 class QFontMetricsF;
+class QEvent;
 class QPainter;
+class QResizeEvent;
 
 class ThermometerElement : public QWidget
 {
@@ -83,16 +89,45 @@ public:
 
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
+  void changeEvent(QEvent *event) override;
 
 private:
-  struct Layout;
+  struct Layout
+  {
+    QRectF bodyRect;
+    QRectF axisRect;
+    QRectF readbackRect;
+    QRectF channelRect;
+    QRectF outerStemRect;
+    QRectF outerBulbRect;
+    QRectF innerStemRect;
+    QRectF innerBulbRect;
+    QPainterPath outerPath;
+    QPainterPath innerPath;
+    QString channelText;
+    QString readbackText;
+    QString lowLabel;
+    QString highLabel;
+    qreal scaleTop = 0.0;
+    qreal scaleBottom = 0.0;
+    qreal lineHeight = 0.0;
+    bool showAxis = false;
+    bool showLimits = false;
+    bool showReadback = false;
+    bool showChannel = false;
+  };
 
   Layout calculateLayout(const QRectF &contentRect,
       const QFontMetricsF &metrics) const;
   void paintTrack(QPainter &painter, const Layout &layout) const;
   void paintFill(QPainter &painter, const Layout &layout) const;
   void paintAxis(QPainter &painter, const Layout &layout) const;
-  void paintLabels(QPainter &painter, const Layout &layout) const;
+  void paintLabels(QPainter &painter, const Layout &layout,
+      bool paintStatic, bool paintReadback) const;
+  void invalidateStaticCache();
+  void ensureStaticCache();
+  QRegion dynamicRegion() const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QColor trackColor() const;
@@ -141,4 +176,10 @@ private:
   int runtimePrecision_ = -1;
   double runtimeValue_ = 0.0;
   short runtimeSeverity_ = 0;
+  QPixmap staticCache_;
+  Layout cachedLayout_;
+  QFont cachedLabelFont_;
+  QSize cachedLogicalSize_;
+  qreal cachedDevicePixelRatio_ = 0.0;
+  bool staticCacheDirty_ = true;
 };

@@ -13,6 +13,7 @@
 #include <QPalette>
 #include <QResizeEvent>
 #include <QSignalBlocker>
+#include <QTimer>
 
 #include "cursor_utils.h"
 #include "pv_name_utils.h"
@@ -94,6 +95,7 @@ SetpointControlElement::SetpointControlElement(QWidget *parent)
   , labelWidget_(new QLabel(this))
   , setpointEdit_(new QLineEdit(this))
   , readbackEdit_(new QLineEdit(this))
+  , readbackFlushTimer_(new QTimer(this))
 {
   setAutoFillBackground(true);
 
@@ -109,6 +111,11 @@ SetpointControlElement::SetpointControlElement(QWidget *parent)
   readbackEdit_->setAttribute(Qt::WA_TransparentForMouseEvents);
 
   setpointEdit_->installEventFilter(this);
+  readbackFlushTimer_->setSingleShot(true);
+  readbackFlushTimer_->setTimerType(Qt::CoarseTimer);
+  readbackFlushTimer_->setInterval(200);
+  connect(readbackFlushTimer_, &QTimer::timeout, this,
+      &SetpointControlElement::flushPendingReadbackValue);
 
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();
@@ -411,6 +418,9 @@ bool SetpointControlElement::isExecuteMode() const
 
 void SetpointControlElement::setSetpointConnected(bool connected)
 {
+  if (runtimeSetpointConnected_ == connected) {
+    return;
+  }
   runtimeSetpointConnected_ = connected;
   if (!connected) {
     runtimeWriteAccess_ = false;
@@ -426,6 +436,9 @@ void SetpointControlElement::setSetpointConnected(bool connected)
 
 void SetpointControlElement::setSetpointWriteAccess(bool writeAccess)
 {
+  if (runtimeWriteAccess_ == writeAccess) {
+    return;
+  }
   runtimeWriteAccess_ = writeAccess;
   updateChildInteraction();
   updateStatusText();
@@ -433,7 +446,11 @@ void SetpointControlElement::setSetpointWriteAccess(bool writeAccess)
 
 void SetpointControlElement::setSetpointSeverity(short severity)
 {
-  runtimeSetpointSeverity_ = std::clamp<short>(severity, 0, 3);
+  const short clamped = std::clamp<short>(severity, 0, 3);
+  if (runtimeSetpointSeverity_ == clamped) {
+    return;
+  }
+  runtimeSetpointSeverity_ = clamped;
   applyPaletteColors();
   updateStatusText();
 }
@@ -459,21 +476,44 @@ void SetpointControlElement::setSetpointValue(double value,
 void SetpointControlElement::setSetpointMetadata(double low, double high,
     int precision, const QString &units)
 {
+  bool limitsValid = runtimeLimitsValid_;
   if (std::isfinite(low) && std::isfinite(high)) {
     if (std::abs(high - low) < 1e-12) {
       high = low + 1.0;
     }
-    runtimeLow_ = std::min(low, high);
-    runtimeHigh_ = std::max(low, high);
-    runtimeLimitsValid_ = true;
+    const double normalizedLow = std::min(low, high);
+    const double normalizedHigh = std::max(low, high);
+    low = normalizedLow;
+    high = normalizedHigh;
+    limitsValid = true;
+  } else {
+    low = runtimeLow_;
+    high = runtimeHigh_;
   }
-  runtimePrecision_ = std::clamp(precision, 0, 17);
+  const int clampedPrecision = std::clamp(precision, 0, 17);
+  if (runtimeLimitsValid_ == limitsValid
+      && (!limitsValid
+          || (qFuzzyCompare(runtimeLow_ + 1.0, low + 1.0)
+              && qFuzzyCompare(runtimeHigh_ + 1.0, high + 1.0)))
+      && runtimePrecision_ == clampedPrecision && units_ == units) {
+    return;
+  }
+  if (limitsValid) {
+    runtimeLow_ = low;
+    runtimeHigh_ = high;
+  }
+  runtimeLimitsValid_ = limitsValid;
+  runtimePrecision_ = clampedPrecision;
   units_ = units;
   updateDisplayTexts();
 }
 
 void SetpointControlElement::setReadbackConnected(bool connected)
 {
+  if (runtimeReadbackConnected_ == connected) {
+    return;
+  }
+  readbackFlushTimer_->stop();
   runtimeReadbackConnected_ = connected;
   if (!connected) {
     hasReadbackValue_ = false;
@@ -485,7 +525,11 @@ void SetpointControlElement::setReadbackConnected(bool connected)
 
 void SetpointControlElement::setReadbackSeverity(short severity)
 {
-  runtimeReadbackSeverity_ = std::clamp<short>(severity, 0, 3);
+  const short clamped = std::clamp<short>(severity, 0, 3);
+  if (runtimeReadbackSeverity_ == clamped) {
+    return;
+  }
+  runtimeReadbackSeverity_ = clamped;
   updateStatusText();
   applyPaletteColors();
 }
@@ -496,14 +540,24 @@ void SetpointControlElement::setReadbackValue(double value,
   if (!std::isfinite(value)) {
     return;
   }
+  const bool oldInTolerance = isInTolerance();
+  const bool wasPending = pending_;
   readbackValue_ = value;
   readbackText_ = text;
   hasReadbackValue_ = true;
   if (pending_ && isInTolerance()) {
     pending_ = false;
   }
-  updateDisplayTexts();
-  updateStatusText();
+  const bool stateTransition = wasPending != pending_
+      || oldInTolerance != isInTolerance();
+  if (stateTransition) {
+    readbackFlushTimer_->stop();
+    flushPendingReadbackValue();
+  } else {
+    if (!readbackFlushTimer_->isActive()) {
+      readbackFlushTimer_->start();
+    }
+  }
 }
 
 void SetpointControlElement::setRuntimeNotice(const QString &notice)
@@ -529,6 +583,7 @@ void SetpointControlElement::acceptAppliedValue(double value,
 
 void SetpointControlElement::clearRuntimeState()
 {
+  readbackFlushTimer_->stop();
   runtimeSetpointConnected_ = false;
   runtimeReadbackConnected_ = false;
   runtimeWriteAccess_ = false;
@@ -769,53 +824,61 @@ void SetpointControlElement::updateChildInteraction()
 void SetpointControlElement::updateDisplayTexts()
 {
   if (labelWidget_) {
-    labelWidget_->setText(displayLabelText());
+    const QString text = displayLabelText();
+    if (labelWidget_->text() != text) {
+      labelWidget_->setText(text);
+    }
   }
   if (!executeMode_ && setpointEdit_) {
     const QSignalBlocker blocker(setpointEdit_);
-    setpointEdit_->setText(setpointChannel_);
+    if (setpointEdit_->text() != setpointChannel_) {
+      setpointEdit_->setText(setpointChannel_);
+    }
   }
   if (readbackEdit_) {
     const QSignalBlocker blocker(readbackEdit_);
+    QString text;
     if (!executeMode_) {
-      readbackEdit_->setText(readbackChannel_);
+      text = readbackChannel_;
     } else if (showReadback_) {
-      readbackEdit_->setText(hasReadbackValue_ ? readbackText_
-                                                : QStringLiteral("--"));
-    } else {
-      readbackEdit_->clear();
+      text = hasReadbackValue_ ? readbackText_ : QStringLiteral("--");
+    }
+    if (readbackEdit_->text() != text) {
+      readbackEdit_->setText(text);
     }
   }
-  updateFontForGeometry();
-  applyReadbackStyle();
 }
 
 void SetpointControlElement::updateStatusText()
 {
+  QString newStatus;
   if (!runtimeNotice_.isEmpty()) {
-    statusText_ = runtimeNotice_;
+    newStatus = runtimeNotice_;
   } else if (!executeMode_) {
-    statusText_ = QStringLiteral("Setpoint Control");
+    newStatus = QStringLiteral("Setpoint Control");
   } else if (setpointChannel_.trimmed().isEmpty()) {
-    statusText_ = QStringLiteral("No setpoint PV");
+    newStatus = QStringLiteral("No setpoint PV");
   } else if (!runtimeSetpointConnected_) {
-    statusText_ = QStringLiteral("Disconnected");
+    newStatus = QStringLiteral("Disconnected");
   } else if (!runtimeWriteAccess_) {
-    statusText_ = QStringLiteral("Read-only");
+    newStatus = QStringLiteral("Read-only");
   } else if (dirty_) {
-    statusText_ = QStringLiteral("Edited");
+    newStatus = QStringLiteral("Edited");
   } else if (pending_) {
-    statusText_ = isInTolerance() ? QStringLiteral("In tolerance")
-                                  : QStringLiteral("Pending readback");
+    newStatus = isInTolerance() ? QStringLiteral("In tolerance")
+                                : QStringLiteral("Pending readback");
   } else if (hasEffectiveReadback() && hasReadbackValue_) {
-    statusText_ = isInTolerance() ? QStringLiteral("In tolerance")
-                                  : QStringLiteral("Out of tolerance");
+    newStatus = isInTolerance() ? QStringLiteral("In tolerance")
+                                : QStringLiteral("Out of tolerance");
   } else if (hasEffectiveReadback()) {
-    statusText_ = QStringLiteral("Readback unavailable");
+    newStatus = QStringLiteral("Readback unavailable");
   } else {
-    statusText_ = QStringLiteral("Ready");
+    newStatus = QStringLiteral("Ready");
   }
-  updateFontForGeometry();
+  if (statusText_ == newStatus) {
+    return;
+  }
+  statusText_ = newStatus;
   applyReadbackStyle();
   update();
 }
@@ -902,9 +965,10 @@ void SetpointControlElement::applyRuntimeSetpointToEditor()
     return;
   }
   const QSignalBlocker blocker(setpointEdit_);
-  setpointEdit_->setText(setpointText_);
+  if (setpointEdit_->text() != setpointText_) {
+    setpointEdit_->setText(setpointText_);
+  }
   setpointEdit_->setCursorPosition(0);
-  updateFontForGeometry();
 }
 
 void SetpointControlElement::applyReadbackStyle()
@@ -919,12 +983,24 @@ void SetpointControlElement::applyReadbackStyle()
   editPal.setColor(QPalette::Base, bg);
   editPal.setColor(QPalette::Text, fg);
   editPal.setColor(QPalette::WindowText, fg);
-  readbackEdit_->setPalette(editPal);
-  readbackEdit_->setStyleSheet(QStringLiteral(
+  if (readbackEdit_->palette() != editPal) {
+    readbackEdit_->setPalette(editPal);
+  }
+  const QString style = QStringLiteral(
       "QLineEdit { background-color: %1; color: %2; "
       "border: 2px solid %3; padding-left: 2px; padding-right: 2px; }")
       .arg(bg.name(QColor::HexRgb), fg.name(QColor::HexRgb),
-           border.name(QColor::HexRgb)));
+           border.name(QColor::HexRgb));
+  if (lastReadbackStyle_ != style) {
+    lastReadbackStyle_ = style;
+    readbackEdit_->setStyleSheet(style);
+  }
+}
+
+void SetpointControlElement::flushPendingReadbackValue()
+{
+  updateDisplayTexts();
+  updateStatusText();
 }
 
 QColor SetpointControlElement::defaultForegroundColor() const

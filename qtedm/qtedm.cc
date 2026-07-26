@@ -978,6 +978,16 @@ int main(int argc, char *argv[])
   app.setPalette(palette);
   QTEDM_TIMING_MARK("Application palette applied");
 
+#if defined(Q_OS_MAC)
+  /*
+   * Qt's Cocoa stylesheet engine resolves generic family aliases on first
+   * use.  Preloading the small native legacy-font set after the application
+   * style is installed preserves font selection while avoiding a second,
+   * deferred family-alias scan during the first widget layout.
+   */
+  LegacyFonts::all();
+#endif
+
   const QFont fixed10Font = LegacyFonts::fontOrDefault(
       QStringLiteral("widgetDM_10"),
       QFontDatabase::systemFont(QFontDatabase::FixedFont));
@@ -1134,6 +1144,7 @@ int main(int argc, char *argv[])
       [&win, &fixed13Font, &fixed10Font, &palette]() {
         showVersionDialog(&win, fixed13Font, fixed10Font, palette, false);
       });
+  QTEDM_TIMING_MARK("Menus created");
 
   auto *central = new QWidget;
   central->setObjectName("mainBB");
@@ -1158,6 +1169,7 @@ int main(int argc, char *argv[])
   auto *panelLayout = new QVBoxLayout(modePanel);
   panelLayout->setContentsMargins(12, 8, 12, 12);
   panelLayout->setSpacing(6);
+  QTEDM_TIMING_MARK("Mode panel frame created");
 
   auto *modeBox = new QGroupBox("Mode");
   modeBox->setFont(fixed13Font);
@@ -1170,6 +1182,7 @@ int main(int argc, char *argv[])
       " padding: 6px 12px 8px 12px; }"
       " QGroupBox::title { subcontrol-origin: margin; left: 10px;"
       " padding: 0 4px; }");
+  QTEDM_TIMING_MARK("Mode group box styled");
 
   auto *modeLayout = new QHBoxLayout;
   modeLayout->setContentsMargins(12, 8, 12, 8);
@@ -1191,6 +1204,7 @@ int main(int argc, char *argv[])
   executeOnlyLayout->addStretch();
   executeOnlyLayout->addWidget(executeOnlyLabel, 0, Qt::AlignCenter);
   executeOnlyLayout->addStretch();
+  QTEDM_TIMING_MARK("Mode panel controls created");
   auto *modeStack = new QStackedLayout;
   modeStack->setContentsMargins(0, 0, 0, 0);
   modeStack->addWidget(modeButtonsWidget);

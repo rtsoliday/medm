@@ -28,18 +28,29 @@ UpdateCoordinator::~UpdateCoordinator()
   }
 }
 
-void UpdateCoordinator::requestUpdate(QWidget *widget)
+void UpdateCoordinator::requestUpdate(QWidget *widget,
+    const QRegion &dirtyRegion)
 {
   if (!widget) {
     return;
   }
-  // Check if widget is already in the pending list
-  for (const QPointer<QWidget> &ptr : pendingWidgets_) {
-    if (ptr.data() == widget) {
-      return;  // Already pending
-    }
+
+  auto pending = pendingWidgets_.find(widget);
+  if (pending == pendingWidgets_.end()) {
+    PendingUpdate update;
+    update.widget = widget;
+    update.dirtyRegion = dirtyRegion;
+    update.fullUpdate = dirtyRegion.isEmpty();
+    pendingWidgets_.insert(widget, update);
+    return;
   }
-  pendingWidgets_.append(QPointer<QWidget>(widget));
+
+  if (dirtyRegion.isEmpty()) {
+    pending->dirtyRegion = QRegion();
+    pending->fullUpdate = true;
+  } else if (!pending->fullUpdate) {
+    pending->dirtyRegion |= dirtyRegion;
+  }
 }
 
 void UpdateCoordinator::setUpdateInterval(int intervalMs)
@@ -128,12 +139,18 @@ void UpdateCoordinator::processPendingUpdates()
 
   // Copy and clear the list to avoid issues if widgets request updates
   // during their paint events
-  QVector<QPointer<QWidget>> widgetsToUpdate;
+  QHash<QWidget *, PendingUpdate> widgetsToUpdate;
   widgetsToUpdate.swap(pendingWidgets_);
 
-  for (const QPointer<QWidget> &widgetPtr : widgetsToUpdate) {
-    if (QWidget *widget = widgetPtr.data()) {
-      widget->update();
+  for (auto it = widgetsToUpdate.constBegin();
+       it != widgetsToUpdate.constEnd(); ++it) {
+    const PendingUpdate &pending = it.value();
+    if (QWidget *widget = pending.widget.data()) {
+      if (pending.fullUpdate || pending.dirtyRegion.isEmpty()) {
+        widget->update();
+      } else {
+        widget->update(pending.dirtyRegion);
+      }
     }
   }
 }

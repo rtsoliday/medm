@@ -7,6 +7,8 @@
 #include <QMouseEvent>
 #include <QString>
 #include <QTableView>
+#include <QSet>
+#include <QTimer>
 #include <QVector>
 
 #include "text_properties.h"
@@ -48,6 +50,8 @@ public:
 
   void setRows(const QVector<PvTableRowConfig> &rows);
   void setRuntimeState(int row, const PvTableRuntimeRowState &state);
+  void setRuntimeValueStates(int firstRow, int lastRow,
+      const QVector<PvTableRuntimeRowState> &states);
   void setColumns(const QVector<Column> &columns);
   void setColorMode(TextColorMode mode);
   void setForegroundColor(const QColor &color);
@@ -116,6 +120,7 @@ public:
   void setRowValue(int row, const QString &value);
   void setRowSeverity(int row, short severity);
   void setRowMetadata(int row, const QString &units);
+  void setRowRuntimeState(int row, const PvTableRuntimeRowState &state);
   void clearRuntimeState();
 
 protected:
@@ -131,6 +136,7 @@ private:
   void updateHeaderVisibility();
   bool ensureRowIndex(int index);
   void updateRuntimeState(int row);
+  void flushPendingValueStates();
   void applyFontSize();
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
@@ -149,4 +155,6 @@ private:
   QVector<PvTableModel::Column> columns_;
   QVector<PvTableRowConfig> rows_;
   QVector<PvTableRuntimeRowState> runtimeStates_;
+  QSet<int> pendingValueRows_;
+  QTimer *valueFlushTimer_ = nullptr;
 };

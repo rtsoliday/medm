@@ -12,6 +12,7 @@
 
 #include "channel_subscription.h"
 #include "element_runtime_traits.h"
+#include "runtime_utils.h"
 
 class DisplayWindow;
 
@@ -74,16 +75,5 @@ template <typename ElementType>
 template <typename Func>
 inline void SingleChannelMonitorRuntimeBase<ElementType>::invokeOnElement(Func &&func)
 {
-  if (!element_) {
-    return;
-  }
-  QPointer<ElementType> target = element_;
-  QMetaObject::invokeMethod(element_.data(),
-      [target, func = std::forward<Func>(func)]() mutable {
-        if (!target) {
-          return;
-        }
-        func(target.data());
-      },
-      Qt::QueuedConnection);
+  RuntimeUtils::invokeOnObject(element_, std::forward<Func>(func));
 }

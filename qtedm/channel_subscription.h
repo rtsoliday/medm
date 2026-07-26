@@ -53,6 +53,16 @@ struct ChannelSummary
   short severity = 0;
 };
 
+/* Passive displays retain the newest value but receive at most 5 updates/s.
+ * Realtime consumers (plots, expressions, and visibility calculations) retain
+ * the existing 10 updates/s delivery ceiling. Connection, access, alarm, and
+ * initial-state notifications are always immediate. */
+enum class ChannelDeliveryMode
+{
+  kPassive,
+  kRealtime,
+};
+
 /* Data structure holding cached channel values and metadata.
  * This is delivered to subscribers on value updates. */
 struct SharedChannelData

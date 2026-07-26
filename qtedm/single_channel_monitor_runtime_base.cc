@@ -274,7 +274,9 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
             channelRef.hasValue = false;
             channelRef.value = 0.0;
             updateRuntimeVisibility();
-          });
+          },
+          nullptr,
+          ChannelDeliveryMode::kRealtime);
     }
   }
 }
@@ -390,7 +392,6 @@ void SingleChannelMonitorRuntimeBase<ElementType>::handleChannelData(const Share
 
   {
     auto &stats = StatisticsTracker::instance();
-    stats.registerCaEvent();
     stats.registerUpdateRequest(true);
     stats.registerUpdateExecuted();
   }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <deque>
 
@@ -85,9 +86,19 @@ public:
   bool isAutoscale() const;
   void setAutoscale(bool enable);
 
+  static std::array<int, 2> circularDisplayWidths(int width, int writeSlot)
+  {
+    if (width <= 0) {
+      return {0, 0};
+    }
+    const int slot = std::clamp(writeSlot, 0, width);
+    return {width - slot, slot};
+  }
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
+  void changeEvent(QEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
@@ -165,7 +176,7 @@ private:
   void handleRefreshTimer();
   void updateSamplingGeometry(int chartWidth);
   void enforceSampleCapacity(int capacity);
-  void maybeAppendSamples(qint64 nowMs);
+  int maybeAppendSamples(qint64 nowMs);
   void appendSampleColumn();
   bool hasDefinedPens() const;
   bool anyPenConnected() const;

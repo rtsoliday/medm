@@ -11,6 +11,8 @@
 #include "wave_table_properties.h"
 #include "wave_table_model.h"
 
+class QTimer;
+
 class WaveTableElement : public QTableView
 {
   friend class DisplayWindow;
@@ -106,6 +108,8 @@ private:
   void updateModelConfiguration();
   void updateRuntimeStatus();
   void applyFontSize();
+  void flushPendingValues();
+  void cancelPendingValues();
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
 
@@ -125,4 +129,7 @@ private:
   WaveTableCharMode charMode_ = WaveTableCharMode::kString;
   bool executeMode_ = false;
   WaveTableRuntimeState runtimeState_;
+  QTimer *valueUpdateTimer_ = nullptr;
+  QVector<QString> pendingValues_;
+  bool hasPendingValues_ = false;
 };

@@ -15,6 +15,7 @@ class QLineEdit;
 class QEvent;
 class QPaintEvent;
 class QResizeEvent;
+class QTimer;
 
 class SetpointControlElement : public QWidget
 {
@@ -122,6 +123,7 @@ private:
   void updateChildGeometry();
   void applyRuntimeSetpointToEditor();
   void applyReadbackStyle();
+  void flushPendingReadbackValue();
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
   QColor effectiveForegroundColor() const;
@@ -173,5 +175,7 @@ private:
   double appliedTarget_ = 0.0;
   QString runtimeNotice_;
   QString statusText_;
+  QTimer *readbackFlushTimer_ = nullptr;
+  QString lastReadbackStyle_;
   std::function<void(const QString &)> activationCallback_;
 };

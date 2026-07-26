@@ -35,6 +35,42 @@
     }
   },
   {
+    "name": "thermometer_visual",
+    "display": "tests/test_Thermometer.adl",
+    "golden": "tests/golden/test_Thermometer.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 250,
+      "max_mean_absolute_delta": 0.03,
+      "max_channel_delta": 160
+    }
+  },
+  {
+    "name": "strip_chart_visual",
+    "display": "tests/test_StripChart.adl",
+    "golden": "tests/golden/test_StripChart.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 1000,
+      "max_mean_absolute_delta": 0.15,
+      "max_channel_delta": 255
+    }
+  },
+  {
+    "name": "setpoint_control_visual",
+    "display": "tests/test_SetpointControl.adl",
+    "golden": "tests/golden/test_SetpointControl.png",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "tolerance": {
+      "max_different_pixels": 500,
+      "max_mean_absolute_delta": 0.08,
+      "max_channel_delta": 200
+    }
+  },
+  {
     "name": "byte_visual",
     "display": "tests/visual_Byte.adl",
     "golden": "tests/golden/test_Byte.png",

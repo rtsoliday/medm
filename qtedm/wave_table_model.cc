@@ -184,19 +184,86 @@ void WaveTableModel::setBackgroundColor(const QColor &color)
 
 void WaveTableModel::setRuntimeState(const WaveTableRuntimeState &state)
 {
+  const bool alarmChanged = runtimeState_.connected != state.connected
+      || runtimeState_.severity != state.severity;
+  const bool statusChanged = alarmChanged
+      || runtimeState_.nativeElementCount != state.nativeElementCount
+      || runtimeState_.receivedElementCount != state.receivedElementCount;
   runtimeState_ = state;
-  if (displayRowCount() > 0 && displayColumnCount() > 0) {
+
+  if (alarmChanged && displayRowCount() > 0 && displayColumnCount() > 0) {
     emit dataChanged(index(0, 0),
         index(displayRowCount() - 1, displayColumnCount() - 1),
-        {Qt::DisplayRole, Qt::ForegroundRole});
+        {Qt::ForegroundRole});
+  }
+  if (statusChanged && values_.isEmpty()) {
+    emit dataChanged(index(0, 0), index(0, 0), {Qt::DisplayRole});
   }
 }
 
 void WaveTableModel::setValues(const QVector<QString> &values)
 {
-  beginResetModel();
+  if (values_ == values) {
+    return;
+  }
+
+  if (values_.size() != values.size()) {
+    beginResetModel();
+    values_ = values;
+    endResetModel();
+    return;
+  }
+
+  int firstChanged = -1;
+  int lastChanged = -1;
+  for (int i = 0; i < values.size(); ++i) {
+    if (values_.at(i) != values.at(i)) {
+      if (firstChanged < 0) {
+        firstChanged = i;
+      }
+      lastChanged = i;
+    }
+  }
   values_ = values;
-  endResetModel();
+  if (firstChanged < 0) {
+    return;
+  }
+
+  if (layout_ == WaveTableLayout::kRow) {
+    emit dataChanged(index(0, firstChanged), index(0, lastChanged),
+        {Qt::DisplayRole});
+    return;
+  }
+  if (layout_ == WaveTableLayout::kColumn) {
+    emit dataChanged(index(firstChanged, 1), index(lastChanged, 1),
+        {Qt::DisplayRole});
+    return;
+  }
+
+  const int firstRow = firstChanged / columnCount_;
+  const int lastRow = lastChanged / columnCount_;
+  if (firstRow == lastRow) {
+    emit dataChanged(index(firstRow, firstChanged % columnCount_),
+        index(lastRow, lastChanged % columnCount_), {Qt::DisplayRole});
+    return;
+  }
+
+  const int firstColumn = firstChanged % columnCount_;
+  if (firstColumn != 0) {
+    emit dataChanged(index(firstRow, firstColumn),
+        index(firstRow, columnCount_ - 1), {Qt::DisplayRole});
+  }
+  const int fullFirstRow = firstRow + (firstColumn == 0 ? 0 : 1);
+  const int lastColumn = lastChanged % columnCount_;
+  const int fullLastRow = lastRow - (lastColumn == columnCount_ - 1 ? 0 : 1);
+  if (fullFirstRow <= fullLastRow) {
+    emit dataChanged(index(fullFirstRow, 0),
+        index(fullLastRow, columnCount_ - 1), {Qt::DisplayRole});
+  }
+  if (lastColumn != columnCount_ - 1) {
+    emit dataChanged(index(lastRow, 0), index(lastRow, lastColumn),
+        {Qt::DisplayRole});
+  }
 }
 
 void WaveTableModel::clearValues()

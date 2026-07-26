@@ -146,13 +146,62 @@ void PvTableModel::setRuntimeState(int row, const PvTableRuntimeRowState &state)
   if (row < 0 || row >= runtimeStates_.size()) {
     return;
   }
+  const PvTableRuntimeRowState oldState = runtimeStates_.at(row);
+  if (oldState.connected == state.connected
+      && oldState.severity == state.severity
+      && oldState.valueText == state.valueText
+      && oldState.units == state.units) {
+    return;
+  }
   runtimeStates_[row] = state;
   if (columns_.isEmpty()) {
     return;
   }
-  emit dataChanged(index(row, 0), index(row, columns_.size() - 1),
-      {Qt::DisplayRole, Qt::ForegroundRole, Qt::BackgroundRole,
-          Qt::TextAlignmentRole});
+
+  const bool connectionChanged = oldState.connected != state.connected;
+  const bool severityChanged = oldState.severity != state.severity;
+  if (connectionChanged || severityChanged) {
+    emit dataChanged(index(row, 0), index(row, columns_.size() - 1),
+        {Qt::ForegroundRole});
+  }
+
+  const auto emitDisplayColumn = [this, row](Column column) {
+    const int visualColumn = visualColumnIndex(column);
+    if (visualColumn >= 0) {
+      emit dataChanged(index(row, visualColumn), index(row, visualColumn),
+          {Qt::DisplayRole});
+    }
+  };
+  if (connectionChanged || oldState.valueText != state.valueText) {
+    emitDisplayColumn(Column::kValue);
+  }
+  if (connectionChanged || oldState.units != state.units) {
+    emitDisplayColumn(Column::kUnits);
+  }
+  if (connectionChanged || severityChanged) {
+    emitDisplayColumn(Column::kSeverity);
+  }
+}
+
+void PvTableModel::setRuntimeValueStates(int firstRow, int lastRow,
+    const QVector<PvTableRuntimeRowState> &states)
+{
+  if (firstRow < 0 || lastRow < firstRow || lastRow >= runtimeStates_.size()
+      || states.size() != runtimeStates_.size()) {
+    return;
+  }
+  bool changed = false;
+  for (int row = firstRow; row <= lastRow; ++row) {
+    if (runtimeStates_[row].valueText != states.at(row).valueText) {
+      runtimeStates_[row].valueText = states.at(row).valueText;
+      changed = true;
+    }
+  }
+  const int valueColumn = visualColumnIndex(Column::kValue);
+  if (changed && valueColumn >= 0) {
+    emit dataChanged(index(firstRow, valueColumn),
+        index(lastRow, valueColumn), {Qt::DisplayRole});
+  }
 }
 
 void PvTableModel::setColumns(const QVector<Column> &columns)
@@ -221,6 +270,7 @@ int PvTableModel::visualColumnIndex(Column column) const
 PvTableElement::PvTableElement(QWidget *parent)
   : QTableView(parent)
   , model_(new PvTableModel(this))
+  , valueFlushTimer_(new QTimer(this))
 {
   setModel(model_);
   setSelectionMode(QAbstractItemView::NoSelection);
@@ -237,6 +287,11 @@ PvTableElement::PvTableElement(QWidget *parent)
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
   setAttribute(Qt::WA_TransparentForMouseEvents);
+  valueFlushTimer_->setSingleShot(true);
+  valueFlushTimer_->setTimerType(Qt::CoarseTimer);
+  valueFlushTimer_->setInterval(200);
+  connect(valueFlushTimer_, &QTimer::timeout, this,
+      &PvTableElement::flushPendingValueStates);
   foregroundColor_ = defaultForegroundColor();
   backgroundColor_ = defaultBackgroundColor();
   columns_ = parseColumns(QStringLiteral("label,pv,value,severity"));
@@ -472,8 +527,34 @@ void PvTableElement::setRowMetadata(int row, const QString &units)
   updateRuntimeState(row);
 }
 
+void PvTableElement::setRowRuntimeState(int row,
+    const PvTableRuntimeRowState &state)
+{
+  if (!ensureRowIndex(row)) {
+    return;
+  }
+  const PvTableRuntimeRowState oldState = runtimeStates_.at(row);
+  runtimeStates_[row] = state;
+  const bool immediate = oldState.connected != state.connected
+      || oldState.severity != state.severity
+      || oldState.units != state.units;
+  if (immediate) {
+    pendingValueRows_.remove(row);
+    model_->setRuntimeState(row, state);
+    return;
+  }
+  if (oldState.valueText != state.valueText) {
+    pendingValueRows_.insert(row);
+    if (!valueFlushTimer_->isActive()) {
+      valueFlushTimer_->start();
+    }
+  }
+}
+
 void PvTableElement::clearRuntimeState()
 {
+  pendingValueRows_.clear();
+  valueFlushTimer_->stop();
   for (int i = 0; i < runtimeStates_.size(); ++i) {
     runtimeStates_[i] = PvTableRuntimeRowState();
     updateRuntimeState(i);
@@ -558,6 +639,28 @@ void PvTableElement::updateRuntimeState(int row)
     return;
   }
   model_->setRuntimeState(row, runtimeStates_.at(row));
+}
+
+void PvTableElement::flushPendingValueStates()
+{
+  if (pendingValueRows_.isEmpty()) {
+    return;
+  }
+  QList<int> rows = pendingValueRows_.values();
+  pendingValueRows_.clear();
+  std::sort(rows.begin(), rows.end());
+
+  int first = rows.first();
+  int last = first;
+  for (int i = 1; i < rows.size(); ++i) {
+    if (rows.at(i) == last + 1) {
+      last = rows.at(i);
+      continue;
+    }
+    model_->setRuntimeValueStates(first, last, runtimeStates_);
+    first = last = rows.at(i);
+  }
+  model_->setRuntimeValueStates(first, last, runtimeStates_);
 }
 
 void PvTableElement::applyFontSize()

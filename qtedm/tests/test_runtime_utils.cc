@@ -11,6 +11,7 @@ private slots:
   void normalizesCalcExpressions();
   void detectsNumericFieldTypes();
   void sanitizesSddsColumnNames();
+  void invokesImmediatelyOnObjectThread();
 };
 
 void TestRuntimeUtils::appendsNullTerminatorOnce()
@@ -49,6 +50,18 @@ void TestRuntimeUtils::sanitizesSddsColumnNames()
       QStringLiteral("___"), QStringLiteral("_Pen0")), QStringLiteral("Pen0"));
   QCOMPARE(RuntimeUtils::sanitizeSddsColumnName(
       QStringLiteral("___")), QStringLiteral("Column"));
+}
+
+void TestRuntimeUtils::invokesImmediatelyOnObjectThread()
+{
+  QObject target;
+  bool invoked = false;
+  RuntimeUtils::invokeOnObject(QPointer<QObject>(&target),
+      [&](QObject *object) {
+        QCOMPARE(object, &target);
+        invoked = true;
+      });
+  QVERIFY(invoked);
 }
 
 QTEST_APPLESS_MAIN(TestRuntimeUtils)

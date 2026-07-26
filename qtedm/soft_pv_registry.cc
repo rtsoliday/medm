@@ -3,11 +3,15 @@
 #include <utility>
 
 #include <QThread>
+#include <QTimer>
 
 #include <db_access.h>
 #include <epicsTime.h>
 
 namespace {
+
+constexpr qint64 kRealtimeNotifyIntervalMs = 100;
+constexpr qint64 kPassiveNotifyIntervalMs = 200;
 
 QString normalizedSoftPvName(const QString &value)
 {
@@ -25,6 +29,7 @@ SoftPvRegistry &SoftPvRegistry::instance()
 SoftPvRegistry::SoftPvRegistry()
   : QObject(nullptr)
 {
+  deliveryTimer_.start();
 }
 
 SoftPvRegistry::~SoftPvRegistry()
@@ -128,7 +133,7 @@ void SoftPvRegistry::publishValue(const QString &name, double value)
   entry->charArrayValue.clear();
   entry->arrayValues.clear();
   stampValue(entry);
-  dispatchValueCallbacks(entry);
+  notifyAllSubscribers(entry);
 }
 
 void SoftPvRegistry::publishStringValue(const QString &name,
@@ -148,7 +153,7 @@ void SoftPvRegistry::publishStringValue(const QString &name,
   entry->charArrayValue.clear();
   entry->arrayValues.clear();
   stampValue(entry);
-  dispatchValueCallbacks(entry);
+  notifyAllSubscribers(entry);
 }
 
 void SoftPvRegistry::publishEnumValue(const QString &name,
@@ -173,7 +178,7 @@ void SoftPvRegistry::publishEnumValue(const QString &name,
   entry->charArrayValue.clear();
   entry->arrayValues.clear();
   stampValue(entry);
-  dispatchValueCallbacks(entry);
+  notifyAllSubscribers(entry);
 }
 
 void SoftPvRegistry::publishCharArrayValue(const QString &name,
@@ -196,7 +201,7 @@ void SoftPvRegistry::publishCharArrayValue(const QString &name,
   entry->hasValue = true;
   entry->arrayValues.clear();
   stampValue(entry);
-  dispatchValueCallbacks(entry);
+  notifyAllSubscribers(entry);
 }
 
 void SoftPvRegistry::publishArrayValue(const QString &name,
@@ -216,7 +221,7 @@ void SoftPvRegistry::publishArrayValue(const QString &name,
   entry->stringValue.clear();
   entry->charArrayValue.clear();
   stampValue(entry);
-  dispatchValueCallbacks(entry);
+  notifyAllSubscribers(entry);
 }
 
 void SoftPvRegistry::setControlInfo(const QString &name, double low,
@@ -241,7 +246,7 @@ void SoftPvRegistry::setControlInfo(const QString &name, double low,
   entry->units = units;
   entry->hasControlInfo = true;
   if (entry->hasValue) {
-    dispatchValueCallbacks(entry);
+    notifyAllSubscribers(entry, true);
   }
 }
 
@@ -469,7 +474,8 @@ bool SoftPvRegistry::infoSnapshot(const QString &name,
 SubscriptionHandle SoftPvRegistry::subscribe(const QString &name,
     ChannelValueCallback valueCallback,
     ChannelConnectionCallback connectionCallback,
-    ChannelAccessRightsCallback accessRightsCallback)
+    ChannelAccessRightsCallback accessRightsCallback,
+    ChannelDeliveryMode deliveryMode)
 {
   assertMainThread();
 
@@ -483,7 +489,8 @@ SubscriptionHandle SoftPvRegistry::subscribe(const QString &name,
   subscriber.valueCallback = std::move(valueCallback);
   subscriber.connectionCallback = std::move(connectionCallback);
   subscriber.accessRightsCallback = std::move(accessRightsCallback);
-  entry->subscribers.append(subscriber);
+  subscriber.deliveryMode = deliveryMode;
+  entry->subscribers.insert(subscriber.id, subscriber);
   subscriptionToEntry_.insert(subscriber.id, entry);
 
   SharedChannelData data = buildData(*entry);
@@ -515,13 +522,7 @@ void SoftPvRegistry::unsubscribe(quint64 subscriptionId)
     return;
   }
 
-  for (auto subIt = entry->subscribers.begin();
-       subIt != entry->subscribers.end(); ++subIt) {
-    if (subIt->id == subscriptionId) {
-      entry->subscribers.erase(subIt);
-      break;
-    }
-  }
+  entry->subscribers.remove(subscriptionId);
 
   cleanupEntryIfUnused(entry);
 }
@@ -559,12 +560,8 @@ SoftPvRegistry::Subscriber *SoftPvRegistry::findSubscriber(Entry *entry,
     return nullptr;
   }
 
-  for (Subscriber &subscriber : entry->subscribers) {
-    if (subscriber.id == id) {
-      return &subscriber;
-    }
-  }
-  return nullptr;
+  auto it = entry->subscribers.find(id);
+  return it == entry->subscribers.end() ? nullptr : &it.value();
 }
 
 void SoftPvRegistry::stampValue(Entry *entry)
@@ -678,9 +675,7 @@ void SoftPvRegistry::dispatchAccessRightsCallbacks(Entry *entry)
 
   QVector<quint64> subscriberIds;
   subscriberIds.reserve(entry->subscribers.size());
-  for (const Subscriber &subscriber : std::as_const(entry->subscribers)) {
-    subscriberIds.append(subscriber.id);
-  }
+  subscriberIds = entry->subscribers.keys().toVector();
 
   const bool writable = entry->writableProducerCount > 0;
   ++entry->dispatchDepth;
@@ -706,9 +701,7 @@ void SoftPvRegistry::dispatchConnectionCallbacks(Entry *entry)
 
   QVector<quint64> subscriberIds;
   subscriberIds.reserve(entry->subscribers.size());
-  for (const Subscriber &subscriber : std::as_const(entry->subscribers)) {
-    subscriberIds.append(subscriber.id);
-  }
+  subscriberIds = entry->subscribers.keys().toVector();
 
   const SharedChannelData data = buildData(*entry);
   ++entry->dispatchDepth;
@@ -726,7 +719,8 @@ void SoftPvRegistry::dispatchConnectionCallbacks(Entry *entry)
   }
 }
 
-void SoftPvRegistry::dispatchValueCallbacks(Entry *entry)
+void SoftPvRegistry::dispatchValueCallbacks(Entry *entry,
+    ChannelDeliveryMode deliveryMode)
 {
   if (!entry) {
     return;
@@ -734,15 +728,14 @@ void SoftPvRegistry::dispatchValueCallbacks(Entry *entry)
 
   QVector<quint64> subscriberIds;
   subscriberIds.reserve(entry->subscribers.size());
-  for (const Subscriber &subscriber : std::as_const(entry->subscribers)) {
-    subscriberIds.append(subscriber.id);
-  }
+  subscriberIds = entry->subscribers.keys().toVector();
 
   const SharedChannelData data = buildData(*entry);
   ++entry->dispatchDepth;
   for (quint64 subscriberId : subscriberIds) {
     if (Subscriber *subscriber = findSubscriber(entry, subscriberId)) {
-      if (subscriber->valueCallback) {
+      if (subscriber->deliveryMode == deliveryMode
+          && subscriber->valueCallback) {
         subscriber->valueCallback(data);
       }
     }
@@ -752,6 +745,68 @@ void SoftPvRegistry::dispatchValueCallbacks(Entry *entry)
   if (entry->dispatchDepth == 0 && entry->cleanupPending) {
     cleanupEntryIfUnused(entry);
   }
+}
+
+void SoftPvRegistry::notifyAllSubscribers(Entry *entry, bool force)
+{
+  if (!entry) {
+    return;
+  }
+
+  /* A callback may unsubscribe itself and unregister the last producer.
+   * Hold the entry alive until both delivery classes have been considered. */
+  ++entry->dispatchDepth;
+  notifySubscribers(entry, ChannelDeliveryMode::kRealtime, force);
+  notifySubscribers(entry, ChannelDeliveryMode::kPassive, force);
+  --entry->dispatchDepth;
+  if (entry->dispatchDepth == 0 && entry->cleanupPending) {
+    cleanupEntryIfUnused(entry);
+  }
+}
+
+void SoftPvRegistry::notifySubscribers(Entry *entry,
+    ChannelDeliveryMode deliveryMode, bool force)
+{
+  if (!entry || !entry->hasValue
+      || entry->connectedProducerCount <= 0) {
+    return;
+  }
+
+  DeliveryState &delivery =
+      deliveryMode == ChannelDeliveryMode::kPassive
+      ? entry->passiveDelivery : entry->realtimeDelivery;
+  const qint64 interval =
+      deliveryMode == ChannelDeliveryMode::kPassive
+      ? kPassiveNotifyIntervalMs : kRealtimeNotifyIntervalMs;
+  const qint64 now = deliveryTimer_.elapsed();
+  if (!force && delivery.lastNotifyTimeMs >= 0) {
+    const qint64 elapsed = now - delivery.lastNotifyTimeMs;
+    if (elapsed < interval) {
+      if (!delivery.notifyPending) {
+        delivery.notifyPending = true;
+        const QString name = entry->name;
+        QTimer::singleShot(static_cast<int>(interval - elapsed), this,
+            [this, name, deliveryMode]() {
+              Entry *current = findEntry(name);
+              if (!current) {
+                return;
+              }
+              DeliveryState &pending =
+                  deliveryMode == ChannelDeliveryMode::kPassive
+                  ? current->passiveDelivery : current->realtimeDelivery;
+              if (!pending.notifyPending) {
+                return;
+              }
+              pending.notifyPending = false;
+              notifySubscribers(current, deliveryMode);
+            });
+      }
+      return;
+    }
+  }
+  delivery.lastNotifyTimeMs = now;
+  delivery.notifyPending = false;
+  dispatchValueCallbacks(entry, deliveryMode);
 }
 
 void SoftPvRegistry::cleanupEntryIfUnused(Entry *entry)

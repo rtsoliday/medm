@@ -122,7 +122,8 @@ void StripChartRuntime::subscribePen(int index)
       },
       [this, index](bool canRead, bool canWrite) {
         handleAccessRightsEvent(index, canRead, canWrite);
-      });
+      },
+      ChannelDeliveryMode::kRealtime);
 }
 
 void StripChartRuntime::handleAccessRightsEvent(int index, bool canRead,

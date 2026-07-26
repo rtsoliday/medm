@@ -48,7 +48,8 @@ public:
       long elementCount,
       ChannelValueCallback valueCallback,
       ChannelConnectionCallback connectionCallback = nullptr,
-      ChannelAccessRightsCallback accessRightsCallback = nullptr);
+      ChannelAccessRightsCallback accessRightsCallback = nullptr,
+      ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive);
 
   bool getInfoSnapshot(const QString &pvName, PvaInfoSnapshot &snapshot);
 
@@ -77,6 +78,13 @@ private:
     ChannelValueCallback valueCallback;
     ChannelConnectionCallback connectionCallback;
     ChannelAccessRightsCallback accessRightsCallback;
+    ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive;
+  };
+
+  struct DeliveryState
+  {
+    qint64 lastNotifyTimeMs = -1;
+    bool notifyPending = false;
   };
 
   struct PvaChannel
@@ -89,10 +97,10 @@ private:
     bool canRead = false;
     bool canWrite = false;
     SharedChannelData cachedData;
-    QList<Subscriber> subscribers;
+    QHash<quint64, Subscriber> subscribers;
     int updateCount = 0;
-    qint64 lastNotifyTimeMs = 0;
-    bool notifyPending = false;
+    DeliveryState passiveDelivery;
+    DeliveryState realtimeDelivery;
     int dispatchDepth = 0;
     bool destroyPending = false;
   };
@@ -105,11 +113,15 @@ private:
   Subscriber *findSubscriber(PvaChannel *channel, quint64 subscriptionId);
   void dispatchConnectionCallbacks(PvaChannel *channel);
   void dispatchAccessRightsCallbacks(PvaChannel *channel);
-  void dispatchValueCallbacks(PvaChannel *channel);
-  void scheduleDeferredValueNotify(const SharedChannelKey &key, int delayMs);
-  void dispatchDeferredValueNotify(const SharedChannelKey &key);
-  void updateCachedData(PvaChannel *channel);
-  void notifySubscribers(PvaChannel *channel);
+  void dispatchValueCallbacks(PvaChannel *channel,
+      ChannelDeliveryMode deliveryMode);
+  void scheduleDeferredValueNotify(const SharedChannelKey &key,
+      ChannelDeliveryMode deliveryMode, int delayMs);
+  void dispatchDeferredValueNotify(const SharedChannelKey &key,
+      ChannelDeliveryMode deliveryMode);
+  void updateCachedData(PvaChannel *channel, bool refreshBridge = true);
+  void notifySubscribers(PvaChannel *channel,
+      ChannelDeliveryMode deliveryMode, bool force = false);
   void updateAccessRights(PvaChannel *channel);
   void pollChannels();
 
@@ -117,6 +129,7 @@ private:
   QHash<quint64, PvaChannel *> subscriptionToChannel_;
   quint64 nextSubscriptionId_ = 1;
   QElapsedTimer statsTimer_;
+  QElapsedTimer deliveryTimer_;
   QTimer pollTimer_;
   bool shutdownComplete_ = false;
 };

@@ -9,6 +9,7 @@
 
 #include "strip_chart_properties.h"
 #include "channel_subscription.h"
+#include "runtime_utils.h"
 
 class StripChartElement;
 
@@ -55,16 +56,5 @@ private:
 template <typename Func>
 inline void StripChartRuntime::invokeOnElement(Func &&func)
 {
-  if (!element_) {
-    return;
-  }
-  QPointer<StripChartElement> target = element_;
-  QMetaObject::invokeMethod(element_.data(),
-      [target, func = std::forward<Func>(func)]() mutable {
-        if (!target) {
-          return;
-        }
-        func(target.data());
-      },
-      Qt::QueuedConnection);
+  RuntimeUtils::invokeOnObject(element_, std::forward<Func>(func));
 }

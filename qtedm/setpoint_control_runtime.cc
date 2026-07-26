@@ -176,7 +176,6 @@ void SetpointControlRuntime::handleSetpointData(const SharedChannelData &data)
   const short severity = data.severity;
 
   auto &stats = StatisticsTracker::instance();
-  stats.registerCaEvent();
   stats.registerUpdateRequest(true);
   stats.registerUpdateExecuted();
 
@@ -229,7 +228,6 @@ void SetpointControlRuntime::handleReadbackData(const SharedChannelData &data)
   const short severity = data.severity;
 
   auto &stats = StatisticsTracker::instance();
-  stats.registerCaEvent();
   stats.registerUpdateRequest(true);
   stats.registerUpdateExecuted();
 

@@ -155,7 +155,9 @@ void CompositeRuntime::initializeChannels()
         },
         [this, index](bool connected, const SharedChannelData &) {
           handleChannelConnection(index, connected);
-        });
+        },
+        nullptr,
+        ChannelDeliveryMode::kRealtime);
   }
 }
 

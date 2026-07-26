@@ -6,13 +6,13 @@
 #include <algorithm>
 
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QStringList>
 #include <QVector>
 
 namespace {
 
-constexpr qint64 kMinNotifyIntervalMs = 100;
+constexpr qint64 kRealtimeNotifyIntervalMs = 100;
+constexpr qint64 kPassiveNotifyIntervalMs = 200;
 constexpr int kPollIntervalMs = 100;
 
 static SharedChannelData toSharedChannelData(const PvaBridgeData &bridgeData)
@@ -63,6 +63,7 @@ PvaChannelManager::PvaChannelManager()
   : QObject(nullptr)
 {
   statsTimer_.start();
+  deliveryTimer_.start();
   pollTimer_.setInterval(kPollIntervalMs);
   pollTimer_.setTimerType(Qt::CoarseTimer);
   connect(&pollTimer_, &QTimer::timeout, this, [this]() { pollChannels(); });
@@ -83,7 +84,8 @@ SubscriptionHandle PvaChannelManager::subscribe(
     long elementCount,
     ChannelValueCallback valueCallback,
     ChannelConnectionCallback connectionCallback,
-    ChannelAccessRightsCallback accessRightsCallback)
+    ChannelAccessRightsCallback accessRightsCallback,
+    ChannelDeliveryMode deliveryMode)
 {
   Q_UNUSED(requestedType);
   Q_UNUSED(elementCount);
@@ -113,8 +115,9 @@ SubscriptionHandle PvaChannelManager::subscribe(
   sub.valueCallback = std::move(valueCallback);
   sub.connectionCallback = std::move(connectionCallback);
   sub.accessRightsCallback = std::move(accessRightsCallback);
+  sub.deliveryMode = deliveryMode;
 
-  channel->subscribers.append(sub);
+  channel->subscribers.insert(subId, std::move(sub));
   subscriptionToChannel_.insert(subId, channel);
 
   if (channel->connected) {
@@ -138,13 +141,7 @@ void PvaChannelManager::unsubscribe(quint64 subscriptionId)
   PvaChannel *channel = it.value();
   subscriptionToChannel_.erase(it);
 
-  auto &subs = channel->subscribers;
-  for (int i = 0; i < subs.size(); ++i) {
-    if (subs[i].id == subscriptionId) {
-      subs.removeAt(i);
-      break;
-    }
-  }
+  channel->subscribers.remove(subscriptionId);
 
   destroyChannelIfUnused(channel);
 }
@@ -210,12 +207,8 @@ PvaChannelManager::Subscriber *PvaChannelManager::findSubscriber(
     return nullptr;
   }
 
-  for (Subscriber &sub : channel->subscribers) {
-    if (sub.id == subscriptionId) {
-      return &sub;
-    }
-  }
-  return nullptr;
+  auto it = channel->subscribers.find(subscriptionId);
+  return it == channel->subscribers.end() ? nullptr : &it.value();
 }
 
 void PvaChannelManager::dispatchConnectionCallbacks(PvaChannel *channel)
@@ -226,9 +219,7 @@ void PvaChannelManager::dispatchConnectionCallbacks(PvaChannel *channel)
 
   QList<quint64> subscriberIds;
   subscriberIds.reserve(channel->subscribers.size());
-  for (const Subscriber &sub : channel->subscribers) {
-    subscriberIds.append(sub.id);
-  }
+  subscriberIds = channel->subscribers.keys();
 
   const bool connected = channel->connected;
   const SharedChannelData data = channel->cachedData;
@@ -256,9 +247,7 @@ void PvaChannelManager::dispatchAccessRightsCallbacks(PvaChannel *channel)
 
   QList<quint64> subscriberIds;
   subscriberIds.reserve(channel->subscribers.size());
-  for (const Subscriber &sub : channel->subscribers) {
-    subscriberIds.append(sub.id);
-  }
+  subscriberIds = channel->subscribers.keys();
 
   const bool canRead = channel->canRead;
   const bool canWrite = channel->canWrite;
@@ -278,7 +267,8 @@ void PvaChannelManager::dispatchAccessRightsCallbacks(PvaChannel *channel)
   }
 }
 
-void PvaChannelManager::dispatchValueCallbacks(PvaChannel *channel)
+void PvaChannelManager::dispatchValueCallbacks(PvaChannel *channel,
+    ChannelDeliveryMode deliveryMode)
 {
   if (!channel) {
     return;
@@ -286,15 +276,13 @@ void PvaChannelManager::dispatchValueCallbacks(PvaChannel *channel)
 
   QList<quint64> subscriberIds;
   subscriberIds.reserve(channel->subscribers.size());
-  for (const Subscriber &sub : channel->subscribers) {
-    subscriberIds.append(sub.id);
-  }
+  subscriberIds = channel->subscribers.keys();
 
   const SharedChannelData data = channel->cachedData;
   ++channel->dispatchDepth;
   for (quint64 subscriberId : subscriberIds) {
     Subscriber *sub = findSubscriber(channel, subscriberId);
-    if (!sub || !sub->valueCallback) {
+    if (!sub || sub->deliveryMode != deliveryMode || !sub->valueCallback) {
       continue;
     }
     auto callback = sub->valueCallback;
@@ -308,21 +296,28 @@ void PvaChannelManager::dispatchValueCallbacks(PvaChannel *channel)
 }
 
 void PvaChannelManager::scheduleDeferredValueNotify(const SharedChannelKey &key,
-    int delayMs)
+    ChannelDeliveryMode deliveryMode, int delayMs)
 {
-  QTimer::singleShot(delayMs, this, [this, key]() {
-    dispatchDeferredValueNotify(key);
+  QTimer::singleShot(delayMs, this, [this, key, deliveryMode]() {
+    dispatchDeferredValueNotify(key, deliveryMode);
   });
 }
 
-void PvaChannelManager::dispatchDeferredValueNotify(const SharedChannelKey &key)
+void PvaChannelManager::dispatchDeferredValueNotify(const SharedChannelKey &key,
+    ChannelDeliveryMode deliveryMode)
 {
   PvaChannel *channel = channels_.value(key, nullptr);
-  if (!channel || !channel->notifyPending) {
+  if (!channel) {
     return;
   }
-
-  notifySubscribers(channel);
+  DeliveryState &delivery =
+      deliveryMode == ChannelDeliveryMode::kPassive
+      ? channel->passiveDelivery : channel->realtimeDelivery;
+  if (!delivery.notifyPending) {
+    return;
+  }
+  delivery.notifyPending = false;
+  notifySubscribers(channel, deliveryMode);
 }
 
 PvaChannelManager::PvaChannel *PvaChannelManager::findOrCreateChannel(
@@ -384,26 +379,27 @@ void PvaChannelManager::updateAccessRights(PvaChannel *channel)
   updateCachedData(channel);
 }
 
-void PvaChannelManager::updateCachedData(PvaChannel *channel)
+void PvaChannelManager::updateCachedData(PvaChannel *channel,
+    bool refreshBridge)
 {
   if (!channel || !channel->bridge) {
     return;
   }
 
-  if (!pvaBridgeRefresh(channel->bridge,
+  if (refreshBridge && !pvaBridgeRefresh(channel->bridge,
           HeatmapRuntime::isGlobalUpdatesPaused())) {
     return;
   }
 
-  PvaBridgeData bridgeData;
-  if (!pvaBridgeGetData(channel->bridge, &bridgeData)) {
+  const PvaBridgeData *bridgeData = pvaBridgeData(channel->bridge);
+  if (!bridgeData) {
     return;
   }
 
-  channel->connected = bridgeData.connected;
-  channel->canRead = bridgeData.canRead;
-  channel->canWrite = bridgeData.canWrite;
-  channel->cachedData = toSharedChannelData(bridgeData);
+  channel->connected = bridgeData->connected;
+  channel->canRead = bridgeData->canRead;
+  channel->canWrite = bridgeData->canWrite;
+  channel->cachedData = toSharedChannelData(*bridgeData);
 }
 
 bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
@@ -436,8 +432,8 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
 
   updateCachedData(channel);
 
-  PvaBridgeData bridgeData;
-  if (!pvaBridgeGetData(channel->bridge, &bridgeData)) {
+  const PvaBridgeData *bridgeData = pvaBridgeData(channel->bridge);
+  if (!bridgeData) {
     cleanupChannel(channel);
     return false;
   }
@@ -449,7 +445,7 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
   snapshot.canWrite = channel->canWrite;
   snapshot.fieldType = data.nativeFieldType;
   snapshot.elementCount = static_cast<unsigned long>(data.nativeElementCount);
-  snapshot.host = QString::fromUtf8(bridgeData.host.c_str());
+  snapshot.host = QString::fromUtf8(bridgeData->host.c_str());
   snapshot.units = data.units;
   snapshot.hasUnits = data.hasUnits;
   snapshot.severity = data.severity;
@@ -483,28 +479,35 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
   return true;
 }
 
-void PvaChannelManager::notifySubscribers(PvaChannel *channel)
+void PvaChannelManager::notifySubscribers(PvaChannel *channel,
+    ChannelDeliveryMode deliveryMode, bool force)
 {
   if (!channel || !channel->cachedData.hasValue) {
     return;
   }
 
-  const qint64 now = QDateTime::currentMSecsSinceEpoch();
-  if (channel->lastNotifyTimeMs > 0) {
-    const qint64 elapsedMs = now - channel->lastNotifyTimeMs;
-    if (elapsedMs < kMinNotifyIntervalMs) {
-      if (!channel->notifyPending) {
-        channel->notifyPending = true;
-        scheduleDeferredValueNotify(channel->key,
-            static_cast<int>(kMinNotifyIntervalMs - elapsedMs));
+  DeliveryState &delivery =
+      deliveryMode == ChannelDeliveryMode::kPassive
+      ? channel->passiveDelivery : channel->realtimeDelivery;
+  const qint64 interval =
+      deliveryMode == ChannelDeliveryMode::kPassive
+      ? kPassiveNotifyIntervalMs : kRealtimeNotifyIntervalMs;
+  const qint64 now = deliveryTimer_.elapsed();
+  if (!force && delivery.lastNotifyTimeMs >= 0) {
+    const qint64 elapsedMs = now - delivery.lastNotifyTimeMs;
+    if (elapsedMs < interval) {
+      if (!delivery.notifyPending) {
+        delivery.notifyPending = true;
+        scheduleDeferredValueNotify(channel->key, deliveryMode,
+            static_cast<int>(interval - elapsedMs));
       }
       return;
     }
   }
-  channel->lastNotifyTimeMs = now;
-  channel->notifyPending = false;
+  delivery.lastNotifyTimeMs = now;
+  delivery.notifyPending = false;
   channel->updateCount++;
-  dispatchValueCallbacks(channel);
+  dispatchValueCallbacks(channel, deliveryMode);
 }
 
 void PvaChannelManager::pollChannels()
@@ -539,10 +542,11 @@ void PvaChannelManager::pollChannels()
     }
 
     bool connectionChanged = false;
+    const short previousSeverity = channel->cachedData.severity;
     int events = pvaBridgePoll(channel->bridge, &connectionChanged, isPaused);
 
     if (connectionChanged) {
-      updateCachedData(channel);
+      updateCachedData(channel, false);
       dispatchConnectionCallbacks(channel);
       if (channels_.value(key, nullptr) != channel) {
         continue;
@@ -554,8 +558,16 @@ void PvaChannelManager::pollChannels()
     }
 
     if (events > 0) {
-      updateCachedData(channel);
-      notifySubscribers(channel);
+      updateCachedData(channel, false);
+      const bool force = connectionChanged
+          || channel->cachedData.severity != previousSeverity;
+      ++channel->dispatchDepth;
+      notifySubscribers(channel, ChannelDeliveryMode::kRealtime, force);
+      notifySubscribers(channel, ChannelDeliveryMode::kPassive, force);
+      --channel->dispatchDepth;
+      if (channel->dispatchDepth == 0 && channel->destroyPending) {
+        destroyChannelIfUnused(channel);
+      }
     }
   }
 }

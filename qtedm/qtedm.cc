@@ -1272,8 +1272,6 @@ int main(int argc, char *argv[])
 //TODO: Add composite file browser for selecting .adl files as composites.
 //TODO: Implement "Flatten Composite" to inline composite contents.
 //TODO: Add "Create Composite from Selection" with optional file save.
-//TODO: Implement symbol/LED widget with configurable shape (circle, square).
-//TODO: Add multi-state indicator with discrete color mapping (>2 states).
 
 // ===========================================================================
 // EXTENDED FUNCTIONALITY (new features, but ADL round-trip safe)

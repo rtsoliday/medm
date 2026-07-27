@@ -13,7 +13,7 @@ class NtNdArrayDecodeTask;
 class NtNdArrayImageRuntime : public HeatmapRuntime
 {
   friend class NtNdArrayDecodeTask;
-  friend class TestPhase4;
+  friend class TestDisplayImportNdArray;
 public:
   explicit NtNdArrayImageRuntime(NtNdArrayImageElement *element);
   ~NtNdArrayImageRuntime() override;

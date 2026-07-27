@@ -459,11 +459,11 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_soft_pv_registry \
                         test_update_coordinator \
                         test_pv_table_model \
-                        test_phase1 \
-                        test_phase2 \
-                        test_phase3 \
-                        test_phase4 \
-                        test_phase5
+                        test_observe_only_controls \
+                        test_tabbed_displays_sessions \
+                        test_archives_snapshots \
+                        test_display_import_ndarray \
+                        test_plugins_property_rules
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 
@@ -496,29 +496,34 @@ test_update_coordinator_OBJS = $(OBJ_DIR)/test_update_coordinator.$(OBJEXT) \
 test_pv_table_model_OBJS = $(OBJ_DIR)/test_pv_table_model.$(OBJEXT) \
                            $(OBJ_DIR)/pv_table_element.$(OBJEXT) \
                            $(OBJ_DIR)/medm_colors.$(OBJEXT)
-test_phase1_OBJS = $(OBJ_DIR)/test_phase1.$(OBJEXT) \
-                   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
-test_phase2_OBJS = $(OBJ_DIR)/test_phase2.$(OBJEXT) \
-                   $(OBJ_DIR)/tabbed_display_element.$(OBJEXT) \
-                   $(OBJ_DIR)/session_manager.$(OBJEXT) \
-                   $(OBJ_DIR)/extension_object_registry.$(OBJEXT)
-test_phase3_OBJS = $(OBJ_DIR)/test_phase3.$(OBJEXT) \
-                   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
-test_phase4_OBJS = $(OBJ_DIR)/test_phase4.$(OBJEXT) \
-                   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
-test_phase5_OBJS = $(OBJ_DIR)/test_phase5.$(OBJEXT) \
-                   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_observe_only_controls_OBJS = \
+  $(OBJ_DIR)/test_observe_only_controls.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_tabbed_displays_sessions_OBJS = \
+  $(OBJ_DIR)/test_tabbed_displays_sessions.$(OBJEXT) \
+  $(OBJ_DIR)/tabbed_display_element.$(OBJEXT) \
+  $(OBJ_DIR)/session_manager.$(OBJEXT) \
+  $(OBJ_DIR)/extension_object_registry.$(OBJEXT)
+test_archives_snapshots_OBJS = \
+  $(OBJ_DIR)/test_archives_snapshots.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_display_import_ndarray_OBJS = \
+  $(OBJ_DIR)/test_display_import_ndarray.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_plugins_property_rules_OBJS = \
+  $(OBJ_DIR)/test_plugins_property_rules.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 
-PHASE5_TEST_PLUGIN_DIR = $(OBJ_DIR)/plugins
+PLUGIN_API_TEST_DIR = $(OBJ_DIR)/plugins
 ifeq ($(OS), Windows)
-  PHASE5_TEST_PLUGIN = $(PHASE5_TEST_PLUGIN_DIR)/qtedm_phase5_test_plugin.dll
+  PLUGIN_API_TEST_LIBRARY = $(PLUGIN_API_TEST_DIR)/qtedm_plugin_api_test.dll
 else ifeq ($(OS), Darwin)
-  PHASE5_TEST_PLUGIN = $(PHASE5_TEST_PLUGIN_DIR)/libqtedm_phase5_test_plugin.dylib
+  PLUGIN_API_TEST_LIBRARY = $(PLUGIN_API_TEST_DIR)/libqtedm_plugin_api_test.dylib
 else
-  PHASE5_TEST_PLUGIN = $(PHASE5_TEST_PLUGIN_DIR)/libqtedm_phase5_test_plugin.so
+  PLUGIN_API_TEST_LIBRARY = $(PLUGIN_API_TEST_DIR)/libqtedm_plugin_api_test.so
 endif
-PHASE5_TEST_PLUGIN_METADATA = $(PHASE5_TEST_PLUGIN).qtedm-plugin.json
+PLUGIN_API_TEST_METADATA = $(PLUGIN_API_TEST_LIBRARY).qtedm-plugin.json
 
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
@@ -531,28 +536,34 @@ $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT): tests/qtedm_image_compare.cc \
                                           $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
-$(OBJ_DIR)/phase5_test_plugin.moc: tests/phase5_test_plugin.cc | $(OBJ_DIR)
+$(OBJ_DIR)/plugin_api_discovery_plugin.moc: \
+    tests/plugin_api_discovery_plugin.cc | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
 
-$(OBJ_DIR)/phase5_test_plugin.$(OBJEXT): tests/phase5_test_plugin.cc \
-    $(OBJ_DIR)/phase5_test_plugin.moc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
+$(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT): \
+    tests/plugin_api_discovery_plugin.cc \
+    $(OBJ_DIR)/plugin_api_discovery_plugin.moc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
-$(PHASE5_TEST_PLUGIN_DIR):
+$(PLUGIN_API_TEST_DIR):
 	mkdir -p $@
 
-$(PHASE5_TEST_PLUGIN_METADATA): tests/phase5_test_plugin.qtedm-plugin.json \
-    $(PHASE5_TEST_PLUGIN) | $(PHASE5_TEST_PLUGIN_DIR)
+$(PLUGIN_API_TEST_METADATA): \
+    tests/plugin_api_discovery_plugin.qtedm-plugin.json \
+    $(PLUGIN_API_TEST_LIBRARY) | $(PLUGIN_API_TEST_DIR)
 	cp -f $< $@
 
 ifeq ($(OS), Windows)
-$(PHASE5_TEST_PLUGIN): $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) | $(PHASE5_TEST_PLUGIN_DIR)
+$(PLUGIN_API_TEST_LIBRARY): \
+    $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
 	$(LINKDLL) -out:$@ $< $(LDFLAGS)
 else ifeq ($(OS), Darwin)
-$(PHASE5_TEST_PLUGIN): $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) | $(PHASE5_TEST_PLUGIN_DIR)
+$(PLUGIN_API_TEST_LIBRARY): \
+    $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
 	$(CCC) -dynamiclib -o $@ $< $(LDFLAGS)
 else
-$(PHASE5_TEST_PLUGIN): $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) | $(PHASE5_TEST_PLUGIN_DIR)
+$(PLUGIN_API_TEST_LIBRARY): \
+    $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
 	$(CCC) -shared -o $@ $< $(LDFLAGS)
 endif
 
@@ -563,7 +574,7 @@ endef
 
 $(foreach test,$(QTEDM_UNIT_TEST_NAMES),$(eval $(call link_qtedm_unit_test,$(test))))
 
-$(OBJ_DIR)/test_phase5$(EXEEXT): | $(PHASE5_TEST_PLUGIN_METADATA)
+$(OBJ_DIR)/test_plugins_property_rules$(EXEEXT): | $(PLUGIN_API_TEST_METADATA)
 
 $(OBJ_DIR)/qtedm_image_compare$(EXEEXT): $(qtedm_image_compare_OBJS)
 	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
@@ -576,7 +587,7 @@ else
 	@exit 1
 endif
 
-build-tests: check-qt-test $(PHASE5_TEST_PLUGIN_METADATA) $(QTEDM_UNIT_TEST_BINARIES)
+build-tests: check-qt-test $(PLUGIN_API_TEST_METADATA) $(QTEDM_UNIT_TEST_BINARIES)
 
 tests: test
 
@@ -603,7 +614,11 @@ test-cli: $(OBJ_DIR)/qtedm$(EXEEXT) $(OBJ_DIR)/qtedm-convert$(EXEEXT)
 	../tests/run_qtedm_cli_tests.sh
 
 test-ioc: $(OBJ_DIR)/qtedm$(EXEEXT)
-	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" ../tests/run_qtedm_ioc_tests.sh
+	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
+	QTEDM_SOFT_IOC_PVA="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/softIocPVA$(EXEEXT)" \
+	QTEDM_PVGET="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/pvget$(EXEEXT)" \
+	QTEDM_PVPUT="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/pvput$(EXEEXT)" \
+	../tests/run_qtedm_ioc_tests.sh
 
 test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
 	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
@@ -612,10 +627,10 @@ test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
 
 clean-tests:
 	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS) \
-	  $(QTEDM_VISUAL_TEST_TOOLS) $(PHASE5_TEST_PLUGIN) \
-	  $(PHASE5_TEST_PLUGIN_METADATA) \
-	  $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) \
-	  $(OBJ_DIR)/phase5_test_plugin.moc
+	  $(QTEDM_VISUAL_TEST_TOOLS) $(PLUGIN_API_TEST_LIBRARY) \
+	  $(PLUGIN_API_TEST_METADATA) \
+	  $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) \
+	  $(OBJ_DIR)/plugin_api_discovery_plugin.moc
 
 .PHONY: tests test build-tests test-unit test-cli test-ioc test-visual clean-tests check-qt-test
 

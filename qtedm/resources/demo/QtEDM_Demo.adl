@@ -1254,7 +1254,7 @@ text {
   "basic attribute" {
     clr=53
   }
-  textix="Phase 1 QtEDM Extensions"
+  textix="QtEDM Safety and Core Controls"
 }
 qtedm_symbol {
   object {

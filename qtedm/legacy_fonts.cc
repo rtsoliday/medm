@@ -1,10 +1,14 @@
 #include "legacy_fonts.h"
 
 #include <QByteArray>
+#include <QDebug>
+#include <QDir>
 #include <QFontDatabase>
 #include <QFontInfo>
 #include <QHash>
+#include <QSharedPointer>
 #include <QStringList>
+#include <QTemporaryFile>
 #include <QtGlobal>
 
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MAC)
@@ -74,6 +78,7 @@ QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
 {
   using CacheKey = quintptr;
   static QHash<CacheKey, int> fontIds;
+  static QHash<CacheKey, QSharedPointer<QTemporaryFile>> fontFiles;
 
   const CacheKey key = reinterpret_cast<CacheKey>(data);
   int fontId = -2;
@@ -84,19 +89,54 @@ QFont loadEmbeddedFont(const unsigned char *data, std::size_t size,
     const QByteArray bytes(reinterpret_cast<const char *>(data),
         static_cast<int>(size));
     fontId = QFontDatabase::addApplicationFontFromData(bytes);
+    /*
+     * Qt's CoreText backend can reject an otherwise valid OpenType font when
+     * it is registered from an in-memory buffer. Retain a private temporary
+     * file for the process lifetime and retry through the file-backed API.
+     */
+    if (fontId == -1) {
+      QString suffix = QStringLiteral(".font");
+      if (bytes.startsWith("OTTO")) {
+        suffix = QStringLiteral(".otf");
+      } else if (bytes.size() >= 4
+          && static_cast<unsigned char>(bytes.at(0)) == 0
+          && static_cast<unsigned char>(bytes.at(1)) == 1
+          && static_cast<unsigned char>(bytes.at(2)) == 0
+          && static_cast<unsigned char>(bytes.at(3)) == 0) {
+        suffix = QStringLiteral(".ttf");
+      }
+      auto file = QSharedPointer<QTemporaryFile>::create(
+          QDir::tempPath() + QStringLiteral("/qtedm-font-XXXXXX") + suffix);
+      if (file->open()
+          && file->write(bytes) == bytes.size()
+          && file->flush()) {
+        fontId = QFontDatabase::addApplicationFont(file->fileName());
+        if (fontId != -1) {
+          fontFiles.insert(key, file);
+        } else {
+          qWarning() << "Unable to register temporary QtEDM font"
+                     << file->fileName();
+        }
+      }
+    }
     fontIds.insert(key, fontId);
   }
 
   QFont font;
+  bool loadedFamily = false;
   if (fontId != -1) {
     const QStringList families = QFontDatabase::applicationFontFamilies(
         fontId);
     if (!families.isEmpty()) {
       font = QFont(families.first());
+      loadedFamily = true;
+    } else {
+      qWarning() << "Registered QtEDM font has no available family"
+                 << fontId;
     }
   }
 
-  if (font.family().isEmpty()) {
+  if (!loadedFamily) {
     const QFontDatabase::SystemFont fallback =
         styleHint == QFont::TypeWriter ? QFontDatabase::FixedFont
                                        : QFontDatabase::GeneralFont;
@@ -147,7 +187,7 @@ bool isBitstreamCharterXLFD(const QString &key, int *pixelSize)
   }
 
   const QStringList parts = key.split('-', Qt::KeepEmptyParts);
-  if (parts.size() < 16) {
+  if (parts.size() < 15) {
     return false;
   }
 
@@ -420,8 +460,8 @@ QFont font(const QString &key)
     return it.value();
   }
 
-  const QFont base = loadBaseFont(key);
-  if (!base.family().isEmpty()) {
+  if (baseFontKeys().contains(key)) {
+    const QFont base = loadBaseFont(key);
     fonts.insert(key, base);
     return base;
   }
@@ -430,16 +470,10 @@ QFont font(const QString &key)
     if (key != QLatin1String(entry.alias)) {
       continue;
     }
-    QFont alias;
-    if (gAliasMode == WidgetDMAliasMode::kScalable) {
-      alias = loadBitstreamCharterBold(entry.pixelSize);
-    }
-    if (alias.family().isEmpty()) {
-      alias = font(QString::fromLatin1(entry.fixedKey));
-    }
-    if (!alias.family().isEmpty()) {
-      fonts.insert(key, alias);
-    }
+    const QFont alias = gAliasMode == WidgetDMAliasMode::kScalable
+        ? loadBitstreamCharterBold(entry.pixelSize)
+        : font(QString::fromLatin1(entry.fixedKey));
+    fonts.insert(key, alias);
     return alias;
   }
 

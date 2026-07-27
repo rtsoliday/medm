@@ -46,7 +46,7 @@ NtNdArrayFrame frameFrom(const std::vector<T> &values,
 QString fixturePath()
 {
   return QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(
-      QStringLiteral("../../tests/fixtures/phase4/caqtdm_mixed.ui"));
+      QStringLiteral("../../tests/fixtures/display_import/caqtdm_mixed.ui"));
 }
 
 QByteArray readAll(const QString &path)
@@ -60,7 +60,7 @@ QByteArray readAll(const QString &path)
 
 } // namespace
 
-class TestPhase4 : public QObject
+class TestDisplayImportNdArray : public QObject
 {
   Q_OBJECT
 
@@ -77,7 +77,7 @@ private slots:
   void newestFrameQueueDropsObsoletePendingFrames();
 };
 
-void TestPhase4::registryContainsNtNdArrayImage()
+void TestDisplayImportNdArray::registryContainsNtNdArrayImage()
 {
   const auto *descriptor = ExtensionObjectRegistry::instance().descriptor(
       QStringLiteral("qtedm_ndarray_image"));
@@ -86,7 +86,7 @@ void TestPhase4::registryContainsNtNdArrayImage()
   QCOMPARE(descriptor->category, QStringLiteral("Monitors"));
 }
 
-void TestPhase4::converterProducesDeterministicDisplaysAndReport()
+void TestDisplayImportNdArray::converterProducesDeterministicDisplaysAndReport()
 {
   QVERIFY2(QFileInfo::exists(fixturePath()), qPrintable(fixturePath()));
   QTemporaryDir directory;
@@ -147,7 +147,7 @@ void TestPhase4::converterProducesDeterministicDisplaysAndReport()
   QCOMPARE(readAll(second.reportPath), firstReport);
 }
 
-void TestPhase4::converterRejectsMalformedAndUnsupportedInputs()
+void TestDisplayImportNdArray::converterRejectsMalformedAndUnsupportedInputs()
 {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -213,7 +213,7 @@ void TestPhase4::converterRejectsMalformedAndUnsupportedInputs()
   QVERIFY(overwriteResult.error.contains(QStringLiteral("overwrite")));
 }
 
-void TestPhase4::decoderSupportsEveryScalarType()
+void TestDisplayImportNdArray::decoderSupportsEveryScalarType()
 {
   NtNdArrayDecodeOptions options;
   options.maximumInputBytes = 1024;
@@ -246,7 +246,7 @@ void TestPhase4::decoderSupportsEveryScalarType()
       {2, 1}, NtNdArrayColorMode::kMono));
 }
 
-void TestPhase4::decoderSupportsMonoAndRgbLayouts()
+void TestDisplayImportNdArray::decoderSupportsMonoAndRgbLayouts()
 {
   NtNdArrayDecodeOptions options;
   const NtNdArrayFrame mono = frameFrom<quint8>(
@@ -282,7 +282,7 @@ void TestPhase4::decoderSupportsMonoAndRgbLayouts()
   }
 }
 
-void TestPhase4::decoderRejectsUnsafeOrMalformedFrames()
+void TestDisplayImportNdArray::decoderRejectsUnsafeOrMalformedFrames()
 {
   NtNdArrayDecodeOptions options;
   options.maximumInputBytes = 3;
@@ -307,7 +307,7 @@ void TestPhase4::decoderRejectsUnsafeOrMalformedFrames()
   QVERIFY(!NtNdArrayImageDecoder::decode(frame, options).valid);
 }
 
-void TestPhase4::decoderMapsTransformedPixelCoordinates()
+void TestDisplayImportNdArray::decoderMapsTransformedPixelCoordinates()
 {
   const NtNdArrayFrame frame = frameFrom<quint16>(
       {10, 20, 30, 40, 50, 60}, NtNdArrayScalarType::kUInt16,
@@ -335,7 +335,7 @@ void TestPhase4::decoderMapsTransformedPixelCoordinates()
   QVERIFY(NtNdArrayImageDecoder::pixelValues(decoded, 2, 0).isEmpty());
 }
 
-void TestPhase4::imageElementTracksDisconnectsAndDimensionChanges()
+void TestDisplayImportNdArray::imageElementTracksDisconnectsAndDimensionChanges()
 {
   NtNdArrayImageElement element;
   NtNdArrayDecodeOptions options;
@@ -387,7 +387,7 @@ void TestPhase4::imageElementTracksDisconnectsAndDimensionChanges()
   QVERIFY(sawDisconnectIndicator);
 }
 
-void TestPhase4::asynchronousDecodePublishesAFrame()
+void TestDisplayImportNdArray::asynchronousDecodePublishesAFrame()
 {
   NtNdArrayImageElement element;
   NtNdArrayImageRuntime runtime(&element);
@@ -404,7 +404,7 @@ void TestPhase4::asynchronousDecodePublishesAFrame()
   runtime.started_ = false;
 }
 
-void TestPhase4::newestFrameQueueDropsObsoletePendingFrames()
+void TestDisplayImportNdArray::newestFrameQueueDropsObsoletePendingFrames()
 {
   NtNdArrayImageElement element;
   NtNdArrayImageRuntime runtime(&element);
@@ -425,5 +425,5 @@ void TestPhase4::newestFrameQueueDropsObsoletePendingFrames()
   runtime.hasPendingFrame_ = false;
 }
 
-QTEST_MAIN(TestPhase4)
-#include "test_phase4.moc"
+QTEST_MAIN(TestDisplayImportNdArray)
+#include "test_display_import_ndarray.moc"

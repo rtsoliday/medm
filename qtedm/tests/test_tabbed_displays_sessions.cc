@@ -10,7 +10,7 @@
 #include "session_manager.h"
 #include "tabbed_display_element.h"
 
-class TestPhase2 : public QObject
+class TestTabbedDisplaysSessions : public QObject
 {
   Q_OBJECT
 
@@ -25,7 +25,7 @@ private slots:
   void sessionGeometryIsClamped();
 };
 
-void TestPhase2::registryContainsTabbedDisplay()
+void TestTabbedDisplaysSessions::registryContainsTabbedDisplay()
 {
   const auto *descriptor = ExtensionObjectRegistry::instance().descriptor(
       QStringLiteral("qtedm_tabbed_display"));
@@ -34,7 +34,7 @@ void TestPhase2::registryContainsTabbedDisplay()
   QCOMPARE(descriptor->category, QStringLiteral("Containers"));
 }
 
-void TestPhase2::tabbedDisplayLoadsLazily()
+void TestTabbedDisplaysSessions::tabbedDisplayLoadsLazily()
 {
   TabbedDisplayElement element;
   element.setPages({
@@ -71,7 +71,7 @@ void TestPhase2::tabbedDisplayLoadsLazily()
   QCOMPARE(element.loadedPageCount(), 0);
 }
 
-void TestPhase2::tabbedDisplayReportsDiagnostics()
+void TestTabbedDisplaysSessions::tabbedDisplayReportsDiagnostics()
 {
   TabbedDisplayElement element;
   element.setPages({
@@ -90,7 +90,7 @@ void TestPhase2::tabbedDisplayReportsDiagnostics()
       QStringLiteral("Child display not found"));
 }
 
-void TestPhase2::tabbedDisplayNormalizesIdsAndSupportsStackedMode()
+void TestTabbedDisplaysSessions::tabbedDisplayNormalizesIdsAndSupportsStackedMode()
 {
   TabbedDisplayElement element;
   element.setPages({
@@ -114,7 +114,7 @@ void TestPhase2::tabbedDisplayNormalizesIdsAndSupportsStackedMode()
   QVERIFY(!element.hiddenTabs());
 }
 
-void TestPhase2::sessionRoundTrip()
+void TestTabbedDisplaysSessions::sessionRoundTrip()
 {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -152,7 +152,7 @@ void TestPhase2::sessionRoundTrip()
   QVERIFY(restored.editMode);
 }
 
-void TestPhase2::sessionRejectsUnsafeNamesAndSchemas()
+void TestTabbedDisplaysSessions::sessionRejectsUnsafeNamesAndSchemas()
 {
   QVERIFY(!SessionManager::isValidSessionName(QStringLiteral("../escape")));
   QVERIFY(!SessionManager::isValidSessionName(QStringLiteral("a/b")));
@@ -177,7 +177,7 @@ void TestPhase2::sessionRejectsUnsafeNamesAndSchemas()
   QVERIFY(loaded.error.contains(QStringLiteral("schema")));
 }
 
-void TestPhase2::sessionInvalidWindowDataReportsWarnings()
+void TestTabbedDisplaysSessions::sessionInvalidWindowDataReportsWarnings()
 {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -229,7 +229,7 @@ void TestPhase2::sessionInvalidWindowDataReportsWarnings()
       QStringLiteral("no display path")));
 }
 
-void TestPhase2::sessionGeometryIsClamped()
+void TestTabbedDisplaysSessions::sessionGeometryIsClamped()
 {
   const QList<QPair<QString, QRect>> screens{
       qMakePair(QStringLiteral("left"), QRect(0, 0, 1920, 1080)),
@@ -247,6 +247,6 @@ void TestPhase2::sessionGeometryIsClamped()
       QRect(0, 0, 640, 480));
 }
 
-QTEST_MAIN(TestPhase2)
+QTEST_MAIN(TestTabbedDisplaysSessions)
 
-#include "test_phase2.moc"
+#include "test_tabbed_displays_sessions.moc"

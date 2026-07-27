@@ -1,4 +1,7 @@
-Public domain font. Share and enjoy.
+The X11 bitmap fonts are public domain or distributed under the permissive
+terms provided by their upstream X.Org font packages.
 
-Bitstream Charter Bold (bitstream-charter-bold.otf) is licensed under the SIL
-Open Font License 1.1. See charter-license.txt for the complete license text.
+XCharter Bold (bitstream-charter-bold.otf) is an extended Bitstream Charter
+face distributed under the original Bitstream permission notice. See
+charter-license.txt for the complete text, modification copyrights, and
+resources/fonts/README.md for the source and checksum.

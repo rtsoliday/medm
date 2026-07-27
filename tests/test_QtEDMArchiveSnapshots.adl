@@ -1,13 +1,13 @@
 file {
-  name="test_QtEDMPhase4.adl"
+  name="test_QtEDMArchiveSnapshots.adl"
   version=030122
 }
 display {
   object {
     x=120
     y=120
-    width=720
-    height=480
+    width=700
+    height=430
   }
   clr=14
   bclr=4
@@ -90,45 +90,38 @@ text {
   object {
     x=20
     y=10
-    width=680
-    height=30
+    width=660
+    height=28
   }
   "basic attribute" {
     clr=14
   }
-  textix="QtEDM Phase 4 - Raw PVA NTNDArray Image"
+  textix="QtEDM Archive History and PV Snapshots"
   align="horiz. centered"
 }
-qtedm_ndarray_image {
+qtedm_archive_plot {
   object {
     x=20
     y=50
-    width=680
+    width=660
     height=350
   }
-  title="Disconnected structured-image test"
-  dataPv="pva://qtedm:test:NTNDArray"
-  colorMap="jet"
-  rangeMode="manual"
-  rangeMin=-5
-  rangeMax=500
-  flipHorizontal="true"
-  rotation="90"
-  showPixelProbe="false"
-  maxInputBytes=67108864
-  maxOutputBytes=33554432
-  maxDimension=4096
-}
-text {
-  object {
-    x=20
-    y=410
-    width=680
-    height=45
-  }
-  "basic attribute" {
+  plotcom {
+    title="Archive and Live Trend"
+    xlabel="Seconds"
+    ylabel="Value"
     clr=14
+    bclr=4
   }
-  textix="Expected: explicit disconnect state. With an areaDetector PVA source, verify newest-frame decoding, zoom/pan, ID/timestamp, and dropped-frame counter."
-  align="horiz. centered"
+  maxPoints=512
+  liveMerge=true
+  pen[0] {
+    chan="strip:test:alpha"
+    clr=15
+    limits {
+      loprSrc="default"
+      hoprSrc="default"
+      hoprDefault=100
+    }
+  }
 }

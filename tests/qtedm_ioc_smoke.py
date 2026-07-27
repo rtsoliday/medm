@@ -2,6 +2,7 @@
 """Run IOC-backed QtEDM integration checks with structured state assertions."""
 
 import argparse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import re
@@ -9,9 +10,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import List, Match, Optional, Set
+from urllib.parse import parse_qs, urlparse
 
 
 CHANNEL_PATTERN = re.compile(
@@ -32,8 +35,27 @@ def prefix_channel_name(channel: str, prefix: str) -> str:
   return f"{prefix}{stripped}"
 
 
+def display_channel_name(channel: str, prefix: str, provider: str) -> str:
+  stripped = channel.strip()
+  if provider != "pva":
+    return prefix_channel_name(channel, prefix)
+  if not stripped:
+    return channel
+  if stripped.lower().startswith("pva://"):
+    pv = stripped[6:]
+    if pv.startswith(prefix):
+      return channel
+    return f"pva://{prefix}{pv}"
+  if "://" in stripped:
+    return channel
+  if stripped.startswith(prefix):
+    return f"pva://{stripped}"
+  return f"pva://{prefix}{stripped}"
+
+
 def rewrite_display_with_prefix(display_path: Path, prefix: str,
-    output_dir: Path, visited: Optional[Set[Path]] = None) -> Path:
+    output_dir: Path, provider: str = "ca",
+    visited: Optional[Set[Path]] = None) -> Path:
   if visited is None:
     visited = set()
   resolved_display = display_path.resolve()
@@ -49,7 +71,10 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
     if (re.search(r'variable="$', match.group(1), re.IGNORECASE)
         and re.fullmatch(r'[A-L]', channel.strip(), re.IGNORECASE)):
       return match.group(0)
-    return f'{match.group(1)}{prefix_channel_name(channel, prefix)}{match.group(3)}'
+    return (
+        f'{match.group(1)}'
+        f'{display_channel_name(channel, prefix, provider)}'
+        f'{match.group(3)}')
 
   rewritten = CHANNEL_PATTERN.sub(replace, text)
   output_path.write_text(rewritten, encoding="utf-8")
@@ -61,7 +86,8 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
       continue
     source_child = (display_path.parent / child_path).resolve()
     if source_child.is_file() and source_child != display_path.resolve():
-      rewrite_display_with_prefix(source_child, prefix, output_dir, visited)
+      rewrite_display_with_prefix(
+          source_child, prefix, output_dir, provider, visited)
   return output_path
 
 
@@ -73,6 +99,94 @@ def run_cavput(cavput_bin: Path, pv: str, value: str) -> subprocess.CompletedPro
       stderr=subprocess.PIPE,
       universal_newlines=True,
   )
+
+
+def run_pvput(pvput_bin: Path, pv: str, value: str) -> subprocess.CompletedProcess:
+  return subprocess.run(
+      [str(pvput_bin), "-w", "5", pv, value],
+      check=False,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      universal_newlines=True,
+  )
+
+
+def wait_for_pva_ready(process: subprocess.Popen, pvget_bin: Path, pv: str,
+    timeout_seconds: float) -> None:
+  deadline = time.monotonic() + timeout_seconds
+  last_output = ""
+  while time.monotonic() < deadline:
+    if process.poll() is not None:
+      raise CaseFailure("softIocPVA exited before its test PV became available")
+    result = subprocess.run(
+        [str(pvget_bin), "-q", "-w", "1", pv],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    if result.returncode == 0:
+      return
+    last_output = (result.stderr or result.stdout).strip()
+    time.sleep(0.2)
+  raise CaseFailure(
+      f"Timed out waiting for PVA test PV {pv}: {last_output}")
+
+
+class ArchiveFixtureHandler(BaseHTTPRequestHandler):
+  """Serve a bounded Archiver Appliance-compatible JSON response."""
+
+  def do_GET(self) -> None:
+    parsed = urlparse(self.path)
+    if not parsed.path.endswith("/data/getData.json"):
+      self.send_error(404)
+      return
+    query = parse_qs(parsed.query)
+    pv = query.get("pv", [""])[0]
+    sample_count = int(getattr(self.server, "sample_count", 5))
+    now = int(time.time())
+    data = [
+        {
+            "secs": now - sample_count + index,
+            "nanos": index * 1000,
+            "val": 10.0 + index,
+            "status": 0,
+            "severity": 0,
+        }
+        for index in range(sample_count)
+    ]
+    payload = json.dumps([
+        {"meta": {"name": pv}, "data": data}
+    ], separators=(",", ":")).encode("utf-8")
+    self.send_response(200)
+    self.send_header("Content-Type", "application/json")
+    self.send_header("Content-Length", str(len(payload)))
+    self.end_headers()
+    self.wfile.write(payload)
+
+  def log_message(self, format_string: str, *args) -> None:
+    del format_string, args
+
+
+class ArchiveFixtureServer:
+  def __init__(self, sample_count: int):
+    self.server = ThreadingHTTPServer(
+        ("127.0.0.1", 0), ArchiveFixtureHandler)
+    self.server.sample_count = sample_count
+    self.thread = threading.Thread(
+        target=self.server.serve_forever,
+        name="qtedm-archive-fixture",
+        daemon=True)
+
+  def start(self) -> str:
+    self.thread.start()
+    port = self.server.server_address[1]
+    return f"http://127.0.0.1:{port}/retrieval"
+
+  def close(self) -> None:
+    self.server.shutdown()
+    self.server.server_close()
+    self.thread.join(timeout=5)
 
 
 def wait_for_ioc_ready(process: subprocess.Popen, ready_file: Path,
@@ -135,17 +249,17 @@ def flatten_widgets(state_data: dict) -> List[dict]:
   return widgets
 
 
-def normalize_selector(value, prefix: str):
+def normalize_selector(value, prefix: str, provider: str):
   if isinstance(value, dict):
     normalized = {}
     for key, item in value.items():
       if key == "channel" and isinstance(item, str):
-        normalized[key] = prefix_channel_name(item, prefix)
+        normalized[key] = display_channel_name(item, prefix, provider)
       else:
-        normalized[key] = normalize_selector(item, prefix)
+        normalized[key] = normalize_selector(item, prefix, provider)
     return normalized
   if isinstance(value, list):
-    return [normalize_selector(item, prefix) for item in value]
+    return [normalize_selector(item, prefix, provider) for item in value]
   return value
 
 
@@ -162,8 +276,9 @@ def object_contains(actual, expected) -> bool:
   return actual == expected
 
 
-def matching_widgets(state_data: dict, selector: dict, prefix: str) -> List[dict]:
-  normalized_selector = normalize_selector(selector, prefix)
+def matching_widgets(state_data: dict, selector: dict, prefix: str,
+    provider: str) -> List[dict]:
+  normalized_selector = normalize_selector(selector, prefix, provider)
   expected_type = normalized_selector.get("type", "<unknown>")
   matches = [
       widget for widget in flatten_widgets(state_data)
@@ -232,11 +347,24 @@ def assert_expectations(case: dict, widgets: List[dict]) -> None:
 
 
 def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
-    prefix: str, temp_dir: Path) -> None:
+    pvput_bin: Optional[Path], prefix: str, temp_dir: Path) -> None:
+  provider = str(case.get("provider", "ca")).lower()
   display_path = (repo_root / case["display"]).resolve()
-  rewritten_display = rewrite_display_with_prefix(display_path, prefix, temp_dir)
+  rewritten_display = rewrite_display_with_prefix(
+      display_path, prefix, temp_dir, provider)
   ready_path = temp_dir / f"{case['name']}.ready"
   state_path = temp_dir / f"{case['name']}.json"
+  archive_server: Optional[ArchiveFixtureServer] = None
+  process: Optional[subprocess.Popen] = None
+
+  process_env = os.environ.copy()
+  archive_fixture = case.get("archive_fixture")
+  if archive_fixture:
+    sample_count = int(archive_fixture.get("sample_count", 5))
+    archive_server = ArchiveFixtureServer(sample_count)
+    process_env["QTEDM_ARCHIVER_URL"] = archive_server.start()
+  else:
+    process_env.pop("QTEDM_ARCHIVER_URL", None)
 
   qtedm_args = [str(value) for value in case.get("qtedm_args", [])]
   command = [
@@ -256,6 +384,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
       universal_newlines=True,
+      env=process_env,
   )
   try:
     wait_for_file(ready_path, process, timeout_seconds=15)
@@ -268,7 +397,12 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       if delay_ms > 0:
         time.sleep(delay_ms / 1000.0)
       pv = prefix_channel_name(write["pv"], prefix)
-      result = run_cavput(cavput_bin, pv, str(write["value"]))
+      if provider == "pva":
+        if pvput_bin is None:
+          raise CaseFailure("PVA case requested without a pvput executable")
+        result = run_pvput(pvput_bin, pv, str(write["value"]))
+      else:
+        result = run_cavput(cavput_bin, pv, str(write["value"]))
       if result.returncode != 0:
         raise CaseFailure(
             f"Failed to write {pv}={write['value']}: "
@@ -280,8 +414,10 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
     terminate_process(process)
     raise CaseFailure(f"Timed out waiting for qtedm in case {case['name']}") from exc
   finally:
-    if process.poll() is None:
+    if process is not None and process.poll() is None:
       terminate_process(process)
+    if archive_server is not None:
+      archive_server.close()
 
   if process.returncode != 0:
     raise CaseFailure(
@@ -292,7 +428,8 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
     raise CaseFailure(f"Missing state dump for case {case['name']}: {state_path}")
 
   state_data = json.loads(state_path.read_text(encoding="utf-8"))
-  widgets = matching_widgets(state_data, case["selector"], prefix)
+  widgets = matching_widgets(
+      state_data, case["selector"], prefix, provider)
   assert_expectations(case, widgets)
 
 
@@ -303,6 +440,12 @@ def main() -> int:
   parser.add_argument(
       "--run-local-ioc", required=True, help="Path to tests/run_local_ioc.sh")
   parser.add_argument("--cavput", required=True, help="Path to tests/cavput")
+  parser.add_argument(
+      "--soft-ioc-pva", help="Path to the EPICS softIocPVA executable")
+  parser.add_argument("--pvget", help="Path to the EPICS pvget executable")
+  parser.add_argument("--pvput", help="Path to the EPICS pvput executable")
+  parser.add_argument(
+      "--pva-database", help="Database loaded by softIocPVA")
   parser.add_argument("--cases", required=True, help="JSON case manifest")
   parser.add_argument(
       "--case", action="append", default=[],
@@ -312,6 +455,16 @@ def main() -> int:
   qtedm_bin = Path(args.qtedm).expanduser().resolve()
   run_local_ioc = Path(args.run_local_ioc).expanduser().resolve()
   cavput_bin = Path(args.cavput).expanduser().resolve()
+  soft_ioc_pva = (
+      Path(args.soft_ioc_pva).expanduser().resolve()
+      if args.soft_ioc_pva else None)
+  pvget_bin = (
+      Path(args.pvget).expanduser().resolve() if args.pvget else None)
+  pvput_bin = (
+      Path(args.pvput).expanduser().resolve() if args.pvput else None)
+  pva_database = (
+      Path(args.pva_database).expanduser().resolve()
+      if args.pva_database else None)
   cases_path = Path(args.cases).expanduser().resolve()
   repo_root = Path(__file__).resolve().parents[1]
 
@@ -328,19 +481,31 @@ def main() -> int:
 
   selected_names = set(args.case)
   cases = load_cases(cases_path, selected_names)
+  has_pva_cases = any(
+      str(case.get("provider", "ca")).lower() == "pva"
+      for case in cases)
+  if has_pva_cases:
+    pva_paths = (soft_ioc_pva, pvget_bin, pvput_bin, pva_database)
+    if any(path is None or not path.is_file() for path in pva_paths):
+      raise CaseFailure(
+          "PVA cases require --soft-ioc-pva, --pvget, --pvput, and "
+          "--pva-database")
   case_runtime_ms = sum(
       int(case.get("exit_after_ms", 4500)) for case in cases)
   ioc_execution_seconds = max(
       240, (case_runtime_ms + 999) // 1000 + 180)
 
   prefix = f"qtedm_ioc_{int(time.time())}_{os.getpid()}:"
+  pva_prefix = f"{prefix}pva:"
   ioc_process: Optional[subprocess.Popen] = None
+  pva_process: Optional[subprocess.Popen] = None
 
   temp_dir = Path(tempfile.mkdtemp(prefix="qtedm-ioc."))
   keep_temp_dir = False
   ioc_log = temp_dir / "local_ioc.log"
   ioc_runner_log = temp_dir / "run_local_ioc.out"
   ioc_ready_file = temp_dir / "ioc.ready"
+  pva_log = temp_dir / "soft_ioc_pva.log"
   ioc_command = [
       str(run_local_ioc),
       "--execution-time",
@@ -359,16 +524,44 @@ def main() -> int:
       stderr=subprocess.STDOUT,
       universal_newlines=True,
   )
+  pva_log_handle = None
 
   try:
     wait_for_ioc_ready(ioc_process, ioc_ready_file, timeout_seconds=120)
+    if has_pva_cases:
+      pva_log_handle = pva_log.open("w", encoding="utf-8")
+      pva_process = subprocess.Popen(
+          [
+              str(soft_ioc_pva),
+              "-S",
+              "-m",
+              f"P={pva_prefix}",
+              "-d",
+              str(pva_database),
+          ],
+          stdin=subprocess.DEVNULL,
+          stdout=pva_log_handle,
+          stderr=subprocess.STDOUT,
+          universal_newlines=True,
+      )
+      wait_for_pva_ready(
+          pva_process, pvget_bin,
+          f"{pva_prefix}sp:test:compact:setpoint",
+          timeout_seconds=30)
     for case in cases:
-      run_case(case, repo_root, qtedm_bin, cavput_bin, prefix, temp_dir)
+      provider = str(case.get("provider", "ca")).lower()
+      case_prefix = pva_prefix if provider == "pva" else prefix
+      run_case(
+          case, repo_root, qtedm_bin, cavput_bin, pvput_bin,
+          case_prefix, temp_dir)
       print(f"PASS {case['name']}")
   except Exception as exc:
     keep_temp_dir = True
     terminate_process(ioc_process)
+    terminate_process(pva_process)
     runner_log_handle.close()
+    if pva_log_handle is not None:
+      pva_log_handle.close()
     if isinstance(exc, CaseFailure):
       message = str(exc)
     else:
@@ -378,12 +571,17 @@ def main() -> int:
         f"IOC log: {ioc_log}" if ioc_log.exists() else "IOC log unavailable",
         f"IOC runner log: {ioc_runner_log}"
         if ioc_runner_log.exists() else "IOC runner log unavailable",
+        f"PVA IOC log: {pva_log}"
+        if pva_log.exists() else "PVA IOC log unavailable",
     ]
     sys.stderr.write(f"{message}\n" + "\n".join(log_hint) + "\n")
     return 1
   finally:
     terminate_process(ioc_process)
+    terminate_process(pva_process)
     runner_log_handle.close()
+    if pva_log_handle is not None:
+      pva_log_handle.close()
     if not keep_temp_dir:
       shutil.rmtree(temp_dir, ignore_errors=True)
 

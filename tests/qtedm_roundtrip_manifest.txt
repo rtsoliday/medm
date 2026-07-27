@@ -16,11 +16,11 @@ test_Meter.adl
 test_Oval.adl
 test_PVTable.adl
 test_Polygon.adl
-test_QtEDMPhase1.adl
-test_QtEDMPhase2.adl
-test_QtEDMPhase3.adl
-test_QtEDMPhase4.adl
-test_QtEDMPhase5.adl
+test_QtEDMSafetyControls.adl
+test_QtEDMTabbedDisplaysSessions.adl
+test_QtEDMArchiveSnapshots.adl
+test_QtEDMDisplayImportNDArray.adl
+test_QtEDMPluginsPropertyRules.adl
 test_RelatedDisplay.adl
 test_ScaleMonitor.adl
 test_SetpointControl.adl

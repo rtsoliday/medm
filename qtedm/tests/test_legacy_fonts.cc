@@ -10,8 +10,22 @@ class TestLegacyFonts : public QObject
   Q_OBJECT
 
 private slots:
+  void loadsEmbeddedBitstreamCharter();
   void preservesLegacyPixelSizeSemantics();
 };
+
+void TestLegacyFonts::loadsEmbeddedBitstreamCharter()
+{
+  const QFont charter = LegacyFonts::font(QStringLiteral(
+      "-bitstream-charter-bold-r-normal--24-240-75-75-p-150-iso8859-1"));
+  const QFontInfo info(charter);
+  QVERIFY2(charter.family().contains(QStringLiteral("Charter"),
+      Qt::CaseInsensitive),
+      qPrintable(QStringLiteral("requested=%1 resolved=%2")
+          .arg(charter.family(), info.family())));
+  QCOMPARE(charter.pixelSize(), 24);
+  QVERIFY(charter.bold());
+}
 
 void TestLegacyFonts::preservesLegacyPixelSizeSemantics()
 {

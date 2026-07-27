@@ -102,7 +102,7 @@ class FakePlugin final : public QObject,
       QtedmArchiveProviderPluginInterface)
 
 public:
-  explicit FakePlugin(QString id = QStringLiteral("org.qtedm.phase5.fake"))
+  explicit FakePlugin(QString id = QStringLiteral("org.qtedm.tests.fake"))
     : id_(std::move(id))
   {
   }
@@ -156,7 +156,7 @@ public:
       return false;
     }
     label->setText(properties.value(QStringLiteral("text")).toString());
-    label->setProperty("_phase5Channel",
+    label->setProperty("_testPluginChannel",
         properties.value(QStringLiteral("channel")));
     const QColor color =
         properties.value(QStringLiteral("color")).value<QColor>();
@@ -175,7 +175,7 @@ public:
     return {
         {QStringLiteral("text"), label ? label->text() : QString()},
         {QStringLiteral("channel"),
-            label ? label->property("_phase5Channel") : QVariant()},
+            label ? label->property("_testPluginChannel") : QVariant()},
         {QStringLiteral("color"),
             label ? label->palette().color(QPalette::WindowText)
                   : QColor(QStringLiteral("#123456"))},
@@ -297,7 +297,7 @@ QString propertyValueForTest(const AdlNode &node, const QString &name)
 
 } // namespace
 
-class TestPhase5 : public QObject
+class TestPluginsPropertyRules : public QObject
 {
   Q_OBJECT
 
@@ -315,7 +315,7 @@ private slots:
   void displayRulesAndMissingPluginSurviveSaveAndUndo();
 };
 
-void TestPhase5::init()
+void TestPluginsPropertyRules::init()
 {
   QtedmPluginManager::instance().resetForTesting();
   PvChannelManager::instance().setObserveOnly(false);
@@ -324,7 +324,7 @@ void TestPhase5::init()
   FakePluginRuntime::stops = 0;
 }
 
-void TestPhase5::cleanup()
+void TestPluginsPropertyRules::cleanup()
 {
   PvChannelManager::instance().setObserveOnly(false);
   QtedmPluginManager::instance().resetForTesting();
@@ -332,7 +332,7 @@ void TestPhase5::cleanup()
   qunsetenv("QTEDM_AUDIT_DIR");
 }
 
-void TestPhase5::exactCompatibilityAndDuplicateRegistration()
+void TestPluginsPropertyRules::exactCompatibilityAndDuplicateRegistration()
 {
   QString reason;
   QVERIFY(QtedmPluginManager::isCompatible(
@@ -365,12 +365,12 @@ void TestPhase5::exactCompatibilityAndDuplicateRegistration()
   FakePlugin duplicateId;
   QVERIFY(!QtedmPluginManager::instance().registerPluginObject(&duplicateId));
 
-  FakePlugin duplicateType(QStringLiteral("org.qtedm.phase5.other"));
+  FakePlugin duplicateType(QStringLiteral("org.qtedm.tests.other"));
   duplicateType.scheme_ = QStringLiteral("otherfake");
   QVERIFY(!QtedmPluginManager::instance().registerPluginObject(&duplicateType));
 
   FakePlugin builtInTypeCollision(
-      QStringLiteral("org.qtedm.phase5.builtin-collision"));
+      QStringLiteral("org.qtedm.tests.builtin-collision"));
   builtInTypeCollision.typeId_ = QStringLiteral("qtedm_symbol");
   builtInTypeCollision.scheme_ = QStringLiteral("builtin-collision");
   QVERIFY(!QtedmPluginManager::instance().registerPluginObject(
@@ -382,7 +382,7 @@ void TestPhase5::exactCompatibilityAndDuplicateRegistration()
   QVERIFY(!QtedmPluginManager::instance().registerPluginObject(&badAbi));
 }
 
-void TestPhase5::configuredPluginDirectoryIsDiscovered()
+void TestPluginsPropertyRules::configuredPluginDirectoryIsDiscovered()
 {
   const QDir applicationPluginDirectory(
       QDir(QCoreApplication::applicationDirPath())
@@ -396,7 +396,7 @@ void TestPhase5::configuredPluginDirectoryIsDiscovered()
     }
   }
   QVERIFY2(!discoveryLibrary.isEmpty(),
-      "The Phase 5 discovery plugin was not built.");
+      "The plugin API discovery library was not built.");
   QTemporaryDir missingMetadataDirectory;
   QVERIFY(missingMetadataDirectory.isValid());
   const QString missingMetadataLibrary =
@@ -413,18 +413,18 @@ void TestPhase5::configuredPluginDirectoryIsDiscovered()
     qunsetenv("QTEDM_PLUGIN_PATH");
   }
   QVERIFY2(QtedmPluginManager::instance().loadedPluginIds().contains(
-      QStringLiteral("org.qtedm.phase5.discovery")),
+      QStringLiteral("org.qtedm.tests.discovery")),
       qPrintable(QtedmPluginManager::instance().diagnostics().join(
           QLatin1Char('\n'))));
   QVERIFY(QtedmPluginManager::instance().displayObject(
-      QStringLiteral("org.qtedm.phase5.discovery"),
+      QStringLiteral("org.qtedm.tests.discovery"),
       QStringLiteral("discovery_label")));
   QVERIFY(QtedmPluginManager::instance().diagnostics().join(
       QLatin1Char('\n')).contains(
           QStringLiteral("Required plugin metadata is missing")));
 }
 
-void TestPhase5::providerSubscriptionsWritesArchivesAndShutdown()
+void TestPluginsPropertyRules::providerSubscriptionsWritesArchivesAndShutdown()
 {
   FakePlugin plugin;
   QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
@@ -486,7 +486,7 @@ void TestPhase5::providerSubscriptionsWritesArchivesAndShutdown()
   QVERIFY(!ExtensionObjectRegistry::instance().descriptor(plugin.typeId_));
 }
 
-void TestPhase5::observeOnlyBlocksPluginProviderWrites()
+void TestPluginsPropertyRules::observeOnlyBlocksPluginProviderWrites()
 {
   FakePlugin plugin;
   QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
@@ -523,7 +523,7 @@ void TestPhase5::observeOnlyBlocksPluginProviderWrites()
   QVERIFY(audit.contains("fake://setpoint"));
 }
 
-void TestPhase5::pluginElementTypedRoundTripAndUnknownPreservation()
+void TestPluginsPropertyRules::pluginElementTypedRoundTripAndUnknownPreservation()
 {
   PluginElement missing;
   QString error;
@@ -611,7 +611,7 @@ void TestPhase5::pluginElementTypedRoundTripAndUnknownPreservation()
   QCOMPARE(FakePluginRuntime::stops, 1);
 }
 
-void TestPhase5::constructionFailureCreatesDiagnosticPlaceholder()
+void TestPluginsPropertyRules::constructionFailureCreatesDiagnosticPlaceholder()
 {
   FakePlugin plugin;
   plugin.failConstruction_ = true;
@@ -628,7 +628,7 @@ void TestPhase5::constructionFailureCreatesDiagnosticPlaceholder()
       QStringLiteral("intentional construction failure")));
 }
 
-void TestPhase5::rulesParseRoundTripCyclesAndSandbox()
+void TestPluginsPropertyRules::rulesParseRoundTripCyclesAndSandbox()
 {
   QtedmRuleSet rules;
   QtedmPropertyRule rule;
@@ -637,7 +637,7 @@ void TestPhase5::rulesParseRoundTripCyclesAndSandbox()
   rule.expression = QStringLiteral("A>0");
   rule.trueValue = QStringLiteral("true");
   rule.falseValue = QStringLiteral("false");
-  rule.inputs = {{QLatin1Char('A'), QStringLiteral("soft:phase5:rule"),
+  rule.inputs = {{QLatin1Char('A'), QStringLiteral("soft:plugins_rules:rule"),
       QtedmRuleInputType::kBoolean}};
   rules.rules.append(rule);
   QStringList diagnostics;
@@ -657,7 +657,7 @@ void TestPhase5::rulesParseRoundTripCyclesAndSandbox()
   QCOMPARE(targetIndex, 3);
   QCOMPARE(parsed.rules.first().id, rule.id);
   QCOMPARE(parsed.rules.first().inputs.first().channel,
-      QStringLiteral("soft:phase5:rule"));
+      QStringLiteral("soft:plugins_rules:rule"));
 
   QtedmRuleSet invalidBoolean = rules;
   invalidBoolean.rules.first().trueValue = QStringLiteral("maybe");
@@ -694,9 +694,9 @@ void TestPhase5::rulesParseRoundTripCyclesAndSandbox()
       QStringLiteral("cycle"), Qt::CaseInsensitive));
 }
 
-void TestPhase5::rulesEvaluateRateLimitDisconnectAndRestore()
+void TestPluginsPropertyRules::rulesEvaluateRateLimitDisconnectAndRestore()
 {
-  const QString pv = QStringLiteral("__phase5:rule_value");
+  const QString pv = QStringLiteral("__plugins_rules:rule_value");
   auto &soft = SoftPvRegistry::instance();
   soft.registerName(pv);
   soft.setConnected(pv, true);
@@ -751,15 +751,16 @@ void TestPhase5::rulesEvaluateRateLimitDisconnectAndRestore()
   soft.unregisterName(pv);
 }
 
-void TestPhase5::displayRulesAndMissingPluginSurviveSaveAndUndo()
+void TestPluginsPropertyRules::displayRulesAndMissingPluginSurviveSaveAndUndo()
 {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
-  const QString source = directory.filePath(QStringLiteral("phase5.adl"));
+  const QString source = directory.filePath(
+      QStringLiteral("plugins-property-rules.adl"));
   QFile file(source);
   QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
   const QByteArray adl =
-      "file { name=\"phase5.adl\" version=040004 }\n"
+      "file { name=\"plugins-property-rules.adl\" version=040004 }\n"
       "display { object { x=0 y=0 width=320 height=160 } clr=14 bclr=0 }\n"
       "color map { ncolors=2 colors { ffffff, 000000, } }\n"
       "text { object { x=20 y=20 width=120 height=30 } textix=\"Rules\" }\n"
@@ -781,7 +782,7 @@ void TestPhase5::displayRulesAndMissingPluginSurviveSaveAndUndo()
       "    falseValue=\"false\"\n"
       "    disconnect=\"restore\"\n"
       "    rateHz=10\n"
-      "    input { variable=\"A\" channel=\"__phase5:display\" type=\"number\" }\n"
+      "    input { variable=\"A\" channel=\"__plugins_rules:display\" type=\"number\" }\n"
       "  }\n"
       "}\n";
   QCOMPARE(file.write(adl), qint64(adl.size()));
@@ -808,7 +809,7 @@ void TestPhase5::displayRulesAndMissingPluginSurviveSaveAndUndo()
   QVERIFY(foundMissingPlugin);
 
   const QString firstSave =
-      directory.filePath(QStringLiteral("phase5-saved.adl"));
+      directory.filePath(QStringLiteral("plugins-property-rules-saved.adl"));
   QVERIFY(window.saveToPath(firstSave));
   QFile saved(firstSave);
   QVERIFY(saved.open(QIODevice::ReadOnly));
@@ -821,7 +822,8 @@ void TestPhase5::displayRulesAndMissingPluginSurviveSaveAndUndo()
   QVERIFY(window.undoStack()->count() > 0);
   window.triggerUndo();
   const QString afterUndo =
-      directory.filePath(QStringLiteral("phase5-after-undo.adl"));
+      directory.filePath(
+          QStringLiteral("plugins-property-rules-after-undo.adl"));
   QVERIFY(window.saveToPath(afterUndo));
   QFile undoFile(afterUndo);
   QVERIFY(undoFile.open(QIODevice::ReadOnly));
@@ -836,5 +838,5 @@ void TestPhase5::displayRulesAndMissingPluginSurviveSaveAndUndo()
       QStringLiteral("rule_target_count")).toInt(), 1);
 }
 
-QTEST_MAIN(TestPhase5)
-#include "test_phase5.moc"
+QTEST_MAIN(TestPluginsPropertyRules)
+#include "test_plugins_property_rules.moc"

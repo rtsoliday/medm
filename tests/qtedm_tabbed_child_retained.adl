@@ -1,5 +1,5 @@
 file {
-  name="qtedm_phase2_child_retained.adl"
+  name="qtedm_tabbed_child_retained.adl"
   version=030122
 }
 display {

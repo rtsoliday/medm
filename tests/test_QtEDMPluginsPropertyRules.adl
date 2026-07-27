@@ -1,5 +1,5 @@
 file {
-  name="test_QtEDMPhase5.adl"
+  name="test_QtEDMPluginsPropertyRules.adl"
   version=030122
 }
 display {
@@ -87,7 +87,7 @@ display {
   }
 }
 qtedm_plugin {
-  pluginId="org.qtedm.phase5.missing-fixture"
+  pluginId="org.qtedm.tests.missing-fixture"
   typeId="operator_status"
   schemaVersion="1"
   object {
@@ -115,7 +115,7 @@ text {
   "basic attribute" {
     clr=14
   }
-  textix="QtEDM Phase 5: Plugins + Rules"
+  textix="QtEDM Plugins and Declarative Property Rules"
   align="horiz. centered"
 }
 text {

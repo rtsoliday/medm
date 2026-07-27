@@ -1,5 +1,5 @@
 file {
-  name="test_QtEDMPhase1.adl"
+  name="test_QtEDMSafetyControls.adl"
   version=030122
 }
 display {
@@ -96,7 +96,7 @@ text {
   "basic attribute" {
     clr=54
   }
-  textix="QtEDM Phase 1 Extension Objects"
+  textix="QtEDM Observe-Only and Safety Controls"
   align="horiz. centered"
 }
 qtedm_symbol {

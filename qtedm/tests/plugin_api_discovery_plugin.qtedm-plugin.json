@@ -1,7 +1,7 @@
 {
   "schema": "org.aps.qtedm.plugin-metadata",
   "schema_version": 1,
-  "plugin_id": "org.qtedm.phase5.discovery",
+  "plugin_id": "org.qtedm.tests.discovery",
   "interfaces": [
     "display"
   ]

@@ -1,5 +1,5 @@
 record(ao, "$(P)led:test:discrete") {
-  field(DESC, "QtEDM Phase 1 symbol PVA source")
+  field(DESC, "QtEDM symbol PVA source")
   field(VAL, "3")
   field(DRVL, "0")
   field(DRVH, "10")
@@ -7,14 +7,14 @@ record(ao, "$(P)led:test:discrete") {
 }
 
 record(bo, "$(P)led:test:binary_live") {
-  field(DESC, "QtEDM Phase 1 toggle PVA source")
+  field(DESC, "QtEDM toggle PVA source")
   field(ZNAM, "Disabled")
   field(ONAM, "Enabled")
   field(VAL, "1")
 }
 
 record(ao, "$(P)sp:test:compact:setpoint") {
-  field(DESC, "QtEDM Phase 1 spinbox PVA source")
+  field(DESC, "QtEDM spinbox PVA source")
   field(VAL, "37.5")
   field(DRVL, "-10")
   field(DRVH, "100")

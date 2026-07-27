@@ -2,7 +2,7 @@
 
 #include "qtedm_plugin_api.h"
 
-class Phase5DiscoveryPlugin final : public QObject,
+class PluginApiDiscoveryPlugin final : public QObject,
     public QtedmDisplayObjectPluginInterface
 {
   Q_OBJECT
@@ -12,7 +12,7 @@ class Phase5DiscoveryPlugin final : public QObject,
 public:
   QString pluginId() const override
   {
-    return QStringLiteral("org.qtedm.phase5.discovery");
+    return QStringLiteral("org.qtedm.tests.discovery");
   }
 
   QtedmPluginCompatibility compatibility() const override
@@ -73,4 +73,4 @@ public:
   }
 };
 
-#include "phase5_test_plugin.moc"
+#include "plugin_api_discovery_plugin.moc"

@@ -1214,7 +1214,7 @@
   },
   {
     "name": "qtedm_symbol_live_range_update",
-    "display": "tests/test_QtEDMPhase1.adl",
+    "display": "tests/test_QtEDMSafetyControls.adl",
     "selector": {
       "type": "qtedm_symbol",
       "channel": "led:test:discrete"
@@ -1237,7 +1237,7 @@
   },
   {
     "name": "qtedm_toggle_live_state_update",
-    "display": "tests/test_QtEDMPhase1.adl",
+    "display": "tests/test_QtEDMSafetyControls.adl",
     "selector": {
       "type": "qtedm_toggle",
       "channel": "led:test:binary_live"
@@ -1260,7 +1260,7 @@
   },
   {
     "name": "qtedm_spinbox_live_numeric_update",
-    "display": "tests/test_QtEDMPhase1.adl",
+    "display": "tests/test_QtEDMSafetyControls.adl",
     "selector": {
       "type": "qtedm_spinbox",
       "channel": "sp:test:compact:setpoint"
@@ -1285,8 +1285,35 @@
     }
   },
   {
+    "name": "qtedm_pva_spinbox_live_numeric_update",
+    "provider": "pva",
+    "display": "tests/test_QtEDMSafetyControls.adl",
+    "selector": {
+      "type": "qtedm_spinbox",
+      "channel": "sp:test:compact:setpoint"
+    },
+    "exit_after_ms": 5500,
+    "writes": [
+      {
+        "pv": "sp:test:compact:setpoint",
+        "value": "64.5"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "write_access": true,
+      "has_value": true,
+      "step": 0.25,
+      "low_limit": -10,
+      "high_limit": 100,
+      "precision": 2,
+      "numeric_value": 64.5,
+      "numeric_tolerance": 0.000001
+    }
+  },
+  {
     "name": "qtedm_observe_only_masks_live_write_access",
-    "display": "tests/test_QtEDMPhase1.adl",
+    "display": "tests/test_QtEDMSafetyControls.adl",
     "qtedm_args": [
       "--read-only"
     ],
@@ -1311,7 +1338,7 @@
   },
   {
     "name": "qtedm_tabbed_display_lazy_initial_page",
-    "display": "tests/test_QtEDMPhase2.adl",
+    "display": "tests/test_QtEDMTabbedDisplaysSessions.adl",
     "selector": {
       "type": "qtedm_tabbed_display"
     },
@@ -1325,7 +1352,7 @@
   },
   {
     "name": "qtedm_tabbed_display_missing_child_diagnostic",
-    "display": "tests/test_QtEDMPhase2.adl",
+    "display": "tests/test_QtEDMTabbedDisplaysSessions.adl",
     "qtedm_args": [
       "--test-active-tab",
       "missing"
@@ -1337,12 +1364,12 @@
     "expect": {
       "active_page": "missing",
       "loaded_pages": 0,
-      "active_diagnostic": "Child display not found: qtedm_phase2_missing.adl"
+      "active_diagnostic": "Child display not found: qtedm_tabbed_missing.adl"
     }
   },
   {
     "name": "qtedm_tabbed_display_recursive_reference_guard",
-    "display": "tests/test_QtEDMPhase2.adl",
+    "display": "tests/test_QtEDMTabbedDisplaysSessions.adl",
     "qtedm_args": [
       "--test-active-tab",
       "recursive"
@@ -1358,7 +1385,7 @@
   },
   {
     "name": "qtedm_archive_plot_live_fallback",
-    "display": "tests/test_QtEDMPhase3.adl",
+    "display": "tests/test_QtEDMArchiveSnapshots.adl",
     "selector": {
       "type": "qtedm_archive_plot",
       "channel": "strip:test:alpha"
@@ -1374,11 +1401,32 @@
     }
   },
   {
-    "name": "qtedm_phase5_declarative_rule_updates_missing_plugin",
-    "display": "tests/test_QtEDMPhase5.adl",
+    "name": "qtedm_archive_plot_historical_retrieval",
+    "display": "tests/test_QtEDMArchiveSnapshots.adl",
+    "archive_fixture": {
+      "sample_count": 5
+    },
+    "selector": {
+      "type": "qtedm_archive_plot",
+      "channel": "strip:test:alpha"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "archive_backed": true,
+      "maximum_points": 512,
+      "live_merge": true,
+      "connected": true,
+      "archive_complete": true,
+      "archive_failed": false,
+      "archive_status": "Loaded 5 archive sample(s)."
+    }
+  },
+  {
+    "name": "qtedm_declarative_rules_update_missing_plugin",
+    "display": "tests/test_QtEDMPluginsPropertyRules.adl",
     "selector": {
       "type": "qtedm_plugin",
-      "plugin_id": "org.qtedm.phase5.missing-fixture",
+      "plugin_id": "org.qtedm.tests.missing-fixture",
       "type_id": "operator_status"
     },
     "exit_after_ms": 4500,

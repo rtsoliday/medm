@@ -26,10 +26,16 @@ the X Logical Font Description (XLFD) that the data was taken from.  MEDM aliase
 | `adobeHelvetica24`       | `-adobe-helvetica-medium-r-normal--34-240-100-100-p-176-iso8859-1`      |
 | `adobeHelveticaBold24`   | `-adobe-helvetica-bold-r-normal--34-240-100-100-p-182-iso8859-1`        |
 
-In addition, the scalable Bitstream Charter Bold typeface (distributed under
-the SIL Open Font License 1.1) is embedded as `bitstream-charter-bold.otf`.
-QtEDM instantiates it at runtime when MEDM displays request the scalable
+In addition, the scalable XCharter Bold typeface is embedded as
+`bitstream-charter-bold.otf`. XCharter is an extended Bitstream Charter face;
+QtEDM instantiates it when MEDM displays request the scalable
 `-bitstream-charter-bold-r-normal` XLFD family.
+
+The OpenType file is XCharter 1.26 from the official CTAN package:
+`https://ctan.org/tex-archive/fonts/xcharter`. Its SHA-256 is
+`baf595556bbd65749a83b41034c900a8d7f8f5b2a1aa24314319501fdcacce9b`.
+The XCharter and original Bitstream redistribution terms are retained in
+`charter-license.txt`.
 
 ## Sources and regeneration
 
@@ -48,18 +54,10 @@ To regenerate an embedded font:
        /usr/share/fonts/X11/misc/5x8-ISO8859-1.pcf.gz misc-fixed-8.otb
    ```
 
-2. Create the matching header that exposes a `k<FontName>FontData` array.  The
-   existing headers were generated with a small Python helper that emits
-   comma-separated hexadecimal bytes:
+2. Create the matching header that exposes a `k<FontName>FontData` array:
 
    ```sh
-   python3 - <<'PY'
-   from pathlib import Path
-   data = Path('misc-fixed-8.otb').read_bytes()
-   hex_bytes = [f"0x{b:02x}" for b in data]
-   for i in range(0, len(hex_bytes), 12):
-       print('    ' + ', '.join(hex_bytes[i:i+12]) + ',')
-   PY
+   python3 generate_font_header.py \
+       bitstream-charter-bold.otf bitstream_charter_bold_otf.h \
+       --symbol kBitstreamCharterBoldFont
    ```
-
-3. Wrap the byte list with the boilerplate used by the existing headers.

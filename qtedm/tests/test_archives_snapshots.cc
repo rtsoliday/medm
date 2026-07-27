@@ -58,7 +58,7 @@ protected:
   }
 };
 
-class TestPhase3 : public QObject
+class TestArchivesSnapshots : public QObject
 {
   Q_OBJECT
 
@@ -75,7 +75,7 @@ private slots:
   void restoreChecksPolicyTypeAccessAndLimits();
 };
 
-void TestPhase3::registryContainsArchivePlot()
+void TestArchivesSnapshots::registryContainsArchivePlot()
 {
   const auto *descriptor = ExtensionObjectRegistry::instance().descriptor(
       QStringLiteral("qtedm_archive_plot"));
@@ -84,7 +84,7 @@ void TestPhase3::registryContainsArchivePlot()
   QCOMPARE(descriptor->category, QStringLiteral("Monitors"));
 }
 
-void TestPhase3::archiverResponseParsingAndDecimation()
+void TestArchivesSnapshots::archiverResponseParsingAndDecimation()
 {
   QJsonArray data;
   for (int index = 0; index < 20; ++index) {
@@ -121,7 +121,7 @@ void TestPhase3::archiverResponseParsingAndDecimation()
   QVERIFY(empty.samples.isEmpty());
 }
 
-void TestPhase3::archiverResponseFailuresRemainVisible()
+void TestArchivesSnapshots::archiverResponseFailuresRemainVisible()
 {
   const ArchiveResult malformed = ArchiverApplianceProvider::parseJson(
       QByteArrayLiteral("{not-json"), 10, 1024);
@@ -154,7 +154,7 @@ void TestPhase3::archiverResponseFailuresRemainVisible()
   QVERIFY(overflow.samples.isEmpty());
 }
 
-void TestPhase3::archiveMergePrefersLiveTimestamp()
+void TestArchivesSnapshots::archiveMergePrefersLiveTimestamp()
 {
   QVector<ArchiveSample> historical{
       {1000, 1.0, 0, 0}, {2000, 2.0, 0, 0},
@@ -170,7 +170,7 @@ void TestPhase3::archiveMergePrefersLiveTimestamp()
   QCOMPARE(merged.last().timestampMs, 4000);
 }
 
-void TestPhase3::archiveRequestCanBeCancelled()
+void TestArchivesSnapshots::archiveRequestCanBeCancelled()
 {
   ArchiverApplianceProvider provider;
   provider.setRetrievalUrl(QString());
@@ -191,7 +191,7 @@ void TestPhase3::archiveRequestCanBeCancelled()
   QVERIFY(observed.cancelled);
 }
 
-void TestPhase3::archiveRequestTimesOut()
+void TestArchivesSnapshots::archiveRequestTimesOut()
 {
   StalledNetworkAccessManager network;
   ArchiverApplianceProvider provider(nullptr, &network);
@@ -214,7 +214,7 @@ void TestPhase3::archiveRequestTimesOut()
   QVERIFY(observed.error.contains(QStringLiteral("timed out")));
 }
 
-void TestPhase3::archiveHistoryPreservesTimestampGaps()
+void TestArchivesSnapshots::archiveHistoryPreservesTimestampGaps()
 {
   StripChartElement chart;
   chart.resize(640, 320);
@@ -243,7 +243,7 @@ void TestPhase3::archiveHistoryPreservesTimestampGaps()
   QVERIFY(chart.sampleIntervalSeconds() > 0.0);
 }
 
-void TestPhase3::snapshotRoundTripPreservesTypedValues()
+void TestArchivesSnapshots::snapshotRoundTripPreservesTypedValues()
 {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -301,7 +301,7 @@ void TestPhase3::snapshotRoundTripPreservesTypedValues()
   QCOMPARE(loaded.document.entries.at(2).value.toArray().size(), 3);
 }
 
-void TestPhase3::snapshotRejectsFutureSchemaAndUnsafeValues()
+void TestArchivesSnapshots::snapshotRejectsFutureSchemaAndUnsafeValues()
 {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -387,7 +387,7 @@ void TestPhase3::snapshotRejectsFutureSchemaAndUnsafeValues()
       fractionalInteger, &error));
 }
 
-void TestPhase3::restoreChecksPolicyTypeAccessAndLimits()
+void TestArchivesSnapshots::restoreChecksPolicyTypeAccessAndLimits()
 {
   PvSnapshotEntry saved;
   saved.provider = QStringLiteral("ca");
@@ -445,6 +445,6 @@ void TestPhase3::restoreChecksPolicyTypeAccessAndLimits()
   QCOMPARE(unavailable.displayValue(), QStringLiteral("Unavailable"));
 }
 
-QTEST_MAIN(TestPhase3)
+QTEST_MAIN(TestArchivesSnapshots)
 
-#include "test_phase3.moc"
+#include "test_archives_snapshots.moc"

@@ -27,14 +27,14 @@ fi
 "${QTEDM_CONVERT_BIN}" --help \
   | grep -q "Exit status: 0 complete, 2 converted with warnings, 1 fatal"
 
-conversion_dir="${QTEDM_TEST_TMP_DIR}/phase4-conversion"
+conversion_dir="${QTEDM_TEST_TMP_DIR}/display-import-conversion"
 mkdir -p "${conversion_dir}"
 set +e
 "${QTEDM_CONVERT_BIN}" \
   --output "${conversion_dir}/converted.adl" \
   --report "${conversion_dir}/report.json" \
   --source-copy "${conversion_dir}/source.ui" \
-  "${SCRIPT_DIR}/fixtures/phase4/caqtdm_mixed.ui"
+  "${SCRIPT_DIR}/fixtures/display_import/caqtdm_mixed.ui"
 conversion_status=$?
 set -e
 if [[ "${conversion_status}" -ne 2 ]]; then
@@ -43,7 +43,7 @@ if [[ "${conversion_status}" -ne 2 ]]; then
 fi
 test -s "${conversion_dir}/converted.adl"
 test -s "${conversion_dir}/report.json"
-cmp -s "${SCRIPT_DIR}/fixtures/phase4/caqtdm_mixed.ui" \
+cmp -s "${SCRIPT_DIR}/fixtures/display_import/caqtdm_mixed.ui" \
   "${conversion_dir}/source.ui"
 grep -q "qtedm_tabbed_display" "${conversion_dir}/converted.adl"
 grep -q "qtedm_ndarray_image" "${conversion_dir}/converted.adl"

@@ -15,14 +15,14 @@
 #include "setpoint_control_element.h"
 #include "soft_pv_registry.h"
 
-class TestPhase1 : public QObject
+class TestObserveOnlyControls : public QObject
 {
   Q_OBJECT
 
 private slots:
   void init();
   void cleanup();
-  void registryContainsPhase1Objects();
+  void registryContainsSafetyControlObjects();
   void observeOnlyBlocksEverySoftPvWriteKind();
   void extensionWidgetPropertiesRoundTripInMemory();
 
@@ -30,13 +30,13 @@ private:
   QStringList registeredNames_;
 };
 
-void TestPhase1::init()
+void TestObserveOnlyControls::init()
 {
   PvChannelManager::instance().setObserveOnly(false);
   AuditLogger::instance().initialize(false);
 }
 
-void TestPhase1::cleanup()
+void TestObserveOnlyControls::cleanup()
 {
   auto &soft = SoftPvRegistry::instance();
   for (const QString &name : registeredNames_) {
@@ -50,7 +50,7 @@ void TestPhase1::cleanup()
   qunsetenv("QTEDM_AUDIT_DIR");
 }
 
-void TestPhase1::registryContainsPhase1Objects()
+void TestObserveOnlyControls::registryContainsSafetyControlObjects()
 {
   auto &registry = ExtensionObjectRegistry::instance();
   const auto *symbol = registry.descriptor(QStringLiteral("qtedm_symbol"));
@@ -66,7 +66,7 @@ void TestPhase1::registryContainsPhase1Objects()
   QVERIFY(registry.descriptors().size() >= 3);
 }
 
-void TestPhase1::observeOnlyBlocksEverySoftPvWriteKind()
+void TestObserveOnlyControls::observeOnlyBlocksEverySoftPvWriteKind()
 {
   auto &soft = SoftPvRegistry::instance();
   auto registerWritable = [this, &soft](const QString &name) {
@@ -149,7 +149,7 @@ void TestPhase1::observeOnlyBlocksEverySoftPvWriteKind()
   AuditLogger::instance().shutdown();
 }
 
-void TestPhase1::extensionWidgetPropertiesRoundTripInMemory()
+void TestObserveOnlyControls::extensionWidgetPropertiesRoundTripInMemory()
 {
   LedMonitorElement symbol;
   symbol.setQtedmSymbol(true);
@@ -220,6 +220,6 @@ void TestPhase1::extensionWidgetPropertiesRoundTripInMemory()
   }
 }
 
-QTEST_MAIN(TestPhase1)
+QTEST_MAIN(TestObserveOnlyControls)
 
-#include "test_phase1.moc"
+#include "test_observe_only_controls.moc"

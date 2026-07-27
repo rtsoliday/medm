@@ -1,5 +1,5 @@
 file {
-  name="test_QtEDMPhase3.adl"
+  name="test_QtEDMTabbedDisplaysSessions.adl"
   version=030122
 }
 display {
@@ -94,34 +94,44 @@ text {
     height=28
   }
   "basic attribute" {
-    clr=14
+    clr=54
   }
-  textix="QtEDM Phase 3 - Archive History with Live Fallback"
+  textix="QtEDM Tabbed Displays and Sessions"
   align="horiz. centered"
 }
-qtedm_archive_plot {
+qtedm_tabbed_display {
   object {
     x=20
     y=50
     width=660
     height=350
   }
-  plotcom {
-    title="Archive and Live Trend"
-    xlabel="Seconds"
-    ylabel="Value"
-    clr=14
-    bclr=4
+  mode="tabs"
+  active_page="live"
+  page {
+    id="live"
+    label="Live Overview"
+    display="qtedm_tabbed_child_live.adl"
+    macros="TITLE=Live Overview,DETAIL=Inactive pages unsubscribe"
+    keepAlive="false"
   }
-  maxPoints=512
-  liveMerge=true
-  pen[0] {
-    chan="strip:test:alpha"
-    clr=15
-    limits {
-      loprSrc="default"
-      hoprSrc="default"
-      hoprDefault=100
-    }
+  page {
+    id="retained"
+    label="Retained"
+    display="qtedm_tabbed_child_retained.adl"
+    macros="TITLE=Retained Page,DETAIL=keepAlive retains subscriptions"
+    keepAlive="true"
+  }
+  page {
+    id="missing"
+    label="Missing Child"
+    display="qtedm_tabbed_missing.adl"
+    keepAlive="false"
+  }
+  page {
+    id="recursive"
+    label="Recursive Guard"
+    display="test_QtEDMTabbedDisplaysSessions.adl"
+    keepAlive="false"
   }
 }

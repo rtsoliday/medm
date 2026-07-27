@@ -2009,47 +2009,48 @@ set_related_display_test_pvs() {
   echo "Related display harness uses launch links only for tests/test_RelatedDisplay.adl (no PV initialization required)."
 }
 
-set_qtedm_phase1_test_pvs() {
+set_qtedm_safety_controls_test_pvs() {
   local _prefix="$1"
 
-  # tests/test_QtEDMPhase1.adl intentionally reuses the deterministic channels
+  # tests/test_QtEDMSafetyControls.adl reuses the deterministic channels
   # initialized by set_led_monitor_test_pvs and
   # set_setpoint_control_test_pvs.  Keeping one producer setup avoids the two
   # harnesses racing to assign different limits or initial values.
-  echo "QtEDM Phase 1 extension PVs initialized by the LED and setpoint harnesses."
+  echo "QtEDM safety-control PVs initialized by the LED and setpoint harnesses."
 }
 
-set_qtedm_phase2_test_pvs() {
+set_qtedm_tabbed_displays_test_pvs() {
   local _prefix="$1"
 
-  # The child displays use the same deterministic channels as the Phase 1
-  # LED and setpoint fixtures.
-  echo "QtEDM Phase 2 child-display PVs initialized by the LED and setpoint harnesses."
+  # The child displays use the same deterministic channels as the LED and
+  # setpoint fixtures.
+  echo "QtEDM tabbed-child PVs initialized by the LED and setpoint harnesses."
 }
 
-set_qtedm_phase3_test_pvs() {
+set_qtedm_archive_snapshot_test_pvs() {
   local _prefix="$1"
 
-  # tests/test_QtEDMPhase3.adl uses the deterministic strip-chart ramp.
-  echo "QtEDM Phase 3 archive-plot live PV initialized by the strip-chart harness."
+  # tests/test_QtEDMArchiveSnapshots.adl uses the deterministic strip-chart
+  # ramp.
+  echo "QtEDM archive-plot PV initialized by the strip-chart harness."
 }
 
-set_qtedm_phase4_test_pvs() {
+set_qtedm_ndarray_test_pvs() {
   local _prefix="$1"
 
-  # The Phase 4 fixture intentionally uses a disconnected structured PVA
-  # endpoint. sddsSoftIOC does not synthesize NTNDArray structures, so the
-  # deterministic check here is the widget's explicit disconnect rendering.
-  echo "QtEDM Phase 4 uses a disconnected PVA NTNDArray endpoint; no scalar IOC initialization is required."
+  # The fixture intentionally uses a disconnected structured PVA endpoint.
+  # sddsSoftIOC does not synthesize NTNDArray structures, so the deterministic
+  # check here is the widget's explicit disconnect rendering.
+  echo "QtEDM NTNDArray fixture uses a disconnected structured PVA endpoint."
 }
 
-set_qtedm_phase5_test_pvs() {
+set_qtedm_plugins_rules_test_pvs() {
   local _prefix="$1"
 
-  # tests/test_QtEDMPhase5.adl intentionally reuses the deterministic
+  # tests/test_QtEDMPluginsPropertyRules.adl reuses the deterministic
   # led:test:binary_live channel initialized by set_led_monitor_test_pvs.
   # The rule runtime is monitor-only and must never issue a write.
-  echo "QtEDM Phase 5 rule input initialized by the LED monitor harness."
+  echo "QtEDM property-rule input initialized by the LED monitor harness."
 }
 
 cleanup() {
@@ -2105,11 +2106,11 @@ set_text_fonts_test_pvs "${PV_PREFIX}" || true
 set_text_area_test_pvs "${PV_PREFIX}" || true
 set_text_entry_test_pvs "${PV_PREFIX}" || true
 set_setpoint_control_test_pvs "${PV_PREFIX}" || true
-set_qtedm_phase1_test_pvs "${PV_PREFIX}" || true
-set_qtedm_phase2_test_pvs "${PV_PREFIX}" || true
-set_qtedm_phase3_test_pvs "${PV_PREFIX}" || true
-set_qtedm_phase4_test_pvs "${PV_PREFIX}" || true
-set_qtedm_phase5_test_pvs "${PV_PREFIX}" || true
+set_qtedm_safety_controls_test_pvs "${PV_PREFIX}" || true
+set_qtedm_tabbed_displays_test_pvs "${PV_PREFIX}" || true
+set_qtedm_archive_snapshot_test_pvs "${PV_PREFIX}" || true
+set_qtedm_ndarray_test_pvs "${PV_PREFIX}" || true
+set_qtedm_plugins_rules_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 if [[ -n "${READY_FILE}" ]]; then

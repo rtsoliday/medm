@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -113,6 +114,18 @@ def compare_images(compare_tool: Path, expected: Path, actual: Path, diff: Path,
       f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
 
 
+def resolve_golden_path(repo_root: Path, case: dict,
+    update_goldens: bool) -> Path:
+  generic = (repo_root / case["golden"]).resolve()
+  variant = os.environ.get(
+      "QTEDM_VISUAL_GOLDEN_VARIANT",
+      f"{platform.system()}-{platform.machine()}")
+  candidate = generic.parent / variant / generic.name
+  if candidate.is_file() or (update_goldens and candidate.parent.is_dir()):
+    return candidate
+  return generic
+
+
 def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
     prefix: str, temp_dir: Path, update_goldens: bool) -> None:
   display_path = (repo_root / case["display"]).resolve()
@@ -124,7 +137,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
   ready_path = temp_dir / f"{case['name']}.ready"
   actual_path = temp_dir / f"{case['name']}.png"
   diff_path = temp_dir / f"{case['name']}.diff.png"
-  golden_path = (repo_root / case["golden"]).resolve()
+  golden_path = resolve_golden_path(repo_root, case, update_goldens)
 
   command = [
       str(qtedm_bin),

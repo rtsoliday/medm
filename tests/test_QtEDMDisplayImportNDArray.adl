@@ -1,13 +1,13 @@
 file {
-  name="test_QtEDMPhase2.adl"
+  name="test_QtEDMDisplayImportNDArray.adl"
   version=030122
 }
 display {
   object {
     x=120
     y=120
-    width=700
-    height=430
+    width=720
+    height=480
   }
   clr=14
   bclr=4
@@ -90,48 +90,45 @@ text {
   object {
     x=20
     y=10
-    width=660
-    height=28
+    width=680
+    height=30
   }
   "basic attribute" {
-    clr=54
+    clr=14
   }
-  textix="QtEDM Phase 2 - Lazy Tabbed Child Displays"
+  textix="QtEDM Display Import and Raw PVA NTNDArray"
   align="horiz. centered"
 }
-qtedm_tabbed_display {
+qtedm_ndarray_image {
   object {
     x=20
     y=50
-    width=660
+    width=680
     height=350
   }
-  mode="tabs"
-  active_page="live"
-  page {
-    id="live"
-    label="Live Overview"
-    display="qtedm_phase2_child_live.adl"
-    macros="TITLE=Live Overview,DETAIL=Inactive pages unsubscribe"
-    keepAlive="false"
+  title="Disconnected structured-image test"
+  dataPv="pva://qtedm:test:NTNDArray"
+  colorMap="jet"
+  rangeMode="manual"
+  rangeMin=-5
+  rangeMax=500
+  flipHorizontal="true"
+  rotation="90"
+  showPixelProbe="false"
+  maxInputBytes=67108864
+  maxOutputBytes=33554432
+  maxDimension=4096
+}
+text {
+  object {
+    x=20
+    y=410
+    width=680
+    height=45
   }
-  page {
-    id="retained"
-    label="Retained"
-    display="qtedm_phase2_child_retained.adl"
-    macros="TITLE=Retained Page,DETAIL=keepAlive retains subscriptions"
-    keepAlive="true"
+  "basic attribute" {
+    clr=14
   }
-  page {
-    id="missing"
-    label="Missing Child"
-    display="qtedm_phase2_missing.adl"
-    keepAlive="false"
-  }
-  page {
-    id="recursive"
-    label="Recursive Guard"
-    display="test_QtEDMPhase2.adl"
-    keepAlive="false"
-  }
+  textix="Expected: explicit disconnect state. With an areaDetector PVA source, verify newest-frame decoding, zoom/pan, ID/timestamp, and dropped-frame counter."
+  align="horiz. centered"
 }

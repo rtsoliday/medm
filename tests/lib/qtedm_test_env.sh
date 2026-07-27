@@ -7,6 +7,22 @@ QTEDM_TEST_REPO_ROOT="$(cd "${QTEDM_TEST_LIB_DIR}/../.." && pwd)"
 QTEDM_TEST_TMP_DIR="${QTEDM_TEST_TMP_DIR:-}"
 QTEDM_TEST_CHILD_PIDS="${QTEDM_TEST_CHILD_PIDS:-}"
 
+qtedm_test_setup_sdds_tools() {
+  local host_arch=""
+  local sdds_epics_bin=""
+
+  host_arch="$(uname -s)-$(uname -m)"
+  sdds_epics_bin="${QTEDM_TEST_REPO_ROOT}/../SDDS-EPICS/bin/${host_arch}"
+  if [[ -z "${SDDS_SOFT_IOC_REAL_BIN:-}" \
+      && -x "${sdds_epics_bin}/sddsSoftIOC" ]]; then
+    export SDDS_SOFT_IOC_REAL_BIN="${sdds_epics_bin}/sddsSoftIOC"
+  fi
+  if [[ -z "${CAVPUT_REAL_BIN:-}" \
+      && -x "${sdds_epics_bin}/cavput" ]]; then
+    export CAVPUT_REAL_BIN="${sdds_epics_bin}/cavput"
+  fi
+}
+
 qtedm_test_setup_env() {
   if [[ -z "${QTEDM_TEST_TMP_DIR}" ]]; then
     QTEDM_TEST_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qtedm-tests.XXXXXX")"
@@ -23,6 +39,12 @@ qtedm_test_setup_env() {
   export HOME="${QTEDM_TEST_TMP_DIR}/home"
   export EPICS_CA_ADDR_LIST=localhost
   export EPICS_CA_AUTO_ADDR_LIST=NO
+  export EPICS_PVA_ADDR_LIST=127.0.0.1
+  export EPICS_PVA_AUTO_ADDR_LIST=NO
+  export EPICS_PVAS_INTF_ADDR_LIST=127.0.0.1
+  export EPICS_PVAS_BEACON_ADDR_LIST=127.0.0.1
+  export EPICS_PVAS_AUTO_BEACON_ADDR_LIST=NO
+  qtedm_test_setup_sdds_tools
 }
 
 qtedm_test_default_qtedm_bin() {

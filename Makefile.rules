@@ -288,7 +288,12 @@ else
 endif
 
 ifeq ($(OS), Windows)
-  LIB_LINK_DIRS = -LIBPATH:$(DD)../lib/$(OS)-$(ARCH) -LIBPATH:$(DD)../../gsl/lib
+  ifneq ($(strip $(GSL_REPO)),)
+    WINDOWS_GSL_LIB_DIR = $(GSL_REPO)/lib
+  else
+    WINDOWS_GSL_LIB_DIR = $(DD)../../gsl/lib
+  endif
+  LIB_LINK_DIRS = -LIBPATH:$(DD)../lib/$(OS)-$(ARCH) -LIBPATH:$(WINDOWS_GSL_LIB_DIR)
 else
   LIB_LINK_DIRS = -L$(DD)../lib/$(OS)-$(ARCH)
 endif

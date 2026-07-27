@@ -53,6 +53,19 @@ def _apply_string_filter(
   return _rebuild_entries_after_filter(entries, filtered)
 
 
+def _native_child_path(path: Path) -> str:
+  """Return a path suitable for a native child launched from Cygwin."""
+  if sys.platform.startswith("cygwin"):
+    result = subprocess.run(
+        ["cygpath", "-w", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        check=True,
+    )
+    return result.stdout.strip()
+  return str(path)
+
 def run_qtedm(adl_path: Path, qtedm_path: Path, output_path: Path) -> int:
   """Invoke qtedm -testSave for the provided ADL file."""
   result = subprocess.run(
@@ -60,8 +73,8 @@ def run_qtedm(adl_path: Path, qtedm_path: Path, output_path: Path) -> int:
           str(qtedm_path),
           "-testSave",
           "-testSaveOutput",
-          str(output_path),
-          str(adl_path),
+          _native_child_path(output_path),
+          _native_child_path(adl_path),
       ],
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,

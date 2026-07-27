@@ -12,6 +12,8 @@ qtedm_test_setup_env
 
 QTEDM_BIN="${QTEDM_BIN:-$(qtedm_test_default_qtedm_bin)}"
 QTEDM_CONVERT_BIN="${QTEDM_CONVERT_BIN:-}"
+QTEDM_BIN="$(qtedm_test_posix_path "${QTEDM_BIN}")"
+QTEDM_CONVERT_BIN="$(qtedm_test_posix_path "${QTEDM_CONVERT_BIN}")"
 
 python3 "${SCRIPT_DIR}/testADL_SaveFiles.py" \
   --qtedm "${QTEDM_BIN}" \
@@ -31,10 +33,10 @@ conversion_dir="${QTEDM_TEST_TMP_DIR}/display-import-conversion"
 mkdir -p "${conversion_dir}"
 set +e
 "${QTEDM_CONVERT_BIN}" \
-  --output "${conversion_dir}/converted.adl" \
-  --report "${conversion_dir}/report.json" \
-  --source-copy "${conversion_dir}/source.ui" \
-  "${SCRIPT_DIR}/fixtures/display_import/caqtdm_mixed.ui"
+  --output "$(qtedm_test_native_path "${conversion_dir}/converted.adl")" \
+  --report "$(qtedm_test_native_path "${conversion_dir}/report.json")" \
+  --source-copy "$(qtedm_test_native_path "${conversion_dir}/source.ui")" \
+  "$(qtedm_test_native_path "${SCRIPT_DIR}/fixtures/display_import/caqtdm_mixed.ui")"
 conversion_status=$?
 set -e
 if [[ "${conversion_status}" -ne 2 ]]; then
@@ -50,7 +52,7 @@ grep -q "qtedm_ndarray_image" "${conversion_dir}/converted.adl"
 grep -q '"schema_version": 1' "${conversion_dir}/report.json"
 
 set +e
-"${QTEDM_CONVERT_BIN}" "${SCRIPT_DIR}/index.adl" >/dev/null 2>&1
+"${QTEDM_CONVERT_BIN}" "$(qtedm_test_native_path "${SCRIPT_DIR}/index.adl")" >/dev/null 2>&1
 fatal_status=$?
 set -e
 if [[ "${fatal_status}" -ne 1 ]]; then

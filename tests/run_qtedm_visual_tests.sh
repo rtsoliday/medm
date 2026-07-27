@@ -22,6 +22,8 @@ chmod 700 "${XDG_RUNTIME_DIR}"
 
 QTEDM_BIN="${QTEDM_BIN:-$(qtedm_test_default_qtedm_bin)}"
 QTEDM_IMAGE_COMPARE_BIN="${QTEDM_IMAGE_COMPARE_BIN:-${QTEDM_TEST_REPO_ROOT}/qtedm/O.$(uname -s)-$(uname -m)/qtedm_image_compare}"
+QTEDM_BIN="$(qtedm_test_posix_path "${QTEDM_BIN}")"
+QTEDM_IMAGE_COMPARE_BIN="$(qtedm_test_posix_path "${QTEDM_IMAGE_COMPARE_BIN}")"
 
 python3 "${SCRIPT_DIR}/qtedm_visual_tests.py" \
   --qtedm "${QTEDM_BIN}" \

@@ -18,21 +18,33 @@ resolve_ioc() {
   printf '%s\n' "${candidate}"
 }
 
+run_ioc() {
+  local binary="$1"
+  shift
+
+  if [[ "$(uname -s)" == CYGWIN* && "${binary,,}" == *.exe && $# -gt 0 ]]; then
+    local sdds_file="$1"
+    shift
+    exec "${binary}" "$(cygpath -m "${sdds_file}")" "$@"
+  fi
+  exec "${binary}" "$@"
+}
+
 if [[ -n "${SDDS_SOFT_IOC_REAL_BIN:-}" ]]; then
-  exec "${SDDS_SOFT_IOC_REAL_BIN}" "$@"
+  run_ioc "${SDDS_SOFT_IOC_REAL_BIN}" "$@"
 fi
 
 if resolved="$(resolve_ioc "${SCRIPT_PATH}.backup")"; then
-  exec "${resolved}" "$@"
+  run_ioc "${resolved}" "$@"
 fi
 
 candidate="$(command -v sddsSoftIOC 2>/dev/null || true)"
 if resolved="$(resolve_ioc "${candidate}")"; then
-  exec "${resolved}" "$@"
+  run_ioc "${resolved}" "$@"
 fi
 
 if resolved="$(resolve_ioc "/usr/local/oag/apps/bin/linux-x86_64/sddsSoftIOC")"; then
-  exec "${resolved}" "$@"
+  run_ioc "${resolved}" "$@"
 fi
 
 echo "sddsSoftIOC binary not found. Set SDDS_SOFT_IOC_REAL_BIN to an installed sddsSoftIOC executable." >&2

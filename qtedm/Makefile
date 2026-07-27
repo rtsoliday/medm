@@ -34,7 +34,10 @@ ifeq ($(OS), Windows)
   QT_CORE_PKG := Qt$(QT_VERSION)Core
   QT_TEST_PKG := Qt$(QT_VERSION)Test
   QT_DIR_FWD := $(subst \\,/,$(QT_DIR))
-  QT_WIDGETS_CFLAGS := -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg" -I"$(QT_DIR_FWD)/include/QtNetwork"
+  QT_MODULE_DEFINES := -DQT_NO_DEBUG -DQT_CORE_LIB -DQT_GUI_LIB \
+    -DQT_WIDGETS_LIB \
+    -DQT_PRINTSUPPORT_LIB -DQT_SVG_LIB -DQT_NETWORK_LIB
+  QT_WIDGETS_CFLAGS := $(QT_MODULE_DEFINES) -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg" -I"$(QT_DIR_FWD)/include/QtNetwork"
   QT_TEST_CFLAGS := -I"$(QT_DIR_FWD)/include/QtTest"
 else
   # Detect Qt version: prefer Qt6, fallback to Qt5
@@ -360,10 +363,11 @@ ifeq ($(OS), Windows)
   MOC = "$(QT_DIR_FWD)/bin/moc.exe"
 
   PVA_CXX17_OBJS = $(OBJ_DIR)/pvaSDDS.$(OBJEXT) \
-                   $(OBJ_DIR)/pva_bridge.$(OBJEXT) \
-                   $(OBJ_DIR)/pva_ntndarray_source.$(OBJEXT)
+                   $(OBJ_DIR)/pva_bridge.$(OBJEXT)
 
 $(PVA_CXX17_OBJS): CCFLAGS := $(filter-out /std:c++20 /permissive-,$(CCFLAGS)) /std:c++17
+
+$(OBJ_DIR)/pva_ntndarray_source.$(OBJEXT): CCFLAGS := $(filter-out /std:c++20,$(CCFLAGS)) /std:c++17 /Zc:twoPhase-
 endif
 
 ifeq ($(QTEDM_PCH_ENABLED),1)
@@ -567,9 +571,14 @@ $(PLUGIN_API_TEST_LIBRARY): \
 	$(CCC) -shared -o $@ $< $(LDFLAGS)
 endif
 
+QTEDM_UNIT_TEST_PLATFORM_LIBS =
+ifeq ($(OS), Windows)
+  QTEDM_UNIT_TEST_PLATFORM_LIBS = $(LIB_LINK_DIRS) $(PROD_LIBS)
+endif
+
 define link_qtedm_unit_test
 $(OBJ_DIR)/$(1)$(EXEEXT): $$($(1)_OBJS)
-	$$(LINKEXE) $$(OUTPUTEXE) $$^ $$(LDFLAGS) $$(QT_TEST_LIBS) $$(PROD_SYS_LIBS)
+	$$(LINKEXE) $$(OUTPUTEXE) $$^ $$(LDFLAGS) $$(QT_TEST_LIBS) $$(QTEDM_UNIT_TEST_PLATFORM_LIBS) $$(PROD_SYS_LIBS)
 endef
 
 $(foreach test,$(QTEDM_UNIT_TEST_NAMES),$(eval $(call link_qtedm_unit_test,$(test))))

@@ -7,19 +7,49 @@ QTEDM_TEST_REPO_ROOT="$(cd "${QTEDM_TEST_LIB_DIR}/../.." && pwd)"
 QTEDM_TEST_TMP_DIR="${QTEDM_TEST_TMP_DIR:-}"
 QTEDM_TEST_CHILD_PIDS="${QTEDM_TEST_CHILD_PIDS:-}"
 
+qtedm_test_posix_path() {
+  local path="${1:-}"
+  if command -v cygpath >/dev/null 2>&1 \
+      && [[ "${path}" =~ ^[[:alpha:]]:[/\\] ]]; then
+    cygpath -u "${path}"
+  else
+    printf '%s\n' "${path}"
+  fi
+}
+
+qtedm_test_native_path() {
+  local path="${1:-}"
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "${path}"
+  else
+    printf '%s\n' "${path}"
+  fi
+}
+
 qtedm_test_setup_sdds_tools() {
+  local executable_suffix=""
   local host_arch=""
+  local sdds_epics_root=""
   local sdds_epics_bin=""
 
-  host_arch="$(uname -s)-$(uname -m)"
-  sdds_epics_bin="${QTEDM_TEST_REPO_ROOT}/../SDDS-EPICS/bin/${host_arch}"
+  case "$(uname -s)" in
+    CYGWIN*)
+      host_arch="Windows-x86_64"
+      executable_suffix=".exe"
+      ;;
+    *)
+      host_arch="$(uname -s)-$(uname -m)"
+      ;;
+  esac
+  sdds_epics_root="${SDDS_EPICS_ROOT:-${QTEDM_TEST_REPO_ROOT}/../SDDS-EPICS}"
+  sdds_epics_bin="${sdds_epics_root}/bin/${host_arch}"
   if [[ -z "${SDDS_SOFT_IOC_REAL_BIN:-}" \
-      && -x "${sdds_epics_bin}/sddsSoftIOC" ]]; then
-    export SDDS_SOFT_IOC_REAL_BIN="${sdds_epics_bin}/sddsSoftIOC"
+      && -x "${sdds_epics_bin}/sddsSoftIOC${executable_suffix}" ]]; then
+    export SDDS_SOFT_IOC_REAL_BIN="${sdds_epics_bin}/sddsSoftIOC${executable_suffix}"
   fi
   if [[ -z "${CAVPUT_REAL_BIN:-}" \
-      && -x "${sdds_epics_bin}/cavput" ]]; then
-    export CAVPUT_REAL_BIN="${sdds_epics_bin}/cavput"
+      && -x "${sdds_epics_bin}/cavput${executable_suffix}" ]]; then
+    export CAVPUT_REAL_BIN="${sdds_epics_bin}/cavput${executable_suffix}"
   fi
 }
 

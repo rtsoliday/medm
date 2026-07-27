@@ -13,6 +13,10 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
+#include <QJsonValue>
 #include <QSpinBox>
 #include <QTableWidget>
 

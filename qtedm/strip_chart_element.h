@@ -7,6 +7,7 @@
 #include <QColor>
 #include <QFont>
 #include <QPixmap>
+#include <QVector>
 #include <QWidget>
 
 #include "monitor_properties.h"
@@ -69,8 +70,21 @@ public:
   void setRuntimeReadAccess(int index, bool readAccess);
   void setRuntimeLimits(int index, double low, double high);
   void addRuntimeSample(int index, double value, qint64 timestampMs);
+  void replaceRuntimeHistory(int index, const QVector<double> &values,
+      const QVector<qint64> &timestamps, qint64 windowStartMs,
+      qint64 windowEndMs);
   void clearRuntimeState();
   void clearPenRuntimeState(int index);
+
+  bool isArchivePlot() const;
+  void setArchivePlot(bool enabled);
+  int archiveMaximumPoints() const;
+  void setArchiveMaximumPoints(int maximumPoints);
+  bool archiveLiveMerge() const;
+  void setArchiveLiveMerge(bool enabled);
+  QString archiveStatus() const;
+  void setArchiveStatus(const QString &status);
+  double historyDurationSeconds() const;
 
   // Data export methods
   int sampleCount() const;
@@ -235,4 +249,9 @@ private:
   mutable double autoscaleLow_ = 0.0;   // Cached autoscale limits
   mutable double autoscaleHigh_ = 1.0;
   mutable bool autoscaleLimitsValid_ = false;
+
+  bool archivePlot_ = false;
+  int archiveMaximumPoints_ = 5000;
+  bool archiveLiveMerge_ = true;
+  QString archiveStatus_;
 };

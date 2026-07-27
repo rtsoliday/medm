@@ -1355,5 +1355,22 @@
       "active_page": "recursive",
       "loaded_pages": 0
     }
+  },
+  {
+    "name": "qtedm_archive_plot_live_fallback",
+    "display": "tests/test_QtEDMPhase3.adl",
+    "selector": {
+      "type": "qtedm_archive_plot",
+      "channel": "strip:test:alpha"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "archive_backed": true,
+      "maximum_points": 512,
+      "live_merge": true,
+      "connected": true,
+      "archive_complete": true,
+      "archive_failed": true
+    }
   }
 ]

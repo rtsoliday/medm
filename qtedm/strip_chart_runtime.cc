@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QDebug>
 #include <QDateTime>
+#include <QPointer>
 
 #include <db_access.h>
 #include <epicsTime.h>
@@ -75,12 +76,19 @@ void StripChartRuntime::start()
     pen.canRead = false;
     pen.fieldType = -1;
     pen.elementCount = 1;
+    pen.historicalSamples.clear();
+    pen.liveSamples.clear();
+    pen.archiveComplete = false;
+    pen.archiveFailed = false;
 
     if (pen.channelName.isEmpty()) {
       continue;
     }
 
     subscribePen(i);
+    if (element_->isArchivePlot()) {
+      requestArchive(i);
+    }
   }
 }
 
@@ -124,6 +132,86 @@ void StripChartRuntime::subscribePen(int index)
         handleAccessRightsEvent(index, canRead, canWrite);
       },
       ChannelDeliveryMode::kRealtime);
+}
+
+void StripChartRuntime::requestArchive(int index)
+{
+  if (!started_ || !element_ || !element_->isArchivePlot()
+      || index < 0 || index >= kStripChartPenCount) {
+    return;
+  }
+  PenState &pen = pens_[index];
+  if (pen.archiveRequest) {
+    pen.archiveRequest->cancel();
+  }
+  const quint64 generation = ++pen.archiveGeneration;
+  const QDateTime to = QDateTime::currentDateTimeUtc();
+  ArchiveQuery query;
+  query.channel = stripPvProtocol(pen.channelName);
+  query.to = to;
+  query.from = to.addMSecs(-static_cast<qint64>(
+      element_->historyDurationSeconds() * 1000.0));
+  query.maximumPoints = element_->archiveMaximumPoints();
+  element_->setArchiveStatus(QStringLiteral("Loading archive history…"));
+
+  QPointer<StripChartRuntime> self(this);
+  pen.archiveRequest = archiveProvider_.query(query, this,
+      [self, index, generation](const ArchiveResult &result) {
+        if (!self || !self->started_ || !self->element_
+            || index < 0 || index >= kStripChartPenCount) {
+          return;
+        }
+        PenState &current = self->pens_[index];
+        if (current.archiveGeneration != generation) {
+          return;
+        }
+        current.archiveRequest.clear();
+        current.archiveComplete = true;
+        current.archiveFailed = !result.ok();
+        if (result.ok()) {
+          current.historicalSamples = result.samples;
+          self->element_->setArchiveStatus(
+              result.samples.isEmpty()
+              ? QStringLiteral("Archive returned no samples; live data continues.")
+              : QStringLiteral("Loaded %1 archive sample(s).")
+                    .arg(result.samples.size()));
+          self->applyMergedHistory(index);
+        } else if (!result.cancelled) {
+          self->element_->setArchiveStatus(
+              QStringLiteral("%1 Live data continues.").arg(result.error));
+        }
+      });
+}
+
+void StripChartRuntime::applyMergedHistory(int index)
+{
+  if (!started_ || !element_ || index < 0
+      || index >= kStripChartPenCount) {
+    return;
+  }
+  PenState &pen = pens_[index];
+  const qint64 minimumTimestamp = QDateTime::currentMSecsSinceEpoch()
+      - static_cast<qint64>(element_->historyDurationSeconds() * 1000.0);
+  const QVector<ArchiveSample> merged =
+      ArchiverApplianceProvider::mergeAndDecimate(
+          pen.historicalSamples,
+          element_->archiveLiveMerge() ? pen.liveSamples
+                                       : QVector<ArchiveSample>{},
+          element_->archiveMaximumPoints(), minimumTimestamp);
+  QVector<double> values;
+  QVector<qint64> timestamps;
+  values.reserve(merged.size());
+  timestamps.reserve(merged.size());
+  for (const ArchiveSample &sample : merged) {
+    values.append(sample.value);
+    timestamps.append(sample.timestampMs);
+  }
+  const qint64 windowEnd = QDateTime::currentMSecsSinceEpoch();
+  invokeOnElement([index, values, timestamps, minimumTimestamp,
+                      windowEnd](StripChartElement *element) {
+    element->replaceRuntimeHistory(index, values, timestamps,
+        minimumTimestamp, windowEnd);
+  });
 }
 
 void StripChartRuntime::handleAccessRightsEvent(int index, bool canRead,
@@ -187,6 +275,17 @@ void StripChartRuntime::handleConnectionEvent(int index,
     pen.connected = false;
     pen.readAccessKnown = false;
     pen.canRead = false;
+    if (element_ && element_->isArchivePlot() && pen.archiveComplete
+        && !pen.archiveFailed && !pen.historicalSamples.isEmpty()) {
+      invokeOnElement([index](StripChartElement *element) {
+        element->setRuntimeConnected(index, true);
+        element->setRuntimeReadAccessKnown(index, true);
+        element->setRuntimeReadAccess(index, true);
+        element->setArchiveStatus(
+            QStringLiteral("Live PV disconnected; showing archive history."));
+      });
+      return;
+    }
     invokeOnElement([index](StripChartElement *element) {
       element->setRuntimeConnected(index, false);
       element->setRuntimeReadAccessKnown(index, false);
@@ -231,6 +330,25 @@ void StripChartRuntime::handleValueEvent(int index,
     timestampMs = QDateTime::currentMSecsSinceEpoch();
   }
 
+  if (element_ && element_->isArchivePlot()) {
+    ArchiveSample live;
+    live.timestampMs = timestampMs;
+    live.value = numericValue;
+    live.status = data.status;
+    live.severity = data.severity;
+    pen.liveSamples.append(live);
+    const int liveLimit = std::max(element_->archiveMaximumPoints(), 2);
+    if (pen.liveSamples.size() > liveLimit) {
+      pen.liveSamples.remove(0, pen.liveSamples.size() - liveLimit);
+    }
+    if (pen.archiveComplete && !pen.archiveFailed) {
+      if (element_->archiveLiveMerge()) {
+        applyMergedHistory(index);
+      }
+      return;
+    }
+  }
+
   invokeOnElement([index, numericValue, timestampMs](StripChartElement *element) {
     element->addRuntimeSample(index, numericValue, timestampMs);
   });
@@ -248,6 +366,10 @@ void StripChartRuntime::resetPen(int index)
   pen.canRead = false;
   pen.fieldType = -1;
   pen.elementCount = 1;
+  pen.historicalSamples.clear();
+  pen.liveSamples.clear();
+  pen.archiveComplete = false;
+  pen.archiveFailed = false;
 }
 
 void StripChartRuntime::unsubscribePen(int index)
@@ -256,5 +378,10 @@ void StripChartRuntime::unsubscribePen(int index)
     return;
   }
   PenState &pen = pens_[index];
+  if (pen.archiveRequest) {
+    pen.archiveRequest->cancel();
+    pen.archiveRequest.clear();
+  }
+  ++pen.archiveGeneration;
   pen.subscription.reset();
 }

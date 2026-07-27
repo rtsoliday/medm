@@ -445,7 +445,13 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
   snapshot.canWrite = channel->canWrite;
   snapshot.fieldType = data.nativeFieldType;
   snapshot.elementCount = static_cast<unsigned long>(data.nativeElementCount);
+  snapshot.nativeDataType =
+      QString::fromStdString(bridgeData->nativeDataType);
   snapshot.host = QString::fromUtf8(bridgeData->host.c_str());
+  snapshot.numericValue = data.numericValue;
+  snapshot.enumValue = data.enumValue;
+  snapshot.isNumeric = data.isNumeric;
+  snapshot.isEnum = data.isEnum;
   snapshot.units = data.units;
   snapshot.hasUnits = data.hasUnits;
   snapshot.severity = data.severity;

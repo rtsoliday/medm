@@ -413,6 +413,7 @@ bool SoftPvRegistry::infoSnapshot(const QString &name,
   snapshot.name = entry->name;
   snapshot.registered = (entry->preparedCount > 0 || entry->producerCount > 0);
   snapshot.connected = entry->connectedProducerCount > 0;
+  snapshot.writeAccess = entry->writableProducerCount > 0;
   snapshot.hasValue = entry->hasValue;
   snapshot.hasControlInfo = entry->hasControlInfo;
   snapshot.low = entry->low;

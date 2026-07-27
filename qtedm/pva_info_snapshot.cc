@@ -16,8 +16,13 @@ bool getPvaInfoSnapshot(const QString &pvName, PvaInfoSnapshot &snapshot)
   snapshot.canWrite = pvaSnapshot.canWrite;
   snapshot.fieldType = pvaSnapshot.fieldType;
   snapshot.elementCount = pvaSnapshot.elementCount;
+  snapshot.nativeDataType = pvaSnapshot.nativeDataType;
   snapshot.host = pvaSnapshot.host;
   snapshot.value = pvaSnapshot.value;
+  snapshot.numericValue = pvaSnapshot.numericValue;
+  snapshot.enumValue = pvaSnapshot.enumValue;
+  snapshot.isNumeric = pvaSnapshot.isNumeric;
+  snapshot.isEnum = pvaSnapshot.isEnum;
   snapshot.hasValue = pvaSnapshot.hasValue;
   snapshot.arrayValues = pvaSnapshot.arrayValues;
   snapshot.isArray = pvaSnapshot.isArray;

@@ -141,6 +141,10 @@ void printUsage(const QString &program)
       "            (can also set QTEDM_NOLOG=1 environment variable)\n"
       "\n"
       "Environment Variables:\n"
+      "  QTEDM_ARCHIVER_URL=https://host/retrieval\n"
+      "            EPICS Archiver Appliance retrieval root used by\n"
+      "            qtedm_archive_plot objects.\n"
+      "\n"
       "  QTEDM_TIMING_DIAGNOSTICS=1\n"
       "            Enable startup timing diagnostics. Prints timestamped\n"
       "            messages to stderr showing how long each startup phase\n"
@@ -1038,6 +1042,10 @@ int main(int argc, char *argv[])
   auto *saveSessionAct = fileMenu->addAction("Save &Session...");
   auto *restoreSessionAct = fileMenu->addAction("&Restore Session...");
   fileMenu->addSeparator();
+  auto *saveSnapshotAct = fileMenu->addAction("Save PV S&napshot...");
+  auto *restoreSnapshotAct =
+      fileMenu->addAction("&Compare / Restore PV Snapshot...");
+  fileMenu->addSeparator();
   auto *printSetupAct = fileMenu->addAction("Print Set&up...");
   auto *printAct = fileMenu->addAction("&Print");
   printAct->setShortcut(QKeySequence::Print);
@@ -1254,8 +1262,6 @@ int main(int argc, char *argv[])
 // ===========================================================================
 
 //TODO: Implement plot crosshairs showing coordinates at cursor position.
-//TODO: Implement "Save PV Values" snapshot feature for current display state.
-//TODO: Add "Restore PV Values" to write saved snapshot back to IOC.
 //TODO: Add bezier curve support to polyline elements.
 //TODO: Implement arc fill patterns (pie slice vs. chord fill styles).
 //TODO: Implement embedded composite editing (edit children in place).
@@ -1371,6 +1377,18 @@ int main(int argc, char *argv[])
       [state]() {
         if (auto active = state->activeDisplay.data()) {
           active->save();
+        }
+      });
+  QObject::connect(saveSnapshotAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->savePvSnapshot();
+        }
+      });
+  QObject::connect(restoreSnapshotAct, &QAction::triggered, &win,
+      [state]() {
+        if (auto active = state->activeDisplay.data()) {
+          active->compareAndRestorePvSnapshot();
         }
       });
   QObject::connect(printSetupAct, &QAction::triggered, &win,

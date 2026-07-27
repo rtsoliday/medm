@@ -15,6 +15,7 @@ struct SoftPvInfoSnapshot
   QString name;
   bool registered = false;
   bool connected = false;
+  bool writeAccess = false;
   bool hasValue = false;
   short fieldType = DBF_DOUBLE;
   unsigned long elementCount = 1;

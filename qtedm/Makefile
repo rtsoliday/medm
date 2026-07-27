@@ -34,7 +34,7 @@ ifeq ($(OS), Windows)
   QT_CORE_PKG := Qt$(QT_VERSION)Core
   QT_TEST_PKG := Qt$(QT_VERSION)Test
   QT_DIR_FWD := $(subst \\,/,$(QT_DIR))
-  QT_WIDGETS_CFLAGS := -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg"
+  QT_WIDGETS_CFLAGS := -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg" -I"$(QT_DIR_FWD)/include/QtNetwork"
   QT_TEST_CFLAGS := -I"$(QT_DIR_FWD)/include/QtTest"
 else
   # Detect Qt version: prefer Qt6, fallback to Qt5
@@ -46,6 +46,7 @@ else
     QT_SVG_PKG := Qt6Svg
     QT_CORE_PKG := Qt6Core
     QT_TEST_PKG := Qt6Test
+    QT_NETWORK_PKG := Qt6Network
   else
     QT5_AVAILABLE := $(shell pkg-config --exists Qt5Core 2>/dev/null && echo 1)
     ifeq ($(QT5_AVAILABLE),1)
@@ -55,6 +56,7 @@ else
       QT_SVG_PKG := Qt5Svg
       QT_CORE_PKG := Qt5Core
       QT_TEST_PKG := Qt5Test
+      QT_NETWORK_PKG := Qt5Network
     else
       $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
     endif
@@ -117,6 +119,9 @@ qtedm_SRC = qtedm.cc \
             audit_logger.cc \
             extension_object_registry.cc \
             session_manager.cc \
+            archive_provider.cc \
+            pv_snapshot.cc \
+            pv_snapshot_dialog.cc \
             legacy_fonts.cc \
             display_window.cc \
             window_utils.cc \
@@ -228,10 +233,10 @@ CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 ifeq ($(OS), Windows)
  CCFLAGS += /std:c++20 /Zc:__cplusplus /permissive- $(QT_WIDGETS_CFLAGS)
- LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt$(QT_VERSION)PrintSupport.lib Qt$(QT_VERSION)Svg.lib Qt$(QT_VERSION)Widgets.lib Qt$(QT_VERSION)Gui.lib Qt$(QT_VERSION)Core.lib
+ LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt$(QT_VERSION)PrintSupport.lib Qt$(QT_VERSION)Svg.lib Qt$(QT_VERSION)Network.lib Qt$(QT_VERSION)Widgets.lib Qt$(QT_VERSION)Gui.lib Qt$(QT_VERSION)Core.lib
 else
- CCFLAGS += $(shell pkg-config --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
- LDFLAGS += $(shell pkg-config --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG))
+ CCFLAGS += $(shell pkg-config --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
+ LDFLAGS += $(shell pkg-config --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
 endif
 
 ifeq ($(OS), Windows)
@@ -436,7 +441,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_update_coordinator \
                         test_pv_table_model \
                         test_phase1 \
-                        test_phase2
+                        test_phase2 \
+                        test_phase3
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 
@@ -475,6 +481,8 @@ test_phase2_OBJS = $(OBJ_DIR)/test_phase2.$(OBJEXT) \
                    $(OBJ_DIR)/tabbed_display_element.$(OBJEXT) \
                    $(OBJ_DIR)/session_manager.$(OBJEXT) \
                    $(OBJ_DIR)/extension_object_registry.$(OBJEXT)
+test_phase3_OBJS = $(OBJ_DIR)/test_phase3.$(OBJEXT) \
+                   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)

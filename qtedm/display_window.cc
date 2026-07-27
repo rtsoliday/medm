@@ -2,6 +2,9 @@
 
 #include "channel_access_context.h"
 #include "startup_timing.h"
+#include "audit_logger.h"
+#include "pv_channel_manager.h"
+#include "pv_snapshot_dialog.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -11154,8 +11157,9 @@ bool DisplayWindow::populateSoftPvInfoDetails(const QString &channelName,
   details.recordType = QStringLiteral("SOFTPV");
   details.fieldType = snapshot.fieldType;
   details.elementCount = snapshot.elementCount;
+  details.connected = snapshot.connected;
   details.readAccess = true;
-  details.writeAccess = false;
+  details.writeAccess = snapshot.writeAccess;
   details.host = QStringLiteral("QtEDM Local");
   details.severity = snapshot.connected ? NO_ALARM : INVALID_ALARM;
   details.status = 0;
@@ -11180,6 +11184,11 @@ bool DisplayWindow::populateSoftPvInfoDetails(const QString &channelName,
   }
 
   if (snapshot.connected && snapshot.hasValue) {
+    if (!snapshot.isString) {
+      details.numericValue = snapshot.isEnum
+          ? static_cast<double>(snapshot.enumValue) : snapshot.value;
+      details.hasNumericValue = true;
+    }
     if (snapshot.isString) {
       details.value = snapshot.stringValue;
     } else if (snapshot.isEnum && !snapshot.enumStrings.isEmpty()
@@ -11444,10 +11453,14 @@ bool DisplayWindow::populatePvInfoDetails(const QString &channelName, chid exist
 
     details.fieldType = snapshot.fieldType;
     details.elementCount = snapshot.elementCount;
+    details.providerTypeName = snapshot.nativeDataType;
+    details.connected = snapshot.connected;
     details.readAccess = snapshot.canRead;
     details.writeAccess = snapshot.canWrite;
     details.host = snapshot.host;
     details.value = snapshot.value;
+    details.numericValue = snapshot.numericValue;
+    details.hasNumericValue = snapshot.isNumeric || snapshot.isEnum;
     details.hasValue = snapshot.hasValue;
     details.severity = snapshot.severity;
     details.hopr = snapshot.hopr;
@@ -11459,7 +11472,7 @@ bool DisplayWindow::populatePvInfoDetails(const QString &channelName, chid exist
     details.hasUnits = snapshot.hasUnits;
     details.states = snapshot.states;
     details.hasStates = snapshot.hasStates;
-    if (snapshot.isArray && !snapshot.arrayValues.isEmpty()) {
+    if (snapshot.isArray) {
       details.hasArrayData = true;
       applyPvInfoArrayMetadata(details.arrayData, details);
       details.arrayData.numericValues = snapshot.arrayValues;
@@ -11536,6 +11549,7 @@ bool DisplayWindow::populatePvInfoDetails(const QString &channelName, chid exist
 
   details.fieldType = ca_field_type(channelId);
   details.elementCount = static_cast<unsigned long>(ca_element_count(channelId));
+  details.connected = true;
   details.readAccess = ca_read_access(channelId);
   details.writeAccess = ca_write_access(channelId);
   if (const char *host = ca_host_name(channelId)) {
@@ -11575,6 +11589,17 @@ bool DisplayWindow::populatePvInfoDetails(const QString &channelName, chid exist
         details.hasStates = !details.states.isEmpty();
       }
     }
+    dbr_time_enum enumValue{};
+    status = ca_array_get(DBR_TIME_ENUM, 1, channelId, &enumValue);
+    if (status == ECA_NORMAL
+        && ca_pend_io(kPvInfoTimeoutSeconds) == ECA_NORMAL) {
+      details.numericValue = enumValue.value;
+      details.hasNumericValue = true;
+      details.timestamp = enumValue.stamp;
+      details.hasTimestamp = true;
+      details.severity = enumValue.severity;
+      details.status = enumValue.status;
+    }
     break;
   }
   case DBF_CHAR:
@@ -11603,6 +11628,17 @@ bool DisplayWindow::populatePvInfoDetails(const QString &channelName, chid exist
         details.hasUnits = !details.units.trimmed().isEmpty();
       }
     }
+    dbr_time_double numericValue{};
+    status = ca_array_get(DBR_TIME_DOUBLE, 1, channelId, &numericValue);
+    if (status == ECA_NORMAL
+        && ca_pend_io(kPvInfoTimeoutSeconds) == ECA_NORMAL) {
+      details.numericValue = numericValue.value;
+      details.hasNumericValue = true;
+      details.timestamp = numericValue.stamp;
+      details.hasTimestamp = true;
+      details.severity = numericValue.severity;
+      details.status = numericValue.status;
+    }
     break;
   }
   default:
@@ -11617,6 +11653,408 @@ bool DisplayWindow::populatePvInfoDetails(const QString &channelName, chid exist
   details.recordType = fetchPvInfoRelatedField(trimmed, QStringLiteral(".RTYP"));
   details.error.clear();
   return true;
+}
+
+QStringList DisplayWindow::snapshotChannelNames() const
+{
+  QStringList channels;
+  QSet<QString> seen;
+  auto append = [&channels, &seen](const QString &channel) {
+    const QString trimmed = channel.trimmed();
+    if (trimmed.isEmpty() || seen.contains(trimmed)) {
+      return;
+    }
+    seen.insert(trimmed);
+    channels.append(trimmed);
+  };
+
+  for (const QPointer<QWidget> &pointer : elementStack_) {
+    QWidget *widget = pointer.data();
+    if (!widget) {
+      continue;
+    }
+    for (const QString &channel : channelsForWidget(widget)) {
+      append(channel);
+    }
+  }
+
+  for (TabbedDisplayElement *tabbed : tabbedDisplayElements_) {
+    if (!tabbed) {
+      continue;
+    }
+    QWidget *content = tabbed->pageContent(tabbed->activePageIndex());
+    QObject *childObject = content
+        ? content->property("_qtedmChildDisplay").value<QObject *>()
+        : nullptr;
+    auto *child = dynamic_cast<DisplayWindow *>(childObject);
+    if (!child) {
+      continue;
+    }
+    for (const QString &channel : child->snapshotChannelNames()) {
+      append(channel);
+    }
+  }
+  channels.sort(Qt::CaseInsensitive);
+  return channels;
+}
+
+bool DisplayWindow::captureSnapshotEntry(const QString &channelName,
+    PvSnapshotEntry &entry, QString *warning) const
+{
+  entry = PvSnapshotEntry{};
+  entry.pvName = channelName.trimmed();
+  const ParsedPvName parsed = parsePvName(entry.pvName);
+  SoftPvInfoSnapshot softSnapshot;
+  const bool isSoft = parsed.protocol == PvProtocol::kCa
+      && SoftPvRegistry::instance().infoSnapshot(
+          parsed.pvName, softSnapshot);
+  entry.provider = isSoft ? QStringLiteral("soft")
+      : parsed.protocol == PvProtocol::kPva
+          ? QStringLiteral("pva") : QStringLiteral("ca");
+
+  PvInfoChannelDetails details;
+  const bool populated = populatePvInfoDetails(entry.pvName, nullptr, details);
+  entry.connected = details.connected;
+  entry.writeAccess = details.writeAccess;
+  entry.fieldType = details.fieldType;
+  entry.units = details.units;
+  entry.hasLimits = details.hasLimits;
+  entry.lowerLimit = details.lopr;
+  entry.upperLimit = details.hopr;
+  entry.enumStrings = details.states;
+  if (details.hasTimestamp) {
+    const qint64 unixSeconds =
+        static_cast<qint64>(details.timestamp.secPastEpoch)
+        + kEpicsEpochOffsetSeconds;
+    entry.timestamp = QDateTime::fromMSecsSinceEpoch(
+        unixSeconds * 1000LL + details.timestamp.nsec / 1000000LL).toUTC();
+  } else {
+    entry.timestamp = QDateTime::currentDateTimeUtc();
+  }
+
+  const QString typeName = details.fieldType >= 0
+      ? pvInfoTypeName(details.fieldType) : QStringLiteral("unknown");
+  const QString exactBaseType =
+      entry.provider == QStringLiteral("pva")
+          && !details.providerTypeName.trimmed().isEmpty()
+      ? QStringLiteral("PVA_%1").arg(details.providerTypeName.trimmed())
+      : typeName;
+  entry.exactType = details.elementCount > 1
+      ? QStringLiteral("%1[%2]").arg(exactBaseType).arg(details.elementCount)
+      : exactBaseType;
+  if (!populated || !details.connected || !details.hasValue) {
+    entry.value = QJsonValue(QJsonValue::Null);
+    entry.kind = PvSnapshotValueKind::kNumeric;
+    if (warning) {
+      *warning = details.error.isEmpty()
+          ? QStringLiteral("%1 has no connected value.").arg(entry.pvName)
+          : QStringLiteral("%1: %2").arg(entry.pvName, details.error);
+    }
+    return true;
+  }
+
+  if (details.hasArrayData && details.arrayData.isCharArray) {
+    if (details.arrayData.byteValues.size()
+        > PvSnapshot::kMaximumArrayElements) {
+      if (warning) {
+        *warning = QStringLiteral("%1 exceeds the %2 element snapshot limit.")
+            .arg(entry.pvName).arg(PvSnapshot::kMaximumArrayElements);
+      }
+      return false;
+    }
+    entry.kind = PvSnapshotValueKind::kCharArray;
+    entry.value = QString::fromLatin1(
+        details.arrayData.byteValues.toBase64());
+    return true;
+  }
+
+  if (details.hasArrayData && details.arrayData.isStringArray) {
+    if (warning) {
+      *warning = QStringLiteral(
+          "%1 is a string array; string-array snapshots are unsupported.")
+          .arg(entry.pvName);
+    }
+    return false;
+  }
+
+  if (details.hasArrayData) {
+    if (details.arrayData.numericValues.size()
+        > PvSnapshot::kMaximumArrayElements) {
+      if (warning) {
+        *warning = QStringLiteral("%1 exceeds the %2 element snapshot limit.")
+            .arg(entry.pvName).arg(PvSnapshot::kMaximumArrayElements);
+      }
+      return false;
+    }
+    entry.kind = PvSnapshotValueKind::kNumericArray;
+    QJsonArray values;
+    for (double value : details.arrayData.numericValues) {
+      if (!std::isfinite(value)) {
+        if (warning) {
+          *warning = QStringLiteral("%1 contains a non-finite value.")
+              .arg(entry.pvName);
+        }
+        return false;
+      }
+      values.append(value);
+    }
+    entry.value = values;
+    return true;
+  }
+
+  if (details.elementCount > 1) {
+    if (warning) {
+      *warning = QStringLiteral(
+          "%1 array data is unavailable or unsupported; no scalar "
+          "fallback was captured.").arg(entry.pvName);
+    }
+    return false;
+  }
+
+  if (details.fieldType == DBF_ENUM) {
+    entry.kind = PvSnapshotValueKind::kEnum;
+    int enumIndex = details.hasNumericValue
+        ? static_cast<int>(details.numericValue)
+        : details.states.indexOf(details.value);
+    if (enumIndex < 0) {
+      bool ok = false;
+      enumIndex = details.value.toInt(&ok);
+      if (!ok) {
+        if (warning) {
+          *warning = QStringLiteral(
+              "%1 has an enum value that cannot be represented exactly.")
+              .arg(entry.pvName);
+        }
+        return false;
+      }
+    }
+    entry.value = enumIndex;
+    return true;
+  }
+
+  if (details.fieldType == DBF_STRING) {
+    entry.kind = PvSnapshotValueKind::kString;
+    entry.value = details.value;
+    return true;
+  }
+
+  bool numericOk = details.hasNumericValue;
+  const double numeric = details.hasNumericValue
+      ? details.numericValue : details.value.toDouble(&numericOk);
+  if (!numericOk || !std::isfinite(numeric)) {
+    if (warning) {
+      *warning = QStringLiteral("%1 has an unsupported scalar value.")
+          .arg(entry.pvName);
+    }
+    return false;
+  }
+  entry.kind = PvSnapshotValueKind::kNumeric;
+  entry.value = numeric;
+  return true;
+}
+
+bool DisplayWindow::restoreSnapshotEntry(const PvSnapshotEntry &entry,
+    QString *error) const
+{
+  bool ok = false;
+  auto &manager = PvChannelManager::instance();
+  switch (entry.kind) {
+  case PvSnapshotValueKind::kNumeric:
+    ok = manager.putValue(entry.pvName, entry.value.toDouble());
+    break;
+  case PvSnapshotValueKind::kString:
+    ok = manager.putValue(entry.pvName, entry.value.toString());
+    break;
+  case PvSnapshotValueKind::kEnum:
+    ok = manager.putValue(entry.pvName,
+        static_cast<dbr_enum_t>(entry.value.toInt()));
+    break;
+  case PvSnapshotValueKind::kCharArray:
+    ok = manager.putCharArrayValue(entry.pvName,
+        QByteArray::fromBase64(entry.value.toString().toLatin1()));
+    break;
+  case PvSnapshotValueKind::kNumericArray: {
+    QVector<double> values;
+    const QJsonArray array = entry.value.toArray();
+    values.reserve(array.size());
+    for (const QJsonValue &value : array) {
+      values.append(value.toDouble());
+    }
+    ok = manager.putArrayValue(entry.pvName, values);
+    break;
+  }
+  case PvSnapshotValueKind::kStringArray:
+    if (error) {
+      *error = QStringLiteral("String-array restores are not supported.");
+    }
+    return false;
+  }
+
+  if (!ok && error && error->isEmpty()) {
+    *error = manager.isObserveOnly()
+        ? QStringLiteral("Blocked by observe-only mode.")
+        : QStringLiteral("The provider rejected the write.");
+  }
+  return ok;
+}
+
+void DisplayWindow::savePvSnapshot()
+{
+  const QStringList channels = snapshotChannelNames();
+  if (channels.isEmpty()) {
+    QMessageBox::information(this, QStringLiteral("Save PV Snapshot"),
+        QStringLiteral("The current display has no process variables."));
+    return;
+  }
+  QString suggested = filePath_.isEmpty()
+      ? QStringLiteral("display.qtedm-snapshot.json")
+      : QFileInfo(filePath_).completeBaseName()
+          + QStringLiteral(".qtedm-snapshot.json");
+  const QString filePath = QFileDialog::getSaveFileName(this,
+      QStringLiteral("Save PV Snapshot"), suggested,
+      QStringLiteral("QtEDM PV Snapshot (*.qtedm-snapshot.json);;"
+                     "JSON Files (*.json)"));
+  if (filePath.isEmpty()) {
+    return;
+  }
+
+  PvSnapshotDocument document;
+  document.createdAt = QDateTime::currentDateTimeUtc();
+  document.displayPath = filePath_;
+  QStringList warnings;
+  for (const QString &channel : channels) {
+    PvSnapshotEntry entry;
+    QString warning;
+    if (captureSnapshotEntry(channel, entry, &warning)) {
+      document.entries.append(entry);
+    }
+    if (!warning.isEmpty()) {
+      warnings.append(warning);
+    }
+  }
+  if (document.entries.isEmpty()) {
+    QMessageBox::warning(this, QStringLiteral("Save PV Snapshot"),
+        QStringLiteral("No representable PV values could be captured."));
+    return;
+  }
+  QString error;
+  if (!PvSnapshot::save(filePath, document, &error)) {
+    QMessageBox::critical(this, QStringLiteral("Save PV Snapshot"), error);
+    return;
+  }
+  QString message = QStringLiteral("Saved %1 deduplicated PV(s) to:\n%2")
+      .arg(document.entries.size()).arg(filePath);
+  if (!warnings.isEmpty()) {
+    message += QStringLiteral("\n\nCapture warnings:\n%1")
+        .arg(warnings.join(QLatin1Char('\n')));
+  }
+  QMessageBox::information(this, QStringLiteral("Save PV Snapshot"), message);
+}
+
+void DisplayWindow::compareAndRestorePvSnapshot()
+{
+  const QString filePath = QFileDialog::getOpenFileName(this,
+      QStringLiteral("Compare / Restore PV Snapshot"), QString(),
+      QStringLiteral("QtEDM PV Snapshot (*.qtedm-snapshot.json *.json)"));
+  if (filePath.isEmpty()) {
+    return;
+  }
+  const PvSnapshotLoadResult loaded = PvSnapshot::load(filePath);
+  if (!loaded.ok()) {
+    QMessageBox::critical(this,
+        QStringLiteral("Compare / Restore PV Snapshot"), loaded.error);
+    return;
+  }
+
+  QVector<PvSnapshotComparison> comparisons;
+  comparisons.reserve(loaded.document.entries.size());
+  for (const PvSnapshotEntry &saved : loaded.document.entries) {
+    PvSnapshotComparison comparison;
+    comparison.saved = saved;
+    QString warning;
+    if (!captureSnapshotEntry(saved.pvName, comparison.current, &warning)) {
+      comparison.current.pvName = saved.pvName;
+      comparison.current.provider = saved.provider;
+      comparison.current.exactType = QStringLiteral("unavailable");
+      comparison.current.value = QJsonValue(QJsonValue::Null);
+    }
+    comparison.check = PvSnapshot::canRestore(saved, comparison.current,
+        PvChannelManager::instance().isObserveOnly());
+    if (!warning.isEmpty() && !comparison.check.allowed) {
+      comparison.check.reason = warning;
+    }
+    comparisons.append(comparison);
+  }
+
+  PvSnapshotRestoreDialog dialog(comparisons, this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+  const QVector<int> selected = dialog.selectedRows();
+  if (selected.isEmpty()) {
+    QMessageBox::information(this,
+        QStringLiteral("Compare / Restore PV Snapshot"),
+        QStringLiteral("No PV values were selected; no writes were sent."));
+    return;
+  }
+  if (QMessageBox::question(this, QStringLiteral("Confirm PV Restore"),
+          QStringLiteral("Restore %1 selected PV value(s)?\n\n"
+              "Each PV will be revalidated immediately before its write.")
+              .arg(selected.size()),
+          QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
+      != QMessageBox::Yes) {
+    return;
+  }
+
+  int restored = 0;
+  QStringList failures;
+  for (int row : selected) {
+    const PvSnapshotEntry &saved = comparisons.at(row).saved;
+    PvSnapshotEntry current;
+    QString captureWarning;
+    const bool captured =
+        captureSnapshotEntry(saved.pvName, current, &captureWarning);
+    const PvSnapshotRestoreCheck check = captured
+        ? PvSnapshot::canRestore(saved, current,
+              PvChannelManager::instance().isObserveOnly())
+        : PvSnapshotRestoreCheck{false,
+              captureWarning.isEmpty()
+                  ? QStringLiteral("PV metadata could not be refreshed.")
+                  : captureWarning};
+    if (!check.allowed) {
+      failures.append(QStringLiteral("%1: %2")
+          .arg(saved.pvName, check.reason));
+      AuditLogger::instance().logPut(saved.pvName, saved.displayValue(),
+          QStringLiteral("SNAPSHOT_RESTORE_FAILED:%1").arg(check.reason),
+          filePath);
+      continue;
+    }
+
+    QString putError;
+    if (restoreSnapshotEntry(saved, &putError)) {
+      ++restored;
+      AuditLogger::instance().logPut(saved.pvName, saved.displayValue(),
+          QStringLiteral("SNAPSHOT_RESTORE"), filePath);
+    } else {
+      failures.append(QStringLiteral("%1: %2")
+          .arg(saved.pvName, putError));
+      AuditLogger::instance().logPut(saved.pvName, saved.displayValue(),
+          QStringLiteral("SNAPSHOT_RESTORE_FAILED:%1").arg(putError),
+          filePath);
+    }
+  }
+
+  QString message = QStringLiteral("Restored %1 of %2 selected PV value(s).")
+      .arg(restored).arg(selected.size());
+  if (!failures.isEmpty()) {
+    message += QStringLiteral("\n\nFailures:\n%1")
+        .arg(failures.join(QLatin1Char('\n')));
+    QMessageBox::warning(this,
+        QStringLiteral("PV Snapshot Restore Results"), message);
+  } else {
+    QMessageBox::information(this,
+        QStringLiteral("PV Snapshot Restore Results"), message);
+  }
 }
 
 
@@ -15306,6 +15744,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
     createScaleMonitorElement(rect);
     break;
   case CreateTool::kStripChart:
+  case CreateTool::kQtedmArchivePlot:
     if (rect.width() < kMinimumStripChartWidth) {
       rect.setWidth(kMinimumStripChartWidth);
     }
@@ -15313,7 +15752,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
       rect.setHeight(kMinimumStripChartHeight);
     }
     rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
-    createStripChartElement(rect);
+    createStripChartElement(rect, tool == CreateTool::kQtedmArchivePlot);
     break;
   case CreateTool::kCartesianPlot:
     if (rect.width() < kMinimumCartesianPlotWidth) {
@@ -16617,12 +17056,14 @@ void DisplayWindow::createScaleMonitorElement(const QRect &rect)
 }
 
 
-void DisplayWindow::createStripChartElement(const QRect &rect)
+void DisplayWindow::createStripChartElement(const QRect &rect,
+    bool archivePlot)
 {
   if (!displayArea_) {
     return;
   }
-  setNextUndoLabel(QStringLiteral("Create Strip Chart"));
+  setNextUndoLabel(archivePlot ? QStringLiteral("Create Archive Plot")
+                               : QStringLiteral("Create Strip Chart"));
   QRect target = rect;
   if (target.width() < kMinimumStripChartWidth) {
     target.setWidth(kMinimumStripChartWidth);
@@ -16635,6 +17076,7 @@ void DisplayWindow::createStripChartElement(const QRect &rect)
     return;
   }
   auto *element = new StripChartElement(displayArea_);
+  element->setArchivePlot(archivePlot);
   element->setGeometry(target);
   recordWidgetOriginalGeometry(element, target);
   element->show();
@@ -18141,6 +18583,35 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
   auto *form = new QFormLayout;
   layout->addLayout(form);
 
+  if (auto *archive = dynamic_cast<StripChartElement *>(widget);
+      archive && archive->isArchivePlot()) {
+    dialog.setWindowTitle(QStringLiteral("QtEDM Archive Plot Properties"));
+    auto *maximumPoints = new QSpinBox(&dialog);
+    maximumPoints->setRange(2, 100000);
+    maximumPoints->setValue(archive->archiveMaximumPoints());
+    auto *liveMerge = new QCheckBox(&dialog);
+    liveMerge->setChecked(archive->archiveLiveMerge());
+    form->addRow(QStringLiteral("Maximum points"), maximumPoints);
+    form->addRow(QStringLiteral("Merge live data"), liveMerge);
+    auto *note = new QLabel(QStringLiteral(
+        "History duration and Y range use the Strip Chart period, units, "
+        "and pen limits."), &dialog);
+    note->setWordWrap(true);
+    layout->addWidget(note);
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted) {
+      setNextUndoLabel(QStringLiteral("Edit QtEDM Archive Plot Properties"));
+      archive->setArchiveMaximumPoints(maximumPoints->value());
+      archive->setArchiveLiveMerge(liveMerge->isChecked());
+      markDirty();
+    }
+    return;
+  }
+
   if (auto *spinbox = dynamic_cast<SetpointControlElement *>(widget);
       spinbox && spinbox->isQtedmSpinBox()) {
     dialog.setWindowTitle(QStringLiteral("QtEDM Spin Box Properties"));
@@ -18293,7 +18764,9 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
       || (dynamic_cast<MessageButtonElement *>(selected)
           && static_cast<MessageButtonElement *>(selected)->isQtedmToggle())
       || (dynamic_cast<LedMonitorElement *>(selected)
-          && static_cast<LedMonitorElement *>(selected)->isQtedmSymbol());
+          && static_cast<LedMonitorElement *>(selected)->isQtedmSymbol())
+      || (dynamic_cast<StripChartElement *>(selected)
+          && static_cast<StripChartElement *>(selected)->isArchivePlot());
   if (isExtension) {
     QAction *properties = addMenuAction(&menu,
         QStringLiteral("QtEDM Extension Properties..."));
@@ -18483,6 +18956,14 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
       addMenuAction(monitorsMenu, QStringLiteral("Strip Chart"));
   QObject::connect(stripChartAction, &QAction::triggered, this, [this]() {
     activateCreateTool(CreateTool::kStripChart);
+    if (!lastContextMenuGlobalPos_.isNull()) {
+      QCursor::setPos(lastContextMenuGlobalPos_);
+    }
+  });
+  auto *archivePlotAction =
+      addMenuAction(monitorsMenu, QStringLiteral("Archive Plot"));
+  QObject::connect(archivePlotAction, &QAction::triggered, this, [this]() {
+    activateCreateTool(CreateTool::kQtedmArchivePlot);
     if (!lastContextMenuGlobalPos_.isNull()) {
       QCursor::setPos(lastContextMenuGlobalPos_);
     }
@@ -21000,7 +21481,9 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
 
     if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
-          QStringLiteral("\"strip chart\" {"));
+          strip->isArchivePlot()
+              ? QStringLiteral("qtedm_archive_plot {")
+              : QStringLiteral("\"strip chart\" {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(strip));
       std::array<QString, 4> stripYLabels{};
       stripYLabels[0] = strip->yLabel();
@@ -21022,6 +21505,15 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("units=\"%1\"")
                 .arg(AdlWriter::timeUnitsString(strip->units())));
+      }
+      if (strip->isArchivePlot()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("maxPoints=%1")
+                .arg(strip->archiveMaximumPoints()));
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("liveMerge=%1")
+                .arg(strip->archiveLiveMerge()
+                    ? QStringLiteral("true") : QStringLiteral("false")));
       }
       for (int i = 0; i < strip->penCount(); ++i) {
         const QString channel = strip->channel(i);
@@ -22560,7 +23052,9 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *strip = dynamic_cast<StripChartElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
-        QStringLiteral("\"strip chart\" {"));
+        strip->isArchivePlot()
+            ? QStringLiteral("qtedm_archive_plot {")
+            : QStringLiteral("\"strip chart\" {"));
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(strip));
     std::array<QString, 4> yLabels{};
@@ -22582,6 +23076,15 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("units=\"%1\"")
               .arg(AdlWriter::timeUnitsString(strip->units())));
+    }
+    if (strip->isArchivePlot()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("maxPoints=%1")
+              .arg(strip->archiveMaximumPoints()));
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("liveMerge=%1")
+              .arg(strip->archiveLiveMerge()
+                  ? QStringLiteral("true") : QStringLiteral("false")));
     }
     for (int i = 0; i < strip->penCount(); ++i) {
       const QString channel = strip->channel(i);
@@ -25310,6 +25813,38 @@ QJsonObject DisplayWindow::testStateObject() const
       if (runtime->hasLastValue_) {
         widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
       }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (StripChartElement *element : stripChartElements_) {
+    if (!element) {
+      continue;
+    }
+    QJsonObject widgetObject;
+    StripChartRuntime *runtime =
+        stripChartRuntimes_.value(element, nullptr);
+    appendWidgetBase(widgetObject,
+        element->isArchivePlot() ? "qtedm_archive_plot" : "strip_chart",
+        element, element->channel(0));
+    widgetObject[QStringLiteral("archive_backed")] =
+        element->isArchivePlot();
+    widgetObject[QStringLiteral("history_duration_seconds")] =
+        element->historyDurationSeconds();
+    widgetObject[QStringLiteral("maximum_points")] =
+        element->archiveMaximumPoints();
+    widgetObject[QStringLiteral("live_merge")] =
+        element->archiveLiveMerge();
+    widgetObject[QStringLiteral("archive_status")] =
+        element->archiveStatus();
+    widgetObject[QStringLiteral("sample_count")] = element->sampleCount();
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] =
+          runtime->pens_[0].connected;
+      widgetObject[QStringLiteral("archive_complete")] =
+          runtime->pens_[0].archiveComplete;
+      widgetObject[QStringLiteral("archive_failed")] =
+          runtime->pens_[0].archiveFailed;
     }
     widgets.append(widgetObject);
   }
@@ -29605,7 +30140,8 @@ CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
   return element;
 }
 
-StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &stripNode)
+StripChartElement *DisplayWindow::loadStripChartElement(
+    const AdlNode &stripNode, bool archivePlot)
 {
   QWidget *parent = effectiveElementParent();
   if (!parent) {
@@ -29624,6 +30160,7 @@ StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &stripNode
   originalGeometry.translate(currentElementOffset_);
 
   auto *element = new StripChartElement(parent);
+  element->setArchivePlot(archivePlot);
   element->setGeometry(geometry);
   recordWidgetOriginalGeometry(element, originalGeometry);
 
@@ -29702,6 +30239,22 @@ StripChartElement *DisplayWindow::loadStripChartElement(const AdlNode &stripNode
     element->setUnits(TimeUnits::kSeconds);
   } else if (!unitsStr.trimmed().isEmpty()) {
     element->setUnits(parseTimeUnits(unitsStr));
+  }
+
+  if (archivePlot) {
+    bool maximumOk = false;
+    const int maximumPoints = propertyValue(stripNode,
+        QStringLiteral("maxPoints")).toInt(&maximumOk);
+    if (maximumOk) {
+      element->setArchiveMaximumPoints(maximumPoints);
+    }
+    const QString liveMerge = propertyValue(stripNode,
+        QStringLiteral("liveMerge")).trimmed().toLower();
+    if (!liveMerge.isEmpty()) {
+      element->setArchiveLiveMerge(liveMerge != QStringLiteral("false")
+          && liveMerge != QStringLiteral("0")
+          && liveMerge != QStringLiteral("no"));
+    }
   }
 
   auto extractPenIndex = [](const QString &name) {
@@ -31983,8 +32536,10 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadScaleMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("cartesian plot")) {
     loaded = loadCartesianPlotElement(node) != nullptr;
-  } else if (name == QStringLiteral("strip chart")) {
-    loaded = loadStripChartElement(node) != nullptr;
+  } else if (name == QStringLiteral("strip chart")
+      || name == QStringLiteral("qtedm_archive_plot")) {
+    loaded = loadStripChartElement(node,
+        name == QStringLiteral("qtedm_archive_plot")) != nullptr;
   } else if (name == QStringLiteral("byte")) {
     loaded = loadByteMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("led_monitor")

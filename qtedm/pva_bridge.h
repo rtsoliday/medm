@@ -12,6 +12,7 @@ struct PvaBridgeData
   bool canWrite = false;
   int nativeFieldType = -1;
   long nativeElementCount = 0;
+  std::string nativeDataType;
   double numericValue = 0.0;
   std::string stringValue;
   unsigned int enumValue = 0;

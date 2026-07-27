@@ -12,8 +12,13 @@ struct PvaInfoSnapshot
   bool canWrite = false;
   int fieldType = -1;
   unsigned long elementCount = 0;
+  QString nativeDataType;
   QString host;
   QString value;
+  double numericValue = 0.0;
+  unsigned int enumValue = 0;
+  bool isNumeric = false;
+  bool isEnum = false;
   bool hasValue = false;
   QVector<double> arrayValues;
   bool isArray = false;

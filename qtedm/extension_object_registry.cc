@@ -22,6 +22,9 @@ ExtensionObjectRegistry::ExtensionObjectRegistry()
   registerObject({QStringLiteral("qtedm_tabbed_display"),
       QStringLiteral("Tabbed Display"), QStringLiteral("Containers"),
       CreateTool::kQtedmTabbedDisplay});
+  registerObject({QStringLiteral("qtedm_archive_plot"),
+      QStringLiteral("Archive Plot"), QStringLiteral("Monitors"),
+      CreateTool::kQtedmArchivePlot});
 }
 
 void ExtensionObjectRegistry::registerObject(

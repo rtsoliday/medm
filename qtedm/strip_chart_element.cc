@@ -655,6 +655,143 @@ void StripChartElement::addRuntimeSample(int index, double value, qint64 timesta
   }
 }
 
+void StripChartElement::replaceRuntimeHistory(int index,
+    const QVector<double> &values, const QVector<qint64> &timestamps,
+    qint64 windowStartMs, qint64 windowEndMs)
+{
+  if (!executeMode_ || index < 0 || index >= penCount()) {
+    return;
+  }
+  Pen &pen = pens_[index];
+  pen.samples.clear();
+  pen.minSamples.clear();
+  pen.maxSamples.clear();
+  const int capacity = std::max(chartRect().width(), 1);
+  const qint64 span = windowEndMs - windowStartMs;
+  const qsizetype count = std::min(values.size(), timestamps.size());
+  const double missingValue = std::numeric_limits<double>::quiet_NaN();
+  if (span > 0 && count > 0) {
+    pen.samples.assign(static_cast<std::size_t>(capacity), missingValue);
+    pen.minSamples.assign(static_cast<std::size_t>(capacity), missingValue);
+    pen.maxSamples.assign(static_cast<std::size_t>(capacity), missingValue);
+  }
+  bool haveSample = false;
+  double lastValue = 0.0;
+  for (qsizetype valueIndex = 0; valueIndex < count; ++valueIndex) {
+    const double value = values.at(valueIndex);
+    const qint64 timestamp = timestamps.at(valueIndex);
+    if (!std::isfinite(value) || timestamp < windowStartMs
+        || timestamp > windowEndMs || span <= 0) {
+      continue;
+    }
+    const long double position =
+        static_cast<long double>(timestamp - windowStartMs)
+        / static_cast<long double>(span);
+    const int slot = std::clamp(
+        static_cast<int>(position * capacity), 0, capacity - 1);
+    const std::size_t sampleIndex = static_cast<std::size_t>(slot);
+    if (std::isfinite(pen.samples[sampleIndex])) {
+      pen.minSamples[sampleIndex] =
+          std::min(pen.minSamples[sampleIndex], value);
+      pen.maxSamples[sampleIndex] =
+          std::max(pen.maxSamples[sampleIndex], value);
+    } else {
+      pen.minSamples[sampleIndex] = value;
+      pen.maxSamples[sampleIndex] = value;
+    }
+    pen.samples[sampleIndex] = value;
+    lastValue = value;
+    haveSample = true;
+  }
+  if (!haveSample) {
+    pen.samples.clear();
+    pen.minSamples.clear();
+    pen.maxSamples.clear();
+  } else {
+    pen.runtimeConnected = true;
+    pen.runtimeReadAccessKnown = true;
+    pen.runtimeReadAccess = true;
+    pen.runtimeValue = lastValue;
+    pen.hasRuntimeValue = !archivePlot_ || archiveLiveMerge_;
+  }
+  int newLength = 0;
+  for (const Pen &candidate : pens_) {
+    newLength = std::max(newLength,
+        static_cast<int>(candidate.samples.size()));
+  }
+  sampleHistoryLength_ = newLength;
+  cachedChartWidth_ = capacity;
+  sampleIntervalMs_ = std::max(
+      static_cast<double>(span) / static_cast<double>(capacity), 10.0);
+  lastSampleMs_ = windowEndMs;
+  nextAdvanceTimeMs_ = saturatingAdd(windowEndMs,
+      roundedPositiveInterval(sampleIntervalMs_));
+  newSampleColumns_ = 0;
+  autoscaleLimitsValid_ = false;
+  invalidatePenCache();
+  invalidateStaticCache();
+  update();
+}
+
+bool StripChartElement::isArchivePlot() const
+{
+  return archivePlot_;
+}
+
+void StripChartElement::setArchivePlot(bool enabled)
+{
+  archivePlot_ = enabled;
+  if (!archivePlot_) {
+    archiveStatus_.clear();
+  }
+  update();
+}
+
+int StripChartElement::archiveMaximumPoints() const
+{
+  return archiveMaximumPoints_;
+}
+
+void StripChartElement::setArchiveMaximumPoints(int maximumPoints)
+{
+  archiveMaximumPoints_ = std::clamp(maximumPoints, 2, 100000);
+}
+
+bool StripChartElement::archiveLiveMerge() const
+{
+  return archiveLiveMerge_;
+}
+
+void StripChartElement::setArchiveLiveMerge(bool enabled)
+{
+  archiveLiveMerge_ = enabled;
+}
+
+QString StripChartElement::archiveStatus() const
+{
+  return archiveStatus_;
+}
+
+void StripChartElement::setArchiveStatus(const QString &status)
+{
+  archiveStatus_ = status;
+  setToolTip(status);
+  update();
+}
+
+double StripChartElement::historyDurationSeconds() const
+{
+  switch (units_) {
+  case TimeUnits::kMilliseconds:
+    return period_ / 1000.0;
+  case TimeUnits::kMinutes:
+    return period_ * 60.0;
+  case TimeUnits::kSeconds:
+  default:
+    return period_;
+  }
+}
+
 void StripChartElement::clearRuntimeState()
 {
   sampleHistoryLength_ = 0;

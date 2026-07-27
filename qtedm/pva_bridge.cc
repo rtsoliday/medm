@@ -71,6 +71,7 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
   data.stringValue.clear();
   data.enumStrings.clear();
   data.host = GetRemoteAddress(channel->pva, 0);
+  data.nativeDataType = GetNativeDataType(channel->pva, 0);
 
   const PVA_DATA_ALL_READINGS &reading = channel->pva->pvaData[0];
   const PVA_DATA *source = nullptr;

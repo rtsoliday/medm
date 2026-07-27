@@ -49,6 +49,7 @@ enum class CreateTool {
   kLedMonitor,
   kScaleMonitor,
   kStripChart,
+  kQtedmArchivePlot,
   kCartesianPlot,
   kHeatmap,
   kWaterfallPlot,

@@ -406,6 +406,8 @@ ObjectPaletteDialog::monitorButtons()
 {
   const auto *symbol = ExtensionObjectRegistry::instance().descriptor(
       CreateTool::kQtedmSymbol);
+  const auto *archivePlot = ExtensionObjectRegistry::instance().descriptor(
+      CreateTool::kQtedmArchivePlot);
   return {
       {QStringLiteral("Meter"), meter25_bits, meter25_width, meter25_height,
           CreateTool::kMeter},
@@ -423,6 +425,10 @@ ObjectPaletteDialog::monitorButtons()
           waveTable25_height, CreateTool::kWaveTable},
       {QStringLiteral("Strip Chart"), stripChart25_bits, stripChart25_width,
           stripChart25_height, CreateTool::kStripChart},
+      {archivePlot ? archivePlot->displayName
+                   : QStringLiteral("Archive Plot"),
+          stripChart25_bits, stripChart25_width, stripChart25_height,
+          CreateTool::kQtedmArchivePlot},
       {QStringLiteral("Text Monitor"), textUpdate25_bits,
           textUpdate25_width, textUpdate25_height, CreateTool::kTextMonitor},
       {QStringLiteral("Scale Monitor"), indicator25_bits,

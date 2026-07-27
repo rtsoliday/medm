@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "strip_chart_properties.h"
+#include "archive_provider.h"
 #include "channel_subscription.h"
 #include "runtime_utils.h"
 
@@ -35,9 +36,17 @@ private:
     bool canRead = false;
     short fieldType = -1;
     long elementCount = 1;
+    QPointer<ArchiveRequest> archiveRequest;
+    QVector<ArchiveSample> historicalSamples;
+    QVector<ArchiveSample> liveSamples;
+    quint64 archiveGeneration = 0;
+    bool archiveComplete = false;
+    bool archiveFailed = false;
   };
 
   void subscribePen(int index);
+  void requestArchive(int index);
+  void applyMergedHistory(int index);
   void handleAccessRightsEvent(int index, bool canRead, bool canWrite);
   void handleConnectionEvent(int index, bool connected,
       const SharedChannelData &data);
@@ -50,6 +59,7 @@ private:
 
   QPointer<StripChartElement> element_;
   std::array<PenState, kStripChartPenCount> pens_{};
+  ArchiverApplianceProvider archiveProvider_;
   bool started_ = false;
 };
 

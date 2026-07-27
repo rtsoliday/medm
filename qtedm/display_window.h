@@ -214,6 +214,7 @@
 #include "pv_protocol.h"
 #include "pv_info_dialog.h"
 #include "pv_limits_dialog.h"
+#include "pv_snapshot.h"
 #include "pva_info_snapshot.h"
 #include "runtime_utils.h"
 #include "strip_chart_data_dialog.h"
@@ -591,6 +592,10 @@ public:
 
   void refreshDisplayView();
 
+  void savePvSnapshot();
+
+  void compareAndRestorePvSnapshot();
+
   void toggleHiddenButtonMarkers();
 
   void destroyHiddenButtonMarkers();
@@ -855,7 +860,8 @@ private:
   ThermometerElement *loadThermometerElement(const AdlNode &thermometerNode);
   ScaleMonitorElement *loadScaleMonitorElement(const AdlNode &indicatorNode);
   CartesianPlotElement *loadCartesianPlotElement(const AdlNode &cartesianNode);
-  StripChartElement *loadStripChartElement(const AdlNode &stripNode);
+  StripChartElement *loadStripChartElement(const AdlNode &stripNode,
+      bool archivePlot = false);
   ByteMonitorElement *loadByteMonitorElement(const AdlNode &byteNode);
   LedMonitorElement *loadLedMonitorElement(const AdlNode &ledNode);
   ExpressionChannelElement *loadExpressionChannelElement(
@@ -1067,12 +1073,16 @@ private:
     QString name;
     QString desc;
     QString recordType;
+    QString providerTypeName;
     chtype fieldType = -1;
     unsigned long elementCount = 0;
+    bool connected = false;
     bool readAccess = false;
     bool writeAccess = false;
     QString host;
     QString value;
+    double numericValue = 0.0;
+    bool hasNumericValue = false;
     bool hasValue = false;
     epicsTimeStamp timestamp{};
     bool hasTimestamp = false;
@@ -1652,6 +1662,14 @@ private:
 
   bool populatePvInfoDetails(const QString &channelName, chid existingChid, PvInfoChannelDetails &details) const;
 
+  QStringList snapshotChannelNames() const;
+
+  bool captureSnapshotEntry(const QString &channelName,
+      PvSnapshotEntry &entry, QString *warning = nullptr) const;
+
+  bool restoreSnapshotEntry(const PvSnapshotEntry &entry,
+      QString *error = nullptr) const;
+
   bool prepareExecuteChannelDrag(const QPoint &windowPos);
 
   void startExecuteChannelDrag();
@@ -1962,7 +1980,7 @@ private:
 
   void createScaleMonitorElement(const QRect &rect);
 
-  void createStripChartElement(const QRect &rect);
+  void createStripChartElement(const QRect &rect, bool archivePlot = false);
 
   void createCartesianPlotElement(const QRect &rect);
 

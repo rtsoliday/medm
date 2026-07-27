@@ -356,6 +356,7 @@ public:
     registerChannel(kRampName, true);
     registerChannel(kBinaryName, true);
     registerChannel(kButtonName, true);
+    registerChannel(kToggleName, true);
     registerChannel(kModeName, true);
     registerChannel(kTextName, true);
     registerChannel(kSetpointName, true);
@@ -371,6 +372,7 @@ public:
     registry.setControlInfo(kRampName, 0.0, 100.0, kFloatingPrecision);
     registry.setControlInfo(kBinaryName, 0.0, 1.0, 0);
     registry.setControlInfo(kButtonName, 0.0, 1.0, 0);
+    registry.setControlInfo(kToggleName, 0.0, 1.0, 0);
     registry.setControlInfo(kSetpointName, 0.0, 100.0, kFloatingPrecision,
         QStringLiteral("V"));
     registry.setControlInfo(kReadbackName, 0.0, 100.0, kFloatingPrecision,
@@ -391,6 +393,7 @@ public:
         initialText.data());
     registry.publishCharArrayValue(kTextName, initialText);
     registry.publishValue(kButtonName, 0.0);
+    registry.publishValue(kToggleName, 0.0);
     registry.publishValue(kSetpointName, setpointTarget_);
     registry.publishValue(kReadbackName, setpointReadback_);
 
@@ -481,6 +484,8 @@ private:
       QStringLiteral("__qtedm_demo:binary");
   static inline const QString kButtonName =
       QStringLiteral("__qtedm_demo:button");
+  static inline const QString kToggleName =
+      QStringLiteral("__qtedm_demo:toggle");
   static inline const QString kModeName =
       QStringLiteral("__qtedm_demo:mode");
   static inline const QString kTextName =

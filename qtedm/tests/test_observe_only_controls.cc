@@ -11,6 +11,7 @@
 #include "extension_object_registry.h"
 #include "led_monitor_element.h"
 #include "message_button_element.h"
+#include "message_button_runtime.h"
 #include "pv_channel_manager.h"
 #include "setpoint_control_element.h"
 #include "soft_pv_registry.h"
@@ -24,6 +25,7 @@ private slots:
   void cleanup();
   void registryContainsSafetyControlObjects();
   void observeOnlyBlocksEverySoftPvWriteKind();
+  void toggleWritesAlternatingValuesThroughSoftPv();
   void extensionWidgetPropertiesRoundTripInMemory();
 
 private:
@@ -149,6 +151,51 @@ void TestObserveOnlyControls::observeOnlyBlocksEverySoftPvWriteKind()
   AuditLogger::instance().shutdown();
 }
 
+void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()
+{
+  const QString channelName = QStringLiteral("__test:toggle_interaction");
+  auto &soft = SoftPvRegistry::instance();
+  soft.registerName(channelName, true);
+  registeredNames_.append(channelName);
+  soft.setConnected(channelName, true);
+  soft.setControlInfo(channelName, 0.0, 1.0, 0);
+  soft.publishValue(channelName, 0.0);
+
+  MessageButtonElement toggle;
+  toggle.resize(180, 44);
+  toggle.setQtedmToggle(true);
+  toggle.setChannel(channelName);
+  toggle.setOffValue(QStringLiteral("0"));
+  toggle.setOnValue(QStringLiteral("1"));
+  toggle.setOffLabel(QStringLiteral("Disabled"));
+  toggle.setOnLabel(QStringLiteral("Enabled"));
+  toggle.setExecuteMode(true);
+
+  MessageButtonRuntime runtime(&toggle);
+  runtime.start();
+  toggle.show();
+  QCoreApplication::processEvents();
+
+  auto *button = toggle.findChild<QPushButton *>();
+  QVERIFY(button);
+  QTRY_VERIFY(button->isEnabled());
+  QTRY_COMPARE(button->text(), QStringLiteral("Disabled"));
+  QVERIFY(!button->isChecked());
+
+  QTest::mouseClick(button, Qt::LeftButton);
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(channelName, snapshot));
+  QCOMPARE(snapshot.value, 1.0);
+  QTRY_COMPARE(button->text(), QStringLiteral("Enabled"));
+  QVERIFY(button->isChecked());
+
+  QTest::mouseClick(button, Qt::LeftButton);
+  QVERIFY(soft.infoSnapshot(channelName, snapshot));
+  QCOMPARE(snapshot.value, 0.0);
+  QTRY_COMPARE(button->text(), QStringLiteral("Disabled"));
+  QVERIFY(!button->isChecked());
+}
+
 void TestObserveOnlyControls::extensionWidgetPropertiesRoundTripInMemory()
 {
   LedMonitorElement symbol;
@@ -211,6 +258,18 @@ void TestObserveOnlyControls::extensionWidgetPropertiesRoundTripInMemory()
   const QList<QToolButton *> stepButtons =
       spinbox.findChildren<QToolButton *>();
   QCOMPARE(stepButtons.size(), 2);
+  auto *decrementButton = spinbox.findChild<QToolButton *>(
+      QStringLiteral("qtedmSpinBoxDecrementButton"));
+  auto *incrementButton = spinbox.findChild<QToolButton *>(
+      QStringLiteral("qtedmSpinBoxIncrementButton"));
+  QVERIFY(decrementButton);
+  QVERIFY(incrementButton);
+  QCOMPARE(decrementButton->text(), QStringLiteral("-"));
+  QCOMPARE(incrementButton->text(), QStringLiteral("+"));
+  QCOMPARE(decrementButton->accessibleName(),
+      QStringLiteral("Decrease value"));
+  QCOMPARE(incrementButton->accessibleName(),
+      QStringLiteral("Increase value"));
   for (QToolButton *button : stepButtons) {
     QVERIFY(!button->isEnabled());
   }

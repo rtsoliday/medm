@@ -1318,7 +1318,7 @@ qtedm_toggle {
     height=48
   }
   control {
-    chan="__qtedm_demo:binary"
+    chan="__qtedm_demo:toggle"
     clr=14
     bclr=45
   }
@@ -1339,7 +1339,7 @@ text {
   "basic attribute" {
     clr=14
   }
-  textix="Toggle"
+  textix="Toggle: click Disabled / Enabled"
   align="horiz. centered"
 }
 qtedm_spinbox {

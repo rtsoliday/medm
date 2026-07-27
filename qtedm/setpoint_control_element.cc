@@ -112,8 +112,16 @@ SetpointControlElement::SetpointControlElement(QWidget *parent)
   readbackEdit_->setFocusPolicy(Qt::NoFocus);
   readbackEdit_->setContextMenuPolicy(Qt::NoContextMenu);
   readbackEdit_->setAttribute(Qt::WA_TransparentForMouseEvents);
-  decrementButton_->setText(QStringLiteral("−"));
+  decrementButton_->setObjectName(
+      QStringLiteral("qtedmSpinBoxDecrementButton"));
+  incrementButton_->setObjectName(
+      QStringLiteral("qtedmSpinBoxIncrementButton"));
+  decrementButton_->setText(QStringLiteral("-"));
   incrementButton_->setText(QStringLiteral("+"));
+  decrementButton_->setAccessibleName(QStringLiteral("Decrease value"));
+  incrementButton_->setAccessibleName(QStringLiteral("Increase value"));
+  decrementButton_->setToolTip(QStringLiteral("Decrease by one step"));
+  incrementButton_->setToolTip(QStringLiteral("Increase by one step"));
   decrementButton_->setAutoRepeat(true);
   incrementButton_->setAutoRepeat(true);
   decrementButton_->setAutoRepeatDelay(400);

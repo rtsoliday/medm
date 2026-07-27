@@ -16,6 +16,7 @@
 #include "channel_access_context.h"
 #include "message_button_element.h"
 #include "pv_channel_manager.h"
+#include "soft_pv_registry.h"
 #include "statistics_tracker.h"
 
 namespace {
@@ -43,7 +44,9 @@ void MessageButtonRuntime::start()
   }
 
   const QString initialChannel = element_->channel().trimmed();
-  const bool needsCa = parsePvName(initialChannel).protocol == PvProtocol::kCa;
+  const ParsedPvName parsed = parsePvName(initialChannel);
+  const bool needsCa = parsed.protocol == PvProtocol::kCa
+      && !SoftPvRegistry::instance().isRegistered(parsed.pvName);
   if (needsCa) {
     ChannelAccessContext &context = ChannelAccessContext::instance();
     context.ensureInitializedForProtocol(PvProtocol::kCa);

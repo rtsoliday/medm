@@ -7,7 +7,7 @@ display {
     x=80
     y=80
     width=1560
-    height=1030
+    height=1230
   }
   clr=14
   bclr=4
@@ -1229,5 +1229,192 @@ text {
     clr=30
   }
   textix="The Expression Channel block in this demo publishes __qtedm_demo:expr; switch to edit mode to see and inspect it."
+  align="horiz. centered"
+}
+rectangle {
+  object {
+    x=20
+    y=1020
+    width=1520
+    height=180
+  }
+  "basic attribute" {
+    clr=7
+    fill="outline"
+    width=2
+  }
+}
+text {
+  object {
+    x=42
+    y=1030
+    width=420
+    height=18
+  }
+  "basic attribute" {
+    clr=53
+  }
+  textix="Phase 1 QtEDM Extensions"
+}
+qtedm_symbol {
+  object {
+    x=42
+    y=1060
+    width=260
+    height=100
+  }
+  monitor {
+    chan="__qtedm_demo:mode"
+    clr=15
+    bclr=14
+  }
+  colorMode="discrete"
+  shape="square"
+  bezel=0
+  stateCount=3
+  onColor=30
+  offColor=20
+  undefinedColor=2
+  stateColor0=20
+  stateColor1=30
+  stateColor2=15
+  state {
+    min=0
+    max=0
+    color=20
+    label="Stopped"
+  }
+  state {
+    min=1
+    max=1
+    color=30
+    label="Standby"
+  }
+  state {
+    min=2
+    max=10
+    color=15
+    label="Running"
+  }
+}
+text {
+  object {
+    x=42
+    y=1165
+    width=260
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Multi-State Symbol"
+  align="horiz. centered"
+}
+qtedm_toggle {
+  object {
+    x=390
+    y=1080
+    width=220
+    height=48
+  }
+  control {
+    chan="__qtedm_demo:binary"
+    clr=14
+    bclr=45
+  }
+  label="Enable"
+  offValue="0"
+  onValue="1"
+  offLabel="Disabled"
+  onLabel="Enabled"
+  clrmod="alarm"
+}
+text {
+  object {
+    x=390
+    y=1135
+    width=220
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Toggle"
+  align="horiz. centered"
+}
+qtedm_spinbox {
+  object {
+    x=700
+    y=1078
+    width=500
+    height=52
+  }
+  "basic attribute" {
+    clr=14
+    bclr=43
+  }
+  label="Demand"
+  setpoint="__qtedm_demo:setpoint"
+  readback="__qtedm_demo:readback"
+  colorMode="alarm"
+  step=0.25
+  limits {
+    loprSrc="default"
+    hoprSrc="default"
+    hoprDefault=100
+    precSrc="default"
+    precDefault=2
+  }
+}
+text {
+  object {
+    x=700
+    y=1135
+    width=500
+    height=16
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Spin Box"
+  align="horiz. centered"
+}
+text {
+  object {
+    x=1240
+    y=1068
+    width=270
+    height=18
+  }
+  "basic attribute" {
+    clr=30
+  }
+  textix="Run with --read-only"
+  align="horiz. centered"
+}
+text {
+  object {
+    x=1240
+    y=1095
+    width=270
+    height=18
+  }
+  "basic attribute" {
+    clr=30
+  }
+  textix="to disable every control write"
+  align="horiz. centered"
+}
+text {
+  object {
+    x=1240
+    y=1122
+    width=270
+    height=18
+  }
+  "basic attribute" {
+    clr=30
+  }
+  textix="while monitoring remains active."
   align="horiz. centered"
 }

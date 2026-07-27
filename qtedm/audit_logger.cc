@@ -64,6 +64,10 @@ void AuditLogger::shutdown()
 
 QString AuditLogger::getLogDirectory() const
 {
+  const QString configured = qEnvironmentVariable("QTEDM_AUDIT_DIR").trimmed();
+  if (!configured.isEmpty()) {
+    return QDir(configured).absolutePath();
+  }
   QString homeDir = QDir::homePath();
   return QDir(homeDir).filePath(QStringLiteral(".medm"));
 }
@@ -186,4 +190,12 @@ void AuditLogger::logPut(const QString &pvName,
                          const QString &displayFile)
 {
   logPut(pvName, QString::number(value), widgetType, displayFile);
+}
+
+void AuditLogger::logBlockedPut(const QString &pvName,
+                                const QString &value,
+                                const QString &reason)
+{
+  const QString blockedType = QStringLiteral("BLOCKED:%1").arg(reason);
+  logPut(pvName, value, blockedType);
 }

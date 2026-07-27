@@ -1,5 +1,6 @@
 #include "object_palette_dialog.h"
 
+#include "extension_object_registry.h"
 #include <QAction>
 #include <QAbstractButton>
 #include <QButtonGroup>
@@ -403,6 +404,8 @@ ObjectPaletteDialog::graphicsButtons()
 std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::monitorButtons()
 {
+  const auto *symbol = ExtensionObjectRegistry::instance().descriptor(
+      CreateTool::kQtedmSymbol);
   return {
       {QStringLiteral("Meter"), meter25_bits, meter25_width, meter25_height,
           CreateTool::kMeter},
@@ -431,6 +434,8 @@ ObjectPaletteDialog::monitorButtons()
           byte25_height, CreateTool::kByteMonitor},
       {QStringLiteral("LED Monitor"), led25_bits, led25_width,
           led25_height, CreateTool::kLedMonitor},
+      {symbol ? symbol->displayName : QStringLiteral("Multi-State Symbol"),
+          led25_bits, led25_width, led25_height, CreateTool::kQtedmSymbol},
       {QStringLiteral("Expression Channel"), expressionChannel25_bits,
           expressionChannel25_width, expressionChannel25_height,
           CreateTool::kExpressionChannel},
@@ -440,6 +445,10 @@ ObjectPaletteDialog::monitorButtons()
 std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::controlButtons()
 {
+  const auto *toggle = ExtensionObjectRegistry::instance().descriptor(
+      CreateTool::kQtedmToggle);
+  const auto *spinbox = ExtensionObjectRegistry::instance().descriptor(
+      CreateTool::kQtedmSpinBox);
   return {
       {QStringLiteral("Choice Button"), choiceButton25_bits,
           choiceButton25_width, choiceButton25_height,
@@ -449,11 +458,17 @@ ObjectPaletteDialog::controlButtons()
       {QStringLiteral("Setpoint Control"), setpointControl25_bits,
           setpointControl25_width, setpointControl25_height,
           CreateTool::kSetpointControl},
+      {spinbox ? spinbox->displayName : QStringLiteral("Spin Box"),
+          setpointControl25_bits, setpointControl25_width,
+          setpointControl25_height, CreateTool::kQtedmSpinBox},
       {QStringLiteral("Text Area"), textArea25_bits, textArea25_width,
           textArea25_height, CreateTool::kTextArea},
       {QStringLiteral("Message Button"), messageButton25_bits,
           messageButton25_width, messageButton25_height,
           CreateTool::kMessageButton},
+      {toggle ? toggle->displayName : QStringLiteral("Toggle"),
+          messageButton25_bits, messageButton25_width,
+          messageButton25_height, CreateTool::kQtedmToggle},
       {QStringLiteral("Menu"), menu25_bits, menu25_width, menu25_height,
           CreateTool::kMenu},
       {QStringLiteral("Slider"), valuator25_bits, valuator25_width,

@@ -1211,5 +1211,102 @@
       "has_string_value": false,
       "has_numeric_value": false
     }
+  },
+  {
+    "name": "qtedm_symbol_live_range_update",
+    "display": "tests/test_QtEDMPhase1.adl",
+    "selector": {
+      "type": "qtedm_symbol",
+      "channel": "led:test:discrete"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "led:test:discrete",
+        "value": "3"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "initial_update": true,
+      "has_value": true,
+      "state_count": 3,
+      "numeric_value": 3,
+      "numeric_tolerance": 0.0
+    }
+  },
+  {
+    "name": "qtedm_toggle_live_state_update",
+    "display": "tests/test_QtEDMPhase1.adl",
+    "selector": {
+      "type": "qtedm_toggle",
+      "channel": "led:test:binary_live"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "led:test:binary_live",
+        "value": "0"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "read_access": true,
+      "write_access": true,
+      "state_known": true,
+      "state_on": false,
+      "confirmation_required": true
+    }
+  },
+  {
+    "name": "qtedm_spinbox_live_numeric_update",
+    "display": "tests/test_QtEDMPhase1.adl",
+    "selector": {
+      "type": "qtedm_spinbox",
+      "channel": "sp:test:compact:setpoint"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "sp:test:compact:setpoint",
+        "value": "21.25"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "write_access": true,
+      "has_value": true,
+      "step": 0.25,
+      "low_limit": -10,
+      "high_limit": 100,
+      "precision": 2,
+      "numeric_value": 21.25,
+      "numeric_tolerance": 0.000001
+    }
+  },
+  {
+    "name": "qtedm_observe_only_masks_live_write_access",
+    "display": "tests/test_QtEDMPhase1.adl",
+    "qtedm_args": [
+      "--read-only"
+    ],
+    "selector": {
+      "type": "qtedm_toggle",
+      "channel": "led:test:binary_live"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "led:test:binary_live",
+        "value": "1"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "read_access": true,
+      "write_access": false,
+      "state_known": true,
+      "state_on": true
+    }
   }
 ]

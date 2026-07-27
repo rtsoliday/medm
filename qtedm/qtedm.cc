@@ -93,6 +93,7 @@ typedef int Status;
 #include "main_window_controller.h"
 #include "memory_tracker.h"
 #include "object_palette_dialog.h"
+#include "pv_channel_manager.h"
 #include "soft_pv_registry.h"
 #include "startup_timing.h"
 #include "statistics_window.h"
@@ -110,6 +111,7 @@ void printUsage(const QString &program)
       "  [-help | -h | -?]\n"
       "  [-version]\n"
       "  [-x]\n"
+      "  [--read-only]\n"
       "  [-local | -attach | -cleanup]\n"
       "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
@@ -126,6 +128,10 @@ void printUsage(const QString &program)
       "  [&]\n"
       "\n"
       "Options:\n"
+      "  --read-only\n"
+      "            Start in execute mode and block all CA, PVA, and soft-PV\n"
+      "            writes. Monitoring, navigation, and diagnostics remain\n"
+      "            available.\n"
       "  -nolog    Disable audit logging of control widget value changes\n"
       "            (can also set QTEDM_NOLOG=1 environment variable)\n"
       "\n"
@@ -500,8 +506,9 @@ int ignoreXErrorHandler(Display *, XErrorEvent *)
 
 QByteArray remotePropertyName(const CommandLineOptions &options)
 {
-  const char *suffix =
-      options.startInExecuteMode ? "_EXEC_FIXED" : "_EDIT_FIXED";
+  const char *suffix = options.observeOnly
+      ? "_EXEC_READONLY_FIXED"
+      : (options.startInExecuteMode ? "_EXEC_FIXED" : "_EDIT_FIXED");
 #ifdef MEDM_VERSION_DIGITS
   QByteArray base(MEDM_VERSION_DIGITS);
 #else
@@ -915,6 +922,7 @@ int main(int argc, char *argv[])
 
   /* Initialize audit logging for control widget value changes */
   AuditLogger::instance().initialize(options.enableAuditLog);
+  PvChannelManager::instance().setObserveOnly(options.observeOnly);
 
   /* Start memory tracking if TRACK_MEM environment variable is set */
   if (MemoryTracker::instance().isEnabled()) {
@@ -1195,9 +1203,17 @@ int main(int argc, char *argv[])
   modeLayout->addWidget(executeModeButton);
   auto *modeButtonsWidget = new QWidget;
   modeButtonsWidget->setLayout(modeLayout);
-  auto *executeOnlyLabel = new QLabel(QStringLiteral("Execute-Only"));
+  auto *executeOnlyLabel = new QLabel(options.observeOnly
+      ? QStringLiteral("Execute-Only — OBSERVE ONLY")
+      : QStringLiteral("Execute-Only"));
   executeOnlyLabel->setFont(fixed13Font);
   executeOnlyLabel->setAlignment(Qt::AlignCenter);
+  if (options.observeOnly) {
+    executeOnlyLabel->setStyleSheet(
+        QStringLiteral("QLabel { color: #8b0000; font-weight: bold; }"));
+    executeOnlyLabel->setToolTip(QStringLiteral(
+        "All CA, PVA, and soft-PV writes are blocked."));
+  }
   auto *executeOnlyWidget = new QWidget;
   auto *executeOnlyLayout = new QHBoxLayout(executeOnlyWidget);
   executeOnlyLayout->setContentsMargins(12, 8, 12, 8);
@@ -1215,6 +1231,7 @@ int main(int argc, char *argv[])
   QTEDM_TIMING_MARK("Creating display state");
   auto state = std::make_shared<DisplayState>();
   state->mainWindow = &win;
+  state->observeOnly = options.observeOnly;
   auto *mainWindowController = new MainWindowController(&win,
       std::weak_ptr<DisplayState>(state));
   win.installEventFilter(mainWindowController);

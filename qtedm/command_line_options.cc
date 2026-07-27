@@ -31,6 +31,9 @@ CommandLineOptions parseCommandLine(const QStringList &args)
     const QString &arg = args.at(i);
     if (arg == QLatin1String("-x")) {
       options.startInExecuteMode = true;
+    } else if (arg == QLatin1String("--read-only")) {
+      options.observeOnly = true;
+      options.startInExecuteMode = true;
     } else if (arg == QLatin1String("-local")) {
       options.remoteMode = RemoteMode::kLocal;
     } else if (arg == QLatin1String("-attach")) {

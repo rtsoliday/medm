@@ -36,6 +36,9 @@ enum class CreateTool {
   kMenu,
   kMessageButton,
   kSetpointControl,
+  kQtedmSymbol,
+  kQtedmToggle,
+  kQtedmSpinBox,
   kShellCommand,
   kRelatedDisplay,
   kMeter,
@@ -62,6 +65,7 @@ enum class CreateTool {
 
 struct DisplayState {
   bool editMode = true;
+  bool observeOnly = false;
   bool raiseMessageWindow = true;
   QList<QPointer<DisplayWindow>> displays;
   CreateTool createTool = CreateTool::kNone;

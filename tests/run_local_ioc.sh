@@ -2009,6 +2009,16 @@ set_related_display_test_pvs() {
   echo "Related display harness uses launch links only for tests/test_RelatedDisplay.adl (no PV initialization required)."
 }
 
+set_qtedm_phase1_test_pvs() {
+  local _prefix="$1"
+
+  # tests/test_QtEDMPhase1.adl intentionally reuses the deterministic channels
+  # initialized by set_led_monitor_test_pvs and
+  # set_setpoint_control_test_pvs.  Keeping one producer setup avoids the two
+  # harnesses racing to assign different limits or initial values.
+  echo "QtEDM Phase 1 extension PVs initialized by the LED and setpoint harnesses."
+}
+
 cleanup() {
   local status=$?
   if [[ -n "${waterfall_driver_pid}" ]] \
@@ -2062,6 +2072,7 @@ set_text_fonts_test_pvs "${PV_PREFIX}" || true
 set_text_area_test_pvs "${PV_PREFIX}" || true
 set_text_entry_test_pvs "${PV_PREFIX}" || true
 set_setpoint_control_test_pvs "${PV_PREFIX}" || true
+set_qtedm_phase1_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 if [[ -n "${READY_FILE}" ]]; then

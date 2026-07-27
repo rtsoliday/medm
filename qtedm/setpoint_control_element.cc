@@ -14,6 +14,7 @@
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QTimer>
+#include <QToolButton>
 
 #include "cursor_utils.h"
 #include "pv_name_utils.h"
@@ -95,6 +96,8 @@ SetpointControlElement::SetpointControlElement(QWidget *parent)
   , labelWidget_(new QLabel(this))
   , setpointEdit_(new QLineEdit(this))
   , readbackEdit_(new QLineEdit(this))
+  , decrementButton_(new QToolButton(this))
+  , incrementButton_(new QToolButton(this))
   , readbackFlushTimer_(new QTimer(this))
 {
   setAutoFillBackground(true);
@@ -109,6 +112,14 @@ SetpointControlElement::SetpointControlElement(QWidget *parent)
   readbackEdit_->setFocusPolicy(Qt::NoFocus);
   readbackEdit_->setContextMenuPolicy(Qt::NoContextMenu);
   readbackEdit_->setAttribute(Qt::WA_TransparentForMouseEvents);
+  decrementButton_->setText(QStringLiteral("−"));
+  incrementButton_->setText(QStringLiteral("+"));
+  decrementButton_->setAutoRepeat(true);
+  incrementButton_->setAutoRepeat(true);
+  decrementButton_->setAutoRepeatDelay(400);
+  incrementButton_->setAutoRepeatDelay(400);
+  decrementButton_->hide();
+  incrementButton_->hide();
 
   setpointEdit_->installEventFilter(this);
   readbackFlushTimer_->setSingleShot(true);
@@ -137,6 +148,10 @@ SetpointControlElement::SetpointControlElement(QWidget *parent)
           activationCallback_(setpointEdit_->text());
         }
       });
+  connect(decrementButton_, &QToolButton::clicked, this,
+      [this]() { stepBy(-1); });
+  connect(incrementButton_, &QToolButton::clicked, this,
+      [this]() { stepBy(1); });
 
   updateDisplayTexts();
   updateLayoutState();
@@ -396,6 +411,42 @@ void SetpointControlElement::setShowReadback(bool show)
   updateLayoutState();
   updateStatusText();
   updateFontForGeometry();
+}
+
+bool SetpointControlElement::isQtedmSpinBox() const
+{
+  return qtedmSpinBox_;
+}
+
+void SetpointControlElement::setQtedmSpinBox(bool enabled)
+{
+  if (qtedmSpinBox_ == enabled) {
+    return;
+  }
+  qtedmSpinBox_ = enabled;
+  if (decrementButton_) {
+    decrementButton_->setVisible(enabled);
+  }
+  if (incrementButton_) {
+    incrementButton_->setVisible(enabled);
+  }
+  updateLayoutState();
+  updateChildInteraction();
+  updateDisplayTexts();
+  updateStatusText();
+}
+
+double SetpointControlElement::stepSize() const
+{
+  return stepSize_;
+}
+
+void SetpointControlElement::setStepSize(double step)
+{
+  if (!std::isfinite(step) || step <= 0.0) {
+    return;
+  }
+  stepSize_ = step;
 }
 
 void SetpointControlElement::setExecuteMode(bool execute)
@@ -814,6 +865,16 @@ void SetpointControlElement::updateChildInteraction()
     setpointEdit_->setAttribute(Qt::WA_TransparentForMouseEvents, !interactive);
     setpointEdit_->setFocusPolicy(interactive ? Qt::StrongFocus : Qt::NoFocus);
   }
+  if (decrementButton_) {
+    decrementButton_->setEnabled(interactive);
+    decrementButton_->setAttribute(Qt::WA_TransparentForMouseEvents,
+        !interactive);
+  }
+  if (incrementButton_) {
+    incrementButton_->setEnabled(interactive);
+    incrementButton_->setAttribute(Qt::WA_TransparentForMouseEvents,
+        !interactive);
+  }
   if (executeMode_ && runtimeSetpointConnected_ && !runtimeWriteAccess_) {
     setCursor(CursorUtils::forbiddenCursor());
   } else {
@@ -855,7 +916,8 @@ void SetpointControlElement::updateStatusText()
   if (!runtimeNotice_.isEmpty()) {
     newStatus = runtimeNotice_;
   } else if (!executeMode_) {
-    newStatus = QStringLiteral("Setpoint Control");
+    newStatus = qtedmSpinBox_ ? QStringLiteral("QtEDM Spin Box")
+                             : QStringLiteral("Setpoint Control");
   } else if (setpointChannel_.trimmed().isEmpty()) {
     newStatus = QStringLiteral("No setpoint PV");
   } else if (!runtimeSetpointConnected_) {
@@ -928,6 +990,8 @@ void SetpointControlElement::updateFontForGeometry()
   applyFontIfChanged(labelWidget_, fittedFont);
   applyFontIfChanged(setpointEdit_, fittedFont);
   applyFontIfChanged(readbackEdit_, fittedFont);
+  applyFontIfChanged(decrementButton_, fittedFont);
+  applyFontIfChanged(incrementButton_, fittedFont);
 }
 
 void SetpointControlElement::updateChildGeometry()
@@ -942,18 +1006,40 @@ void SetpointControlElement::updateChildGeometry()
   const int usableWidth = std::max(0, contentWidth - totalSpacing);
   const int labelWidth = std::max(40, usableWidth * 34 / 100);
   const int valueWidth = std::max(1, usableWidth - labelWidth);
-  const int setpointWidth = showReadback_ ? valueWidth / 2 : valueWidth;
-  const int readbackWidth = showReadback_ ? valueWidth - setpointWidth : 0;
+  const int setpointRegionWidth = showReadback_ ? valueWidth / 2 : valueWidth;
+  const int readbackWidth = showReadback_
+      ? valueWidth - setpointRegionWidth : 0;
+  const int stepButtonWidth = qtedmSpinBox_
+      ? std::clamp(contentHeight, 16, 40) : 0;
+  const int stepSpacing = qtedmSpinBox_ ? 2 * 2 : 0;
+  const int setpointWidth = std::max(1,
+      setpointRegionWidth - 2 * stepButtonWidth - stepSpacing);
 
   int x = contentX;
   if (labelWidget_) {
     labelWidget_->setGeometry(x, contentY, labelWidth, contentHeight);
   }
   x += labelWidth + spacing;
+  if (decrementButton_) {
+    decrementButton_->setGeometry(x, contentY, stepButtonWidth, contentHeight);
+  }
+  if (qtedmSpinBox_) {
+    x += stepButtonWidth + 2;
+  }
   if (setpointEdit_) {
     setpointEdit_->setGeometry(x, contentY, setpointWidth, contentHeight);
   }
-  x += setpointWidth + spacing;
+  x += setpointWidth;
+  if (qtedmSpinBox_) {
+    x += 2;
+  }
+  if (incrementButton_) {
+    incrementButton_->setGeometry(x, contentY, stepButtonWidth, contentHeight);
+  }
+  if (qtedmSpinBox_) {
+    x += stepButtonWidth;
+  }
+  x += spacing;
   if (readbackEdit_) {
     readbackEdit_->setGeometry(x, contentY, readbackWidth, contentHeight);
   }
@@ -1066,13 +1152,44 @@ double SetpointControlElement::toleranceTargetValue() const
 
 QString SetpointControlElement::displayLabelText() const
 {
+  QString result;
   if (!label_.trimmed().isEmpty()) {
-    return label_;
+    result = label_;
+  } else if (!setpointChannel_.trimmed().isEmpty()) {
+    result = setpointChannel_;
+  } else {
+    result = QStringLiteral("Setpoint");
   }
-  if (!setpointChannel_.trimmed().isEmpty()) {
-    return setpointChannel_;
+  if (qtedmSpinBox_ && executeMode_ && !units_.trimmed().isEmpty()) {
+    result += QStringLiteral(" [%1]").arg(units_);
   }
-  return QStringLiteral("Setpoint");
+  return result;
+}
+
+void SetpointControlElement::stepBy(int direction)
+{
+  if (!qtedmSpinBox_ || direction == 0 || !activationCallback_
+      || !executeMode_ || !runtimeSetpointConnected_
+      || !runtimeWriteAccess_) {
+    return;
+  }
+  double current = hasSetpointValue_ ? setpointValue_ : 0.0;
+  if (setpointEdit_) {
+    bool ok = false;
+    const double edited = setpointEdit_->text().trimmed().toDouble(&ok);
+    if (ok && std::isfinite(edited)) {
+      current = edited;
+    }
+  }
+  double next = current + static_cast<double>(direction) * stepSize_;
+  const double low = displayLowLimit();
+  const double high = displayHighLimit();
+  if (std::isfinite(low) && std::isfinite(high) && low <= high) {
+    next = std::clamp(next, low, high);
+  }
+  const int precision = precisionSource() == PvLimitSource::kChannel
+      && runtimePrecision_ >= 0 ? runtimePrecision_ : precisionDefault();
+  activationCallback_(QString::number(next, 'f', std::clamp(precision, 0, 17)));
 }
 
 bool SetpointControlElement::forwardMouseEventToParent(QEvent *event) const

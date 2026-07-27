@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "channel_subscription.h"
 #include "pv_protocol.h"
 
@@ -23,6 +25,9 @@ public:
   bool putCharArrayValue(const QString &pvName, const QByteArray &value);
   bool putArrayValue(const QString &pvName, const QVector<double> &values);
 
+  void setObserveOnly(bool observeOnly);
+  bool isObserveOnly() const;
+
   int uniqueChannelCount() const;
   int totalSubscriptionCount() const;
   int connectedChannelCount() const;
@@ -32,4 +37,8 @@ public:
 
 private:
   PvChannelManager() = default;
+
+  bool rejectWrite(const QString &pvName, const QString &valueDescription);
+
+  std::atomic_bool observeOnly_{false};
 };

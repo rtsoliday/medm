@@ -51,6 +51,11 @@ public:
               const QString &widgetType,
               const QString &displayFile = QString());
 
+  /* Log a write rejected before transport dispatch. */
+  void logBlockedPut(const QString &pvName,
+                     const QString &value,
+                     const QString &reason);
+
   /* Shutdown and close log file */
   void shutdown();
 

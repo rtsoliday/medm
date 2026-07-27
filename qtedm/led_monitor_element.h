@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QString>
 #include <QWidget>
+#include <QVector>
 #include <QtGlobal>
 
 #include <array>
@@ -15,6 +16,15 @@ class LedMonitorElement : public QWidget
   friend class DisplayWindow;
 
 public:
+  struct SymbolState
+  {
+    double minimum = 0.0;
+    double maximum = 0.0;
+    QColor color;
+    QString label;
+    QString imagePath;
+  };
+
   explicit LedMonitorElement(QWidget *parent = nullptr);
 
   void setSelected(bool selected);
@@ -49,6 +59,14 @@ public:
 
   int stateCount() const;
   void setStateCount(int count);
+
+  bool isQtedmSymbol() const;
+  void setQtedmSymbol(bool enabled);
+  QVector<SymbolState> symbolStates() const;
+  void setSymbolStates(const QVector<SymbolState> &states);
+  void setSymbolState(int index, const SymbolState &state);
+  QString baseDirectory() const;
+  void setBaseDirectory(const QString &directory);
 
   QString channel() const;
   void setChannel(const QString &channel);
@@ -88,6 +106,9 @@ private:
   QColor defaultBackground() const;
   QColor defaultUndefined() const;
   QColor currentColorForState(int index) const;
+  int currentSymbolStateIndex() const;
+  void paintSymbol(QPainter &painter, const QRectF &bounds,
+      const FillState &fillState);
   void syncBinaryColorsFromStates();
   void syncStateColorsFromBinary();
 
@@ -102,6 +123,9 @@ private:
   QColor undefinedColor_;
   std::array<QColor, kLedStateCount> stateColors_{};
   int stateCount_ = 2;
+  bool qtedmSymbol_ = false;
+  QVector<SymbolState> symbolStates_;
+  QString baseDirectory_;
   QString channel_;
   std::array<QString, 5> visibilityChannels_{};
   TextVisibilityMode visibilityMode_ = TextVisibilityMode::kStatic;
@@ -110,6 +134,6 @@ private:
   bool runtimeConnected_ = false;
   bool runtimeVisible_ = true;
   bool hasRuntimeValue_ = false;
-  qint32 runtimeValue_ = 0;
+  double runtimeValue_ = 0.0;
   short runtimeSeverity_ = 3;
 };

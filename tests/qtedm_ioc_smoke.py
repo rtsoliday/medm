@@ -217,8 +217,10 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
   ready_path = temp_dir / f"{case['name']}.ready"
   state_path = temp_dir / f"{case['name']}.json"
 
+  qtedm_args = [str(value) for value in case.get("qtedm_args", [])]
   command = [
       str(qtedm_bin),
+      *qtedm_args,
       "-x",
       "-testReadyFile",
       str(ready_path),

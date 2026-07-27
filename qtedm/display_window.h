@@ -1923,7 +1923,8 @@ private:
 
   void createTextEntryElement(const QRect &rect);
 
-  void createSetpointControlElement(const QRect &rect);
+  void createSetpointControlElement(const QRect &rect,
+      bool qtedmSpinBox = false);
 
   void createTextAreaElement(const QRect &rect);
 
@@ -1935,7 +1936,8 @@ private:
 
   void createMenuElement(const QRect &rect);
 
-  void createMessageButtonElement(const QRect &rect);
+  void createMessageButtonElement(const QRect &rect,
+      bool qtedmToggle = false);
 
   void createShellCommandElement(const QRect &rect);
 
@@ -1955,7 +1957,8 @@ private:
 
   void createByteMonitorElement(const QRect &rect);
 
-  void createLedMonitorElement(const QRect &rect);
+  void createLedMonitorElement(const QRect &rect,
+      bool qtedmSymbol = false);
 
   void createExpressionChannelElement(const QRect &rect);
 
@@ -2018,4 +2021,6 @@ private:
   void retryChannelConnections();
 
   void showEditContextMenu(const QPoint &globalPos);
+
+  void showQtedmExtensionProperties(QWidget *widget);
 };

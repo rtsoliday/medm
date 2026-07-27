@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "audit_logger.h"
 #include "channel_access_context.h"
 #include "pva_channel_manager.h"
 #include "shared_channel_manager.h"
@@ -22,6 +23,16 @@ SubscriptionHandle PvChannelManager::subscribe(
     ChannelAccessRightsCallback accessRightsCallback,
     ChannelDeliveryMode deliveryMode)
 {
+  if (accessRightsCallback) {
+    ChannelAccessRightsCallback requestedCallback =
+        std::move(accessRightsCallback);
+    accessRightsCallback =
+        [this, callback = std::move(requestedCallback)](
+            bool canRead, bool canWrite) {
+          callback(canRead, canWrite && !isObserveOnly());
+        };
+  }
+
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -45,6 +56,9 @@ SubscriptionHandle PvChannelManager::subscribe(
 
 bool PvChannelManager::putValue(const QString &pvName, double value)
 {
+  if (rejectWrite(pvName, QString::number(value, 'g', 15))) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -58,6 +72,9 @@ bool PvChannelManager::putValue(const QString &pvName, double value)
 
 bool PvChannelManager::putValue(const QString &pvName, const QString &value)
 {
+  if (rejectWrite(pvName, value)) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -71,6 +88,9 @@ bool PvChannelManager::putValue(const QString &pvName, const QString &value)
 
 bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value)
 {
+  if (rejectWrite(pvName, QString::number(value))) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -85,6 +105,10 @@ bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value)
 bool PvChannelManager::putCharArrayValue(const QString &pvName,
     const QByteArray &value)
 {
+  if (rejectWrite(pvName, QStringLiteral("<char-array:%1 bytes>")
+          .arg(value.size()))) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -100,6 +124,10 @@ bool PvChannelManager::putCharArrayValue(const QString &pvName,
 bool PvChannelManager::putArrayValue(const QString &pvName,
     const QVector<double> &values)
 {
+  if (rejectWrite(pvName, QStringLiteral("<numeric-array:%1 elements>")
+          .arg(values.size()))) {
+    return false;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -150,4 +178,25 @@ double PvChannelManager::elapsedSecondsSinceReset() const
 {
   return std::max(SharedChannelManager::instance().elapsedSecondsSinceReset(),
       PvaChannelManager::instance().elapsedSecondsSinceReset());
+}
+
+void PvChannelManager::setObserveOnly(bool observeOnly)
+{
+  observeOnly_.store(observeOnly, std::memory_order_release);
+}
+
+bool PvChannelManager::isObserveOnly() const
+{
+  return observeOnly_.load(std::memory_order_acquire);
+}
+
+bool PvChannelManager::rejectWrite(const QString &pvName,
+    const QString &valueDescription)
+{
+  if (!isObserveOnly()) {
+    return false;
+  }
+  AuditLogger::instance().logBlockedPut(pvName, valueDescription,
+      QStringLiteral("ObserveOnly"));
+  return true;
 }

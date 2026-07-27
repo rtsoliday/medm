@@ -17,6 +17,7 @@
 #include <QPen>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QSignalBlocker>
 
 #include "cursor_utils.h"
 #include "legacy_fonts.h"
@@ -164,6 +165,14 @@ MessageButtonElement::MessageButtonElement(QWidget *parent)
       [this]() {
         handleButtonReleased();
       });
+  QObject::connect(button_, &QPushButton::clicked, this,
+      [this]() {
+        if (!qtedmToggle_) {
+          return;
+        }
+        const QSignalBlocker blocker(button_);
+        button_->setChecked(runtimeToggleKnown_ && runtimeToggleOn_);
+      });
 
   foregroundColor_ = palette().color(QPalette::WindowText);
   backgroundColor_ = palette().color(QPalette::Window);
@@ -292,6 +301,82 @@ void MessageButtonElement::setChannel(const QString &channel)
   }
 }
 
+bool MessageButtonElement::isQtedmToggle() const
+{
+  return qtedmToggle_;
+}
+
+void MessageButtonElement::setQtedmToggle(bool enabled)
+{
+  if (qtedmToggle_ == enabled) {
+    return;
+  }
+  qtedmToggle_ = enabled;
+  runtimeToggleKnown_ = false;
+  if (button_) {
+    button_->setCheckable(enabled);
+    button_->setChecked(false);
+    button_->setText(effectiveLabel());
+  }
+  updateButtonState();
+}
+
+QString MessageButtonElement::offValue() const
+{
+  return offValue_;
+}
+
+void MessageButtonElement::setOffValue(const QString &value)
+{
+  offValue_ = value;
+}
+
+QString MessageButtonElement::onValue() const
+{
+  return onValue_;
+}
+
+void MessageButtonElement::setOnValue(const QString &value)
+{
+  onValue_ = value;
+}
+
+QString MessageButtonElement::offLabel() const
+{
+  return offLabel_;
+}
+
+void MessageButtonElement::setOffLabel(const QString &label)
+{
+  offLabel_ = label;
+  if (button_) {
+    button_->setText(effectiveLabel());
+  }
+}
+
+QString MessageButtonElement::onLabel() const
+{
+  return onLabel_;
+}
+
+void MessageButtonElement::setOnLabel(const QString &label)
+{
+  onLabel_ = label;
+  if (button_) {
+    button_->setText(effectiveLabel());
+  }
+}
+
+bool MessageButtonElement::confirmationRequired() const
+{
+  return confirmationRequired_;
+}
+
+void MessageButtonElement::setConfirmationRequired(bool required)
+{
+  confirmationRequired_ = required;
+}
+
 void MessageButtonElement::setExecuteMode(bool execute)
 {
   if (executeMode_ == execute) {
@@ -302,6 +387,8 @@ void MessageButtonElement::setExecuteMode(bool execute)
   runtimeReadAccess_ = false;
   runtimeWriteAccess_ = false;
   runtimeSeverity_ = 0;
+  runtimeToggleKnown_ = false;
+  runtimeToggleOn_ = false;
   if (button_) {
     button_->setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
     button_->setDown(false);
@@ -371,6 +458,21 @@ void MessageButtonElement::setRuntimeWriteAccess(bool writeAccess)
     return;
   }
   updateButtonState();
+}
+
+void MessageButtonElement::setRuntimeToggleState(bool on, bool known)
+{
+  if (runtimeToggleOn_ == on && runtimeToggleKnown_ == known) {
+    return;
+  }
+  runtimeToggleOn_ = on;
+  runtimeToggleKnown_ = known;
+  if (button_) {
+    const QSignalBlocker blocker(button_);
+    button_->setChecked(known && on);
+    button_->setText(effectiveLabel());
+  }
+  updateButtonFont();
 }
 
 void MessageButtonElement::setPressCallback(const std::function<void()> &callback)
@@ -462,7 +564,7 @@ void MessageButtonElement::applyPaletteColors()
       "border-width: 2px; border-style: solid; "
       "border-top-color: %3; border-left-color: %3; "
       "border-bottom-color: %4; border-right-color: %4; }"
-      "QPushButton:pressed { "
+      "QPushButton:pressed, QPushButton:checked { "
       "border-top-color: %4; border-left-color: %4; "
       "border-bottom-color: %3; border-right-color: %3; "
       "padding-top: 1px; padding-left: 1px; }")
@@ -483,6 +585,13 @@ void MessageButtonElement::updateSelectionVisual()
 
 QString MessageButtonElement::effectiveLabel() const
 {
+  if (qtedmToggle_) {
+    if (!executeMode_ || !runtimeToggleKnown_) {
+      return !label_.trimmed().isEmpty() ? label_.trimmed()
+                                         : QStringLiteral("Toggle");
+    }
+    return runtimeToggleOn_ ? onLabel_ : offLabel_;
+  }
   return label_.trimmed();
 }
 
@@ -540,15 +649,18 @@ void MessageButtonElement::updateButtonState()
     return;
   }
 
-  const bool enable = runtimeConnected_;
+  const bool enable = runtimeConnected_ && runtimeWriteAccess_;
   button_->setEnabled(enable);
-  if (enable && runtimeWriteAccess_) {
+  if (enable) {
     button_->setCursor(CursorUtils::arrowCursor());
   } else {
     button_->setCursor(CursorUtils::forbiddenCursor());
   }
   if (!enable) {
     button_->setDown(false);
+    if (qtedmToggle_ && !runtimeConnected_) {
+      button_->setChecked(false);
+    }
   }
 }
 
@@ -580,7 +692,7 @@ void MessageButtonElement::handleButtonReleased()
     }
     return;
   }
-  if (releaseCallback_) {
+  if (!qtedmToggle_ && releaseCallback_) {
     releaseCallback_();
   }
 }

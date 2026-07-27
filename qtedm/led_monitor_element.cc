@@ -7,11 +7,14 @@
 #include <limits>
 
 #include <QApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QPalette>
 #include <QPen>
+#include <QPixmap>
 #include <QRadialGradient>
 
 #include "medm_colors.h"
@@ -237,6 +240,59 @@ void LedMonitorElement::setStateCount(int count)
   update();
 }
 
+bool LedMonitorElement::isQtedmSymbol() const
+{
+  return qtedmSymbol_;
+}
+
+void LedMonitorElement::setQtedmSymbol(bool enabled)
+{
+  if (qtedmSymbol_ == enabled) {
+    return;
+  }
+  qtedmSymbol_ = enabled;
+  if (enabled && symbolStates_.isEmpty()) {
+    symbolStates_ = {
+        {0.0, 0.0, offColor_, QStringLiteral("Off"), QString()},
+        {1.0, 1.0, onColor_, QStringLiteral("On"), QString()}};
+  }
+  update();
+}
+
+QVector<LedMonitorElement::SymbolState> LedMonitorElement::symbolStates() const
+{
+  return symbolStates_;
+}
+
+void LedMonitorElement::setSymbolStates(const QVector<SymbolState> &states)
+{
+  symbolStates_ = states.mid(0, kLedStateCount);
+  update();
+}
+
+void LedMonitorElement::setSymbolState(int index, const SymbolState &state)
+{
+  if (index < 0 || index >= kLedStateCount) {
+    return;
+  }
+  if (symbolStates_.size() <= index) {
+    symbolStates_.resize(index + 1);
+  }
+  symbolStates_[index] = state;
+  update();
+}
+
+QString LedMonitorElement::baseDirectory() const
+{
+  return baseDirectory_;
+}
+
+void LedMonitorElement::setBaseDirectory(const QString &directory)
+{
+  baseDirectory_ = directory;
+  update();
+}
+
 QString LedMonitorElement::channel() const
 {
   return channel_;
@@ -331,7 +387,7 @@ void LedMonitorElement::setRuntimeConnected(bool connected)
   if (!runtimeConnected_) {
     runtimeSeverity_ = kInvalidSeverity;
     hasRuntimeValue_ = false;
-    runtimeValue_ = 0;
+    runtimeValue_ = 0.0;
   }
   UpdateCoordinator::instance().requestUpdate(this);
 }
@@ -371,14 +427,10 @@ void LedMonitorElement::setRuntimeValue(double value)
   if (!std::isfinite(value)) {
     return;
   }
-  const double minValue = static_cast<double>(std::numeric_limits<qint32>::min());
-  const double maxValue = static_cast<double>(std::numeric_limits<qint32>::max());
-  const qint32 integralValue = static_cast<qint32>(
-      std::clamp(value, minValue, maxValue));
-  if (hasRuntimeValue_ && runtimeValue_ == integralValue) {
+  if (hasRuntimeValue_ && qFuzzyCompare(runtimeValue_ + 1.0, value + 1.0)) {
     return;
   }
-  runtimeValue_ = integralValue;
+  runtimeValue_ = value;
   hasRuntimeValue_ = true;
   UpdateCoordinator::instance().requestUpdate(this);
 }
@@ -398,7 +450,7 @@ void LedMonitorElement::clearRuntimeState()
 {
   runtimeConnected_ = false;
   hasRuntimeValue_ = false;
-  runtimeValue_ = 0;
+  runtimeValue_ = 0.0;
   runtimeSeverity_ = kInvalidSeverity;
   if (executeMode_) {
     UpdateCoordinator::instance().requestUpdate(this);
@@ -424,6 +476,13 @@ void LedMonitorElement::paintEvent(QPaintEvent *event)
   }
 
   const FillState fillState = effectiveFillState();
+  if (qtedmSymbol_) {
+    paintSymbol(painter, bounds, fillState);
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
   QColor fillColor = fillState.color.isValid() ? fillState.color : defaultUndefined();
   const QPainterPath outerPath = ledPathForShape(shape_, bounds);
   if (outerPath.isEmpty()) {
@@ -519,10 +578,85 @@ LedMonitorElement::FillState LedMonitorElement::effectiveFillState() const
   case TextColorMode::kDiscrete:
   default:
     if (hasRuntimeValue_) {
-      return {currentColorForState(runtimeValue_), false};
+      const double minimum =
+          static_cast<double>(std::numeric_limits<int>::min());
+      const double maximum =
+          static_cast<double>(std::numeric_limits<int>::max());
+      const int index = static_cast<int>(
+          std::clamp(runtimeValue_, minimum, maximum));
+      return {currentColorForState(index), false};
     }
     return {undefinedColor_.isValid() ? undefinedColor_ : defaultUndefined(),
         false};
+  }
+}
+
+int LedMonitorElement::currentSymbolStateIndex() const
+{
+  if (executeMode_ && (!runtimeConnected_ || !hasRuntimeValue_)) {
+    return -1;
+  }
+  if (!executeMode_) {
+    return symbolStates_.isEmpty() ? -1 : 0;
+  }
+  for (int i = 0; i < symbolStates_.size(); ++i) {
+    const SymbolState &state = symbolStates_.at(i);
+    const double low = std::min(state.minimum, state.maximum);
+    const double high = std::max(state.minimum, state.maximum);
+    if (runtimeValue_ >= low && runtimeValue_ <= high) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void LedMonitorElement::paintSymbol(QPainter &painter, const QRectF &bounds,
+    const FillState &fillState)
+{
+  const int index = currentSymbolStateIndex();
+  const SymbolState *state = index >= 0 && index < symbolStates_.size()
+      ? &symbolStates_.at(index) : nullptr;
+  QColor color = state && state->color.isValid()
+      ? state->color : fillState.color;
+  if (!color.isValid()) {
+    color = defaultUndefined();
+  }
+  painter.fillRect(bounds, color);
+
+  if (state && !state->imagePath.trimmed().isEmpty()) {
+    QString path = state->imagePath;
+    if (QFileInfo(path).isRelative() && !baseDirectory_.isEmpty()) {
+      path = QDir(baseDirectory_).filePath(path);
+    }
+    const QPixmap pixmap(path);
+    if (!pixmap.isNull()) {
+      painter.drawPixmap(bounds.toRect(), pixmap, pixmap.rect());
+    }
+  }
+
+  if (fillState.hatched || !state) {
+    QColor hatch = clampLightness(color, -100);
+    hatch.setAlpha(190);
+    painter.fillRect(bounds, QBrush(hatch, Qt::BDiagPattern));
+  }
+
+  const QString label = state ? state->label
+      : (executeMode_ ? QStringLiteral("Undefined")
+                      : QStringLiteral("Symbol"));
+  if (!label.isEmpty()) {
+    QColor textColor = color.lightness() < 128 ? Qt::white : Qt::black;
+    painter.setPen(textColor);
+    painter.drawText(bounds.adjusted(3, 2, -3, -2),
+        Qt::AlignCenter | Qt::TextWordWrap, label);
+  }
+
+  if (executeMode_ && runtimeConnected_ && runtimeSeverity_ > 0
+      && runtimeSeverity_ < kInvalidSeverity) {
+    QPen alarmPen(MedmColors::alarmColorForSeverity(runtimeSeverity_));
+    alarmPen.setWidth(3);
+    painter.setPen(alarmPen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(bounds.adjusted(1.5, 1.5, -1.5, -1.5));
   }
 }
 

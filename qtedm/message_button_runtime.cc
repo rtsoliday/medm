@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QDebug>
+#include <QMessageBox>
 
 #include <db_access.h>
 
@@ -105,12 +106,15 @@ void MessageButtonRuntime::resetRuntimeState()
   lastWriteAccess_ = false;
   lastSeverity_ = 0;
   enumStrings_.clear();
+  toggleStateKnown_ = false;
+  toggleStateOn_ = false;
 
   invokeOnElement([](MessageButtonElement *element) {
     element->setRuntimeConnected(false);
     element->setRuntimeReadAccess(false);
     element->setRuntimeWriteAccess(false);
     element->setRuntimeSeverity(0);
+    element->setRuntimeToggleState(false, false);
   });
 }
 
@@ -147,6 +151,7 @@ void MessageButtonRuntime::handleChannelConnection(bool connected,
       element->setRuntimeReadAccess(false);
       element->setRuntimeWriteAccess(false);
       element->setRuntimeSeverity(kInvalidSeverity);
+      element->setRuntimeToggleState(false, false);
     });
   }
 }
@@ -174,6 +179,16 @@ void MessageButtonRuntime::handleChannelData(const SharedChannelData &data)
   if (!data.enumStrings.isEmpty() && enumStrings_ != data.enumStrings) {
     enumStrings_ = data.enumStrings;
   }
+  if (element_ && element_->isQtedmToggle() && data.hasValue) {
+    const bool matchesOn = dataMatchesValue(data, element_->onValue());
+    const bool matchesOff = dataMatchesValue(data, element_->offValue());
+    toggleStateKnown_ = matchesOn || matchesOff;
+    toggleStateOn_ = matchesOn;
+    invokeOnElement([on = toggleStateOn_, known = toggleStateKnown_](
+                        MessageButtonElement *element) {
+      element->setRuntimeToggleState(on, known);
+    });
+  }
 }
 void MessageButtonRuntime::handleAccessRights(bool canRead, bool canWrite)
 {
@@ -197,6 +212,25 @@ void MessageButtonRuntime::handlePress()
     return;
   }
   if (!element_) {
+    return;
+  }
+  if (element_->isQtedmToggle()) {
+    const bool nextOn = !toggleStateKnown_ || !toggleStateOn_;
+    const QString value = nextOn ? element_->onValue() : element_->offValue();
+    if (element_->confirmationRequired()) {
+      const QString label = nextOn ? element_->onLabel() : element_->offLabel();
+      const auto answer = QMessageBox::question(element_,
+          QStringLiteral("Confirm PV Write"),
+          QStringLiteral("Set %1 to %2 (%3)?")
+              .arg(channelName_, label, value),
+          QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+      if (answer != QMessageBox::Yes) {
+        return;
+      }
+    }
+    if (!sendValue(value)) {
+      QApplication::beep();
+    }
     return;
   }
   const QString message = element_->pressMessage();
@@ -271,7 +305,7 @@ bool MessageButtonRuntime::sendStringValue(const QString &value)
     return false;
   }
   AuditLogger::instance().logPut(channelName_, value,
-      QStringLiteral("MessageButton"));
+      auditWidgetType());
   return true;
 }
 
@@ -296,6 +330,7 @@ bool MessageButtonRuntime::sendCharArrayValue(const QString &value)
                << channelName_;
     return false;
   }
+  AuditLogger::instance().logPut(channelName_, value, auditWidgetType());
   return true;
 }
 
@@ -336,7 +371,7 @@ bool MessageButtonRuntime::sendEnumValue(const QString &value)
     return false;
   }
   AuditLogger::instance().logPut(channelName_, static_cast<int>(toSend),
-      QStringLiteral("MessageButton"));
+      auditWidgetType());
   return true;
 }
 
@@ -356,6 +391,44 @@ bool MessageButtonRuntime::sendNumericValue(const QString &value)
     return false;
   }
   AuditLogger::instance().logPut(channelName_, numeric,
-      QStringLiteral("MessageButton"));
+      auditWidgetType());
   return true;
+}
+
+bool MessageButtonRuntime::dataMatchesValue(const SharedChannelData &data,
+    const QString &configuredValue) const
+{
+  const QString trimmed = configuredValue.trimmed();
+  if (data.isEnum) {
+    if (data.enumValue < static_cast<dbr_enum_t>(enumStrings_.size())
+        && enumStrings_.at(data.enumValue) == trimmed) {
+      return true;
+    }
+    bool ok = false;
+    const double target = trimmed.toDouble(&ok);
+    return ok && std::abs(static_cast<double>(data.enumValue) - target)
+        <= 1e-12;
+  }
+  if (data.isNumeric) {
+    bool ok = false;
+    const double target = trimmed.toDouble(&ok);
+    return ok && std::isfinite(target)
+        && std::abs(data.numericValue - target) <= 1e-12;
+  }
+  if (data.isCharArray) {
+    const int nul = data.charArrayValue.indexOf('\0');
+    const QByteArray bytes = nul >= 0 ? data.charArrayValue.left(nul)
+                                     : data.charArrayValue;
+    return QString::fromLatin1(bytes) == configuredValue;
+  }
+  if (data.isString) {
+    return data.stringValue == configuredValue;
+  }
+  return false;
+}
+
+QString MessageButtonRuntime::auditWidgetType() const
+{
+  return element_ && element_->isQtedmToggle()
+      ? QStringLiteral("QtEDMToggle") : QStringLiteral("MessageButton");
 }

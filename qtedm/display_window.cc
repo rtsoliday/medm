@@ -3,6 +3,14 @@
 #include "channel_access_context.h"
 #include "startup_timing.h"
 
+#include <QCheckBox>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QHeaderView>
+#include <QSpinBox>
+#include <QTableWidget>
+
 /* Format a display window title with QtEDM prefix for visual distinction.
  * When macros are provided, they are appended in brackets after the filename
  * to help operators distinguish multiple instances of the same display
@@ -2696,18 +2704,21 @@ void DisplayWindow::mousePressEvent(QMouseEvent *event)
           || state->createTool == CreateTool::kWaveTable
           || state->createTool == CreateTool::kTextEntry
           || state->createTool == CreateTool::kSetpointControl
+          || state->createTool == CreateTool::kQtedmSpinBox
           || state->createTool == CreateTool::kTextArea
           || state->createTool == CreateTool::kSlider
           || state->createTool == CreateTool::kWheelSwitch
           || state->createTool == CreateTool::kChoiceButton
           || state->createTool == CreateTool::kMenu
           || state->createTool == CreateTool::kMessageButton
+          || state->createTool == CreateTool::kQtedmToggle
           || state->createTool == CreateTool::kShellCommand
           || state->createTool == CreateTool::kMeter
           || state->createTool == CreateTool::kBarMonitor
           || state->createTool == CreateTool::kThermometer
           || state->createTool == CreateTool::kByteMonitor
           || state->createTool == CreateTool::kLedMonitor
+          || state->createTool == CreateTool::kQtedmSymbol
           || state->createTool == CreateTool::kExpressionChannel
           || state->createTool == CreateTool::kScaleMonitor
           || state->createTool == CreateTool::kStripChart
@@ -6918,17 +6929,27 @@ void DisplayWindow::showResourcePaletteForMessageButton(MessageButtonElement *el
         markDirty();
       },
       [element]() {
-        return element->pressMessage();
+        return element->isQtedmToggle() ? element->onValue()
+                                        : element->pressMessage();
       },
       [this, element](const QString &text) {
-        element->setPressMessage(text);
+        if (element->isQtedmToggle()) {
+          element->setOnValue(text);
+        } else {
+          element->setPressMessage(text);
+        }
         markDirty();
       },
       [element]() {
-        return element->releaseMessage();
+        return element->isQtedmToggle() ? element->offValue()
+                                        : element->releaseMessage();
       },
       [this, element](const QString &text) {
-        element->setReleaseMessage(text);
+        if (element->isQtedmToggle()) {
+          element->setOffValue(text);
+        } else {
+          element->setReleaseMessage(text);
+        }
         markDirty();
       },
       [element]() {
@@ -8151,6 +8172,14 @@ void DisplayWindow::showResourcePaletteForLedMonitor(LedMonitorElement *element)
     stateColorSetters[static_cast<std::size_t>(i)] =
         [this, element, i](const QColor &color) {
           element->setStateColor(i, color);
+          if (element->isQtedmSymbol()) {
+            auto states = element->symbolStates();
+            if (states.size() <= i) {
+              states.resize(i + 1);
+            }
+            states[i].color = color;
+            element->setSymbolStates(states);
+          }
           markDirty();
         };
   }
@@ -15036,6 +15065,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
     createTextEntryElement(rect);
     break;
   case CreateTool::kSetpointControl:
+  case CreateTool::kQtedmSpinBox:
     if (rect.width() < kMinimumTextWidth * 3) {
       rect.setWidth(kMinimumTextWidth * 3);
     }
@@ -15043,7 +15073,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
       rect.setHeight(kMinimumTextHeight * 2);
     }
     rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
-    createSetpointControlElement(rect);
+    createSetpointControlElement(rect, tool == CreateTool::kQtedmSpinBox);
     break;
   case CreateTool::kTextArea:
     if (rect.width() < kMinimumTextWidth * 2) {
@@ -15096,6 +15126,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
     createMenuElement(rect);
     break;
   case CreateTool::kMessageButton:
+  case CreateTool::kQtedmToggle:
     if (rect.width() < kMinimumTextWidth) {
       rect.setWidth(kMinimumTextWidth);
     }
@@ -15103,7 +15134,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
       rect.setHeight(kMinimumTextHeight);
     }
     rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
-    createMessageButtonElement(rect);
+    createMessageButtonElement(rect, tool == CreateTool::kQtedmToggle);
     break;
   case CreateTool::kShellCommand:
     if (rect.width() < kMinimumTextWidth) {
@@ -15156,6 +15187,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
     createByteMonitorElement(rect);
     break;
   case CreateTool::kLedMonitor:
+  case CreateTool::kQtedmSymbol:
     if (rect.width() <= 0) {
       rect.setWidth(kDefaultLedSize);
     }
@@ -15169,7 +15201,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
       rect.setHeight(kMinimumLedSize);
     }
     rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
-    createLedMonitorElement(rect);
+    createLedMonitorElement(rect, tool == CreateTool::kQtedmSymbol);
     break;
   case CreateTool::kExpressionChannel:
     if (rect.width() < kMinimumExpressionChannelWidth) {
@@ -16078,12 +16110,14 @@ void DisplayWindow::createTextEntryElement(const QRect &rect)
 }
 
 
-void DisplayWindow::createSetpointControlElement(const QRect &rect)
+void DisplayWindow::createSetpointControlElement(const QRect &rect,
+    bool qtedmSpinBox)
 {
   if (!displayArea_) {
     return;
   }
-  setNextUndoLabel(QStringLiteral("Create Setpoint Control"));
+  setNextUndoLabel(qtedmSpinBox ? QStringLiteral("Create QtEDM Spin Box")
+                               : QStringLiteral("Create Setpoint Control"));
   QRect target = rect;
   if (target.width() < kMinimumTextWidth * 3) {
     target.setWidth(kMinimumTextWidth * 3);
@@ -16096,6 +16130,10 @@ void DisplayWindow::createSetpointControlElement(const QRect &rect)
     return;
   }
   auto *element = new SetpointControlElement(displayArea_);
+  element->setQtedmSpinBox(qtedmSpinBox);
+  if (qtedmSpinBox) {
+    element->setShowReadback(false);
+  }
   element->setFont(font());
   element->setGeometry(target);
   recordWidgetOriginalGeometry(element, target);
@@ -16270,12 +16308,14 @@ void DisplayWindow::createMenuElement(const QRect &rect)
 }
 
 
-void DisplayWindow::createMessageButtonElement(const QRect &rect)
+void DisplayWindow::createMessageButtonElement(const QRect &rect,
+    bool qtedmToggle)
 {
   if (!displayArea_) {
     return;
   }
-  setNextUndoLabel(QStringLiteral("Create Message Button"));
+  setNextUndoLabel(qtedmToggle ? QStringLiteral("Create QtEDM Toggle")
+                              : QStringLiteral("Create Message Button"));
   QRect target = rect;
   if (target.width() < kMinimumTextWidth) {
     target.setWidth(kMinimumTextWidth);
@@ -16288,6 +16328,7 @@ void DisplayWindow::createMessageButtonElement(const QRect &rect)
     return;
   }
   auto *element = new MessageButtonElement(displayArea_);
+  element->setQtedmToggle(qtedmToggle);
   element->setFont(font());
   element->setGeometry(target);
   recordWidgetOriginalGeometry(element, target);
@@ -16584,12 +16625,14 @@ void DisplayWindow::createByteMonitorElement(const QRect &rect)
 }
 
 
-void DisplayWindow::createLedMonitorElement(const QRect &rect)
+void DisplayWindow::createLedMonitorElement(const QRect &rect,
+    bool qtedmSymbol)
 {
   if (!displayArea_) {
     return;
   }
-  setNextUndoLabel(QStringLiteral("Create LED Monitor"));
+  setNextUndoLabel(qtedmSymbol ? QStringLiteral("Create QtEDM Symbol")
+                              : QStringLiteral("Create LED Monitor"));
   QRect target = rect;
   if (target.width() < kMinimumLedSize) {
     target.setWidth(kMinimumLedSize);
@@ -16602,6 +16645,7 @@ void DisplayWindow::createLedMonitorElement(const QRect &rect)
     return;
   }
   auto *element = new LedMonitorElement(displayArea_);
+  element->setQtedmSymbol(qtedmSymbol);
   element->setGeometry(target);
   recordWidgetOriginalGeometry(element, target);
   element->show();
@@ -17110,18 +17154,22 @@ void DisplayWindow::updateCreateCursor()
           || state->createTool == CreateTool::kPvTable
           || state->createTool == CreateTool::kWaveTable
           || state->createTool == CreateTool::kTextEntry
+          || state->createTool == CreateTool::kSetpointControl
+          || state->createTool == CreateTool::kQtedmSpinBox
           || state->createTool == CreateTool::kTextArea
           || state->createTool == CreateTool::kSlider
           || state->createTool == CreateTool::kWheelSwitch
           || state->createTool == CreateTool::kChoiceButton
           || state->createTool == CreateTool::kMenu
           || state->createTool == CreateTool::kMessageButton
+          || state->createTool == CreateTool::kQtedmToggle
           || state->createTool == CreateTool::kShellCommand
           || state->createTool == CreateTool::kMeter
           || state->createTool == CreateTool::kBarMonitor
           || state->createTool == CreateTool::kThermometer
           || state->createTool == CreateTool::kByteMonitor
           || state->createTool == CreateTool::kLedMonitor
+          || state->createTool == CreateTool::kQtedmSymbol
           || state->createTool == CreateTool::kExpressionChannel
           || state->createTool == CreateTool::kScaleMonitor
           || state->createTool == CreateTool::kStripChart
@@ -17953,6 +18001,145 @@ void DisplayWindow::retryChannelConnections()
   }
 }
 
+void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
+{
+  if (!widget) {
+    return;
+  }
+
+  QDialog dialog(this);
+  dialog.setModal(true);
+  auto *layout = new QVBoxLayout(&dialog);
+  auto *form = new QFormLayout;
+  layout->addLayout(form);
+
+  if (auto *spinbox = dynamic_cast<SetpointControlElement *>(widget);
+      spinbox && spinbox->isQtedmSpinBox()) {
+    dialog.setWindowTitle(QStringLiteral("QtEDM Spin Box Properties"));
+    auto *step = new QDoubleSpinBox(&dialog);
+    step->setDecimals(12);
+    step->setRange(1e-12, 1e12);
+    step->setValue(spinbox->stepSize());
+    form->addRow(QStringLiteral("Step size"), step);
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted) {
+      setNextUndoLabel(QStringLiteral("Edit QtEDM Spin Box Properties"));
+      spinbox->setStepSize(step->value());
+      markDirty();
+    }
+    return;
+  }
+
+  if (auto *toggle = dynamic_cast<MessageButtonElement *>(widget);
+      toggle && toggle->isQtedmToggle()) {
+    dialog.setWindowTitle(QStringLiteral("QtEDM Toggle Properties"));
+    auto *offValue = new QLineEdit(toggle->offValue(), &dialog);
+    auto *onValue = new QLineEdit(toggle->onValue(), &dialog);
+    auto *offLabel = new QLineEdit(toggle->offLabel(), &dialog);
+    auto *onLabel = new QLineEdit(toggle->onLabel(), &dialog);
+    auto *confirm = new QCheckBox(&dialog);
+    confirm->setChecked(toggle->confirmationRequired());
+    form->addRow(QStringLiteral("Off value"), offValue);
+    form->addRow(QStringLiteral("On value"), onValue);
+    form->addRow(QStringLiteral("Off label"), offLabel);
+    form->addRow(QStringLiteral("On label"), onLabel);
+    form->addRow(QStringLiteral("Require confirmation"), confirm);
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted) {
+      setNextUndoLabel(QStringLiteral("Edit QtEDM Toggle Properties"));
+      toggle->setOffValue(offValue->text());
+      toggle->setOnValue(onValue->text());
+      toggle->setOffLabel(offLabel->text());
+      toggle->setOnLabel(onLabel->text());
+      toggle->setConfirmationRequired(confirm->isChecked());
+      markDirty();
+    }
+    return;
+  }
+
+  auto *symbol = dynamic_cast<LedMonitorElement *>(widget);
+  if (!symbol || !symbol->isQtedmSymbol()) {
+    return;
+  }
+  dialog.setWindowTitle(QStringLiteral("QtEDM Symbol State Mapping"));
+  auto *count = new QSpinBox(&dialog);
+  count->setRange(1, kLedStateCount);
+  const QVector<LedMonitorElement::SymbolState> originalStates =
+      symbol->symbolStates();
+  count->setValue(std::max(1, static_cast<int>(originalStates.size())));
+  form->addRow(QStringLiteral("State count"), count);
+
+  auto *table = new QTableWidget(count->value(), 5, &dialog);
+  table->setHorizontalHeaderLabels({QStringLiteral("Minimum"),
+      QStringLiteral("Maximum"), QStringLiteral("Label"),
+      QStringLiteral("Image"), QStringLiteral("Color")});
+  table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+  table->verticalHeader()->setVisible(false);
+  for (int row = 0; row < originalStates.size(); ++row) {
+    const auto &state = originalStates.at(row);
+    table->setItem(row, 0, new QTableWidgetItem(
+        QString::number(state.minimum, 'g', 15)));
+    table->setItem(row, 1, new QTableWidgetItem(
+        QString::number(state.maximum, 'g', 15)));
+    table->setItem(row, 2, new QTableWidgetItem(state.label));
+    table->setItem(row, 3, new QTableWidgetItem(state.imagePath));
+    table->setItem(row, 4, new QTableWidgetItem(
+        state.color.isValid() ? state.color.name(QColor::HexRgb) : QString()));
+  }
+  connect(count, qOverload<int>(&QSpinBox::valueChanged), table,
+      &QTableWidget::setRowCount);
+  layout->addWidget(table);
+  auto *buttons = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  layout->addWidget(buttons);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  QVector<LedMonitorElement::SymbolState> states;
+  states.reserve(table->rowCount());
+  auto itemText = [table](int row, int column) {
+    const QTableWidgetItem *item = table->item(row, column);
+    return item ? item->text() : QString();
+  };
+  for (int row = 0; row < table->rowCount(); ++row) {
+    LedMonitorElement::SymbolState state;
+    bool minimumOk = false;
+    bool maximumOk = false;
+    state.minimum = itemText(row, 0).toDouble(&minimumOk);
+    state.maximum = itemText(row, 1).toDouble(&maximumOk);
+    if (!minimumOk) {
+      state.minimum = static_cast<double>(row);
+    }
+    if (!maximumOk) {
+      state.maximum = state.minimum;
+    }
+    state.label = itemText(row, 2);
+    state.imagePath = itemText(row, 3);
+    state.color = QColor(itemText(row, 4));
+    states.append(state);
+  }
+  setNextUndoLabel(QStringLiteral("Edit QtEDM Symbol Properties"));
+  symbol->setSymbolStates(states);
+  symbol->setStateCount(states.size());
+  for (int i = 0; i < states.size(); ++i) {
+    if (states.at(i).color.isValid()) {
+      symbol->setStateColor(i, states.at(i).color);
+    }
+  }
+  markDirty();
+}
+
 
 void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
 {
@@ -17969,6 +18156,23 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
     }
     return action;
   };
+
+  QWidget *selected = currentSelectedWidget();
+  const bool isExtension =
+      (dynamic_cast<SetpointControlElement *>(selected)
+          && static_cast<SetpointControlElement *>(selected)
+                 ->isQtedmSpinBox())
+      || (dynamic_cast<MessageButtonElement *>(selected)
+          && static_cast<MessageButtonElement *>(selected)->isQtedmToggle())
+      || (dynamic_cast<LedMonitorElement *>(selected)
+          && static_cast<LedMonitorElement *>(selected)->isQtedmSymbol());
+  if (isExtension) {
+    QAction *properties = addMenuAction(&menu,
+        QStringLiteral("QtEDM Extension Properties..."));
+    connect(properties, &QAction::triggered, this,
+        [this, selected]() { showQtedmExtensionProperties(selected); });
+    menu.addSeparator();
+  }
 
   auto *objectMenu = menu.addMenu(QStringLiteral("Object"));
 
@@ -18112,6 +18316,14 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
       QCursor::setPos(lastContextMenuGlobalPos_);
     }
   });
+  auto *symbolAction =
+      addMenuAction(monitorsMenu, QStringLiteral("Multi-State Symbol"));
+  QObject::connect(symbolAction, &QAction::triggered, this, [this]() {
+    activateCreateTool(CreateTool::kQtedmSymbol);
+    if (!lastContextMenuGlobalPos_.isNull()) {
+      QCursor::setPos(lastContextMenuGlobalPos_);
+    }
+  });
   auto *expressionChannelAction =
       addMenuAction(monitorsMenu, QStringLiteral("Expression Channel"));
   QObject::connect(expressionChannelAction, &QAction::triggered, this, [this]() {
@@ -18163,6 +18375,14 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
       QCursor::setPos(lastContextMenuGlobalPos_);
     }
   });
+  auto *spinBoxAction =
+      addMenuAction(controllersMenu, QStringLiteral("Spin Box"));
+  QObject::connect(spinBoxAction, &QAction::triggered, this, [this]() {
+    activateCreateTool(CreateTool::kQtedmSpinBox);
+    if (!lastContextMenuGlobalPos_.isNull()) {
+      QCursor::setPos(lastContextMenuGlobalPos_);
+    }
+  });
   auto *textAreaAction =
       addMenuAction(controllersMenu, QStringLiteral("Text Area"));
   QObject::connect(textAreaAction, &QAction::triggered, this, [this]() {
@@ -18199,6 +18419,14 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
       addMenuAction(controllersMenu, QStringLiteral("Message Button"));
   QObject::connect(messageButtonAction, &QAction::triggered, this, [this]() {
     activateCreateTool(CreateTool::kMessageButton);
+    if (!lastContextMenuGlobalPos_.isNull()) {
+      QCursor::setPos(lastContextMenuGlobalPos_);
+    }
+  });
+  auto *toggleAction =
+      addMenuAction(controllersMenu, QStringLiteral("Toggle"));
+  QObject::connect(toggleAction, &QAction::triggered, this, [this]() {
+    activateCreateTool(CreateTool::kQtedmToggle);
     if (!lastContextMenuGlobalPos_.isNull()) {
       QCursor::setPos(lastContextMenuGlobalPos_);
     }
@@ -19838,7 +20066,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
 
     if (auto *setpoint = dynamic_cast<SetpointControlElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
-          QStringLiteral("setpoint_control {"));
+          setpoint->isQtedmSpinBox() ? QStringLiteral("qtedm_spinbox {")
+                                    : QStringLiteral("setpoint_control {"));
       AdlWriter::writeObjectSection(stream, 1,
           serializedGeometry(setpoint));
       AdlWriter::writeIndentedLine(stream, 1,
@@ -19887,6 +20116,11 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (!setpoint->showReadback()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("showReadback=0"));
+      }
+      if (setpoint->isQtedmSpinBox()) {
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("step=%1").arg(
+                QString::number(setpoint->stepSize(), 'g', 15)));
       }
       AdlWriter::writeLimitsSection(stream, 1, setpoint->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
@@ -20082,7 +20316,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
 
     if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0,
-          QStringLiteral("\"message button\" {"));
+          message->isQtedmToggle() ? QStringLiteral("qtedm_toggle {")
+                                   : QStringLiteral("\"message button\" {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(message));
     const QColor messageForeground = resolvedForegroundColor(message,
       message->foregroundColor());
@@ -20097,17 +20332,36 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
             QStringLiteral("label=\"%1\"")
                 .arg(AdlWriter::escapeAdlString(label)));
       }
-      const QString press = message->pressMessage().trimmed();
-      if (!press.isEmpty()) {
+      if (message->isQtedmToggle()) {
         AdlWriter::writeIndentedLine(stream, 1,
-            QStringLiteral("press_msg=\"%1\"")
-                .arg(AdlWriter::escapeAdlString(press)));
-      }
-      const QString release = message->releaseMessage().trimmed();
-      if (!release.isEmpty()) {
+            QStringLiteral("offValue=\"%1\"").arg(
+                AdlWriter::escapeAdlString(message->offValue())));
         AdlWriter::writeIndentedLine(stream, 1,
-            QStringLiteral("release_msg=\"%1\"")
-                .arg(AdlWriter::escapeAdlString(release)));
+            QStringLiteral("onValue=\"%1\"").arg(
+                AdlWriter::escapeAdlString(message->onValue())));
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("offLabel=\"%1\"").arg(
+                AdlWriter::escapeAdlString(message->offLabel())));
+        AdlWriter::writeIndentedLine(stream, 1,
+            QStringLiteral("onLabel=\"%1\"").arg(
+                AdlWriter::escapeAdlString(message->onLabel())));
+        if (message->confirmationRequired()) {
+          AdlWriter::writeIndentedLine(stream, 1,
+              QStringLiteral("confirm=1"));
+        }
+      } else {
+        const QString press = message->pressMessage().trimmed();
+        if (!press.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 1,
+              QStringLiteral("press_msg=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(press)));
+        }
+        const QString release = message->releaseMessage().trimmed();
+        if (!release.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 1,
+              QStringLiteral("release_msg=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(release)));
+        }
       }
       if (message->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -20396,7 +20650,9 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     }
 
     if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
-      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("led_monitor {"));
+      AdlWriter::writeIndentedLine(stream, 0,
+          led->isQtedmSymbol() ? QStringLiteral("qtedm_symbol {")
+                               : QStringLiteral("led_monitor {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(led));
       const QColor ledForeground = resolvedForegroundColor(led,
           led->foregroundColor());
@@ -20442,6 +20698,33 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
             QStringLiteral("stateColor%1=%2")
                 .arg(i)
                 .arg(AdlWriter::medmColorIndex(stateColor)));
+      }
+      if (led->isQtedmSymbol()) {
+        for (const auto &state : led->symbolStates()) {
+          AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("state {"));
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("min=%1").arg(
+                  QString::number(state.minimum, 'g', 15)));
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("max=%1").arg(
+                  QString::number(state.maximum, 'g', 15)));
+          if (state.color.isValid()) {
+            AdlWriter::writeIndentedLine(stream, 2,
+                QStringLiteral("color=%1").arg(
+                    AdlWriter::medmColorIndex(state.color)));
+          }
+          if (!state.label.isEmpty()) {
+            AdlWriter::writeIndentedLine(stream, 2,
+                QStringLiteral("label=\"%1\"").arg(
+                    AdlWriter::escapeAdlString(state.label)));
+          }
+          if (!state.imagePath.isEmpty()) {
+            AdlWriter::writeIndentedLine(stream, 2,
+                QStringLiteral("image=\"%1\"").arg(
+                    AdlWriter::escapeAdlString(state.imagePath)));
+          }
+          AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+        }
       }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
@@ -21299,7 +21582,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *setpoint = dynamic_cast<SetpointControlElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
-        QStringLiteral("setpoint_control {"));
+        setpoint->isQtedmSpinBox() ? QStringLiteral("qtedm_spinbox {")
+                                  : QStringLiteral("setpoint_control {"));
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(setpoint));
     AdlWriter::writeIndentedLine(stream, next,
@@ -21344,6 +21628,11 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (!setpoint->showReadback()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("showReadback=0"));
+    }
+    if (setpoint->isQtedmSpinBox()) {
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("step=%1").arg(
+              QString::number(setpoint->stepSize(), 'g', 15)));
     }
     AdlWriter::writeLimitsSection(stream, next, setpoint->limits());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
@@ -21542,7 +21831,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *message = dynamic_cast<MessageButtonElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
-        QStringLiteral("\"message button\" {"));
+        message->isQtedmToggle() ? QStringLiteral("qtedm_toggle {")
+                                 : QStringLiteral("\"message button\" {"));
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(message));
     const QColor messageForeground = resolveForeground(message,
@@ -21558,17 +21848,36 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
           QStringLiteral("label=\"%1\"")
               .arg(AdlWriter::escapeAdlString(label)));
     }
-    const QString press = message->pressMessage().trimmed();
-    if (!press.isEmpty()) {
+    if (message->isQtedmToggle()) {
       AdlWriter::writeIndentedLine(stream, next,
-          QStringLiteral("press_msg=\"%1\"")
-              .arg(AdlWriter::escapeAdlString(press)));
-    }
-    const QString release = message->releaseMessage().trimmed();
-    if (!release.isEmpty()) {
+          QStringLiteral("offValue=\"%1\"").arg(
+              AdlWriter::escapeAdlString(message->offValue())));
       AdlWriter::writeIndentedLine(stream, next,
-          QStringLiteral("release_msg=\"%1\"")
-              .arg(AdlWriter::escapeAdlString(release)));
+          QStringLiteral("onValue=\"%1\"").arg(
+              AdlWriter::escapeAdlString(message->onValue())));
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("offLabel=\"%1\"").arg(
+              AdlWriter::escapeAdlString(message->offLabel())));
+      AdlWriter::writeIndentedLine(stream, next,
+          QStringLiteral("onLabel=\"%1\"").arg(
+              AdlWriter::escapeAdlString(message->onLabel())));
+      if (message->confirmationRequired()) {
+        AdlWriter::writeIndentedLine(stream, next,
+            QStringLiteral("confirm=1"));
+      }
+    } else {
+      const QString press = message->pressMessage().trimmed();
+      if (!press.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next,
+            QStringLiteral("press_msg=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(press)));
+      }
+      const QString release = message->releaseMessage().trimmed();
+      if (!release.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next,
+            QStringLiteral("release_msg=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(release)));
+      }
     }
     if (message->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -21863,7 +22172,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
   if (auto *led = dynamic_cast<LedMonitorElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
-        QStringLiteral("led_monitor {"));
+        led->isQtedmSymbol() ? QStringLiteral("qtedm_symbol {")
+                             : QStringLiteral("led_monitor {"));
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(led));
     const QColor ledForeground = resolveForeground(led,
@@ -21910,6 +22220,33 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
           QStringLiteral("stateColor%1=%2")
               .arg(i)
               .arg(AdlWriter::medmColorIndex(stateColor)));
+    }
+    if (led->isQtedmSymbol()) {
+      for (const auto &state : led->symbolStates()) {
+        AdlWriter::writeIndentedLine(stream, next, QStringLiteral("state {"));
+        AdlWriter::writeIndentedLine(stream, next + 1,
+            QStringLiteral("min=%1").arg(
+                QString::number(state.minimum, 'g', 15)));
+        AdlWriter::writeIndentedLine(stream, next + 1,
+            QStringLiteral("max=%1").arg(
+                QString::number(state.maximum, 'g', 15)));
+        if (state.color.isValid()) {
+          AdlWriter::writeIndentedLine(stream, next + 1,
+              QStringLiteral("color=%1").arg(
+                  AdlWriter::medmColorIndex(state.color)));
+        }
+        if (!state.label.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, next + 1,
+              QStringLiteral("label=\"%1\"").arg(
+                  AdlWriter::escapeAdlString(state.label)));
+        }
+        if (!state.imagePath.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, next + 1,
+              QStringLiteral("image=\"%1\"").arg(
+                  AdlWriter::escapeAdlString(state.imagePath)));
+        }
+        AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+      }
     }
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
@@ -24526,7 +24863,9 @@ QJsonObject DisplayWindow::testStateObject() const
     LedMonitorRuntime *runtime = ledMonitorRuntimes_.value(element, nullptr);
     const LedMonitorElement::FillState fillState = element->effectiveFillState();
     QJsonObject widgetObject;
-    appendWidgetBase(widgetObject, "led_monitor", element, element->channel());
+    appendWidgetBase(widgetObject,
+        element->isQtedmSymbol() ? "qtedm_symbol" : "led_monitor",
+        element, element->channel());
     widgetObject[QStringLiteral("color_mode")] =
         colorModeToString(element->colorMode());
     widgetObject[QStringLiteral("shape")] =
@@ -24549,9 +24888,93 @@ QJsonObject DisplayWindow::testStateObject() const
       widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
       widgetObject[QStringLiteral("has_value")] = runtime->hasLastValue_;
       if (runtime->hasLastValue_) {
-        widgetObject[QStringLiteral("numeric_value")] =
-            static_cast<qint64>(runtime->lastValue_);
+        widgetObject[QStringLiteral("numeric_value")] = runtime->lastValue_;
       }
+    }
+    if (element->isQtedmSymbol()) {
+      QJsonArray states;
+      for (const auto &state : element->symbolStates()) {
+        QJsonObject stateObject;
+        stateObject[QStringLiteral("minimum")] = state.minimum;
+        stateObject[QStringLiteral("maximum")] = state.maximum;
+        stateObject[QStringLiteral("color")] = colorToString(state.color);
+        stateObject[QStringLiteral("label")] = state.label;
+        stateObject[QStringLiteral("image")] = state.imagePath;
+        states.append(stateObject);
+      }
+      widgetObject[QStringLiteral("states")] = states;
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (MessageButtonElement *element : messageButtonElements_) {
+    if (!element) {
+      continue;
+    }
+    MessageButtonRuntime *runtime =
+        messageButtonRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject,
+        element->isQtedmToggle() ? "qtedm_toggle" : "message_button",
+        element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("label")] = element->label();
+    if (element->isQtedmToggle()) {
+      widgetObject[QStringLiteral("off_value")] = element->offValue();
+      widgetObject[QStringLiteral("on_value")] = element->onValue();
+      widgetObject[QStringLiteral("off_label")] = element->offLabel();
+      widgetObject[QStringLiteral("on_label")] = element->onLabel();
+      widgetObject[QStringLiteral("confirmation_required")] =
+          element->confirmationRequired();
+    }
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("read_access")] = runtime->lastReadAccess_;
+      widgetObject[QStringLiteral("write_access")] = runtime->lastWriteAccess_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      if (element->isQtedmToggle()) {
+        widgetObject[QStringLiteral("state_known")] =
+            runtime->toggleStateKnown_;
+        widgetObject[QStringLiteral("state_on")] = runtime->toggleStateOn_;
+      }
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (SetpointControlElement *element : setpointControlElements_) {
+    if (!element) {
+      continue;
+    }
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject,
+        element->isQtedmSpinBox() ? "qtedm_spinbox" : "setpoint_control",
+        element, element->setpointChannel());
+    widgetObject[QStringLiteral("readback_channel")] =
+        element->readbackChannel();
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("connected")] =
+        element->runtimeSetpointConnected();
+    widgetObject[QStringLiteral("readback_connected")] =
+        element->runtimeReadbackConnected();
+    widgetObject[QStringLiteral("write_access")] =
+        element->runtimeWriteAccess();
+    widgetObject[QStringLiteral("severity")] =
+        element->runtimeSetpointSeverity();
+    widgetObject[QStringLiteral("has_value")] = element->hasSetpointValue();
+    if (element->hasSetpointValue()) {
+      widgetObject[QStringLiteral("numeric_value")] =
+          element->runtimeSetpointValue();
+    }
+    if (element->isQtedmSpinBox()) {
+      widgetObject[QStringLiteral("step")] = element->stepSize();
+      widgetObject[QStringLiteral("low_limit")] =
+          element->displayLowLimit();
+      widgetObject[QStringLiteral("high_limit")] =
+          element->displayHighLimit();
+      widgetObject[QStringLiteral("precision")] =
+          element->precision();
     }
     widgets.append(widgetObject);
   }
@@ -24796,6 +25219,9 @@ QJsonObject DisplayWindow::testStateObject() const
   QJsonObject object;
   object[QStringLiteral("file_path")] = filePath_;
   object[QStringLiteral("window_title")] = windowTitle();
+  if (auto state = state_.lock()) {
+    object[QStringLiteral("observe_only")] = state->observeOnly;
+  }
   object[QStringLiteral("widget_count")] = widgets.size();
   object[QStringLiteral("widgets")] = widgets;
   return object;
@@ -25696,6 +26122,12 @@ SetpointControlElement *DisplayWindow::loadSetpointControlElement(
   geometry.translate(currentElementOffset_);
   const QRect originalGeometry = geometry;
   auto *element = new SetpointControlElement(parent);
+  const bool qtedmSpinBox = normalizedAdlName(setpointControlNode.name)
+      == QStringLiteral("qtedm_spinbox");
+  element->setQtedmSpinBox(qtedmSpinBox);
+  if (qtedmSpinBox) {
+    element->setShowReadback(false);
+  }
   element->setFont(font());
   element->setGeometry(geometry);
   recordWidgetOriginalGeometry(element, originalGeometry);
@@ -25810,6 +26242,14 @@ SetpointControlElement *DisplayWindow::loadSetpointControlElement(
 
   element->setShowReadback(parseBool(propertyValue(setpointControlNode,
       QStringLiteral("showReadback")), element->showReadback()));
+  if (qtedmSpinBox) {
+    bool stepOk = false;
+    const double step = propertyValue(setpointControlNode,
+        QStringLiteral("step")).toDouble(&stepOk);
+    if (stepOk) {
+      element->setStepSize(step);
+    }
+  }
 
   if (const AdlNode *limitsNode = ::findChild(setpointControlNode,
           QStringLiteral("limits"))) {
@@ -26710,6 +27150,9 @@ MessageButtonElement *DisplayWindow::loadMessageButtonElement(
   originalGeometry.translate(currentElementOffset_);
 
   auto *element = new MessageButtonElement(parent);
+  const bool qtedmToggle = normalizedAdlName(messageNode.name)
+      == QStringLiteral("qtedm_toggle");
+  element->setQtedmToggle(qtedmToggle);
   element->setFont(font());
   element->setGeometry(geometry);
   recordWidgetOriginalGeometry(element, originalGeometry);
@@ -26739,6 +27182,35 @@ MessageButtonElement *DisplayWindow::loadMessageButtonElement(
   const QString trimmedRelease = releaseValue.trimmed();
   if (!trimmedRelease.isEmpty()) {
     element->setReleaseMessage(trimmedRelease);
+  }
+
+  if (qtedmToggle) {
+    const QString offValue = propertyValue(messageNode,
+        QStringLiteral("offValue"));
+    const QString onValue = propertyValue(messageNode,
+        QStringLiteral("onValue"));
+    const QString offLabel = propertyValue(messageNode,
+        QStringLiteral("offLabel"));
+    const QString onLabel = propertyValue(messageNode,
+        QStringLiteral("onLabel"));
+    if (!offValue.isEmpty()) {
+      element->setOffValue(offValue);
+    }
+    if (!onValue.isEmpty()) {
+      element->setOnValue(onValue);
+    }
+    if (!offLabel.isEmpty()) {
+      element->setOffLabel(offLabel);
+    }
+    if (!onLabel.isEmpty()) {
+      element->setOnLabel(onLabel);
+    }
+    const QString confirmation = propertyValue(messageNode,
+        QStringLiteral("confirm")).trimmed().toLower();
+    element->setConfirmationRequired(confirmation == QStringLiteral("1")
+        || confirmation == QStringLiteral("true")
+        || confirmation == QStringLiteral("yes")
+        || confirmation == QStringLiteral("on"));
   }
 
   if (const AdlNode *control = ::findChild(messageNode,
@@ -29215,6 +29687,12 @@ LedMonitorElement *DisplayWindow::loadLedMonitorElement(
   originalGeometry.translate(currentElementOffset_);
 
   auto *element = new LedMonitorElement(parent);
+  const bool qtedmSymbol = normalizedAdlName(ledNode.name)
+      == QStringLiteral("qtedm_symbol");
+  element->setQtedmSymbol(qtedmSymbol);
+  element->setBaseDirectory(!currentLoadDirectory_.isEmpty()
+      ? currentLoadDirectory_
+      : QFileInfo(filePath_).absolutePath());
   element->setGeometry(geometry);
   recordWidgetOriginalGeometry(element, originalGeometry);
 
@@ -29327,6 +29805,39 @@ LedMonitorElement *DisplayWindow::loadLedMonitorElement(
         QStringLiteral("stateColor%1").arg(i)));
     if (stateColor.isValid()) {
       element->setStateColor(i, stateColor);
+    }
+  }
+
+  if (qtedmSymbol) {
+    QVector<LedMonitorElement::SymbolState> states;
+    for (const AdlNode &child : effectiveNode.children) {
+      if (normalizedAdlName(child.name) != QStringLiteral("state")) {
+        continue;
+      }
+      LedMonitorElement::SymbolState state;
+      bool minimumOk = false;
+      bool maximumOk = false;
+      state.minimum = propertyValue(child, QStringLiteral("min"))
+          .toDouble(&minimumOk);
+      state.maximum = propertyValue(child, QStringLiteral("max"))
+          .toDouble(&maximumOk);
+      if (!minimumOk) {
+        state.minimum = static_cast<double>(states.size());
+      }
+      if (!maximumOk) {
+        state.maximum = state.minimum;
+      }
+      state.label = propertyValue(child, QStringLiteral("label"));
+      state.imagePath = propertyValue(child, QStringLiteral("image"));
+      state.color = parseOptionalColor(propertyValue(child,
+          QStringLiteral("color")));
+      states.append(state);
+      if (states.size() >= kLedStateCount) {
+        break;
+      }
+    }
+    if (!states.isEmpty()) {
+      element->setSymbolStates(states);
     }
   }
 
@@ -31019,7 +31530,8 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
   } else if (name == QStringLiteral("text entry")) {
     loaded = loadTextEntryElement(node) != nullptr;
   } else if (name == QStringLiteral("setpoint_control")
-      || name == QStringLiteral("setpoint control")) {
+      || name == QStringLiteral("setpoint control")
+      || name == QStringLiteral("qtedm_spinbox")) {
     loaded = loadSetpointControlElement(node) != nullptr;
   } else if (name == QStringLiteral("text_area")) {
     loaded = loadTextAreaElement(node) != nullptr;
@@ -31031,7 +31543,8 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadChoiceButtonElement(node) != nullptr;
   } else if (name == QStringLiteral("menu")) {
     loaded = loadMenuElement(node) != nullptr;
-  } else if (name == QStringLiteral("message button")) {
+  } else if (name == QStringLiteral("message button")
+      || name == QStringLiteral("qtedm_toggle")) {
     loaded = loadMessageButtonElement(node) != nullptr;
   } else if (name == QStringLiteral("shell command")) {
     loaded = loadShellCommandElement(node) != nullptr;
@@ -31051,7 +31564,8 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadStripChartElement(node) != nullptr;
   } else if (name == QStringLiteral("byte")) {
     loaded = loadByteMonitorElement(node) != nullptr;
-  } else if (name == QStringLiteral("led_monitor")) {
+  } else if (name == QStringLiteral("led_monitor")
+      || name == QStringLiteral("qtedm_symbol")) {
     loaded = loadLedMonitorElement(node) != nullptr;
   } else if (name == QStringLiteral("expression_channel")) {
     loaded = loadExpressionChannelElement(node) != nullptr;

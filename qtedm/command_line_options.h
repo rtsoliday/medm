@@ -30,6 +30,7 @@ enum class RemoteMode {
 
 struct CommandLineOptions {
   bool startInExecuteMode = false;
+  bool observeOnly = false;
   bool showHelp = false;
   bool showVersion = false;
   bool raiseMessageWindow = true;

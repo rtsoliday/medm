@@ -33,6 +33,9 @@ private:
   void handleAccessRights(bool canRead, bool canWrite);
   void handlePress();
   void handleRelease();
+  bool dataMatchesValue(const SharedChannelData &data,
+      const QString &configuredValue) const;
+  QString auditWidgetType() const;
 
   bool sendValue(const QString &value);
   bool sendStringValue(const QString &value);
@@ -54,6 +57,8 @@ private:
   bool lastWriteAccess_ = false;
   short lastSeverity_ = 0;
   QStringList enumStrings_;
+  bool toggleStateKnown_ = false;
+  bool toggleStateOn_ = false;
 };
 
 template <typename Func>

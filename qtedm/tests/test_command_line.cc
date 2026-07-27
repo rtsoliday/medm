@@ -41,6 +41,7 @@ class TestCommandLine : public QObject
 
 private slots:
   void parsesCommonOptions();
+  void parsesObserveOnly();
   void usesEnvironmentOverrides();
   void resolvesDisplayFilesFromSearchPath();
   void parsesMacrosAndGeometry();
@@ -65,6 +66,19 @@ void TestCommandLine::parsesCommonOptions()
   QCOMPARE(options.displayFont, QStringLiteral("scalable"));
   QCOMPARE(options.displayFiles, QStringList{QStringLiteral("demo.adl")});
   QCOMPARE(options.macroString, QStringLiteral("A=1,B=two"));
+}
+
+void TestCommandLine::parsesObserveOnly()
+{
+  const CommandLineOptions options = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"),
+      QStringLiteral("--read-only"),
+      QStringLiteral("demo.adl"),
+  });
+
+  QVERIFY(options.observeOnly);
+  QVERIFY(options.startInExecuteMode);
+  QCOMPARE(options.displayFiles, QStringList{QStringLiteral("demo.adl")});
 }
 
 void TestCommandLine::usesEnvironmentOverrides()

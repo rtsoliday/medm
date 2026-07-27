@@ -16,6 +16,7 @@ class QEvent;
 class QPaintEvent;
 class QResizeEvent;
 class QTimer;
+class QToolButton;
 
 class SetpointControlElement : public QWidget
 {
@@ -71,6 +72,11 @@ public:
   bool showReadback() const;
   void setShowReadback(bool show);
 
+  bool isQtedmSpinBox() const;
+  void setQtedmSpinBox(bool enabled);
+  double stepSize() const;
+  void setStepSize(double step);
+
   void setExecuteMode(bool execute);
   bool isExecuteMode() const;
 
@@ -124,6 +130,7 @@ private:
   void applyRuntimeSetpointToEditor();
   void applyReadbackStyle();
   void flushPendingReadbackValue();
+  void stepBy(int direction);
   QColor defaultForegroundColor() const;
   QColor defaultBackgroundColor() const;
   QColor effectiveForegroundColor() const;
@@ -139,6 +146,8 @@ private:
   QLabel *labelWidget_ = nullptr;
   QLineEdit *setpointEdit_ = nullptr;
   QLineEdit *readbackEdit_ = nullptr;
+  QToolButton *decrementButton_ = nullptr;
+  QToolButton *incrementButton_ = nullptr;
 
   QColor foregroundColor_;
   QColor backgroundColor_;
@@ -151,6 +160,8 @@ private:
   SetpointToleranceMode toleranceMode_ = SetpointToleranceMode::kNone;
   double tolerance_ = 0.0;
   bool showReadback_ = true;
+  bool qtedmSpinBox_ = false;
+  double stepSize_ = 1.0;
 
   bool executeMode_ = false;
   bool runtimeSetpointConnected_ = false;

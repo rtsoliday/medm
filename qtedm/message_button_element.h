@@ -43,6 +43,19 @@ public:
   QString channel() const;
   void setChannel(const QString &channel);
 
+  bool isQtedmToggle() const;
+  void setQtedmToggle(bool enabled);
+  QString offValue() const;
+  void setOffValue(const QString &value);
+  QString onValue() const;
+  void setOnValue(const QString &value);
+  QString offLabel() const;
+  void setOffLabel(const QString &label);
+  QString onLabel() const;
+  void setOnLabel(const QString &label);
+  bool confirmationRequired() const;
+  void setConfirmationRequired(bool required);
+
   void setExecuteMode(bool execute);
   bool isExecuteMode() const;
 
@@ -50,6 +63,7 @@ public:
   void setRuntimeSeverity(short severity);
   void setRuntimeReadAccess(bool readAccess);
   void setRuntimeWriteAccess(bool writeAccess);
+  void setRuntimeToggleState(bool on, bool known);
 
   void setPressCallback(const std::function<void()> &callback);
   void setReleaseCallback(const std::function<void()> &callback);
@@ -82,6 +96,14 @@ private:
   QString pressMessage_;
   QString releaseMessage_;
   QString channel_;
+  bool qtedmToggle_ = false;
+  QString offValue_ = QStringLiteral("0");
+  QString onValue_ = QStringLiteral("1");
+  QString offLabel_ = QStringLiteral("Off");
+  QString onLabel_ = QStringLiteral("On");
+  bool confirmationRequired_ = false;
+  bool runtimeToggleOn_ = false;
+  bool runtimeToggleKnown_ = false;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
   bool runtimeReadAccess_ = false;

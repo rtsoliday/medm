@@ -16,6 +16,7 @@ test_Meter.adl
 test_Oval.adl
 test_PVTable.adl
 test_Polygon.adl
+test_QtEDMPhase1.adl
 test_RelatedDisplay.adl
 test_ScaleMonitor.adl
 test_SetpointControl.adl

@@ -245,6 +245,10 @@
     <td>Start in EXECUTE mode (default is EDIT mode)</td>
   </tr>
   <tr>
+    <td><code>--read-only</code></td>
+    <td>Start in EXECUTE mode with global observe-only write inhibition. A persistent red indicator is shown and all CA, PVA, and soft-PV puts are blocked and audit logged.</td>
+  </tr>
+  <tr>
     <td><code>-local</code></td>
     <td>Run in local mode (default)</td>
   </tr>
@@ -375,6 +379,7 @@ way.</p>
   <a href="#WidgetThermometer">Thermometer</a>,
   <a href="#WidgetByteMonitor">Byte Monitor</a>,
   <a href="#WidgetLedMonitor">LED Monitor</a>,
+  <a href="#WidgetQtedmSymbol">Multi-State Symbol</a>,
   <a href="#WidgetHeatmap">Heatmap</a>,
   <a href="#WidgetPVTable">PV Table</a>,
   <a href="#WidgetWaveTable">Waveform Table</a>,
@@ -389,6 +394,8 @@ way.</p>
   <a href="#WidgetChoiceButton">Choice Button</a>,
   <a href="#WidgetMenu">Menu</a>,
   <a href="#WidgetMessageButton">Message Button</a>,
+  <a href="#WidgetQtedmToggle">Toggle</a>,
+  <a href="#WidgetQtedmSpinBox">Spin Box</a>,
   <a href="#WidgetRelatedDisplay">Related Display</a>,
   <a href="#WidgetShellCommand">Shell Command</a></p>
 </div>
@@ -695,6 +702,18 @@ way.</p>
   stateColor3=20
   undefinedColor=7
 }</pre>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetQtedmSymbol"></a>Multi-State Symbol</h4>
+  <p>Multi-State Symbol is a QtEDM extension stored as
+  <code>qtedm_symbol</code>. It maps numeric values or inclusive ranges to a
+  color, label, and optional image. Undefined values and disconnected channels
+  remain visibly hatched, while active alarms add a severity-colored border.</p>
+  <ul>
+    <li><strong>Configure:</strong> Use the LED resource palette for the channel and colors, then choose <em>QtEDM Extension Properties...</em> from the edit context menu for ranges, labels, and image paths.</li>
+    <li><strong>Compatibility:</strong> The object is a separate QtEDM extension and never changes the meaning of a MEDM object.</li>
+  </ul>
 </div>
 
 <div class="widget-entry">
@@ -1051,6 +1070,28 @@ backward compatible.</p>
 </div>
 
 <div class="widget-entry">
+  <h4><a name="WidgetQtedmToggle"></a>Toggle</h4>
+  <p>Toggle is a compact two-state QtEDM control stored as
+  <code>qtedm_toggle</code>. It follows the current PV value, writes explicit
+  on/off values, uses independent state labels, and can require confirmation
+  before each write. Scalar, enum, string, and character-array targets use the
+  same typed write path as Message Button.</p>
+  <p>Common colors, channel, and values are editable through the resource
+  palette. State labels and confirmation are available through
+  <em>QtEDM Extension Properties...</em>.</p>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetQtedmSpinBox"></a>Spin Box</h4>
+  <p>Spin Box is a bounded numeric QtEDM control stored as
+  <code>qtedm_spinbox</code>. It adds autorepeating decrement and increment
+  buttons to the existing setpoint implementation and therefore inherits PV
+  control limits, precision, engineering units, alarm color, connection state,
+  access rights, and audit logging. The step size is edited with
+  <em>QtEDM Extension Properties...</em>.</p>
+</div>
+
+<div class="widget-entry">
   <h4><a name="WidgetRelatedDisplay"></a>Related Display</h4>
   <div class="widget-figure">
     <img src="images/qtedm-widgets/related-display.png" alt="Related Display widget examples in QtEDM" loading="lazy">
@@ -1103,6 +1144,10 @@ backward compatible.</p>
     <td><code>EPICS_CA_AUTO_ADDR_LIST</code></td>
     <td>Enable/disable automatic CA address discovery</td>
   </tr>
+  <tr>
+    <td><code>QTEDM_AUDIT_DIR</code></td>
+    <td>Optional audit-log directory override. The default remains <code>~/.medm</code>.</td>
+  </tr>
 </table>
 
 <p>Standard EPICS Channel Access environment variables are also used. See the EPICS documentation for details.</p>
@@ -1145,6 +1190,9 @@ Both versions remain fully readable by QtEDM.</p>
   <li><code>heatmap</code></li>
   <li><code>thermometer</code></li>
   <li><code>expression_channel</code></li>
+  <li><code>qtedm_symbol</code></li>
+  <li><code>qtedm_toggle</code></li>
+  <li><code>qtedm_spinbox</code></li>
 </ul>
 
 <p>The <code>expression_channel</code> block stores a local calc node that
@@ -1249,6 +1297,7 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
       <li><strong>Log Location:</strong> Logs are written to <code>~/.medm/audit_YYYYMMDD_HHMMSS_PID.log</code> where PID is the process ID, ensuring unique log files when multiple QtEDM instances run concurrently on shared accounts.</li>
       <li><strong>Disable Logging:</strong> Use the <code>-nolog</code> command line option or set the environment variable <code>QTEDM_NOLOG=1</code></li>
       <li><strong>Logged Widgets:</strong> TextEntry, Slider, WheelSwitch, Menu, ChoiceButton, and MessageButton writes are logged.</li>
+      <li><strong>Observe-only records:</strong> Writes blocked by <code>--read-only</code> use the widget type <code>BLOCKED:ObserveOnly</code>, so they remain distinct from successful puts without changing the six-column log format.</li>
     </ul>
   </li>
 </ul>

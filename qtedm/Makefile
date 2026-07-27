@@ -116,6 +116,7 @@ qtedm_SRC = qtedm.cc \
             adl_parser.cc \
             audit_logger.cc \
             extension_object_registry.cc \
+            session_manager.cc \
             legacy_fonts.cc \
             display_window.cc \
             window_utils.cc \
@@ -202,6 +203,7 @@ qtedm_SRC = qtedm.cc \
             wave_table_runtime.cc \
             composite_element.cc \
             composite_runtime.cc \
+            tabbed_display_element.cc \
             cartesian_axis_dialog.cc \
             display_list_dialog.cc \
             audit_log_viewer_dialog.cc \
@@ -433,7 +435,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_soft_pv_registry \
                         test_update_coordinator \
                         test_pv_table_model \
-                        test_phase1
+                        test_phase1 \
+                        test_phase2
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 
@@ -468,6 +471,10 @@ test_pv_table_model_OBJS = $(OBJ_DIR)/test_pv_table_model.$(OBJEXT) \
                            $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_phase1_OBJS = $(OBJ_DIR)/test_phase1.$(OBJEXT) \
                    $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_phase2_OBJS = $(OBJ_DIR)/test_phase2.$(OBJEXT) \
+                   $(OBJ_DIR)/tabbed_display_element.$(OBJEXT) \
+                   $(OBJ_DIR)/session_manager.$(OBJEXT) \
+                   $(OBJ_DIR)/extension_object_registry.$(OBJEXT)
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)

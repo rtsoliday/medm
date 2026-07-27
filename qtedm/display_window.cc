@@ -303,6 +303,7 @@ void DisplayWindow::selectAllElements()
   appendVisible(polylineElements_);
   appendVisible(polygonElements_);
   appendVisible(compositeElements_);
+  appendVisible(tabbedDisplayElements_);
 
   if (widgets.isEmpty()) {
     notifyMenus();
@@ -569,6 +570,7 @@ void DisplayWindow::findOutliers()
   considerList(polylineElements_);
   considerList(polygonElements_);
   considerList(compositeElements_);
+  considerList(tabbedDisplayElements_);
 
   int partialCount = 0;
   int totalCount = 0;
@@ -2494,6 +2496,29 @@ const QHash<QString, QString> &DisplayWindow::macroDefinitions() const
   return macroDefinitions_;
 }
 
+QString DisplayWindow::activeTabbedPageId() const
+{
+  for (TabbedDisplayElement *element : tabbedDisplayElements_) {
+    if (element) {
+      return element->activePageId();
+    }
+  }
+  return QString();
+}
+
+bool DisplayWindow::setActiveTabbedPageId(const QString &pageId)
+{
+  if (pageId.trimmed().isEmpty()) {
+    return false;
+  }
+  for (TabbedDisplayElement *element : tabbedDisplayElements_) {
+    if (element && element->setActivePageId(pageId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 
 bool DisplayWindow::isDirty() const
 {
@@ -2705,6 +2730,7 @@ void DisplayWindow::mousePressEvent(QMouseEvent *event)
           || state->createTool == CreateTool::kTextEntry
           || state->createTool == CreateTool::kSetpointControl
           || state->createTool == CreateTool::kQtedmSpinBox
+          || state->createTool == CreateTool::kQtedmTabbedDisplay
           || state->createTool == CreateTool::kTextArea
           || state->createTool == CreateTool::kSlider
           || state->createTool == CreateTool::kWheelSwitch
@@ -3388,6 +3414,15 @@ void DisplayWindow::clearCompositeSelection()
   selectedCompositeElement_ = nullptr;
 }
 
+void DisplayWindow::clearTabbedDisplaySelection()
+{
+  if (!selectedTabbedDisplayElement_) {
+    return;
+  }
+  selectedTabbedDisplayElement_->setSelected(false);
+  selectedTabbedDisplayElement_ = nullptr;
+}
+
 
 void DisplayWindow::setWidgetSelectionState(QWidget *widget, bool selected)
 {
@@ -3520,6 +3555,14 @@ void DisplayWindow::setWidgetSelectionState(QWidget *widget, bool selected)
   }
   if (auto *polygon = dynamic_cast<PolygonElement *>(widget)) {
     polygon->setSelected(selected);
+    return;
+  }
+  if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
+    composite->setSelected(selected);
+    return;
+  }
+  if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
+    tabbed->setSelected(selected);
     return;
   }
 }
@@ -3777,6 +3820,12 @@ void DisplayWindow::detachSingleSelectionForWidget(QWidget *widget)
   if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
     if (selectedCompositeElement_ == composite) {
       selectedCompositeElement_ = nullptr;
+    }
+    return;
+  }
+  if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
+    if (selectedTabbedDisplayElement_ == tabbed) {
+      selectedTabbedDisplayElement_ = nullptr;
     }
     return;
   }
@@ -4115,6 +4164,7 @@ QList<QWidget *> DisplayWindow::selectedWidgets() const
   appendUnique(selectedPolyline_);
   appendUnique(selectedPolygon_);
   appendUnique(selectedCompositeElement_);
+  appendUnique(selectedTabbedDisplayElement_);
 
   return widgets;
 }
@@ -4216,6 +4266,7 @@ void DisplayWindow::clearSelections()
   clearPolylineSelection();
   clearPolygonSelection();
   clearCompositeSelection();
+  clearTabbedDisplaySelection();
   closeResourcePalette();
   notifyMenus();
 }
@@ -9759,6 +9810,7 @@ QList<QWidget *> DisplayWindow::findPvWidgets() const
   appendList(polylineElements_);
   appendList(polygonElements_);
   appendList(compositeElements_);
+  appendList(tabbedDisplayElements_);
 
   return widgets;
 }
@@ -13059,6 +13111,16 @@ void DisplayWindow::selectCompositeElement(CompositeElement *element)
   selectedCompositeElement_->setSelected(true);
 }
 
+void DisplayWindow::selectTabbedDisplayElement(TabbedDisplayElement *element)
+{
+  if (!element) {
+    return;
+  }
+  clearSelections();
+  selectedTabbedDisplayElement_ = element;
+  selectedTabbedDisplayElement_->setSelected(true);
+}
+
 
 QWidget *DisplayWindow::currentSelectedWidget() const
 {
@@ -13166,6 +13228,9 @@ QWidget *DisplayWindow::currentSelectedWidget() const
   if (selectedCompositeElement_) {
     return selectedCompositeElement_;
   }
+  if (selectedTabbedDisplayElement_) {
+    return selectedTabbedDisplayElement_;
+  }
   return nullptr;
 }
 
@@ -13174,6 +13239,9 @@ bool DisplayWindow::selectWidgetForEditing(QWidget *widget)
 {
   if (!widget) {
     return false;
+  }
+  if (widget != selectedTabbedDisplayElement_) {
+    clearTabbedDisplaySelection();
   }
   clearMultiSelection();
   clearPvTableSelection();
@@ -13310,6 +13378,10 @@ bool DisplayWindow::selectWidgetForEditing(QWidget *widget)
   } else if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
     selectCompositeElement(composite);
     showResourcePaletteForComposite(composite);
+    handled = true;
+  } else if (auto *tabbed =
+      dynamic_cast<TabbedDisplayElement *>(widget)) {
+    selectTabbedDisplayElement(tabbed);
     handled = true;
   } else if (auto *line = dynamic_cast<LineElement *>(widget)) {
     selectLineElement(line);
@@ -15085,6 +15157,16 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
     rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
     createTextAreaElement(rect);
     break;
+  case CreateTool::kQtedmTabbedDisplay:
+    if (rect.width() < kMinimumTextWidth * 6) {
+      rect.setWidth(kMinimumTextWidth * 6);
+    }
+    if (rect.height() < kMinimumTextHeight * 6) {
+      rect.setHeight(kMinimumTextHeight * 6);
+    }
+    rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+    createTabbedDisplayElement(rect);
+    break;
   case CreateTool::kSlider:
     if (rect.width() < kMinimumSliderWidth) {
       rect.setWidth(kMinimumSliderWidth);
@@ -16665,6 +16747,51 @@ void DisplayWindow::createLedMonitorElement(const QRect &rect,
   markDirty();
 }
 
+void DisplayWindow::createTabbedDisplayElement(const QRect &rect)
+{
+  if (!displayArea_) {
+    return;
+  }
+  setNextUndoLabel(QStringLiteral("Create Tabbed Display"));
+  const QRect target = adjustRectToDisplayArea(rect);
+  if (target.width() <= 0 || target.height() <= 0) {
+    return;
+  }
+
+  AdlNode node;
+  node.name = QStringLiteral("qtedm_tabbed_display");
+  AdlNode object;
+  object.name = QStringLiteral("object");
+  object.properties = {
+      {QStringLiteral("x"), QString::number(target.x())},
+      {QStringLiteral("y"), QString::number(target.y())},
+      {QStringLiteral("width"), QString::number(target.width())},
+      {QStringLiteral("height"), QString::number(target.height())},
+  };
+  node.children.append(object);
+  node.properties.append(
+      {QStringLiteral("mode"), QStringLiteral("tabs")});
+  for (int index = 1; index <= 2; ++index) {
+    AdlNode page;
+    page.name = QStringLiteral("page");
+    page.properties = {
+        {QStringLiteral("id"), QStringLiteral("page-%1").arg(index)},
+        {QStringLiteral("label"), QStringLiteral("Page %1").arg(index)},
+        {QStringLiteral("display"), QString()},
+        {QStringLiteral("keepAlive"), QStringLiteral("false")},
+    };
+    node.children.append(page);
+  }
+
+  TabbedDisplayElement *element = loadTabbedDisplayElement(node);
+  if (!element) {
+    return;
+  }
+  selectTabbedDisplayElement(element);
+  deactivateCreateTool();
+  markDirty();
+}
+
 
 void DisplayWindow::createExpressionChannelElement(const QRect &rect)
 {
@@ -17156,6 +17283,7 @@ void DisplayWindow::updateCreateCursor()
           || state->createTool == CreateTool::kTextEntry
           || state->createTool == CreateTool::kSetpointControl
           || state->createTool == CreateTool::kQtedmSpinBox
+          || state->createTool == CreateTool::kQtedmTabbedDisplay
           || state->createTool == CreateTool::kTextArea
           || state->createTool == CreateTool::kSlider
           || state->createTool == CreateTool::kWheelSwitch
@@ -18235,6 +18363,17 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
       addMenuAction(graphicsMenu, QStringLiteral("Image"));
   QObject::connect(imageAction, &QAction::triggered, this, [this]() {
     activateCreateTool(CreateTool::kImage);
+    if (!lastContextMenuGlobalPos_.isNull()) {
+      QCursor::setPos(lastContextMenuGlobalPos_);
+    }
+  });
+
+  auto *containersMenu =
+      objectMenu->addMenu(QStringLiteral("Containers"));
+  auto *tabbedDisplayAction =
+      addMenuAction(containersMenu, QStringLiteral("Tabbed Display"));
+  QObject::connect(tabbedDisplayAction, &QAction::triggered, this, [this]() {
+    activateCreateTool(CreateTool::kQtedmTabbedDisplay);
     if (!lastContextMenuGlobalPos_.isNull()) {
       QCursor::setPos(lastContextMenuGlobalPos_);
     }
@@ -19336,6 +19475,15 @@ bool DisplayWindow::isTestAutomationReady() const
 bool DisplayWindow::loadFromFile(const QString &filePath,
     QString *errorMessage, const QHash<QString, QString> &macros)
 {
+  const QString canonicalPath = QFileInfo(filePath).canonicalFilePath();
+  const QString normalizedPath = canonicalPath.isEmpty()
+      ? QFileInfo(filePath).absoluteFilePath()
+      : canonicalPath;
+  if (!embeddedDisplay_) {
+    loadAncestry_ = {normalizedPath};
+  } else if (loadAncestry_.isEmpty()) {
+    loadAncestry_ = {normalizedPath};
+  }
   const bool restartExecuteModeAfterLoad = executeModeActive_;
   const bool preservePositionAfterLoad = preserveNextLoadPosition_;
   const QPoint positionToRestore = preservedLoadPosition_;
@@ -19961,6 +20109,43 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
   for (const auto &entry : elementStack_) {
     QWidget *widget = entry.data();
     if (!widget) {
+      continue;
+    }
+
+    if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
+      AdlWriter::writeIndentedLine(stream, 0,
+          QStringLiteral("qtedm_tabbed_display {"));
+      AdlWriter::writeObjectSection(stream, 1, serializedGeometry(tabbed));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("mode=\"%1\"")
+              .arg(tabbed->hiddenTabs() ? QStringLiteral("stacked")
+                                        : QStringLiteral("tabs")));
+      AdlWriter::writeIndentedLine(stream, 1,
+          QStringLiteral("active_page=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(tabbed->activePageId())));
+      for (const TabbedDisplayPage &page : tabbed->pages()) {
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("page {"));
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("id=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(page.id)));
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("label=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(page.label)));
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("display=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(page.displayPath)));
+        if (!page.macros.isEmpty()) {
+          AdlWriter::writeIndentedLine(stream, 2,
+              QStringLiteral("macros=\"%1\"")
+                  .arg(AdlWriter::escapeAdlString(page.macros)));
+        }
+        AdlWriter::writeIndentedLine(stream, 2,
+            QStringLiteral("keepAlive=\"%1\"")
+                .arg(page.keepAlive ? QStringLiteral("true")
+                                    : QStringLiteral("false")));
+        AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
+      }
+      AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
     }
 
@@ -21477,6 +21662,43 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return absoluteGeometryForWidget(target,
         widgetGeometryForSerialization(target));
   };
+
+  if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
+    AdlWriter::writeIndentedLine(stream, level,
+        QStringLiteral("qtedm_tabbed_display {"));
+    AdlWriter::writeObjectSection(stream, next, serializedGeometry(tabbed));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("mode=\"%1\"")
+            .arg(tabbed->hiddenTabs() ? QStringLiteral("stacked")
+                                      : QStringLiteral("tabs")));
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("active_page=\"%1\"")
+            .arg(AdlWriter::escapeAdlString(tabbed->activePageId())));
+    for (const TabbedDisplayPage &page : tabbed->pages()) {
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("page {"));
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("id=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(page.id)));
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("label=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(page.label)));
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("display=\"%1\"")
+              .arg(AdlWriter::escapeAdlString(page.displayPath)));
+      if (!page.macros.isEmpty()) {
+        AdlWriter::writeIndentedLine(stream, next + 1,
+            QStringLiteral("macros=\"%1\"")
+                .arg(AdlWriter::escapeAdlString(page.macros)));
+      }
+      AdlWriter::writeIndentedLine(stream, next + 1,
+          QStringLiteral("keepAlive=\"%1\"")
+              .arg(page.keepAlive ? QStringLiteral("true")
+                                  : QStringLiteral("false")));
+      AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
+    }
+    AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
 
   if (auto *composite = dynamic_cast<CompositeElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("composite {"));
@@ -23056,6 +23278,7 @@ void DisplayWindow::clearAllElements()
   clearList(polylineElements_);
   clearList(polygonElements_);
   clearList(compositeElements_);
+  clearList(tabbedDisplayElements_);
   elementStack_.clear();
   elementStackSet_.clear();
   polygonCreationActive_ = false;
@@ -24853,6 +25076,60 @@ QJsonObject DisplayWindow::testStateObject() const
             static_cast<qint64>(runtime->lastValue_);
       }
     }
+    widgets.append(widgetObject);
+  }
+
+  for (TabbedDisplayElement *element : tabbedDisplayElements_) {
+    if (!element) {
+      continue;
+    }
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "qtedm_tabbed_display", element,
+        QString());
+    widgetObject[QStringLiteral("mode")] =
+        element->hiddenTabs() ? QStringLiteral("stacked")
+                              : QStringLiteral("tabs");
+    widgetObject[QStringLiteral("active_page")] =
+        element->activePageId();
+    widgetObject[QStringLiteral("active_index")] =
+        element->activePageIndex();
+    widgetObject[QStringLiteral("loaded_pages")] =
+        element->loadedPageCount();
+    widgetObject[QStringLiteral("active_diagnostic")] =
+        element->pageDiagnostic(element->activePageIndex());
+    QJsonArray pages;
+    const QList<TabbedDisplayPage> definitions = element->pages();
+    for (int index = 0; index < definitions.size(); ++index) {
+      const TabbedDisplayPage &page = definitions.at(index);
+      QJsonObject pageObject;
+      pageObject[QStringLiteral("id")] = page.id;
+      pageObject[QStringLiteral("label")] = page.label;
+      pageObject[QStringLiteral("display")] = page.displayPath;
+      pageObject[QStringLiteral("macros")] = page.macros;
+      pageObject[QStringLiteral("keep_alive")] = page.keepAlive;
+      pageObject[QStringLiteral("diagnostic")] =
+          element->pageDiagnostic(index);
+      if (QWidget *content = element->pageContent(index)) {
+        pageObject[QStringLiteral("content_width")] = content->width();
+        pageObject[QStringLiteral("content_height")] = content->height();
+        QObject *childObject =
+            content->property("_qtedmChildDisplay").value<QObject *>();
+        if (auto *child = dynamic_cast<DisplayWindow *>(childObject)) {
+          pageObject[QStringLiteral("child_state")] =
+              child->testStateObject();
+          if (child->displayArea_) {
+            pageObject[QStringLiteral("child_area_width")] =
+                child->displayArea_->width();
+            pageObject[QStringLiteral("child_area_height")] =
+                child->displayArea_->height();
+            pageObject[QStringLiteral("child_area_visible")] =
+                child->displayArea_->isVisible();
+          }
+        }
+      }
+      pages.append(pageObject);
+    }
+    widgetObject[QStringLiteral("pages")] = pages;
     widgets.append(widgetObject);
   }
 
@@ -31512,6 +31789,152 @@ CompositeElement *DisplayWindow::loadCompositeElement(
   return composite;
 }
 
+TabbedDisplayElement *DisplayWindow::loadTabbedDisplayElement(
+    const AdlNode &tabbedNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(tabbedNode);
+  QRect originalGeometry = geometry;
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new TabbedDisplayElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+  const QString mode =
+      propertyValue(tabbedNode, QStringLiteral("mode")).trimmed().toLower();
+  element->setHiddenTabs(mode == QStringLiteral("stacked")
+      || mode == QStringLiteral("hidden"));
+
+  QList<TabbedDisplayPage> pages;
+  for (const AdlNode &childNode : tabbedNode.children) {
+    if (normalizedAdlName(childNode.name) != QStringLiteral("page")) {
+      continue;
+    }
+    TabbedDisplayPage page;
+    page.id = propertyValue(childNode, QStringLiteral("id")).trimmed();
+    page.label = propertyValue(childNode, QStringLiteral("label"));
+    page.displayPath =
+        propertyValue(childNode, QStringLiteral("display")).trimmed();
+    page.macros =
+        propertyValue(childNode, QStringLiteral("macros")).trimmed();
+    const QString keepAlive = propertyValue(childNode,
+        QStringLiteral("keepAlive")).trimmed().toLower();
+    page.keepAlive = keepAlive == QStringLiteral("true")
+        || keepAlive == QStringLiteral("1")
+        || keepAlive == QStringLiteral("yes");
+    pages.append(page);
+  }
+  element->setPages(pages);
+  const QString activePage =
+      propertyValue(tabbedNode, QStringLiteral("active_page")).trimmed();
+  if (!activePage.isEmpty()) {
+    element->setActivePageId(activePage);
+  }
+
+  element->setPageLoader(
+      [this](const TabbedDisplayPage &page, QWidget *host,
+          QString *error) -> QWidget * {
+        const QString resolved = resolveRelatedDisplayFile(page.displayPath);
+        if (resolved.isEmpty()) {
+          if (error) {
+            *error = QStringLiteral("Child display not found: %1")
+                .arg(page.displayPath);
+          }
+          return nullptr;
+        }
+        const QString canonical = QFileInfo(resolved).canonicalFilePath();
+        const QString normalized = canonical.isEmpty()
+            ? QFileInfo(resolved).absoluteFilePath()
+            : canonical;
+        if (loadAncestry_.contains(normalized)) {
+          if (error) {
+            *error = QStringLiteral("Recursive child display reference: %1")
+                .arg(normalized);
+          }
+          return nullptr;
+        }
+
+        QHash<QString, QString> mergedMacros = macroDefinitions_;
+        const QHash<QString, QString> pageMacros =
+            parseMacroDefinitionString(page.macros);
+        for (auto it = pageMacros.constBegin(); it != pageMacros.constEnd();
+             ++it) {
+          mergedMacros.insert(it.key(), it.value());
+        }
+
+        auto *container = new QWidget(host);
+        auto *containerLayout = new QVBoxLayout(container);
+        containerLayout->setContentsMargins(0, 0, 0, 0);
+        /*
+         * Keep the runtime DisplayWindow out of the page's visual widget tree.
+         * QMainWindow is only the existing ADL/runtime owner here; its display
+         * area is reparented into the tab page below. Some Qt platform plugins
+         * otherwise composite the hidden window's backing store over the page.
+         */
+        auto *child = new DisplayWindow(palette(), resourcePaletteBase_,
+            font(), labelFont_, state_, nullptr);
+        child->embeddedDisplay_ = true;
+        child->loadAncestry_ = loadAncestry_;
+        child->loadAncestry_.append(normalized);
+        child->setAttribute(Qt::WA_DeleteOnClose, false);
+        child->setMinimumSize(0, 0);
+        if (child->centralWidget()) {
+          child->centralWidget()->setMinimumSize(0, 0);
+        }
+        QString loadError;
+        if (!child->loadFromFile(resolved, &loadError, mergedMacros)) {
+          if (error) {
+            *error = loadError;
+          }
+          delete container;
+          return nullptr;
+        }
+        QWidget *childArea = child->takeCentralWidget();
+        if (!childArea) {
+          if (error) {
+            *error = QStringLiteral("Child display has no display area.");
+          }
+          delete container;
+          return nullptr;
+        }
+        childArea->setMinimumSize(0, 0);
+        childArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        containerLayout->addWidget(childArea);
+        childArea->show();
+        child->hide();
+        container->setProperty("_qtedmChildDisplay",
+            QVariant::fromValue<QObject *>(child));
+        QObject::connect(container, &QObject::destroyed, child,
+            [child]() { delete child; });
+        /*
+         * Static text captures its design visibility when execute mode starts.
+         * Defer startup until TabbedDisplayElement has inserted and shown the
+         * returned container, so ordinary visible children remain visible.
+         */
+        QTimer::singleShot(0, container,
+            [child]() { child->enterExecuteMode(); });
+        return container;
+      });
+  element->setChangedCallback([this]() {
+    setNextUndoLabel(QStringLiteral("Edit Tabbed Display"));
+    markDirty();
+  });
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+  tabbedDisplayElements_.append(element);
+  element->show();
+  element->setSelected(false);
+  ensureElementInStack(element);
+  return element;
+}
+
 bool DisplayWindow::loadElementNode(const AdlNode &node)
 {
   const QString name = normalizedAdlName(node.name);
@@ -31588,6 +32011,8 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = true;
   } else if (name == QStringLiteral("composite")) {
     loaded = loadCompositeElement(node) != nullptr;
+  } else if (name == QStringLiteral("qtedm_tabbed_display")) {
+    loaded = loadTabbedDisplayElement(node) != nullptr;
   }
 
   /* Clear pending basic attribute after loading applicable widgets */
@@ -31830,7 +32255,8 @@ void DisplayWindow::enterExecuteMode()
   }
 
   /* Report element counts for timing diagnostics */
-  int totalWidgets = compositeElements_.size() + textElements_.size() +
+  int totalWidgets = tabbedDisplayElements_.size()
+      + compositeElements_.size() + textElements_.size() +
       textEntryElements_.size() + setpointControlElements_.size() +
       textAreaElements_.size() +
       rectangleElements_.size() +
@@ -31849,6 +32275,13 @@ void DisplayWindow::enterExecuteMode()
       menuElements_.size() + messageButtonElements_.size() +
       shellCommandElements_.size() + relatedDisplayElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Total widgets to start", totalWidgets);
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Starting tabbed displays",
+      tabbedDisplayElements_.size());
+  for (TabbedDisplayElement *element : tabbedDisplayElements_) {
+    if (element) {
+      element->setExecuteMode(true);
+    }
+  }
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating composite runtimes", compositeElements_.size());
   for (CompositeElement *element : compositeElements_) {
     if (!element) {
@@ -32295,6 +32728,11 @@ void DisplayWindow::leaveExecuteMode()
     pvInfoDialog_->hide();
   }
   cancelExecuteChannelDrag();
+  for (TabbedDisplayElement *element : tabbedDisplayElements_) {
+    if (element) {
+      element->setExecuteMode(false);
+    }
+  }
   for (auto it = compositeRuntimes_.begin(); it != compositeRuntimes_.end(); ++it) {
     if (auto *runtime = it.value()) {
       runtime->stop();

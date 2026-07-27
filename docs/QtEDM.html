@@ -249,6 +249,10 @@
     <td>Start in EXECUTE mode with global observe-only write inhibition. A persistent red indicator is shown and all CA, PVA, and soft-PV puts are blocked and audit logged.</td>
   </tr>
   <tr>
+    <td><code>--session name</code></td>
+    <td>Explicitly restore a named version-1 session. Session restore defaults to EXECUTE mode, validates every display, reports omissions, and clamps windows to connected screens.</td>
+  </tr>
+  <tr>
     <td><code>-local</code></td>
     <td>Run in local mode (default)</td>
   </tr>
@@ -713,6 +717,21 @@ way.</p>
   <ul>
     <li><strong>Configure:</strong> Use the LED resource palette for the channel and colors, then choose <em>QtEDM Extension Properties...</em> from the edit context menu for ranges, labels, and image paths.</li>
     <li><strong>Compatibility:</strong> The object is a separate QtEDM extension and never changes the meaning of a MEDM object.</li>
+  </ul>
+</div>
+
+<div class="widget-entry">
+  <h4><a name="WidgetQtedmTabbedDisplay"></a>Tabbed Display</h4>
+  <p>Tabbed Display is a QtEDM extension stored as
+  <code>qtedm_tabbed_display</code>. Each page has a stable ID, label,
+  file-backed child ADL, page macros, and a <code>keepAlive</code> policy.
+  Page macros override inherited parent macros.</p>
+  <ul>
+    <li><strong>Configure:</strong> Create the object from the Containers section, then double-click it in EDIT mode to edit its page table.</li>
+    <li><strong>Runtime behavior:</strong> The active child is loaded on demand. Inactive pages are destroyed and unsubscribe by default; <code>keepAlive=true</code> retains a loaded page. Ctrl+PageUp and Ctrl+PageDown navigate pages.</li>
+    <li><strong>Stacked mode:</strong> Set <code>mode="stacked"</code> to hide the tab bar while retaining keyboard or programmatic page selection.</li>
+    <li><strong>Diagnostics:</strong> Missing child files and recursive references produce visible page errors.</li>
+    <li><strong>Compatibility:</strong> Child files remain ordinary ADLs. The container block is a QtEDM-only extension and does not reinterpret MEDM objects.</li>
   </ul>
 </div>
 
@@ -1193,7 +1212,22 @@ Both versions remain fully readable by QtEDM.</p>
   <li><code>qtedm_symbol</code></li>
   <li><code>qtedm_toggle</code></li>
   <li><code>qtedm_spinbox</code></li>
+  <li><code>qtedm_tabbed_display</code></li>
 </ul>
+
+<h3>Named Sessions</h3>
+
+<p><em>File &rarr; Save Session...</em> stores the current top-level display
+paths, macros, window geometries, screen names, active tab IDs, and edit/execute
+state in a versioned JSON file below
+<code>QStandardPaths::AppConfigLocation/sessions</code>. Restore is always
+explicit: use <em>File &rarr; Restore Session...</em> or
+<code>--session name</code>. QtEDM never silently restores a prior layout.</p>
+
+<p>Restore opens valid displays in EXECUTE mode, reports missing or renamed
+files and invalid records, and moves off-screen or oversized windows onto an
+available screen. A changed or missing active tab falls back to the display's
+configured default.</p>
 
 <p>The <code>expression_channel</code> block stores a local calc node that
 publishes a soft PV for other widgets to consume. A typical block looks like

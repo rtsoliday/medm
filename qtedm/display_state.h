@@ -39,6 +39,7 @@ enum class CreateTool {
   kQtedmSymbol,
   kQtedmToggle,
   kQtedmSpinBox,
+  kQtedmTabbedDisplay,
   kShellCommand,
   kRelatedDisplay,
   kMeter,

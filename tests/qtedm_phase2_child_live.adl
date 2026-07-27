@@ -1,0 +1,54 @@
+file {
+  name="qtedm_phase2_child_live.adl"
+  version=030122
+}
+display {
+  object {
+    width=620
+    height=300
+  }
+  clr=14
+  bclr=4
+  cmap=""
+}
+text {
+  object {
+    x=20
+    y=20
+    width=580
+    height=35
+  }
+  "basic attribute" {
+    clr=25
+  }
+  textix="$(TITLE)"
+  align="horiz. centered"
+}
+text {
+  object {
+    x=20
+    y=62
+    width=580
+    height=24
+  }
+  "basic attribute" {
+    clr=50
+  }
+  textix="$(DETAIL)"
+  align="horiz. centered"
+}
+"text update" {
+  object {
+    x=180
+    y=120
+    width=260
+    height=50
+  }
+  monitor {
+    chan="led:test:binary_live"
+    clr=15
+    bclr=14
+  }
+  clrmod="alarm"
+  align="horiz. centered"
+}

@@ -19,6 +19,9 @@ ExtensionObjectRegistry::ExtensionObjectRegistry()
   registerObject({QStringLiteral("qtedm_spinbox"),
       QStringLiteral("Spin Box"), QStringLiteral("Controls"),
       CreateTool::kQtedmSpinBox});
+  registerObject({QStringLiteral("qtedm_tabbed_display"),
+      QStringLiteral("Tabbed Display"), QStringLiteral("Containers"),
+      CreateTool::kQtedmTabbedDisplay});
 }
 
 void ExtensionObjectRegistry::registerObject(

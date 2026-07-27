@@ -44,6 +44,7 @@ struct CommandLineOptions {
   QStringList displayFiles;
   QString displayGeometry;
   QString macroString;
+  QString sessionName;
   RemoteMode remoteMode = RemoteMode::kLocal;
   QStringList resolvedDisplayFiles;
   QString displayFont = QStringLiteral("alias");
@@ -51,6 +52,7 @@ struct CommandLineOptions {
   QString testDumpStatePath;
   QString testCaptureScreenshotPath;
   QString testReadyFilePath;
+  QString testActiveTabId;
 };
 
 using MacroMap = QHash<QString, QString>;

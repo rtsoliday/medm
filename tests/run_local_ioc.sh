@@ -2019,6 +2019,14 @@ set_qtedm_phase1_test_pvs() {
   echo "QtEDM Phase 1 extension PVs initialized by the LED and setpoint harnesses."
 }
 
+set_qtedm_phase2_test_pvs() {
+  local _prefix="$1"
+
+  # The child displays use the same deterministic channels as the Phase 1
+  # LED and setpoint fixtures.
+  echo "QtEDM Phase 2 child-display PVs initialized by the LED and setpoint harnesses."
+}
+
 cleanup() {
   local status=$?
   if [[ -n "${waterfall_driver_pid}" ]] \
@@ -2073,6 +2081,7 @@ set_text_area_test_pvs "${PV_PREFIX}" || true
 set_text_entry_test_pvs "${PV_PREFIX}" || true
 set_setpoint_control_test_pvs "${PV_PREFIX}" || true
 set_qtedm_phase1_test_pvs "${PV_PREFIX}" || true
+set_qtedm_phase2_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 if [[ -n "${READY_FILE}" ]]; then

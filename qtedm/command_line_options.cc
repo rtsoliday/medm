@@ -34,6 +34,19 @@ CommandLineOptions parseCommandLine(const QStringList &args)
     } else if (arg == QLatin1String("--read-only")) {
       options.observeOnly = true;
       options.startInExecuteMode = true;
+    } else if (arg == QLatin1String("--session")) {
+      if ((i + 1) < args.size()) {
+        const QString sessionName = args.at(++i).trimmed();
+        if (sessionName.isEmpty()
+            || sessionName.startsWith(QLatin1Char('-'))) {
+          options.invalidOption = arg;
+        } else {
+          options.sessionName = sessionName;
+          options.startInExecuteMode = true;
+        }
+      } else {
+        options.invalidOption = arg;
+      }
     } else if (arg == QLatin1String("-local")) {
       options.remoteMode = RemoteMode::kLocal;
     } else if (arg == QLatin1String("-attach")) {
@@ -94,6 +107,13 @@ CommandLineOptions parseCommandLine(const QStringList &args)
                arg == QLatin1String("--test-ready-file")) {
       if ((i + 1) < args.size()) {
         options.testReadyFilePath = args.at(++i);
+      } else {
+        options.invalidOption = arg;
+      }
+    } else if (arg == QLatin1String("-testActiveTab") ||
+               arg == QLatin1String("--test-active-tab")) {
+      if ((i + 1) < args.size()) {
+        options.testActiveTabId = args.at(++i);
       } else {
         options.invalidOption = arg;
       }

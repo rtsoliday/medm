@@ -63,7 +63,7 @@ void TestPhase1::registryContainsPhase1Objects()
   QCOMPARE(toggle->typeId, QStringLiteral("qtedm_toggle"));
   QVERIFY(spinbox);
   QCOMPARE(spinbox->createTool, CreateTool::kQtedmSpinBox);
-  QCOMPARE(registry.descriptors().size(), 3);
+  QVERIFY(registry.descriptors().size() >= 3);
 }
 
 void TestPhase1::observeOnlyBlocksEverySoftPvWriteKind()

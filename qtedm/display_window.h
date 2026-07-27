@@ -127,6 +127,7 @@
 #include "rectangle_runtime.h"
 #include "composite_element.h"
 #include "composite_runtime.h"
+#include "tabbed_display_element.h"
 #include "resource_palette_dialog.h"
 #include "text_element.h"
 #include "text_runtime.h"
@@ -794,6 +795,9 @@ public:
 
   const QHash<QString, QString> &macroDefinitions() const;
 
+  QString activeTabbedPageId() const;
+  bool setActiveTabbedPageId(const QString &pageId);
+
   bool isDirty() const;
 
   bool hasFilePath() const;
@@ -866,6 +870,7 @@ private:
   PolygonElement *loadPolygonElement(const AdlNode &polygonNode);
   PolylineElement *loadPolylineElement(const AdlNode &polylineNode);
   CompositeElement *loadCompositeElement(const AdlNode &compositeNode);
+  TabbedDisplayElement *loadTabbedDisplayElement(const AdlNode &tabbedNode);
   bool loadElementNode(const AdlNode &node);
   QWidget *effectiveElementParent() const;
   std::optional<AdlNode> widgetToAdlNode(QWidget *widget) const;
@@ -1026,6 +1031,7 @@ private:
   std::optional<AdlNode> pendingDynamicAttribute_;
   bool dirty_ = true;
   bool executeModeActive_ = false;
+  bool embeddedDisplay_ = false;
   bool preserveNextLoadPosition_ = false;
   QPoint preservedLoadPosition_;
   QPoint originalDisplayPosition_;
@@ -1203,6 +1209,9 @@ private:
   QList<CompositeElement *> compositeElements_;
   QHash<CompositeElement *, CompositeRuntime *> compositeRuntimes_;
   CompositeElement *selectedCompositeElement_ = nullptr;
+  QList<TabbedDisplayElement *> tabbedDisplayElements_;
+  TabbedDisplayElement *selectedTabbedDisplayElement_ = nullptr;
+  QStringList loadAncestry_;
   bool polygonCreationActive_ = false;
   PolygonElement *activePolygonElement_ = nullptr;
   QVector<QPoint> polygonCreationPoints_;
@@ -1333,6 +1342,7 @@ private:
   void clearPolygonSelection();
 
   void clearCompositeSelection();
+  void clearTabbedDisplaySelection();
 
   void setWidgetSelectionState(QWidget *widget, bool selected);
 
@@ -1723,6 +1733,7 @@ private:
   void selectPolygonElement(PolygonElement *element);
 
   void selectCompositeElement(CompositeElement *element);
+  void selectTabbedDisplayElement(TabbedDisplayElement *element);
 
   QWidget *currentSelectedWidget() const;
 
@@ -1959,6 +1970,8 @@ private:
 
   void createLedMonitorElement(const QRect &rect,
       bool qtedmSymbol = false);
+
+  void createTabbedDisplayElement(const QRect &rect);
 
   void createExpressionChannelElement(const QRect &rect);
 

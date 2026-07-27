@@ -42,6 +42,7 @@ class TestCommandLine : public QObject
 private slots:
   void parsesCommonOptions();
   void parsesObserveOnly();
+  void parsesSession();
   void usesEnvironmentOverrides();
   void resolvesDisplayFilesFromSearchPath();
   void parsesMacrosAndGeometry();
@@ -79,6 +80,31 @@ void TestCommandLine::parsesObserveOnly()
   QVERIFY(options.observeOnly);
   QVERIFY(options.startInExecuteMode);
   QCOMPARE(options.displayFiles, QStringList{QStringLiteral("demo.adl")});
+}
+
+void TestCommandLine::parsesSession()
+{
+  const CommandLineOptions options = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"),
+      QStringLiteral("--session"),
+      QStringLiteral("operator-layout"),
+  });
+
+  QCOMPARE(options.sessionName, QStringLiteral("operator-layout"));
+  QVERIFY(options.startInExecuteMode);
+
+  const CommandLineOptions missing = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"),
+      QStringLiteral("--session"),
+  });
+  QCOMPARE(missing.invalidOption, QStringLiteral("--session"));
+
+  const CommandLineOptions optionAsName = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"),
+      QStringLiteral("--session"),
+      QStringLiteral("--read-only"),
+  });
+  QCOMPARE(optionAsName.invalidOption, QStringLiteral("--session"));
 }
 
 void TestCommandLine::usesEnvironmentOverrides()
@@ -155,6 +181,8 @@ void TestCommandLine::parsesTestAutomationOptions()
       QStringLiteral("/tmp/screenshot.png"),
       QStringLiteral("-testReadyFile"),
       QStringLiteral("/tmp/ready.flag"),
+      QStringLiteral("-testActiveTab"),
+      QStringLiteral("diagnostics"),
       QStringLiteral("-testExitAfterMs"),
       QStringLiteral("250"),
       QStringLiteral("screen.adl"),
@@ -166,6 +194,7 @@ void TestCommandLine::parsesTestAutomationOptions()
   QCOMPARE(options.testCaptureScreenshotPath,
       QStringLiteral("/tmp/screenshot.png"));
   QCOMPARE(options.testReadyFilePath, QStringLiteral("/tmp/ready.flag"));
+  QCOMPARE(options.testActiveTabId, QStringLiteral("diagnostics"));
   QCOMPARE(options.testExitAfterMs, 250);
   QCOMPARE(options.displayFiles, QStringList{QStringLiteral("screen.adl")});
 }

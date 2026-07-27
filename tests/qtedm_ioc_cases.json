@@ -1308,5 +1308,52 @@
       "state_known": true,
       "state_on": true
     }
+  },
+  {
+    "name": "qtedm_tabbed_display_lazy_initial_page",
+    "display": "tests/test_QtEDMPhase2.adl",
+    "selector": {
+      "type": "qtedm_tabbed_display"
+    },
+    "exit_after_ms": 4500,
+    "expect": {
+      "mode": "tabs",
+      "active_page": "live",
+      "active_index": 0,
+      "loaded_pages": 1
+    }
+  },
+  {
+    "name": "qtedm_tabbed_display_missing_child_diagnostic",
+    "display": "tests/test_QtEDMPhase2.adl",
+    "qtedm_args": [
+      "--test-active-tab",
+      "missing"
+    ],
+    "selector": {
+      "type": "qtedm_tabbed_display"
+    },
+    "exit_after_ms": 2500,
+    "expect": {
+      "active_page": "missing",
+      "loaded_pages": 0,
+      "active_diagnostic": "Child display not found: qtedm_phase2_missing.adl"
+    }
+  },
+  {
+    "name": "qtedm_tabbed_display_recursive_reference_guard",
+    "display": "tests/test_QtEDMPhase2.adl",
+    "qtedm_args": [
+      "--test-active-tab",
+      "recursive"
+    ],
+    "selector": {
+      "type": "qtedm_tabbed_display"
+    },
+    "exit_after_ms": 2500,
+    "expect": {
+      "active_page": "recursive",
+      "loaded_pages": 0
+    }
   }
 ]

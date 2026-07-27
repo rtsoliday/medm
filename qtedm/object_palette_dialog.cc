@@ -488,7 +488,12 @@ ObjectPaletteDialog::controlButtons()
 std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::miscButtons()
 {
+  const auto *tabbed = ExtensionObjectRegistry::instance().descriptor(
+      CreateTool::kQtedmTabbedDisplay);
   return {
+      {tabbed ? tabbed->displayName : QStringLiteral("Tabbed Display"),
+          relatedDisplay25_bits, relatedDisplay25_width,
+          relatedDisplay25_height, CreateTool::kQtedmTabbedDisplay},
       {QStringLiteral("Select"), select25_bits, select25_width,
           select25_height, CreateTool::kNone},
   };

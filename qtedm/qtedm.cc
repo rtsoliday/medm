@@ -15,6 +15,7 @@
 #include <QGuiApplication>
 #include <QHash>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -94,6 +95,7 @@ typedef int Status;
 #include "memory_tracker.h"
 #include "object_palette_dialog.h"
 #include "pv_channel_manager.h"
+#include "session_manager.h"
 #include "soft_pv_registry.h"
 #include "startup_timing.h"
 #include "statistics_window.h"
@@ -112,6 +114,7 @@ void printUsage(const QString &program)
       "  [-version]\n"
       "  [-x]\n"
       "  [--read-only]\n"
+      "  [--session name]\n"
       "  [-local | -attach | -cleanup]\n"
       "  [-macro \"xxx=aaa,yyy=bbb, ...\"]\n"
       "  [-dg geometry]\n"
@@ -132,6 +135,8 @@ void printUsage(const QString &program)
       "            Start in execute mode and block all CA, PVA, and soft-PV\n"
       "            writes. Monitoring, navigation, and diagnostics remain\n"
       "            available.\n"
+      "  --session name\n"
+      "            Explicitly restore the named QtEDM session in execute mode.\n"
       "  -nolog    Disable audit logging of control widget value changes\n"
       "            (can also set QTEDM_NOLOG=1 environment variable)\n"
       "\n"
@@ -728,6 +733,8 @@ int main(int argc, char *argv[])
 
   QTEDM_TIMING_MARK("Creating QApplication");
   QApplication app(argc, argv);
+  QCoreApplication::setApplicationName(QStringLiteral("QtEDM"));
+  QCoreApplication::setOrganizationName(QStringLiteral("EPICS"));
   QTEDM_TIMING_MARK("QApplication created");
   Q_INIT_RESOURCE(icons);
   Q_INIT_RESOURCE(demo);
@@ -1027,6 +1034,9 @@ int main(int argc, char *argv[])
   saveAct->setShortcut(QKeySequence::Save);
   auto *saveAsAct = fileMenu->addAction("Save &As...");
   auto *closeAct = fileMenu->addAction("&Close");
+  fileMenu->addSeparator();
+  auto *saveSessionAct = fileMenu->addAction("Save &Session...");
+  auto *restoreSessionAct = fileMenu->addAction("&Restore Session...");
   fileMenu->addSeparator();
   auto *printSetupAct = fileMenu->addAction("Print Set&up...");
   auto *printAct = fileMenu->addAction("&Print");
@@ -1847,6 +1857,161 @@ int main(int argc, char *argv[])
     }
   };
 
+  SessionManager sessionManager;
+  auto availableScreens = []() {
+    QList<QPair<QString, QRect>> screens;
+    for (QScreen *screen : QGuiApplication::screens()) {
+      if (screen) {
+        screens.append(qMakePair(screen->name(), screen->availableGeometry()));
+      }
+    }
+    return screens;
+  };
+
+  auto restoreSession =
+      [state, &win, displayPalette, &palette, fixed10Font, fixed13Font,
+          registerDisplayWindow, &sessionManager, availableScreens](
+          const QString &name, bool interactive) {
+        QList<DisplayWindow *> restored;
+        QtEdmSessionLoadResult result = sessionManager.load(name);
+        if (!result.ok()) {
+          if (interactive) {
+            QMessageBox::critical(&win, QStringLiteral("Restore Session"),
+                result.error);
+          } else {
+            fprintf(stderr, "QtEDM session restore failed: %s\n",
+                result.error.toLocal8Bit().constData());
+            fflush(stderr);
+          }
+          return restored;
+        }
+
+        QStringList warnings = result.warnings;
+        for (const QtEdmSessionWindow &saved : result.session.windows) {
+          QFileInfo info(saved.displayPath);
+          if (!info.exists() || !info.isFile()
+              || !saved.displayPath.endsWith(
+                  QStringLiteral(".adl"), Qt::CaseInsensitive)) {
+            warnings.append(QStringLiteral("Omitted missing or invalid display: %1")
+                .arg(saved.displayPath));
+            continue;
+          }
+          auto *displayWin = new DisplayWindow(displayPalette, palette,
+              fixed10Font, fixed13Font,
+              std::weak_ptr<DisplayState>(state));
+          QString loadError;
+          if (!displayWin->loadFromFile(
+                  info.absoluteFilePath(), &loadError, saved.macros)) {
+            warnings.append(QStringLiteral("Omitted %1: %2")
+                .arg(saved.displayPath,
+                    loadError.isEmpty() ? QStringLiteral("load failed")
+                                        : loadError));
+            delete displayWin;
+            continue;
+          }
+          const QRect safeGeometry = SessionManager::clampGeometryToScreens(
+              saved.geometry, saved.screenName, availableScreens());
+          displayWin->setGeometry(safeGeometry);
+          if (!saved.activeTabId.isEmpty()
+              && !displayWin->setActiveTabbedPageId(saved.activeTabId)) {
+            warnings.append(QStringLiteral(
+                "Display %1 no longer contains tab '%2'; its default tab was used.")
+                .arg(saved.displayPath, saved.activeTabId));
+          }
+          registerDisplayWindow(displayWin);
+          /*
+           * loadFromFile schedules a final ADL-size correction for ordinary
+           * launches. Reapply the explicitly requested session geometry after
+           * that correction so restored window sizes are not replaced by the
+           * display's authored size.
+           */
+          QPointer<DisplayWindow> geometryTarget(displayWin);
+          QTimer::singleShot(100, displayWin,
+              [geometryTarget, safeGeometry]() {
+                if (DisplayWindow *window = geometryTarget.data()) {
+                  window->setGeometry(safeGeometry);
+                }
+              });
+          restored.append(displayWin);
+        }
+
+        if (!warnings.isEmpty()) {
+          const QString message = warnings.join(QLatin1Char('\n'));
+          if (interactive) {
+            QMessageBox::warning(&win, QStringLiteral("Restore Session"),
+                QStringLiteral("The session was restored with omissions:\n\n%1")
+                    .arg(message));
+          } else {
+            fprintf(stderr, "QtEDM session restore warnings:\n%s\n",
+                message.toLocal8Bit().constData());
+            fflush(stderr);
+          }
+        }
+        if (interactive && !restored.isEmpty()) {
+          QMessageBox::information(&win, QStringLiteral("Restore Session"),
+              QStringLiteral("Restored %1 display window(s) from session “%2”.")
+                  .arg(restored.size()).arg(name));
+        }
+        return restored;
+      };
+
+  QObject::connect(saveSessionAct, &QAction::triggered, &win,
+      [state, &win, &sessionManager]() {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(&win,
+            QStringLiteral("Save Session"), QStringLiteral("Session name:"),
+            QLineEdit::Normal, QString(), &accepted).trimmed();
+        if (!accepted) {
+          return;
+        }
+        QtEdmSession session;
+        session.name = name;
+        for (const QPointer<DisplayWindow> &pointer : state->displays) {
+          DisplayWindow *display = pointer.data();
+          if (!display || display->filePath().isEmpty()) {
+            continue;
+          }
+          QtEdmSessionWindow saved;
+          saved.displayPath = display->filePath();
+          saved.macros = display->macroDefinitions();
+          saved.geometry = display->geometry();
+          saved.screenName = display->screen()
+              ? display->screen()->name() : QString();
+          saved.activeTabId = display->activeTabbedPageId();
+          saved.editMode = state->editMode;
+          session.windows.append(saved);
+        }
+        QString error;
+        if (!sessionManager.save(session, &error)) {
+          QMessageBox::critical(&win, QStringLiteral("Save Session"), error);
+          return;
+        }
+        QMessageBox::information(&win, QStringLiteral("Save Session"),
+            QStringLiteral("Saved session “%1” with %2 display window(s).")
+                .arg(session.name).arg(session.windows.size()));
+      });
+
+  QObject::connect(restoreSessionAct, &QAction::triggered, &win,
+      [state, &win, &sessionManager, restoreSession, executeModeButton]() {
+        const QStringList names = sessionManager.sessionNames();
+        if (names.isEmpty()) {
+          QMessageBox::information(&win, QStringLiteral("Restore Session"),
+              QStringLiteral("No saved QtEDM sessions were found."));
+          return;
+        }
+        bool accepted = false;
+        const QString name = QInputDialog::getItem(&win,
+            QStringLiteral("Restore Session"), QStringLiteral("Session:"),
+            names, 0, false, &accepted);
+        if (!accepted || name.isEmpty()) {
+          return;
+        }
+        if (state->editMode) {
+          executeModeButton->setChecked(true);
+        }
+        restoreSession(name, true);
+      });
+
   /* Set up drag-and-drop support for .adl files on main window */
   mainWindowController->setDisplayWindowFactory(
       [displayPalette, &palette, fixed10Font, fixed13Font](
@@ -2066,6 +2231,16 @@ int main(int argc, char *argv[])
   DisplayWindow *testSaveWindow = nullptr;
   DisplayWindow *testCaptureWindow = nullptr;
 
+  if (!options.sessionName.isEmpty()) {
+    const QList<DisplayWindow *> restored =
+        restoreSession(options.sessionName, false);
+    if (!restored.isEmpty()) {
+      loadedAnyDisplay = true;
+      testSaveWindow = restored.first();
+      testCaptureWindow = restored.first();
+    }
+  }
+
   if (!options.resolvedDisplayFiles.isEmpty()) {
     QTEDM_TIMING_MARK_COUNT("Display files to load", options.resolvedDisplayFiles.size());
     for (const QString &resolved : options.resolvedDisplayFiles) {
@@ -2082,6 +2257,9 @@ int main(int argc, char *argv[])
             message);
         delete displayWin;
         continue;
+      }
+      if (!options.testActiveTabId.isEmpty()) {
+        displayWin->setActiveTabbedPageId(options.testActiveTabId);
       }
       QTEDM_TIMING_MARK("ADL file loaded successfully");
       if (geometrySpec) {

@@ -17,6 +17,8 @@ from typing import List, Match, Optional, Set
 CHANNEL_PATTERN = re.compile(
     r'((?:chan(?:[ABCD])?|channelA|channelB|channelC|channelD|variable|setpoint|readback|readbackPv|readbackChannel)=")([^"]*)(")',
     re.IGNORECASE)
+CHILD_DISPLAY_PATTERN = re.compile(
+    r'((?:^|\n)\s*display=")([^"]+\.adl)(")', re.IGNORECASE)
 
 
 class CaseFailure(RuntimeError):
@@ -31,7 +33,15 @@ def prefix_channel_name(channel: str, prefix: str) -> str:
 
 
 def rewrite_display_with_prefix(display_path: Path, prefix: str,
-    output_dir: Path) -> Path:
+    output_dir: Path, visited: Optional[Set[Path]] = None) -> Path:
+  if visited is None:
+    visited = set()
+  resolved_display = display_path.resolve()
+  output_path = output_dir / display_path.name
+  if resolved_display in visited:
+    return output_path
+  visited.add(resolved_display)
+
   text = display_path.read_text(encoding="utf-8")
 
   def replace(match: Match[str]) -> str:
@@ -39,8 +49,16 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
     return f'{match.group(1)}{prefix_channel_name(channel, prefix)}{match.group(3)}'
 
   rewritten = CHANNEL_PATTERN.sub(replace, text)
-  output_path = output_dir / display_path.name
   output_path.write_text(rewritten, encoding="utf-8")
+
+  for match in CHILD_DISPLAY_PATTERN.finditer(text):
+    child_name = match.group(2).strip()
+    child_path = Path(child_name)
+    if child_path.is_absolute():
+      continue
+    source_child = (display_path.parent / child_path).resolve()
+    if source_child.is_file() and source_child != display_path.resolve():
+      rewrite_display_with_prefix(source_child, prefix, output_dir, visited)
   return output_path
 
 
@@ -307,6 +325,10 @@ def main() -> int:
 
   selected_names = set(args.case)
   cases = load_cases(cases_path, selected_names)
+  case_runtime_ms = sum(
+      int(case.get("exit_after_ms", 4500)) for case in cases)
+  ioc_execution_seconds = max(
+      240, (case_runtime_ms + 999) // 1000 + 180)
 
   prefix = f"qtedm_ioc_{int(time.time())}_{os.getpid()}:"
   ioc_process: Optional[subprocess.Popen] = None
@@ -319,7 +341,7 @@ def main() -> int:
   ioc_command = [
       str(run_local_ioc),
       "--execution-time",
-      "240",
+      str(ioc_execution_seconds),
       "--pv-prefix",
       prefix,
       "--log-file",

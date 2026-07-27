@@ -95,6 +95,7 @@ typedef int Status;
 #include "main_window_controller.h"
 #include "memory_tracker.h"
 #include "object_palette_dialog.h"
+#include "plugin_manager.h"
 #include "pv_channel_manager.h"
 #include "session_manager.h"
 #include "soft_pv_registry.h"
@@ -935,6 +936,7 @@ int main(int argc, char *argv[])
   /* Initialize audit logging for control widget value changes */
   AuditLogger::instance().initialize(options.enableAuditLog);
   PvChannelManager::instance().setObserveOnly(options.observeOnly);
+  QtedmPluginManager::instance().loadConfiguredPlugins();
 
   /* Start memory tracking if TRACK_MEM environment variable is set */
   if (MemoryTracker::instance().isEnabled()) {
@@ -1298,7 +1300,6 @@ int main(int argc, char *argv[])
 
 //TODO: Implement dockable layouts so operators can rearrange displays.
 //TODO: Add CSS .opi import and additional caQtDM custom-widget mappings.
-//TODO: Design plugin API for custom widgets (C++ or Python registration).
 //TODO: Add compressed areaDetector codecs and CA waveform-image compatibility.
 //TODO: Implement versioned schema system for forward/backward compatibility.
 //TODO: Add macro inheritance for related displays (pass parent macros).

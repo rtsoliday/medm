@@ -15,7 +15,7 @@ from typing import List, Match, Optional, Set
 
 
 CHANNEL_PATTERN = re.compile(
-    r'((?:chan(?:[ABCD])?|channelA|channelB|channelC|channelD|variable|setpoint|readback|readbackPv|readbackChannel)=")([^"]*)(")',
+    r'((?:chan(?:[ABCD])?|channel(?:[ABCD])?|variable|setpoint|readback|readbackPv|readbackChannel)=")([^"]*)(")',
     re.IGNORECASE)
 CHILD_DISPLAY_PATTERN = re.compile(
     r'((?:^|\n)\s*display=")([^"]+\.adl)(")', re.IGNORECASE)
@@ -46,6 +46,9 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
 
   def replace(match: Match[str]) -> str:
     channel = match.group(2)
+    if (re.search(r'variable="$', match.group(1), re.IGNORECASE)
+        and re.fullmatch(r'[A-L]', channel.strip(), re.IGNORECASE)):
+      return match.group(0)
     return f'{match.group(1)}{prefix_channel_name(channel, prefix)}{match.group(3)}'
 
   rewritten = CHANNEL_PATTERN.sub(replace, text)

@@ -35,6 +35,8 @@ private:
     int width;
     int height;
     CreateTool tool;
+    QString pluginId;
+    QString typeId;
   };
 
   QWidget *createCategory(const QString &title,
@@ -49,6 +51,7 @@ private:
   static std::vector<ButtonDefinition> monitorButtons();
   static std::vector<ButtonDefinition> controlButtons();
   static std::vector<ButtonDefinition> miscButtons();
+  static std::vector<ButtonDefinition> pluginButtons();
 
   QPalette basePalette_;
   QFont labelFont_;
@@ -58,6 +61,8 @@ private:
   QAbstractButton *selectButton_ = nullptr;
   QHash<int, QString> buttonDescriptions_;
   QHash<int, CreateTool> buttonTools_;
+  QHash<int, QString> buttonPluginIds_;
+  QHash<int, QString> buttonTypeIds_;
   int nextButtonId_ = 0;
   std::weak_ptr<DisplayState> state_;
 };

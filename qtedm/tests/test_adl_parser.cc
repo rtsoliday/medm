@@ -17,6 +17,7 @@ private slots:
   void parsesTextAreaBlock();
   void parsesPvTableBlock();
   void parsesWaveTableBlock();
+  void preservesBlocksNamedProperty();
   void rejectsMalformedInput();
   void rejectsTopLevelUnterminatedString();
 };
@@ -389,6 +390,30 @@ void TestAdlParser::parsesWaveTableBlock()
       QStringLiteral("scientific"));
   QCOMPARE(propertyValue(*tableNode, QStringLiteral("charMode")),
       QStringLiteral("bytes"));
+}
+
+void TestAdlParser::preservesBlocksNamedProperty()
+{
+  const QString text = QStringLiteral(
+      "qtedm_plugin {\n"
+      "  pluginId=\"org.example.test\"\n"
+      "  property {\n"
+      "    name=\"title\"\n"
+      "    type=\"string\"\n"
+      "    value=\"Operator view\"\n"
+      "  }\n"
+      "}\n");
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(text, &errorMessage);
+  QVERIFY2(root.has_value(), qPrintable(errorMessage));
+  const AdlNode *plugin = ::findChild(*root, QStringLiteral("qtedm_plugin"));
+  QVERIFY(plugin);
+  const AdlNode *property = ::findChild(*plugin, QStringLiteral("property"));
+  QVERIFY(property);
+  QCOMPARE(propertyValue(*property, QStringLiteral("name")),
+      QStringLiteral("title"));
+  QCOMPARE(propertyValue(*property, QStringLiteral("value")),
+      QStringLiteral("Operator view"));
 }
 
 void TestAdlParser::rejectsMalformedInput()

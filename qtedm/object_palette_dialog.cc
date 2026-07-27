@@ -130,6 +130,11 @@ ObjectPaletteDialog::ObjectPaletteDialog(const QPalette &basePalette,
       controlButtons()));
   contentLayout->addWidget(createCategory(QStringLiteral("Misc"),
     miscButtons()));
+  const auto plugins = pluginButtons();
+  if (!plugins.empty()) {
+    contentLayout->addWidget(createCategory(QStringLiteral("Plugins"),
+        plugins));
+  }
 
   mainLayout->addWidget(contentFrame);
 
@@ -220,6 +225,8 @@ QToolButton *ObjectPaletteDialog::createToolButton(
   buttonGroup_->addButton(button, id);
   buttonDescriptions_.insert(id, definition.label);
   buttonTools_.insert(id, definition.tool);
+  buttonPluginIds_.insert(id, definition.pluginId);
+  buttonTypeIds_.insert(id, definition.typeId);
   button->installEventFilter(this);
 
   if (definition.label.compare(QStringLiteral("Select"),
@@ -300,6 +307,13 @@ void ObjectPaletteDialog::applyCreateToolSelection(int id)
   updateStatusLabel(buttonDescriptions_.value(id));
   const auto tool = buttonTools_.value(id, CreateTool::kNone);
   if (auto state = state_.lock()) {
+    if (tool == CreateTool::kQtedmPlugin) {
+      state->pluginCreatePluginId = buttonPluginIds_.value(id);
+      state->pluginCreateTypeId = buttonTypeIds_.value(id);
+    } else {
+      state->pluginCreatePluginId.clear();
+      state->pluginCreateTypeId.clear();
+    }
     bool stateChanged = false;
     bool handledByDisplay = false;
     if (tool == CreateTool::kNone) {
@@ -354,7 +368,12 @@ void ObjectPaletteDialog::syncButtonsToState()
       const int buttonId = buttonGroup_->id(button);
       const CreateTool toolForButton = buttonTools_.value(buttonId,
           CreateTool::kNone);
-      if (toolForButton == currentTool) {
+      const bool pluginMatches = toolForButton != CreateTool::kQtedmPlugin
+          || (buttonPluginIds_.value(buttonId)
+                  == state->pluginCreatePluginId
+              && buttonTypeIds_.value(buttonId)
+                  == state->pluginCreateTypeId);
+      if (toolForButton == currentTool && pluginMatches) {
         button->setChecked(true);
         updateStatusLabel(buttonDescriptions_.value(buttonId));
         return;
@@ -509,4 +528,27 @@ ObjectPaletteDialog::miscButtons()
       {QStringLiteral("Select"), select25_bits, select25_width,
           select25_height, CreateTool::kNone},
   };
+}
+
+std::vector<ObjectPaletteDialog::ButtonDefinition>
+ObjectPaletteDialog::pluginButtons()
+{
+  std::vector<ButtonDefinition> buttons;
+  const auto descriptors =
+      ExtensionObjectRegistry::instance().descriptors();
+  for (const ExtensionObjectDescriptor &descriptor : descriptors) {
+    if (!descriptor.isPluginObject()) {
+      continue;
+    }
+    buttons.push_back({
+        descriptor.displayName,
+        nullptr,
+        25,
+        25,
+        CreateTool::kQtedmPlugin,
+        descriptor.pluginId,
+        descriptor.typeId,
+    });
+  }
+  return buttons;
 }

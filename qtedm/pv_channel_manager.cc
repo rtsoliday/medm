@@ -5,6 +5,7 @@
 #include "audit_logger.h"
 #include "channel_access_context.h"
 #include "pva_channel_manager.h"
+#include "plugin_manager.h"
 #include "shared_channel_manager.h"
 #include "soft_pv_registry.h"
 
@@ -33,6 +34,12 @@ SubscriptionHandle PvChannelManager::subscribe(
         };
   }
 
+  if (QtedmPluginManager::instance().supportsDataProvider(pvName)) {
+    return QtedmPluginManager::instance().subscribeDataProvider(pvName,
+        std::move(valueCallback), std::move(connectionCallback),
+        std::move(accessRightsCallback), deliveryMode);
+  }
+
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -59,6 +66,16 @@ bool PvChannelManager::putValue(const QString &pvName, double value)
   if (rejectWrite(pvName, QString::number(value, 'g', 15))) {
     return false;
   }
+  if (QtedmPluginManager::instance().supportsDataProvider(pvName)) {
+    QString error;
+    const bool success = QtedmPluginManager::instance().putDataProvider(
+        pvName, value, &error);
+    if (success) {
+      AuditLogger::instance().logPut(pvName, value,
+          QStringLiteral("PluginDataProvider"));
+    }
+    return success;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -75,6 +92,16 @@ bool PvChannelManager::putValue(const QString &pvName, const QString &value)
   if (rejectWrite(pvName, value)) {
     return false;
   }
+  if (QtedmPluginManager::instance().supportsDataProvider(pvName)) {
+    QString error;
+    const bool success = QtedmPluginManager::instance().putDataProvider(
+        pvName, value, &error);
+    if (success) {
+      AuditLogger::instance().logPut(pvName, value,
+          QStringLiteral("PluginDataProvider"));
+    }
+    return success;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -90,6 +117,16 @@ bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value)
 {
   if (rejectWrite(pvName, QString::number(value))) {
     return false;
+  }
+  if (QtedmPluginManager::instance().supportsDataProvider(pvName)) {
+    QString error;
+    const bool success = QtedmPluginManager::instance().putDataProvider(
+        pvName, QVariant::fromValue(static_cast<unsigned int>(value)), &error);
+    if (success) {
+      AuditLogger::instance().logPut(pvName, static_cast<int>(value),
+          QStringLiteral("PluginDataProvider"));
+    }
+    return success;
   }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
@@ -109,6 +146,17 @@ bool PvChannelManager::putCharArrayValue(const QString &pvName,
           .arg(value.size()))) {
     return false;
   }
+  if (QtedmPluginManager::instance().supportsDataProvider(pvName)) {
+    QString error;
+    const bool success = QtedmPluginManager::instance().putDataProvider(
+        pvName, value, &error);
+    if (success) {
+      AuditLogger::instance().logPut(pvName,
+          QStringLiteral("<char-array:%1 bytes>").arg(value.size()),
+          QStringLiteral("PluginDataProvider"));
+    }
+    return success;
+  }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa
       && SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
@@ -127,6 +175,22 @@ bool PvChannelManager::putArrayValue(const QString &pvName,
   if (rejectWrite(pvName, QStringLiteral("<numeric-array:%1 elements>")
           .arg(values.size()))) {
     return false;
+  }
+  if (QtedmPluginManager::instance().supportsDataProvider(pvName)) {
+    QVariantList list;
+    list.reserve(values.size());
+    for (double value : values) {
+      list.append(value);
+    }
+    QString error;
+    const bool success = QtedmPluginManager::instance().putDataProvider(
+        pvName, list, &error);
+    if (success) {
+      AuditLogger::instance().logPut(pvName,
+          QStringLiteral("<numeric-array:%1 elements>").arg(values.size()),
+          QStringLiteral("PluginDataProvider"));
+    }
+    return success;
   }
   ParsedPvName parsed = parsePvName(pvName);
   if (parsed.protocol == PvProtocol::kCa

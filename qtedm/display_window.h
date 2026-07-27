@@ -130,6 +130,8 @@
 #include "composite_element.h"
 #include "composite_runtime.h"
 #include "tabbed_display_element.h"
+#include "plugin_element.h"
+#include "property_rules.h"
 #include "resource_palette_dialog.h"
 #include "text_element.h"
 #include "text_runtime.h"
@@ -881,7 +883,9 @@ private:
   PolylineElement *loadPolylineElement(const AdlNode &polylineNode);
   CompositeElement *loadCompositeElement(const AdlNode &compositeNode);
   TabbedDisplayElement *loadTabbedDisplayElement(const AdlNode &tabbedNode);
+  PluginElement *loadPluginElement(const AdlNode &pluginNode);
   bool loadElementNode(const AdlNode &node);
+  void loadPropertyRuleNodes(const QList<AdlNode> &nodes);
   QWidget *effectiveElementParent() const;
   std::optional<AdlNode> widgetToAdlNode(QWidget *widget) const;
   void setObjectGeometry(AdlNode &node, const QRect &rect) const;
@@ -1225,6 +1229,12 @@ private:
   CompositeElement *selectedCompositeElement_ = nullptr;
   QList<TabbedDisplayElement *> tabbedDisplayElements_;
   TabbedDisplayElement *selectedTabbedDisplayElement_ = nullptr;
+  QList<PluginElement *> pluginElements_;
+  PluginElement *selectedPluginElement_ = nullptr;
+  QHash<PluginElement *, QtedmPluginRuntime *> pluginRuntimes_;
+  QHash<QWidget *, QtedmRuleSet> propertyRuleSets_;
+  QHash<QWidget *, PropertyRuleRuntime *> propertyRuleRuntimes_;
+  QList<AdlNode> unparsedPropertyRuleNodes_;
   QStringList loadAncestry_;
   bool polygonCreationActive_ = false;
   PolygonElement *activePolygonElement_ = nullptr;
@@ -1357,6 +1367,7 @@ private:
 
   void clearCompositeSelection();
   void clearTabbedDisplaySelection();
+  void clearPluginSelection();
 
   void setWidgetSelectionState(QWidget *widget, bool selected);
 
@@ -1417,6 +1428,8 @@ private:
   void removeTextEntryRuntime(TextEntryElement *element);
   void removeSetpointControlRuntime(SetpointControlElement *element);
   void removeTextAreaRuntime(TextAreaElement *element);
+  void removePluginRuntime(PluginElement *element);
+  void stopPropertyRuleRuntimes();
 
   template <typename ElementType>
   bool cutSelectedElement(QList<ElementType *> &elements,
@@ -1756,6 +1769,7 @@ private:
 
   void selectCompositeElement(CompositeElement *element);
   void selectTabbedDisplayElement(TabbedDisplayElement *element);
+  void selectPluginElement(PluginElement *element);
 
   QWidget *currentSelectedWidget() const;
 
@@ -2012,6 +2026,8 @@ private:
   void createArcElement(const QRect &rect);
 
   void createLineElement(const QPoint &startPoint, const QPoint &endPoint);
+  void createPluginElement(const QRect &rect, const QString &pluginId,
+      const QString &typeId);
 
   void ensureRubberBand();
 
@@ -2060,4 +2076,6 @@ private:
   void showEditContextMenu(const QPoint &globalPos);
 
   void showQtedmExtensionProperties(QWidget *widget);
+  void showPluginProperties(PluginElement *element);
+  void showPropertyRuleEditor(QWidget *widget);
 };

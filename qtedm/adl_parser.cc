@@ -360,7 +360,12 @@ private:
 
       AdlNode node;
 
-      node.name = QStringLiteral("property");
+      /*
+       * Keep parser-internal assignments distinct from a real block named
+       * "property".  QtEDM plugin ADL intentionally uses property { ... }
+       * children, which must survive as nodes instead of being flattened.
+       */
+      node.name = QStringLiteral("__adl_assignment__");
 
       node.properties.append({name, *value});
 
@@ -374,7 +379,7 @@ private:
 
       AdlNode node;
 
-      node.name = QStringLiteral("value");
+      node.name = QStringLiteral("__adl_value__");
 
       node.properties.append({QString(), name});
 
@@ -426,11 +431,11 @@ private:
 
       }
 
-      if (entry->name == QStringLiteral("property")) {
+      if (entry->name == QStringLiteral("__adl_assignment__")) {
 
         node.properties.append(entry->properties.first());
 
-      } else if (entry->name == QStringLiteral("value")) {
+      } else if (entry->name == QStringLiteral("__adl_value__")) {
 
         node.properties.append(entry->properties.first());
 

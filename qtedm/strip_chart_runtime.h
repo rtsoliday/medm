@@ -59,7 +59,8 @@ private:
 
   QPointer<StripChartElement> element_;
   std::array<PenState, kStripChartPenCount> pens_{};
-  ArchiverApplianceProvider archiveProvider_;
+  ArchiveProvider *archiveProvider_ = nullptr;
+  QString archiveProviderError_;
   bool started_ = false;
 };
 

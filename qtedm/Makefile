@@ -119,6 +119,10 @@ qtedm_SRC = qtedm.cc \
             audit_logger.cc \
             display_converter.cc \
             extension_object_registry.cc \
+            plugin_manager.cc \
+            plugin_element.cc \
+            property_rules.cc \
+            property_rule_editor_dialog.cc \
             session_manager.cc \
             archive_provider.cc \
             pv_snapshot.cc \
@@ -458,7 +462,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_phase1 \
                         test_phase2 \
                         test_phase3 \
-                        test_phase4
+                        test_phase4 \
+                        test_phase5
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 
@@ -501,7 +506,19 @@ test_phase3_OBJS = $(OBJ_DIR)/test_phase3.$(OBJEXT) \
                    $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 test_phase4_OBJS = $(OBJ_DIR)/test_phase4.$(OBJEXT) \
                    $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_phase5_OBJS = $(OBJ_DIR)/test_phase5.$(OBJEXT) \
+                   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
+
+PHASE5_TEST_PLUGIN_DIR = $(OBJ_DIR)/plugins
+ifeq ($(OS), Windows)
+  PHASE5_TEST_PLUGIN = $(PHASE5_TEST_PLUGIN_DIR)/qtedm_phase5_test_plugin.dll
+else ifeq ($(OS), Darwin)
+  PHASE5_TEST_PLUGIN = $(PHASE5_TEST_PLUGIN_DIR)/libqtedm_phase5_test_plugin.dylib
+else
+  PHASE5_TEST_PLUGIN = $(PHASE5_TEST_PLUGIN_DIR)/libqtedm_phase5_test_plugin.so
+endif
+PHASE5_TEST_PLUGIN_METADATA = $(PHASE5_TEST_PLUGIN).qtedm-plugin.json
 
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
@@ -514,12 +531,39 @@ $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT): tests/qtedm_image_compare.cc \
                                           $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
+$(OBJ_DIR)/phase5_test_plugin.moc: tests/phase5_test_plugin.cc | $(OBJ_DIR)
+	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
+
+$(OBJ_DIR)/phase5_test_plugin.$(OBJEXT): tests/phase5_test_plugin.cc \
+    $(OBJ_DIR)/phase5_test_plugin.moc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
+	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+
+$(PHASE5_TEST_PLUGIN_DIR):
+	mkdir -p $@
+
+$(PHASE5_TEST_PLUGIN_METADATA): tests/phase5_test_plugin.qtedm-plugin.json \
+    $(PHASE5_TEST_PLUGIN) | $(PHASE5_TEST_PLUGIN_DIR)
+	cp -f $< $@
+
+ifeq ($(OS), Windows)
+$(PHASE5_TEST_PLUGIN): $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) | $(PHASE5_TEST_PLUGIN_DIR)
+	$(LINKDLL) -out:$@ $< $(LDFLAGS)
+else ifeq ($(OS), Darwin)
+$(PHASE5_TEST_PLUGIN): $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) | $(PHASE5_TEST_PLUGIN_DIR)
+	$(CCC) -dynamiclib -o $@ $< $(LDFLAGS)
+else
+$(PHASE5_TEST_PLUGIN): $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) | $(PHASE5_TEST_PLUGIN_DIR)
+	$(CCC) -shared -o $@ $< $(LDFLAGS)
+endif
+
 define link_qtedm_unit_test
 $(OBJ_DIR)/$(1)$(EXEEXT): $$($(1)_OBJS)
 	$$(LINKEXE) $$(OUTPUTEXE) $$^ $$(LDFLAGS) $$(QT_TEST_LIBS) $$(PROD_SYS_LIBS)
 endef
 
 $(foreach test,$(QTEDM_UNIT_TEST_NAMES),$(eval $(call link_qtedm_unit_test,$(test))))
+
+$(OBJ_DIR)/test_phase5$(EXEEXT): | $(PHASE5_TEST_PLUGIN_METADATA)
 
 $(OBJ_DIR)/qtedm_image_compare$(EXEEXT): $(qtedm_image_compare_OBJS)
 	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
@@ -532,7 +576,7 @@ else
 	@exit 1
 endif
 
-build-tests: check-qt-test $(QTEDM_UNIT_TEST_BINARIES)
+build-tests: check-qt-test $(PHASE5_TEST_PLUGIN_METADATA) $(QTEDM_UNIT_TEST_BINARIES)
 
 tests: test
 
@@ -568,7 +612,10 @@ test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
 
 clean-tests:
 	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS) \
-	  $(QTEDM_VISUAL_TEST_TOOLS)
+	  $(QTEDM_VISUAL_TEST_TOOLS) $(PHASE5_TEST_PLUGIN) \
+	  $(PHASE5_TEST_PLUGIN_METADATA) \
+	  $(OBJ_DIR)/phase5_test_plugin.$(OBJEXT) \
+	  $(OBJ_DIR)/phase5_test_plugin.moc
 
 .PHONY: tests test build-tests test-unit test-cli test-ioc test-visual clean-tests check-qt-test
 

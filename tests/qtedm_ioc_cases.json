@@ -1372,5 +1372,29 @@
       "archive_complete": true,
       "archive_failed": true
     }
+  },
+  {
+    "name": "qtedm_phase5_declarative_rule_updates_missing_plugin",
+    "display": "tests/test_QtEDMPhase5.adl",
+    "selector": {
+      "type": "qtedm_plugin",
+      "plugin_id": "org.qtedm.phase5.missing-fixture",
+      "type_id": "operator_status"
+    },
+    "exit_after_ms": 4500,
+    "writes": [
+      {
+        "pv": "led:test:binary_live",
+        "value": "0"
+      }
+    ],
+    "expect": {
+      "available": false,
+      "visible": false,
+      "rule_count": 2,
+      "properties": {
+        "text": "STOPPED"
+      }
+    }
   }
 ]

@@ -1167,6 +1167,18 @@ backward compatible.</p>
     <td><code>QTEDM_AUDIT_DIR</code></td>
     <td>Optional audit-log directory override. The default remains <code>~/.medm</code>.</td>
   </tr>
+  <tr>
+    <td><code>QTEDM_ARCHIVER_URL</code></td>
+    <td>EPICS Archiver Appliance retrieval root used by archive-backed plots.</td>
+  </tr>
+  <tr>
+    <td><code>QTEDM_ARCHIVER_PROVIDER</code></td>
+    <td>Archive-provider plugin ID. Empty or <code>archiver-appliance</code> selects the built-in provider.</td>
+  </tr>
+  <tr>
+    <td><code>QTEDM_PLUGIN_PATH</code></td>
+    <td>Platform-separated list of absolute local plugin directories. QtEDM also scans the <code>plugins</code> directory next to its executable.</td>
+  </tr>
 </table>
 
 <p>Standard EPICS Channel Access environment variables are also used. See the EPICS documentation for details.</p>
@@ -1215,6 +1227,8 @@ Both versions remain fully readable by QtEDM.</p>
   <li><code>qtedm_tabbed_display</code></li>
   <li><code>qtedm_archive_plot</code></li>
   <li><code>qtedm_ndarray_image</code></li>
+  <li><code>qtedm_plugin</code></li>
+  <li><code>qtedm_rules</code></li>
 </ul>
 
 <h3>Display Import</h3>
@@ -1242,6 +1256,39 @@ failure.</p>
     <li><strong>Deferred:</strong> Compressed codecs and CA waveform-image compatibility are not supported in version 1.</li>
   </ul>
 </div>
+
+<h3>Version 1 Local Plugins</h3>
+
+<p>QtEDM can load trusted local Qt plugins for custom display objects, data
+provider URI schemes, and archive providers. A plugin library must be installed
+with a versioned <code>.qtedm-plugin.json</code> sidecar in the executable's
+<code>plugins</code> directory or an absolute directory from
+<code>QTEDM_PLUGIN_PATH</code>. Remote plugin loading is not supported.</p>
+
+<p>The loader requires the exact Qt major version, build architecture, compiler
+ABI, and QtEDM interface version. It also rejects duplicate plugin IDs, display
+type IDs, data schemes, and archive-provider IDs. Missing or incompatible
+display plugins appear as labeled placeholders, and their original
+<code>qtedm_plugin</code> nodes remain intact when the display is saved.</p>
+
+<p>Plugin data-provider and display-widget writes pass through QtEDM's central
+write policy, so observe-only mode and auditing apply before the provider sees
+a put. See <code>docs/QtEDM_Plugin_API.md</code> in the source distribution for
+the complete interface, metadata, lifecycle, and packaging contract.</p>
+
+<h3>Declarative Property Rules</h3>
+
+<p>Select a built-in or plugin widget in EDIT mode and choose
+<em>Declarative Property Rules...</em> to attach a <code>qtedm_rules</code>
+block. Rules reuse the EPICS calculation grammar with typed inputs A through L.
+They may change only visibility, enabled state, text, foreground/background
+color, or geometry.</p>
+
+<p>Each rule has a 1&ndash;60 Hz evaluation cap and explicit disconnect
+behavior. QtEDM detects duplicate IDs and dependency cycles, reports authoring
+errors, and restores original properties when EXECUTE mode ends. Version 1 is
+not a script engine: Python, JavaScript, filesystem access, process execution,
+network access, and PV writes are unavailable and rejected by validation.</p>
 
 <h3>Named Sessions</h3>
 
@@ -1299,6 +1346,14 @@ as their ordinary channel name.</p>
 
 <p>PV names can include macro references like <code>$(P)</code> that are replaced at runtime. This allows creating reusable displays that work with different devices.</p>
 
+<h3>Local Plugins and Property Rules</h3>
+
+<p>Reviewed facility plugins can add display types and CA/PVA-adjacent data or
+archive providers without changing the QtEDM executable. Declarative property
+rules provide a separate sandboxed path for display-author logic when a native
+plugin is unnecessary. Both mechanisms preserve unknown ADL extension data so
+a temporarily missing plugin does not destroy a display.</p>
+
 <h3>Related Displays</h3>
 
 <p>Related Display widgets can open additional displays, optionally passing macro substitutions and replacing or overlaying the current display.</p>
@@ -1334,7 +1389,7 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
   <li><strong>Font handling</strong> &ndash; QtEDM uses scalable fonts with alias mode for MEDM compatibility</li>
   <li><strong>Window management</strong> &ndash; Some window behaviors may differ depending on the desktop environment</li>
   <li><strong>Platform support</strong> &ndash; QtEDM currently focuses on Linux; Windows and macOS support may vary</li>
-  <li><strong>qtedm-only widgets</strong> &ndash; Text Area, Heatmap, NTNDArray Image, Archive Plot, PV Table, Waveform Table, Waterfall Plot, Thermometer, LED Monitor, and Expression Channel are QtEDM ADL extensions and are not backward compatible with MEDM</li>
+  <li><strong>qtedm-only widgets</strong> &ndash; Text Area, Heatmap, NTNDArray Image, Archive Plot, PV Table, Waveform Table, Waterfall Plot, Thermometer, LED Monitor, Expression Channel, plugin objects, and declarative rules are QtEDM ADL extensions and are not backward compatible with MEDM</li>
   <li><strong>Enhanced Statistics Window</strong> &ndash; The Statistics Window (View &gt; Statistics Window) includes a third mode called "PV Details" that displays a sortable table of all connected PVs with their connection status, writable status, update rate, and alarm severity. Click the Mode button to cycle through Interval, Average, and PV Details views.</li>
   <li><strong>Find PV Dialog</strong> &ndash; QtEDM provides a Find PV feature (View &gt; Find PV or Ctrl+F) that allows searching for process variables across all open displays. Enter a PV name pattern to locate widgets using matching PVs.</li>
   <li><strong>Export Image</strong> &ndash; QtEDM adds an "Export Image..." option to the right-click context menu in EXECUTE mode. This allows exporting displays as PNG, SVG, JPEG, or BMP images. MEDM supports XWD format via the print command; QtEDM provides more modern image formats including vector SVG output.</li>

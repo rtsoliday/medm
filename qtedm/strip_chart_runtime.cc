@@ -10,6 +10,7 @@
 
 #include "strip_chart_element.h"
 #include "channel_access_context.h"
+#include "plugin_manager.h"
 #include "pv_channel_manager.h"
 #include "runtime_utils.h"
 
@@ -32,6 +33,25 @@ StripChartRuntime::StripChartRuntime(StripChartElement *element)
   : QObject(element)
   , element_(element)
 {
+  const QString providerId =
+      qEnvironmentVariable("QTEDM_ARCHIVER_PROVIDER").trimmed();
+  if (providerId.isEmpty()
+      || providerId.compare(QStringLiteral("archiver-appliance"),
+          Qt::CaseInsensitive) == 0) {
+    archiveProvider_ = new ArchiverApplianceProvider(this);
+  } else {
+    archiveProvider_ = QtedmPluginManager::instance().createArchiveProvider(
+        providerId, this, &archiveProviderError_);
+    if (archiveProvider_) {
+      QObject *providerObject = dynamic_cast<QObject *>(archiveProvider_);
+      if (!providerObject || providerObject->parent() != this) {
+        archiveProviderError_ = QStringLiteral(
+            "Plugin archive provider must return a QObject parented to its owner.");
+        delete archiveProvider_;
+        archiveProvider_ = nullptr;
+      }
+    }
+  }
 }
 
 StripChartRuntime::~StripChartRuntime()
@@ -140,6 +160,14 @@ void StripChartRuntime::requestArchive(int index)
       || index < 0 || index >= kStripChartPenCount) {
     return;
   }
+  if (!archiveProvider_) {
+    element_->setArchiveStatus(QStringLiteral(
+        "%1 Live data continues.")
+        .arg(archiveProviderError_.isEmpty()
+            ? QStringLiteral("Archive provider is unavailable.")
+            : archiveProviderError_));
+    return;
+  }
   PenState &pen = pens_[index];
   if (pen.archiveRequest) {
     pen.archiveRequest->cancel();
@@ -155,7 +183,7 @@ void StripChartRuntime::requestArchive(int index)
   element_->setArchiveStatus(QStringLiteral("Loading archive history…"));
 
   QPointer<StripChartRuntime> self(this);
-  pen.archiveRequest = archiveProvider_.query(query, this,
+  pen.archiveRequest = archiveProvider_->query(query, this,
       [self, index, generation](const ArchiveResult &result) {
         if (!self || !self->started_ || !self->element_
             || index < 0 || index >= kStripChartPenCount) {

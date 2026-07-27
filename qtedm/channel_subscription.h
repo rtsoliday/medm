@@ -15,6 +15,7 @@
 #include <db_access.h>
 
 class PvaChannelManager;
+class QtedmPluginManager;
 class SharedChannelManager;
 class SoftPvRegistry;
 
@@ -139,6 +140,7 @@ public:
 
 private:
   friend class PvaChannelManager;
+  friend class QtedmPluginManager;
   friend class SharedChannelManager;
   friend class SoftPvRegistry;
   friend class SubscriptionOwner;

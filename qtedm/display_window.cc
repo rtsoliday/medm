@@ -5,6 +5,8 @@
 #include "audit_logger.h"
 #include "pv_channel_manager.h"
 #include "pv_snapshot_dialog.h"
+#include "plugin_manager.h"
+#include "property_rule_editor_dialog.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -2814,6 +2816,7 @@ void DisplayWindow::mousePressEvent(QMouseEvent *event)
           || state->createTool == CreateTool::kSetpointControl
           || state->createTool == CreateTool::kQtedmSpinBox
           || state->createTool == CreateTool::kQtedmTabbedDisplay
+          || state->createTool == CreateTool::kQtedmPlugin
           || state->createTool == CreateTool::kTextArea
           || state->createTool == CreateTool::kSlider
           || state->createTool == CreateTool::kWheelSwitch
@@ -3507,6 +3510,14 @@ void DisplayWindow::clearTabbedDisplaySelection()
   selectedTabbedDisplayElement_ = nullptr;
 }
 
+void DisplayWindow::clearPluginSelection()
+{
+  if (!selectedPluginElement_) {
+    return;
+  }
+  selectedPluginElement_->setSelected(false);
+  selectedPluginElement_ = nullptr;
+}
 
 void DisplayWindow::setWidgetSelectionState(QWidget *widget, bool selected)
 {
@@ -3647,6 +3658,10 @@ void DisplayWindow::setWidgetSelectionState(QWidget *widget, bool selected)
   }
   if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
     tabbed->setSelected(selected);
+    return;
+  }
+  if (auto *plugin = dynamic_cast<PluginElement *>(widget)) {
+    plugin->setSelected(selected);
     return;
   }
 }
@@ -3910,6 +3925,12 @@ void DisplayWindow::detachSingleSelectionForWidget(QWidget *widget)
   if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
     if (selectedTabbedDisplayElement_ == tabbed) {
       selectedTabbedDisplayElement_ = nullptr;
+    }
+    return;
+  }
+  if (auto *plugin = dynamic_cast<PluginElement *>(widget)) {
+    if (selectedPluginElement_ == plugin) {
+      selectedPluginElement_ = nullptr;
     }
     return;
   }
@@ -4249,6 +4270,7 @@ QList<QWidget *> DisplayWindow::selectedWidgets() const
   appendUnique(selectedPolygon_);
   appendUnique(selectedCompositeElement_);
   appendUnique(selectedTabbedDisplayElement_);
+  appendUnique(selectedPluginElement_);
 
   return widgets;
 }
@@ -4351,6 +4373,7 @@ void DisplayWindow::clearSelections()
   clearPolygonSelection();
   clearCompositeSelection();
   clearTabbedDisplaySelection();
+  clearPluginSelection();
   closeResourcePalette();
   notifyMenus();
 }
@@ -4382,6 +4405,47 @@ bool DisplayWindow::copySelectionInternal(bool removeOriginal)
     markDirty();
     notifyMenus();
   };
+
+  if (selectedPluginElement_) {
+    PluginElement *element = selectedPluginElement_;
+    const QRect geometry = widgetDisplayRect(element);
+    std::optional<AdlNode> node = widgetToAdlNode(element);
+    if (!node) {
+      return false;
+    }
+    const QtedmRuleSet rules = propertyRuleSets_.value(element);
+    prepareClipboard([geometry, node = std::move(*node), rules](
+                         DisplayWindow &target, const QPoint &offset) {
+      if (!target.displayArea_) {
+        return;
+      }
+      AdlNode nodeCopy = node;
+      target.setObjectGeometry(nodeCopy,
+          target.translateRectForPaste(geometry, offset));
+      PluginElement *created = nullptr;
+      {
+        ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+            false, nullptr);
+        created = target.loadPluginElement(nodeCopy);
+      }
+      if (created) {
+        if (!rules.isEmpty()) {
+          target.propertyRuleSets_.insert(created, rules);
+        }
+        target.selectPluginElement(created);
+        target.markDirty();
+      }
+    });
+    if (removeOriginal) {
+      selectedPluginElement_ = nullptr;
+      pluginElements_.removeAll(element);
+      removePluginRuntime(element);
+      removeElementFromStack(element);
+      element->deleteLater();
+      finalizeCut();
+    }
+    return true;
+  }
 
   if (selectedCompositeElement_) {
     CompositeElement *element = selectedCompositeElement_;
@@ -6058,7 +6122,8 @@ bool DisplayWindow::hasAnyElementSelection() const
       || selectedRectangle_ || selectedImage_ || selectedHeatmap_
       || selectedWaterfallPlot_ || selectedOval_
       || selectedArc_ || selectedLine_ || selectedPolyline_
-      || selectedPolygon_ || selectedCompositeElement_;
+      || selectedPolygon_ || selectedCompositeElement_
+      || selectedTabbedDisplayElement_ || selectedPluginElement_;
 }
 
 
@@ -6088,7 +6153,8 @@ bool DisplayWindow::hasSelectableElements() const
       || !waterfallPlotElements_.isEmpty()
       || !ovalElements_.isEmpty() || !arcElements_.isEmpty()
       || !lineElements_.isEmpty() || !polylineElements_.isEmpty()
-      || !polygonElements_.isEmpty() || !compositeElements_.isEmpty();
+      || !polygonElements_.isEmpty() || !compositeElements_.isEmpty()
+      || !tabbedDisplayElements_.isEmpty() || !pluginElements_.isEmpty();
 }
 
 
@@ -9868,6 +9934,17 @@ QStringList DisplayWindow::channelsForWidget(QWidget *widget) const
       appendChannel(element->traceXChannel(i));
       appendChannel(element->traceYChannel(i));
     }
+  } else if (auto *element = dynamic_cast<PluginElement *>(widget)) {
+    appendChannelArray(element->channels());
+  }
+
+  const auto ruleIt = propertyRuleSets_.constFind(widget);
+  if (ruleIt != propertyRuleSets_.constEnd()) {
+    for (const QtedmPropertyRule &rule : ruleIt.value().rules) {
+      for (const QtedmRuleInput &input : rule.inputs) {
+        appendChannel(input.channel);
+      }
+    }
   }
 
   return channels;
@@ -9919,6 +9996,7 @@ QList<QWidget *> DisplayWindow::findPvWidgets() const
   appendList(polygonElements_);
   appendList(compositeElements_);
   appendList(tabbedDisplayElements_);
+  appendList(pluginElements_);
 
   return widgets;
 }
@@ -12312,6 +12390,12 @@ void DisplayWindow::removeElementFromStack(QWidget *element)
   }
   originalAdlGeometries_.remove(element);
   originalPolylinePoints_.remove(element);
+  if (PropertyRuleRuntime *runtime =
+          propertyRuleRuntimes_.take(element)) {
+    runtime->stop();
+    delete runtime;
+  }
+  propertyRuleSets_.remove(element);
   bool removed = false;
   for (auto it = elementStack_.begin(); it != elementStack_.end();) {
     QWidget *current = it->data();
@@ -13667,6 +13751,15 @@ void DisplayWindow::selectTabbedDisplayElement(TabbedDisplayElement *element)
   selectedTabbedDisplayElement_->setSelected(true);
 }
 
+void DisplayWindow::selectPluginElement(PluginElement *element)
+{
+  if (!element) {
+    return;
+  }
+  clearSelections();
+  selectedPluginElement_ = element;
+  selectedPluginElement_->setSelected(true);
+}
 
 QWidget *DisplayWindow::currentSelectedWidget() const
 {
@@ -13776,6 +13869,9 @@ QWidget *DisplayWindow::currentSelectedWidget() const
   }
   if (selectedTabbedDisplayElement_) {
     return selectedTabbedDisplayElement_;
+  }
+  if (selectedPluginElement_) {
+    return selectedPluginElement_;
   }
   return nullptr;
 }
@@ -13928,6 +14024,9 @@ bool DisplayWindow::selectWidgetForEditing(QWidget *widget)
   } else if (auto *tabbed =
       dynamic_cast<TabbedDisplayElement *>(widget)) {
     selectTabbedDisplayElement(tabbed);
+    handled = true;
+  } else if (auto *plugin = dynamic_cast<PluginElement *>(widget)) {
+    selectPluginElement(plugin);
     handled = true;
   } else if (auto *line = dynamic_cast<LineElement *>(widget)) {
     selectLineElement(line);
@@ -15713,6 +15812,20 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
     rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
     createTabbedDisplayElement(rect);
     break;
+  case CreateTool::kQtedmPlugin: {
+    if (rect.width() < kMinimumTextWidth * 2) {
+      rect.setWidth(kMinimumTextWidth * 2);
+    }
+    if (rect.height() < kMinimumTextHeight * 2) {
+      rect.setHeight(kMinimumTextHeight * 2);
+    }
+    rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
+    if (auto state = state_.lock()) {
+      createPluginElement(rect, state->pluginCreatePluginId,
+          state->pluginCreateTypeId);
+    }
+    break;
+  }
   case CreateTool::kSlider:
     if (rect.width() < kMinimumSliderWidth) {
       rect.setWidth(kMinimumSliderWidth);
@@ -17347,6 +17460,55 @@ void DisplayWindow::createTabbedDisplayElement(const QRect &rect)
   markDirty();
 }
 
+void DisplayWindow::createPluginElement(const QRect &rect,
+    const QString &pluginId, const QString &typeId)
+{
+  if (!displayArea_ || pluginId.trimmed().isEmpty()
+      || typeId.trimmed().isEmpty()) {
+    return;
+  }
+  const QtedmLoadedDisplayObject *registered =
+      QtedmPluginManager::instance().displayObject(pluginId, typeId);
+  if (!registered) {
+    QMessageBox::warning(this, QStringLiteral("QtEDM Plugin"),
+        QStringLiteral("The selected plugin object is no longer available."));
+    deactivateCreateTool();
+    return;
+  }
+
+  setNextUndoLabel(QStringLiteral("Create Plugin Object"));
+  const QRect target = adjustRectToDisplayArea(rect);
+  if (target.width() <= 0 || target.height() <= 0) {
+    return;
+  }
+
+  AdlNode node;
+  node.name = QStringLiteral("qtedm_plugin");
+  node.properties = {
+      {QStringLiteral("pluginId"), pluginId},
+      {QStringLiteral("typeId"), typeId},
+      {QStringLiteral("schemaVersion"),
+          QString::number(registered->descriptor.schemaVersion)},
+  };
+  AdlNode object;
+  object.name = QStringLiteral("object");
+  object.properties = {
+      {QStringLiteral("x"), QString::number(target.x())},
+      {QStringLiteral("y"), QString::number(target.y())},
+      {QStringLiteral("width"), QString::number(target.width())},
+      {QStringLiteral("height"), QString::number(target.height())},
+  };
+  node.children.append(object);
+
+  PluginElement *element = loadPluginElement(node);
+  if (!element) {
+    return;
+  }
+  selectPluginElement(element);
+  deactivateCreateTool();
+  markDirty();
+}
+
 
 void DisplayWindow::createExpressionChannelElement(const QRect &rect)
 {
@@ -17874,6 +18036,7 @@ void DisplayWindow::updateCreateCursor()
           || state->createTool == CreateTool::kSetpointControl
           || state->createTool == CreateTool::kQtedmSpinBox
           || state->createTool == CreateTool::kQtedmTabbedDisplay
+          || state->createTool == CreateTool::kQtedmPlugin
           || state->createTool == CreateTool::kTextArea
           || state->createTool == CreateTool::kSlider
           || state->createTool == CreateTool::kWheelSwitch
@@ -18942,6 +19105,191 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
   markDirty();
 }
 
+void DisplayWindow::showPluginProperties(PluginElement *element)
+{
+  if (!element) {
+    return;
+  }
+  const QtedmLoadedDisplayObject *registration =
+      QtedmPluginManager::instance().displayObject(
+          element->pluginId(), element->typeId());
+  if (!registration) {
+    QMessageBox::information(this, QStringLiteral("Plugin Properties"),
+        element->diagnostic());
+    return;
+  }
+
+  QDialog dialog(this);
+  dialog.setWindowTitle(registration->descriptor.displayName
+      + QStringLiteral(" Properties"));
+  auto *layout = new QVBoxLayout(&dialog);
+  auto *table = new QTableWidget(
+      registration->descriptor.properties.size(), 3, &dialog);
+  table->setHorizontalHeaderLabels({QStringLiteral("Property"),
+      QStringLiteral("Type"), QStringLiteral("Value")});
+  table->horizontalHeader()->setSectionResizeMode(
+      0, QHeaderView::ResizeToContents);
+  table->horizontalHeader()->setSectionResizeMode(
+      1, QHeaderView::ResizeToContents);
+  table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+  table->verticalHeader()->setVisible(false);
+
+  auto typeName = [](QtedmPluginPropertyType type) {
+    switch (type) {
+    case QtedmPluginPropertyType::kBoolean: return QStringLiteral("boolean");
+    case QtedmPluginPropertyType::kInteger: return QStringLiteral("integer");
+    case QtedmPluginPropertyType::kDouble: return QStringLiteral("double");
+    case QtedmPluginPropertyType::kColor: return QStringLiteral("color");
+    case QtedmPluginPropertyType::kStringList:
+      return QStringLiteral("string_list");
+    case QtedmPluginPropertyType::kString:
+    default: return QStringLiteral("string");
+    }
+  };
+  auto valueText = [](QtedmPluginPropertyType type,
+                       const QVariant &value) {
+    switch (type) {
+    case QtedmPluginPropertyType::kBoolean:
+      return value.toBool() ? QStringLiteral("true")
+                            : QStringLiteral("false");
+    case QtedmPluginPropertyType::kInteger:
+      return QString::number(value.toLongLong());
+    case QtedmPluginPropertyType::kDouble:
+      return QString::number(value.toDouble(), 'g', 15);
+    case QtedmPluginPropertyType::kColor:
+      return value.value<QColor>().name(QColor::HexArgb);
+    case QtedmPluginPropertyType::kStringList: {
+      QJsonArray values;
+      for (const QString &entry : value.toStringList()) {
+        values.append(entry);
+      }
+      return QString::fromUtf8(
+          QJsonDocument(values).toJson(QJsonDocument::Compact));
+    }
+    case QtedmPluginPropertyType::kString:
+    default:
+      return value.toString();
+    }
+  };
+
+  const QVariantMap current = element->properties();
+  for (int row = 0; row < registration->descriptor.properties.size(); ++row) {
+    const QtedmPluginPropertySchema &schema =
+        registration->descriptor.properties.at(row);
+    auto *nameItem = new QTableWidgetItem(schema.displayName.isEmpty()
+        ? schema.name : schema.displayName);
+    nameItem->setData(Qt::UserRole, schema.name);
+    nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+    nameItem->setToolTip(schema.description);
+    table->setItem(row, 0, nameItem);
+    auto *typeItem = new QTableWidgetItem(typeName(schema.type));
+    typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
+    table->setItem(row, 1, typeItem);
+    table->setItem(row, 2, new QTableWidgetItem(valueText(schema.type,
+        current.value(schema.name, schema.defaultValue))));
+  }
+  layout->addWidget(table);
+
+  auto *buttons = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  layout->addWidget(buttons);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  QVariantMap updated = current;
+  QStringList errors;
+  for (int row = 0; row < registration->descriptor.properties.size(); ++row) {
+    const QtedmPluginPropertySchema &schema =
+        registration->descriptor.properties.at(row);
+    const QString text = table->item(row, 2)
+        ? table->item(row, 2)->text() : QString();
+    bool ok = true;
+    QVariant value;
+    switch (schema.type) {
+    case QtedmPluginPropertyType::kBoolean: {
+      const QString normalized = text.trimmed().toLower();
+      ok = normalized == QStringLiteral("true")
+          || normalized == QStringLiteral("false");
+      value = normalized == QStringLiteral("true");
+      break;
+    }
+    case QtedmPluginPropertyType::kInteger:
+      value = text.toLongLong(&ok);
+      break;
+    case QtedmPluginPropertyType::kDouble:
+      value = text.toDouble(&ok);
+      break;
+    case QtedmPluginPropertyType::kColor: {
+      const QColor color(text.trimmed());
+      ok = color.isValid();
+      value = color;
+      break;
+    }
+    case QtedmPluginPropertyType::kStringList: {
+      QJsonParseError parseError;
+      const QJsonDocument document =
+          QJsonDocument::fromJson(text.toUtf8(), &parseError);
+      ok = parseError.error == QJsonParseError::NoError
+          && document.isArray();
+      QStringList values;
+      if (ok) {
+        for (const QJsonValue &entry : document.array()) {
+          if (!entry.isString()) {
+            ok = false;
+            break;
+          }
+          values.append(entry.toString());
+        }
+      }
+      value = values;
+      break;
+    }
+    case QtedmPluginPropertyType::kString:
+    default:
+      value = text;
+      break;
+    }
+    if (!ok || (schema.required && text.trimmed().isEmpty())) {
+      errors.append(schema.displayName.isEmpty()
+          ? schema.name : schema.displayName);
+    } else {
+      updated.insert(schema.name, value);
+    }
+  }
+  if (!errors.isEmpty()) {
+    QMessageBox::warning(this, QStringLiteral("Plugin Properties"),
+        QStringLiteral("Invalid values: %1").arg(errors.join(
+            QStringLiteral(", "))));
+    return;
+  }
+
+  setNextUndoLabel(QStringLiteral("Edit Plugin Properties"));
+  element->setProperties(updated);
+  markDirty();
+}
+
+void DisplayWindow::showPropertyRuleEditor(QWidget *widget)
+{
+  if (!widget || !elementStackSet_.contains(widget)) {
+    return;
+  }
+  PropertyRuleEditorDialog dialog(propertyRuleSets_.value(widget), this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+  setNextUndoLabel(QStringLiteral("Edit Declarative Property Rules"));
+  const QtedmRuleSet rules = dialog.ruleSet();
+  if (rules.isEmpty()) {
+    propertyRuleSets_.remove(widget);
+  } else {
+    propertyRuleSets_.insert(widget, rules);
+  }
+  markDirty();
+}
+
 
 void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
 {
@@ -18960,6 +19308,19 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
   };
 
   QWidget *selected = currentSelectedWidget();
+  if (auto *plugin = dynamic_cast<PluginElement *>(selected)) {
+    QAction *properties = addMenuAction(&menu,
+        QStringLiteral("Plugin Properties..."));
+    connect(properties, &QAction::triggered, this,
+        [this, plugin]() { showPluginProperties(plugin); });
+  }
+  if (selected) {
+    QAction *rules = addMenuAction(&menu,
+        QStringLiteral("Declarative Property Rules..."));
+    connect(rules, &QAction::triggered, this,
+        [this, selected]() { showPropertyRuleEditor(selected); });
+    menu.addSeparator();
+  }
   const bool isExtension =
       (dynamic_cast<SetpointControlElement *>(selected)
           && static_cast<SetpointControlElement *>(selected)
@@ -20264,6 +20625,7 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   bool displayLoaded = false;
   bool elementLoaded = false;
   int elementCount = 0;
+  QList<AdlNode> propertyRuleNodes;
   for (const auto &child : document->children) {
     const QString childName = normalizedAdlName(child.name);
     if (childName == QStringLiteral("display")) {
@@ -20280,6 +20642,10 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
       pendingDynamicAttribute_ = child;
       continue;
     }
+    if (childName == QStringLiteral("qtedm_rules")) {
+      propertyRuleNodes.append(child);
+      continue;
+    }
     if (loadElementNode(child)) {
       elementLoaded = true;
       elementCount++;
@@ -20289,6 +20655,7 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
       continue;
     }
   }
+  loadPropertyRuleNodes(propertyRuleNodes);
   QTEDM_TIMING_MARK_COUNT("loadFromFile: Total elements loaded", elementCount);
   pendingBasicAttribute_ = std::nullopt;
   pendingDynamicAttribute_ = std::nullopt;
@@ -20802,6 +21169,12 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
   for (const auto &entry : elementStack_) {
     QWidget *widget = entry.data();
     if (!widget) {
+      continue;
+    }
+
+    if (auto *plugin = dynamic_cast<PluginElement *>(widget)) {
+      PluginElement::writeAdlNode(stream,
+          plugin->toAdlNode(serializedGeometry(plugin)));
       continue;
     }
 
@@ -22308,6 +22681,20 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     }
   }
 
+  for (int index = 0; index < elementStack_.size(); ++index) {
+    QWidget *widget = elementStack_.at(index).data();
+    if (!widget || !propertyRuleSets_.contains(widget)) {
+      continue;
+    }
+    const QtedmRuleSet &rules = propertyRuleSets_.value(widget);
+    if (!rules.isEmpty()) {
+      PropertyRules::writeAdl(stream, index, rules);
+    }
+  }
+  for (const AdlNode &node : unparsedPropertyRuleNodes_) {
+    PluginElement::writeAdlNode(stream, node);
+  }
+
   stream << '\n';
 }
 
@@ -22373,6 +22760,12 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     return absoluteGeometryForWidget(target,
         widgetGeometryForSerialization(target));
   };
+
+  if (auto *plugin = dynamic_cast<PluginElement *>(widget)) {
+    PluginElement::writeAdlNode(stream,
+        plugin->toAdlNode(serializedGeometry(plugin)), level);
+    return;
+  }
 
   if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
     AdlWriter::writeIndentedLine(stream, level,
@@ -23900,6 +24293,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
 
 void DisplayWindow::clearAllElements()
 {
+  stopPropertyRuleRuntimes();
   clearSelections();
   auto clearList = [this](auto &list) {
     using ElementType = typename std::decay_t<decltype(list)>::value_type;
@@ -23967,6 +24361,8 @@ void DisplayWindow::clearAllElements()
           removePolylineRuntime(element);
         } else if constexpr (std::is_same_v<ElementType, PolygonElement *>) {
           removePolygonRuntime(element);
+        } else if constexpr (std::is_same_v<ElementType, PluginElement *>) {
+          removePluginRuntime(element);
         }
         removeElementFromStack(element);
         element->deleteLater();
@@ -24008,6 +24404,9 @@ void DisplayWindow::clearAllElements()
   clearList(polygonElements_);
   clearList(compositeElements_);
   clearList(tabbedDisplayElements_);
+  clearList(pluginElements_);
+  propertyRuleSets_.clear();
+  unparsedPropertyRuleNodes_.clear();
   elementStack_.clear();
   elementStackSet_.clear();
   polygonCreationActive_ = false;
@@ -26286,6 +26685,42 @@ QJsonObject DisplayWindow::testStateObject() const
     widgets.append(widgetObject);
   }
 
+  for (PluginElement *element : pluginElements_) {
+    if (!element) {
+      continue;
+    }
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "qtedm_plugin", element, QString());
+    widgetObject[QStringLiteral("plugin_id")] = element->pluginId();
+    widgetObject[QStringLiteral("type_id")] = element->typeId();
+    widgetObject[QStringLiteral("schema_version")] = element->schemaVersion();
+    widgetObject[QStringLiteral("available")] = element->pluginAvailable();
+    widgetObject[QStringLiteral("diagnostic")] = element->diagnostic();
+    widgetObject[QStringLiteral("execute_mode")] = element->isExecuteMode();
+    QJsonObject properties;
+    const QVariantMap pluginProperties = element->properties();
+    for (auto it = pluginProperties.constBegin();
+         it != pluginProperties.constEnd(); ++it) {
+      if (it.value().userType() == QMetaType::QColor) {
+        properties[it.key()] =
+            it.value().value<QColor>().name(QColor::HexArgb);
+      } else {
+        properties[it.key()] = QJsonValue::fromVariant(it.value());
+      }
+    }
+    widgetObject[QStringLiteral("properties")] = properties;
+    widgetObject[QStringLiteral("rule_count")] =
+        propertyRuleSets_.value(element).rules.size();
+    if (PropertyRuleRuntime *runtime =
+            propertyRuleRuntimes_.value(element, nullptr)) {
+      widgetObject[QStringLiteral("rule_evaluations")] =
+          static_cast<qint64>(runtime->evaluationCount());
+      widgetObject[QStringLiteral("rule_diagnostic")] =
+          runtime->diagnostic();
+    }
+    widgets.append(widgetObject);
+  }
+
   QJsonObject object;
   object[QStringLiteral("file_path")] = filePath_;
   object[QStringLiteral("window_title")] = windowTitle();
@@ -26294,6 +26729,10 @@ QJsonObject DisplayWindow::testStateObject() const
   }
   object[QStringLiteral("widget_count")] = widgets.size();
   object[QStringLiteral("widgets")] = widgets;
+  object[QStringLiteral("plugin_diagnostics")] =
+      QJsonArray::fromStringList(
+          QtedmPluginManager::instance().diagnostics());
+  object[QStringLiteral("rule_target_count")] = propertyRuleSets_.size();
   return object;
 }
 
@@ -32864,6 +33303,89 @@ TabbedDisplayElement *DisplayWindow::loadTabbedDisplayElement(
   return element;
 }
 
+PluginElement *DisplayWindow::loadPluginElement(const AdlNode &pluginNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(pluginNode);
+  QRect originalGeometry = geometry;
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new PluginElement(parent);
+  QString error;
+  if (!element->loadFromAdlNode(pluginNode, &error)) {
+    qWarning() << "QtEDM plugin object:" << error;
+    delete element;
+    return nullptr;
+  }
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+  element->setChangedCallback([this]() {
+    setNextUndoLabel(QStringLiteral("Edit Plugin Object"));
+    markDirty();
+  });
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+  pluginElements_.append(element);
+  element->show();
+  element->setSelected(false);
+  ensureElementInStack(element);
+
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    QString runtimeError;
+    QtedmPluginRuntime *runtime = element->createRuntime(&runtimeError);
+    if (runtime) {
+      try {
+        if (runtime->start(&runtimeError)) {
+          pluginRuntimes_.insert(element, runtime);
+        } else {
+          delete runtime;
+        }
+      } catch (...) {
+        delete runtime;
+        runtimeError = QStringLiteral("Plugin runtime threw during startup.");
+      }
+    }
+    if (!runtimeError.isEmpty()) {
+      element->setRuntimeDiagnostic(runtimeError);
+    }
+  }
+  return element;
+}
+
+void DisplayWindow::loadPropertyRuleNodes(const QList<AdlNode> &nodes)
+{
+  for (const AdlNode &node : nodes) {
+    QtedmRuleSet rules;
+    int targetIndex = -1;
+    QString error;
+    if (!PropertyRules::parseAdl(node, &rules, &targetIndex, &error)
+        || targetIndex < 0 || targetIndex >= elementStack_.size()
+        || !elementStack_.at(targetIndex)) {
+      unparsedPropertyRuleNodes_.append(node);
+      qWarning() << "QtEDM property rules:" <<
+          (error.isEmpty()
+              ? QStringLiteral("targetIndex is not a loaded object.")
+              : error);
+      continue;
+    }
+    QWidget *target = elementStack_.at(targetIndex).data();
+    if (propertyRuleSets_.contains(target)) {
+      unparsedPropertyRuleNodes_.append(node);
+      qWarning() << "QtEDM property rules: duplicate targetIndex"
+                 << targetIndex;
+      continue;
+    }
+    propertyRuleSets_.insert(target, rules);
+  }
+}
+
 bool DisplayWindow::loadElementNode(const AdlNode &node)
 {
   const QString name = normalizedAdlName(node.name);
@@ -32946,6 +33468,8 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadCompositeElement(node) != nullptr;
   } else if (name == QStringLiteral("qtedm_tabbed_display")) {
     loaded = loadTabbedDisplayElement(node) != nullptr;
+  } else if (name == QStringLiteral("qtedm_plugin")) {
+    loaded = loadPluginElement(node) != nullptr;
   }
 
   /* Clear pending basic attribute after loading applicable widgets */
@@ -33008,10 +33532,15 @@ bool DisplayWindow::restoreSerializedState(const QByteArray &data)
 
   bool displayLoaded = false;
   bool elementLoaded = false;
+  QList<AdlNode> propertyRuleNodes;
   for (const auto &child : document->children) {
-    if (child.name.compare(QStringLiteral("display"), Qt::CaseInsensitive)
-        == 0) {
+    const QString childName = normalizedAdlName(child.name);
+    if (childName == QStringLiteral("display")) {
       displayLoaded = loadDisplaySection(child) || displayLoaded;
+      continue;
+    }
+    if (childName == QStringLiteral("qtedm_rules")) {
+      propertyRuleNodes.append(child);
       continue;
     }
     if (loadElementNode(child)) {
@@ -33019,6 +33548,7 @@ bool DisplayWindow::restoreSerializedState(const QByteArray &data)
       continue;
     }
   }
+  loadPropertyRuleNodes(propertyRuleNodes);
 
   filePath_ = previousFilePath;
   if (!filePath_.isEmpty()) {
@@ -33158,6 +33688,8 @@ void DisplayWindow::enterExecuteMode()
   reserveRuntime(choiceButtonRuntimes_, choiceButtonElements_.size());
   reserveRuntime(menuRuntimes_, menuElements_.size());
   reserveRuntime(messageButtonRuntimes_, messageButtonElements_.size());
+  reserveRuntime(pluginRuntimes_, pluginElements_.size());
+  reserveRuntime(propertyRuleRuntimes_, propertyRuleSets_.size());
 
   QList<DisplayWindow *> softPvPrepareDisplays;
   if (auto state = state_.lock()) {
@@ -33206,7 +33738,8 @@ void DisplayWindow::enterExecuteMode()
       waveTableElements_.size() +
       choiceButtonElements_.size() +
       menuElements_.size() + messageButtonElements_.size() +
-      shellCommandElements_.size() + relatedDisplayElements_.size();
+      shellCommandElements_.size() + relatedDisplayElements_.size()
+      + pluginElements_.size();
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Total widgets to start", totalWidgets);
   QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Starting tabbed displays",
       tabbedDisplayElements_.size());
@@ -33628,6 +34161,50 @@ void DisplayWindow::enterExecuteMode()
     element->setExecuteMode(true);
   }
 
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating plugin runtimes",
+      pluginElements_.size());
+  for (PluginElement *element : pluginElements_) {
+    if (!element) {
+      continue;
+    }
+    element->setExecuteMode(true);
+    QString error;
+    QtedmPluginRuntime *runtime = element->createRuntime(&error);
+    if (runtime) {
+      try {
+        if (runtime->start(&error)) {
+          pluginRuntimes_.insert(element, runtime);
+        } else {
+          delete runtime;
+        }
+      } catch (...) {
+        delete runtime;
+        error = QStringLiteral("Plugin runtime threw during startup.");
+      }
+    }
+    if (!error.isEmpty()) {
+      element->setRuntimeDiagnostic(error);
+    }
+  }
+
+  QTEDM_TIMING_MARK_COUNT("enterExecuteMode: Creating property-rule runtimes",
+      propertyRuleSets_.size());
+  for (auto it = propertyRuleSets_.constBegin();
+       it != propertyRuleSets_.constEnd(); ++it) {
+    QWidget *target = it.key();
+    if (!target || it.value().isEmpty()) {
+      continue;
+    }
+    auto *runtime = new PropertyRuleRuntime(target, it.value());
+    QString error;
+    if (runtime->start(&error)) {
+      propertyRuleRuntimes_.insert(target, runtime);
+    } else {
+      qWarning() << "QtEDM property rules:" << error;
+      delete runtime;
+    }
+  }
+
   for (DisplayWindow *display : softPvPrepareDisplays) {
     if (!display) {
       continue;
@@ -33667,6 +34244,10 @@ void DisplayWindow::leaveExecuteMode()
     pvInfoDialog_->hide();
   }
   cancelExecuteChannelDrag();
+  stopPropertyRuleRuntimes();
+  for (PluginElement *element : pluginElements_) {
+    removePluginRuntime(element);
+  }
   for (TabbedDisplayElement *element : tabbedDisplayElements_) {
     if (element) {
       element->setExecuteMode(false);
@@ -34405,6 +34986,35 @@ void DisplayWindow::removeMessageButtonRuntime(MessageButtonElement *element)
     runtime->stop();
     runtime->deleteLater();
   }
+}
+
+void DisplayWindow::removePluginRuntime(PluginElement *element)
+{
+  if (!element) {
+    return;
+  }
+  if (QtedmPluginRuntime *runtime = pluginRuntimes_.take(element)) {
+    try {
+      runtime->stop();
+    } catch (...) {
+      element->setRuntimeDiagnostic(
+          QStringLiteral("Plugin runtime threw during shutdown."));
+    }
+    delete runtime;
+  }
+  element->setExecuteMode(false);
+}
+
+void DisplayWindow::stopPropertyRuleRuntimes()
+{
+  for (auto it = propertyRuleRuntimes_.begin();
+       it != propertyRuleRuntimes_.end(); ++it) {
+    if (PropertyRuleRuntime *runtime = it.value()) {
+      runtime->stop();
+      delete runtime;
+    }
+  }
+  propertyRuleRuntimes_.clear();
 }
 
 void DisplayWindow::updateDirtyIndicator()

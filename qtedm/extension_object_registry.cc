@@ -1,5 +1,7 @@
 #include "extension_object_registry.h"
 
+#include <algorithm>
+
 #include <QDebug>
 
 ExtensionObjectRegistry &ExtensionObjectRegistry::instance()
@@ -30,21 +32,27 @@ ExtensionObjectRegistry::ExtensionObjectRegistry()
       CreateTool::kQtedmNdArrayImage});
 }
 
-void ExtensionObjectRegistry::registerObject(
+bool ExtensionObjectRegistry::registerObject(
     const ExtensionObjectDescriptor &descriptor)
 {
   const QString typeId = descriptor.typeId.trimmed().toLower();
-  if (typeId.isEmpty() || descriptor.createTool == CreateTool::kNone
-      || byTypeId_.contains(typeId)
-      || typeIdByTool_.contains(static_cast<int>(descriptor.createTool))) {
+  const bool hasCreateTool = descriptor.createTool != CreateTool::kNone;
+  if (typeId.isEmpty() || byTypeId_.contains(typeId)
+      || (!hasCreateTool && descriptor.pluginId.trimmed().isEmpty())
+      || (hasCreateTool
+          && typeIdByTool_.contains(static_cast<int>(descriptor.createTool)))) {
     qWarning() << "Rejected duplicate or invalid QtEDM extension object"
                << descriptor.typeId;
-    return;
+    return false;
   }
   ExtensionObjectDescriptor normalized = descriptor;
   normalized.typeId = typeId;
+  normalized.pluginId = descriptor.pluginId.trimmed();
   byTypeId_.insert(typeId, normalized);
-  typeIdByTool_.insert(static_cast<int>(descriptor.createTool), typeId);
+  if (hasCreateTool) {
+    typeIdByTool_.insert(static_cast<int>(descriptor.createTool), typeId);
+  }
+  return true;
 }
 
 const ExtensionObjectDescriptor *ExtensionObjectRegistry::descriptor(
@@ -68,5 +76,42 @@ QVector<ExtensionObjectDescriptor> ExtensionObjectRegistry::descriptors() const
   for (const ExtensionObjectDescriptor &descriptor : byTypeId_) {
     result.append(descriptor);
   }
+  std::sort(result.begin(), result.end(),
+      [](const ExtensionObjectDescriptor &left,
+          const ExtensionObjectDescriptor &right) {
+        const int category = left.category.compare(
+            right.category, Qt::CaseInsensitive);
+        if (category != 0) {
+          return category < 0;
+        }
+        return left.displayName.compare(
+            right.displayName, Qt::CaseInsensitive) < 0;
+      });
   return result;
+}
+
+bool ExtensionObjectRegistry::registerPluginObject(const QString &pluginId,
+    const QtedmDisplayObjectType &descriptor)
+{
+  ExtensionObjectDescriptor extension;
+  extension.typeId = descriptor.typeId;
+  extension.displayName = descriptor.displayName;
+  extension.category = descriptor.category.isEmpty()
+      ? QStringLiteral("Plugins") : descriptor.category;
+  extension.pluginId = pluginId;
+  extension.schemaVersion = descriptor.schemaVersion;
+  extension.defaultSize = descriptor.defaultSize;
+  extension.propertySchema = descriptor.properties;
+  return registerObject(extension);
+}
+
+void ExtensionObjectRegistry::unregisterPluginObjects()
+{
+  for (auto it = byTypeId_.begin(); it != byTypeId_.end();) {
+    if (it->isPluginObject()) {
+      it = byTypeId_.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }

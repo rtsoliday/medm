@@ -5,6 +5,7 @@
 #include <QVector>
 
 #include "display_state.h"
+#include "qtedm_plugin_api.h"
 
 struct ExtensionObjectDescriptor
 {
@@ -12,12 +13,21 @@ struct ExtensionObjectDescriptor
   QString displayName;
   QString category;
   CreateTool createTool = CreateTool::kNone;
+  QString pluginId;
+  int schemaVersion = 0;
+  QSize defaultSize;
+  QVector<QtedmPluginPropertySchema> propertySchema;
+
+  bool isPluginObject() const
+  {
+    return !pluginId.isEmpty();
+  }
 };
 
 /*
- * Internal registry for QtEDM extension objects.  Phase 1 deliberately keeps
- * this registry private to the application; the stable plugin API planned for
- * Phase 5 can promote the same type IDs without changing saved displays.
+ * Registry for built-in QtEDM extensions and version-1 plugin display types.
+ * Plugin registrations are removed before their libraries are unloaded, while
+ * built-in type IDs remain stable for the lifetime of the application.
  */
 class ExtensionObjectRegistry
 {
@@ -28,9 +38,13 @@ public:
   const ExtensionObjectDescriptor *descriptor(CreateTool tool) const;
   QVector<ExtensionObjectDescriptor> descriptors() const;
 
+  bool registerPluginObject(const QString &pluginId,
+      const QtedmDisplayObjectType &descriptor);
+  void unregisterPluginObjects();
+
 private:
   ExtensionObjectRegistry();
-  void registerObject(const ExtensionObjectDescriptor &descriptor);
+  bool registerObject(const ExtensionObjectDescriptor &descriptor);
 
   QHash<QString, ExtensionObjectDescriptor> byTypeId_;
   QHash<int, QString> typeIdByTool_;

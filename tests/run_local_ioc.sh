@@ -2043,6 +2043,15 @@ set_qtedm_phase4_test_pvs() {
   echo "QtEDM Phase 4 uses a disconnected PVA NTNDArray endpoint; no scalar IOC initialization is required."
 }
 
+set_qtedm_phase5_test_pvs() {
+  local _prefix="$1"
+
+  # tests/test_QtEDMPhase5.adl intentionally reuses the deterministic
+  # led:test:binary_live channel initialized by set_led_monitor_test_pvs.
+  # The rule runtime is monitor-only and must never issue a write.
+  echo "QtEDM Phase 5 rule input initialized by the LED monitor harness."
+}
+
 cleanup() {
   local status=$?
   if [[ -n "${waterfall_driver_pid}" ]] \
@@ -2100,6 +2109,7 @@ set_qtedm_phase1_test_pvs "${PV_PREFIX}" || true
 set_qtedm_phase2_test_pvs "${PV_PREFIX}" || true
 set_qtedm_phase3_test_pvs "${PV_PREFIX}" || true
 set_qtedm_phase4_test_pvs "${PV_PREFIX}" || true
+set_qtedm_phase5_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
 if [[ -n "${READY_FILE}" ]]; then

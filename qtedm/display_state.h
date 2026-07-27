@@ -50,6 +50,7 @@ enum class CreateTool {
   kScaleMonitor,
   kStripChart,
   kQtedmArchivePlot,
+  kQtedmPlugin,
   kCartesianPlot,
   kHeatmap,
   kQtedmNdArrayImage,
@@ -72,6 +73,8 @@ struct DisplayState {
   bool raiseMessageWindow = true;
   QList<QPointer<DisplayWindow>> displays;
   CreateTool createTool = CreateTool::kNone;
+  QString pluginCreatePluginId;
+  QString pluginCreateTypeId;
   QPointer<QMainWindow> mainWindow;
   QPointer<DisplayListDialog> displayListDialog;
   QPointer<FindPvDialog> findPvDialog;

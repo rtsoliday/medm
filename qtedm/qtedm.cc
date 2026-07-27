@@ -86,6 +86,7 @@ typedef int Status;
 #include "audit_log_viewer_dialog.h"
 #include "command_line_options.h"
 #include "display_common_properties.h"
+#include "display_converter.h"
 #include "display_state.h"
 #include "display_list_dialog.h"
 #include "display_window.h"
@@ -1034,6 +1035,7 @@ int main(int argc, char *argv[])
   newAct->setShortcut(QKeySequence::New);
   auto *openAct = fileMenu->addAction("&Open...");
   openAct->setShortcut(QKeySequence::Open);
+  auto *importAct = fileMenu->addAction("&Import Display...");
   auto *saveAct = fileMenu->addAction("&Save");
   saveAct->setShortcut(QKeySequence::Save);
   auto *saveAsAct = fileMenu->addAction("Save &As...");
@@ -1275,8 +1277,6 @@ int main(int argc, char *argv[])
 // EXTENDED FUNCTIONALITY (new features, but ADL round-trip safe)
 // ===========================================================================
 
-//TODO: Add tabbed container / stacked widget support for multi-view displays.
-//TODO: Implement 2D image viewer for EPICS areaDetector NDArray PVs.
 //TODO: Add 2D contour / heatmap widget (like sddscontour) for SDDS or array PVs.
 //TODO: Implement vector/arrow field widget for displaying field maps or quiver data.
 //TODO: Add spectrogram / FFT display widget for frequency-domain visualization.
@@ -1297,16 +1297,15 @@ int main(int argc, char *argv[])
 // ===========================================================================
 
 //TODO: Implement dockable layouts so operators can rearrange displays.
-//TODO: Add support for importing caQtDM .ui and CSS .opi display files.
+//TODO: Add CSS .opi import and additional caQtDM custom-widget mappings.
 //TODO: Design plugin API for custom widgets (C++ or Python registration).
-//TODO: Add EPICS PVAccess (PVA) support alongside Channel Access.
+//TODO: Add compressed areaDetector codecs and CA waveform-image compatibility.
 //TODO: Implement versioned schema system for forward/backward compatibility.
 //TODO: Add macro inheritance for related displays (pass parent macros).
 //TODO: Implement display preloading for frequently-used related displays.
 //TODO: Add command-line batch mode for automated display testing.
 //TODO: Implement accessibility features (screen reader, high contrast).
 //TODO: Add touch-screen friendly controls (larger hit targets, gestures).
-//TODO: Implement session save/restore (remember open displays and positions).
 //TODO: Add multi-monitor support with display placement preferences.
 //TODO: Implement network-based display serving (load ADL from URL).
 
@@ -2116,6 +2115,69 @@ int main(int argc, char *argv[])
         }
 
         registerDisplayWindow(displayWin);
+      });
+
+  QObject::connect(importAct, &QAction::triggered, &win,
+      [state, &win, displayPalette, &palette, fixed10Font, fixed13Font,
+          registerDisplayWindow]() {
+        const QString input = QFileDialog::getOpenFileName(&win,
+            QStringLiteral("Import caQtDM / Qt Designer Display"), QString(),
+            QStringLiteral("Qt Designer UI Files (*.ui);;All Files (*)"));
+        if (input.isEmpty()) {
+          return;
+        }
+        const QFileInfo inputInfo(input);
+        const QString suggested = inputInfo.absoluteDir().filePath(
+            inputInfo.completeBaseName() + QStringLiteral(".adl"));
+        const QString output = QFileDialog::getSaveFileName(&win,
+            QStringLiteral("Save Imported QtEDM Display"), suggested,
+            QStringLiteral("MEDM Display Files (*.adl)"));
+        if (output.isEmpty()) {
+          return;
+        }
+
+        DisplayConversionOptions conversion;
+        conversion.inputPath = input;
+        conversion.outputPath = output;
+        const DisplayConversionResult result =
+            DisplayConverter::convert(conversion);
+        if (!result.success) {
+          QMessageBox::critical(&win, QStringLiteral("Import Display"),
+              result.error);
+          return;
+        }
+
+        QString loadError;
+        auto *displayWin = new DisplayWindow(displayPalette, palette,
+            fixed10Font, fixed13Font, std::weak_ptr<DisplayState>(state));
+        if (!displayWin->loadFromFile(result.outputPath, &loadError)) {
+          delete displayWin;
+          QMessageBox::critical(&win, QStringLiteral("Import Display"),
+              loadError.isEmpty()
+                  ? QStringLiteral("The converted display could not be opened.")
+                  : loadError);
+          return;
+        }
+        registerDisplayWindow(displayWin);
+        if (!state->editMode) {
+          displayWin->enterExecuteMode();
+        }
+
+        QMessageBox message(
+            result.hasWarnings ? QMessageBox::Warning
+                               : QMessageBox::Information,
+            QStringLiteral("Import Display"),
+            result.hasWarnings
+                ? QStringLiteral(
+                      "The display was imported with warnings. "
+                      "Unsupported objects are visible placeholders.")
+                : QStringLiteral("The display was imported successfully."),
+            QMessageBox::Ok, &win);
+        message.setInformativeText(QStringLiteral(
+            "Converted display: %1\nReport: %2\nPreserved source: %3")
+            .arg(result.outputPath, result.reportPath,
+                result.sourceCopyPath));
+        message.exec();
       });
 
   QObject::connect(editModeButton, &QRadioButton::toggled, &win,

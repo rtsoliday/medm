@@ -52,6 +52,7 @@ enum class CreateTool {
   kQtedmArchivePlot,
   kCartesianPlot,
   kHeatmap,
+  kQtedmNdArrayImage,
   kWaterfallPlot,
   kPvTable,
   kWaveTable,

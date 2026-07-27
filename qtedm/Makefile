@@ -117,6 +117,7 @@ qtedm_SRC = qtedm.cc \
             command_line_options.cc \
             adl_parser.cc \
             audit_logger.cc \
+            display_converter.cc \
             extension_object_registry.cc \
             session_manager.cc \
             archive_provider.cc \
@@ -199,6 +200,10 @@ qtedm_SRC = qtedm.cc \
             image_runtime.cc \
             heatmap_element.cc \
             heatmap_runtime.cc \
+            pva_ntndarray_source.cc \
+            ntndarray_image_decoder.cc \
+            ntndarray_image_element.cc \
+            ntndarray_image_runtime.cc \
             waterfall_plot_element.cc \
             waterfall_plot_runtime.cc \
             pv_table_element.cc \
@@ -351,7 +356,8 @@ ifeq ($(OS), Windows)
   MOC = "$(QT_DIR_FWD)/bin/moc.exe"
 
   PVA_CXX17_OBJS = $(OBJ_DIR)/pvaSDDS.$(OBJEXT) \
-                   $(OBJ_DIR)/pva_bridge.$(OBJEXT)
+                   $(OBJ_DIR)/pva_bridge.$(OBJEXT) \
+                   $(OBJ_DIR)/pva_ntndarray_source.$(OBJEXT)
 
 $(PVA_CXX17_OBJS): CCFLAGS := $(filter-out /std:c++20 /permissive-,$(CCFLAGS)) /std:c++17
 endif
@@ -378,6 +384,11 @@ include ../Makefile.build
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/demo_rcc.$(OBJEXT)
+
+qtedm_convert_OBJS = $(OBJ_DIR)/qtedm_convert.$(OBJEXT) \
+                     $(OBJ_DIR)/display_converter.$(OBJEXT)
+
+all: $(OBJ_DIR)/qtedm-convert$(EXEEXT)
 
 $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png \
                                  $(QTEDM_PCH_FILE) | $(OBJ_DIR)
@@ -423,6 +434,10 @@ $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
 	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
 	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
 
+$(OBJ_DIR)/qtedm-convert$(EXEEXT): $(qtedm_convert_OBJS)
+	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
+	cp -f $@ $(BIN_DIR)/
+
 $(OBJ_DIR)/medm$(EXEEXT): $(medm_OBJS) $(PROD_DEPS)
 	$(LINKEXE) $(OUTPUTEXE) $(medm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
 	cp -f $@ $(BIN_DIR)/
@@ -442,7 +457,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_pv_table_model \
                         test_phase1 \
                         test_phase2 \
-                        test_phase3
+                        test_phase3 \
+                        test_phase4
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 
@@ -482,6 +498,8 @@ test_phase2_OBJS = $(OBJ_DIR)/test_phase2.$(OBJEXT) \
                    $(OBJ_DIR)/session_manager.$(OBJEXT) \
                    $(OBJ_DIR)/extension_object_registry.$(OBJEXT)
 test_phase3_OBJS = $(OBJ_DIR)/test_phase3.$(OBJEXT) \
+                   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_phase4_OBJS = $(OBJ_DIR)/test_phase4.$(OBJEXT) \
                    $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 
@@ -535,8 +553,10 @@ test-unit: build-tests
 	  "$$test_bin"; \
 	done
 
-test-cli: $(OBJ_DIR)/qtedm$(EXEEXT)
-	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" ../tests/run_qtedm_cli_tests.sh
+test-cli: $(OBJ_DIR)/qtedm$(EXEEXT) $(OBJ_DIR)/qtedm-convert$(EXEEXT)
+	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
+	QTEDM_CONVERT_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm-convert$(EXEEXT)" \
+	../tests/run_qtedm_cli_tests.sh
 
 test-ioc: $(OBJ_DIR)/qtedm$(EXEEXT)
 	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" ../tests/run_qtedm_ioc_tests.sh

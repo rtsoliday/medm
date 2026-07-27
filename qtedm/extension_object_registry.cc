@@ -25,6 +25,9 @@ ExtensionObjectRegistry::ExtensionObjectRegistry()
   registerObject({QStringLiteral("qtedm_archive_plot"),
       QStringLiteral("Archive Plot"), QStringLiteral("Monitors"),
       CreateTool::kQtedmArchivePlot});
+  registerObject({QStringLiteral("qtedm_ndarray_image"),
+      QStringLiteral("NTNDArray Image"), QStringLiteral("Monitors"),
+      CreateTool::kQtedmNdArrayImage});
 }
 
 void ExtensionObjectRegistry::registerObject(

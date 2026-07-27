@@ -14,6 +14,83 @@
 #include <QSpinBox>
 #include <QTableWidget>
 
+namespace {
+
+void writeNtNdArrayImageAdl(QTextStream &stream, int level,
+    const NtNdArrayImageElement *image, const QRect &geometry)
+{
+  const int next = level + 1;
+  AdlWriter::writeIndentedLine(stream, level,
+      QStringLiteral("qtedm_ndarray_image {"));
+  AdlWriter::writeObjectSection(stream, next, geometry);
+  if (!image->title().trimmed().isEmpty()) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("title=\"%1\"").arg(
+            AdlWriter::escapeAdlString(image->title().trimmed())));
+  }
+  if (!image->dataChannel().trimmed().isEmpty()) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("dataPv=\"%1\"").arg(
+            AdlWriter::escapeAdlString(image->dataChannel().trimmed())));
+  }
+  if (image->colorMap() != HeatmapColorMap::kGrayscale) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("colorMap=\"%1\"").arg(
+            AdlWriter::heatmapColorMapString(image->colorMap())));
+  }
+  if (image->rangeMode() != HeatmapRangeMode::kAuto) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("rangeMode=\"%1\"").arg(
+            AdlWriter::heatmapRangeModeString(image->rangeMode())));
+  }
+  if (AdlWriter::isNonDefaultDouble(image->rangeMinimum(), 0.0)) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("rangeMin=%1").arg(
+            QString::number(image->rangeMinimum(), 'g', 15)));
+  }
+  if (AdlWriter::isNonDefaultDouble(image->rangeMaximum(), 255.0)) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("rangeMax=%1").arg(
+            QString::number(image->rangeMaximum(), 'g', 15)));
+  }
+  if (!image->preserveAspectRatio()) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("preserveAspectRatio=\"false\""));
+  }
+  if (image->flipHorizontal()) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("flipHorizontal=\"true\""));
+  }
+  if (image->flipVertical()) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("flipVertical=\"true\""));
+  }
+  if (image->rotation() != HeatmapRotation::kNone) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("rotation=\"%1\"").arg(
+            AdlWriter::heatmapRotationString(image->rotation())));
+  }
+  if (!image->showPixelProbe()) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("showPixelProbe=\"false\""));
+  }
+  if (image->maximumInputBytes() != 512ULL * 1024ULL * 1024ULL) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("maxInputBytes=%1").arg(image->maximumInputBytes()));
+  }
+  if (image->maximumOutputBytes() != 256ULL * 1024ULL * 1024ULL) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("maxOutputBytes=%1").arg(image->maximumOutputBytes()));
+  }
+  if (image->maximumDimension() != 16384) {
+    AdlWriter::writeIndentedLine(stream, next,
+        QStringLiteral("maxDimension=%1").arg(image->maximumDimension()));
+  }
+  AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+}
+
+} // namespace
+
 /* Format a display window title with QtEDM prefix for visual distinction.
  * When macros are provided, they are appended in brackets after the filename
  * to help operators distinguish multiple instances of the same display
@@ -490,6 +567,9 @@ void DisplayWindow::findOutliers()
     }
     if (dynamic_cast<ImageElement *>(widget)) {
       return QStringLiteral("Image");
+    }
+    if (dynamic_cast<NtNdArrayImageElement *>(widget)) {
+      return QStringLiteral("NTNDArray Image");
     }
     if (dynamic_cast<HeatmapElement *>(widget)) {
       return QStringLiteral("Heatmap");
@@ -2758,6 +2838,7 @@ void DisplayWindow::mousePressEvent(QMouseEvent *event)
           || state->createTool == CreateTool::kLine
           || state->createTool == CreateTool::kImage
           || state->createTool == CreateTool::kHeatmap
+          || state->createTool == CreateTool::kQtedmNdArrayImage
           || state->createTool == CreateTool::kWaterfallPlot
           || state->createTool == CreateTool::kRelatedDisplay) {
         if (displayArea_) {
@@ -5523,6 +5604,30 @@ const QString visibilityCalc = element->visibilityCalc();
   if (selectedHeatmap_) {
     HeatmapElement *element = selectedHeatmap_;
     const QRect geometry = widgetDisplayRect(element);
+    if (dynamic_cast<NtNdArrayImageElement *>(element)) {
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy,
+            target.translateRectForPaste(geometry, offset));
+        if (auto *copy = target.loadNtNdArrayImageElement(nodeCopy)) {
+          target.selectHeatmapElement(copy);
+          target.markDirty();
+        }
+      });
+      if (removeOriginal) {
+        cutSelectedElement(heatmapElements_, selectedHeatmap_);
+        finalizeCut();
+      }
+      return true;
+    }
     const QString title = element->title();
     const QString dataChannel = element->dataChannel();
     const HeatmapDimensionSource xSource = element->xDimensionSource();
@@ -10395,14 +10500,17 @@ QString DisplayWindow::pvInfoElementLabel(QWidget *widget) const
   if (dynamic_cast<ImageElement *>(widget)) {
     return QStringLiteral("Image");
   }
-    if (dynamic_cast<HeatmapElement *>(widget)) {
-      return QStringLiteral("Heatmap");
-    }
-    if (dynamic_cast<WaterfallPlotElement *>(widget)) {
-      return QStringLiteral("Waterfall Plot");
-    }
-    if (dynamic_cast<OvalElement *>(widget)) {
-      return QStringLiteral("Oval");
+  if (dynamic_cast<NtNdArrayImageElement *>(widget)) {
+    return QStringLiteral("NTNDArray Image");
+  }
+  if (dynamic_cast<HeatmapElement *>(widget)) {
+    return QStringLiteral("Heatmap");
+  }
+  if (dynamic_cast<WaterfallPlotElement *>(widget)) {
+    return QStringLiteral("Waterfall Plot");
+  }
+  if (dynamic_cast<OvalElement *>(widget)) {
+    return QStringLiteral("Oval");
   }
   if (dynamic_cast<ArcElement *>(widget)) {
     return QStringLiteral("Arc");
@@ -15808,6 +15916,7 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
     createImageElement(rect);
     break;
   case CreateTool::kHeatmap:
+  case CreateTool::kQtedmNdArrayImage:
     if (rect.width() < kMinimumHeatmapWidth) {
       rect.setWidth(kMinimumHeatmapWidth);
     }
@@ -15815,7 +15924,11 @@ void DisplayWindow::finishCreateRubberBand(const QPoint &areaPos)
       rect.setHeight(kMinimumHeatmapHeight);
     }
     rect = snapRectOriginToGrid(adjustRectToDisplayArea(rect));
-    createHeatmapElement(rect);
+    if (tool == CreateTool::kQtedmNdArrayImage) {
+      createNtNdArrayImageElement(rect);
+    } else {
+      createHeatmapElement(rect);
+    }
     break;
   case CreateTool::kWaterfallPlot:
     if (rect.width() < kMinimumWaterfallPlotWidth) {
@@ -17389,6 +17502,41 @@ void DisplayWindow::createHeatmapElement(const QRect &rect)
   markDirty();
 }
 
+void DisplayWindow::createNtNdArrayImageElement(const QRect &rect)
+{
+  if (!displayArea_) {
+    return;
+  }
+  setNextUndoLabel(QStringLiteral("Create NTNDArray Image"));
+  QRect target = adjustRectToDisplayArea(rect);
+  if (target.width() < kMinimumHeatmapWidth) {
+    target.setWidth(kMinimumHeatmapWidth);
+  }
+  if (target.height() < kMinimumHeatmapHeight) {
+    target.setHeight(kMinimumHeatmapHeight);
+  }
+  target = adjustRectToDisplayArea(target);
+  if (target.width() <= 0 || target.height() <= 0) {
+    return;
+  }
+  auto *element = new NtNdArrayImageElement(displayArea_);
+  element->setGeometry(target);
+  recordWidgetOriginalGeometry(element, target);
+  element->show();
+  ensureElementInStack(element);
+  heatmapElements_.append(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    auto *runtime = new NtNdArrayImageRuntime(element);
+    heatmapRuntimes_.insert(element, runtime);
+    runtime->start();
+  }
+  selectHeatmapElement(element);
+  showResourcePaletteForHeatmap(element);
+  deactivateCreateTool();
+  markDirty();
+}
+
 
 void DisplayWindow::createWaterfallPlotElement(const QRect &rect)
 {
@@ -17752,6 +17900,7 @@ void DisplayWindow::updateCreateCursor()
           || state->createTool == CreateTool::kLine
           || state->createTool == CreateTool::kImage
           || state->createTool == CreateTool::kHeatmap
+          || state->createTool == CreateTool::kQtedmNdArrayImage
           || state->createTool == CreateTool::kWaterfallPlot
           || state->createTool == CreateTool::kRelatedDisplay);
   if (displayArea_) {
@@ -18097,6 +18246,8 @@ void DisplayWindow::showExecuteContextMenu(const QPoint &globalPos)
       dynamic_cast<CartesianPlotElement *>(clickedWidget);
   HeatmapElement *clickedHeatmap =
       dynamic_cast<HeatmapElement *>(clickedWidget);
+  NtNdArrayImageElement *clickedNtNdArray =
+      dynamic_cast<NtNdArrayImageElement *>(clickedWidget);
   WaterfallPlotElement *clickedWaterfall =
       dynamic_cast<WaterfallPlotElement *>(clickedWidget);
 
@@ -18206,11 +18357,17 @@ void DisplayWindow::showExecuteContextMenu(const QPoint &globalPos)
 
   // Heatmap specific options
   if (clickedHeatmap) {
-    if (clickedHeatmap->isZoomed()) {
+    const bool imageZoomed =
+        clickedNtNdArray && clickedNtNdArray->isImageZoomed();
+    if (clickedHeatmap->isZoomed() || imageZoomed) {
       QAction *resetZoomAction = menu.addAction(QStringLiteral("Reset Zoom"));
       QObject::connect(resetZoomAction, &QAction::triggered, this,
-          [clickedHeatmap]() {
-            clickedHeatmap->resetZoom();
+          [clickedHeatmap, clickedNtNdArray]() {
+            if (clickedNtNdArray) {
+              clickedNtNdArray->resetImageView();
+            } else {
+              clickedHeatmap->resetZoom();
+            }
           });
       menu.addSeparator();
     }
@@ -18583,6 +18740,52 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
   auto *form = new QFormLayout;
   layout->addLayout(form);
 
+  if (auto *image =
+          dynamic_cast<NtNdArrayImageElement *>(widget)) {
+    dialog.setWindowTitle(
+        QStringLiteral("QtEDM NTNDArray Image Properties"));
+    auto *probe = new QCheckBox(&dialog);
+    probe->setChecked(image->showPixelProbe());
+    auto *inputMiB = new QSpinBox(&dialog);
+    inputMiB->setRange(1, 4096);
+    inputMiB->setValue(static_cast<int>(
+        image->maximumInputBytes() / (1024ULL * 1024ULL)));
+    auto *outputMiB = new QSpinBox(&dialog);
+    outputMiB->setRange(1, 4096);
+    outputMiB->setValue(static_cast<int>(
+        image->maximumOutputBytes() / (1024ULL * 1024ULL)));
+    auto *dimension = new QSpinBox(&dialog);
+    dimension->setRange(1, 65536);
+    dimension->setValue(image->maximumDimension());
+    form->addRow(QStringLiteral("Pixel probe"), probe);
+    form->addRow(QStringLiteral("Maximum input (MiB)"), inputMiB);
+    form->addRow(QStringLiteral("Maximum image (MiB)"), outputMiB);
+    form->addRow(QStringLiteral("Maximum dimension"), dimension);
+    auto *note = new QLabel(QStringLiteral(
+        "Version 1 accepts uncompressed pva:// NTNDArray mono and RGB "
+        "frames. The newest frame is retained when decoding falls behind."),
+        &dialog);
+    note->setWordWrap(true);
+    layout->addWidget(note);
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted) {
+      setNextUndoLabel(
+          QStringLiteral("Edit QtEDM NTNDArray Image Properties"));
+      image->setShowPixelProbe(probe->isChecked());
+      image->setMaximumInputBytes(
+          static_cast<quint64>(inputMiB->value()) * 1024ULL * 1024ULL);
+      image->setMaximumOutputBytes(
+          static_cast<quint64>(outputMiB->value()) * 1024ULL * 1024ULL);
+      image->setMaximumDimension(dimension->value());
+      markDirty();
+    }
+    return;
+  }
+
   if (auto *archive = dynamic_cast<StripChartElement *>(widget);
       archive && archive->isArchivePlot()) {
     dialog.setWindowTitle(QStringLiteral("QtEDM Archive Plot Properties"));
@@ -18766,7 +18969,8 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
       || (dynamic_cast<LedMonitorElement *>(selected)
           && static_cast<LedMonitorElement *>(selected)->isQtedmSymbol())
       || (dynamic_cast<StripChartElement *>(selected)
-          && static_cast<StripChartElement *>(selected)->isArchivePlot());
+          && static_cast<StripChartElement *>(selected)->isArchivePlot())
+      || dynamic_cast<NtNdArrayImageElement *>(selected);
   if (isExtension) {
     QAction *properties = addMenuAction(&menu,
         QStringLiteral("QtEDM Extension Properties..."));
@@ -18902,6 +19106,14 @@ void DisplayWindow::showEditContextMenu(const QPoint &globalPos)
   auto *heatmapAction = addMenuAction(monitorsMenu, QStringLiteral("Heatmap"));
   QObject::connect(heatmapAction, &QAction::triggered, this, [this]() {
     activateCreateTool(CreateTool::kHeatmap);
+    if (!lastContextMenuGlobalPos_.isNull()) {
+      QCursor::setPos(lastContextMenuGlobalPos_);
+    }
+  });
+  auto *ndArrayImageAction =
+      addMenuAction(monitorsMenu, QStringLiteral("NTNDArray Image"));
+  QObject::connect(ndArrayImageAction, &QAction::triggered, this, [this]() {
+    activateCreateTool(CreateTool::kQtedmNdArrayImage);
     if (!lastContextMenuGlobalPos_.isNull()) {
       QCursor::setPos(lastContextMenuGlobalPos_);
     }
@@ -21673,6 +21885,13 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       continue;
     }
 
+    if (auto *ndArray =
+            dynamic_cast<NtNdArrayImageElement *>(widget)) {
+      writeNtNdArrayImageAdl(
+          stream, 0, ndArray, serializedGeometry(ndArray));
+      continue;
+    }
+
     if (auto *heatmap = dynamic_cast<HeatmapElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("heatmap {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(heatmap));
@@ -23243,6 +23462,13 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         image->colorMode(), image->visibilityMode(), image->visibilityCalc(),
         imageChannels);
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
+    return;
+  }
+
+  if (auto *ndArray =
+          dynamic_cast<NtNdArrayImageElement *>(widget)) {
+    writeNtNdArrayImageAdl(
+        stream, level, ndArray, serializedGeometry(ndArray));
     return;
   }
 
@@ -25953,6 +26179,38 @@ QJsonObject DisplayWindow::testStateObject() const
       widgetObject[QStringLiteral("requested_count")] =
           static_cast<qint64>(runtime->requestedCount_);
     }
+    widgets.append(widgetObject);
+  }
+
+  for (HeatmapElement *heatmap : heatmapElements_) {
+    auto *element = dynamic_cast<NtNdArrayImageElement *>(heatmap);
+    if (!element) {
+      continue;
+    }
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "qtedm_ndarray_image", element,
+        element->dataChannel());
+    widgetObject[QStringLiteral("data_channel")] = element->dataChannel();
+    widgetObject[QStringLiteral("connected")] = element->streamConnected();
+    widgetObject[QStringLiteral("dropped_frames")] =
+        static_cast<qint64>(element->droppedFrames());
+    widgetObject[QStringLiteral("last_error")] = element->lastError();
+    widgetObject[QStringLiteral("zoomed")] = element->isImageZoomed();
+    widgetObject[QStringLiteral("show_pixel_probe")] =
+        element->showPixelProbe();
+    widgetObject[QStringLiteral("max_input_bytes")] =
+        static_cast<qint64>(element->maximumInputBytes());
+    widgetObject[QStringLiteral("max_output_bytes")] =
+        static_cast<qint64>(element->maximumOutputBytes());
+    widgetObject[QStringLiteral("max_dimension")] =
+        element->maximumDimension();
+    const NtNdArrayDecodedFrame &frame = element->decodedFrame();
+    widgetObject[QStringLiteral("frame_valid")] = frame.valid;
+    widgetObject[QStringLiteral("width")] = frame.image.width();
+    widgetObject[QStringLiteral("height")] = frame.image.height();
+    widgetObject[QStringLiteral("unique_id")] = frame.source.uniqueId;
+    widgetObject[QStringLiteral("seconds_past_epoch")] =
+        frame.source.secondsPastEpoch;
     widgets.append(widgetObject);
   }
 
@@ -30995,6 +31253,124 @@ HeatmapElement *DisplayWindow::loadHeatmapElement(
   return element;
 }
 
+NtNdArrayImageElement *DisplayWindow::loadNtNdArrayImageElement(
+    const AdlNode &imageNode)
+{
+  QWidget *parent = effectiveElementParent();
+  if (!parent) {
+    return nullptr;
+  }
+
+  QRect geometry = parseObjectGeometry(imageNode);
+  QRect originalGeometry = geometry;
+  if (geometry.width() < kMinimumHeatmapWidth) {
+    geometry.setWidth(kMinimumHeatmapWidth);
+  }
+  if (geometry.height() < kMinimumHeatmapHeight) {
+    geometry.setHeight(kMinimumHeatmapHeight);
+  }
+  geometry.translate(currentElementOffset_);
+  originalGeometry.translate(currentElementOffset_);
+
+  auto *element = new NtNdArrayImageElement(parent);
+  element->setGeometry(geometry);
+  recordWidgetOriginalGeometry(element, originalGeometry);
+
+  const QString dataPv = propertyValue(imageNode, QStringLiteral("dataPv"));
+  if (!dataPv.trimmed().isEmpty()) {
+    element->setDataChannel(dataPv);
+  } else if (const AdlNode *monitor =
+                 ::findChild(imageNode, QStringLiteral("monitor"))) {
+    element->setDataChannel(channelValueWithLegacyFallback(*monitor));
+  }
+  const QString title = propertyValue(imageNode, QStringLiteral("title"));
+  if (!title.trimmed().isEmpty()) {
+    element->setTitle(title);
+  }
+  const QString colorMap =
+      propertyValue(imageNode, QStringLiteral("colorMap"));
+  if (!colorMap.isEmpty()) {
+    element->setColorMap(parseHeatmapColorMap(colorMap));
+  }
+  const QString rangeMode =
+      propertyValue(imageNode, QStringLiteral("rangeMode"));
+  if (!rangeMode.isEmpty()) {
+    element->setRangeMode(parseHeatmapRangeMode(rangeMode));
+  }
+  bool ok = false;
+  const double rangeMin =
+      propertyValue(imageNode, QStringLiteral("rangeMin")).toDouble(&ok);
+  if (ok && std::isfinite(rangeMin)) {
+    element->setRangeMinimum(rangeMin);
+  }
+  ok = false;
+  const double rangeMax =
+      propertyValue(imageNode, QStringLiteral("rangeMax")).toDouble(&ok);
+  if (ok && std::isfinite(rangeMax)) {
+    element->setRangeMaximum(rangeMax);
+  }
+  const QString preserve =
+      propertyValue(imageNode, QStringLiteral("preserveAspectRatio"));
+  if (!preserve.isEmpty()) {
+    element->setPreserveAspectRatio(parseHeatmapBool(preserve));
+  }
+  const QString flipHorizontal =
+      propertyValue(imageNode, QStringLiteral("flipHorizontal"));
+  if (!flipHorizontal.isEmpty()) {
+    element->setFlipHorizontal(parseHeatmapBool(flipHorizontal));
+  }
+  const QString flipVertical =
+      propertyValue(imageNode, QStringLiteral("flipVertical"));
+  if (!flipVertical.isEmpty()) {
+    element->setFlipVertical(parseHeatmapBool(flipVertical));
+  }
+  const QString rotation =
+      propertyValue(imageNode, QStringLiteral("rotation"));
+  if (!rotation.isEmpty()) {
+    element->setRotation(parseHeatmapRotation(rotation));
+  }
+  const QString probe =
+      propertyValue(imageNode, QStringLiteral("showPixelProbe"));
+  if (!probe.isEmpty()) {
+    element->setShowPixelProbe(parseHeatmapBool(probe));
+  }
+  ok = false;
+  const quint64 inputBytes =
+      propertyValue(imageNode, QStringLiteral("maxInputBytes"))
+          .toULongLong(&ok);
+  if (ok && inputBytes > 0) {
+    element->setMaximumInputBytes(inputBytes);
+  }
+  ok = false;
+  const quint64 outputBytes =
+      propertyValue(imageNode, QStringLiteral("maxOutputBytes"))
+          .toULongLong(&ok);
+  if (ok && outputBytes > 0) {
+    element->setMaximumOutputBytes(outputBytes);
+  }
+  ok = false;
+  const int maximumDimension =
+      propertyValue(imageNode, QStringLiteral("maxDimension")).toInt(&ok);
+  if (ok && maximumDimension > 0) {
+    element->setMaximumDimension(maximumDimension);
+  }
+
+  if (currentCompositeOwner_) {
+    currentCompositeOwner_->adoptChild(element);
+  }
+  element->show();
+  element->setSelected(false);
+  heatmapElements_.append(element);
+  ensureElementInStack(element);
+  if (executeModeActive_) {
+    element->setExecuteMode(true);
+    auto *runtime = new NtNdArrayImageRuntime(element);
+    heatmapRuntimes_.insert(element, runtime);
+    runtime->start();
+  }
+  return element;
+}
+
 WaterfallPlotElement *DisplayWindow::loadWaterfallPlotElement(
     const AdlNode &waterfallNode)
 {
@@ -32551,6 +32927,8 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadImageElement(node) != nullptr;
   } else if (name == QStringLiteral("heatmap")) {
     loaded = loadHeatmapElement(node) != nullptr;
+  } else if (name == QStringLiteral("qtedm_ndarray_image")) {
+    loaded = loadNtNdArrayImageElement(node) != nullptr;
   } else if (name == QStringLiteral("waterfall_plot")) {
     loaded = loadWaterfallPlotElement(node) != nullptr;
   } else if (name == QStringLiteral("rectangle")) {
@@ -32936,7 +33314,13 @@ void DisplayWindow::enterExecuteMode()
     }
     element->setExecuteMode(true);
     if (!heatmapRuntimes_.contains(element)) {
-      auto *runtime = new HeatmapRuntime(element);
+      HeatmapRuntime *runtime = nullptr;
+      if (auto *image =
+              dynamic_cast<NtNdArrayImageElement *>(element)) {
+        runtime = new NtNdArrayImageRuntime(image);
+      } else {
+        runtime = new HeatmapRuntime(element);
+      }
       heatmapRuntimes_.insert(element, runtime);
       runtime->start();
 

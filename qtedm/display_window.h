@@ -108,6 +108,8 @@
 #include "image_runtime.h"
 #include "heatmap_element.h"
 #include "heatmap_runtime.h"
+#include "ntndarray_image_element.h"
+#include "ntndarray_image_runtime.h"
 #include "waterfall_plot_element.h"
 #include "waterfall_plot_runtime.h"
 #include "meter_element.h"
@@ -868,6 +870,8 @@ private:
       const AdlNode &expressionChannelNode);
   ImageElement *loadImageElement(const AdlNode &imageNode);
   HeatmapElement *loadHeatmapElement(const AdlNode &heatmapNode);
+  NtNdArrayImageElement *loadNtNdArrayImageElement(
+      const AdlNode &imageNode);
   WaterfallPlotElement *loadWaterfallPlotElement(
       const AdlNode &waterfallNode);
   RectangleElement *loadRectangleElement(const AdlNode &rectangleNode);
@@ -1998,6 +2002,8 @@ private:
   void createImageElement(const QRect &rect);
 
   void createHeatmapElement(const QRect &rect);
+
+  void createNtNdArrayImageElement(const QRect &rect);
 
   void createWaterfallPlotElement(const QRect &rect);
 

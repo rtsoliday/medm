@@ -19,6 +19,7 @@ test_Polygon.adl
 test_QtEDMPhase1.adl
 test_QtEDMPhase2.adl
 test_QtEDMPhase3.adl
+test_QtEDMPhase4.adl
 test_RelatedDisplay.adl
 test_ScaleMonitor.adl
 test_SetpointControl.adl

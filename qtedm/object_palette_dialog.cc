@@ -408,6 +408,8 @@ ObjectPaletteDialog::monitorButtons()
       CreateTool::kQtedmSymbol);
   const auto *archivePlot = ExtensionObjectRegistry::instance().descriptor(
       CreateTool::kQtedmArchivePlot);
+  const auto *ndArrayImage = ExtensionObjectRegistry::instance().descriptor(
+      CreateTool::kQtedmNdArrayImage);
   return {
       {QStringLiteral("Meter"), meter25_bits, meter25_width, meter25_height,
           CreateTool::kMeter},
@@ -417,6 +419,10 @@ ObjectPaletteDialog::monitorButtons()
           thermometer25_height, CreateTool::kThermometer},
       {QStringLiteral("Heatmap"), heatmap25_bits, heatmap25_width,
         heatmap25_height, CreateTool::kHeatmap},
+      {ndArrayImage ? ndArrayImage->displayName
+                    : QStringLiteral("NTNDArray Image"),
+          heatmap25_bits, heatmap25_width, heatmap25_height,
+          CreateTool::kQtedmNdArrayImage},
       {QStringLiteral("Waterfall Plot"), waterfall25_bits, waterfall25_width,
           waterfall25_height, CreateTool::kWaterfallPlot},
       {QStringLiteral("PV Table"), pvTable25_bits, pvTable25_width,

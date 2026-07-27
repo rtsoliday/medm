@@ -17,8 +17,8 @@ public:
   explicit HeatmapRuntime(HeatmapElement *element);
   ~HeatmapRuntime() override;
 
-  void start();
-  void stop();
+  virtual void start();
+  virtual void stop();
 
   static void setGlobalUpdatesPaused(bool paused);
   static bool isGlobalUpdatesPaused();

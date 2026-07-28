@@ -1,20 +1,33 @@
 #include <QtTest/QtTest>
 
+#include <cmath>
+
+#include <QAbstractButton>
+#include <QApplication>
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QMainWindow>
+#include <QMessageBox>
 #include <QPushButton>
+#include <QScreen>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QToolButton>
+#include <QWindow>
 
 #include "audit_logger.h"
+#include "display_state.h"
+#include "display_window.h"
 #include "extension_object_registry.h"
 #include "led_monitor_element.h"
+#include "main_window_controller.h"
 #include "message_button_element.h"
 #include "message_button_runtime.h"
 #include "pv_channel_manager.h"
 #include "setpoint_control_element.h"
 #include "soft_pv_registry.h"
+#include "window_utils.h"
 
 class TestObserveOnlyControls : public QObject
 {
@@ -26,6 +39,11 @@ private slots:
   void registryContainsSafetyControlObjects();
   void observeOnlyBlocksEverySoftPvWriteKind();
   void toggleWritesAlternatingValuesThroughSoftPv();
+  void oversizedWindowGetsRealOnScreenGeometry();
+  void oversizedForcedExecuteDisplayStaysFitted();
+  void modeSwitchReactivatesActiveDisplay();
+  void forcedExecuteDisplayActivatesSafetyControls();
+  void reopenedExecuteDisplayDeliversMessageButtonReleaseBeforeMove();
   void extensionWidgetPropertiesRoundTripInMemory();
 
 private:
@@ -194,6 +212,384 @@ void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()
   QCOMPARE(snapshot.value, 0.0);
   QTRY_COMPARE(button->text(), QStringLiteral("Disabled"));
   QVERIFY(!button->isChecked());
+}
+
+void TestObserveOnlyControls::oversizedWindowGetsRealOnScreenGeometry()
+{
+  QScreen *screen = QGuiApplication::primaryScreen();
+  QVERIFY(screen);
+  const QSize available = screen->availableGeometry().size();
+  QVERIFY(available.isValid());
+
+  QWidget window;
+  window.resize(available.width() + 400, available.height() + 300);
+  const QSize oversized = window.size();
+  QVERIFY(fitWindowToAvailableScreen(&window));
+  QVERIFY(window.width() <= available.width());
+  QVERIFY(window.height() <= available.height());
+  QVERIFY(window.size() != oversized);
+
+  const qreal originalAspect =
+      static_cast<qreal>(oversized.width()) / oversized.height();
+  const qreal fittedAspect =
+      static_cast<qreal>(window.width()) / window.height();
+  QVERIFY(std::abs(originalAspect - fittedAspect) < 0.01);
+  QVERIFY(!fitWindowToAvailableScreen(&window));
+
+  /* Reproduce Cocoa's initial state for an oversized display: the native
+   * top-level window is already clamped, while its display canvas still
+   * reports the larger ADL dimensions. */
+  window.resize(available);
+  QVERIFY(fitWindowToAvailableScreen(&window, oversized));
+  QVERIFY(window.width() <= available.width());
+  QVERIFY(window.height() <= available.height());
+  const qreal canvasFittedAspect =
+      static_cast<qreal>(window.width()) / window.height();
+  QVERIFY(std::abs(originalAspect - canvasFittedAspect) < 0.01);
+}
+
+void TestObserveOnlyControls::oversizedForcedExecuteDisplayStaysFitted()
+{
+#if !defined(Q_OS_MAC)
+  QSKIP("Cocoa oversized-window compositor behavior is macOS-specific");
+#else
+  if (QGuiApplication::platformName() != QStringLiteral("cocoa")) {
+    QSKIP("Requires Qt's native Cocoa platform");
+  }
+  QScreen *screen = QGuiApplication::primaryScreen();
+  QVERIFY(screen);
+  const QSize available = screen->availableGeometry().size();
+  if (available.width() >= 1560 && available.height() >= 1230) {
+    QSKIP("The test screen is large enough for the unscaled demo");
+  }
+
+  const QString fixture =
+      QFINDTESTDATA("../resources/demo/QtEDM_Demo.adl");
+  QVERIFY2(!fixture.isEmpty(), "QtEDM demo ADL fixture was not found");
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture, &error), qPrintable(error));
+
+  window.show();
+  window.enterExecuteMode();
+  QTest::qWait(150);
+
+  QWidget *displayArea =
+      window.findChild<QWidget *>(QStringLiteral("displayArea"));
+  QVERIFY(displayArea);
+  QVERIFY(window.width() <= available.width());
+  QVERIFY(window.height() <= available.height());
+  QVERIFY(displayArea->width() <= available.width());
+  QVERIFY(displayArea->height() <= available.height());
+
+  MessageButtonElement *toggle = nullptr;
+  SetpointControlElement *spinbox = nullptr;
+  for (QWidget *widget : window.findChildren<QWidget *>()) {
+    if (auto *candidate = dynamic_cast<MessageButtonElement *>(widget);
+        candidate && candidate->isQtedmToggle()) {
+      toggle = candidate;
+    }
+    if (auto *candidate = dynamic_cast<SetpointControlElement *>(widget);
+        candidate && candidate->isQtedmSpinBox()) {
+      spinbox = candidate;
+    }
+  }
+  QVERIFY(toggle);
+  QVERIFY(spinbox);
+  QVERIFY(displayArea->rect().contains(toggle->geometry()));
+  QVERIFY(displayArea->rect().contains(spinbox->geometry()));
+
+  window.close();
+#endif
+}
+
+void TestObserveOnlyControls::modeSwitchReactivatesActiveDisplay()
+{
+#if !defined(Q_OS_MAC)
+  QSKIP("Inactive-window first-click behavior is specific to macOS");
+#else
+  auto state = std::make_shared<DisplayState>();
+  QMainWindow controlWindow;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow displayWindow(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  controlWindow.resize(240, 120);
+  displayWindow.resize(320, 180);
+  controlWindow.show();
+  displayWindow.show();
+  state->displays.append(&displayWindow);
+  state->activeDisplay = &displayWindow;
+
+  MainWindowController controller(&controlWindow,
+      std::weak_ptr<DisplayState>(state));
+  controlWindow.raise();
+  controlWindow.activateWindow();
+  QTRY_VERIFY(controlWindow.isActiveWindow());
+
+  controller.reactivateActiveDisplayAfterModeChange();
+  QTRY_VERIFY(displayWindow.isActiveWindow());
+#endif
+}
+
+void TestObserveOnlyControls::forcedExecuteDisplayActivatesSafetyControls()
+{
+  auto &soft = SoftPvRegistry::instance();
+  auto registerNumeric = [this, &soft](const QString &name, double value,
+                             double low, double high, short precision) {
+    soft.registerName(name, true);
+    registeredNames_.append(name);
+    soft.setConnected(name, true);
+    soft.setControlInfo(name, low, high, precision);
+    soft.publishValue(name, value);
+  };
+  registerNumeric(QStringLiteral("led:test:discrete"), 2.0, 0.0, 10.0, 0);
+  registerNumeric(QStringLiteral("led:test:binary_live"), 0.0, 0.0, 1.0, 0);
+  registerNumeric(QStringLiteral("sp:test:compact:setpoint"), 42.0,
+      -10.0, 100.0, 2);
+
+  const QString fixture =
+      QFINDTESTDATA("../../tests/test_QtEDMSafetyControls.adl");
+  QVERIFY2(!fixture.isEmpty(), "Safety-controls ADL fixture was not found");
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture, &error), qPrintable(error));
+
+  /* Match the built-in demo path: show the display while the shared
+   * application remains in Edit, then force only this display to execute. */
+  window.show();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+
+  MessageButtonElement *toggle = nullptr;
+  SetpointControlElement *spinbox = nullptr;
+  LedMonitorElement *symbol = nullptr;
+  for (QWidget *widget : window.findChildren<QWidget *>()) {
+    if (auto *candidate = dynamic_cast<MessageButtonElement *>(widget);
+        candidate && candidate->isQtedmToggle()) {
+      toggle = candidate;
+    }
+    if (auto *candidate = dynamic_cast<SetpointControlElement *>(widget);
+        candidate && candidate->isQtedmSpinBox()) {
+      spinbox = candidate;
+    }
+    if (auto *candidate = dynamic_cast<LedMonitorElement *>(widget);
+        candidate && candidate->isQtedmSymbol()) {
+      symbol = candidate;
+    }
+  }
+
+  QVERIFY(toggle);
+  QVERIFY(spinbox);
+  QVERIFY(symbol);
+  QVERIFY(state->editMode);
+  QVERIFY(toggle->isExecuteMode());
+  QVERIFY(spinbox->isExecuteMode());
+  QVERIFY(symbol->isExecuteMode());
+
+  auto *toggleButton = toggle->findChild<QPushButton *>();
+  auto *incrementButton = spinbox->findChild<QToolButton *>(
+      QStringLiteral("qtedmSpinBoxIncrementButton"));
+  QVERIFY(toggleButton);
+  QVERIFY(incrementButton);
+  QTRY_VERIFY(toggleButton->isEnabled());
+  QTRY_VERIFY(incrementButton->isEnabled());
+
+  QWidget *toggleHit = QApplication::widgetAt(
+      toggleButton->mapToGlobal(toggleButton->rect().center()));
+  QCOMPARE(toggleHit, static_cast<QWidget *>(toggleButton));
+  auto acceptToggleConfirmation = [] {
+    QTimer::singleShot(0, [] {
+      if (auto *messageBox =
+              qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+        if (QAbstractButton *yesButton =
+                messageBox->button(QMessageBox::Yes)) {
+          yesButton->click();
+        }
+      }
+    });
+  };
+  acceptToggleConfirmation();
+  QVERIFY(window.windowHandle());
+  QTest::mouseClick(window.windowHandle(), Qt::LeftButton,
+      Qt::NoModifier,
+      window.mapFromGlobal(toggleButton->mapToGlobal(
+          toggleButton->rect().center())));
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(QStringLiteral("led:test:binary_live"), snapshot));
+  QCOMPARE(snapshot.value, 1.0);
+  QTRY_COMPARE(toggleButton->text(), QStringLiteral("Enabled"));
+
+  QWidget *incrementHit = QApplication::widgetAt(
+      incrementButton->mapToGlobal(incrementButton->rect().center()));
+  QCOMPARE(incrementHit, static_cast<QWidget *>(incrementButton));
+  QTest::mouseClick(window.windowHandle(), Qt::LeftButton,
+      Qt::NoModifier,
+      window.mapFromGlobal(incrementButton->mapToGlobal(
+          incrementButton->rect().center())));
+  QVERIFY(soft.infoSnapshot(QStringLiteral("sp:test:compact:setpoint"),
+      snapshot));
+  QCOMPARE(snapshot.value, 42.25);
+  QTRY_COMPARE(spinbox->runtimeSetpointText(), QStringLiteral("42.25"));
+
+  state->editMode = false;
+  window.handleEditModeChanged(false);
+  state->editMode = true;
+  window.handleEditModeChanged(true);
+  state->editMode = false;
+  window.handleEditModeChanged(false);
+  QCoreApplication::processEvents();
+  QTRY_VERIFY(toggleButton->isEnabled());
+  QTRY_VERIFY(incrementButton->isEnabled());
+
+  acceptToggleConfirmation();
+  QTest::mouseClick(window.windowHandle(), Qt::LeftButton,
+      Qt::NoModifier,
+      window.mapFromGlobal(toggleButton->mapToGlobal(
+          toggleButton->rect().center())));
+  QVERIFY(soft.infoSnapshot(QStringLiteral("led:test:binary_live"), snapshot));
+  QCOMPARE(snapshot.value, 0.0);
+  QTRY_COMPARE(toggleButton->text(), QStringLiteral("Disabled"));
+
+  QTest::mouseClick(window.windowHandle(), Qt::LeftButton,
+      Qt::NoModifier,
+      window.mapFromGlobal(incrementButton->mapToGlobal(
+          incrementButton->rect().center())));
+  QVERIFY(soft.infoSnapshot(QStringLiteral("sp:test:compact:setpoint"),
+      snapshot));
+  QCOMPARE(snapshot.value, 42.5);
+  QTRY_COMPARE(spinbox->runtimeSetpointText(), QStringLiteral("42.50"));
+}
+
+void TestObserveOnlyControls::
+    reopenedExecuteDisplayDeliversMessageButtonReleaseBeforeMove()
+{
+  const QString channelName =
+      QStringLiteral("__test:reopened_message_button");
+  auto &soft = SoftPvRegistry::instance();
+  soft.registerName(channelName, true);
+  registeredNames_.append(channelName);
+  soft.setConnected(channelName, true);
+  soft.setControlInfo(channelName, 0.0, 1.0, 0);
+  soft.publishValue(channelName, 0.0);
+
+  QTemporaryDir fixtureDirectory;
+  QVERIFY(fixtureDirectory.isValid());
+  const QString fixturePath =
+      fixtureDirectory.filePath(QStringLiteral("reopened_message_button.adl"));
+  QFile fixture(fixturePath);
+  QVERIFY(fixture.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray fixtureContents = QByteArrayLiteral(
+      "file {\n"
+      "  name=\"reopened_message_button.adl\"\n"
+      "  version=030122\n"
+      "}\n"
+      "display {\n"
+      "  object { x=100 y=100 width=320 height=180 }\n"
+      "  clr=14\n"
+      "  bclr=4\n"
+      "  cmap=\"\"\n"
+      "  gridSpacing=5\n"
+      "  gridOn=0\n"
+      "  snapToGrid=0\n"
+      "}\n"
+      "\"message button\" {\n"
+      "  object { x=70 y=60 width=180 height=44 }\n"
+      "  control {\n"
+      "    chan=\"__test:reopened_message_button\"\n"
+      "    clr=14\n"
+      "    bclr=4\n"
+      "  }\n"
+      "  label=\"Press\"\n"
+      "  press_msg=\"1\"\n"
+      "  release_msg=\"0\"\n"
+      "}\n");
+  QCOMPARE(fixture.write(fixtureContents), fixtureContents.size());
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+
+  auto exerciseOpenDisplay = [&]() {
+    DisplayWindow window(palette, palette, font, font,
+        std::weak_ptr<DisplayState>(state));
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    QString error;
+    QVERIFY2(window.loadFromFile(fixturePath, &error), qPrintable(error));
+    state->displays.append(&window);
+
+    window.show();
+    activateWindowWhenExposed(&window);
+    QPointer<DisplayWindow> delayedDisplay(&window);
+    runWhenWindowExposed(&window, [delayedDisplay]() {
+      if (delayedDisplay) {
+        delayedDisplay->handleEditModeChanged(false);
+      }
+    });
+
+    QTRY_VERIFY(window.windowHandle());
+    QTRY_VERIFY(window.windowHandle()->isExposed());
+#if defined(Q_OS_MAC)
+    QTRY_VERIFY(window.isActiveWindow());
+#endif
+
+    MessageButtonElement *message = nullptr;
+    for (QWidget *widget : window.findChildren<QWidget *>()) {
+      if (auto *candidate = dynamic_cast<MessageButtonElement *>(widget);
+          candidate && !candidate->isQtedmToggle()) {
+        message = candidate;
+        break;
+      }
+    }
+    QVERIFY(message);
+    auto *button = message->findChild<QPushButton *>();
+    QVERIFY(button);
+    QTRY_VERIFY(message->isExecuteMode());
+    QTRY_VERIFY(button->isEnabled());
+
+    const QPoint originalPosition = window.pos();
+    const QPoint clickPosition = window.mapFromGlobal(
+        button->mapToGlobal(button->rect().center()));
+    QSignalSpy pressedSpy(button, &QPushButton::pressed);
+    QSignalSpy releasedSpy(button, &QPushButton::released);
+
+    QTest::mousePress(window.windowHandle(), Qt::LeftButton,
+        Qt::NoModifier, clickPosition);
+    QTRY_COMPARE(pressedSpy.count(), 1);
+    SoftPvInfoSnapshot snapshot;
+    QVERIFY(soft.infoSnapshot(channelName, snapshot));
+    QCOMPARE(snapshot.value, 1.0);
+
+    QTest::mouseRelease(window.windowHandle(), Qt::LeftButton,
+        Qt::NoModifier, clickPosition);
+    QTRY_COMPARE(releasedSpy.count(), 1);
+    QVERIFY(soft.infoSnapshot(channelName, snapshot));
+    QCOMPARE(snapshot.value, 0.0);
+    QCOMPARE(window.pos(), originalPosition);
+
+    state->displays.removeAll(&window);
+    window.close();
+    QCoreApplication::processEvents();
+  };
+
+  exerciseOpenDisplay();
+  exerciseOpenDisplay();
 }
 
 void TestObserveOnlyControls::extensionWidgetPropertiesRoundTripInMemory()

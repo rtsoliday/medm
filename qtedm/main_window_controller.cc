@@ -11,6 +11,7 @@
 #include <QUrl>
 
 #include "display_window.h"
+#include "window_utils.h"
 
 MainWindowController::MainWindowController(QMainWindow *mainWindow,
     std::weak_ptr<DisplayState> state)
@@ -35,6 +36,27 @@ void MainWindowController::setDisplayWindowFactory(DisplayWindowFactory factory)
 void MainWindowController::setDisplayWindowRegistrar(DisplayWindowRegistrar registrar)
 {
   displayWindowRegistrar_ = std::move(registrar);
+}
+
+void MainWindowController::reactivateActiveDisplayAfterModeChange()
+{
+#if defined(Q_OS_MAC)
+  const auto state = state_.lock();
+  if (!state) {
+    return;
+  }
+  const QPointer<DisplayWindow> activeDisplay = state->activeDisplay;
+  if (!activeDisplay || !activeDisplay->isVisible()
+      || activeDisplay->isMinimized()) {
+    return;
+  }
+
+  /* Clicking Edit or Execute activates the main control window. AppKit may
+   * consume the first subsequent click in an inactive display solely to
+   * activate that window. Wait for the display's native window to be exposed
+   * before restoring it so a newly opened display is handled too. */
+  activateWindowWhenExposed(activeDisplay);
+#endif
 }
 
 bool MainWindowController::eventFilter(QObject *watched, QEvent *event)
@@ -150,4 +172,3 @@ void MainWindowController::handleDroppedFiles(const QStringList &filePaths)
     displayWindowRegistrar_(displayWin);
   }
 }
-

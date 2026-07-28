@@ -7,6 +7,7 @@
 #include "pv_snapshot_dialog.h"
 #include "plugin_manager.h"
 #include "property_rule_editor_dialog.h"
+#include "window_utils.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -20007,8 +20008,15 @@ void DisplayWindow::resizeEvent(QResizeEvent *event)
   /* In EXECUTE mode - scale all elements proportionally like medm does.
    * In EDIT mode - only resize selected elements (handled elsewhere).
    * For now, we scale all elements in execute mode only. */
-  auto state = state_.lock();
-  if (state && !state->editMode && executeModeActive_) {
+  const auto state = state_.lock();
+  bool scaleExecuteResize =
+      executeModeActive_ && state && !state->editMode;
+#if defined(Q_OS_MAC)
+  scaleExecuteResize = scaleExecuteResize
+      || (executeModeActive_
+          && QGuiApplication::platformName() == QStringLiteral("cocoa"));
+#endif
+  if (scaleExecuteResize) {
     if (newWidth == pendingResizeAreaSize_.width()
         && newHeight == pendingResizeAreaSize_.height()
         && !resizeDebounceTimer_->isActive()) {
@@ -20066,8 +20074,15 @@ void DisplayWindow::applyExecuteResizeScale(int newWidth, int newHeight)
       || newWidth <= 0 || newHeight <= 0) {
     return;
   }
-  auto state = state_.lock();
-  if (!state || state->editMode || !executeModeActive_) {
+  const auto state = state_.lock();
+  bool scaleExecuteResize =
+      executeModeActive_ && state && !state->editMode;
+#if defined(Q_OS_MAC)
+  scaleExecuteResize = scaleExecuteResize
+      || (executeModeActive_
+          && QGuiApplication::platformName() == QStringLiteral("cocoa"));
+#endif
+  if (!scaleExecuteResize) {
     return;
   }
   if (newWidth == lastScaledAreaSize_.width()
@@ -20745,6 +20760,44 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
       if (desiredAreaSize.width() <= 0 || desiredAreaSize.height() <= 0) {
         return;
       }
+#if defined(Q_OS_MAC)
+      if (window->executeModeActive_
+          && QGuiApplication::platformName() == QStringLiteral("cocoa")) {
+        QScreen *screen = window->screen();
+        if (!screen) {
+          screen = QGuiApplication::primaryScreen();
+        }
+        const QSize availableSize =
+            screen ? screen->availableGeometry().size() : QSize();
+        if (availableSize.isValid()
+            && (desiredAreaSize.width() > availableSize.width()
+                || desiredAreaSize.height() > availableSize.height())) {
+          /*
+           * Do not let the deferred ADL-size restoration undo the real
+           * execute-window fit performed after Cocoa exposure.  Reapplying an
+           * oversized canvas here recreates the painted/input geometry split.
+           */
+          fitWindowToAvailableScreen(window, desiredAreaSize);
+          if (window->layout()) {
+            window->layout()->activate();
+          }
+          const QSize fittedAreaSize = window->displayArea_->size();
+          if (fittedAreaSize.isValid()
+              && window->originalDisplayWidth_ > 0
+              && window->originalDisplayHeight_ > 0) {
+            window->scaleAllElements(window->originalDisplayWidth_,
+                window->originalDisplayHeight_, fittedAreaSize.width(),
+                fittedAreaSize.height());
+            window->pendingResizeAreaSize_ = fittedAreaSize;
+            window->lastScaledAreaSize_ = fittedAreaSize;
+            if (window->resizeDebounceTimer_->isActive()) {
+              window->resizeDebounceTimer_->stop();
+            }
+          }
+          return;
+        }
+      }
+#endif
       const QSize currentWindowSize = window->size();
       const QSize currentAreaSize = window->displayArea_->size();
       const int extraWidth = currentWindowSize.width() - currentAreaSize.width();
@@ -29355,8 +29408,7 @@ void DisplayWindow::handleRelatedDisplayActivation(
       } else {
         existingWindow->show();
       }
-      existingWindow->raise();
-      existingWindow->activateWindow();
+      activateWindowWhenExposed(existingWindow);
       return;
     }
   }
@@ -29470,8 +29522,7 @@ void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin,
       });
 
   displayWin->show();
-  displayWin->raise();
-  displayWin->activateWindow();
+  activateWindowWhenExposed(displayWin);
 
   if (updateMenus && *updateMenus) {
     (*updateMenus)();
@@ -29479,7 +29530,7 @@ void DisplayWindow::registerDisplayWindow(DisplayWindow *displayWin,
 
   if (postponeExecute) {
     QPointer<DisplayWindow> delayed(displayWin);
-    QTimer::singleShot(0, displayWin,
+    runWhenWindowExposed(displayWin,
         [stateWeak = state_, delayed]() {
           if (auto locked = stateWeak.lock()) {
             if (!locked->editMode) {
@@ -33647,13 +33698,51 @@ void DisplayWindow::enterExecuteMode()
   QTEDM_TIMING_MARK("enterExecuteMode: Starting");
   const bool restoreDisplayUpdates =
       displayArea_ ? displayArea_->updatesEnabled() : false;
-  if (displayArea_) {
+#if defined(Q_OS_MAC)
+  /* On Cocoa, disabling updates while Execute-mode child controls are hidden,
+   * rebuilt, and shown before the top-level window's first exposure can leave
+   * their painting and mouse tracking stale until the window is moved. Keep
+   * updates live on macOS; the batching optimization remains on other hosts. */
+  const bool suspendDisplayUpdates = false;
+#else
+  const bool suspendDisplayUpdates = displayArea_ != nullptr;
+#endif
+  if (suspendDisplayUpdates) {
     displayArea_->setUpdatesEnabled(false);
   }
   executeModeActive_ = true;
   if (displayArea_) {
     displayArea_->setExecuteMode(true);
   }
+#if defined(Q_OS_MAC)
+  /*
+   * Cocoa can compositor-scale an oversized window to the visible screen
+   * before Qt receives a matching resize.  The pixels then appear fitted, but
+   * child-widget hit regions retain a different vertical scale until the
+   * operator moves the window.  Give the QWidget a real, aspect-preserving
+   * on-screen size before enabling its controls so paint and input geometry
+   * use the same coordinate system.
+   */
+  if (QGuiApplication::platformName() == QStringLiteral("cocoa")) {
+    fitWindowToAvailableScreen(this,
+        displayArea_ ? displayArea_->size() : QSize());
+    if (displayArea_ && originalDisplayWidth_ > 0
+        && originalDisplayHeight_ > 0) {
+      const QSize executeAreaSize = displayArea_->size();
+      if (executeAreaSize.isValid()
+          && executeAreaSize != QSize(originalDisplayWidth_,
+                                      originalDisplayHeight_)) {
+        scaleAllElements(originalDisplayWidth_, originalDisplayHeight_,
+            executeAreaSize.width(), executeAreaSize.height());
+      }
+      pendingResizeAreaSize_ = executeAreaSize;
+      lastScaledAreaSize_ = executeAreaSize;
+      if (resizeDebounceTimer_->isActive()) {
+        resizeDebounceTimer_->stop();
+      }
+    }
+  }
+#endif
 
   auto reserveRuntime = [](auto &hash, int expected) {
     if (expected > 0) {
@@ -34224,7 +34313,9 @@ void DisplayWindow::enterExecuteMode()
   QTEDM_TIMING_MARK("enterExecuteMode: Adjusting widget layering");
   refreshStackingOrder();
   if (displayArea_) {
-    displayArea_->setUpdatesEnabled(restoreDisplayUpdates);
+    if (suspendDisplayUpdates) {
+      displayArea_->setUpdatesEnabled(restoreDisplayUpdates);
+    }
     if (restoreDisplayUpdates) {
       displayArea_->update();
     }

@@ -1867,10 +1867,20 @@ int main(int argc, char *argv[])
 
     QTEDM_TIMING_MARK("Showing display window");
     displayWin->show();
-    displayWin->raise();
-    displayWin->activateWindow();
+    activateWindowWhenExposed(displayWin);
     QTEDM_TIMING_MARK("Entering execute mode for display");
-    displayWin->handleEditModeChanged(state->editMode);
+    if (state->editMode) {
+      displayWin->handleEditModeChanged(true);
+    } else {
+      QPointer<DisplayWindow> delayedDisplay(displayWin);
+      runWhenWindowExposed(displayWin,
+          [stateWeak = std::weak_ptr<DisplayState>(state), delayedDisplay]() {
+            if (auto locked = stateWeak.lock();
+                locked && !locked->editMode && delayedDisplay) {
+              delayedDisplay->handleEditModeChanged(false);
+            }
+          });
+    }
     QTEDM_TIMING_MARK("Display window ready");
 
     if (updateMenus && *updateMenus) {
@@ -2061,7 +2071,12 @@ int main(int argc, char *argv[])
         }
 
         registerDisplayWindow(displayWin);
-        displayWin->enterExecuteMode();
+        QPointer<DisplayWindow> delayedDemo(displayWin);
+        runWhenWindowExposed(displayWin, [delayedDemo]() {
+          if (delayedDemo) {
+            delayedDemo->enterExecuteMode();
+          }
+        });
       });
 
   QObject::connect(newAct, &QAction::triggered, &win,
@@ -2185,7 +2200,7 @@ int main(int argc, char *argv[])
       });
 
   QObject::connect(editModeButton, &QRadioButton::toggled, &win,
-      [state, updateMenus](bool checked) {
+      [state, updateMenus, mainWindowController](bool checked) {
         state->editMode = checked;
         if (!checked) {
           state->createTool = CreateTool::kNone;
@@ -2207,6 +2222,7 @@ int main(int argc, char *argv[])
         if (updateMenus && *updateMenus) {
           (*updateMenus)();
         }
+        mainWindowController->reactivateActiveDisplayAfterModeChange();
       });
   editModeButton->setChecked(true);
   modeStack->setCurrentWidget(modeButtonsWidget);

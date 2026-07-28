@@ -5,8 +5,14 @@
 #include <QString>
 #include <QWidget>
 
+#include <functional>
+
 void centerWindowOnScreen(QWidget *window);
 void positionWindowTopRight(QWidget *window, int rightMargin, int topMargin);
+bool fitWindowToAvailableScreen(QWidget *window,
+    const QSize &requestedContentSize = QSize());
+void runWhenWindowExposed(QWidget *window, std::function<void()> callback);
+void activateWindowWhenExposed(QWidget *window);
 void showVersionDialog(QWidget *parent, const QFont &titleFont,
     const QFont &bodyFont, const QPalette &palette, bool autoClose = true);
 void showHelpBrowser(QWidget *parent, const QString &title,

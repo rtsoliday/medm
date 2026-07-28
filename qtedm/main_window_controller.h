@@ -25,6 +25,7 @@ public:
 
   void setDisplayWindowFactory(DisplayWindowFactory factory);
   void setDisplayWindowRegistrar(DisplayWindowRegistrar registrar);
+  void reactivateActiveDisplayAfterModeChange();
 
 protected:
   bool eventFilter(QObject *watched, QEvent *event) override;
@@ -39,4 +40,3 @@ private:
   DisplayWindowFactory displayWindowFactory_;
   DisplayWindowRegistrar displayWindowRegistrar_;
 };
-

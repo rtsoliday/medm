@@ -14,6 +14,7 @@
 #include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "setpoint_control_element.h"
+#include "soft_pv_registry.h"
 #include "statistics_tracker.h"
 #include "text_format_utils.h"
 
@@ -53,8 +54,16 @@ void SetpointControlRuntime::start()
   setpointChannel_ = element_->setpointChannel().trimmed();
   readbackChannel_ = element_->readbackChannel().trimmed();
 
-  const bool needsCa = parsePvName(setpointChannel_).protocol == PvProtocol::kCa
-      || parsePvName(readbackChannel_).protocol == PvProtocol::kCa;
+  auto needsCaContextFor = [](const QString &channelName) {
+    if (channelName.isEmpty()) {
+      return false;
+    }
+    const ParsedPvName parsed = parsePvName(channelName);
+    return parsed.protocol == PvProtocol::kCa
+        && !SoftPvRegistry::instance().isRegistered(parsed.pvName);
+  };
+  const bool needsCa = needsCaContextFor(setpointChannel_)
+      || needsCaContextFor(readbackChannel_);
   if (needsCa) {
     ChannelAccessContext &context = ChannelAccessContext::instance();
     context.ensureInitializedForProtocol(PvProtocol::kCa);

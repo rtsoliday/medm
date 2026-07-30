@@ -420,11 +420,13 @@ void TestArchivesSnapshots::restoreChecksPolicyTypeAccessAndLimits()
   saved.fieldType = DBF_ENUM;
   saved.exactType = QStringLiteral("DBF_ENUM");
   saved.value = 1;
-  saved.enumStrings = {QStringLiteral("Off"), QStringLiteral("On")};
+  saved.enumStrings =
+      QStringList{QStringLiteral("Off"), QStringLiteral("On")};
   current = saved;
   current.connected = true;
   current.writeAccess = true;
-  current.enumStrings = {QStringLiteral("Closed"), QStringLiteral("Open")};
+  current.enumStrings =
+      QStringList{QStringLiteral("Closed"), QStringLiteral("Open")};
   const PvSnapshotRestoreCheck enumCheck =
       PvSnapshot::canRestore(saved, current, false);
   QVERIFY(!enumCheck.allowed);

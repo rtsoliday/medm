@@ -413,7 +413,7 @@ void NtNdArrayImageElement::mouseDoubleClickEvent(QMouseEvent *event)
 void NtNdArrayImageElement::wheelEvent(QWheelEvent *event)
 {
   const QPointF position =
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
       event->position();
 #else
       event->posF();

@@ -684,10 +684,10 @@ void TestPluginsPropertyRules::rulesParseRoundTripCyclesAndSandbox()
   QtedmRuleSet cyclic;
   QtedmPropertyRule first = rule;
   first.id = QStringLiteral("first");
-  first.dependsOn = {QStringLiteral("second")};
+  first.dependsOn = QStringList{QStringLiteral("second")};
   QtedmPropertyRule second = rule;
   second.id = QStringLiteral("second");
-  second.dependsOn = {QStringLiteral("first")};
+  second.dependsOn = QStringList{QStringLiteral("first")};
   cyclic.rules = {first, second};
   QVERIFY(!PropertyRules::validate(&cyclic, &diagnostics));
   QVERIFY(diagnostics.join(QLatin1Char('\n')).contains(

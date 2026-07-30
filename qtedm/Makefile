@@ -241,6 +241,14 @@ qtedm_SRC = qtedm.cc \
 qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
 QTEDM_PCH_FILE :=
 
+ifeq ($(OS), Linux)
+  # This constructor builds the complete resource palette UI and exceeds
+  # GCC's debug variable-tracking limit. GCC retries without this pass, so
+  # disable it for this translation unit up front and avoid the build note.
+  $(OBJ_DIR)/resource_palette_dialog.$(OBJEXT): \
+    CCFLAGS += -fno-var-tracking-assignments
+endif
+
 CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
 ifeq ($(OS), Windows)

@@ -13,6 +13,7 @@
 #include <QPalette>
 #include <QPen>
 #include <QResizeEvent>
+#include <QtMath>
 
 #include <cvtFast.h>
 

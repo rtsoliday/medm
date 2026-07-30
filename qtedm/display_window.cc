@@ -20553,9 +20553,9 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
       ? QFileInfo(filePath).absoluteFilePath()
       : canonicalPath;
   if (!embeddedDisplay_) {
-    loadAncestry_ = {normalizedPath};
+    loadAncestry_ = QStringList{normalizedPath};
   } else if (loadAncestry_.isEmpty()) {
-    loadAncestry_ = {normalizedPath};
+    loadAncestry_ = QStringList{normalizedPath};
   }
   const bool restartExecuteModeAfterLoad = executeModeActive_;
   const bool preservePositionAfterLoad = preserveNextLoadPosition_;

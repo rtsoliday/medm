@@ -397,8 +397,19 @@ NtNdArrayDecodedFrame NtNdArrayImageDecoder::decode(
   }
 
   if (options.flipHorizontal || options.flipVertical) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    Qt::Orientations orientations;
+    if (options.flipHorizontal) {
+      orientations |= Qt::Horizontal;
+    }
+    if (options.flipVertical) {
+      orientations |= Qt::Vertical;
+    }
+    image = image.flipped(orientations);
+#else
     image = image.mirrored(
         options.flipHorizontal, options.flipVertical);
+#endif
   }
   if (options.rotation != HeatmapRotation::kNone) {
     QTransform transform;

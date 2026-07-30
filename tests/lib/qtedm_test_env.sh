@@ -64,7 +64,7 @@ qtedm_test_setup_env() {
   export QTEDM_TEST_REPO_ROOT
   export QT_QPA_PLATFORM=offscreen
   export QTEDM_NOLOG=1
-  export LC_ALL=C
+  export LC_ALL=C.UTF-8
   export TZ=UTC
   export HOME="${QTEDM_TEST_TMP_DIR}/home"
   export EPICS_CA_ADDR_LIST=localhost

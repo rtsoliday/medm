@@ -375,6 +375,9 @@ set_slider_test_pvs() {
   local retries=20
   local delay=0.25
   local initialized=0
+  # A first CA batch can succeed while the IOC is still settling under load.
+  # Require a confirming pass so the values present at the ready file are final.
+  local successful_passes=0
   for _ in $(seq 1 "${retries}"); do
     initialized=1
     local entry pv value lopr hopr prec full_pv
@@ -389,8 +392,13 @@ set_slider_test_pvs() {
       fi
     done
     if [[ "${initialized}" -eq 1 ]]; then
-      echo "Slider PV initialization complete."
-      return 0
+      successful_passes=$((successful_passes + 1))
+      if [[ "${successful_passes}" -ge 2 ]]; then
+        echo "Slider PV initialization complete."
+        return 0
+      fi
+    else
+      successful_passes=0
     fi
     sleep "${delay}"
   done

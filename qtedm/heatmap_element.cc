@@ -1203,7 +1203,18 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
   }
   
   if (flipHorizontal_ || flipVertical_) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    Qt::Orientations orientations;
+    if (flipHorizontal_) {
+      orientations |= Qt::Horizontal;
+    }
+    if (flipVertical_) {
+      orientations |= Qt::Vertical;
+    }
+    cachedImage_ = cachedImage_.flipped(orientations);
+#else
     cachedImage_ = cachedImage_.mirrored(flipHorizontal_, flipVertical_);
+#endif
   }
   
   if (rotation_ != HeatmapRotation::kNone) {

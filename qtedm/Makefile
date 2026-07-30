@@ -616,7 +616,7 @@ test-unit: build-tests
 	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
 	export QT_QPA_PLATFORM=offscreen; \
 	export QTEDM_NOLOG=1; \
-	export LC_ALL=C; \
+	export LC_ALL=C.UTF-8; \
 	export TZ=UTC; \
 	export HOME="$$tmp_dir/home"; \
 	mkdir -p "$$HOME"; \

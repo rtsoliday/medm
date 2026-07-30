@@ -7,6 +7,7 @@ import os
 import platform
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,12 @@ CHANNEL_PATTERN = re.compile(
 
 class CaseFailure(RuntimeError):
   """Raised when a visual regression case fails."""
+
+
+def unused_udp_port() -> int:
+  with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+    udp_socket.bind(("127.0.0.1", 0))
+    return int(udp_socket.getsockname()[1])
 
 
 def prefix_channel_name(channel: str, prefix: str) -> str:
@@ -127,7 +134,8 @@ def resolve_golden_path(repo_root: Path, case: dict,
 
 
 def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
-    prefix: str, temp_dir: Path, update_goldens: bool) -> None:
+    prefix: str, temp_dir: Path, update_goldens: bool,
+    process_env: dict) -> None:
   display_path = (repo_root / case["display"]).resolve()
   if case.get("use_ioc"):
     display_to_run = rewrite_display_with_prefix(display_path, prefix, temp_dir)
@@ -152,6 +160,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
   ]
   process = subprocess.Popen(
       command,
+      env=process_env,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
       universal_newlines=True,
@@ -239,6 +248,18 @@ def main() -> int:
   ioc_runner_log = temp_dir / "run_local_ioc.out"
   ioc_ready_file = temp_dir / "ioc.ready"
   runner_log_handle = None
+  process_env = os.environ.copy()
+  if needs_ioc:
+    # The visual prefix must remain stable because some goldens display channel
+    # names. Isolate the CA server by port so concurrent or orphaned test IOCs
+    # cannot answer searches for those same names with stale values.
+    server_port = unused_udp_port()
+    process_env.update({
+        "EPICS_CA_ADDR_LIST": f"127.0.0.1:{server_port}",
+        "EPICS_CA_AUTO_ADDR_LIST": "NO",
+        "EPICS_CA_SERVER_PORT": str(server_port),
+        "EPICS_CAS_INTF_ADDR_LIST": "127.0.0.1",
+    })
 
   try:
     if needs_ioc:
@@ -256,6 +277,7 @@ def main() -> int:
       runner_log_handle = ioc_runner_log.open("w", encoding="utf-8")
       ioc_process = subprocess.Popen(
           ioc_command,
+          env=process_env,
           stdout=runner_log_handle,
           stderr=subprocess.STDOUT,
           universal_newlines=True,
@@ -264,7 +286,7 @@ def main() -> int:
 
     for case in cases:
       run_case(case, repo_root, qtedm_bin, compare_tool, prefix, temp_dir,
-          args.update_goldens)
+          args.update_goldens, process_env)
   except Exception as exc:
     keep_temp_dir = True
     terminate_process(ioc_process)

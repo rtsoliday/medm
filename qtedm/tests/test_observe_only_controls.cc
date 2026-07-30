@@ -222,8 +222,8 @@ void TestObserveOnlyControls::oversizedWindowGetsRealOnScreenGeometry()
   QVERIFY(available.isValid());
 
   QWidget window;
-  window.resize(available.width() + 400, available.height() + 300);
-  const QSize oversized = window.size();
+  const QSize oversized(available.width() * 2, available.height() + 1);
+  window.resize(oversized);
   QVERIFY(fitWindowToAvailableScreen(&window));
   QVERIFY(window.width() <= available.width());
   QVERIFY(window.height() <= available.height());

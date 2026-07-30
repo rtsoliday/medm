@@ -58,7 +58,7 @@ void TestPvTableModel::valueChangeUsesOneCellAndOneRole()
   QCOMPARE(qvariant_cast<QModelIndex>(args.at(0)).row(), 0);
   QCOMPARE(qvariant_cast<QModelIndex>(args.at(0)).column(), 2);
   QCOMPARE(qvariant_cast<QModelIndex>(args.at(1)).column(), 2);
-  QCOMPARE(args.at(2).value<QList<int>>(), QList<int>{Qt::DisplayRole});
+  QCOMPARE(args.at(2).value<QVector<int>>(), QVector<int>{Qt::DisplayRole});
 }
 
 void TestPvTableModel::severityChangeUsesOnlySeverityDisplayAndRowForeground()
@@ -78,12 +78,13 @@ void TestPvTableModel::severityChangeUsesOnlySeverityDisplayAndRowForeground()
   const QList<QVariant> foreground = changes.at(0);
   QCOMPARE(qvariant_cast<QModelIndex>(foreground.at(0)).column(), 0);
   QCOMPARE(qvariant_cast<QModelIndex>(foreground.at(1)).column(), 4);
-  QCOMPARE(foreground.at(2).value<QList<int>>(),
-      QList<int>{Qt::ForegroundRole});
+  QCOMPARE(foreground.at(2).value<QVector<int>>(),
+      QVector<int>{Qt::ForegroundRole});
   const QList<QVariant> display = changes.at(1);
   QCOMPARE(qvariant_cast<QModelIndex>(display.at(0)).column(), 4);
   QCOMPARE(qvariant_cast<QModelIndex>(display.at(1)).column(), 4);
-  QCOMPARE(display.at(2).value<QList<int>>(), QList<int>{Qt::DisplayRole});
+  QCOMPARE(display.at(2).value<QVector<int>>(),
+      QVector<int>{Qt::DisplayRole});
 }
 
 void TestPvTableModel::contiguousValueRowsUseOneRange()
@@ -105,7 +106,7 @@ void TestPvTableModel::contiguousValueRowsUseOneRange()
   QCOMPARE(last.row(), 1);
   QCOMPARE(first.column(), 2);
   QCOMPARE(last.column(), 2);
-  QCOMPARE(args.at(2).value<QList<int>>(), QList<int>{Qt::DisplayRole});
+  QCOMPARE(args.at(2).value<QVector<int>>(), QVector<int>{Qt::DisplayRole});
 }
 
 QTEST_MAIN(TestPvTableModel)

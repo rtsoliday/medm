@@ -39,7 +39,10 @@ void TestLegacyFonts::preservesLegacyPixelSizeSemantics()
 
   QFont pointSized = base;
   pointSized.setPointSize(10);
-  QVERIFY(QFontMetrics(pointSized).height() > baseHeight);
+  QCOMPARE(pointSized.pointSize(), 10);
+  QCOMPARE(pointSized.pixelSize(), -1);
+  QVERIFY(base.pixelSize() > 0);
+  QCOMPARE(base.pointSize(), -1);
 
   const QFont resolved10 = LegacyFonts::fontForLegacySize(base, 10);
   QCOMPARE(QFontInfo(resolved10).pixelSize(), basePixelSize);

@@ -258,11 +258,8 @@ bool parseUi(const QByteArray &bytes, UiObject *root, QString *error)
   QXmlStreamReader reader(bytes);
   bool foundUi = false;
   bool foundRoot = false;
-  while (reader.readNextStartElement()) {
-    if (reader.name() != QLatin1String("ui")) {
-      reader.skipCurrentElement();
-      continue;
-    }
+  if (reader.readNextStartElement()
+      && reader.name() == QLatin1String("ui")) {
     foundUi = true;
     while (reader.readNextStartElement()) {
       if (reader.name() == QLatin1String("widget") && !foundRoot) {

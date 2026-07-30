@@ -1005,15 +1005,13 @@ int main(int argc, char *argv[])
   app.setPalette(palette);
   QTEDM_TIMING_MARK("Application palette applied");
 
-#if defined(Q_OS_MAC)
   /*
-   * Qt's Cocoa stylesheet engine resolves generic family aliases on first
-   * use.  Preloading the small native legacy-font set after the application
-   * style is installed preserves font selection while avoiding a second,
-   * deferred family-alias scan during the first widget layout.
+   * Preload the small legacy-font set after installing the application style.
+   * Several embedded bitmap faces share family metadata, so registering them
+   * lazily can make font selection depend on the order widgets are created.
+   * Preloading also avoids a second, deferred family-alias scan on Cocoa.
    */
   LegacyFonts::all();
-#endif
 
   const QFont fixed10Font = LegacyFonts::fontOrDefault(
       QStringLiteral("widgetDM_10"),

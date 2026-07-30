@@ -481,9 +481,19 @@ def main() -> int:
 
   selected_names = set(args.case)
   cases = load_cases(cases_path, selected_names)
-  has_pva_cases = any(
-      str(case.get("provider", "ca")).lower() == "pva"
-      for case in cases)
+  ca_cases = [
+      case for case in cases
+      if str(case.get("provider", "ca")).lower() != "pva"
+  ]
+  pva_cases = [
+      case for case in cases
+      if str(case.get("provider", "ca")).lower() == "pva"
+  ]
+  # softIocPVA also starts a CA server. On Linux, running it beside the CA IOC
+  # on the same UDP port can divert unicast CA searches, so finish CA cases
+  # before starting the PVA IOC.
+  cases = ca_cases + pva_cases
+  has_pva_cases = bool(pva_cases)
   if has_pva_cases:
     pva_paths = (soft_ioc_pva, pvget_bin, pvput_bin, pva_database)
     if any(path is None or not path.is_file() for path in pva_paths):
@@ -528,28 +538,28 @@ def main() -> int:
 
   try:
     wait_for_ioc_ready(ioc_process, ioc_ready_file, timeout_seconds=120)
-    if has_pva_cases:
-      pva_log_handle = pva_log.open("w", encoding="utf-8")
-      pva_process = subprocess.Popen(
-          [
-              str(soft_ioc_pva),
-              "-S",
-              "-m",
-              f"P={pva_prefix}",
-              "-d",
-              str(pva_database),
-          ],
-          stdin=subprocess.DEVNULL,
-          stdout=pva_log_handle,
-          stderr=subprocess.STDOUT,
-          universal_newlines=True,
-      )
-      wait_for_pva_ready(
-          pva_process, pvget_bin,
-          f"{pva_prefix}sp:test:compact:setpoint",
-          timeout_seconds=30)
     for case in cases:
       provider = str(case.get("provider", "ca")).lower()
+      if provider == "pva" and pva_process is None:
+        pva_log_handle = pva_log.open("w", encoding="utf-8")
+        pva_process = subprocess.Popen(
+            [
+                str(soft_ioc_pva),
+                "-S",
+                "-m",
+                f"P={pva_prefix}",
+                "-d",
+                str(pva_database),
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=pva_log_handle,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+        )
+        wait_for_pva_ready(
+            pva_process, pvget_bin,
+            f"{pva_prefix}sp:test:compact:setpoint",
+            timeout_seconds=30)
       case_prefix = pva_prefix if provider == "pva" else prefix
       run_case(
           case, repo_root, qtedm_bin, cavput_bin, pvput_bin,

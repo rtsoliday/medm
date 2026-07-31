@@ -14,6 +14,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPainter>
 #include <QToolButton>
 #include <QToolTip>
 #include <QVBoxLayout>
@@ -53,6 +54,76 @@ QPixmap createPixmap(const unsigned char *bits, int width, int height)
   }
 
   return QPixmap::fromImage(image);
+}
+
+QPixmap createExtensionPixmap(CreateTool tool, int width, int height)
+{
+  QPixmap pixmap(width, height);
+  pixmap.fill(Qt::transparent);
+  QPainter painter(&pixmap);
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  painter.setPen(QPen(Qt::black, 1));
+  painter.setBrush(Qt::NoBrush);
+  const QRect bounds(2, 2, width - 5, height - 5);
+
+  switch (tool) {
+  case CreateTool::kQtedmSymbol:
+    painter.drawEllipse(bounds.adjusted(2, 2, -2, -2));
+    painter.drawLine(bounds.left() + 4, bounds.center().y(),
+        bounds.right() - 4, bounds.center().y());
+    painter.drawLine(bounds.center().x(), bounds.top() + 4,
+        bounds.center().x(), bounds.bottom() - 4);
+    break;
+  case CreateTool::kQtedmToggle:
+    painter.drawRoundedRect(bounds.adjusted(0, 5, 0, -5), 5, 5);
+    painter.setBrush(Qt::black);
+    painter.drawEllipse(QRect(bounds.center().x(), bounds.top() + 7, 7, 7));
+    break;
+  case CreateTool::kQtedmSpinBox:
+    painter.drawRect(bounds);
+    painter.drawLine(bounds.right() - 6, bounds.top(),
+        bounds.right() - 6, bounds.bottom());
+    painter.drawLine(bounds.right() - 6, bounds.center().y(),
+        bounds.right(), bounds.center().y());
+    painter.drawLine(bounds.right() - 4, bounds.center().y() - 3,
+        bounds.right() - 2, bounds.center().y() - 1);
+    painter.drawLine(bounds.right() - 4, bounds.center().y() + 3,
+        bounds.right() - 2, bounds.center().y() + 1);
+    break;
+  case CreateTool::kQtedmTabbedDisplay:
+    painter.drawRect(bounds.adjusted(0, 5, 0, 0));
+    painter.drawRect(QRect(bounds.left(), bounds.top(), 8, 6));
+    painter.drawRect(QRect(bounds.left() + 8, bounds.top() + 1, 8, 5));
+    break;
+  case CreateTool::kQtedmArchivePlot:
+    painter.drawRect(bounds);
+    painter.drawPolyline(QPolygon({QPoint(bounds.left() + 2,
+        bounds.bottom() - 3), QPoint(bounds.left() + 7, bounds.top() + 7),
+        QPoint(bounds.left() + 11, bounds.center().y()),
+        QPoint(bounds.right() - 2, bounds.top() + 4)}));
+    painter.drawLine(bounds.left() + 2, bounds.bottom() - 5,
+        bounds.right() - 2, bounds.bottom() - 5);
+    break;
+  case CreateTool::kQtedmNdArrayImage:
+    painter.drawRect(bounds);
+    painter.drawLine(bounds.left(), bounds.center().y(), bounds.right(),
+        bounds.center().y());
+    painter.drawLine(bounds.center().x(), bounds.top(), bounds.center().x(),
+        bounds.bottom());
+    painter.fillRect(QRect(bounds.left() + 2, bounds.top() + 2,
+        bounds.width() / 2 - 2, bounds.height() / 2 - 2), Qt::black);
+    painter.fillRect(QRect(bounds.center().x() + 2, bounds.center().y() + 2,
+        bounds.width() / 2 - 3, bounds.height() / 2 - 3), Qt::black);
+    break;
+  case CreateTool::kQtedmPlugin:
+    painter.drawRoundedRect(bounds, 2, 2);
+    painter.drawText(bounds, Qt::AlignCenter, QStringLiteral("P"));
+    break;
+  default:
+    painter.drawRect(bounds);
+    break;
+  }
+  return pixmap;
 }
 
 }  // namespace
@@ -128,6 +199,8 @@ ObjectPaletteDialog::ObjectPaletteDialog(const QPalette &basePalette,
       monitorButtons()));
   contentLayout->addWidget(createCategory(QStringLiteral("Controller"),
       controlButtons()));
+  contentLayout->addWidget(createCategory(QStringLiteral("Container"),
+      containerButtons()));
   contentLayout->addWidget(createCategory(QStringLiteral("Misc"),
     miscButtons()));
   const auto plugins = pluginButtons();
@@ -216,8 +289,20 @@ QToolButton *ObjectPaletteDialog::createToolButton(
   button->setFont(buttonFont_);
   button->setFocusPolicy(Qt::NoFocus);
   button->setToolTip(definition.label);
-  button->setIcon(QIcon(createPixmap(definition.bits,
-      definition.width, definition.height)));
+  QPixmap icon = createPixmap(definition.bits,
+      definition.width, definition.height);
+  if (!definition.bits
+      || definition.tool == CreateTool::kQtedmSymbol
+      || definition.tool == CreateTool::kQtedmToggle
+      || definition.tool == CreateTool::kQtedmSpinBox
+      || definition.tool == CreateTool::kQtedmTabbedDisplay
+      || definition.tool == CreateTool::kQtedmArchivePlot
+      || definition.tool == CreateTool::kQtedmNdArrayImage
+      || definition.tool == CreateTool::kQtedmPlugin) {
+    icon = createExtensionPixmap(definition.tool,
+        definition.width, definition.height);
+  }
+  button->setIcon(QIcon(icon));
   button->setIconSize(QSize(definition.width, definition.height));
   button->setFixedSize(definition.width + 8, definition.height + 8);
 
@@ -519,14 +604,20 @@ ObjectPaletteDialog::controlButtons()
 std::vector<ObjectPaletteDialog::ButtonDefinition>
 ObjectPaletteDialog::miscButtons()
 {
+  return {
+      {QStringLiteral("Select"), select25_bits, select25_width,
+          select25_height, CreateTool::kNone},
+  };
+}
+
+std::vector<ObjectPaletteDialog::ButtonDefinition>
+ObjectPaletteDialog::containerButtons()
+{
   const auto *tabbed = ExtensionObjectRegistry::instance().descriptor(
       CreateTool::kQtedmTabbedDisplay);
   return {
       {tabbed ? tabbed->displayName : QStringLiteral("Tabbed Display"),
-          relatedDisplay25_bits, relatedDisplay25_width,
-          relatedDisplay25_height, CreateTool::kQtedmTabbedDisplay},
-      {QStringLiteral("Select"), select25_bits, select25_width,
-          select25_height, CreateTool::kNone},
+          nullptr, 25, 25, CreateTool::kQtedmTabbedDisplay},
   };
 }
 

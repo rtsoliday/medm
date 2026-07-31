@@ -12,6 +12,9 @@
 #include <QRect>
 #include <QSize>
 #include <QString>
+#include <QStringList>
+#include <QVariant>
+#include <QVector>
 
 #include "cartesian_plot_properties.h"
 #include "control_properties.h"
@@ -43,6 +46,34 @@ class QScrollArea;
 class QScreen;
 class QSpinBox;
 class QWidget;
+
+enum class ResourcePalettePropertyType {
+  kBoolean,
+  kInteger,
+  kDouble,
+  kString,
+  kColor,
+  kStringList,
+  kChoice,
+  kReadOnly,
+  kAction,
+};
+
+struct ResourcePaletteProperty
+{
+  QString key;
+  QString label;
+  QString description;
+  ResourcePalettePropertyType type = ResourcePalettePropertyType::kString;
+  QVariant value;
+  QVariant minimum;
+  QVariant maximum;
+  int decimals = 8;
+  QStringList choices;
+  QString actionText;
+  std::function<void(const QVariant &)> setter;
+  std::function<void()> action;
+};
 
 class ResourcePaletteDialog : public QDialog
 {
@@ -146,7 +177,8 @@ public:
       std::function<double()> toleranceGetter,
       std::function<void(double)> toleranceSetter,
       std::function<bool()> showReadbackGetter,
-      std::function<void(bool)> showReadbackSetter);
+      std::function<void(bool)> showReadbackSetter,
+      const QString &elementLabel = QStringLiteral("Setpoint Control"));
 
 
   void showForTextArea(std::function<QRect()> geometryGetter,
@@ -268,7 +300,10 @@ public:
       std::function<QString()> releaseGetter,
       std::function<void(const QString &)> releaseSetter,
       std::function<QString()> channelGetter,
-      std::function<void(const QString &)> channelSetter);
+      std::function<void(const QString &)> channelSetter,
+      const QString &elementLabel = QStringLiteral("Message Button"),
+      const QString &pressLabel = QStringLiteral("Press Message"),
+      const QString &releaseLabel = QStringLiteral("Release Message"));
 
 
   void showForShellCommand(std::function<QRect()> geometryGetter,
@@ -482,7 +517,8 @@ public:
       std::array<std::function<QColor()>, kStripChartPenCount> colorGetters,
       std::array<std::function<void(const QColor &)>, kStripChartPenCount> colorSetters,
       std::array<std::function<PvLimits()>, kStripChartPenCount> limitsGetters,
-      std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> limitsSetters);
+      std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> limitsSetters,
+      const QString &elementLabel = QStringLiteral("Strip Chart"));
 
 
   void showForCartesianPlot(std::function<QRect()> geometryGetter,
@@ -584,7 +620,19 @@ public:
       std::function<QString()> visibilityCalcGetter,
       std::function<void(const QString &)> visibilityCalcSetter,
       std::array<std::function<QString()>, 4> visibilityChannelGetters,
-      std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters);
+      std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters,
+      const QString &elementLabel = QStringLiteral("LED Monitor"),
+      bool symbolMode = false);
+
+
+  void showForExtension(std::function<QRect()> geometryGetter,
+      std::function<void(const QRect &)> geometrySetter,
+      const QString &elementLabel,
+      const QVector<ResourcePaletteProperty> &properties);
+
+
+  void setExtensionProperties(const QString &elementLabel,
+      const QVector<ResourcePaletteProperty> &properties);
 
 
   void showForExpressionChannel(std::function<QRect()> geometryGetter,
@@ -830,7 +878,8 @@ private:
     kStripChart,
     kCartesianPlot,
     kByteMonitor,
-    kLedMonitor
+    kLedMonitor,
+    kExtension
   };
 
   enum class LedColorModeChoice {
@@ -878,6 +927,13 @@ private:
 
 
   void updateSectionVisibility(SelectionKind kind);
+
+
+  void clearExtensionProperties();
+
+
+  void populateExtensionProperties(
+      const QVector<ResourcePaletteProperty> &properties);
 
 
   void commitTextString();
@@ -1805,6 +1861,9 @@ private:
   QDoubleSpinBox *expressionChannelInitialValueSpin_ = nullptr;
   QComboBox *expressionChannelEventSignalCombo_ = nullptr;
   QSpinBox *expressionChannelPrecisionSpin_ = nullptr;
+  QWidget *extensionPropertiesSection_ = nullptr;
+  QGridLayout *extensionPropertiesLayout_ = nullptr;
+  bool extensionPropertiesActive_ = false;
   QPushButton *rectangleForegroundButton_ = nullptr;
   QComboBox *rectangleFillCombo_ = nullptr;
   QComboBox *rectangleLineStyleCombo_ = nullptr;

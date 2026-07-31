@@ -85,6 +85,7 @@ TabbedDisplayElement::TabbedDisplayElement(QWidget *parent)
       {QStringLiteral("page-2"), QStringLiteral("Page 2"), QString(), QString(),
           false},
   });
+  updateEditInteraction();
 }
 
 TabbedDisplayElement::~TabbedDisplayElement()
@@ -177,6 +178,7 @@ void TabbedDisplayElement::setExecuteMode(bool execute)
       unloadPage(index);
     }
   }
+  updateEditInteraction();
   updatePlaceholders();
 }
 
@@ -292,6 +294,8 @@ void TabbedDisplayElement::rebuildPages()
     stack_->addWidget(host);
     runtimes_.append({host, nullptr, QString()});
   }
+
+  updateEditInteraction();
 
   const int initial = pages_.isEmpty() ? -1 : 0;
   previousIndex_ = initial;
@@ -412,6 +416,27 @@ void TabbedDisplayElement::updatePlaceholders()
                              : QStringLiteral("false")));
     }
     placeholder->show();
+  }
+}
+
+void TabbedDisplayElement::updateEditInteraction()
+{
+  const bool transparent = !executeMode_;
+  if (tabBar_) {
+    tabBar_->setAttribute(Qt::WA_TransparentForMouseEvents, transparent);
+  }
+  if (stack_) {
+    stack_->setAttribute(Qt::WA_TransparentForMouseEvents, transparent);
+  }
+  for (const PageRuntime &runtime : runtimes_) {
+    if (runtime.host) {
+      runtime.host->setAttribute(
+          Qt::WA_TransparentForMouseEvents, transparent);
+    }
+    if (!runtime.content.isNull()) {
+      runtime.content->setAttribute(
+          Qt::WA_TransparentForMouseEvents, transparent);
+    }
   }
 }
 

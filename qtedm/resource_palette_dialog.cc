@@ -4038,6 +4038,16 @@ textMonitorLayout->setRowStretch(7, 1);
   expressionChannelLayout->setRowStretch(expressionChannelRow, 1);
   entriesLayout->addWidget(expressionChannelSection_);
 
+  extensionPropertiesSection_ = new QWidget(entriesWidget_);
+  extensionPropertiesSection_->setObjectName(
+      QStringLiteral("qtedmExtensionPropertiesSection"));
+  extensionPropertiesLayout_ =
+      new QGridLayout(extensionPropertiesSection_);
+  extensionPropertiesLayout_->setContentsMargins(0, 0, 0, 0);
+  extensionPropertiesLayout_->setHorizontalSpacing(12);
+  extensionPropertiesLayout_->setVerticalSpacing(6);
+  entriesLayout->addWidget(extensionPropertiesSection_);
+
   entriesLayout->addStretch(1);
 
 displaySection_->setVisible(false);
@@ -4061,6 +4071,7 @@ scaleSection_->setVisible(false);
 byteSection_->setVisible(false);
 ledSection_->setVisible(false);
 expressionChannelSection_->setVisible(false);
+extensionPropertiesSection_->setVisible(false);
 updateSectionVisibility(selectionKind_);
 
   scrollArea_->setWidget(entriesWidget_);
@@ -4672,7 +4683,8 @@ void ResourcePaletteDialog::showForSetpointControl(std::function<QRect()> geomet
     std::function<double()> toleranceGetter,
     std::function<void(double)> toleranceSetter,
     std::function<bool()> showReadbackGetter,
-    std::function<void(bool)> showReadbackSetter)
+    std::function<void(bool)> showReadbackSetter,
+    const QString &elementLabel)
 {
   clearSelectionState();
   selectionKind_ = SelectionKind::kSetpointControl;
@@ -4804,7 +4816,7 @@ void ResourcePaletteDialog::showForSetpointControl(std::function<QRect()> geomet
         && static_cast<bool>(setpointControlLimitsSetter_));
   }
   if (elementLabel_) {
-    elementLabel_->setText(QStringLiteral("Setpoint Control"));
+    elementLabel_->setText(elementLabel);
   }
 
   showPaletteWithoutActivating();
@@ -5864,7 +5876,10 @@ void ResourcePaletteDialog::showForMessageButton(std::function<QRect()> geometry
     std::function<QString()> releaseGetter,
     std::function<void(const QString &)> releaseSetter,
     std::function<QString()> channelGetter,
-    std::function<void(const QString &)> channelSetter)
+    std::function<void(const QString &)> channelSetter,
+    const QString &elementLabel,
+    const QString &pressLabel,
+    const QString &releaseLabel)
 {
   clearSelectionState();
   selectionKind_ = SelectionKind::kMessageButton;
@@ -5938,6 +5953,10 @@ void ResourcePaletteDialog::showForMessageButton(std::function<QRect()> geometry
     committedTexts_[messageButtonPressEdit_] = text;
   }
 
+  if (QLabel *label = fieldLabels_.value(messageButtonPressEdit_, nullptr)) {
+    label->setText(pressLabel);
+  }
+
   if (messageButtonReleaseEdit_) {
     const QString text = messageButtonReleaseGetter_
             ? messageButtonReleaseGetter_()
@@ -5945,6 +5964,11 @@ void ResourcePaletteDialog::showForMessageButton(std::function<QRect()> geometry
     const QSignalBlocker blocker(messageButtonReleaseEdit_);
     messageButtonReleaseEdit_->setText(text);
     committedTexts_[messageButtonReleaseEdit_] = text;
+  }
+
+
+  if (QLabel *label = fieldLabels_.value(messageButtonReleaseEdit_, nullptr)) {
+    label->setText(releaseLabel);
   }
 
   if (messageButtonChannelEdit_) {
@@ -5957,7 +5981,7 @@ void ResourcePaletteDialog::showForMessageButton(std::function<QRect()> geometry
   }
 
   if (elementLabel_) {
-    elementLabel_->setText(QStringLiteral("Message Button"));
+    elementLabel_->setText(elementLabel);
   }
 
   showPaletteWithoutActivating();
@@ -7502,7 +7526,8 @@ void ResourcePaletteDialog::showForStripChart(std::function<QRect()> geometryGet
     std::array<std::function<QColor()>, kStripChartPenCount> colorGetters,
     std::array<std::function<void(const QColor &)>, kStripChartPenCount> colorSetters,
     std::array<std::function<PvLimits()>, kStripChartPenCount> limitsGetters,
-    std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> limitsSetters)
+    std::array<std::function<void(const PvLimits &)>, kStripChartPenCount> limitsSetters,
+    const QString &elementLabel)
 {
   clearSelectionState();
   selectionKind_ = SelectionKind::kStripChart;
@@ -7719,7 +7744,7 @@ void ResourcePaletteDialog::showForStripChart(std::function<QRect()> geometryGet
     }
   }
 
-  elementLabel_->setText(QStringLiteral("Strip Chart"));
+  elementLabel_->setText(elementLabel);
 
   showPaletteWithoutActivating();
 }
@@ -8298,7 +8323,9 @@ void ResourcePaletteDialog::showForLedMonitor(std::function<QRect()> geometryGet
     std::function<QString()> visibilityCalcGetter,
     std::function<void(const QString &)> visibilityCalcSetter,
     std::array<std::function<QString()>, 4> visibilityChannelGetters,
-    std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters)
+    std::array<std::function<void(const QString &)>, 4> visibilityChannelSetters,
+    const QString &elementLabel,
+    bool symbolMode)
 {
   clearSelectionState();
   selectionKind_ = SelectionKind::kLedMonitor;
@@ -8455,7 +8482,20 @@ void ResourcePaletteDialog::showForLedMonitor(std::function<QRect()> geometryGet
   updateLedMonitorStateColorControls();
   updateLedMonitorChannelDependentControls();
 
-  elementLabel_->setText(QStringLiteral("LED Monitor"));
+  for (QWidget *field : {static_cast<QWidget *>(ledOnColorButton_),
+           static_cast<QWidget *>(ledOffColorButton_),
+           static_cast<QWidget *>(ledShapeCombo_),
+           static_cast<QWidget *>(ledBezelCheckBox_)}) {
+    if (!field) {
+      continue;
+    }
+    field->setVisible(!symbolMode);
+    if (QLabel *label = fieldLabels_.value(field, nullptr)) {
+      label->setVisible(!symbolMode);
+    }
+  }
+
+  elementLabel_->setText(elementLabel);
 
   showPaletteWithoutActivating();
 }
@@ -9870,8 +9910,271 @@ void ResourcePaletteDialog::showForLine(std::function<QRect()> geometryGetter,
 
 
 
+void ResourcePaletteDialog::showForExtension(
+    std::function<QRect()> geometryGetter,
+    std::function<void(const QRect &)> geometrySetter,
+    const QString &elementLabel,
+    const QVector<ResourcePaletteProperty> &properties)
+{
+  clearSelectionState();
+  selectionKind_ = SelectionKind::kExtension;
+  geometryGetter_ = std::move(geometryGetter);
+  geometrySetter_ = std::move(geometrySetter);
+
+  QRect geometry = geometryGetter_ ? geometryGetter_() : QRect();
+  if (geometry.width() <= 0) {
+    geometry.setWidth(kMinimumTextWidth * 2);
+  }
+  if (geometry.height() <= 0) {
+    geometry.setHeight(kMinimumTextHeight * 2);
+  }
+  lastCommittedGeometry_ = geometry;
+  updateGeometryEdits(geometry);
+
+  setExtensionProperties(elementLabel, properties);
+}
+
+
+
+void ResourcePaletteDialog::setExtensionProperties(
+    const QString &elementLabel,
+    const QVector<ResourcePaletteProperty> &properties)
+{
+  clearExtensionProperties();
+  extensionPropertiesActive_ = true;
+  populateExtensionProperties(properties);
+  updateSectionVisibility(selectionKind_);
+  if (elementLabel_) {
+    elementLabel_->setText(elementLabel);
+  }
+  showPaletteWithoutActivating();
+}
+
+
+
+void ResourcePaletteDialog::clearExtensionProperties()
+{
+  extensionPropertiesActive_ = false;
+  if (!extensionPropertiesLayout_) {
+    return;
+  }
+  for (auto it = fieldLabels_.begin(); it != fieldLabels_.end();) {
+    QWidget *field = it.key();
+    if (field && extensionPropertiesSection_
+        && extensionPropertiesSection_->isAncestorOf(field)) {
+      it = fieldLabels_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  while (QLayoutItem *item = extensionPropertiesLayout_->takeAt(0)) {
+    delete item->widget();
+    delete item;
+  }
+  if (extensionPropertiesSection_) {
+    extensionPropertiesSection_->hide();
+  }
+}
+
+
+
+void ResourcePaletteDialog::populateExtensionProperties(
+    const QVector<ResourcePaletteProperty> &properties)
+{
+  if (!extensionPropertiesLayout_) {
+    return;
+  }
+
+  auto objectNameForKey = [](const QString &key) {
+    QString suffix = key.trimmed();
+    if (suffix.isEmpty()) {
+      suffix = QStringLiteral("property");
+    }
+    for (qsizetype index = 0; index < suffix.size(); ++index) {
+      if (!suffix.at(index).isLetterOrNumber()) {
+        suffix[index] = QLatin1Char('_');
+      }
+    }
+    return QStringLiteral("qtedmResourceProperty_%1").arg(suffix);
+  };
+
+  int row = 0;
+  for (const ResourcePaletteProperty &property : properties) {
+    QWidget *field = nullptr;
+    switch (property.type) {
+    case ResourcePalettePropertyType::kBoolean: {
+      auto *combo = createBooleanComboBox();
+      combo->setCurrentIndex(property.value.toBool() ? 1 : 0);
+      combo->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(combo,
+          static_cast<void (QComboBox::*)(int)>(
+              &QComboBox::currentIndexChanged),
+          this, [setter = property.setter](int index) {
+            if (setter) {
+              setter(index == 1);
+            }
+          });
+      field = combo;
+      break;
+    }
+    case ResourcePalettePropertyType::kInteger: {
+      auto *spin = new QSpinBox;
+      spin->setFont(valueFont_);
+      spin->setAutoFillBackground(true);
+      const int minimum = property.minimum.isValid()
+          ? property.minimum.toInt() : std::numeric_limits<int>::min();
+      const int maximum = property.maximum.isValid()
+          ? property.maximum.toInt() : std::numeric_limits<int>::max();
+      spin->setRange(minimum, std::max(minimum, maximum));
+      spin->setValue(std::clamp(property.value.toInt(),
+          spin->minimum(), spin->maximum()));
+      spin->setAccelerated(true);
+      spin->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(spin,
+          static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
+          this, [setter = property.setter](int value) {
+            if (setter) {
+              setter(value);
+            }
+          });
+      field = spin;
+      break;
+    }
+    case ResourcePalettePropertyType::kDouble: {
+      auto *spin = new QDoubleSpinBox;
+      spin->setFont(valueFont_);
+      spin->setAutoFillBackground(true);
+      const double minimum = property.minimum.isValid()
+          ? property.minimum.toDouble() : -1.0e12;
+      const double maximum = property.maximum.isValid()
+          ? property.maximum.toDouble() : 1.0e12;
+      spin->setRange(minimum, std::max(minimum, maximum));
+      spin->setDecimals(std::clamp(property.decimals, 0, 15));
+      spin->setValue(std::clamp(property.value.toDouble(),
+          spin->minimum(), spin->maximum()));
+      spin->setAccelerated(true);
+      spin->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(spin,
+          static_cast<void (QDoubleSpinBox::*)(double)>(
+              &QDoubleSpinBox::valueChanged),
+          this, [setter = property.setter](double value) {
+            if (setter) {
+              setter(value);
+            }
+          });
+      field = spin;
+      break;
+    }
+    case ResourcePalettePropertyType::kColor: {
+      QColor color = property.value.value<QColor>();
+      if (!color.isValid()) {
+        color = QColor(property.value.toString());
+      }
+      if (!color.isValid()) {
+        color = palette().color(QPalette::WindowText);
+      }
+      auto *button = createColorButton(color);
+      button->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(button, &QPushButton::clicked, this,
+          [this, button, property]() {
+            openColorPalette(button, property.label,
+                [setter = property.setter](const QColor &selected) {
+                  if (setter) {
+                    setter(selected);
+                  }
+                });
+          });
+      field = button;
+      break;
+    }
+    case ResourcePalettePropertyType::kChoice: {
+      auto *combo = new QComboBox;
+      combo->setFont(valueFont_);
+      combo->setAutoFillBackground(true);
+      combo->addItems(property.choices);
+      combo->setCurrentIndex(std::clamp(property.value.toInt(), 0,
+          std::max(0, combo->count() - 1)));
+      combo->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(combo,
+          static_cast<void (QComboBox::*)(int)>(
+              &QComboBox::currentIndexChanged),
+          this, [setter = property.setter](int index) {
+            if (setter) {
+              setter(index);
+            }
+          });
+      field = combo;
+      break;
+    }
+    case ResourcePalettePropertyType::kAction: {
+      auto *button = createActionButton(property.actionText.isEmpty()
+          ? QStringLiteral("Edit...") : property.actionText);
+      button->setEnabled(static_cast<bool>(property.action));
+      QObject::connect(button, &QPushButton::clicked, this,
+          [action = property.action]() {
+            if (action) {
+              action();
+            }
+          });
+      field = button;
+      break;
+    }
+    case ResourcePalettePropertyType::kReadOnly: {
+      auto *edit = createLineEdit();
+      edit->setReadOnly(true);
+      edit->setText(property.value.toString());
+      field = edit;
+      break;
+    }
+    case ResourcePalettePropertyType::kStringList:
+    case ResourcePalettePropertyType::kString:
+    default: {
+      auto *edit = createLineEdit();
+      const bool stringList =
+          property.type == ResourcePalettePropertyType::kStringList;
+      edit->setText(stringList
+          ? property.value.toStringList().join(QStringLiteral("; "))
+          : property.value.toString());
+      edit->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(edit, &QLineEdit::editingFinished, this,
+          [edit, setter = property.setter, stringList]() {
+            if (!setter) {
+              return;
+            }
+            if (!stringList) {
+              setter(edit->text());
+              return;
+            }
+            QStringList values = edit->text().split(QLatin1Char(';'),
+                Qt::SkipEmptyParts);
+            for (QString &value : values) {
+              value = value.trimmed();
+            }
+            setter(values);
+          });
+      field = edit;
+      break;
+    }
+    }
+
+    if (!field) {
+      continue;
+    }
+    field->setObjectName(objectNameForKey(property.key));
+    field->setToolTip(property.description);
+    addRow(extensionPropertiesLayout_, row++, property.label, field);
+    if (QLabel *label = fieldLabels_.value(field, nullptr)) {
+      label->setToolTip(property.description);
+    }
+  }
+  extensionPropertiesLayout_->setRowStretch(row, 1);
+}
+
+
+
 void ResourcePaletteDialog::clearSelectionState()
 {
+  clearExtensionProperties();
   geometryGetter_ = {};
   geometrySetter_ = {};
   foregroundColorGetter_ = {};
@@ -11887,6 +12190,11 @@ void ResourcePaletteDialog::updateSectionVisibility(SelectionKind kind)
     const bool expressionVisible = kind == SelectionKind::kExpressionChannel;
     expressionChannelSection_->setVisible(expressionVisible);
     expressionChannelSection_->setEnabled(expressionVisible);
+  }
+  if (extensionPropertiesSection_) {
+    const bool extensionVisible = extensionPropertiesActive_;
+    extensionPropertiesSection_->setVisible(extensionVisible);
+    extensionPropertiesSection_->setEnabled(extensionVisible);
   }
 }
 

@@ -4,6 +4,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QStackedWidget>
+#include <QTabBar>
 #include <QTemporaryDir>
 
 #include "extension_object_registry.h"
@@ -19,6 +21,7 @@ private slots:
   void tabbedDisplayLoadsLazily();
   void tabbedDisplayReportsDiagnostics();
   void tabbedDisplayNormalizesIdsAndSupportsStackedMode();
+  void tabbedDisplayRoutesEditModeMouseEventsToContainer();
   void sessionRoundTrip();
   void sessionRejectsUnsafeNamesAndSchemas();
   void sessionInvalidWindowDataReportsWarnings();
@@ -112,6 +115,27 @@ void TestTabbedDisplaysSessions::tabbedDisplayNormalizesIdsAndSupportsStackedMod
   QVERIFY(element.hiddenTabs());
   element.setHiddenTabs(false);
   QVERIFY(!element.hiddenTabs());
+}
+
+void TestTabbedDisplaysSessions::
+    tabbedDisplayRoutesEditModeMouseEventsToContainer()
+{
+  TabbedDisplayElement element;
+  auto *tabBar = element.findChild<QTabBar *>();
+  auto *stack = element.findChild<QStackedWidget *>();
+  QVERIFY(tabBar);
+  QVERIFY(stack);
+
+  QVERIFY(tabBar->testAttribute(Qt::WA_TransparentForMouseEvents));
+  QVERIFY(stack->testAttribute(Qt::WA_TransparentForMouseEvents));
+
+  element.setExecuteMode(true);
+  QVERIFY(!tabBar->testAttribute(Qt::WA_TransparentForMouseEvents));
+  QVERIFY(!stack->testAttribute(Qt::WA_TransparentForMouseEvents));
+
+  element.setExecuteMode(false);
+  QVERIFY(tabBar->testAttribute(Qt::WA_TransparentForMouseEvents));
+  QVERIFY(stack->testAttribute(Qt::WA_TransparentForMouseEvents));
 }
 
 void TestTabbedDisplaysSessions::sessionRoundTrip()

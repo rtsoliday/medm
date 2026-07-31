@@ -50,6 +50,11 @@ public:
 
   void setChangedCallback(std::function<void()> callback);
 
+  // Opens the same page editor used by an edit-mode double-click.  Exposing
+  // this lets the Resource Palette provide the conventional properties entry
+  // point used by other QtEDM objects.
+  void showPageEditor();
+
   int loadedPageCount() const;
   QWidget *pageContent(int index) const;
   QString pageDiagnostic(int index) const;
@@ -72,7 +77,7 @@ private:
   void loadPage(int index);
   void unloadPage(int index);
   void updatePlaceholders();
-  void showPageEditor();
+  void updateEditInteraction();
   bool forwardMouseEventToParent(QMouseEvent *event) const;
   static QList<TabbedDisplayPage> normalizedPages(
       const QList<TabbedDisplayPage> &pages);

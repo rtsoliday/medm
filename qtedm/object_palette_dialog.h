@@ -50,6 +50,7 @@ private:
   static std::vector<ButtonDefinition> graphicsButtons();
   static std::vector<ButtonDefinition> monitorButtons();
   static std::vector<ButtonDefinition> controlButtons();
+  static std::vector<ButtonDefinition> containerButtons();
   static std::vector<ButtonDefinition> miscButtons();
   static std::vector<ButtonDefinition> pluginButtons();
 

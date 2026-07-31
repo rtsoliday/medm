@@ -1,6 +1,7 @@
 #include "display_window.h"
 
 #include "channel_access_context.h"
+#include "extension_object_registry.h"
 #include "startup_timing.h"
 #include "audit_logger.h"
 #include "pv_channel_manager.h"
@@ -4411,6 +4412,48 @@ bool DisplayWindow::copySelectionInternal(bool removeOriginal)
     notifyMenus();
   };
 
+  if (selectedTabbedDisplayElement_) {
+    TabbedDisplayElement *element = selectedTabbedDisplayElement_;
+    const QRect geometry = widgetDisplayRect(element);
+    std::optional<AdlNode> node = widgetToAdlNode(element);
+    if (!node) {
+      return false;
+    }
+    const QtedmRuleSet rules = propertyRuleSets_.value(element);
+    prepareClipboard([geometry, node = std::move(*node), rules](
+                         DisplayWindow &target, const QPoint &offset) {
+      if (!target.displayArea_) {
+        return;
+      }
+      AdlNode nodeCopy = node;
+      target.setObjectGeometry(nodeCopy,
+          target.translateRectForPaste(geometry, offset));
+      TabbedDisplayElement *created = nullptr;
+      {
+        ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+            false, nullptr);
+        created = target.loadTabbedDisplayElement(nodeCopy);
+      }
+      if (created) {
+        if (!rules.isEmpty()) {
+          target.propertyRuleSets_.insert(created, rules);
+        }
+        target.selectTabbedDisplayElement(created);
+        target.showResourcePaletteForTabbedDisplay(created);
+        target.markDirty();
+      }
+    });
+    if (removeOriginal) {
+      selectedTabbedDisplayElement_ = nullptr;
+      tabbedDisplayElements_.removeAll(element);
+      removeElementFromStack(element);
+      propertyRuleSets_.remove(element);
+      element->deleteLater();
+      finalizeCut();
+    }
+    return true;
+  }
+
   if (selectedPluginElement_) {
     PluginElement *element = selectedPluginElement_;
     const QRect geometry = widgetDisplayRect(element);
@@ -4438,6 +4481,7 @@ bool DisplayWindow::copySelectionInternal(bool removeOriginal)
           target.propertyRuleSets_.insert(created, rules);
         }
         target.selectPluginElement(created);
+        target.showResourcePaletteForPlugin(created);
         target.markDirty();
       }
     });
@@ -4807,6 +4851,39 @@ const QRect geometry = widgetDisplayRect(element);
 
   if (selectedMessageButtonElement_) {
     MessageButtonElement *element = selectedMessageButtonElement_;
+    if (element->isQtedmToggle()) {
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy,
+            target.translateRectForPaste(geometry, offset));
+        MessageButtonElement *created = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          created = target.loadMessageButtonElement(nodeCopy);
+        }
+        if (created) {
+          target.selectMessageButtonElement(created);
+          target.showResourcePaletteForMessageButton(created);
+          target.markDirty();
+        }
+      });
+      if (removeOriginal) {
+        cutSelectedElement(messageButtonElements_,
+            selectedMessageButtonElement_);
+        finalizeCut();
+      }
+      return true;
+    }
 const QRect geometry = widgetDisplayRect(element);
     const QColor foreground = element->foregroundColor();
     const QColor background = element->backgroundColor();
@@ -5281,6 +5358,38 @@ const QRect geometry = widgetDisplayRect(element);
 
   if (selectedStripChartElement_) {
     StripChartElement *element = selectedStripChartElement_;
+    if (element->isArchivePlot()) {
+      const QRect geometry = widgetDisplayRect(element);
+      std::optional<AdlNode> node = widgetToAdlNode(element);
+      if (!node) {
+        return false;
+      }
+      prepareClipboard([geometry, node = std::move(*node)](
+                           DisplayWindow &target, const QPoint &offset) {
+        if (!target.displayArea_) {
+          return;
+        }
+        AdlNode nodeCopy = node;
+        target.setObjectGeometry(nodeCopy,
+            target.translateRectForPaste(geometry, offset));
+        StripChartElement *created = nullptr;
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          created = target.loadStripChartElement(nodeCopy, true);
+        }
+        if (created) {
+          target.selectStripChartElement(created);
+          target.showResourcePaletteForStripChart(created);
+          target.markDirty();
+        }
+      });
+      if (removeOriginal) {
+        cutSelectedElement(stripChartElements_, selectedStripChartElement_);
+        finalizeCut();
+      }
+      return true;
+    }
 const QRect geometry = widgetDisplayRect(element);
     const QColor foreground = element->foregroundColor();
     const QColor background = element->backgroundColor();
@@ -5688,6 +5797,7 @@ const QString visibilityCalc = element->visibilityCalc();
             target.translateRectForPaste(geometry, offset));
         if (auto *copy = target.loadNtNdArrayImageElement(nodeCopy)) {
           target.selectHeatmapElement(copy);
+          target.showResourcePaletteForHeatmap(copy);
           target.markDirty();
         }
       });
@@ -6667,7 +6777,27 @@ void DisplayWindow::showResourcePaletteForSetpointControl(SetpointControlElement
       [this, element](bool show) {
         element->setShowReadback(show);
         markDirty();
-      });
+      },
+      element->isQtedmSpinBox() ? QStringLiteral("Spin Box")
+                                : QStringLiteral("Setpoint Control"));
+
+  if (element->isQtedmSpinBox()) {
+    ResourcePaletteProperty step;
+    step.key = QStringLiteral("step_size");
+    step.label = QStringLiteral("Step Size");
+    step.description = QStringLiteral(
+        "Amount added or subtracted by the spin-box buttons.");
+    step.type = ResourcePalettePropertyType::kDouble;
+    step.value = element->stepSize();
+    step.minimum = 1.0e-12;
+    step.maximum = 1.0e12;
+    step.decimals = 12;
+    step.setter = [this, element](const QVariant &value) {
+      element->setStepSize(value.toDouble());
+      markDirty();
+    };
+    dialog->setExtensionProperties(QStringLiteral("Spin Box"), {step});
+  }
 }
 
 
@@ -7188,7 +7318,51 @@ void DisplayWindow::showResourcePaletteForMessageButton(MessageButtonElement *el
       [this, element](const QString &channel) {
         element->setChannel(channel);
         markDirty();
-      });
+      },
+      element->isQtedmToggle() ? QStringLiteral("Toggle")
+                               : QStringLiteral("Message Button"),
+      element->isQtedmToggle() ? QStringLiteral("On Value")
+                               : QStringLiteral("Press Message"),
+      element->isQtedmToggle() ? QStringLiteral("Off Value")
+                               : QStringLiteral("Release Message"));
+
+  if (element->isQtedmToggle()) {
+    ResourcePaletteProperty offLabel;
+    offLabel.key = QStringLiteral("off_label");
+    offLabel.label = QStringLiteral("Off Label");
+    offLabel.description = QStringLiteral(
+        "Button text while the monitored value is in the off state.");
+    offLabel.value = element->offLabel();
+    offLabel.setter = [this, element](const QVariant &value) {
+      element->setOffLabel(value.toString());
+      markDirty();
+    };
+
+    ResourcePaletteProperty onLabel;
+    onLabel.key = QStringLiteral("on_label");
+    onLabel.label = QStringLiteral("On Label");
+    onLabel.description = QStringLiteral(
+        "Button text while the monitored value is in the on state.");
+    onLabel.value = element->onLabel();
+    onLabel.setter = [this, element](const QVariant &value) {
+      element->setOnLabel(value.toString());
+      markDirty();
+    };
+
+    ResourcePaletteProperty confirm;
+    confirm.key = QStringLiteral("confirm");
+    confirm.label = QStringLiteral("Confirm Writes");
+    confirm.description = QStringLiteral(
+        "Require operator confirmation before changing the PV.");
+    confirm.type = ResourcePalettePropertyType::kBoolean;
+    confirm.value = element->confirmationRequired();
+    confirm.setter = [this, element](const QVariant &value) {
+      element->setConfirmationRequired(value.toBool());
+      markDirty();
+    };
+    dialog->setExtensionProperties(QStringLiteral("Toggle"),
+        {offLabel, onLabel, confirm});
+  }
 }
 
 
@@ -7790,7 +7964,39 @@ void DisplayWindow::showResourcePaletteForStripChart(StripChartElement *element)
       },
       std::move(channelGetters), std::move(channelSetters),
       std::move(colorGetters), std::move(colorSetters),
-      std::move(limitsGetters), std::move(limitsSetters));
+      std::move(limitsGetters), std::move(limitsSetters),
+      element->isArchivePlot() ? QStringLiteral("Archive Plot")
+                               : QStringLiteral("Strip Chart"));
+
+  if (element->isArchivePlot()) {
+    ResourcePaletteProperty maximumPoints;
+    maximumPoints.key = QStringLiteral("archive_maximum_points");
+    maximumPoints.label = QStringLiteral("Maximum Points");
+    maximumPoints.description = QStringLiteral(
+        "Maximum number of historical samples requested per pen.");
+    maximumPoints.type = ResourcePalettePropertyType::kInteger;
+    maximumPoints.value = element->archiveMaximumPoints();
+    maximumPoints.minimum = 2;
+    maximumPoints.maximum = 100000;
+    maximumPoints.setter = [this, element](const QVariant &value) {
+      element->setArchiveMaximumPoints(value.toInt());
+      markDirty();
+    };
+
+    ResourcePaletteProperty liveMerge;
+    liveMerge.key = QStringLiteral("archive_live_merge");
+    liveMerge.label = QStringLiteral("Merge Live Data");
+    liveMerge.description = QStringLiteral(
+        "Continue merging live PV samples after archive history loads.");
+    liveMerge.type = ResourcePalettePropertyType::kBoolean;
+    liveMerge.value = element->archiveLiveMerge();
+    liveMerge.setter = [this, element](const QVariant &value) {
+      element->setArchiveLiveMerge(value.toBool());
+      markDirty();
+    };
+    dialog->setExtensionProperties(QStringLiteral("Archive Plot"),
+        {maximumPoints, liveMerge});
+  }
 }
 
 
@@ -8517,6 +8723,19 @@ void DisplayWindow::showResourcePaletteForLedMonitor(LedMonitorElement *element)
       },
       [this, element](int stateCount) {
         element->setStateCount(stateCount);
+        if (element->isQtedmSymbol()) {
+          QVector<LedMonitorElement::SymbolState> states =
+              element->symbolStates();
+          const int previousSize = states.size();
+          states.resize(stateCount);
+          for (int index = previousSize; index < states.size(); ++index) {
+            states[index].minimum = index;
+            states[index].maximum = index;
+            states[index].color = element->stateColor(index);
+            states[index].label = QStringLiteral("State %1").arg(index);
+          }
+          element->setSymbolStates(states);
+        }
         markDirty();
       },
       [element]() {
@@ -8541,7 +8760,180 @@ void DisplayWindow::showResourcePaletteForLedMonitor(LedMonitorElement *element)
         markDirty();
       },
       std::move(visibilityChannelGetters),
-      std::move(visibilityChannelSetters));
+      std::move(visibilityChannelSetters),
+      element->isQtedmSymbol() ? QStringLiteral("Multi-State Symbol")
+                               : QStringLiteral("LED Monitor"),
+      element->isQtedmSymbol());
+
+  if (element->isQtedmSymbol()) {
+    ResourcePaletteProperty states;
+    states.key = QStringLiteral("symbol_states");
+    states.label = QStringLiteral("State Definitions");
+    states.description = QStringLiteral(
+        "Edit each value range, label, color, and optional image.");
+    states.type = ResourcePalettePropertyType::kAction;
+    states.actionText = QStringLiteral("Edit States...");
+    states.action = [this, element]() {
+      showQtedmExtensionProperties(element);
+      showResourcePaletteForLedMonitor(element);
+    };
+    dialog->setExtensionProperties(QStringLiteral("Multi-State Symbol"),
+        {states});
+  }
+}
+
+
+void DisplayWindow::showResourcePaletteForTabbedDisplay(
+    TabbedDisplayElement *element)
+{
+  if (!element) {
+    return;
+  }
+  ResourcePaletteDialog *dialog = ensureResourcePalette();
+  if (!dialog) {
+    return;
+  }
+
+  QVector<ResourcePaletteProperty> properties;
+  ResourcePaletteProperty stacked;
+  stacked.key = QStringLiteral("stacked_mode");
+  stacked.label = QStringLiteral("Stacked Mode");
+  stacked.description = QStringLiteral(
+      "Hide the tabs and select the active page through rules or scripts.");
+  stacked.type = ResourcePalettePropertyType::kBoolean;
+  stacked.value = element->hiddenTabs();
+  stacked.setter = [this, element](const QVariant &value) {
+    element->setHiddenTabs(value.toBool());
+    markDirty();
+  };
+  properties.append(stacked);
+
+  ResourcePaletteProperty pageCount;
+  pageCount.key = QStringLiteral("page_count");
+  pageCount.label = QStringLiteral("Page Count");
+  pageCount.type = ResourcePalettePropertyType::kReadOnly;
+  pageCount.value = element->pages().size();
+  properties.append(pageCount);
+
+  ResourcePaletteProperty activePage;
+  activePage.key = QStringLiteral("active_page");
+  activePage.label = QStringLiteral("Active Page");
+  activePage.type = ResourcePalettePropertyType::kReadOnly;
+  activePage.value = element->activePageId();
+  properties.append(activePage);
+
+  ResourcePaletteProperty pages;
+  pages.key = QStringLiteral("pages");
+  pages.label = QStringLiteral("Pages");
+  pages.description = QStringLiteral(
+      "Edit page labels, child displays, macros, and keep-alive behavior.");
+  pages.type = ResourcePalettePropertyType::kAction;
+  pages.actionText = QStringLiteral("Edit Pages...");
+  pages.action = [this, element]() {
+    element->showPageEditor();
+    showResourcePaletteForTabbedDisplay(element);
+  };
+  properties.append(pages);
+
+  dialog->showForExtension(
+      [this, element]() { return widgetDisplayRect(element); },
+      [this, element](const QRect &geometry) {
+        QRect adjusted = geometry;
+        adjusted.setWidth(std::max(80, adjusted.width()));
+        adjusted.setHeight(std::max(60, adjusted.height()));
+        setWidgetDisplayRect(element, adjustRectToDisplayArea(adjusted));
+        markDirty();
+      },
+      QStringLiteral("Tabbed Display"), properties);
+}
+
+
+void DisplayWindow::showResourcePaletteForPlugin(PluginElement *element)
+{
+  if (!element) {
+    return;
+  }
+  ResourcePaletteDialog *dialog = ensureResourcePalette();
+  if (!dialog) {
+    return;
+  }
+
+  QVector<ResourcePaletteProperty> properties;
+  auto appendReadOnly = [&properties](const QString &key,
+      const QString &label, const QVariant &value) {
+    ResourcePaletteProperty property;
+    property.key = key;
+    property.label = label;
+    property.type = ResourcePalettePropertyType::kReadOnly;
+    property.value = value;
+    properties.append(property);
+  };
+  appendReadOnly(QStringLiteral("plugin"), QStringLiteral("Plugin"),
+      element->pluginId());
+  appendReadOnly(QStringLiteral("type"), QStringLiteral("Type"),
+      element->typeId());
+  appendReadOnly(QStringLiteral("schema"), QStringLiteral("Schema"),
+      element->schemaVersion());
+  appendReadOnly(QStringLiteral("status"), QStringLiteral("Status"),
+      element->pluginAvailable()
+          ? QStringLiteral("Available") : element->diagnostic());
+
+  const ExtensionObjectDescriptor *descriptor =
+      ExtensionObjectRegistry::instance().descriptor(element->typeId());
+  const QVariantMap current = element->properties();
+  if (descriptor && descriptor->pluginId == element->pluginId()) {
+    for (const QtedmPluginPropertySchema &schema :
+         descriptor->propertySchema) {
+      ResourcePaletteProperty property;
+      property.key = schema.name;
+      property.label = schema.displayName.trimmed().isEmpty()
+          ? schema.name : schema.displayName;
+      property.description = schema.description;
+      property.value = current.contains(schema.name)
+          ? current.value(schema.name) : schema.defaultValue;
+      switch (schema.type) {
+      case QtedmPluginPropertyType::kBoolean:
+        property.type = ResourcePalettePropertyType::kBoolean;
+        break;
+      case QtedmPluginPropertyType::kInteger:
+        property.type = ResourcePalettePropertyType::kInteger;
+        break;
+      case QtedmPluginPropertyType::kDouble:
+        property.type = ResourcePalettePropertyType::kDouble;
+        break;
+      case QtedmPluginPropertyType::kColor:
+        property.type = ResourcePalettePropertyType::kColor;
+        break;
+      case QtedmPluginPropertyType::kStringList:
+        property.type = ResourcePalettePropertyType::kStringList;
+        break;
+      case QtedmPluginPropertyType::kString:
+      default:
+        property.type = ResourcePalettePropertyType::kString;
+        break;
+      }
+      property.setter = [this, element, name = schema.name](
+          const QVariant &value) {
+        QVariantMap updated = element->properties();
+        updated.insert(name, value);
+        element->setProperties(updated);
+        markDirty();
+      };
+      properties.append(property);
+    }
+  }
+
+  const QString label = descriptor && !descriptor->displayName.isEmpty()
+      ? descriptor->displayName : QStringLiteral("Plugin Object");
+  dialog->showForExtension(
+      [this, element]() { return widgetDisplayRect(element); },
+      [this, element](const QRect &geometry) {
+        QRect adjusted = geometry;
+        adjusted.setWidth(std::max(20, adjusted.width()));
+        adjusted.setHeight(std::max(20, adjusted.height()));
+        setWidgetDisplayRect(element, adjustRectToDisplayArea(adjusted));
+        markDirty();
+      }, label, properties);
 }
 
 
@@ -8937,6 +9329,175 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
   }
   ResourcePaletteDialog *dialog = ensureResourcePalette();
   if (!dialog) {
+    return;
+  }
+
+  if (auto *image = dynamic_cast<NtNdArrayImageElement *>(element)) {
+    QVector<ResourcePaletteProperty> properties;
+    auto appendString = [this, image, &properties](const QString &key,
+        const QString &label, const QString &value,
+        void (HeatmapElement::*setter)(const QString &)) {
+      ResourcePaletteProperty property;
+      property.key = key;
+      property.label = label;
+      property.type = ResourcePalettePropertyType::kString;
+      property.value = value;
+      property.setter = [this, image, setter](const QVariant &updated) {
+        (image->*setter)(updated.toString());
+        markDirty();
+      };
+      properties.append(property);
+    };
+    appendString(QStringLiteral("title"), QStringLiteral("Title"),
+        image->title(), &HeatmapElement::setTitle);
+    appendString(QStringLiteral("data_pv"), QStringLiteral("Data PV"),
+        image->dataChannel(), &HeatmapElement::setDataChannel);
+    properties.last().description = QStringLiteral(
+        "PVA NTNDArray channel, normally written as pva://PVNAME.");
+
+    ResourcePaletteProperty colorMap;
+    colorMap.key = QStringLiteral("color_map");
+    colorMap.label = QStringLiteral("Color Map");
+    colorMap.type = ResourcePalettePropertyType::kChoice;
+    colorMap.value = static_cast<int>(image->colorMap());
+    colorMap.choices = {QStringLiteral("Grayscale"), QStringLiteral("Jet"),
+        QStringLiteral("Hot"), QStringLiteral("Cool"),
+        QStringLiteral("Rainbow"), QStringLiteral("Turbo")};
+    colorMap.setter = [this, image](const QVariant &value) {
+      image->setColorMap(static_cast<HeatmapColorMap>(value.toInt()));
+      markDirty();
+    };
+    properties.append(colorMap);
+
+    ResourcePaletteProperty rangeMode;
+    rangeMode.key = QStringLiteral("range_mode");
+    rangeMode.label = QStringLiteral("Range Mode");
+    rangeMode.type = ResourcePalettePropertyType::kChoice;
+    rangeMode.value = static_cast<int>(image->rangeMode());
+    rangeMode.choices = {QStringLiteral("Auto"), QStringLiteral("Manual")};
+    rangeMode.setter = [this, image](const QVariant &value) {
+      image->setRangeMode(static_cast<HeatmapRangeMode>(value.toInt()));
+      markDirty();
+    };
+    properties.append(rangeMode);
+
+    auto appendDouble = [this, image, &properties](const QString &key,
+        const QString &label, double value,
+        void (HeatmapElement::*setter)(double)) {
+      ResourcePaletteProperty property;
+      property.key = key;
+      property.label = label;
+      property.type = ResourcePalettePropertyType::kDouble;
+      property.value = value;
+      property.setter = [this, image, setter](const QVariant &updated) {
+        (image->*setter)(updated.toDouble());
+        markDirty();
+      };
+      properties.append(property);
+    };
+    appendDouble(QStringLiteral("range_minimum"),
+        QStringLiteral("Range Minimum"), image->rangeMinimum(),
+        &HeatmapElement::setRangeMinimum);
+    appendDouble(QStringLiteral("range_maximum"),
+        QStringLiteral("Range Maximum"), image->rangeMaximum(),
+        &HeatmapElement::setRangeMaximum);
+
+    auto appendBoolean = [this, image, &properties](const QString &key,
+        const QString &label, bool value,
+        void (HeatmapElement::*setter)(bool)) {
+      ResourcePaletteProperty property;
+      property.key = key;
+      property.label = label;
+      property.type = ResourcePalettePropertyType::kBoolean;
+      property.value = value;
+      property.setter = [this, image, setter](const QVariant &updated) {
+        (image->*setter)(updated.toBool());
+        markDirty();
+      };
+      properties.append(property);
+    };
+    appendBoolean(QStringLiteral("preserve_aspect"),
+        QStringLiteral("Preserve Aspect"), image->preserveAspectRatio(),
+        &HeatmapElement::setPreserveAspectRatio);
+    appendBoolean(QStringLiteral("flip_horizontal"),
+        QStringLiteral("Flip Horizontal"), image->flipHorizontal(),
+        &HeatmapElement::setFlipHorizontal);
+    appendBoolean(QStringLiteral("flip_vertical"),
+        QStringLiteral("Flip Vertical"), image->flipVertical(),
+        &HeatmapElement::setFlipVertical);
+
+    ResourcePaletteProperty rotation;
+    rotation.key = QStringLiteral("rotation");
+    rotation.label = QStringLiteral("Rotation");
+    rotation.type = ResourcePalettePropertyType::kChoice;
+    rotation.value = static_cast<int>(image->rotation());
+    rotation.choices = {QStringLiteral("None"), QStringLiteral("90 degrees"),
+        QStringLiteral("180 degrees"), QStringLiteral("270 degrees")};
+    rotation.setter = [this, image](const QVariant &value) {
+      image->setRotation(static_cast<HeatmapRotation>(value.toInt()));
+      markDirty();
+    };
+    properties.append(rotation);
+
+    ResourcePaletteProperty probe;
+    probe.key = QStringLiteral("pixel_probe");
+    probe.label = QStringLiteral("Pixel Probe");
+    probe.type = ResourcePalettePropertyType::kBoolean;
+    probe.value = image->showPixelProbe();
+    probe.setter = [this, image](const QVariant &value) {
+      image->setShowPixelProbe(value.toBool());
+      markDirty();
+    };
+    properties.append(probe);
+
+    auto appendMemoryLimit = [this, image, &properties](const QString &key,
+        const QString &label, quint64 bytes,
+        void (NtNdArrayImageElement::*setter)(quint64)) {
+      ResourcePaletteProperty property;
+      property.key = key;
+      property.label = label;
+      property.type = ResourcePalettePropertyType::kInteger;
+      property.value = static_cast<int>(bytes / (1024ULL * 1024ULL));
+      property.minimum = 1;
+      property.maximum = 4096;
+      property.setter = [this, image, setter](const QVariant &updated) {
+        (image->*setter)(static_cast<quint64>(updated.toInt())
+            * 1024ULL * 1024ULL);
+        markDirty();
+      };
+      properties.append(property);
+    };
+    appendMemoryLimit(QStringLiteral("maximum_input_mib"),
+        QStringLiteral("Maximum Input (MiB)"), image->maximumInputBytes(),
+        &NtNdArrayImageElement::setMaximumInputBytes);
+    appendMemoryLimit(QStringLiteral("maximum_image_mib"),
+        QStringLiteral("Maximum Image (MiB)"), image->maximumOutputBytes(),
+        &NtNdArrayImageElement::setMaximumOutputBytes);
+
+    ResourcePaletteProperty dimension;
+    dimension.key = QStringLiteral("maximum_dimension");
+    dimension.label = QStringLiteral("Maximum Dimension");
+    dimension.type = ResourcePalettePropertyType::kInteger;
+    dimension.value = image->maximumDimension();
+    dimension.minimum = 1;
+    dimension.maximum = 65536;
+    dimension.setter = [this, image](const QVariant &value) {
+      image->setMaximumDimension(value.toInt());
+      markDirty();
+    };
+    properties.append(dimension);
+
+    dialog->showForExtension(
+        [this, image]() { return widgetDisplayRect(image); },
+        [this, image](const QRect &geometry) {
+          QRect adjusted = geometry;
+          adjusted.setWidth(std::max(kMinimumHeatmapWidth, adjusted.width()));
+          adjusted.setHeight(
+              std::max(kMinimumHeatmapHeight, adjusted.height()));
+          setWidgetDisplayRect(image, adjustRectToDisplayArea(adjusted));
+          markDirty();
+        },
+        QStringLiteral("NTNDArray Image"), properties);
     return;
   }
 
@@ -13890,6 +14451,9 @@ bool DisplayWindow::selectWidgetForEditing(QWidget *widget)
   if (widget != selectedTabbedDisplayElement_) {
     clearTabbedDisplaySelection();
   }
+  if (widget != selectedPluginElement_) {
+    clearPluginSelection();
+  }
   clearMultiSelection();
   clearPvTableSelection();
   clearWaveTableSelection();
@@ -14029,9 +14593,11 @@ bool DisplayWindow::selectWidgetForEditing(QWidget *widget)
   } else if (auto *tabbed =
       dynamic_cast<TabbedDisplayElement *>(widget)) {
     selectTabbedDisplayElement(tabbed);
+    showResourcePaletteForTabbedDisplay(tabbed);
     handled = true;
   } else if (auto *plugin = dynamic_cast<PluginElement *>(widget)) {
     selectPluginElement(plugin);
+    showResourcePaletteForPlugin(plugin);
     handled = true;
   } else if (auto *line = dynamic_cast<LineElement *>(widget)) {
     selectLineElement(line);
@@ -17461,6 +18027,7 @@ void DisplayWindow::createTabbedDisplayElement(const QRect &rect)
     return;
   }
   selectTabbedDisplayElement(element);
+  showResourcePaletteForTabbedDisplay(element);
   deactivateCreateTool();
   markDirty();
 }
@@ -17510,6 +18077,7 @@ void DisplayWindow::createPluginElement(const QRect &rect,
     return;
   }
   selectPluginElement(element);
+  showResourcePaletteForPlugin(element);
   deactivateCreateTool();
   markDirty();
 }

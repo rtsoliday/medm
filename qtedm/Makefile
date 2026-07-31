@@ -475,7 +475,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_tabbed_displays_sessions \
                         test_archives_snapshots \
                         test_display_import_ndarray \
-                        test_plugins_property_rules
+                        test_plugins_property_rules \
+                        test_extension_resource_palettes
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 
@@ -524,6 +525,9 @@ test_display_import_ndarray_OBJS = \
   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 test_plugins_property_rules_OBJS = \
   $(OBJ_DIR)/test_plugins_property_rules.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_extension_resource_palettes_OBJS = \
+  $(OBJ_DIR)/test_extension_resource_palettes.$(OBJEXT) \
   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 

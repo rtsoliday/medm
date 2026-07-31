@@ -1570,6 +1570,10 @@ private:
 
   void showResourcePaletteForLedMonitor(LedMonitorElement *element);
 
+  void showResourcePaletteForTabbedDisplay(TabbedDisplayElement *element);
+
+  void showResourcePaletteForPlugin(PluginElement *element);
+
   void showResourcePaletteForComposite(CompositeElement *element);
 
   void showResourcePaletteForRectangle(RectangleElement *element);

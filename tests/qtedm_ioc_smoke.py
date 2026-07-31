@@ -28,6 +28,20 @@ class CaseFailure(RuntimeError):
   """Raised when an IOC-backed integration case fails."""
 
 
+def native_child_path(path: Path) -> str:
+  """Return a path suitable for a native child launched from Cygwin."""
+  if sys.platform.startswith("cygwin"):
+    result = subprocess.run(
+        ["cygpath", "-w", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        check=True,
+    )
+    return result.stdout.strip()
+  return str(path)
+
+
 def prefix_channel_name(channel: str, prefix: str) -> str:
   stripped = channel.strip()
   if not stripped or "://" in stripped or stripped.startswith(prefix):
@@ -372,12 +386,12 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       *qtedm_args,
       "-x",
       "-testReadyFile",
-      str(ready_path),
+      native_child_path(ready_path),
       "-testDumpState",
-      str(state_path),
+      native_child_path(state_path),
       "-testExitAfterMs",
       str(case.get("exit_after_ms", 4500)),
-      str(rewritten_display),
+      native_child_path(rewritten_display),
   ]
   process = subprocess.Popen(
       command,
@@ -549,7 +563,7 @@ def main() -> int:
                 "-m",
                 f"P={pva_prefix}",
                 "-d",
-                str(pva_database),
+                native_child_path(pva_database),
             ],
             stdin=subprocess.DEVNULL,
             stdout=pva_log_handle,

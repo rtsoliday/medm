@@ -25,6 +25,20 @@ class CaseFailure(RuntimeError):
   """Raised when a visual regression case fails."""
 
 
+def native_child_path(path: Path) -> str:
+  """Return a path suitable for a native child launched from Cygwin."""
+  if sys.platform.startswith("cygwin"):
+    result = subprocess.run(
+        ["cygpath", "-w", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        check=True,
+    )
+    return result.stdout.strip()
+  return str(path)
+
+
 def unused_udp_port() -> int:
   with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
     udp_socket.bind(("127.0.0.1", 0))
@@ -91,11 +105,11 @@ def compare_images(compare_tool: Path, expected: Path, actual: Path, diff: Path,
   command = [
       str(compare_tool),
       "--expected",
-      str(expected),
+      native_child_path(expected),
       "--actual",
-      str(actual),
+      native_child_path(actual),
       "--diff",
-      str(diff),
+      native_child_path(diff),
       "--max-different-pixels",
       str(int(tolerance.get("max_different_pixels", 0))),
       "--max-mean-absolute-delta",
@@ -124,9 +138,12 @@ def compare_images(compare_tool: Path, expected: Path, actual: Path, diff: Path,
 def resolve_golden_path(repo_root: Path, case: dict,
     update_goldens: bool) -> Path:
   generic = (repo_root / case["golden"]).resolve()
+  default_variant = (
+      f"Windows-{platform.machine()}"
+      if sys.platform.startswith("cygwin")
+      else f"{platform.system()}-{platform.machine()}")
   variant = os.environ.get(
-      "QTEDM_VISUAL_GOLDEN_VARIANT",
-      f"{platform.system()}-{platform.machine()}")
+      "QTEDM_VISUAL_GOLDEN_VARIANT", default_variant)
   candidate = generic.parent / variant / generic.name
   if candidate.is_file() or (update_goldens and candidate.parent.is_dir()):
     return candidate
@@ -151,12 +168,12 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
       str(qtedm_bin),
       "-x",
       "-testReadyFile",
-      str(ready_path),
+      native_child_path(ready_path),
       "-testCaptureScreenshot",
-      str(actual_path),
+      native_child_path(actual_path),
       "-testExitAfterMs",
       str(case.get("exit_after_ms", 1500)),
-      str(display_to_run),
+      native_child_path(display_to_run),
   ]
   process = subprocess.Popen(
       command,

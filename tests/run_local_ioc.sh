@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IOC_BIN="${SCRIPT_DIR}/sddsSoftIOC"
 CAVPUT_BIN="${SCRIPT_DIR}/cavput"
+CAPUT_BIN="${CAPUT_BIN:-}"
 SDDS_FILE="${SCRIPT_DIR}/sddsSoftIOC_tests.sdds"
 LOG_FILE="${SCRIPT_DIR}/sddsSoftIOC.log"
 READY_FILE=""
@@ -145,6 +146,7 @@ set_local_ca_env() {
 set_local_epics_runtime_env() {
   local epics_base="${EPICS_BASE:-}"
   local candidate=""
+  local executable_suffix=""
   local -a epics_search_paths=(
     "${SCRIPT_DIR}/../../epics-base"
     "${SCRIPT_DIR}/../../../epics-base"
@@ -167,6 +169,34 @@ set_local_epics_runtime_env() {
       EPICS_HOST_ARCH="$("${EPICS_BASE}/startup/EpicsHostArch")"
       export EPICS_HOST_ARCH
     fi
+  fi
+
+  case "$(uname -s)" in
+    CYGWIN*) executable_suffix=".exe" ;;
+  esac
+  if [[ -z "${CAPUT_BIN}" && -n "${EPICS_BASE:-}" \
+      && -n "${EPICS_HOST_ARCH:-}" ]]; then
+    candidate="${EPICS_BASE}/bin/${EPICS_HOST_ARCH}/caput${executable_suffix}"
+    if [[ -x "${candidate}" ]]; then
+      CAPUT_BIN="${candidate}"
+    fi
+  fi
+  export CAPUT_BIN
+}
+
+put_ca_array_csv() {
+  local pv="$1"
+  local csv="$2"
+  local values_text=""
+  local -a values=()
+
+  if [[ -n "${CAPUT_BIN}" && -x "${CAPUT_BIN}" ]]; then
+    values_text="${csv//\\,/ }"
+    read -r -a values <<< "${values_text}"
+    "${CAPUT_BIN}" -w 5 -a "${pv}" "${#values[@]}" "${values[@]}" \
+        >/dev/null 2>&1
+  else
+    "${CAVPUT_BIN}" "-list=${pv}=${csv}" >/dev/null 2>&1
   fi
 }
 
@@ -234,13 +264,11 @@ put_waveform_batch() {
       "${waveform_points}" values
   join_cavput_array_values epsilon_csv "${values[@]}"
 
-  cavput_list="${prefix}waterfall:test:alpha:waveform=${alpha_csv},"
-  cavput_list+="${prefix}waterfall:test:beta:waveform=${beta_csv},"
-  cavput_list+="${prefix}waterfall:test:gamma:waveform=${gamma_csv},"
-  cavput_list+="${prefix}waterfall:test:delta:waveform=${delta_csv},"
-  cavput_list+="${prefix}waterfall:test:epsilon:waveform=${epsilon_csv}"
-
-  "${CAVPUT_BIN}" "-list=${cavput_list}" >/dev/null 2>&1
+  put_ca_array_csv "${prefix}waterfall:test:alpha:waveform" "${alpha_csv}" &&
+    put_ca_array_csv "${prefix}waterfall:test:beta:waveform" "${beta_csv}" &&
+    put_ca_array_csv "${prefix}waterfall:test:gamma:waveform" "${gamma_csv}" &&
+    put_ca_array_csv "${prefix}waterfall:test:delta:waveform" "${delta_csv}" &&
+    put_ca_array_csv "${prefix}waterfall:test:epsilon:waveform" "${epsilon_csv}"
 }
 
 build_waterfall_waveform_values() {
@@ -809,15 +837,19 @@ set_wave_table_test_pvs() {
       join_cavput_array_values short_csv "${short_values[@]}"
       join_cavput_array_values limited_csv "${limited_values[@]}"
       text_to_cavput_char_csv char_csv "QtEDM Waveform Table"
-      local cavput_list=""
-      cavput_list+="${prefix}wavetable:test:doubleWave=${double_csv},"
-      cavput_list+="${prefix}wavetable:test:intWave=${int_csv},"
-      cavput_list+="${prefix}wavetable:test:shortWave=${short_csv},"
-      cavput_list+="${prefix}wavetable:test:limitedWave=${limited_csv},"
-      cavput_list+="${prefix}wavetable:test:charWave=${char_csv},"
-      cavput_list+="${prefix}wavetable:test:enumValue=2,"
-      cavput_list+="${prefix}wavetable:test:stringValue=READY"
-      if ! "${CAVPUT_BIN}" "-list=${cavput_list}" >/dev/null 2>&1; then
+      if ! put_ca_array_csv \
+          "${prefix}wavetable:test:doubleWave" "${double_csv}" ||
+          ! put_ca_array_csv \
+          "${prefix}wavetable:test:intWave" "${int_csv}" ||
+          ! put_ca_array_csv \
+          "${prefix}wavetable:test:shortWave" "${short_csv}" ||
+          ! put_ca_array_csv \
+          "${prefix}wavetable:test:limitedWave" "${limited_csv}" ||
+          ! put_ca_array_csv \
+          "${prefix}wavetable:test:charWave" "${char_csv}" ||
+          ! "${CAVPUT_BIN}" \
+          "-list=${prefix}wavetable:test:enumValue=2,${prefix}wavetable:test:stringValue=READY" \
+          >/dev/null 2>&1; then
         initialized=0
       fi
     fi
@@ -1763,7 +1795,7 @@ set_text_area_test_pvs() {
       pv="${text_area_char_pvs[${index}]}"
       full_pv="${prefix}${pv}"
       text_to_cavput_char_csv csv "${text_area_char_texts[${index}]}"
-      if ! "${CAVPUT_BIN}" "-list=${full_pv}=${csv}" >/dev/null 2>&1; then
+      if ! put_ca_array_csv "${full_pv}" "${csv}"; then
         initialized=0
         break
       fi

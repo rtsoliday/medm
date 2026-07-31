@@ -222,7 +222,8 @@ public:
     sample.stringValue = QStringLiteral("connected sample");
     sample.isEnum = true;
     sample.enumValue = 1;
-    sample.enumStrings = {QStringLiteral("Off"), QStringLiteral("On")};
+    sample.enumStrings =
+        QStringList{QStringLiteral("Off"), QStringLiteral("On")};
     sample.isArray = true;
     sample.arrayValues = {1.0, 2.0, 3.0};
     sample.severity = 2;

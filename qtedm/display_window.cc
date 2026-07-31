@@ -9361,7 +9361,8 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
     colorMap.label = QStringLiteral("Color Map");
     colorMap.type = ResourcePalettePropertyType::kChoice;
     colorMap.value = static_cast<int>(image->colorMap());
-    colorMap.choices = {QStringLiteral("Grayscale"), QStringLiteral("Jet"),
+    colorMap.choices = QStringList{
+        QStringLiteral("Grayscale"), QStringLiteral("Jet"),
         QStringLiteral("Hot"), QStringLiteral("Cool"),
         QStringLiteral("Rainbow"), QStringLiteral("Turbo")};
     colorMap.setter = [this, image](const QVariant &value) {
@@ -9375,7 +9376,8 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
     rangeMode.label = QStringLiteral("Range Mode");
     rangeMode.type = ResourcePalettePropertyType::kChoice;
     rangeMode.value = static_cast<int>(image->rangeMode());
-    rangeMode.choices = {QStringLiteral("Auto"), QStringLiteral("Manual")};
+    rangeMode.choices = QStringList{
+        QStringLiteral("Auto"), QStringLiteral("Manual")};
     rangeMode.setter = [this, image](const QVariant &value) {
       image->setRangeMode(static_cast<HeatmapRangeMode>(value.toInt()));
       markDirty();
@@ -9432,7 +9434,8 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
     rotation.label = QStringLiteral("Rotation");
     rotation.type = ResourcePalettePropertyType::kChoice;
     rotation.value = static_cast<int>(image->rotation());
-    rotation.choices = {QStringLiteral("None"), QStringLiteral("90 degrees"),
+    rotation.choices = QStringList{
+        QStringLiteral("None"), QStringLiteral("90 degrees"),
         QStringLiteral("180 degrees"), QStringLiteral("270 degrees")};
     rotation.setter = [this, image](const QVariant &value) {
       image->setRotation(static_cast<HeatmapRotation>(value.toInt()));

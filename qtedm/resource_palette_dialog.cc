@@ -9990,7 +9990,7 @@ void ResourcePaletteDialog::populateExtensionProperties(
     if (suffix.isEmpty()) {
       suffix = QStringLiteral("property");
     }
-    for (qsizetype index = 0; index < suffix.size(); ++index) {
+    for (int index = 0; index < static_cast<int>(suffix.size()); ++index) {
       if (!suffix.at(index).isLetterOrNumber()) {
         suffix[index] = QLatin1Char('_');
       }

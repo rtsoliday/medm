@@ -245,8 +245,15 @@ ifeq ($(OS), Linux)
   # This constructor builds the complete resource palette UI and exceeds
   # GCC's debug variable-tracking limit. GCC retries without this pass, so
   # disable it for this translation unit up front and avoid the build note.
-  $(OBJ_DIR)/resource_palette_dialog.$(OBJEXT): \
-    CCFLAGS += -fno-var-tracking-assignments
+  # Probe the selected compiler because Clang on Linux does not accept this
+  # GCC-specific option.
+  QTEDM_HAS_NO_VAR_TRACKING_ASSIGNMENTS := $(shell \
+    $(CCC) -fno-var-tracking-assignments -E -x c++ /dev/null \
+      >/dev/null 2>&1 && echo 1)
+  ifeq ($(QTEDM_HAS_NO_VAR_TRACKING_ASSIGNMENTS),1)
+    $(OBJ_DIR)/resource_palette_dialog.$(OBJEXT): \
+      CCFLAGS += -fno-var-tracking-assignments
+  endif
 endif
 
 CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc

@@ -8896,10 +8896,10 @@ void DisplayWindow::showResourcePaletteForPlugin(PluginElement *element)
         property.type = ResourcePalettePropertyType::kBoolean;
         break;
       case QtedmPluginPropertyType::kInteger:
-        property.type = ResourcePalettePropertyType::kInteger;
+        property.type = ResourcePalettePropertyType::kInteger64;
         break;
       case QtedmPluginPropertyType::kDouble:
-        property.type = ResourcePalettePropertyType::kDouble;
+        property.type = ResourcePalettePropertyType::kDoubleText;
         break;
       case QtedmPluginPropertyType::kColor:
         property.type = ResourcePalettePropertyType::kColor;
@@ -8916,8 +8916,9 @@ void DisplayWindow::showResourcePaletteForPlugin(PluginElement *element)
           const QVariant &value) {
         QVariantMap updated = element->properties();
         updated.insert(name, value);
-        element->setProperties(updated);
-        markDirty();
+        if (element->setProperties(updated)) {
+          markDirty();
+        }
       };
       properties.append(property);
     }
@@ -19840,8 +19841,12 @@ void DisplayWindow::showPluginProperties(PluginElement *element)
   }
 
   setNextUndoLabel(QStringLiteral("Edit Plugin Properties"));
-  element->setProperties(updated);
-  markDirty();
+  if (element->setProperties(updated)) {
+    markDirty();
+  } else {
+    QMessageBox::warning(this, QStringLiteral("Plugin Properties"),
+        element->diagnostic());
+  }
 }
 
 void DisplayWindow::showPropertyRuleEditor(QWidget *widget)
@@ -33882,6 +33887,7 @@ TabbedDisplayElement *DisplayWindow::loadTabbedDisplayElement(
           if (error) {
             *error = loadError;
           }
+          delete child;
           delete container;
           return nullptr;
         }
@@ -33890,6 +33896,7 @@ TabbedDisplayElement *DisplayWindow::loadTabbedDisplayElement(
           if (error) {
             *error = QStringLiteral("Child display has no display area.");
           }
+          delete child;
           delete container;
           return nullptr;
         }

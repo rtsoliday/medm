@@ -152,6 +152,31 @@ void TestArchivesSnapshots::archiverResponseFailuresRemainVisible()
       overflowPayload, 10, 1024 * 1024);
   QVERIFY(overflow.ok());
   QVERIFY(overflow.samples.isEmpty());
+
+  const QByteArray invalidTimestampPayload = QJsonDocument(QJsonArray{
+      QJsonObject{{QStringLiteral("data"), QJsonArray{
+          QJsonObject{{QStringLiteral("val"), 1.0}},
+          QJsonObject{{QStringLiteral("secs"), 1700000000.5},
+              {QStringLiteral("nanos"), 0},
+              {QStringLiteral("val"), 2.0}},
+          QJsonObject{{QStringLiteral("secs"), 1700000001},
+              {QStringLiteral("nanos"), QStringLiteral("0")},
+              {QStringLiteral("val"), 3.0}},
+          QJsonObject{{QStringLiteral("secs"), static_cast<double>(
+              std::numeric_limits<qint64>::max() / 1000LL)},
+              {QStringLiteral("nanos"), 999999999},
+              {QStringLiteral("val"), 3.5}},
+          QJsonObject{{QStringLiteral("secs"), 1700000002},
+              {QStringLiteral("nanos"), 250000000},
+              {QStringLiteral("val"), 4.0}},
+      }}},
+  }).toJson(QJsonDocument::Compact);
+  const ArchiveResult timestamps = ArchiverApplianceProvider::parseJson(
+      invalidTimestampPayload, 10, 1024 * 1024);
+  QVERIFY2(timestamps.ok(), qPrintable(timestamps.error));
+  QCOMPARE(timestamps.samples.size(), 1);
+  QCOMPARE(timestamps.samples.first().timestampMs, 1700000002250LL);
+  QCOMPARE(timestamps.samples.first().value, 4.0);
 }
 
 void TestArchivesSnapshots::archiveMergePrefersLiveTimestamp()
@@ -316,13 +341,38 @@ void TestArchivesSnapshots::snapshotRejectsFutureSchemaAndUnsafeValues()
   file.close();
   QVERIFY(!PvSnapshot::load(path).ok());
 
+  const QString missingEntriesPath = directory.filePath(
+      QStringLiteral("missing-entries.qtedm-snapshot.json"));
+  QFile missingEntriesFile(missingEntriesPath);
+  QVERIFY(missingEntriesFile.open(QIODevice::WriteOnly));
+  QVERIFY(missingEntriesFile.write(QJsonDocument(QJsonObject{
+      {QStringLiteral("schemaVersion"), 1},
+      {QStringLiteral("createdAt"),
+          QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
+  }).toJson()) > 0);
+  missingEntriesFile.close();
+  QVERIFY(!PvSnapshot::load(missingEntriesPath).ok());
+
+  const QString invalidTimePath = directory.filePath(
+      QStringLiteral("invalid-time.qtedm-snapshot.json"));
+  QFile invalidTimeFile(invalidTimePath);
+  QVERIFY(invalidTimeFile.open(QIODevice::WriteOnly));
+  QVERIFY(invalidTimeFile.write(QJsonDocument(QJsonObject{
+      {QStringLiteral("schemaVersion"), 1},
+      {QStringLiteral("createdAt"), QStringLiteral("not-a-time")},
+      {QStringLiteral("entries"), QJsonArray()},
+  }).toJson()) > 0);
+  invalidTimeFile.close();
+  QVERIFY(!PvSnapshot::load(invalidTimePath).ok());
+
   const QString badLimitsPath = directory.filePath(
       QStringLiteral("bad-limits.qtedm-snapshot.json"));
   QFile badLimitsFile(badLimitsPath);
   QVERIFY(badLimitsFile.open(QIODevice::WriteOnly));
   QVERIFY(badLimitsFile.write(QJsonDocument(QJsonObject{
       {QStringLiteral("schemaVersion"), 1},
-      {QStringLiteral("createdAt"), QString()},
+      {QStringLiteral("createdAt"),
+          QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
       {QStringLiteral("displayPath"), QString()},
       {QStringLiteral("entries"), QJsonArray{QJsonObject{
           {QStringLiteral("provider"), QStringLiteral("ca")},
@@ -345,6 +395,7 @@ void TestArchivesSnapshots::snapshotRejectsFutureSchemaAndUnsafeValues()
   QVERIFY(!PvSnapshot::load(badLimitsPath).ok());
 
   PvSnapshotDocument invalid;
+  invalid.createdAt = QDateTime::currentDateTimeUtc();
   PvSnapshotEntry entry;
   entry.provider = QStringLiteral("ca");
   entry.pvName = QStringLiteral("TEST:NAN");
@@ -358,7 +409,14 @@ void TestArchivesSnapshots::snapshotRejectsFutureSchemaAndUnsafeValues()
       directory.filePath(QStringLiteral("invalid.json")), invalid, &error));
   QVERIFY(!error.isEmpty());
 
+  PvSnapshotDocument missingCreationTime;
+  QVERIFY(!PvSnapshot::save(
+      directory.filePath(QStringLiteral("missing-time.json")),
+      missingCreationTime, &error));
+  QVERIFY(error.contains(QStringLiteral("creation time")));
+
   PvSnapshotDocument invalidChars;
+  invalidChars.createdAt = QDateTime::currentDateTimeUtc();
   PvSnapshotEntry chars;
   chars.provider = QStringLiteral("ca");
   chars.pvName = QStringLiteral("TEST:CHARS");
@@ -373,6 +431,7 @@ void TestArchivesSnapshots::snapshotRejectsFutureSchemaAndUnsafeValues()
       invalidChars, &error));
 
   PvSnapshotDocument fractionalInteger;
+  fractionalInteger.createdAt = QDateTime::currentDateTimeUtc();
   PvSnapshotEntry integer;
   integer.provider = QStringLiteral("ca");
   integer.pvName = QStringLiteral("TEST:LONG");

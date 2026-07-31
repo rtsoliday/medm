@@ -39,6 +39,7 @@ private slots:
   void registryContainsSafetyControlObjects();
   void observeOnlyBlocksEverySoftPvWriteKind();
   void toggleWritesAlternatingValuesThroughSoftPv();
+  void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
   void oversizedForcedExecuteDisplayStaysFitted();
   void modeSwitchReactivatesActiveDisplay();
@@ -212,6 +213,62 @@ void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()
   QCOMPARE(snapshot.value, 0.0);
   QTRY_COMPARE(button->text(), QStringLiteral("Disabled"));
   QVERIFY(!button->isChecked());
+}
+
+void TestObserveOnlyControls::toggleMatchesNormalizedEnumAndStringValues()
+{
+  auto &soft = SoftPvRegistry::instance();
+
+  const QString enumName = QStringLiteral("__test:toggle_enum_matching");
+  soft.registerName(enumName, true);
+  registeredNames_.append(enumName);
+  soft.setConnected(enumName, true);
+  soft.publishEnumValue(enumName, 1,
+      {QStringLiteral("Off"), QStringLiteral("On")});
+
+  MessageButtonElement enumToggle;
+  enumToggle.setQtedmToggle(true);
+  enumToggle.setChannel(enumName);
+  enumToggle.setOffValue(QStringLiteral("0"));
+  enumToggle.setOnValue(QStringLiteral("0.6"));
+  enumToggle.setOffLabel(QStringLiteral("Off"));
+  enumToggle.setOnLabel(QStringLiteral("On"));
+  enumToggle.setExecuteMode(true);
+  MessageButtonRuntime enumRuntime(&enumToggle);
+  enumRuntime.start();
+  enumToggle.show();
+  auto *enumButton = enumToggle.findChild<QPushButton *>();
+  QVERIFY(enumButton);
+  QTRY_VERIFY(enumButton->isChecked());
+  QTest::mouseClick(enumButton, Qt::LeftButton);
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(enumName, snapshot));
+  QCOMPARE(snapshot.enumValue, static_cast<dbr_enum_t>(0));
+  QTRY_VERIFY(!enumButton->isChecked());
+
+  const QString stringName =
+      QStringLiteral("__test:toggle_string_matching");
+  soft.registerName(stringName, true);
+  registeredNames_.append(stringName);
+  soft.setConnected(stringName, true);
+  soft.publishStringValue(stringName, QStringLiteral("RUNNING"));
+
+  MessageButtonElement stringToggle;
+  stringToggle.setQtedmToggle(true);
+  stringToggle.setChannel(stringName);
+  stringToggle.setOffValue(QStringLiteral("  STOPPED  "));
+  stringToggle.setOnValue(QStringLiteral("  RUNNING  "));
+  stringToggle.setExecuteMode(true);
+  MessageButtonRuntime stringRuntime(&stringToggle);
+  stringRuntime.start();
+  stringToggle.show();
+  auto *stringButton = stringToggle.findChild<QPushButton *>();
+  QVERIFY(stringButton);
+  QTRY_VERIFY(stringButton->isChecked());
+  QTest::mouseClick(stringButton, Qt::LeftButton);
+  QVERIFY(soft.infoSnapshot(stringName, snapshot));
+  QCOMPARE(snapshot.stringValue, QStringLiteral("STOPPED"));
+  QTRY_VERIFY(!stringButton->isChecked());
 }
 
 void TestObserveOnlyControls::oversizedWindowGetsRealOnScreenGeometry()

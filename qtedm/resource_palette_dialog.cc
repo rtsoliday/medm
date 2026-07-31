@@ -10040,6 +10040,29 @@ void ResourcePaletteDialog::populateExtensionProperties(
       field = spin;
       break;
     }
+    case ResourcePalettePropertyType::kInteger64: {
+      auto *edit = createLineEdit();
+      qlonglong committedValue = property.value.toLongLong();
+      edit->setText(QString::number(committedValue));
+      edit->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(edit, &QLineEdit::editingFinished, this,
+          [edit, setter = property.setter, committedValue]() mutable {
+            if (!setter) {
+              return;
+            }
+            bool ok = false;
+            const qlonglong value = edit->text().trimmed().toLongLong(&ok);
+            if (!ok) {
+              edit->setText(QString::number(committedValue));
+              return;
+            }
+            committedValue = value;
+            edit->setText(QString::number(value));
+            setter(QVariant::fromValue(value));
+          });
+      field = edit;
+      break;
+    }
     case ResourcePalettePropertyType::kDouble: {
       auto *spin = new QDoubleSpinBox;
       spin->setFont(valueFont_);
@@ -10063,6 +10086,29 @@ void ResourcePaletteDialog::populateExtensionProperties(
             }
           });
       field = spin;
+      break;
+    }
+    case ResourcePalettePropertyType::kDoubleText: {
+      auto *edit = createLineEdit();
+      double committedValue = property.value.toDouble();
+      edit->setText(QString::number(committedValue, 'g', 17));
+      edit->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(edit, &QLineEdit::editingFinished, this,
+          [edit, setter = property.setter, committedValue]() mutable {
+            if (!setter) {
+              return;
+            }
+            bool ok = false;
+            const double value = edit->text().trimmed().toDouble(&ok);
+            if (!ok || !std::isfinite(value)) {
+              edit->setText(QString::number(committedValue, 'g', 17));
+              return;
+            }
+            committedValue = value;
+            edit->setText(QString::number(value, 'g', 17));
+            setter(value);
+          });
+      field = edit;
       break;
     }
     case ResourcePalettePropertyType::kColor: {

@@ -284,23 +284,41 @@ ArchiveResult ArchiverApplianceProvider::parseJson(const QByteArray &payload,
     }
     const QJsonArray data = dataValue.toArray();
     for (const QJsonValue &sampleValue : data) {
+      if (!sampleValue.isObject()) {
+        continue;
+      }
       const QJsonObject sampleObject = sampleValue.toObject();
       const QJsonValue value = sampleObject.value(QStringLiteral("val"));
-      if (!value.isDouble()) {
+      const QJsonValue secondsValue =
+          sampleObject.value(QStringLiteral("secs"));
+      const QJsonValue nanosValue =
+          sampleObject.value(QStringLiteral("nanos"));
+      if (!value.isDouble() || !secondsValue.isDouble()
+          || !nanosValue.isDouble()) {
         continue;
       }
       const double numeric = value.toDouble();
-      const qint64 seconds = sampleObject.value(QStringLiteral("secs"))
-          .toVariant().toLongLong();
-      const qint64 nanos = sampleObject.value(QStringLiteral("nanos"))
-          .toVariant().toLongLong();
-      if (!std::isfinite(numeric) || seconds < 0 || nanos < 0
-          || nanos >= 1000000000LL
-          || seconds > std::numeric_limits<qint64>::max() / 1000LL) {
+      const double secondsNumber = secondsValue.toDouble();
+      const double nanosNumber = nanosValue.toDouble();
+      const double maximumSeconds = static_cast<double>(
+          std::numeric_limits<qint64>::max() / 1000LL);
+      if (!std::isfinite(numeric) || !std::isfinite(secondsNumber)
+          || !std::isfinite(nanosNumber) || secondsNumber < 0.0
+          || secondsNumber > maximumSeconds || nanosNumber < 0.0
+          || nanosNumber >= 1000000000.0
+          || std::trunc(secondsNumber) != secondsNumber
+          || std::trunc(nanosNumber) != nanosNumber) {
+        continue;
+      }
+      const qint64 seconds = static_cast<qint64>(secondsNumber);
+      const qint64 nanos = static_cast<qint64>(nanosNumber);
+      const qint64 nanosMilliseconds = nanos / 1000000LL;
+      if (seconds > (std::numeric_limits<qint64>::max()
+              - nanosMilliseconds) / 1000LL) {
         continue;
       }
       ArchiveSample sample;
-      sample.timestampMs = seconds * 1000LL + nanos / 1000000LL;
+      sample.timestampMs = seconds * 1000LL + nanosMilliseconds;
       sample.value = numeric;
       sample.status = static_cast<short>(
           sampleObject.value(QStringLiteral("status")).toInt());

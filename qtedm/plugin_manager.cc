@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <exception>
+#include <limits>
 #include <utility>
 
 #include "archive_provider.h"
@@ -121,6 +122,50 @@ ChannelDeliveryMode hostDelivery(QtedmChannelDelivery delivery)
 {
   return delivery == QtedmChannelDelivery::kRealtime
       ? ChannelDeliveryMode::kRealtime : ChannelDeliveryMode::kPassive;
+}
+
+SharedChannelData sharedDataFromPluginSample(
+    const QtedmChannelSample &sample)
+{
+  SharedChannelData data;
+  data.connected = sample.connected;
+  data.hasValue = sample.hasValue;
+  data.isNumeric = sample.isNumeric;
+  data.isString = sample.isString;
+  data.isEnum = sample.isEnum;
+  data.isArray = sample.isArray;
+  data.numericValue = sample.numericValue;
+  data.stringValue = sample.stringValue;
+  data.enumValue = static_cast<dbr_enum_t>(std::min<unsigned int>(
+      sample.enumValue, std::numeric_limits<dbr_enum_t>::max()));
+  data.arrayValues = sample.arrayValues;
+  data.enumStrings = sample.enumStrings;
+  data.severity = sample.severity;
+  data.status = sample.status;
+  data.nativeFieldType = sample.nativeType >= 0
+          && sample.nativeType <= std::numeric_limits<short>::max()
+      ? static_cast<short>(sample.nativeType) : static_cast<short>(-1);
+  data.nativeElementCount = sample.elementCount;
+
+  constexpr qint64 kEpicsEpochOffsetSeconds = 631152000LL;
+  if (sample.timestamp.isValid()) {
+    const qint64 unixMilliseconds =
+        sample.timestamp.toUTC().toMSecsSinceEpoch();
+    const qint64 epicsEpochMilliseconds =
+        kEpicsEpochOffsetSeconds * 1000LL;
+    if (unixMilliseconds >= epicsEpochMilliseconds) {
+      const qint64 epicsMilliseconds =
+          unixMilliseconds - epicsEpochMilliseconds;
+      const qint64 epicsSeconds = epicsMilliseconds / 1000LL;
+      if (epicsSeconds <= std::numeric_limits<epicsUInt32>::max()) {
+        data.timestamp.secPastEpoch = static_cast<epicsUInt32>(epicsSeconds);
+        data.timestamp.nsec = static_cast<epicsUInt32>(
+            (epicsMilliseconds % 1000LL) * 1000000LL);
+        data.hasTimestamp = true;
+      }
+    }
+  }
+  return data;
 }
 
 class HostSubscription final : public QtedmPluginHostSubscription
@@ -393,10 +438,11 @@ bool QtedmPluginManager::registerPluginObject(QObject *object,
         const QString name = property.name.trimmed().toLower();
         static const QRegularExpression propertyNamePattern(
             QStringLiteral("^[a-z][a-z0-9_.-]{0,63}$"));
-        if (!propertyNamePattern.match(name).hasMatch()
+        if (property.name != name
+            || !propertyNamePattern.match(name).hasMatch()
             || propertyNames.contains(name)) {
           addDiagnostic(source,
-              QStringLiteral("Duplicate or empty property schema in type %1.")
+              QStringLiteral("Invalid or duplicate property schema in type %1.")
                   .arg(descriptor.typeId));
           return false;
         }
@@ -679,23 +725,7 @@ SubscriptionHandle QtedmPluginManager::subscribeDataProvider(
         if (!callback) {
           return;
         }
-        SharedChannelData data;
-        data.connected = sample.connected;
-        data.hasValue = sample.hasValue;
-        data.isNumeric = sample.isNumeric;
-        data.isString = sample.isString;
-        data.isEnum = sample.isEnum;
-        data.isArray = sample.isArray;
-        data.numericValue = sample.numericValue;
-        data.stringValue = sample.stringValue;
-        data.enumValue = static_cast<dbr_enum_t>(sample.enumValue);
-        data.arrayValues = sample.arrayValues;
-        data.enumStrings = sample.enumStrings;
-        data.severity = sample.severity;
-        data.status = sample.status;
-        data.nativeFieldType = static_cast<short>(sample.nativeType);
-        data.nativeElementCount = sample.elementCount;
-        callback(data);
+        callback(sharedDataFromPluginSample(sample));
       };
   callbacks.connection =
       [callback = std::move(connectionCallback)](bool connected,
@@ -703,13 +733,8 @@ SubscriptionHandle QtedmPluginManager::subscribeDataProvider(
         if (!callback) {
           return;
         }
-        SharedChannelData data;
+        SharedChannelData data = sharedDataFromPluginSample(sample);
         data.connected = connected;
-        data.nativeFieldType = static_cast<short>(sample.nativeType);
-        data.nativeElementCount = sample.elementCount;
-        data.hasValue = sample.hasValue;
-        data.isNumeric = sample.isNumeric;
-        data.numericValue = sample.numericValue;
         callback(connected, data);
       };
   callbacks.accessRights = std::move(accessRightsCallback);

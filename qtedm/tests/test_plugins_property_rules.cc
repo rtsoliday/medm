@@ -121,7 +121,7 @@ public:
     descriptor.category = QStringLiteral("Tests");
     descriptor.defaultSize = QSize(140, 40);
     descriptor.properties = {
-        {QStringLiteral("text"), QStringLiteral("Text"), QString(),
+        {firstPropertyName_, QStringLiteral("Text"), QString(),
             QtedmPluginPropertyType::kString,
             QStringLiteral("Default"), true},
         {QStringLiteral("channel"), QStringLiteral("Channel"), QString(),
@@ -156,6 +156,12 @@ public:
       return false;
     }
     label->setText(properties.value(QStringLiteral("text")).toString());
+    if (rejectProperties_) {
+      if (error) {
+        *error = QStringLiteral("intentional property rejection");
+      }
+      return false;
+    }
     label->setProperty("_testPluginChannel",
         properties.value(QStringLiteral("channel")));
     const QColor color =
@@ -212,6 +218,19 @@ public:
     sample.hasValue = true;
     sample.isNumeric = true;
     sample.numericValue = 8.25;
+    sample.isString = true;
+    sample.stringValue = QStringLiteral("connected sample");
+    sample.isEnum = true;
+    sample.enumValue = 1;
+    sample.enumStrings = {QStringLiteral("Off"), QStringLiteral("On")};
+    sample.isArray = true;
+    sample.arrayValues = {1.0, 2.0, 3.0};
+    sample.severity = 2;
+    sample.status = 7;
+    sample.nativeType = DBF_ENUM;
+    sample.elementCount = 3;
+    sample.timestamp =
+        QDateTime::fromMSecsSinceEpoch(1700000000123LL).toUTC();
     if (callbacks.connection) {
       callbacks.connection(true, sample);
     }
@@ -249,10 +268,12 @@ public:
 
   QString id_;
   QString typeId_ = QStringLiteral("fake_label");
+  QString firstPropertyName_ = QStringLiteral("text");
   QString scheme_ = QStringLiteral("fake");
   QtedmPluginCompatibility compatibility_ =
       qtedmCurrentPluginCompatibility();
   bool failConstruction_ = false;
+  bool rejectProperties_ = false;
   int putCount = 0;
   int cancelCount = 0;
   QVariant lastPut;
@@ -377,6 +398,12 @@ void TestPluginsPropertyRules::exactCompatibilityAndDuplicateRegistration()
       &builtInTypeCollision));
 
   QtedmPluginManager::instance().resetForTesting();
+  FakePlugin malformedProperty;
+  malformedProperty.firstPropertyName_ = QStringLiteral(" Text ");
+  QVERIFY(!QtedmPluginManager::instance().registerPluginObject(
+      &malformedProperty));
+
+  QtedmPluginManager::instance().resetForTesting();
   FakePlugin badAbi;
   badAbi.compatibility_.qtMajorVersion += 1;
   QVERIFY(!QtedmPluginManager::instance().registerPluginObject(&badAbi));
@@ -432,6 +459,7 @@ void TestPluginsPropertyRules::providerSubscriptionsWritesArchivesAndShutdown()
   bool connected = false;
   bool received = false;
   bool writable = false;
+  SharedChannelData connectionData;
   SubscriptionHandle subscription =
       QtedmPluginManager::instance().subscribeDataProvider(
           QStringLiteral("fake://temperature"),
@@ -439,8 +467,10 @@ void TestPluginsPropertyRules::providerSubscriptionsWritesArchivesAndShutdown()
             received = data.hasValue && qFuzzyCompare(
                 data.numericValue, 8.25);
           },
-          [&connected](bool state, const SharedChannelData &) {
+          [&connected, &connectionData](bool state,
+              const SharedChannelData &data) {
             connected = state;
+            connectionData = data;
           },
           [&writable](bool, bool canWrite) { writable = canWrite; },
           ChannelDeliveryMode::kRealtime);
@@ -448,6 +478,23 @@ void TestPluginsPropertyRules::providerSubscriptionsWritesArchivesAndShutdown()
   QVERIFY(connected);
   QVERIFY(received);
   QVERIFY(writable);
+  QVERIFY(connectionData.hasValue);
+  QVERIFY(connectionData.isString);
+  QCOMPARE(connectionData.stringValue, QStringLiteral("connected sample"));
+  QVERIFY(connectionData.isEnum);
+  QCOMPARE(connectionData.enumValue, static_cast<dbr_enum_t>(1));
+  QCOMPARE(connectionData.enumStrings,
+      QStringList({QStringLiteral("Off"), QStringLiteral("On")}));
+  QVERIFY(connectionData.isArray);
+  QCOMPARE(connectionData.arrayValues, QVector<double>({1.0, 2.0, 3.0}));
+  QCOMPARE(connectionData.severity, static_cast<short>(2));
+  QCOMPARE(connectionData.status, static_cast<short>(7));
+  QCOMPARE(connectionData.nativeFieldType, static_cast<short>(DBF_ENUM));
+  QCOMPARE(connectionData.nativeElementCount, 3L);
+  QVERIFY(connectionData.hasTimestamp);
+  QCOMPARE(connectionData.timestamp.secPastEpoch,
+      static_cast<epicsUInt32>(1700000000LL - 631152000LL));
+  QCOMPARE(connectionData.timestamp.nsec, static_cast<epicsUInt32>(123000000));
   QCOMPARE(QtedmPluginManager::instance().dataProviderDiagnostic(
       QStringLiteral("fake://temperature")),
       QStringLiteral("fake provider ready"));
@@ -543,6 +590,18 @@ void TestPluginsPropertyRules::pluginElementTypedRoundTripAndUnknownPreservation
   }
   QVERIFY(foundFuture);
 
+  int missingChangeNotifications = 0;
+  missing.setChangedCallback(
+      [&missingChangeNotifications]() { ++missingChangeNotifications; });
+  QVariantMap missingProperties = missing.properties();
+  missingProperties.insert(QStringLiteral("text"),
+      QStringLiteral("Before rule"));
+  QVERIFY(missing.setProperties(missingProperties));
+  QCOMPARE(missingChangeNotifications, 1);
+  QVERIFY(missing.setRuleText(QStringLiteral("After rule")));
+  QCOMPARE(missing.ruleText(), QStringLiteral("After rule"));
+  QCOMPARE(missingChangeNotifications, 1);
+
   FakePlugin plugin;
   QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
   AdlNode node;
@@ -590,6 +649,17 @@ void TestPluginsPropertyRules::pluginElementTypedRoundTripAndUnknownPreservation
       QStringLiteral("Operator label"));
   QCOMPARE(loaded.properties().value(QStringLiteral("color")).value<QColor>(),
       QColor(QStringLiteral("#ff112233")));
+  plugin.rejectProperties_ = true;
+  QVariantMap rejected = loaded.properties();
+  rejected.insert(QStringLiteral("text"), QStringLiteral("Rejected"));
+  QVERIFY(!loaded.setProperties(rejected));
+  QCOMPARE(qobject_cast<QLabel *>(loaded.pluginWidget())->text(),
+      QStringLiteral("Operator label"));
+  QCOMPARE(loaded.properties().value(QStringLiteral("text")).toString(),
+      QStringLiteral("Operator label"));
+  QVERIFY(loaded.diagnostic().contains(
+      QStringLiteral("intentional property rejection")));
+  plugin.rejectProperties_ = false;
   const AdlNode knownRoundTrip = loaded.toAdlNode(QRect(0, 0, 100, 30));
   bool retainedUnknownProperty = false;
   for (const AdlNode &child : knownRoundTrip.children) {
@@ -680,6 +750,9 @@ void TestPluginsPropertyRules::rulesParseRoundTripCyclesAndSandbox()
     QVERIFY2(!PropertyRules::isExpressionSandboxed(
         expression, &parseError), qPrintable(expression));
   }
+  QVERIFY(!PropertyRules::isExpressionSandboxed(
+      QString(80, QLatin1Char('A')), &parseError));
+  QVERIFY(parseError.contains(QStringLiteral("79")));
 
   QtedmRuleSet cyclic;
   QtedmPropertyRule first = rule;

@@ -354,6 +354,12 @@ bool PvSnapshot::save(const QString &filePath,
     }
     return false;
   }
+  if (!document.createdAt.isValid()) {
+    if (error) {
+      *error = QStringLiteral("Snapshot creation time is invalid.");
+    }
+    return false;
+  }
 
   QJsonArray entries;
   for (const PvSnapshotEntry &entry : document.entries) {
@@ -425,6 +431,10 @@ PvSnapshotLoadResult PvSnapshot::load(const QString &filePath)
     result.error = QStringLiteral("Unsupported snapshot schema version.");
     return result;
   }
+  if (!root.value(QStringLiteral("entries")).isArray()) {
+    result.error = QStringLiteral("Snapshot entries must be an array.");
+    return result;
+  }
   const QJsonArray entries = root.value(QStringLiteral("entries")).toArray();
   if (entries.size() > kMaximumEntries) {
     result.error = QStringLiteral("Snapshot exceeds the %1 PV limit.")
@@ -434,6 +444,10 @@ PvSnapshotLoadResult PvSnapshot::load(const QString &filePath)
   result.document.schemaVersion = kSchemaVersion;
   result.document.createdAt = QDateTime::fromString(
       root.value(QStringLiteral("createdAt")).toString(), Qt::ISODate);
+  if (!result.document.createdAt.isValid()) {
+    result.error = QStringLiteral("Snapshot creation time is invalid.");
+    return result;
+  }
   result.document.displayPath =
       root.value(QStringLiteral("displayPath")).toString();
   QSet<QString> seen;

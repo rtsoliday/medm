@@ -409,8 +409,15 @@ bool MessageButtonRuntime::dataMatchesValue(const SharedChannelData &data,
     }
     bool ok = false;
     const double target = trimmed.toDouble(&ok);
-    return ok && std::abs(static_cast<double>(data.enumValue) - target)
-        <= 1e-12;
+    if (!ok || !std::isfinite(target)) {
+      return false;
+    }
+    const double maximum = static_cast<double>(
+        std::numeric_limits<dbr_enum_t>::max());
+    const dbr_enum_t normalized = target <= 0.0 ? 0
+        : target >= maximum ? std::numeric_limits<dbr_enum_t>::max()
+                            : static_cast<dbr_enum_t>(std::llround(target));
+    return data.enumValue == normalized;
   }
   if (data.isNumeric) {
     bool ok = false;
@@ -422,10 +429,10 @@ bool MessageButtonRuntime::dataMatchesValue(const SharedChannelData &data,
     const int nul = data.charArrayValue.indexOf('\0');
     const QByteArray bytes = nul >= 0 ? data.charArrayValue.left(nul)
                                      : data.charArrayValue;
-    return QString::fromLatin1(bytes) == configuredValue;
+    return QString::fromLatin1(bytes) == trimmed;
   }
   if (data.isString) {
-    return data.stringValue == configuredValue;
+    return data.stringValue == trimmed;
   }
   return false;
 }

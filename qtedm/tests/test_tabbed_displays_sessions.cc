@@ -199,6 +199,16 @@ void TestTabbedDisplaysSessions::sessionRejectsUnsafeNamesAndSchemas()
       manager.load(QStringLiteral("future"));
   QVERIFY(!loaded.ok());
   QVERIFY(loaded.error.contains(QStringLiteral("schema")));
+
+  QtEdmSession invalidSession;
+  invalidSession.name = QStringLiteral("invalid-window");
+  QtEdmSessionWindow invalidWindow;
+  invalidWindow.geometry = QRect(0, 0, 640, 480);
+  invalidSession.windows.append(invalidWindow);
+  QString error;
+  QVERIFY(!manager.save(invalidSession, &error));
+  QVERIFY(error.contains(QStringLiteral("display path")));
+  QVERIFY(!QFileInfo::exists(manager.sessionPath(invalidSession.name)));
 }
 
 void TestTabbedDisplaysSessions::sessionInvalidWindowDataReportsWarnings()

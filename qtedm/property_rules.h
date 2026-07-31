@@ -117,7 +117,7 @@ private:
     std::array<double, 12> values{};
     std::array<bool, 12> connected{};
     std::array<bool, 12> hasValue{};
-    std::array<char, 512> postfix{};
+    std::array<char, 1024> postfix{};
     bool postfixValid = false;
     bool pending = true;
     qint64 lastEvaluationMs = -1;
@@ -146,4 +146,3 @@ private:
   QString diagnostic_;
   bool started_ = false;
 };
-

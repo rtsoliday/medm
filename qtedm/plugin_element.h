@@ -27,7 +27,7 @@ public:
   QString typeId() const;
   int schemaVersion() const;
   QVariantMap properties() const;
-  void setProperties(const QVariantMap &properties);
+  bool setProperties(const QVariantMap &properties);
   QStringList channels() const;
 
   QWidget *pluginWidget() const;
@@ -68,4 +68,3 @@ private:
   bool executeMode_ = false;
   std::function<void()> changedCallback_;
 };
-

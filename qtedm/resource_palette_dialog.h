@@ -50,7 +50,9 @@ class QWidget;
 enum class ResourcePalettePropertyType {
   kBoolean,
   kInteger,
+  kInteger64,
   kDouble,
+  kDoubleText,
   kString,
   kColor,
   kStringList,

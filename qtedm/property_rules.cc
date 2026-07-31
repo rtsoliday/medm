@@ -33,7 +33,11 @@ namespace {
 
 constexpr int kMaximumRulesPerWidget = 64;
 constexpr int kMaximumInputsPerRule = 12;
-constexpr int kMaximumExpressionLength = 512;
+/* medm_calc.c has fixed 80-entry parser and evaluation stacks and no output
+ * length argument. Keeping the infix below 80 characters bounds both stack
+ * use and the worst-case encoded postfix size. */
+constexpr int kMaximumExpressionLength = 79;
+constexpr int kMaximumPostfixLength = 1024;
 constexpr double kMinimumRateHz = 1.0;
 constexpr double kMaximumRateHz = 60.0;
 
@@ -514,7 +518,7 @@ bool PropertyRules::isExpressionSandboxed(const QString &expression,
 {
   if (expression.size() > kMaximumExpressionLength) {
     if (error) {
-      *error = QStringLiteral("Expression exceeds 512 characters.");
+      *error = QStringLiteral("Expression exceeds 79 characters.");
     }
     return false;
   }
@@ -532,7 +536,7 @@ bool PropertyRules::isExpressionSandboxed(const QString &expression,
   const QString normalized =
       RuntimeUtils::normalizeCalcExpression(expression.trimmed());
   QByteArray infix = normalized.toLatin1();
-  std::array<char, 512> compiled{};
+  std::array<char, kMaximumPostfixLength> compiled{};
   short parseError = 0;
   if (infix.isEmpty()
       || postfix(infix.data(), compiled.data(), &parseError) != 0) {

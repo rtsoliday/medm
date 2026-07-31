@@ -151,9 +151,18 @@ bool SessionManager::save(const QtEdmSession &session, QString *error) const
   }
 
   QJsonArray windows;
-  for (const QtEdmSessionWindow &window : session.windows) {
+  for (int index = 0; index < session.windows.size(); ++index) {
+    const QtEdmSessionWindow &window = session.windows.at(index);
+    if (window.displayPath.trimmed().isEmpty()) {
+      if (error) {
+        *error = QStringLiteral("Window %1 has no display path.")
+            .arg(index + 1);
+      }
+      return false;
+    }
     QJsonObject object;
-    object.insert(QStringLiteral("displayPath"), window.displayPath);
+    object.insert(QStringLiteral("displayPath"),
+        window.displayPath.trimmed());
     object.insert(QStringLiteral("macros"), macrosToJson(window.macros));
     object.insert(QStringLiteral("geometry"), geometryToJson(window.geometry));
     object.insert(QStringLiteral("screen"), window.screenName);
@@ -184,8 +193,9 @@ bool SessionManager::save(const QtEdmSession &session, QString *error) const
     }
     return false;
   }
-  if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0
-      || !file.commit()) {
+  const QByteArray encoded =
+      QJsonDocument(root).toJson(QJsonDocument::Indented);
+  if (file.write(encoded) != encoded.size() || !file.commit()) {
     if (error) {
       *error = QStringLiteral("Failed to write session file: %1").arg(path);
     }

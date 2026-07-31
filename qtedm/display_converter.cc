@@ -42,6 +42,7 @@ struct ConversionContext
   QList<QJsonObject> records;
   QStringList generatedPaths;
   QSet<QString> usedChildNames;
+  QSet<QString> reservedPaths;
   bool warnings = false;
   int sourceObjectCount = 0;
   int targetObjectCount = 0;
@@ -497,10 +498,16 @@ QString uniqueChildName(ConversionContext &context, const QString &label,
           slug(label, QStringLiteral("page_%1").arg(index + 1)));
   QString candidate = base;
   int suffix = 2;
-  while (context.usedChildNames.contains(candidate)) {
+  auto childPath = [&context](const QString &name) {
+    return QFileInfo(QDir(context.outputDirectory).filePath(
+        name + QStringLiteral(".adl"))).absoluteFilePath();
+  };
+  while (context.usedChildNames.contains(candidate)
+      || context.reservedPaths.contains(childPath(candidate))) {
     candidate = QStringLiteral("%1_%2").arg(base).arg(suffix++);
   }
   context.usedChildNames.insert(candidate);
+  context.reservedPaths.insert(childPath(candidate));
   return candidate + QStringLiteral(".adl");
 }
 
@@ -783,20 +790,20 @@ void convertObject(const UiObject &object, QString &adl,
     QString file = propertyText(object,
         {"filename", "fileName", "filenameList"});
     if (file.endsWith(QLatin1String(".ui"), Qt::CaseInsensitive)) {
-      file.chop(3);
+      file.chop(2);
       file += QStringLiteral("adl");
     }
     const QString macros = propertyText(object,
         {"macro", "macros", "macroString"});
+    QString compositeFile = file;
+    if (!macros.isEmpty()) {
+      compositeFile += QLatin1Char(';') + macros;
+    }
     adl += QStringLiteral("composite {\n");
     appendObjectGeometry(adl, rect);
-    adl += QStringLiteral("  \"composite name\"=%1\n").arg(quoted(file));
-    if (!macros.isEmpty()) {
-      adl += QStringLiteral("  \"composite file\" {\n");
-      adl += QStringLiteral("    name=%1\n").arg(quoted(file));
-      adl += QStringLiteral("    args=%1\n").arg(quoted(macros));
-      adl += QStringLiteral("  }\n");
-    }
+    adl += QStringLiteral("  \"composite name\"=\"\"\n");
+    adl += QStringLiteral("  \"composite file\"=%1\n")
+        .arg(quoted(compositeFile));
     adl += QStringLiteral("}\n");
     ++context.targetObjectCount;
     appendRecord(context, object, DisplayConversionDisposition::kMapped,
@@ -986,8 +993,18 @@ DisplayConversionResult DisplayConverter::convert(
   context.outputPath = outputInfo.absoluteFilePath();
   context.outputDirectory = outputDirectory;
   context.outputBaseName = outputBaseName;
+  context.reservedPaths = {
+      outputAbsolute, reportAbsolute, sourceCopyAbsolute};
 
-  const QRect rootGeometry = geometryOf(root);
+  QRect rootGeometry;
+  const QVariant rootGeometryValue =
+      root.properties.value(QStringLiteral("geometry"));
+  if (rootGeometryValue.canConvert<QRect>()) {
+    const QRect candidate = rootGeometryValue.toRect();
+    if (candidate.width() > 0 && candidate.height() > 0) {
+      rootGeometry = candidate;
+    }
+  }
   const QSize displaySize(
       rootGeometry.width() > 0 ? rootGeometry.width() : kDefaultDisplayWidth,
       rootGeometry.height() > 0 ? rootGeometry.height() : kDefaultDisplayHeight);

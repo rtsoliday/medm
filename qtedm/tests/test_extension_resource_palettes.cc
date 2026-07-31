@@ -41,6 +41,8 @@ void TestExtensionResourcePalettes::
   QRect geometry(10, 20, 160, 80);
   bool enabled = false;
   int maximum = 10;
+  qlonglong wideInteger = 5000000000LL;
+  double wideDouble = 1.0e100;
   QString name = QStringLiteral("before");
   bool actionInvoked = false;
 
@@ -73,6 +75,24 @@ void TestExtensionResourcePalettes::
     name = value.toString();
   };
 
+  ResourcePaletteProperty integer64;
+  integer64.key = QStringLiteral("wide_integer");
+  integer64.label = QStringLiteral("Wide Integer");
+  integer64.type = ResourcePalettePropertyType::kInteger64;
+  integer64.value = wideInteger;
+  integer64.setter = [&wideInteger](const QVariant &value) {
+    wideInteger = value.toLongLong();
+  };
+
+  ResourcePaletteProperty doubleText;
+  doubleText.key = QStringLiteral("wide_double");
+  doubleText.label = QStringLiteral("Wide Double");
+  doubleText.type = ResourcePalettePropertyType::kDoubleText;
+  doubleText.value = wideDouble;
+  doubleText.setter = [&wideDouble](const QVariant &value) {
+    wideDouble = value.toDouble();
+  };
+
   ResourcePaletteProperty action;
   action.key = QStringLiteral("details");
   action.label = QStringLiteral("Details");
@@ -82,7 +102,8 @@ void TestExtensionResourcePalettes::
 
   dialog.showForExtension([&geometry]() { return geometry; },
       [&geometry](const QRect &updated) { geometry = updated; },
-      QStringLiteral("Extension Test"), {boolean, integer, text, action});
+      QStringLiteral("Extension Test"),
+      {boolean, integer, integer64, doubleText, text, action});
   QCoreApplication::processEvents();
 
   auto *enabledField = dialog.findChild<QComboBox *>(
@@ -91,22 +112,41 @@ void TestExtensionResourcePalettes::
       QStringLiteral("qtedmResourceProperty_maximum"));
   auto *nameField = dialog.findChild<QLineEdit *>(
       QStringLiteral("qtedmResourceProperty_name"));
+  auto *wideIntegerField = dialog.findChild<QLineEdit *>(
+      QStringLiteral("qtedmResourceProperty_wide_integer"));
+  auto *wideDoubleField = dialog.findChild<QLineEdit *>(
+      QStringLiteral("qtedmResourceProperty_wide_double"));
   auto *detailsButton = dialog.findChild<QPushButton *>(
       QStringLiteral("qtedmResourceProperty_details"));
   QVERIFY(enabledField);
   QVERIFY(maximumField);
   QVERIFY(nameField);
+  QVERIFY(wideIntegerField);
+  QVERIFY(wideDoubleField);
   QVERIFY(detailsButton);
   QVERIFY(enabledField->isVisible());
 
   enabledField->setCurrentIndex(1);
   maximumField->setValue(42);
+  wideIntegerField->setText(QStringLiteral("6000000000"));
+  QMetaObject::invokeMethod(wideIntegerField, "editingFinished",
+      Qt::DirectConnection);
   nameField->setText(QStringLiteral("after"));
   QMetaObject::invokeMethod(nameField, "editingFinished",
       Qt::DirectConnection);
   detailsButton->click();
   QVERIFY(enabled);
   QCOMPARE(maximum, 42);
+  QCOMPARE(wideInteger, 6000000000LL);
+  QCOMPARE(wideDouble, 1.0e100);
+  wideDoubleField->setText(QStringLiteral("2.5e200"));
+  QMetaObject::invokeMethod(wideDoubleField, "editingFinished",
+      Qt::DirectConnection);
+  QCOMPARE(wideDouble, 2.5e200);
+  wideDoubleField->setText(QStringLiteral("inf"));
+  QMetaObject::invokeMethod(wideDoubleField, "editingFinished",
+      Qt::DirectConnection);
+  QCOMPARE(wideDouble, 2.5e200);
   QCOMPARE(name, QStringLiteral("after"));
   QVERIFY(actionInvoked);
 }
@@ -168,6 +208,10 @@ void TestExtensionResourcePalettes::
           QtedmPluginPropertyType::kString, QStringLiteral("Test"), false},
       {QStringLiteral("enabled"), QStringLiteral("Enabled"), QString(),
           QtedmPluginPropertyType::kBoolean, true, false},
+      {QStringLiteral("wide"), QStringLiteral("Wide"), QString(),
+          QtedmPluginPropertyType::kInteger, 5000000000LL, false},
+      {QStringLiteral("huge"), QStringLiteral("Huge"), QString(),
+          QtedmPluginPropertyType::kDouble, 1.0e100, false},
   };
   QVERIFY(ExtensionObjectRegistry::instance().registerPluginObject(
       QStringLiteral("org.qtedm.tests.integration"), pluginType));
@@ -196,6 +240,10 @@ void TestExtensionResourcePalettes::
   requireField(QStringLiteral("qtedmResourceProperty_status"));
   requireField(QStringLiteral("qtedmResourceProperty_caption"));
   requireField(QStringLiteral("qtedmResourceProperty_enabled"));
+  QVERIFY(window.findChild<QLineEdit *>(
+      QStringLiteral("qtedmResourceProperty_wide")));
+  QVERIFY(window.findChild<QLineEdit *>(
+      QStringLiteral("qtedmResourceProperty_huge")));
   window.selectAndScrollToWidget(spinbox);
   QVERIFY(!plugin->isSelected());
   ExtensionObjectRegistry::instance().unregisterPluginObjects();

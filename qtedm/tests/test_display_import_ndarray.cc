@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "display_converter.h"
+#include "display_state.h"
+#include "display_window.h"
 #include "extension_object_registry.h"
 #include "ntndarray_image_decoder.h"
 #include "ntndarray_image_element.h"
@@ -68,6 +70,8 @@ private slots:
   void registryContainsNtNdArrayImage();
   void converterProducesDeterministicDisplaysAndReport();
   void converterRejectsMalformedAndUnsupportedInputs();
+  void converterUsesSafeDefaultsAndAvoidsArtifactCollisions();
+  void tabbedChildLoadFailureDoesNotLeakWindow();
   void decoderSupportsEveryScalarType();
   void decoderSupportsMonoAndRgbLayouts();
   void decoderRejectsUnsafeOrMalformedFrames();
@@ -109,6 +113,9 @@ void TestDisplayImportNdArray::converterProducesDeterministicDisplaysAndReport()
   QVERIFY(firstAdl.contains("qtedm_ndarray_image"));
   QVERIFY(firstAdl.contains("Unsupported import: QPushButton"));
   QVERIFY(firstAdl.contains("IMPORT:READBACK"));
+  QVERIFY(firstAdl.contains(
+      "\"composite file\"=\"child_panel.adl;DEVICE=IMPORT\""));
+  QVERIFY(!firstAdl.contains("child_paneladl"));
   QCOMPARE(readAll(first.sourceCopyPath), readAll(fixturePath()));
 
   const QJsonObject report =
@@ -145,6 +152,112 @@ void TestDisplayImportNdArray::converterProducesDeterministicDisplaysAndReport()
   QVERIFY2(second.success, qPrintable(second.error));
   QCOMPARE(readAll(second.outputPath), firstAdl);
   QCOMPARE(readAll(second.reportPath), firstReport);
+}
+
+void TestDisplayImportNdArray::
+    converterUsesSafeDefaultsAndAvoidsArtifactCollisions()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+
+  const QString rootlessGeometryPath =
+      directory.filePath(QStringLiteral("rootless.ui"));
+  QFile rootlessGeometry(rootlessGeometryPath);
+  QVERIFY(rootlessGeometry.open(QIODevice::WriteOnly));
+  const QByteArray rootlessUi =
+      "<ui version=\"4.0\"><class>Rootless</class>"
+      "<widget class=\"QWidget\" name=\"Rootless\">"
+      "<widget class=\"QLabel\" name=\"label\">"
+      "<property name=\"text\"><string>Default size</string></property>"
+      "</widget></widget></ui>";
+  QCOMPARE(rootlessGeometry.write(rootlessUi), qint64(rootlessUi.size()));
+  rootlessGeometry.close();
+
+  DisplayConversionOptions defaultOptions;
+  defaultOptions.inputPath = rootlessGeometryPath;
+  defaultOptions.outputPath =
+      directory.filePath(QStringLiteral("rootless.adl"));
+  const DisplayConversionResult defaultResult =
+      DisplayConverter::convert(defaultOptions);
+  QVERIFY2(defaultResult.success, qPrintable(defaultResult.error));
+  const QByteArray defaultAdl = readAll(defaultResult.outputPath);
+  QVERIFY(defaultAdl.contains("width=800"));
+  QVERIFY(defaultAdl.contains("height=600"));
+
+  DisplayConversionOptions collisionOptions;
+  collisionOptions.inputPath = fixturePath();
+  collisionOptions.outputPath =
+      directory.filePath(QStringLiteral("collision.adl"));
+  collisionOptions.reportPath = directory.filePath(
+      QStringLiteral("collision_tab_overview.adl"));
+  collisionOptions.sourceCopyPath =
+      directory.filePath(QStringLiteral("collision.source.ui"));
+  const DisplayConversionResult collisionResult =
+      DisplayConverter::convert(collisionOptions);
+  QVERIFY2(collisionResult.success, qPrintable(collisionResult.error));
+  const QJsonDocument report =
+      QJsonDocument::fromJson(readAll(collisionResult.reportPath));
+  QVERIFY(report.isObject());
+  const QJsonArray generated = report.object()
+      .value(QStringLiteral("generated_displays")).toArray();
+  bool foundRenamedChild = false;
+  for (const QJsonValue &path : generated) {
+    foundRenamedChild = foundRenamedChild
+        || path.toString().endsWith(
+            QStringLiteral("collision_tab_overview_2.adl"));
+  }
+  QVERIFY(foundRenamedChild);
+  QVERIFY(QFileInfo::exists(directory.filePath(
+      QStringLiteral("collision_tab_overview_2.adl"))));
+}
+
+void TestDisplayImportNdArray::tabbedChildLoadFailureDoesNotLeakWindow()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString childPath =
+      directory.filePath(QStringLiteral("broken-child.adl"));
+  QFile child(childPath);
+  QVERIFY(child.open(QIODevice::WriteOnly));
+  QCOMPARE(child.write("file {"), qint64(6));
+  child.close();
+
+  const QString parentPath =
+      directory.filePath(QStringLiteral("parent.adl"));
+  QFile parent(parentPath);
+  QVERIFY(parent.open(QIODevice::WriteOnly));
+  const QByteArray parentAdl =
+      "file { name=\"parent.adl\" version=040004 }\n"
+      "display { object { x=0 y=0 width=300 height=200 } "
+      "clr=14 bclr=4 cmap=\"\" gridSpacing=5 gridOn=0 snapToGrid=0 }\n"
+      "qtedm_tabbed_display {\n"
+      "  object { x=10 y=10 width=280 height=180 }\n"
+      "  mode=\"tabs\" active_page=\"broken\"\n"
+      "  page { id=\"broken\" label=\"Broken\" "
+      "display=\"broken-child.adl\" keepAlive=\"false\" }\n"
+      "}\n";
+  QCOMPARE(parent.write(parentAdl), qint64(parentAdl.size()));
+  parent.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QFont(), QFont(), state);
+  QString error;
+  QVERIFY2(window.loadFromFile(parentPath, &error), qPrintable(error));
+  auto topLevelDisplayCount = []() {
+    int count = 0;
+    for (QWidget *widget : QApplication::topLevelWidgets()) {
+      if (dynamic_cast<DisplayWindow *>(widget)) {
+        ++count;
+      }
+    }
+    return count;
+  };
+  const int before = topLevelDisplayCount();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+  QCOMPARE(topLevelDisplayCount(), before);
 }
 
 void TestDisplayImportNdArray::converterRejectsMalformedAndUnsupportedInputs()

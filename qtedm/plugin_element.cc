@@ -393,25 +393,37 @@ QVariantMap PluginElement::properties() const
   return properties_;
 }
 
-void PluginElement::setProperties(const QVariantMap &properties)
+bool PluginElement::setProperties(const QVariantMap &properties)
 {
-  if (properties_ == properties) {
-    return;
+  const QVariantMap previous = this->properties();
+  if (previous == properties) {
+    return true;
   }
-  properties_ = properties;
   QString error;
   if (pluginWidget_) {
     if (!QtedmPluginManager::instance().applyDisplayProperties(
-            pluginId_, typeId_, pluginWidget_, properties_, &error)) {
+            pluginId_, typeId_, pluginWidget_, properties, &error)) {
       diagnostic_ = error;
-    } else {
-      diagnostic_.clear();
+      QString rollbackError;
+      if (!QtedmPluginManager::instance().applyDisplayProperties(
+              pluginId_, typeId_, pluginWidget_, previous, &rollbackError)
+          && !rollbackError.isEmpty()) {
+        diagnostic_ += QStringLiteral(" Rollback failed: %1")
+            .arg(rollbackError);
+      }
+      properties_ = previous;
+      update();
+      return false;
     }
+    properties_ = properties;
+    diagnostic_.clear();
   } else {
+    properties_ = properties;
     constructPluginWidget(&error);
   }
   notifyChanged();
   update();
+  return true;
 }
 
 QStringList PluginElement::channels() const
@@ -522,12 +534,30 @@ bool PluginElement::setRuleText(const QString &text)
   }
   QVariantMap updated = properties_;
   updated.insert(propertyName, text);
-  properties_ = updated;
-  if (pluginWidget_) {
-    QString error;
-    return QtedmPluginManager::instance().applyDisplayProperties(
-        pluginId_, typeId_, pluginWidget_, properties_, &error);
+  if (updated == properties_) {
+    return true;
   }
+  if (pluginWidget_) {
+    const QVariantMap previous = this->properties();
+    QString error;
+    if (!QtedmPluginManager::instance().applyDisplayProperties(
+            pluginId_, typeId_, pluginWidget_, updated, &error)) {
+      diagnostic_ = error;
+      QString rollbackError;
+      if (!QtedmPluginManager::instance().applyDisplayProperties(
+              pluginId_, typeId_, pluginWidget_, previous, &rollbackError)
+          && !rollbackError.isEmpty()) {
+        diagnostic_ += QStringLiteral(" Rollback failed: %1")
+            .arg(rollbackError);
+      }
+      properties_ = previous;
+      update();
+      return false;
+    }
+    diagnostic_.clear();
+  }
+  properties_ = updated;
+  update();
   return true;
 }
 

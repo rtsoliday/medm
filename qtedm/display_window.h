@@ -212,7 +212,6 @@
 #include "pv_table_runtime.h"
 #include "wave_table_element.h"
 #include "wave_table_runtime.h"
-#include "statistics_tracker.h"
 #include "display_list_dialog.h"
 #include "find_pv_dialog.h"
 #include "pv_protocol.h"
@@ -225,7 +224,6 @@
 #include "cursor_utils.h"
 
 namespace {
-constexpr double kChannelRetryTimeoutSeconds = 1.0;
 constexpr double kPvInfoTimeoutSeconds = 1.0;
 constexpr qint64 kEpicsEpochOffsetSeconds = 631152000; // 1990-01-01 -> 1970-01-01
 constexpr unsigned long kPvInfoArrayFetchLimit = 100000;
@@ -513,6 +511,8 @@ class DisplayWindow : public QMainWindow
 {
 
   friend class DisplayStackingEventFilter;
+  friend class TestObserveOnlyControls;
+  friend class FindPvDialog;
 public:
   class DisplayStackingEventFilter : public QObject
   {
@@ -819,6 +819,7 @@ public:
 
 protected:
   void focusInEvent(QFocusEvent *event) override;
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
   void keyPressEvent(QKeyEvent *event) override;
 
@@ -889,6 +890,8 @@ private:
   QWidget *effectiveElementParent() const;
   std::optional<AdlNode> widgetToAdlNode(QWidget *widget) const;
   void setObjectGeometry(AdlNode &node, const QRect &rect) const;
+  void translateElementNodeForPaste(AdlNode &node,
+      const QPoint &translation) const;
 
   class ElementLoadContextGuard
   {
@@ -1117,11 +1120,14 @@ private:
   bool executeCascadeAvailable_ = false;
   QVector<ExecuteMenuEntry> executeMenuEntries_;
   QPointer<PvInfoDialog> pvInfoDialog_;
+  bool pvInfoApplicationFilterInstalled_ = false;
+  bool executeMiddleButtonApplicationFilterInstalled_ = false;
   bool pvInfoPickingActive_ = false;
   bool pvInfoCursorInitialized_ = false;
   bool pvInfoCursorActive_ = false;
   QCursor pvInfoCursor_;
   QPointer<PvLimitsDialog> pvLimitsDialog_;
+  bool pvLimitsApplicationFilterInstalled_ = false;
   bool pvLimitsPickingActive_ = false;
   bool pvLimitsCursorInitialized_ = false;
   bool pvLimitsCursorActive_ = false;
@@ -1485,6 +1491,14 @@ private:
       removeMenuRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, MessageButtonElement>) {
       removeMessageButtonRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, HeatmapElement>) {
+      removeHeatmapRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, WaterfallPlotElement>) {
+      removeWaterfallPlotRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, CompositeElement>) {
+      removeCompositeRuntime(element);
+    } else if constexpr (std::is_same_v<ElementType, PluginElement>) {
+      removePluginRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, LineElement>) {
       removeLineRuntime(element);
     } else if constexpr (std::is_same_v<ElementType, RectangleElement>) {
@@ -1503,6 +1517,8 @@ private:
   }
 
   bool copySelectionInternal(bool removeOriginal);
+
+  bool cutWidgetFromDisplay(QWidget *widget);
 
   void pasteFromClipboard();
 
@@ -1607,6 +1623,10 @@ private:
 
   QStringList channelsForWidget(QWidget *widget) const;
 
+  QList<DisplayWindow *> loadedDisplayTree() const;
+
+  DisplayWindow *contentDisplayForTarget(QWidget *target) const;
+
 public:
   /* Returns all widgets that may have PV channels associated with them */ QList<QWidget *> findPvWidgets() const;
 
@@ -1621,7 +1641,8 @@ private:
 
   void cancelPvInfoPickMode();
 
-  void completePvInfoPick(const QPoint &windowPos);
+  void completePvInfoPick(const QPoint &windowPos,
+      QWidget *eventTarget = nullptr);
 
   void showPvInfoContent(const PvInfoContent &content);
 
@@ -1629,9 +1650,11 @@ private:
 
   void cancelPvLimitsPickMode();
 
-  void completePvLimitsPick(const QPoint &windowPos);
+  void completePvLimitsPick(const QPoint &windowPos,
+      QWidget *eventTarget = nullptr);
 
-  void showPvLimitsForWidget(QWidget *widget);
+  void showPvLimitsForWidget(QWidget *widget,
+      DisplayWindow *runtimeOwner = nullptr);
 
   void showStripChartDataDialog(StripChartElement *element);
 
@@ -1692,6 +1715,14 @@ private:
       QString *error = nullptr) const;
 
   bool prepareExecuteChannelDrag(const QPoint &windowPos);
+
+  bool routeExecuteMiddleButtonEvent(QWidget *eventTarget,
+      QMouseEvent *event);
+
+  bool routeExecuteRightButtonEvent(QWidget *eventTarget,
+      QMouseEvent *event);
+
+  void removeApplicationEventFilterIfUnused();
 
   void startExecuteChannelDrag();
 
@@ -2070,10 +2101,6 @@ private:
   void showFindPvDialog() const;
 
   PvInfoDialog *ensurePvInfoDialog();
-
-  bool attemptChannelRetry(const QString &channelName, QString &retriedChannel) const;
-
-  bool retryFirstUnconnectedChannel(QString &retriedChannel);
 
   void retryChannelConnections();
 

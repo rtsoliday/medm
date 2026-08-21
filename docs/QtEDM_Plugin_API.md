@@ -56,8 +56,24 @@ with a diagnostic rather than loaded optimistically.
 
 The Qt plugin class needs `Q_OBJECT`, one `Q_PLUGIN_METADATA` declaration, and
 all implemented interfaces in `Q_INTERFACES`. The checked-in
-`qtedm/tests/plugin_api_discovery_plugin.cc` is the smallest buildable display-plugin
-example.
+`qtedm/tests/plugin_api_discovery_plugin.cc` is the smallest buildable display
+plugin example. `qtedm/tests/plugin_api_pv_thumbs_plugin.cc` is a live-PV
+example: its `PV Thumbs Indicator` displays a thumbs-down emoji for zero and a
+thumbs-up emoji for any nonzero numeric value. It reports its channel through
+the display-plugin API, subscribes through `QtedmPluginHost`, and cancels the
+subscription when its runtime stops. Its default test channel is
+`led:test:binary_live`.
+
+Build both examples and their metadata sidecars with:
+
+```sh
+make -C qtedm build-tests
+```
+
+The resulting libraries are placed in the `plugins` directory beside the unit
+test executable, where a QtEDM executable in that same build directory will
+discover them automatically. Open `tests/test_QtEDMPluginExamples.adl` with
+that executable to see the Discovery Label and PV Thumbs Indicator together.
 
 ## Display-object plugins
 

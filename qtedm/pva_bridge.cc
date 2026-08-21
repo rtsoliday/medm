@@ -142,7 +142,6 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
       free(choices);
       data.isEnum = true;
       data.enumValue = static_cast<unsigned int>(data.numericValue);
-      data.hasControlInfo = true;
     }
   }
 
@@ -172,7 +171,6 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
   if (reading.hasPrecision) {
     data.precision = static_cast<short>(reading.displayPrecision);
     data.hasPrecision = true;
-    data.hasControlInfo = true;
   }
 
   if (IsEnumFieldType(channel->pva, 0)) {

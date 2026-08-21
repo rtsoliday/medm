@@ -10,11 +10,11 @@
 #include <QVBoxLayout>
 
 PvSnapshotRestoreDialog::PvSnapshotRestoreDialog(
-    const QVector<PvSnapshotComparison> &comparisons, QWidget *parent)
-  : QDialog(parent)
+    const QVector<PvSnapshotComparison> &comparisons)
+  : QDialog(nullptr)
 {
   setWindowTitle(QStringLiteral("Compare / Restore PV Snapshot"));
-  setModal(true);
+  setWindowModality(Qt::ApplicationModal);
   resize(1050, 520);
   auto *layout = new QVBoxLayout(this);
   auto *note = new QLabel(QStringLiteral(

@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QSignalBlocker>
+#include <QStyle>
 
 #include "cursor_utils.h"
 #include "legacy_fonts.h"
@@ -170,8 +171,14 @@ MessageButtonElement::MessageButtonElement(QWidget *parent)
         if (!qtedmToggle_) {
           return;
         }
-        const QSignalBlocker blocker(button_);
-        button_->setChecked(runtimeToggleKnown_ && runtimeToggleOn_);
+        {
+          const QSignalBlocker blocker(button_);
+          button_->setChecked(runtimeToggleKnown_ && runtimeToggleOn_);
+        }
+        if (executeMode_ && runtimeConnected_ && runtimeWriteAccess_
+            && pressCallback_) {
+          pressCallback_();
+        }
       });
 
   foregroundColor_ = palette().color(QPalette::WindowText);
@@ -472,6 +479,7 @@ void MessageButtonElement::setRuntimeToggleState(bool on, bool known)
     button_->setChecked(known && on);
     button_->setText(effectiveLabel());
   }
+  updateToggleStyleState();
   updateButtonFont();
 }
 
@@ -564,7 +572,7 @@ void MessageButtonElement::applyPaletteColors()
       "border-width: 2px; border-style: solid; "
       "border-top-color: %3; border-left-color: %3; "
       "border-bottom-color: %4; border-right-color: %4; }"
-      "QPushButton:pressed, QPushButton:checked { "
+      "QPushButton:pressed, QPushButton[_qtedmToggleOn=\"true\"] { "
       "border-top-color: %4; border-left-color: %4; "
       "border-bottom-color: %3; border-right-color: %3; "
       "padding-top: 1px; padding-left: 1px; }")
@@ -643,9 +651,11 @@ void MessageButtonElement::updateButtonState()
   if (!button_) {
     return;
   }
+  updateToggleStyleState();
   if (!executeMode_) {
     button_->setEnabled(true);
     button_->setCursor(CursorUtils::arrowCursor());
+    unsetCursor();
     return;
   }
 
@@ -653,8 +663,13 @@ void MessageButtonElement::updateButtonState()
   button_->setEnabled(enable);
   if (enable) {
     button_->setCursor(CursorUtils::arrowCursor());
+    unsetCursor();
   } else {
     button_->setCursor(CursorUtils::forbiddenCursor());
+    /* Disabled child widgets do not provide their cursor to Qt's hit test.
+     * Set the same cursor on the owner so Message Button and Toggle controls
+     * visibly remain non-writable while their button is disabled. */
+    setCursor(CursorUtils::forbiddenCursor());
   }
   if (!enable) {
     button_->setDown(false);
@@ -663,6 +678,26 @@ void MessageButtonElement::updateButtonState()
     }
   }
 }
+
+void MessageButtonElement::updateToggleStyleState()
+{
+  if (!button_) {
+    return;
+  }
+  const bool toggleOn =
+      qtedmToggle_ && runtimeToggleKnown_ && runtimeToggleOn_
+      && (!executeMode_ || runtimeConnected_);
+  if (button_->property("_qtedmToggleOn").toBool() == toggleOn) {
+    return;
+  }
+  button_->setProperty("_qtedmToggleOn", toggleOn);
+  if (QStyle *buttonStyle = button_->style()) {
+    buttonStyle->unpolish(button_);
+    buttonStyle->polish(button_);
+  }
+  button_->update();
+}
+
 
 void MessageButtonElement::handleButtonPressed()
 {
@@ -676,7 +711,10 @@ void MessageButtonElement::handleButtonPressed()
     }
     return;
   }
-  if (pressCallback_) {
+  /* Toggle confirmation and writes run from clicked(), after Qt has cleared
+   * its transient pressed state.  Opening a modal confirmation from pressed()
+   * can consume the matching mouse release and leave the bevel stuck down. */
+  if (!qtedmToggle_ && pressCallback_) {
     pressCallback_();
   }
 }

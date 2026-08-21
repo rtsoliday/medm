@@ -7,6 +7,8 @@
 #include <QLibrary>
 #include <QTemporaryDir>
 
+#include <memory>
+
 #include "archive_provider.h"
 #include "audit_logger.h"
 #include "display_window.h"
@@ -328,6 +330,7 @@ private slots:
   void cleanup();
   void exactCompatibilityAndDuplicateRegistration();
   void configuredPluginDirectoryIsDiscovered();
+  void pvThumbsPluginTracksZeroAndNonzeroValues();
   void providerSubscriptionsWritesArchivesAndShutdown();
   void observeOnlyBlocksPluginProviderWrites();
   void pluginElementTypedRoundTripAndUnknownPreservation();
@@ -447,9 +450,85 @@ void TestPluginsPropertyRules::configuredPluginDirectoryIsDiscovered()
   QVERIFY(QtedmPluginManager::instance().displayObject(
       QStringLiteral("org.qtedm.tests.discovery"),
       QStringLiteral("discovery_label")));
+  QVERIFY2(QtedmPluginManager::instance().loadedPluginIds().contains(
+      QStringLiteral("org.qtedm.examples.pv-thumbs")),
+      qPrintable(QtedmPluginManager::instance().diagnostics().join(
+          QLatin1Char('\n'))));
+  QVERIFY(QtedmPluginManager::instance().displayObject(
+      QStringLiteral("org.qtedm.examples.pv-thumbs"),
+      QStringLiteral("pv_thumbs_indicator")));
   QVERIFY(QtedmPluginManager::instance().diagnostics().join(
       QLatin1Char('\n')).contains(
           QStringLiteral("Required plugin metadata is missing")));
+}
+
+void TestPluginsPropertyRules::pvThumbsPluginTracksZeroAndNonzeroValues()
+{
+  auto &manager = QtedmPluginManager::instance();
+  manager.loadConfiguredPlugins();
+  const QString pluginId = QStringLiteral("org.qtedm.examples.pv-thumbs");
+  const QString typeId = QStringLiteral("pv_thumbs_indicator");
+  const QString pv = QStringLiteral("__plugins:pv_thumbs");
+
+  QVERIFY2(manager.displayObject(pluginId, typeId),
+      qPrintable(manager.diagnostics().join(QLatin1Char('\n'))));
+  QString error;
+  std::unique_ptr<QWidget> widget(
+      manager.createDisplayWidget(pluginId, typeId, nullptr, &error));
+  QVERIFY2(widget, qPrintable(error));
+  auto *label = qobject_cast<QLabel *>(widget.get());
+  QVERIFY(label);
+
+  const QVariantMap properties = {
+      {QStringLiteral("channel"), pv},
+  };
+  QVERIFY2(manager.applyDisplayProperties(pluginId, typeId, label,
+      properties, &error), qPrintable(error));
+  QCOMPARE(manager.displayChannels(pluginId, typeId, properties),
+      QStringList{pv});
+  QCOMPARE(manager.serializeDisplayProperties(pluginId, typeId, label)
+      .value(QStringLiteral("channel")).toString(), pv);
+  QCOMPARE(label->toolTip(), pv);
+
+  auto &soft = SoftPvRegistry::instance();
+  soft.registerName(pv);
+  soft.setConnected(pv, true);
+  soft.publishValue(pv, 0.0);
+  struct SoftPvCleanup {
+    SoftPvRegistry *registry;
+    QString name;
+    ~SoftPvCleanup()
+    {
+      registry->setConnected(name, false);
+      registry->unregisterName(name);
+    }
+  } cleanup{&soft, pv};
+
+  std::unique_ptr<QtedmPluginRuntime> runtime(
+      manager.createDisplayRuntime(pluginId, typeId, label, &error));
+  QVERIFY2(runtime, qPrintable(error));
+  QVERIFY2(runtime->start(&error), qPrintable(error));
+  QTRY_COMPARE(label->text(),
+      QString::fromUtf8("\xF0\x9F\x91\x8E"));
+
+  soft.publishValue(pv, 4.5);
+  QTRY_COMPARE(label->text(),
+      QString::fromUtf8("\xF0\x9F\x91\x8D"));
+  soft.publishValue(pv, -2.0);
+  QTRY_COMPARE(label->text(),
+      QString::fromUtf8("\xF0\x9F\x91\x8D"));
+  soft.publishValue(pv, 0.0);
+  QTRY_COMPARE(label->text(),
+      QString::fromUtf8("\xF0\x9F\x91\x8E"));
+
+  soft.setConnected(pv, false);
+  QTRY_COMPARE(label->text(), QString::fromUtf8("\xE2\x80\x94"));
+  soft.setConnected(pv, true);
+  soft.publishValue(pv, 1.0);
+  QTRY_COMPARE(label->text(),
+      QString::fromUtf8("\xF0\x9F\x91\x8D"));
+  runtime->stop();
+  QCOMPARE(label->text(), QString::fromUtf8("\xE2\x80\x94"));
 }
 
 void TestPluginsPropertyRules::providerSubscriptionsWritesArchivesAndShutdown()

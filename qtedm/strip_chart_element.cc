@@ -1835,7 +1835,9 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
     // offsetColumns shifts data to the right when buffer isn't full
     const int offsetColumns = capacity - samplesToRender;
     const int denominator = std::max(capacity - 1, 1);
-    
+    QPointF previousPoint;
+    bool havePreviousPoint = false;
+
     for (int s = startSample; s < sampleCount; ++s) {
       const double sampleValue = pen.samples[static_cast<std::size_t>(s)];
       if (!std::isfinite(sampleValue)) {
@@ -1863,12 +1865,25 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
           + (static_cast<double>(offsetColumns + renderIndex) / denominator) * (width - 1.0);
       const double yLow = content.top() + (height - 1.0) * (1.0 - normalizedLow);
       const double yHigh = content.top() + (height - 1.0) * (1.0 - normalizedHigh);
+      const double normalizedValue = (sampleValue - low) / range;
+      const double yValue = content.top()
+          + (height - 1.0) * (1.0 - normalizedValue);
+      const QPointF samplePoint(x, yValue);
 
-      if (std::abs(yLow - yHigh) < 0.5) {
-        painter.drawPoint(QPointF(x, yLow));
-      } else {
+      if (archivePlot_) {
+        if (havePreviousPoint) {
+          painter.drawLine(previousPoint, samplePoint);
+        } else {
+          painter.drawPoint(samplePoint);
+        }
+      } else if (std::abs(yLow - yHigh) < 0.5) {
+        painter.drawPoint(samplePoint);
+      }
+      if (std::abs(yLow - yHigh) >= 0.5) {
         painter.drawLine(QPointF(x, yLow), QPointF(x, yHigh));
       }
+      previousPoint = samplePoint;
+      havePreviousPoint = true;
     }
   }
 }

@@ -10,39 +10,11 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSet>
 #include <QVBoxLayout>
 
-#include "adl_writer.h"
-#include "arc_element.h"
-#include "bar_monitor_element.h"
-#include "byte_monitor_element.h"
-#include "cartesian_plot_element.h"
-#include "choice_button_element.h"
-#include "composite_element.h"
 #include "display_state.h"
 #include "display_window.h"
-#include "expression_channel_element.h"
-#include "image_element.h"
-#include "line_element.h"
-#include "menu_element.h"
-#include "message_button_element.h"
-#include "meter_element.h"
-#include "oval_element.h"
-#include "polygon_element.h"
-#include "polyline_element.h"
-#include "pv_table_element.h"
-#include "rectangle_element.h"
-#include "related_display_element.h"
-#include "scale_monitor_element.h"
-#include "setpoint_control_element.h"
-#include "shell_command_element.h"
-#include "slider_element.h"
-#include "strip_chart_element.h"
-#include "text_element.h"
-#include "wave_table_element.h"
-#include "text_entry_element.h"
-#include "text_monitor_element.h"
-#include "wheel_switch_element.h"
 
 namespace {
 
@@ -280,8 +252,23 @@ void FindPvDialog::performSearch()
     displaysToSearch.append(state->activeDisplay.data());
   }
 
-  /* Search all widgets in each display */
+  /* Expand top-level displays through every currently loaded tab/stack page. */
+  QList<DisplayWindow *> expandedDisplays;
+  QSet<DisplayWindow *> seenDisplays;
   for (DisplayWindow *display : displaysToSearch) {
+    if (!display) {
+      continue;
+    }
+    for (DisplayWindow *contentDisplay : display->loadedDisplayTree()) {
+      if (contentDisplay && !seenDisplays.contains(contentDisplay)) {
+        seenDisplays.insert(contentDisplay);
+        expandedDisplays.append(contentDisplay);
+      }
+    }
+  }
+
+  /* Search all widgets in each display */
+  for (DisplayWindow *display : expandedDisplays) {
     if (!display) {
       continue;
     }
@@ -294,7 +281,7 @@ void FindPvDialog::performSearch()
         continue;
       }
 
-      QStringList channels = channelsForWidget(widget);
+      const QStringList channels = display->channelsForWidget(widget);
       for (const QString &channel : channels) {
         QRegularExpressionMatch match = regex.match(channel);
         if (match.hasMatch()) {
@@ -302,7 +289,7 @@ void FindPvDialog::performSearch()
           result.display = display;
           result.widget = widget;
           result.pvName = channel;
-          result.elementType = elementTypeLabel(widget);
+          result.elementType = display->pvInfoElementLabel(widget);
           searchResults_.append(result);
         }
       }
@@ -393,195 +380,6 @@ void FindPvDialog::selectAllResults()
       display->selectWidgets(widgets);
     }
   }
-}
-
-QString FindPvDialog::elementTypeLabel(QWidget *widget) const
-{
-  if (!widget) {
-    return QStringLiteral("Unknown");
-  }
-  if (dynamic_cast<TextElement *>(widget)) {
-    return QStringLiteral("Text");
-  }
-  if (dynamic_cast<TextMonitorElement *>(widget)) {
-    return QStringLiteral("Text Monitor");
-  }
-  if (dynamic_cast<PvTableElement *>(widget)) {
-    return QStringLiteral("PV Table");
-  }
-  if (dynamic_cast<WaveTableElement *>(widget)) {
-    return QStringLiteral("Waveform Table");
-  }
-  if (dynamic_cast<TextEntryElement *>(widget)) {
-    return QStringLiteral("Text Entry");
-  }
-  if (dynamic_cast<SetpointControlElement *>(widget)) {
-    return QStringLiteral("Setpoint Control");
-  }
-  if (dynamic_cast<SliderElement *>(widget)) {
-    return QStringLiteral("Slider");
-  }
-  if (dynamic_cast<WheelSwitchElement *>(widget)) {
-    return QStringLiteral("Wheel Switch");
-  }
-  if (dynamic_cast<ChoiceButtonElement *>(widget)) {
-    return QStringLiteral("Choice Button");
-  }
-  if (dynamic_cast<MenuElement *>(widget)) {
-    return QStringLiteral("Menu");
-  }
-  if (dynamic_cast<MessageButtonElement *>(widget)) {
-    return QStringLiteral("Message Button");
-  }
-  if (dynamic_cast<ShellCommandElement *>(widget)) {
-    return QStringLiteral("Shell Command");
-  }
-  if (dynamic_cast<RelatedDisplayElement *>(widget)) {
-    return QStringLiteral("Related Display");
-  }
-  if (dynamic_cast<MeterElement *>(widget)) {
-    return QStringLiteral("Meter");
-  }
-  if (dynamic_cast<BarMonitorElement *>(widget)) {
-    return QStringLiteral("Bar Monitor");
-  }
-  if (dynamic_cast<ScaleMonitorElement *>(widget)) {
-    return QStringLiteral("Scale Monitor");
-  }
-  if (dynamic_cast<ByteMonitorElement *>(widget)) {
-    return QStringLiteral("Byte Monitor");
-  }
-  if (dynamic_cast<ExpressionChannelElement *>(widget)) {
-    return QStringLiteral("Expression Channel");
-  }
-  if (dynamic_cast<StripChartElement *>(widget)) {
-    return QStringLiteral("Strip Chart");
-  }
-  if (dynamic_cast<CartesianPlotElement *>(widget)) {
-    return QStringLiteral("Cartesian Plot");
-  }
-  if (dynamic_cast<RectangleElement *>(widget)) {
-    return QStringLiteral("Rectangle");
-  }
-  if (dynamic_cast<ImageElement *>(widget)) {
-    return QStringLiteral("Image");
-  }
-  if (dynamic_cast<OvalElement *>(widget)) {
-    return QStringLiteral("Oval");
-  }
-  if (dynamic_cast<ArcElement *>(widget)) {
-    return QStringLiteral("Arc");
-  }
-  if (dynamic_cast<LineElement *>(widget)) {
-    return QStringLiteral("Line");
-  }
-  if (dynamic_cast<PolylineElement *>(widget)) {
-    return QStringLiteral("Polyline");
-  }
-  if (dynamic_cast<PolygonElement *>(widget)) {
-    return QStringLiteral("Polygon");
-  }
-  if (dynamic_cast<CompositeElement *>(widget)) {
-    return QStringLiteral("Composite");
-  }
-  return QStringLiteral("Unknown");
-}
-
-QStringList FindPvDialog::channelsForWidget(QWidget *widget) const
-{
-  QStringList channels;
-  if (!widget) {
-    return channels;
-  }
-
-  auto appendChannel = [&](const QString &channel) {
-    const QString trimmed = channel.trimmed();
-    if (trimmed.isEmpty()) {
-      return;
-    }
-    if (!channels.contains(trimmed)) {
-      channels.append(trimmed);
-    }
-  };
-
-  auto appendChannelArray = [&](const auto &array) {
-    for (const QString &value : array) {
-      appendChannel(value);
-    }
-  };
-
-  if (auto *element = dynamic_cast<TextElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<PvTableElement *>(widget)) {
-    const QVector<PvTableRowConfig> rows = element->rows();
-    for (const PvTableRowConfig &row : rows) {
-      appendChannel(row.channel);
-    }
-  } else if (auto *element = dynamic_cast<WaveTableElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<SetpointControlElement *>(widget)) {
-    appendChannel(element->setpointChannel());
-    appendChannel(element->readbackChannel());
-  } else if (auto *element = dynamic_cast<SliderElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<ChoiceButtonElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<MenuElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<MessageButtonElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<MeterElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<ByteMonitorElement *>(widget)) {
-    appendChannel(element->channel());
-  } else if (auto *element = dynamic_cast<ExpressionChannelElement *>(widget)) {
-    appendChannel(element->variable());
-    for (int i = 0; i < 4; ++i) {
-      appendChannel(element->channel(i));
-    }
-  } else if (auto *element = dynamic_cast<RectangleElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<ImageElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<OvalElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<ArcElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<LineElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<PolylineElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<PolygonElement *>(widget)) {
-    appendChannelArray(AdlWriter::collectChannels(element));
-  } else if (auto *element = dynamic_cast<CompositeElement *>(widget)) {
-    appendChannelArray(element->channels());
-  } else if (auto *element = dynamic_cast<StripChartElement *>(widget)) {
-    const int penCount = element->penCount();
-    for (int i = 0; i < penCount; ++i) {
-      appendChannel(element->channel(i));
-    }
-  } else if (auto *element = dynamic_cast<CartesianPlotElement *>(widget)) {
-    appendChannel(element->triggerChannel());
-    appendChannel(element->eraseChannel());
-    appendChannel(element->countChannel());
-    const int traceCount = element->traceCount();
-    for (int i = 0; i < traceCount; ++i) {
-      appendChannel(element->traceXChannel(i));
-      appendChannel(element->traceYChannel(i));
-    }
-  }
-
-  return channels;
 }
 
 #include "moc_find_pv_dialog.cpp"

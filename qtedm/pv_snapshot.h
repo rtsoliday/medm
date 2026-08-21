@@ -67,6 +67,7 @@ public:
   static constexpr int kMaximumArrayElements = 16384;
   static constexpr qsizetype kMaximumFileBytes = 16 * 1024 * 1024;
 
+  static QString ensureDefaultFileExtension(const QString &filePath);
   static bool save(const QString &filePath,
       const PvSnapshotDocument &document, QString *error = nullptr);
   static PvSnapshotLoadResult load(const QString &filePath);

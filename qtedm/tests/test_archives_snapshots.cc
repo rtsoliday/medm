@@ -5,6 +5,7 @@
 #include <limits>
 
 #include <QFile>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -18,6 +19,7 @@
 #include "archive_provider.h"
 #include "extension_object_registry.h"
 #include "pv_snapshot.h"
+#include "pv_snapshot_dialog.h"
 #include "strip_chart_element.h"
 
 class StalledNetworkReply : public QNetworkReply
@@ -70,6 +72,9 @@ private slots:
   void archiveRequestCanBeCancelled();
   void archiveRequestTimesOut();
   void archiveHistoryPreservesTimestampGaps();
+  void archiveHistoryRendersConnectedLine();
+  void snapshotDefaultExtensionIsAppended();
+  void restoreDialogIsIndependentTopLevelWindow();
   void snapshotRoundTripPreservesTypedValues();
   void snapshotRejectsFutureSchemaAndUnsafeValues();
   void restoreChecksPolicyTypeAccessAndLimits();
@@ -266,6 +271,66 @@ void TestArchivesSnapshots::archiveHistoryPreservesTimestampGaps()
   QVERIFY(finiteIndices.at(1) - finiteIndices.at(0) > 1);
   QVERIFY(finiteIndices.at(2) - finiteIndices.at(1) > 1);
   QVERIFY(chart.sampleIntervalSeconds() > 0.0);
+}
+
+void TestArchivesSnapshots::archiveHistoryRendersConnectedLine()
+{
+  StripChartElement chart;
+  chart.resize(640, 320);
+  chart.setBackgroundColor(Qt::white);
+  chart.setForegroundColor(Qt::black);
+  chart.setPenColor(0, Qt::magenta);
+  chart.setArchivePlot(true);
+  chart.setExecuteMode(true);
+  chart.setChannel(0, QStringLiteral("TEST:PV"));
+  chart.setRuntimeConnected(0, true);
+  chart.setRuntimeReadAccessKnown(0, true);
+  chart.setRuntimeReadAccess(0, true);
+  chart.setRuntimeLimits(0, 0.0, 4.0);
+  const qint64 start = 100000;
+  const qint64 end = 110000;
+  chart.replaceRuntimeHistory(0, {1.0, 3.0, 2.0},
+      {start + 100, start + 5000, end - 100}, start, end);
+
+  QImage rendered(chart.size(), QImage::Format_ARGB32);
+  rendered.fill(Qt::transparent);
+  chart.render(&rendered);
+
+  int penPixels = 0;
+  for (int y = 0; y < rendered.height(); ++y) {
+    for (int x = 0; x < rendered.width(); ++x) {
+      if (rendered.pixelColor(x, y) == QColor(Qt::magenta)) {
+        ++penPixels;
+      }
+    }
+  }
+  QVERIFY2(penPixels > 100,
+      qPrintable(QStringLiteral("Expected connected archive line, found %1 "
+          "pen-colored pixels").arg(penPixels)));
+}
+
+void TestArchivesSnapshots::snapshotDefaultExtensionIsAppended()
+{
+  QCOMPARE(PvSnapshot::ensureDefaultFileExtension(
+      QStringLiteral("snapshot")),
+      QStringLiteral("snapshot.qtedm-snapshot.json"));
+  QCOMPARE(PvSnapshot::ensureDefaultFileExtension(
+      QStringLiteral("snapshot.qtedm-snapshot.json")),
+      QStringLiteral("snapshot.qtedm-snapshot.json"));
+  QCOMPARE(PvSnapshot::ensureDefaultFileExtension(
+      QStringLiteral("snapshot.json")), QStringLiteral("snapshot.json"));
+  QCOMPARE(PvSnapshot::ensureDefaultFileExtension(
+      QStringLiteral("/tmp/archive.v1/snapshot")),
+      QStringLiteral("/tmp/archive.v1/snapshot.qtedm-snapshot.json"));
+  QCOMPARE(PvSnapshot::ensureDefaultFileExtension(QString()), QString());
+}
+
+void TestArchivesSnapshots::restoreDialogIsIndependentTopLevelWindow()
+{
+  PvSnapshotRestoreDialog dialog({});
+  QVERIFY(dialog.isWindow());
+  QVERIFY(!dialog.parentWidget());
+  QCOMPARE(dialog.windowModality(), Qt::ApplicationModal);
 }
 
 void TestArchivesSnapshots::snapshotRoundTripPreservesTypedValues()

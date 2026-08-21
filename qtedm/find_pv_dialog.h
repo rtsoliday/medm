@@ -48,8 +48,6 @@ private:
   void updateResultsList();
   void selectResult(const SearchResult &result);
   void selectAllResults();
-  QString elementTypeLabel(QWidget *widget) const;
-  QStringList channelsForWidget(QWidget *widget) const;
 
   std::weak_ptr<DisplayState> state_;
   QLineEdit *searchEdit_ = nullptr;

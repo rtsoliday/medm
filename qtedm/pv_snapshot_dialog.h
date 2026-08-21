@@ -20,8 +20,7 @@ class PvSnapshotRestoreDialog : public QDialog
 {
 public:
   explicit PvSnapshotRestoreDialog(
-      const QVector<PvSnapshotComparison> &comparisons,
-      QWidget *parent = nullptr);
+      const QVector<PvSnapshotComparison> &comparisons);
 
   QVector<int> selectedRows() const;
 

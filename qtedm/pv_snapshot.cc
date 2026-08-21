@@ -5,6 +5,7 @@
 #include <limits>
 
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -336,6 +337,14 @@ QString PvSnapshotEntry::displayValue() const
     }
   }
   return value.toVariant().toString();
+}
+
+QString PvSnapshot::ensureDefaultFileExtension(const QString &filePath)
+{
+  if (filePath.isEmpty() || !QFileInfo(filePath).suffix().isEmpty()) {
+    return filePath;
+  }
+  return filePath + QStringLiteral(".qtedm-snapshot.json");
 }
 
 bool PvSnapshot::save(const QString &filePath,

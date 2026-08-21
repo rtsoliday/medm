@@ -541,12 +541,19 @@ qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 PLUGIN_API_TEST_DIR = $(OBJ_DIR)/plugins
 ifeq ($(OS), Windows)
   PLUGIN_API_TEST_LIBRARY = $(PLUGIN_API_TEST_DIR)/qtedm_plugin_api_test.dll
+  PLUGIN_API_THUMBS_LIBRARY = $(PLUGIN_API_TEST_DIR)/qtedm_plugin_pv_thumbs.dll
 else ifeq ($(OS), Darwin)
   PLUGIN_API_TEST_LIBRARY = $(PLUGIN_API_TEST_DIR)/libqtedm_plugin_api_test.dylib
+  PLUGIN_API_THUMBS_LIBRARY = \
+    $(PLUGIN_API_TEST_DIR)/libqtedm_plugin_pv_thumbs.dylib
 else
   PLUGIN_API_TEST_LIBRARY = $(PLUGIN_API_TEST_DIR)/libqtedm_plugin_api_test.so
+  PLUGIN_API_THUMBS_LIBRARY = \
+    $(PLUGIN_API_TEST_DIR)/libqtedm_plugin_pv_thumbs.so
 endif
 PLUGIN_API_TEST_METADATA = $(PLUGIN_API_TEST_LIBRARY).qtedm-plugin.json
+PLUGIN_API_THUMBS_METADATA = \
+  $(PLUGIN_API_THUMBS_LIBRARY).qtedm-plugin.json
 
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
@@ -568,6 +575,15 @@ $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT): \
     $(OBJ_DIR)/plugin_api_discovery_plugin.moc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
+$(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc: \
+    tests/plugin_api_pv_thumbs_plugin.cc | $(OBJ_DIR)
+	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
+
+$(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT): \
+    tests/plugin_api_pv_thumbs_plugin.cc \
+    $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
+	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+
 $(PLUGIN_API_TEST_DIR):
 	mkdir -p $@
 
@@ -576,17 +592,31 @@ $(PLUGIN_API_TEST_METADATA): \
     $(PLUGIN_API_TEST_LIBRARY) | $(PLUGIN_API_TEST_DIR)
 	cp -f $< $@
 
+$(PLUGIN_API_THUMBS_METADATA): \
+    tests/plugin_api_pv_thumbs_plugin.qtedm-plugin.json \
+    $(PLUGIN_API_THUMBS_LIBRARY) | $(PLUGIN_API_TEST_DIR)
+	cp -f $< $@
+
 ifeq ($(OS), Windows)
 $(PLUGIN_API_TEST_LIBRARY): \
     $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
+	$(LINKDLL) -out:$@ $< $(LDFLAGS)
+$(PLUGIN_API_THUMBS_LIBRARY): \
+    $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
 	$(LINKDLL) -out:$@ $< $(LDFLAGS)
 else ifeq ($(OS), Darwin)
 $(PLUGIN_API_TEST_LIBRARY): \
     $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
 	$(CCC) -dynamiclib -o $@ $< $(LDFLAGS)
+$(PLUGIN_API_THUMBS_LIBRARY): \
+    $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
+	$(CCC) -dynamiclib -o $@ $< $(LDFLAGS)
 else
 $(PLUGIN_API_TEST_LIBRARY): \
     $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
+	$(CCC) -shared -o $@ $< $(LDFLAGS)
+$(PLUGIN_API_THUMBS_LIBRARY): \
+    $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
 	$(CCC) -shared -o $@ $< $(LDFLAGS)
 endif
 
@@ -602,7 +632,8 @@ endef
 
 $(foreach test,$(QTEDM_UNIT_TEST_NAMES),$(eval $(call link_qtedm_unit_test,$(test))))
 
-$(OBJ_DIR)/test_plugins_property_rules$(EXEEXT): | $(PLUGIN_API_TEST_METADATA)
+$(OBJ_DIR)/test_plugins_property_rules$(EXEEXT): | \
+  $(PLUGIN_API_TEST_METADATA) $(PLUGIN_API_THUMBS_METADATA)
 
 $(OBJ_DIR)/qtedm_image_compare$(EXEEXT): $(qtedm_image_compare_OBJS)
 	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
@@ -615,7 +646,8 @@ else
 	@exit 1
 endif
 
-build-tests: check-qt-test $(PLUGIN_API_TEST_METADATA) $(QTEDM_UNIT_TEST_BINARIES)
+build-tests: check-qt-test $(PLUGIN_API_TEST_METADATA) \
+  $(PLUGIN_API_THUMBS_METADATA) $(QTEDM_UNIT_TEST_BINARIES)
 
 tests: test
 
@@ -656,9 +688,12 @@ test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
 clean-tests:
 	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS) \
 	  $(QTEDM_VISUAL_TEST_TOOLS) $(PLUGIN_API_TEST_LIBRARY) \
-	  $(PLUGIN_API_TEST_METADATA) \
+	  $(PLUGIN_API_TEST_METADATA) $(PLUGIN_API_THUMBS_LIBRARY) \
+	  $(PLUGIN_API_THUMBS_METADATA) \
 	  $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) \
-	  $(OBJ_DIR)/plugin_api_discovery_plugin.moc
+	  $(OBJ_DIR)/plugin_api_discovery_plugin.moc \
+	  $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) \
+	  $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc
 
 .PHONY: tests test build-tests test-unit test-cli test-ioc test-visual clean-tests check-qt-test
 

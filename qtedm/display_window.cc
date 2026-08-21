@@ -232,6 +232,11 @@ DisplayWindow::DisplayWindow(const QPalette &displayPalette, const QPalette &uiP
 
 DisplayWindow::~DisplayWindow()
 {
+  if (resourcePalette_) {
+    QObject::disconnect(resourcePalette_, nullptr, this, nullptr);
+    delete resourcePalette_;
+    resourcePalette_ = nullptr;
+  }
   leaveExecuteMode();
   clearSelections();
   if (executeDragTooltipLabel_) {
@@ -372,6 +377,8 @@ void DisplayWindow::selectAllElements()
   appendVisible(shellCommandElements_);
   appendVisible(relatedDisplayElements_);
   appendVisible(textMonitorElements_);
+  appendVisible(pvTableElements_);
+  appendVisible(waveTableElements_);
   appendVisible(meterElements_);
   appendVisible(barMonitorElements_);
   appendVisible(thermometerElements_);
@@ -392,6 +399,7 @@ void DisplayWindow::selectAllElements()
   appendVisible(polygonElements_);
   appendVisible(compositeElements_);
   appendVisible(tabbedDisplayElements_);
+  appendVisible(pluginElements_);
 
   if (widgets.isEmpty()) {
     notifyMenus();
@@ -506,101 +514,8 @@ void DisplayWindow::findOutliers()
 
   QList<OutlierRecord> outliers;
 
-  auto elementTypeName = [](QWidget *widget) -> QString {
-    if (!widget) {
-      return QStringLiteral("Unknown");
-    }
-    if (dynamic_cast<TextElement *>(widget)) {
-      return QStringLiteral("Text");
-    }
-    if (dynamic_cast<TextEntryElement *>(widget)) {
-      return QStringLiteral("Text Entry");
-    }
-    if (dynamic_cast<TextAreaElement *>(widget)) {
-      return QStringLiteral("Text Area");
-    }
-    if (dynamic_cast<SliderElement *>(widget)) {
-      return QStringLiteral("Slider");
-    }
-    if (dynamic_cast<WheelSwitchElement *>(widget)) {
-      return QStringLiteral("Wheel Switch");
-    }
-    if (dynamic_cast<ChoiceButtonElement *>(widget)) {
-      return QStringLiteral("Choice Button");
-    }
-    if (dynamic_cast<MenuElement *>(widget)) {
-      return QStringLiteral("Menu");
-    }
-    if (dynamic_cast<MessageButtonElement *>(widget)) {
-      return QStringLiteral("Message Button");
-    }
-    if (dynamic_cast<ShellCommandElement *>(widget)) {
-      return QStringLiteral("Shell Command");
-    }
-    if (dynamic_cast<RelatedDisplayElement *>(widget)) {
-      return QStringLiteral("Related Display");
-    }
-    if (dynamic_cast<TextMonitorElement *>(widget)) {
-      return QStringLiteral("Text Monitor");
-    }
-    if (dynamic_cast<MeterElement *>(widget)) {
-      return QStringLiteral("Meter");
-    }
-    if (dynamic_cast<BarMonitorElement *>(widget)) {
-      return QStringLiteral("Bar Monitor");
-    }
-    if (dynamic_cast<ThermometerElement *>(widget)) {
-      return QStringLiteral("Thermometer");
-    }
-    if (dynamic_cast<ScaleMonitorElement *>(widget)) {
-      return QStringLiteral("Scale Monitor");
-    }
-    if (dynamic_cast<StripChartElement *>(widget)) {
-      return QStringLiteral("Strip Chart");
-    }
-    if (dynamic_cast<CartesianPlotElement *>(widget)) {
-      return QStringLiteral("Cartesian Plot");
-    }
-    if (dynamic_cast<ByteMonitorElement *>(widget)) {
-      return QStringLiteral("Byte Monitor");
-    }
-    if (dynamic_cast<LedMonitorElement *>(widget)) {
-      return QStringLiteral("LED Monitor");
-    }
-    if (dynamic_cast<ExpressionChannelElement *>(widget)) {
-      return QStringLiteral("Expression Channel");
-    }
-    if (dynamic_cast<RectangleElement *>(widget)) {
-      return QStringLiteral("Rectangle");
-    }
-    if (dynamic_cast<ImageElement *>(widget)) {
-      return QStringLiteral("Image");
-    }
-    if (dynamic_cast<NtNdArrayImageElement *>(widget)) {
-      return QStringLiteral("NTNDArray Image");
-    }
-    if (dynamic_cast<HeatmapElement *>(widget)) {
-      return QStringLiteral("Heatmap");
-    }
-    if (dynamic_cast<OvalElement *>(widget)) {
-      return QStringLiteral("Oval");
-    }
-    if (dynamic_cast<ArcElement *>(widget)) {
-      return QStringLiteral("Arc");
-    }
-    if (dynamic_cast<LineElement *>(widget)) {
-      return QStringLiteral("Line");
-    }
-    if (dynamic_cast<PolylineElement *>(widget)) {
-      return QStringLiteral("Polyline");
-    }
-    if (dynamic_cast<PolygonElement *>(widget)) {
-      return QStringLiteral("Polygon");
-    }
-    if (dynamic_cast<CompositeElement *>(widget)) {
-      return QStringLiteral("Composite");
-    }
-    return QString::fromLatin1(widget->metaObject()->className());
+  auto elementTypeName = [this](QWidget *widget) {
+    return pvInfoElementLabel(widget);
   };
 
   auto considerWidget = [&](QWidget *widget) {
@@ -662,6 +577,7 @@ void DisplayWindow::findOutliers()
   considerList(polygonElements_);
   considerList(compositeElements_);
   considerList(tabbedDisplayElements_);
+  considerList(pluginElements_);
 
   int partialCount = 0;
   int totalCount = 0;
@@ -1121,15 +1037,23 @@ void DisplayWindow::groupSelectedElements()
     insertIndex = elementStack_.size();
   }
 
+  QHash<QWidget *, QtedmRuleSet> groupedRules;
   for (QWidget *widget : candidates) {
     const QPoint currentTopLeft = widget->mapTo(displayArea_, QPoint(0, 0));
     const QPoint relativePos = currentTopLeft - compositeRect.topLeft();
+    const QtedmRuleSet rules = propertyRuleSets_.value(widget);
     removeElementFromStack(widget);
+    if (!rules.isEmpty()) {
+      groupedRules.insert(widget, rules);
+    }
     widget->setParent(composite);
     widget->move(relativePos);
     widget->show();
     markWidgetGeometryEdited(widget);
     composite->adoptChild(widget);
+  }
+  for (auto it = groupedRules.cbegin(); it != groupedRules.cend(); ++it) {
+    propertyRuleSets_.insert(it.key(), it.value());
   }
 
   /* Expand composite bounds to encompass all child widgets */
@@ -1205,6 +1129,7 @@ void DisplayWindow::ungroupSelectedElements()
 
     const QPoint compositeOrigin = composite->mapTo(displayArea_, QPoint(0, 0));
     const QList<QWidget *> children = composite->childWidgets();
+    const QtedmRuleSet compositeRules = propertyRuleSets_.value(composite);
 
     removeElementFromStack(composite);
     compositeElements_.removeAll(composite);
@@ -1221,6 +1146,14 @@ void DisplayWindow::ungroupSelectedElements()
       child->setGeometry(newGeometry);
       child->show();
       insertElementInStack(insertIndex, child);
+      if (!compositeRules.isEmpty()) {
+        QtedmRuleSet mergedRules = propertyRuleSets_.value(child);
+        mergedRules.rules += compositeRules.rules;
+        if (mergedRules.diagnostic.isEmpty()) {
+          mergedRules.diagnostic = compositeRules.diagnostic;
+        }
+        propertyRuleSets_.insert(child, mergedRules);
+      }
       ++insertIndex;
     }
 
@@ -2641,6 +2574,82 @@ bool DisplayWindow::isPvLimitsPickingActive() const
 }
 
 
+bool DisplayWindow::eventFilter(QObject *watched, QEvent *event)
+{
+  if (!event || (!pvInfoPickingActive_ && !pvLimitsPickingActive_
+      && !executeMiddleButtonApplicationFilterInstalled_)) {
+    return QMainWindow::eventFilter(watched, event);
+  }
+
+  auto *target = qobject_cast<QWidget *>(watched);
+  const bool belongsToDisplay =
+      target && (target == this || isAncestorOf(target));
+  if (!belongsToDisplay) {
+    return QMainWindow::eventFilter(watched, event);
+  }
+
+  const bool pickerActive = pvInfoPickingActive_ || pvLimitsPickingActive_;
+  if (pickerActive && event->type() == QEvent::MouseButtonPress) {
+    auto *mouseEvent = static_cast<QMouseEvent *>(event);
+    if (mouseEvent->button() == Qt::LeftButton) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+      const QPoint globalPos = mouseEvent->globalPosition().toPoint();
+#else
+      const QPoint globalPos = mouseEvent->globalPos();
+#endif
+      const QPoint windowPos = mapFromGlobal(globalPos);
+      if (pvInfoPickingActive_) {
+        completePvInfoPick(windowPos, target);
+      } else {
+        completePvLimitsPick(windowPos, target);
+      }
+      mouseEvent->accept();
+      return true;
+    }
+    if (mouseEvent->button() == Qt::RightButton
+        || mouseEvent->button() == Qt::MiddleButton) {
+      if (pvInfoPickingActive_) {
+        cancelPvInfoPickMode();
+      }
+      if (pvLimitsPickingActive_) {
+        cancelPvLimitsPickMode();
+      }
+      if (mouseEvent->button() == Qt::MiddleButton) {
+        mouseEvent->accept();
+        return true;
+      }
+    }
+  } else if (pickerActive && event->type() == QEvent::KeyPress) {
+    auto *keyEvent = static_cast<QKeyEvent *>(event);
+    if (keyEvent->key() == Qt::Key_Escape) {
+      if (pvInfoPickingActive_) {
+        cancelPvInfoPickMode();
+      }
+      if (pvLimitsPickingActive_) {
+        cancelPvLimitsPickMode();
+      }
+      keyEvent->accept();
+      return true;
+    }
+  }
+
+  if (executeMiddleButtonApplicationFilterInstalled_
+      && (event->type() == QEvent::MouseButtonPress
+          || event->type() == QEvent::MouseMove
+          || event->type() == QEvent::MouseButtonRelease)) {
+    auto *mouseEvent = static_cast<QMouseEvent *>(event);
+    if (routeExecuteRightButtonEvent(target, mouseEvent)) {
+      return true;
+    }
+    if (routeExecuteMiddleButtonEvent(target, mouseEvent)) {
+      return true;
+    }
+  }
+
+  return QMainWindow::eventFilter(watched, event);
+}
+
+
 void DisplayWindow::focusInEvent(QFocusEvent *event)
 {
   QMainWindow::focusInEvent(event);
@@ -3990,7 +3999,6 @@ void DisplayWindow::removeWidgetFromSelection(QWidget *widget)
   if (auto *textEntry = dynamic_cast<TextEntryElement *>(widget)) {
     if (selectedTextEntryElement_ == textEntry) {
       clearTextEntrySelection();
-      clearTextAreaSelection();
       return;
     }
   }
@@ -4051,15 +4059,12 @@ void DisplayWindow::removeWidgetFromSelection(QWidget *widget)
   if (auto *textMonitor = dynamic_cast<TextMonitorElement *>(widget)) {
     if (selectedTextMonitorElement_ == textMonitor) {
       clearTextMonitorSelection();
-      clearPvTableSelection();
-      clearWaveTableSelection();
       return;
     }
   }
   if (auto *pvTable = dynamic_cast<PvTableElement *>(widget)) {
     if (selectedPvTable_ == pvTable) {
       clearPvTableSelection();
-      clearWaveTableSelection();
       return;
     }
   }
@@ -4183,6 +4188,18 @@ void DisplayWindow::removeWidgetFromSelection(QWidget *widget)
       return;
     }
   }
+  if (auto *tabbed = dynamic_cast<TabbedDisplayElement *>(widget)) {
+    if (selectedTabbedDisplayElement_ == tabbed) {
+      clearTabbedDisplaySelection();
+      return;
+    }
+  }
+  if (auto *plugin = dynamic_cast<PluginElement *>(widget)) {
+    if (selectedPluginElement_ == plugin) {
+      clearPluginSelection();
+      return;
+    }
+  }
   setWidgetSelectionState(widget, false);
 }
 
@@ -4269,6 +4286,8 @@ QList<QWidget *> DisplayWindow::selectedWidgets() const
   appendUnique(selectedExpressionChannel_);
   appendUnique(selectedRectangle_);
   appendUnique(selectedImage_);
+  appendUnique(selectedHeatmap_);
+  appendUnique(selectedWaterfallPlot_);
   appendUnique(selectedOval_);
   appendUnique(selectedArc_);
   appendUnique(selectedLine_);
@@ -4348,6 +4367,7 @@ void DisplayWindow::clearSelections()
   clearDisplaySelection();
   clearTextSelection();
   clearTextEntrySelection();
+  clearSetpointControlSelection();
   clearTextAreaSelection();
   clearSliderSelection();
   clearWheelSwitchSelection();
@@ -4397,7 +4417,23 @@ bool DisplayWindow::copySelectionInternal(bool removeOriginal)
     if (!state->clipboard) {
       state->clipboard = std::make_shared<ClipboardContent>();
     }
-    state->clipboard->paste = std::forward<decltype(fn)>(fn);
+    const QtedmRuleSet sourceRules =
+        propertyRuleSets_.value(currentSelectedWidget());
+    state->clipboard->paste =
+        [operation = std::forward<decltype(fn)>(fn), sourceRules](
+            DisplayWindow &target, const QPoint &offset) mutable {
+          const QSet<QWidget *> previousElements = target.elementStackSet_;
+          operation(target, offset);
+          if (sourceRules.isEmpty()) {
+            return;
+          }
+          for (const auto &pointer : target.elementStack_) {
+            QWidget *created = pointer.data();
+            if (created && !previousElements.contains(created)) {
+              target.propertyRuleSets_.insert(created, sourceRules);
+            }
+          }
+        };
     state->clipboard->nextOffset = QPoint(10, 10);
     state->clipboard->hasPasted = false;
     notifyMenus();
@@ -4411,6 +4447,85 @@ bool DisplayWindow::copySelectionInternal(bool removeOriginal)
     markDirty();
     notifyMenus();
   };
+
+  const QList<QWidget *> multiWidgets = selectedWidgetsInStackOrder(true);
+  if (multiSelection_.size() > 1 && multiWidgets.size() > 1) {
+    struct ClipboardItem {
+      QRect geometry;
+      AdlNode node;
+      QtedmRuleSet rules;
+    };
+    QVector<ClipboardItem> items;
+    items.reserve(multiWidgets.size());
+    for (QWidget *widget : multiWidgets) {
+      std::optional<AdlNode> node = widgetToAdlNode(widget);
+      if (!widget || !node) {
+        return false;
+      }
+      items.append({widgetDisplayRect(widget), std::move(*node),
+          propertyRuleSets_.value(widget)});
+    }
+
+    if (!state->clipboard) {
+      state->clipboard = std::make_shared<ClipboardContent>();
+    }
+    state->clipboard->paste = [items = std::move(items)](
+        DisplayWindow &target, const QPoint &offset) {
+      if (!target.displayArea_) {
+        return;
+      }
+      target.clearSelections();
+      QList<QWidget *> createdElements;
+      for (const ClipboardItem &item : items) {
+        const QSet<QWidget *> previousElements = target.elementStackSet_;
+        AdlNode nodeCopy = item.node;
+        const QRect desired =
+            target.translateRectForPaste(item.geometry, offset);
+        target.translateElementNodeForPaste(nodeCopy,
+            desired.topLeft() - item.geometry.topLeft());
+        {
+          ElementLoadContextGuard guard(target, target.displayArea_, QPoint(),
+              false, nullptr);
+          target.loadElementNode(nodeCopy);
+        }
+        for (auto it = target.elementStack_.crbegin();
+             it != target.elementStack_.crend(); ++it) {
+          QWidget *created = it->data();
+          if (created && !previousElements.contains(created)) {
+            if (!item.rules.isEmpty()) {
+              target.propertyRuleSets_.insert(created, item.rules);
+            }
+            createdElements.append(created);
+            break;
+          }
+        }
+      }
+
+      if (createdElements.size() == 1) {
+        target.selectWidgetForEditing(createdElements.front());
+      } else {
+        for (QWidget *created : std::as_const(createdElements)) {
+          target.addWidgetToMultiSelection(created);
+        }
+        target.showResourcePaletteForMultipleSelection();
+      }
+      if (!createdElements.isEmpty()) {
+        target.markDirty();
+        target.notifyMenus();
+      }
+    };
+    state->clipboard->nextOffset = QPoint(10, 10);
+    state->clipboard->hasPasted = false;
+    notifyMenus();
+
+    if (removeOriginal) {
+      for (QWidget *widget : multiWidgets) {
+        cutWidgetFromDisplay(widget);
+      }
+      finalizeCut();
+    }
+    return true;
+  }
 
   if (selectedTabbedDisplayElement_) {
     TabbedDisplayElement *element = selectedTabbedDisplayElement_;
@@ -4526,7 +4641,9 @@ const QRect geometry = widgetDisplayRect(element);
     });
 
     if (removeOriginal) {
-      cutSelectedElement(compositeElements_, selectedCompositeElement_);
+      CompositeElement *original = selectedCompositeElement_;
+      selectedCompositeElement_ = nullptr;
+      cutWidgetFromDisplay(original);
       finalizeCut();
     }
     return true;
@@ -6200,6 +6317,99 @@ const QString visibilityCalc = element->visibilityCalc();
 }
 
 
+bool DisplayWindow::cutWidgetFromDisplay(QWidget *widget)
+{
+  if (!widget) {
+    return false;
+  }
+  auto cutElement = [this](auto *element, auto &elements) {
+    auto *selected = element;
+    return cutSelectedElement(elements, selected);
+  };
+
+  if (auto *element = dynamic_cast<TextElement *>(widget))
+    return cutElement(element, textElements_);
+  if (auto *element = dynamic_cast<TextEntryElement *>(widget))
+    return cutElement(element, textEntryElements_);
+  if (auto *element = dynamic_cast<SetpointControlElement *>(widget))
+    return cutElement(element, setpointControlElements_);
+  if (auto *element = dynamic_cast<TextAreaElement *>(widget))
+    return cutElement(element, textAreaElements_);
+  if (auto *element = dynamic_cast<SliderElement *>(widget))
+    return cutElement(element, sliderElements_);
+  if (auto *element = dynamic_cast<WheelSwitchElement *>(widget))
+    return cutElement(element, wheelSwitchElements_);
+  if (auto *element = dynamic_cast<ChoiceButtonElement *>(widget))
+    return cutElement(element, choiceButtonElements_);
+  if (auto *element = dynamic_cast<MenuElement *>(widget))
+    return cutElement(element, menuElements_);
+  if (auto *element = dynamic_cast<MessageButtonElement *>(widget))
+    return cutElement(element, messageButtonElements_);
+  if (auto *element = dynamic_cast<ShellCommandElement *>(widget))
+    return cutElement(element, shellCommandElements_);
+  if (auto *element = dynamic_cast<RelatedDisplayElement *>(widget))
+    return cutElement(element, relatedDisplayElements_);
+  if (auto *element = dynamic_cast<TextMonitorElement *>(widget))
+    return cutElement(element, textMonitorElements_);
+  if (auto *element = dynamic_cast<PvTableElement *>(widget))
+    return cutElement(element, pvTableElements_);
+  if (auto *element = dynamic_cast<WaveTableElement *>(widget))
+    return cutElement(element, waveTableElements_);
+  if (auto *element = dynamic_cast<MeterElement *>(widget))
+    return cutElement(element, meterElements_);
+  if (auto *element = dynamic_cast<BarMonitorElement *>(widget))
+    return cutElement(element, barMonitorElements_);
+  if (auto *element = dynamic_cast<ThermometerElement *>(widget))
+    return cutElement(element, thermometerElements_);
+  if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget))
+    return cutElement(element, scaleMonitorElements_);
+  if (auto *element = dynamic_cast<StripChartElement *>(widget))
+    return cutElement(element, stripChartElements_);
+  if (auto *element = dynamic_cast<CartesianPlotElement *>(widget))
+    return cutElement(element, cartesianPlotElements_);
+  if (auto *element = dynamic_cast<ByteMonitorElement *>(widget))
+    return cutElement(element, byteMonitorElements_);
+  if (auto *element = dynamic_cast<LedMonitorElement *>(widget))
+    return cutElement(element, ledMonitorElements_);
+  if (auto *element = dynamic_cast<ExpressionChannelElement *>(widget))
+    return cutElement(element, expressionChannelElements_);
+  if (auto *element = dynamic_cast<RectangleElement *>(widget))
+    return cutElement(element, rectangleElements_);
+  if (auto *element = dynamic_cast<HeatmapElement *>(widget))
+    return cutElement(element, heatmapElements_);
+  if (auto *element = dynamic_cast<ImageElement *>(widget))
+    return cutElement(element, imageElements_);
+  if (auto *element = dynamic_cast<WaterfallPlotElement *>(widget))
+    return cutElement(element, waterfallPlotElements_);
+  if (auto *element = dynamic_cast<OvalElement *>(widget))
+    return cutElement(element, ovalElements_);
+  if (auto *element = dynamic_cast<ArcElement *>(widget))
+    return cutElement(element, arcElements_);
+  if (auto *element = dynamic_cast<LineElement *>(widget))
+    return cutElement(element, lineElements_);
+  if (auto *element = dynamic_cast<PolylineElement *>(widget))
+    return cutElement(element, polylineElements_);
+  if (auto *element = dynamic_cast<PolygonElement *>(widget))
+    return cutElement(element, polygonElements_);
+  if (auto *element = dynamic_cast<CompositeElement *>(widget)) {
+    const QList<QWidget *> children = element->childWidgets();
+    for (QWidget *child : children) {
+      cutWidgetFromDisplay(child);
+    }
+    return cutElement(element, compositeElements_);
+  }
+  if (auto *element = dynamic_cast<TabbedDisplayElement *>(widget)) {
+    tabbedDisplayElements_.removeAll(element);
+    removeElementFromStack(element);
+    element->deleteLater();
+    return true;
+  }
+  if (auto *element = dynamic_cast<PluginElement *>(widget))
+    return cutElement(element, pluginElements_);
+  return false;
+}
+
+
 void DisplayWindow::pasteFromClipboard()
 {
   setAsActiveDisplay();
@@ -6228,6 +6438,7 @@ bool DisplayWindow::hasAnyElementSelection() const
       || selectedChoiceButtonElement_ || selectedMenuElement_
       || selectedMessageButtonElement_ || selectedShellCommandElement_
       || selectedRelatedDisplayElement_ || selectedTextMonitorElement_
+      || selectedPvTable_ || selectedWaveTable_
       || selectedMeterElement_ || selectedBarMonitorElement_
       || selectedThermometerElement_
       || selectedScaleMonitorElement_ || selectedStripChartElement_
@@ -6257,6 +6468,7 @@ bool DisplayWindow::hasSelectableElements() const
       || !choiceButtonElements_.isEmpty() || !menuElements_.isEmpty()
       || !messageButtonElements_.isEmpty() || !shellCommandElements_.isEmpty()
       || !relatedDisplayElements_.isEmpty() || !textMonitorElements_.isEmpty()
+      || !pvTableElements_.isEmpty() || !waveTableElements_.isEmpty()
       || !meterElements_.isEmpty() || !barMonitorElements_.isEmpty()
       || !thermometerElements_.isEmpty()
       || !scaleMonitorElements_.isEmpty() || !stripChartElements_.isEmpty()
@@ -6297,9 +6509,11 @@ void DisplayWindow::closeResourcePalette()
 
 void DisplayWindow::handleResourcePaletteClosed()
 {
+  clearMultiSelection();
   clearDisplaySelection();
   clearTextSelection();
   clearTextEntrySelection();
+  clearSetpointControlSelection();
   clearTextAreaSelection();
   clearSliderSelection();
   clearWheelSwitchSelection();
@@ -6316,15 +6530,23 @@ void DisplayWindow::handleResourcePaletteClosed()
   clearStripChartSelection();
   clearCartesianPlotSelection();
   clearBarMonitorSelection();
+  clearThermometerSelection();
   clearByteMonitorSelection();
+  clearLedMonitorSelection();
   clearExpressionChannelSelection();
   clearRectangleSelection();
   clearImageSelection();
+  clearHeatmapSelection();
+  clearWaterfallPlotSelection();
   clearOvalSelection();
   clearArcSelection();
   clearLineSelection();
   clearPolylineSelection();
   clearPolygonSelection();
+  clearCompositeSelection();
+  clearTabbedDisplaySelection();
+  clearPluginSelection();
+  notifyMenus();
 }
 
 
@@ -10250,7 +10472,10 @@ QWidget *DisplayWindow::elementAt(const QPoint &windowPos,
   if (!displayArea_) {
     return nullptr;
   }
-  const QPoint areaPos = displayArea_->mapFrom(this, windowPos);
+  /* Embedded displays reparent their display area into the tab page while
+   * retaining a hidden DisplayWindow as the runtime owner. Map through global
+   * coordinates so hit testing remains valid in both widget hierarchies. */
+  const QPoint areaPos = displayArea_->mapFromGlobal(mapToGlobal(windowPos));
   if (!displayArea_->rect().contains(areaPos)) {
     return nullptr;
   }
@@ -10572,6 +10797,54 @@ QList<QWidget *> DisplayWindow::findPvWidgets() const
 }
 
 
+QList<DisplayWindow *> DisplayWindow::loadedDisplayTree() const
+{
+  QList<DisplayWindow *> displays;
+  QSet<DisplayWindow *> seen;
+  std::function<void(DisplayWindow *)> appendDisplay =
+      [&](DisplayWindow *display) {
+        if (!display || seen.contains(display)) {
+          return;
+        }
+        seen.insert(display);
+        displays.append(display);
+
+        for (TabbedDisplayElement *tabbed : display->tabbedDisplayElements_) {
+          if (!tabbed) {
+            continue;
+          }
+          const int pageCount = tabbed->pages().size();
+          for (int index = 0; index < pageCount; ++index) {
+            QWidget *content = tabbed->pageContent(index);
+            QObject *childObject = content
+                ? content->property("_qtedmChildDisplay").value<QObject *>()
+                : nullptr;
+            if (auto *child = dynamic_cast<DisplayWindow *>(childObject)) {
+              appendDisplay(child);
+            }
+          }
+        }
+      };
+
+  appendDisplay(const_cast<DisplayWindow *>(this));
+  return displays;
+}
+
+
+DisplayWindow *DisplayWindow::contentDisplayForTarget(QWidget *target) const
+{
+  for (QWidget *current = target; current;
+       current = current->parentWidget()) {
+    QObject *childObject = current->property("_qtedmChildDisplay")
+                               .value<QObject *>();
+    if (auto *childWindow = dynamic_cast<DisplayWindow *>(childObject)) {
+      return childWindow;
+    }
+  }
+  return const_cast<DisplayWindow *>(this);
+}
+
+
 bool DisplayWindow::hasPvaChannels() const
 {
   const QList<QWidget *> widgets = findPvWidgets();
@@ -10659,6 +10932,9 @@ void DisplayWindow::startPvInfoPickMode()
   if (pvInfoPickingActive_) {
     cancelPvInfoPickMode();
   }
+  if (pvLimitsPickingActive_ || pvLimitsApplicationFilterInstalled_) {
+    cancelPvLimitsPickMode();
+  }
   if (!pvInfoCursorInitialized_) {
     pvInfoCursor_ = createPvInfoCursor();
     pvInfoCursorInitialized_ = true;
@@ -10666,15 +10942,23 @@ void DisplayWindow::startPvInfoPickMode()
   QGuiApplication::setOverrideCursor(pvInfoCursor_);
   pvInfoCursorActive_ = true;
   pvInfoPickingActive_ = true;
+  if (qApp && !pvInfoApplicationFilterInstalled_) {
+    qApp->installEventFilter(this);
+    pvInfoApplicationFilterInstalled_ = true;
+  }
 }
 
 
 void DisplayWindow::cancelPvInfoPickMode()
 {
-  if (!pvInfoPickingActive_) {
+  if (!pvInfoPickingActive_ && !pvInfoApplicationFilterInstalled_) {
     return;
   }
   pvInfoPickingActive_ = false;
+  if (pvInfoApplicationFilterInstalled_) {
+    pvInfoApplicationFilterInstalled_ = false;
+    removeApplicationEventFilterIfUnused();
+  }
   if (pvInfoCursorActive_) {
     QGuiApplication::restoreOverrideCursor();
     pvInfoCursorActive_ = false;
@@ -10682,20 +10966,24 @@ void DisplayWindow::cancelPvInfoPickMode()
 }
 
 
-void DisplayWindow::completePvInfoPick(const QPoint &windowPos)
+void DisplayWindow::completePvInfoPick(const QPoint &windowPos,
+    QWidget *eventTarget)
 {
   if (!pvInfoPickingActive_) {
     return;
   }
-  QWidget *widget = elementAt(windowPos);
   const QPoint globalPos = mapToGlobal(windowPos);
   lastContextMenuGlobalPos_ = globalPos;
 
+  DisplayWindow *contentWindow = contentDisplayForTarget(eventTarget);
+
+  QWidget *widget = contentWindow->elementAt(
+      contentWindow->mapFromGlobal(globalPos));
   PvInfoContent content;
   if (widget) {
-    content = buildPvInfoContent(widget);
+    content = contentWindow->buildPvInfoContent(widget);
   } else {
-    content.text = buildPvInfoBackgroundText();
+    content.text = contentWindow->buildPvInfoBackgroundText();
   }
 
   cancelPvInfoPickMode();
@@ -10724,6 +11012,9 @@ void DisplayWindow::startPvLimitsPickMode()
   if (pvLimitsPickingActive_) {
     cancelPvLimitsPickMode();
   }
+  if (pvInfoPickingActive_ || pvInfoApplicationFilterInstalled_) {
+    cancelPvInfoPickMode();
+  }
   if (!pvLimitsCursorInitialized_) {
     pvLimitsCursor_ = createPvLimitsCursor();
     pvLimitsCursorInitialized_ = true;
@@ -10731,15 +11022,23 @@ void DisplayWindow::startPvLimitsPickMode()
   QGuiApplication::setOverrideCursor(pvLimitsCursor_);
   pvLimitsCursorActive_ = true;
   pvLimitsPickingActive_ = true;
+  if (qApp && !pvLimitsApplicationFilterInstalled_) {
+    qApp->installEventFilter(this);
+    pvLimitsApplicationFilterInstalled_ = true;
+  }
 }
 
 
 void DisplayWindow::cancelPvLimitsPickMode()
 {
-  if (!pvLimitsPickingActive_) {
+  if (!pvLimitsPickingActive_ && !pvLimitsApplicationFilterInstalled_) {
     return;
   }
   pvLimitsPickingActive_ = false;
+  if (pvLimitsApplicationFilterInstalled_) {
+    pvLimitsApplicationFilterInstalled_ = false;
+    removeApplicationEventFilterIfUnused();
+  }
   if (pvLimitsCursorActive_) {
     QGuiApplication::restoreOverrideCursor();
     pvLimitsCursorActive_ = false;
@@ -10747,19 +11046,26 @@ void DisplayWindow::cancelPvLimitsPickMode()
 }
 
 
-void DisplayWindow::completePvLimitsPick(const QPoint &windowPos)
+void DisplayWindow::completePvLimitsPick(const QPoint &windowPos,
+    QWidget *eventTarget)
 {
   if (!pvLimitsPickingActive_) {
     return;
   }
-  QWidget *widget = elementAt(windowPos);
+  const QPoint globalPos = mapToGlobal(windowPos);
+  DisplayWindow *contentWindow = contentDisplayForTarget(eventTarget);
+
+  QWidget *widget = contentWindow->elementAt(
+      contentWindow->mapFromGlobal(globalPos));
   cancelPvLimitsPickMode();
-  showPvLimitsForWidget(widget);
+  showPvLimitsForWidget(widget, contentWindow);
 }
 
 
-void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
+void DisplayWindow::showPvLimitsForWidget(QWidget *widget,
+    DisplayWindow *runtimeOwner)
 {
+  DisplayWindow *owner = runtimeOwner ? runtimeOwner : this;
   PvLimitsDialog *dialog = ensurePvLimitsDialog();
   if (!dialog) {
     return;
@@ -10776,7 +11082,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   QString channelName;
 
   if (auto *element = dynamic_cast<TextMonitorElement *>(widget)) {
-    if (auto *runtime = textMonitorRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->textMonitorRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel(0);
@@ -10805,7 +11111,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   }
 
   if (auto *element = dynamic_cast<TextEntryElement *>(widget)) {
-    if (auto *runtime = textEntryRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->textEntryRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -10833,8 +11139,27 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
     return;
   }
 
+  if (auto *element = dynamic_cast<SetpointControlElement *>(widget)) {
+    channelName = element->setpointChannel();
+    dialog->setTextMonitorCallbacks(
+        channelName,
+        [element]() { return element->precisionSource(); },
+        [element](PvLimitSource source) {
+          element->setPrecisionSource(source);
+        },
+        [element]() { return element->precisionDefault(); },
+        [element](int value) { element->setPrecisionDefault(value); },
+        [element]() { element->update(); },
+        [element]() { return element->limits(); },
+        [element](const PvLimits &limits) { element->setLimits(limits); },
+        [element]() { return element->displayLowLimit(); },
+        [element]() { return element->displayHighLimit(); }, true);
+    dialog->showForTextMonitor();
+    return;
+  }
+
   if (auto *element = dynamic_cast<TextAreaElement *>(widget)) {
-    if (auto *runtime = textAreaRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->textAreaRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -10863,7 +11188,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   }
 
   if (auto *element = dynamic_cast<SliderElement *>(widget)) {
-    if (auto *runtime = sliderRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->sliderRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -10880,7 +11205,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   }
 
   if (auto *element = dynamic_cast<WheelSwitchElement *>(widget)) {
-    if (auto *runtime = wheelSwitchRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->wheelSwitchRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -10897,7 +11222,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   }
 
   if (auto *element = dynamic_cast<MeterElement *>(widget)) {
-    if (auto *runtime = meterRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->meterRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -10914,7 +11239,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   }
 
   if (auto *element = dynamic_cast<BarMonitorElement *>(widget)) {
-    if (auto *runtime = barMonitorRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->barMonitorRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -10931,7 +11256,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   }
 
   if (auto *element = dynamic_cast<ThermometerElement *>(widget)) {
-    if (auto *runtime = thermometerRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->thermometerRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -10948,7 +11273,7 @@ void DisplayWindow::showPvLimitsForWidget(QWidget *widget)
   }
 
   if (auto *element = dynamic_cast<ScaleMonitorElement *>(widget)) {
-    if (auto *runtime = scaleMonitorRuntimes_.value(element, nullptr)) {
+    if (auto *runtime = owner->scaleMonitorRuntimes_.value(element, nullptr)) {
       channelName = runtime->channelName_;
     } else {
       channelName = element->channel();
@@ -11088,8 +11413,10 @@ QString DisplayWindow::pvInfoElementLabel(QWidget *widget) const
   if (dynamic_cast<TextEntryElement *>(widget)) {
     return QStringLiteral("Text Entry");
   }
-  if (dynamic_cast<SetpointControlElement *>(widget)) {
-    return QStringLiteral("Setpoint Control");
+  if (auto *element = dynamic_cast<SetpointControlElement *>(widget)) {
+    return element->isQtedmSpinBox()
+        ? QStringLiteral("Spin Box")
+        : QStringLiteral("Setpoint Control");
   }
   if (dynamic_cast<TextAreaElement *>(widget)) {
     return QStringLiteral("Text Area");
@@ -11106,8 +11433,10 @@ QString DisplayWindow::pvInfoElementLabel(QWidget *widget) const
   if (dynamic_cast<MenuElement *>(widget)) {
     return QStringLiteral("Menu");
   }
-  if (dynamic_cast<MessageButtonElement *>(widget)) {
-    return QStringLiteral("Message Button");
+  if (auto *element = dynamic_cast<MessageButtonElement *>(widget)) {
+    return element->isQtedmToggle()
+        ? QStringLiteral("Toggle")
+        : QStringLiteral("Message Button");
   }
   if (dynamic_cast<ShellCommandElement *>(widget)) {
     return QStringLiteral("Shell Command");
@@ -11130,11 +11459,15 @@ QString DisplayWindow::pvInfoElementLabel(QWidget *widget) const
   if (dynamic_cast<ByteMonitorElement *>(widget)) {
     return QStringLiteral("Byte Monitor");
   }
-  if (dynamic_cast<LedMonitorElement *>(widget)) {
-    return QStringLiteral("LED Monitor");
+  if (auto *element = dynamic_cast<LedMonitorElement *>(widget)) {
+    return element->isQtedmSymbol()
+        ? QStringLiteral("Multi-State Symbol")
+        : QStringLiteral("LED Monitor");
   }
-  if (dynamic_cast<StripChartElement *>(widget)) {
-    return QStringLiteral("Strip Chart");
+  if (auto *element = dynamic_cast<StripChartElement *>(widget)) {
+    return element->isArchivePlot()
+        ? QStringLiteral("Archive Plot")
+        : QStringLiteral("Strip Chart");
   }
   if (dynamic_cast<CartesianPlotElement *>(widget)) {
     return QStringLiteral("Cartesian Plot");
@@ -11174,6 +11507,12 @@ QString DisplayWindow::pvInfoElementLabel(QWidget *widget) const
   }
   if (dynamic_cast<CompositeElement *>(widget)) {
     return QStringLiteral("Composite");
+  }
+  if (dynamic_cast<TabbedDisplayElement *>(widget)) {
+    return QStringLiteral("Tabbed Display");
+  }
+  if (dynamic_cast<PluginElement *>(widget)) {
+    return QStringLiteral("Plugin Object");
   }
   return QStringLiteral("Unknown");
 }
@@ -11444,6 +11783,10 @@ QVector<DisplayWindow::PvInfoChannelRef> DisplayWindow::gatherPvInfoChannels(QWi
         addRef(element->traceYChannel(i));
       }
     }
+  }
+
+  for (const QString &channel : channelsForWidget(widget)) {
+    addRef(channel);
   }
 
   return refs;
@@ -12666,13 +13009,15 @@ void DisplayWindow::savePvSnapshot()
       ? QStringLiteral("display.qtedm-snapshot.json")
       : QFileInfo(filePath_).completeBaseName()
           + QStringLiteral(".qtedm-snapshot.json");
-  const QString filePath = QFileDialog::getSaveFileName(this,
+  const QString selectedPath = QFileDialog::getSaveFileName(this,
       QStringLiteral("Save PV Snapshot"), suggested,
       QStringLiteral("QtEDM PV Snapshot (*.qtedm-snapshot.json);;"
                      "JSON Files (*.json)"));
-  if (filePath.isEmpty()) {
+  if (selectedPath.isEmpty()) {
     return;
   }
+  const QString filePath =
+      PvSnapshot::ensureDefaultFileExtension(selectedPath);
 
   PvSnapshotDocument document;
   document.createdAt = QDateTime::currentDateTimeUtc();
@@ -12742,7 +13087,7 @@ void DisplayWindow::compareAndRestorePvSnapshot()
     comparisons.append(comparison);
   }
 
-  PvSnapshotRestoreDialog dialog(comparisons, this);
+  PvSnapshotRestoreDialog dialog(comparisons);
   if (dialog.exec() != QDialog::Accepted) {
     return;
   }
@@ -12843,6 +13188,105 @@ bool DisplayWindow::prepareExecuteChannelDrag(const QPoint &windowPos)
   executeDragTooltipText_ = text;
   updateExecuteDragTooltip(windowPos);
   return true;
+}
+
+
+bool DisplayWindow::routeExecuteMiddleButtonEvent(QWidget *eventTarget,
+    QMouseEvent *event)
+{
+  if (!eventTarget || !event) {
+    return false;
+  }
+
+  DisplayWindow *contentWindow = contentDisplayForTarget(eventTarget);
+  if (!contentWindow || !contentWindow->executeModeActive_) {
+    return false;
+  }
+
+  const bool isPress = event->type() == QEvent::MouseButtonPress
+      && event->button() == Qt::MiddleButton;
+  const bool isMove = event->type() == QEvent::MouseMove
+      && event->buttons().testFlag(Qt::MiddleButton)
+      && contentWindow->executeDragPending_;
+  const bool isRelease = event->type() == QEvent::MouseButtonRelease
+      && event->button() == Qt::MiddleButton
+      && contentWindow->executeDragPending_;
+  if (!isPress && !isMove && !isRelease) {
+    return false;
+  }
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPoint globalPos = event->globalPosition().toPoint();
+#else
+  const QPoint globalPos = event->globalPos();
+#endif
+  const QPoint contentPos = contentWindow->mapFromGlobal(globalPos);
+
+  if (isPress) {
+    if (!contentWindow->prepareExecuteChannelDrag(contentPos)) {
+      return false;
+    }
+  } else {
+    QMouseEvent routed(event->type(), QPointF(contentPos),
+        QPointF(contentPos), QPointF(globalPos), event->button(),
+        event->buttons(), event->modifiers());
+    if (isMove) {
+      contentWindow->mouseMoveEvent(&routed);
+    } else {
+      contentWindow->mouseReleaseEvent(&routed);
+    }
+  }
+
+  event->accept();
+  return true;
+}
+
+
+bool DisplayWindow::routeExecuteRightButtonEvent(QWidget *eventTarget,
+    QMouseEvent *event)
+{
+  if (!eventTarget || !event
+      || event->type() != QEvent::MouseButtonPress
+      || event->button() != Qt::RightButton) {
+    return false;
+  }
+
+  DisplayWindow *contentWindow = contentDisplayForTarget(eventTarget);
+  if (!contentWindow || !contentWindow->executeModeActive_) {
+    return false;
+  }
+
+  for (QWidget *current = eventTarget; current;
+       current = current->parentWidget()) {
+    if (dynamic_cast<TextAreaElement *>(current)) {
+      return false;
+    }
+    if (current == contentWindow->displayArea_) {
+      break;
+    }
+  }
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  const QPoint globalPos = event->globalPosition().toPoint();
+#else
+  const QPoint globalPos = event->globalPos();
+#endif
+  contentWindow->lastContextMenuGlobalPos_ = globalPos;
+  if (!contentWindow->showExecuteSliderDialogForRightClick(globalPos)) {
+    contentWindow->showExecuteContextMenu(globalPos);
+  }
+  event->accept();
+  return true;
+}
+
+
+void DisplayWindow::removeApplicationEventFilterIfUnused()
+{
+  if (qApp && !executeMiddleButtonApplicationFilterInstalled_
+      && !pvInfoApplicationFilterInstalled_
+      && !pvLimitsApplicationFilterInstalled_) {
+    qApp->removeEventFilter(this);
+  }
 }
 
 
@@ -12990,6 +13434,7 @@ void DisplayWindow::selectTextElement(TextElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedTextElement_) {
     selectedTextElement_->setSelected(false);
   }
@@ -13030,6 +13475,7 @@ void DisplayWindow::selectTextEntryElement(TextEntryElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedTextEntryElement_) {
     selectedTextEntryElement_->setSelected(false);
   }
@@ -13071,6 +13517,7 @@ void DisplayWindow::selectSetpointControlElement(SetpointControlElement *element
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedSetpointControl_) {
     selectedSetpointControl_->setSelected(false);
   }
@@ -13113,6 +13560,7 @@ void DisplayWindow::selectTextAreaElement(TextAreaElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedTextAreaElement_) {
     selectedTextAreaElement_->setSelected(false);
   }
@@ -13154,6 +13602,7 @@ void DisplayWindow::selectSliderElement(SliderElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedSliderElement_) {
     selectedSliderElement_->setSelected(false);
   }
@@ -13195,6 +13644,7 @@ void DisplayWindow::selectWheelSwitchElement(WheelSwitchElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedWheelSwitchElement_) {
     selectedWheelSwitchElement_->setSelected(false);
   }
@@ -13236,6 +13686,7 @@ void DisplayWindow::selectChoiceButtonElement(ChoiceButtonElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedChoiceButtonElement_) {
     selectedChoiceButtonElement_->setSelected(false);
   }
@@ -13277,6 +13728,7 @@ void DisplayWindow::selectMenuElement(MenuElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedMenuElement_) {
     selectedMenuElement_->setSelected(false);
   }
@@ -13318,6 +13770,7 @@ void DisplayWindow::selectMessageButtonElement(MessageButtonElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedMessageButtonElement_) {
     selectedMessageButtonElement_->setSelected(false);
   }
@@ -13359,6 +13812,7 @@ void DisplayWindow::selectShellCommandElement(ShellCommandElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedShellCommandElement_) {
     selectedShellCommandElement_->setSelected(false);
   }
@@ -13400,6 +13854,7 @@ void DisplayWindow::selectRelatedDisplayElement(RelatedDisplayElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedRelatedDisplayElement_) {
     selectedRelatedDisplayElement_->setSelected(false);
   }
@@ -13441,6 +13896,7 @@ void DisplayWindow::selectTextMonitorElement(TextMonitorElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedTextMonitorElement_) {
     selectedTextMonitorElement_->setSelected(false);
   }
@@ -13481,6 +13937,7 @@ void DisplayWindow::selectPvTableElement(PvTableElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedPvTable_) {
     selectedPvTable_->setSelected(false);
   }
@@ -13522,6 +13979,7 @@ void DisplayWindow::selectWaveTableElement(WaveTableElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedWaveTable_) {
     selectedWaveTable_->setSelected(false);
   }
@@ -13563,6 +14021,7 @@ void DisplayWindow::selectMeterElement(MeterElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedMeterElement_) {
     selectedMeterElement_->setSelected(false);
   }
@@ -13603,6 +14062,7 @@ void DisplayWindow::selectScaleMonitorElement(ScaleMonitorElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedScaleMonitorElement_) {
     selectedScaleMonitorElement_->setSelected(false);
   }
@@ -13643,6 +14103,7 @@ void DisplayWindow::selectStripChartElement(StripChartElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedStripChartElement_) {
     selectedStripChartElement_->setSelected(false);
   }
@@ -13683,6 +14144,7 @@ void DisplayWindow::selectCartesianPlotElement(CartesianPlotElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedCartesianPlotElement_) {
     selectedCartesianPlotElement_->setSelected(false);
   }
@@ -13723,6 +14185,7 @@ void DisplayWindow::selectBarMonitorElement(BarMonitorElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedBarMonitorElement_) {
     selectedBarMonitorElement_->setSelected(false);
   }
@@ -13764,6 +14227,7 @@ void DisplayWindow::selectThermometerElement(ThermometerElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedThermometerElement_) {
     selectedThermometerElement_->setSelected(false);
   }
@@ -13805,6 +14269,7 @@ void DisplayWindow::selectByteMonitorElement(ByteMonitorElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedByteMonitorElement_) {
     selectedByteMonitorElement_->setSelected(false);
   }
@@ -13845,6 +14310,7 @@ void DisplayWindow::selectLedMonitorElement(LedMonitorElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedLedMonitorElement_) {
     selectedLedMonitorElement_->setSelected(false);
   }
@@ -13886,6 +14352,7 @@ void DisplayWindow::selectRectangleElement(RectangleElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedRectangle_) {
     selectedRectangle_->setSelected(false);
   }
@@ -13925,6 +14392,7 @@ void DisplayWindow::selectExpressionChannelElement(ExpressionChannelElement *ele
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedExpressionChannel_) {
     selectedExpressionChannel_->setSelected(false);
   }
@@ -13965,6 +14433,7 @@ void DisplayWindow::selectImageElement(ImageElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedImage_) {
     selectedImage_->setSelected(false);
   }
@@ -14004,6 +14473,7 @@ void DisplayWindow::selectHeatmapElement(HeatmapElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedHeatmap_) {
     selectedHeatmap_->setSelected(false);
   }
@@ -14044,6 +14514,7 @@ void DisplayWindow::selectWaterfallPlotElement(WaterfallPlotElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedWaterfallPlot_) {
     selectedWaterfallPlot_->setSelected(false);
   }
@@ -14084,6 +14555,7 @@ void DisplayWindow::selectOvalElement(OvalElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedOval_) {
     selectedOval_->setSelected(false);
   }
@@ -14122,6 +14594,7 @@ void DisplayWindow::selectArcElement(ArcElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedArc_) {
     selectedArc_->setSelected(false);
   }
@@ -14161,6 +14634,7 @@ void DisplayWindow::selectLineElement(LineElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedLine_) {
     selectedLine_->setSelected(false);
   }
@@ -14200,6 +14674,7 @@ void DisplayWindow::selectPolylineElement(PolylineElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedPolyline_) {
     selectedPolyline_->setSelected(false);
   }
@@ -14239,6 +14714,7 @@ void DisplayWindow::selectPolygonElement(PolygonElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedPolygon_) {
     selectedPolygon_->setSelected(false);
   }
@@ -14278,6 +14754,7 @@ void DisplayWindow::selectCompositeElement(CompositeElement *element)
   if (!element) {
     return;
   }
+  clearSelections();
   if (selectedCompositeElement_) {
     selectedCompositeElement_->setSelected(false);
   }
@@ -16180,6 +16657,7 @@ void DisplayWindow::applySelectionRect(const QRect &rect)
   considerList(cartesianPlotElements_);
   considerList(byteMonitorElements_);
   considerList(ledMonitorElements_);
+  considerList(expressionChannelElements_);
   considerList(rectangleElements_);
   considerList(imageElements_);
   considerList(heatmapElements_);
@@ -16189,6 +16667,9 @@ void DisplayWindow::applySelectionRect(const QRect &rect)
   considerList(lineElements_);
   considerList(polylineElements_);
   considerList(polygonElements_);
+  considerList(compositeElements_);
+  considerList(tabbedDisplayElements_);
+  considerList(pluginElements_);
 
   if (matched.isEmpty()) {
     return;
@@ -16214,37 +16695,9 @@ void DisplayWindow::handleDisplayBackgroundClick()
   if (!state || !state->editMode) {
     return;
   }
-  clearMultiSelection();
-  clearRectangleSelection();
-  clearOvalSelection();
-  clearTextSelection();
-  clearTextEntrySelection();
-  clearTextAreaSelection();
-  clearSliderSelection();
-  clearWheelSwitchSelection();
-  clearChoiceButtonSelection();
-  clearMenuSelection();
-  clearMessageButtonSelection();
-  clearShellCommandSelection();
-  clearRelatedDisplaySelection();
-  clearTextMonitorSelection();
-  clearPvTableSelection();
-  clearWaveTableSelection();
-  clearMeterSelection();
-  clearScaleMonitorSelection();
-  clearStripChartSelection();
-  clearCartesianPlotSelection();
-  clearBarMonitorSelection();
-  clearByteMonitorSelection();
-  clearImageSelection();
-  clearArcSelection();
-  clearLineSelection();
-  clearPolylineSelection();
-  clearPolygonSelection();
-
-  if (displaySelected_) {
-    clearDisplaySelection();
-    closeResourcePalette();
+  const bool displayWasSelected = displaySelected_;
+  clearSelections();
+  if (displayWasSelected) {
     return;
   }
 
@@ -19266,206 +19719,48 @@ PvInfoDialog *DisplayWindow::ensurePvInfoDialog()
 }
 
 
-bool DisplayWindow::attemptChannelRetry(const QString &channelName,
-  QString &retriedChannel) const
-{
-  const QString trimmed = channelName.trimmed();
-  if (trimmed.isEmpty()) {
-    return false;
-  }
-
-  QByteArray channelBytes = trimmed.toLatin1();
-  if (channelBytes.isEmpty()) {
-    return false;
-  }
-
-  chid retryChid = nullptr;
-  int status = ca_search_and_connect(channelBytes.constData(), &retryChid,
-      nullptr, nullptr);
-  if (status != ECA_NORMAL) {
-    qWarning() << "Retry Connections: ca_search_and_connect failed for"
-               << trimmed << ':' << ca_message(status);
-    return false;
-  }
-
-  int pendStatus = ca_pend_io(kChannelRetryTimeoutSeconds);
-  if (pendStatus != ECA_NORMAL) {
-    qWarning() << "Retry Connections: ca_pend_io timed out for"
-               << trimmed << ':' << ca_message(pendStatus);
-  }
-
-  if (retryChid) {
-    int clearStatus = ca_clear_channel(retryChid);
-    if (clearStatus != ECA_NORMAL) {
-      qWarning() << "Retry Connections: ca_clear_channel failed for"
-                 << trimmed << ':' << ca_message(clearStatus);
-    }
-  }
-
-  retriedChannel = trimmed;
-  return true;
-}
-
-
-bool DisplayWindow::retryFirstUnconnectedChannel(QString &retriedChannel)
-{
-  if (!executeModeActive_) {
-    return false;
-  }
-
-  auto attemptWithAccessor = [&](const QString &name, bool connected) {
-    if (name.trimmed().isEmpty() || connected) {
-      return false;
-    }
-    return attemptChannelRetry(name, retriedChannel);
-  };
-
-  auto attemptRuntimeChannels = [&](const auto &runtimeMap) {
-    for (auto it = runtimeMap.cbegin(); it != runtimeMap.cend(); ++it) {
-      auto *runtime = it.value();
-      if (!runtime || !runtime->started_) {
-        continue;
-      }
-      for (const auto &channel : runtime->channels_) {
-        if (attemptWithAccessor(channel.name, channel.connected)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  if (attemptRuntimeChannels(textRuntimes_) ||
-      attemptRuntimeChannels(rectangleRuntimes_) ||
-      attemptRuntimeChannels(imageRuntimes_) ||
-      attemptRuntimeChannels(ovalRuntimes_) ||
-      attemptRuntimeChannels(arcRuntimes_) ||
-      attemptRuntimeChannels(lineRuntimes_) ||
-      attemptRuntimeChannels(polylineRuntimes_) ||
-      attemptRuntimeChannels(polygonRuntimes_)) {
-    return true;
-  }
-
-  auto attemptSingleChannelRuntime = [&](const auto &runtimeMap) {
-    for (auto it = runtimeMap.cbegin(); it != runtimeMap.cend(); ++it) {
-      auto *runtime = it.value();
-      if (!runtime || !runtime->started_) {
-        continue;
-      }
-      if (attemptWithAccessor(runtime->channelName_, runtime->connected_)) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  if (attemptSingleChannelRuntime(textEntryRuntimes_) ||
-      attemptSingleChannelRuntime(textAreaRuntimes_) ||
-      attemptSingleChannelRuntime(sliderRuntimes_) ||
-      attemptSingleChannelRuntime(wheelSwitchRuntimes_) ||
-      attemptSingleChannelRuntime(choiceButtonRuntimes_) ||
-      attemptSingleChannelRuntime(menuRuntimes_) ||
-      attemptSingleChannelRuntime(messageButtonRuntimes_) ||
-      attemptSingleChannelRuntime(textMonitorRuntimes_) ||
-      attemptSingleChannelRuntime(meterRuntimes_) ||
-      attemptSingleChannelRuntime(barMonitorRuntimes_) ||
-      attemptSingleChannelRuntime(thermometerRuntimes_) ||
-      attemptSingleChannelRuntime(scaleMonitorRuntimes_) ||
-      attemptSingleChannelRuntime(byteMonitorRuntimes_) ||
-      attemptSingleChannelRuntime(ledMonitorRuntimes_)) {
-    return true;
-  }
-
-  for (auto it = stripChartRuntimes_.cbegin();
-       it != stripChartRuntimes_.cend(); ++it) {
-    auto *runtime = it.value();
-    if (!runtime || !runtime->started_) {
-      continue;
-    }
-    for (const auto &pen : runtime->pens_) {
-      if (attemptWithAccessor(pen.channelName, pen.connected)) {
-        return true;
-      }
-    }
-  }
-
-  for (auto it = cartesianPlotRuntimes_.cbegin();
-       it != cartesianPlotRuntimes_.cend(); ++it) {
-    auto *runtime = it.value();
-    if (!runtime || !runtime->started_) {
-      continue;
-    }
-    for (const auto &trace : runtime->traces_) {
-      if (attemptWithAccessor(trace.x.name, trace.x.connected) ||
-          attemptWithAccessor(trace.y.name, trace.y.connected)) {
-        return true;
-      }
-    }
-    if (attemptWithAccessor(runtime->triggerChannel_.name,
-            runtime->triggerChannel_.connected) ||
-        attemptWithAccessor(runtime->eraseChannel_.name,
-            runtime->eraseChannel_.connected) ||
-        attemptWithAccessor(runtime->countChannel_.name,
-            runtime->countChannel_.connected)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-
 void DisplayWindow::retryChannelConnections()
 {
-  ChannelAccessContext &context = ChannelAccessContext::instance();
-  context.ensureInitialized();
-  if (!context.isInitialized()) {
-    qWarning() << "Retry Connections: Channel Access context unavailable";
+  QList<QPointer<DisplayWindow>> activeDisplays;
+  auto appendActiveDisplay = [&activeDisplays](DisplayWindow *display) {
+    if (!display || display->embeddedDisplay_
+        || !display->executeModeActive_) {
+      return;
+    }
+    for (const auto &existing : std::as_const(activeDisplays)) {
+      if (existing.data() == display) {
+        return;
+      }
+    }
+    activeDisplays.append(display);
+  };
+
+  if (auto state = state_.lock()) {
+    for (const auto &display : std::as_const(state->displays)) {
+      appendActiveDisplay(display.data());
+    }
+  }
+  appendActiveDisplay(this);
+
+  if (activeDisplays.isEmpty()) {
+    qInfo() << "Retry Connections: no active displays to restart";
     return;
   }
 
-  const auto channelCounts = StatisticsTracker::instance().channelCounts();
-  const int totalChannels = channelCounts.first;
-  const int connectedChannels = channelCounts.second;
-
-  QString retriedChannel;
-  DisplayWindow *targetDisplay = nullptr;
-
-  if (retryFirstUnconnectedChannel(retriedChannel)) {
-    targetDisplay = this;
-  } else if (auto state = state_.lock()) {
-    const auto displays = state->displays;
-    for (const auto &displayPtr : displays) {
-      DisplayWindow *display = displayPtr.data();
-      if (!display || display == this || !display->executeModeActive_) {
-        continue;
-      }
-      if (display->retryFirstUnconnectedChannel(retriedChannel)) {
-        targetDisplay = display;
-        break;
-      }
+  for (const auto &display : std::as_const(activeDisplays)) {
+    if (display) {
+      display->leaveExecuteMode();
     }
   }
-
-  if (!targetDisplay) {
-    if (totalChannels > 0 && totalChannels == connectedChannels) {
-      QApplication::beep();
-      qInfo() << "Retry Connections: all channels are connected";
-    } else if (totalChannels == 0) {
-      qInfo() << "Retry Connections: no active channels to retry";
-    } else {
-      qWarning() << "Retry Connections: no unresolved channels found for retry";
+  int restarted = 0;
+  for (const auto &display : std::as_const(activeDisplays)) {
+    if (display) {
+      display->enterExecuteMode();
+      ++restarted;
     }
-    return;
   }
-
-  qInfo() << "Retry Connections: retried search for" << retriedChannel;
-
-  if (targetDisplay == this) {
-    refreshDisplayView();
-  } else if (targetDisplay->displayArea_) {
-    targetDisplay->displayArea_->update();
-  }
+  qInfo() << "Retry Connections: restarted subscriptions for"
+          << restarted << "display(s)";
 }
 
 void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
@@ -20850,6 +21145,15 @@ void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
       }
     }
   }
+  for (ExpressionChannelElement *e : expressionChannelElements_) {
+    scaleWidget(e);
+  }
+  for (TabbedDisplayElement *e : tabbedDisplayElements_) {
+    scaleWidget(e);
+  }
+  for (PluginElement *e : pluginElements_) {
+    scaleWidget(e);
+  }
 }
 
 bool DisplayWindow::save(QWidget *dialogParent)
@@ -21174,13 +21478,6 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   if (fileVersion < 20200) {
     QTEDM_TIMING_MARK("loadFromFile: Converting legacy ADL format");
     adlContent = convertLegacyAdlFormat(contents, fileVersion);
-    /* Debug: write converted content to /tmp/qtedm_converted.adl */
-    QFile debugFile(QStringLiteral("/tmp/qtedm_converted.adl"));
-    if (debugFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-      QTextStream debugStream(&debugFile);
-      debugStream << adlContent;
-      debugFile.close();
-    }
   }
 
   const bool previousLegacyMode = loadingLegacyAdl_;
@@ -21662,14 +21959,6 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
   QRegularExpression rdbkPattern(QStringLiteral("\\n(\\s+)rdbk="));
   converted.replace(rdbkPattern, QStringLiteral("\n\\1chan="));
 
-  /* Debug: write converted text to file */
-  QFile debugFile(QStringLiteral("/tmp/qtedm_converted.adl"));
-  if (debugFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    QTextStream out(&debugFile);
-    out << converted;
-    debugFile.close();
-  }
-
   return converted;
 }
 
@@ -21876,6 +22165,13 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           for (QWidget *child : children) {
             writeWidgetAdl(stream, child, 2, resolvedForegroundColor,
                 resolvedBackgroundColor);
+          }
+          for (int childIndex = 0; childIndex < children.size(); ++childIndex) {
+            QWidget *child = children.at(childIndex);
+            const QtedmRuleSet rules = propertyRuleSets_.value(child);
+            if (!rules.isEmpty()) {
+              PropertyRules::writeAdl(stream, childIndex, rules, 2);
+            }
           }
           AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
         }
@@ -23464,6 +23760,13 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         for (QWidget *child : children) {
           writeWidgetAdl(stream, child, next + 1, resolveForeground,
               resolveBackground);
+        }
+        for (int childIndex = 0; childIndex < children.size(); ++childIndex) {
+          QWidget *child = children.at(childIndex);
+          const QtedmRuleSet rules = propertyRuleSets_.value(child);
+          if (!rules.isEmpty()) {
+            PropertyRules::writeAdl(stream, childIndex, rules, next + 1);
+          }
         }
         AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
       }
@@ -26309,6 +26612,50 @@ void DisplayWindow::setObjectGeometry(AdlNode &node,
       {QStringLiteral("height"), QString::number(rect.height())});
   node.children.append(std::move(objectNode));
 }
+
+void DisplayWindow::translateElementNodeForPaste(AdlNode &node,
+    const QPoint &translation) const
+{
+  if (translation.isNull()) {
+    return;
+  }
+
+  const QRect geometry = parseObjectGeometry(node);
+  if (geometry.isValid()) {
+    setObjectGeometry(node, geometry.translated(translation));
+  }
+
+  QVector<QPoint> points = parsePolylinePoints(node);
+  if (!points.isEmpty()) {
+    for (QPoint &point : points) {
+      point += translation;
+    }
+    for (AdlNode &child : node.children) {
+      if (normalizedAdlName(child.name) != QStringLiteral("points")) {
+        continue;
+      }
+      child.properties.clear();
+      child.children.clear();
+      for (const QPoint &point : std::as_const(points)) {
+        AdlNode pointNode;
+        pointNode.name = QStringLiteral("(%1,%2)")
+            .arg(point.x()).arg(point.y());
+        child.children.append(std::move(pointNode));
+      }
+      break;
+    }
+  }
+
+  for (AdlNode &child : node.children) {
+    if (normalizedAdlName(child.name) != QStringLiteral("children")) {
+      continue;
+    }
+    for (AdlNode &nestedElement : child.children) {
+      translateElementNodeForPaste(nestedElement, translation);
+    }
+  }
+}
+
 
 QRect DisplayWindow::widgetDisplayRect(const QWidget *widget) const
 {
@@ -33677,8 +34024,31 @@ CompositeElement *DisplayWindow::loadCompositeElement(
             QStringLiteral("children"))) {
       ElementLoadContextGuard guard(*this, composite, childOffset, true,
           composite);
+      QList<AdlNode> propertyRuleNodes;
       for (const auto &child : childrenNode->children) {
-        loadElementNode(child);
+        if (normalizedAdlName(child.name) == QStringLiteral("qtedm_rules")) {
+          propertyRuleNodes.append(child);
+        } else {
+          loadElementNode(child);
+        }
+      }
+      const QList<QWidget *> children = composite->childWidgets();
+      for (const AdlNode &ruleNode : propertyRuleNodes) {
+        QtedmRuleSet rules;
+        int targetIndex = -1;
+        QString error;
+        if (!PropertyRules::parseAdl(ruleNode, &rules, &targetIndex, &error)
+            || targetIndex < 0 || targetIndex >= children.size()) {
+          qWarning() << "QtEDM composite property rules:"
+                     << (error.isEmpty()
+                         ? QStringLiteral("targetIndex is not a child object.")
+                         : error);
+          continue;
+        }
+        QWidget *target = children.at(targetIndex);
+        if (target && !rules.isEmpty()) {
+          propertyRuleSets_.insert(target, rules);
+        }
       }
     }
   } else {
@@ -34289,6 +34659,11 @@ void DisplayWindow::enterExecuteMode()
     displayArea_->setUpdatesEnabled(false);
   }
   executeModeActive_ = true;
+  if (!embeddedDisplay_ && qApp
+      && !executeMiddleButtonApplicationFilterInstalled_) {
+    qApp->installEventFilter(this);
+    executeMiddleButtonApplicationFilterInstalled_ = true;
+  }
   if (displayArea_) {
     displayArea_->setExecuteMode(true);
   }
@@ -34363,19 +34738,27 @@ void DisplayWindow::enterExecuteMode()
   reserveRuntime(propertyRuleRuntimes_, propertyRuleSets_.size());
 
   QList<DisplayWindow *> softPvPrepareDisplays;
-  if (auto state = state_.lock()) {
-    softPvPrepareDisplays.reserve(state->displays.size());
-    for (const QPointer<DisplayWindow> &displayPtr : state->displays) {
-      DisplayWindow *display = displayPtr.data();
-      if (!display) {
-        continue;
+  QSet<DisplayWindow *> seenSoftPvDisplays;
+  auto appendSoftPvDisplays = [&](DisplayWindow *root) {
+    if (!root) {
+      return;
+    }
+    for (DisplayWindow *display : root->loadedDisplayTree()) {
+      if (display && !seenSoftPvDisplays.contains(display)) {
+        seenSoftPvDisplays.insert(display);
+        softPvPrepareDisplays.append(display);
       }
-      softPvPrepareDisplays.append(display);
+    }
+  };
+  if (auto state = state_.lock()) {
+    for (const QPointer<DisplayWindow> &displayPtr : state->displays) {
+      appendSoftPvDisplays(displayPtr.data());
     }
   }
-  if (softPvPrepareDisplays.isEmpty()) {
-    softPvPrepareDisplays.append(this);
-  }
+  /* Embedded displays are not registered in DisplayState::displays.  Always
+   * add the current display tree so its expression outputs are prepared before
+   * an earlier-starting monitor can mistake the local soft PV for a CA PV. */
+  appendSoftPvDisplays(this);
 
   /* Pre-register all declared expression outputs so cross-display soft-PV
    * subscriptions resolve deterministically during the execute-mode fanout. */
@@ -34913,6 +35296,11 @@ void DisplayWindow::leaveExecuteMode()
     displayArea_->setExecuteMode(false);
   }
   cancelPvInfoPickMode();
+  cancelPvLimitsPickMode();
+  if (executeMiddleButtonApplicationFilterInstalled_) {
+    executeMiddleButtonApplicationFilterInstalled_ = false;
+    removeApplicationEventFilterIfUnused();
+  }
   if (pvInfoDialog_) {
     pvInfoDialog_->hide();
   }

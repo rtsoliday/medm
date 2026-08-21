@@ -1,0 +1,98 @@
+file {
+  name="test_QtEDMPluginExamples.adl"
+  version=030122
+}
+display {
+  object {
+    x=120
+    y=120
+    width=520
+    height=280
+  }
+  clr=2
+  bclr=1
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+"color map" {
+  ncolors=4
+  colors {
+    ffffff,
+    c0c0c0,
+    000000,
+    0000ff,
+  }
+}
+text {
+  object {
+    x=20
+    y=15
+    width=480
+    height=30
+  }
+  "basic attribute" {
+    clr=2
+  }
+  textix="QtEDM Display Plugin Examples"
+  align="horiz. centered"
+}
+qtedm_plugin {
+  pluginId="org.qtedm.tests.discovery"
+  typeId="discovery_label"
+  schemaVersion="1"
+  object {
+    x="50"
+    y="65"
+    width="200"
+    height="70"
+  }
+  property {
+    name="text"
+    type="string"
+    value="Discovery Label"
+  }
+}
+qtedm_plugin {
+  pluginId="org.qtedm.examples.pv-thumbs"
+  typeId="pv_thumbs_indicator"
+  schemaVersion="1"
+  object {
+    x="285"
+    y="65"
+    width="180"
+    height="110"
+  }
+  property {
+    name="channel"
+    type="string"
+    value="led:test:binary_live"
+  }
+}
+text {
+  object {
+    x=25
+    y=195
+    width=470
+    height=25
+  }
+  "basic attribute" {
+    clr=2
+  }
+  textix="led:test:binary_live = 0: thumbs down; nonzero: thumbs up"
+  align="horiz. centered"
+}
+text {
+  object {
+    x=25
+    y=230
+    width=470
+    height=20
+  }
+  "basic attribute" {
+    clr=2
+  }
+  textix="A disconnected or unreadable PV displays an em dash."
+  align="horiz. centered"
+}

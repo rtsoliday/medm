@@ -1024,6 +1024,7 @@ void TextAreaElement::updateTextEditState()
 
   const bool editable = isEditableRuntime();
   const bool readable = executeMode_ && runtimeConnected_;
+  const bool writeBlocked = readable && !readOnly_ && !runtimeWriteAccess_;
 
   textEdit_->setReadOnly(!editable);
   textEdit_->setFocusPolicy(editable ? Qt::StrongFocus : Qt::NoFocus);
@@ -1033,14 +1034,17 @@ void TextAreaElement::updateTextEditState()
             ? Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard
             : Qt::NoTextInteraction));
 
-  if (executeMode_ && runtimeConnected_ && !readOnly_ && !runtimeWriteAccess_) {
+  if (writeBlocked) {
     textEdit_->setCursor(CursorUtils::forbiddenCursor());
+    textEdit_->viewport()->setCursor(CursorUtils::forbiddenCursor());
     setCursor(CursorUtils::forbiddenCursor());
-  } else if (editable) {
+  } else if (readable) {
+    textEdit_->unsetCursor();
     textEdit_->viewport()->setCursor(Qt::IBeamCursor);
     unsetCursor();
   } else {
     textEdit_->unsetCursor();
+    textEdit_->viewport()->unsetCursor();
     unsetCursor();
   }
 

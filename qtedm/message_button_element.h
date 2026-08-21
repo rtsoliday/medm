@@ -80,6 +80,7 @@ private:
   void updateSelectionVisual();
   void updateButtonFont();
   void updateButtonState();
+  void updateToggleStyleState();
   void handleButtonPressed();
   void handleButtonReleased();
   QString effectiveLabel() const;

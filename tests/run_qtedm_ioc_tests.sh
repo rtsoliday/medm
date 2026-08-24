@@ -10,6 +10,10 @@ trap 'qtedm_test_cleanup $?' EXIT INT TERM
 
 qtedm_test_setup_env
 
+export XDG_RUNTIME_DIR="${QTEDM_TEST_TMP_DIR}/xdg-runtime"
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
+
 QTEDM_BIN="${QTEDM_BIN:-$(qtedm_test_default_qtedm_bin)}"
 QTEDM_SOFT_IOC_PVA="${QTEDM_SOFT_IOC_PVA:?QTEDM_SOFT_IOC_PVA is required}"
 QTEDM_PVGET="${QTEDM_PVGET:?QTEDM_PVGET is required}"

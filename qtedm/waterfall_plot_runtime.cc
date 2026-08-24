@@ -14,6 +14,7 @@
 #include "pv_channel_manager.h"
 #include "pv_protocol.h"
 #include "runtime_utils.h"
+#include "soft_pv_registry.h"
 #include "statistics_tracker.h"
 #include "waterfall_plot_element.h"
 
@@ -71,7 +72,9 @@ void WaterfallPlotRuntime::start()
       element_->eraseChannel().trimmed()
   };
   for (const QString &name : channelNames) {
-    if (!name.isEmpty() && parsePvName(name).protocol == PvProtocol::kCa) {
+    const ParsedPvName parsed = parsePvName(name);
+    if (!name.isEmpty() && parsed.protocol == PvProtocol::kCa
+        && !SoftPvRegistry::instance().isRegistered(parsed.pvName)) {
       needsCa = true;
       break;
     }

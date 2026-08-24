@@ -8,6 +8,10 @@
 #include "pv_snapshot_dialog.h"
 #include "plugin_manager.h"
 #include "property_rule_editor_dialog.h"
+#include "plot_export_utils.h"
+#include "related_display_utils.h"
+#include "shell_command_utils.h"
+#include "widget_image_export_utils.h"
 #include "window_utils.h"
 
 #include <QCheckBox>
@@ -1688,41 +1692,11 @@ void DisplayWindow::exportDisplayImage()
     }
   }
 
-  bool success = false;
-
-  if (suffix == QStringLiteral("svg")) {
-    // Export as SVG
-    QSvgGenerator generator;
-    generator.setFileName(selectedFile);
-    generator.setSize(displayArea_->size());
-    generator.setViewBox(QRect(0, 0, displayArea_->width(), displayArea_->height()));
-    generator.setTitle(windowTitle());
-    generator.setDescription(QStringLiteral("QtEDM Display Export"));
-
-    QPainter painter;
-    if (painter.begin(&generator)) {
-      displayArea_->render(&painter);
-      painter.end();
-      success = true;
-    }
-  } else {
-    // Export as raster image (PNG, JPEG, BMP)
-    QPixmap pixmap = displayArea_->grab();
-    if (!pixmap.isNull()) {
-      // Determine format
-      const char *format = "PNG";
-      if (suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg")) {
-        format = "JPEG";
-      } else if (suffix == QStringLiteral("bmp")) {
-        format = "BMP";
-      }
-      success = pixmap.save(selectedFile, format);
-    }
-  }
-
-  if (!success) {
+  QString exportError;
+  if (!renderWidgetImageToPath(displayArea_, selectedFile, windowTitle(),
+          QStringLiteral("QtEDM Display Export"), &exportError)) {
     QMessageBox::warning(this, QStringLiteral("Export Failed"),
-        QStringLiteral("Failed to export display image to:\n%1").arg(selectedFile));
+        exportError);
   }
 }
 
@@ -1984,217 +1958,11 @@ void DisplayWindow::exportCartesianPlotData(CartesianPlotElement *plot)
     }
   }
 
-  bool success = false;
-  const int traceCount = plot->traceCount();
-
-  // Gather trace information and find maximum point count
-  // Track which X and Y columns to include for each trace
-  struct TraceColumnInfo {
-    int traceIndex;
-    QString xColName;
-    QString yColName;
-    bool includeX;
-    bool includeY;
-  };
-  QList<TraceColumnInfo> traceColumns;
-  QSet<QString> usedColumnNames;
-  int maxPointCount = 0;
-
-  for (int t = 0; t < traceCount; ++t) {
-    if (plot->traceHasData(t)) {
-      TraceColumnInfo info;
-      info.traceIndex = t;
-      info.includeX = true;
-      info.includeY = true;
-
-      // Determine X column name
-      QString xCh = plot->traceXChannel(t);
-      if (xCh.isEmpty()) {
-        xCh = QStringLiteral("X%1").arg(t);
-      }
-      info.xColName = RuntimeUtils::sanitizeSddsColumnName(xCh,
-          QStringLiteral("X%1").arg(t));
-
-      // Determine Y column name
-      QString yCh = plot->traceYChannel(t);
-      if (yCh.isEmpty()) {
-        yCh = plot->traceXChannel(t);
-      }
-      if (yCh.isEmpty()) {
-        yCh = QStringLiteral("Trace%1").arg(t);
-      }
-      info.yColName = RuntimeUtils::sanitizeSddsColumnName(yCh,
-          QStringLiteral("Trace%1").arg(t));
-
-      // If X and Y column names are the same, append suffix
-      if (info.xColName == info.yColName) {
-        info.xColName += QStringLiteral("_X");
-        info.yColName += QStringLiteral("_Y");
-      }
-
-      // Check X column for duplicate
-      if (usedColumnNames.contains(info.xColName)) {
-        info.includeX = false;  // Skip X column - it's a duplicate
-      } else {
-        usedColumnNames.insert(info.xColName);
-      }
-
-      // Check Y column for duplicate
-      if (usedColumnNames.contains(info.yColName)) {
-        info.includeY = false;  // Skip Y column - it's a duplicate
-      } else {
-        usedColumnNames.insert(info.yColName);
-      }
-
-      // Only include trace if at least one column is included
-      if (info.includeX || info.includeY) {
-        traceColumns.append(info);
-        maxPointCount = std::max(maxPointCount, plot->dataPointCount(t));
-      }
-    }
-  }
-
-  if (traceColumns.isEmpty() || maxPointCount <= 0) {
-    QMessageBox::warning(this, QStringLiteral("Export Failed"),
-        QStringLiteral("No data available to export.\n"
-            "The Cartesian plot has no connected traces with data."));
-    return;
-  }
-
-  QFile file(selectedFile);
-  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    QMessageBox::warning(this, QStringLiteral("Export Failed"),
-        QStringLiteral("Failed to open file for writing:\n%1").arg(selectedFile));
-    return;
-  }
-
-  QTextStream stream(&file);
-  setUtf8Encoding(stream);
-
-  if (suffix == QStringLiteral("sdds")) {
-    // Export as SDDS format
-    stream << QStringLiteral("SDDS1\n");
-    stream << QStringLiteral("&description text=\"Cartesian Plot Data Export from QtEDM\", "
-        "contents=\"cartesian plot data\" &end\n");
-
-    // Define Index column
-    stream << QStringLiteral("&column name=Index, type=long, "
-        "description=\"Data point index\" &end\n");
-
-    // Define X and Y columns for each active trace (only non-duplicate columns)
-    for (const auto &info : traceColumns) {
-      if (info.includeX) {
-        stream << QStringLiteral("&column name=%1, type=double, "
-            "description=\"X values for trace %2\" &end\n")
-            .arg(info.xColName)
-            .arg(info.traceIndex);
-      }
-      if (info.includeY) {
-        stream << QStringLiteral("&column name=%1, type=double, "
-            "description=\"Y values for trace %2\" &end\n")
-            .arg(info.yColName)
-            .arg(info.traceIndex);
-      }
-    }
-
-    stream << QStringLiteral("&data mode=ascii &end\n");
-
-    // Write row count
-    stream << maxPointCount << QStringLiteral("\n");
-
-    // Write data rows
-    for (int p = 0; p < maxPointCount; ++p) {
-      stream << p;  // Index column
-      for (const auto &info : traceColumns) {
-        int pointCount = plot->dataPointCount(info.traceIndex);
-        if (p < pointCount) {
-          QPointF pt = plot->dataPoint(info.traceIndex, p);
-          if (info.includeX) {
-            stream << QStringLiteral(" ");
-            if (std::isnan(pt.x())) {
-              stream << QStringLiteral("nan");
-            } else {
-              stream << QString::number(pt.x(), 'g', 15);
-            }
-          }
-          if (info.includeY) {
-            stream << QStringLiteral(" ");
-            if (std::isnan(pt.y())) {
-              stream << QStringLiteral("nan");
-            } else {
-              stream << QString::number(pt.y(), 'g', 15);
-            }
-          }
-        } else {
-          // Trace has fewer points; output NaN for included columns
-          if (info.includeX) {
-            stream << QStringLiteral(" nan");
-          }
-          if (info.includeY) {
-            stream << QStringLiteral(" nan");
-          }
-        }
-      }
-      stream << QStringLiteral("\n");
-    }
-    success = true;
-  } else {
-    // Export as CSV format
-    // Header row
-    stream << QStringLiteral("Index");
-    for (const auto &info : traceColumns) {
-      if (info.includeX) {
-        stream << QStringLiteral(",\"") << info.xColName << QStringLiteral("\"");
-      }
-      if (info.includeY) {
-        stream << QStringLiteral(",\"") << info.yColName << QStringLiteral("\"");
-      }
-    }
-    stream << QStringLiteral("\n");
-
-    // Data rows
-    for (int p = 0; p < maxPointCount; ++p) {
-      stream << p;  // Index column
-      for (const auto &info : traceColumns) {
-        int pointCount = plot->dataPointCount(info.traceIndex);
-        if (p < pointCount) {
-          QPointF pt = plot->dataPoint(info.traceIndex, p);
-          if (info.includeX) {
-            stream << QStringLiteral(",");
-            if (std::isnan(pt.x())) {
-              stream << QStringLiteral("");
-            } else {
-              stream << QString::number(pt.x(), 'g', 15);
-            }
-          }
-          if (info.includeY) {
-            stream << QStringLiteral(",");
-            if (std::isnan(pt.y())) {
-              stream << QStringLiteral("");
-            } else {
-              stream << QString::number(pt.y(), 'g', 15);
-            }
-          }
-        } else {
-          // Trace has fewer points; output empty cells for included columns
-          if (info.includeX) {
-            stream << QStringLiteral(",");
-          }
-          if (info.includeY) {
-            stream << QStringLiteral(",");
-          }
-        }
-      }
-      stream << QStringLiteral("\n");
-    }
-    success = true;
-  }
-
-  file.close();
-
-  if (!success) {
-    QMessageBox::warning(this, QStringLiteral("Export Failed"),
-        QStringLiteral("Failed to export Cartesian plot data to:\n%1").arg(selectedFile));
+  const PlotDataExportFormat format = suffix == QStringLiteral("csv")
+      ? PlotDataExportFormat::kCsv : PlotDataExportFormat::kSdds;
+  QString exportError;
+  if (!writeCartesianPlotData(*plot, selectedFile, format, &exportError)) {
+    QMessageBox::warning(this, QStringLiteral("Export Failed"), exportError);
   }
 }
 
@@ -2261,40 +2029,12 @@ void DisplayWindow::exportWaterfallPlotImage(WaterfallPlotElement *plot)
     }
   }
 
-  bool success = false;
-  if (suffix == QStringLiteral("svg")) {
-    QSvgGenerator generator;
-    generator.setFileName(selectedFile);
-    generator.setSize(plot->size());
-    generator.setViewBox(QRect(QPoint(0, 0), plot->size()));
-    generator.setTitle(plotTitle.isEmpty()
-            ? QStringLiteral("Waterfall Plot")
-            : plotTitle);
-    generator.setDescription(QStringLiteral("QtEDM Waterfall Plot Export"));
-
-    QPainter painter;
-    if (painter.begin(&generator)) {
-      plot->render(&painter);
-      painter.end();
-      success = true;
-    }
-  } else {
-    QPixmap pixmap = plot->grab();
-    if (!pixmap.isNull()) {
-      const char *format = "PNG";
-      if (suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg")) {
-        format = "JPEG";
-      } else if (suffix == QStringLiteral("bmp")) {
-        format = "BMP";
-      }
-      success = pixmap.save(selectedFile, format);
-    }
-  }
-
-  if (!success) {
+  QString exportError;
+  if (!renderWidgetImageToPath(plot, selectedFile,
+          plotTitle.isEmpty() ? QStringLiteral("Waterfall Plot") : plotTitle,
+          QStringLiteral("QtEDM Waterfall Plot Export"), &exportError)) {
     QMessageBox::warning(this, QStringLiteral("Export Failed"),
-        QStringLiteral("Failed to export waterfall plot image to:\n%1")
-            .arg(selectedFile));
+        exportError);
   }
 }
 
@@ -21267,32 +21007,11 @@ bool DisplayWindow::saveScreenshotToPath(const QString &filePath) const
     return false;
   }
 
-  const QString normalized = QFileInfo(filePath).absoluteFilePath();
-  if (normalized.isEmpty()) {
-    return false;
-  }
-
-  const QFileInfo outputInfo(normalized);
-  QDir parentDir = outputInfo.absoluteDir();
-  if (!parentDir.exists() && !QDir().mkpath(parentDir.absolutePath())) {
-    return false;
-  }
-
   displayArea_->update();
   displayArea_->repaint();
   QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
-
-  QImage image(displayArea_->size(), QImage::Format_ARGB32_Premultiplied);
-  if (image.isNull()) {
-    return false;
-  }
-
-  image.fill(Qt::transparent);
-  QPainter painter(&image);
-  displayArea_->render(&painter, QPoint(), QRegion(),
-      QWidget::DrawChildren);
-  painter.end();
-  return image.save(normalized, "PNG");
+  return renderWidgetImageToPath(displayArea_, filePath, windowTitle(),
+      QStringLiteral("QtEDM Automated Display Capture"));
 }
 
 bool DisplayWindow::isTestAutomationReady() const
@@ -21334,6 +21053,13 @@ bool DisplayWindow::isTestAutomationReady() const
   if (!allWidgetsReady(textAreaElements_, textAreaRuntimes_,
           [](TextAreaElement *element) { return element->channel(); },
           [](TextAreaRuntime *runtime) {
+            return runtime->initialUpdateTracked_;
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(textEntryElements_, textEntryRuntimes_,
+          [](TextEntryElement *element) { return element->channel(); },
+          [](TextEntryRuntime *runtime) {
             return runtime->initialUpdateTracked_;
           })) {
     return false;
@@ -21409,6 +21135,58 @@ bool DisplayWindow::isTestAutomationReady() const
                 && (runtime->lastValue_ >= 0 || runtime->lastValueOutOfRange_);
           })) {
     return false;
+  }
+  if (!allWidgetsReady(menuElements_, menuRuntimes_,
+          [](MenuElement *element) { return element->channel(); },
+          [](MenuRuntime *runtime) {
+            return runtime->connected_ && runtime->lastReadAccessKnown_
+                && !runtime->enumStrings_.isEmpty()
+                && (runtime->lastValue_ >= 0 || runtime->lastValueOutOfRange_);
+          })) {
+    return false;
+  }
+  if (!allWidgetsReady(messageButtonElements_, messageButtonRuntimes_,
+          [](MessageButtonElement *element) { return element->channel(); },
+          [](MessageButtonRuntime *runtime) { return runtime->connected_; })) {
+    return false;
+  }
+  for (SetpointControlElement *element : setpointControlElements_) {
+    if (element && hasChannel(element->setpointChannel())
+        && (!element->runtimeSetpointConnected()
+            || !element->hasSetpointValue())) {
+      return false;
+    }
+  }
+  for (CartesianPlotElement *element : cartesianPlotElements_) {
+    if (!element) {
+      continue;
+    }
+    bool hasConfiguredTrace = false;
+    bool hasReadyTrace = false;
+    for (int index = 0; index < element->traceCount(); ++index) {
+      if (!hasChannel(element->traceXChannel(index))
+          && !hasChannel(element->traceYChannel(index))) {
+        continue;
+      }
+      hasConfiguredTrace = true;
+      if (element->traceHasData(index)) {
+        hasReadyTrace = true;
+      }
+    }
+    if (hasConfiguredTrace && !hasReadyTrace) {
+      return false;
+    }
+  }
+  for (HeatmapElement *element : heatmapElements_) {
+    if (!element || dynamic_cast<NtNdArrayImageElement *>(element)
+        || !hasChannel(element->dataChannel())) {
+      continue;
+    }
+    HeatmapRuntime *runtime = heatmapRuntimes_.value(element, nullptr);
+    if (!runtime || !runtime->dataChannel_.connected
+        || !element->hasRuntimeData()) {
+      return false;
+    }
   }
   if (!allWidgetsReady(waterfallPlotElements_, waterfallPlotRuntimes_,
           [](WaterfallPlotElement *element) { return element->dataChannel(); },
@@ -26708,6 +26486,262 @@ QRect DisplayWindow::absoluteGeometryForWidget(
   return absolute;
 }
 
+int DisplayWindow::applyTestAction(const QJsonObject &action,
+    QString *errorMessage)
+{
+  const QJsonValue selectorValue = action.value(QStringLiteral("selector"));
+  const QString operation =
+      action.value(QStringLiteral("operation")).toString().trimmed();
+  if (!selectorValue.isObject() || operation.isEmpty()) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral(
+          "Each test action requires an object selector and an operation.");
+    }
+    return -1;
+  }
+
+  const QJsonObject selector = selectorValue.toObject();
+  const QString expectedType =
+      selector.value(QStringLiteral("type")).toString().trimmed();
+  if (expectedType.isEmpty()) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("A test action selector requires a type.");
+    }
+    return -1;
+  }
+
+  auto geometryMatches = [this, &selector](const QWidget *widget) {
+    const QJsonValue geometryValue = selector.value(QStringLiteral("geometry"));
+    if (!geometryValue.isObject()) {
+      return true;
+    }
+    if (!widget) {
+      return false;
+    }
+    const QJsonObject expected = geometryValue.toObject();
+    const QRect actual = absoluteGeometryForWidget(widget, widget->geometry());
+    const std::array<std::pair<const char *, int>, 4> fields = {{
+      {"x", actual.x()}, {"y", actual.y()},
+      {"width", actual.width()}, {"height", actual.height()}
+    }};
+    for (const auto &field : fields) {
+      const QString key = QLatin1String(field.first);
+      if (expected.contains(key)
+          && expected.value(key).toInt() != field.second) {
+        return false;
+      }
+    }
+    return true;
+  };
+  auto selectorMatches = [&selector, &expectedType, &geometryMatches](
+                             const char *typeName, const QWidget *widget,
+                             const QString &channel) {
+    if (expectedType != QLatin1String(typeName)) {
+      return false;
+    }
+    if (selector.contains(QStringLiteral("channel"))
+        && selector.value(QStringLiteral("channel")).toString() != channel) {
+      return false;
+    }
+    return geometryMatches(widget);
+  };
+
+  enum class CandidateKind {
+    kTextEntry,
+    kSetpoint,
+    kMenu,
+    kChoice,
+    kMessage,
+    kSlider,
+    kWheel,
+    kWaterfall,
+  };
+  struct Candidate {
+    CandidateKind kind;
+    QWidget *widget = nullptr;
+  };
+  QVector<Candidate> candidates;
+
+  for (TextEntryElement *element : textEntryElements_) {
+    if (element && selectorMatches(
+            "text_entry", element, element->channel())) {
+      candidates.append({CandidateKind::kTextEntry, element});
+    }
+  }
+  for (SetpointControlElement *element : setpointControlElements_) {
+    if (!element) {
+      continue;
+    }
+    const char *typeName =
+        element->isQtedmSpinBox() ? "qtedm_spinbox" : "setpoint_control";
+    if (selectorMatches(typeName, element, element->setpointChannel())) {
+      candidates.append({CandidateKind::kSetpoint, element});
+    }
+  }
+  for (MenuElement *element : menuElements_) {
+    if (element && selectorMatches("menu", element, element->channel())) {
+      candidates.append({CandidateKind::kMenu, element});
+    }
+  }
+  for (ChoiceButtonElement *element : choiceButtonElements_) {
+    if (element
+        && selectorMatches("choice_button", element, element->channel())) {
+      candidates.append({CandidateKind::kChoice, element});
+    }
+  }
+  for (MessageButtonElement *element : messageButtonElements_) {
+    if (!element) {
+      continue;
+    }
+    const char *typeName =
+        element->isQtedmToggle() ? "qtedm_toggle" : "message_button";
+    if (selectorMatches(typeName, element, element->channel())) {
+      candidates.append({CandidateKind::kMessage, element});
+    }
+  }
+  for (SliderElement *element : sliderElements_) {
+    if (element && selectorMatches("slider", element, element->channel())) {
+      candidates.append({CandidateKind::kSlider, element});
+    }
+  }
+  for (WheelSwitchElement *element : wheelSwitchElements_) {
+    if (element
+        && selectorMatches("wheel_switch", element, element->channel())) {
+      candidates.append({CandidateKind::kWheel, element});
+    }
+  }
+  for (WaterfallPlotElement *element : waterfallPlotElements_) {
+    if (element
+        && selectorMatches("waterfall_plot", element,
+            element->dataChannel())) {
+      candidates.append({CandidateKind::kWaterfall, element});
+    }
+  }
+
+  if (candidates.isEmpty()) {
+    return 0;
+  }
+  if (candidates.size() != 1) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Selector matched %1 widgets.")
+          .arg(candidates.size());
+    }
+    return -1;
+  }
+
+  const QJsonValue value = action.value(QStringLiteral("value"));
+  const QString textValue = value.isString()
+      ? value.toString()
+      : QString::number(value.toDouble(), 'g', 17);
+  const Candidate candidate = candidates.first();
+  switch (candidate.kind) {
+  case CandidateKind::kTextEntry: {
+    auto *element = static_cast<TextEntryElement *>(candidate.widget);
+    TextEntryRuntime *runtime = textEntryRuntimes_.value(element, nullptr);
+    if (operation != QLatin1String("commit_text") || !runtime) {
+      break;
+    }
+    runtime->handleActivation(textValue);
+    return 1;
+  }
+  case CandidateKind::kSetpoint: {
+    auto *element = static_cast<SetpointControlElement *>(candidate.widget);
+    SetpointControlRuntime *runtime =
+        setpointControlRuntimes_.value(element, nullptr);
+    if ((operation != QLatin1String("commit_text")
+            && operation != QLatin1String("set_numeric"))
+        || !runtime) {
+      break;
+    }
+    runtime->handleActivation(textValue);
+    return 1;
+  }
+  case CandidateKind::kMenu: {
+    auto *element = static_cast<MenuElement *>(candidate.widget);
+    MenuRuntime *runtime = menuRuntimes_.value(element, nullptr);
+    if (operation != QLatin1String("select_index") || !runtime
+        || !value.isDouble()) {
+      break;
+    }
+    runtime->handleActivation(value.toInt());
+    return 1;
+  }
+  case CandidateKind::kChoice: {
+    auto *element = static_cast<ChoiceButtonElement *>(candidate.widget);
+    ChoiceButtonRuntime *runtime = choiceButtonRuntimes_.value(element, nullptr);
+    if (operation != QLatin1String("select_index") || !runtime
+        || !value.isDouble()) {
+      break;
+    }
+    runtime->handleActivation(value.toInt());
+    return 1;
+  }
+  case CandidateKind::kMessage: {
+    auto *element = static_cast<MessageButtonElement *>(candidate.widget);
+    MessageButtonRuntime *runtime =
+        messageButtonRuntimes_.value(element, nullptr);
+    if (!runtime) {
+      break;
+    }
+    if (operation == QLatin1String("press")) {
+      runtime->handlePress();
+      return 1;
+    }
+    if (operation == QLatin1String("release")) {
+      runtime->handleRelease();
+      return 1;
+    }
+    if (operation == QLatin1String("click")) {
+      runtime->handlePress();
+      if (!element->isQtedmToggle()) {
+        runtime->handleRelease();
+      }
+      return 1;
+    }
+    break;
+  }
+  case CandidateKind::kSlider: {
+    auto *element = static_cast<SliderElement *>(candidate.widget);
+    SliderRuntime *runtime = sliderRuntimes_.value(element, nullptr);
+    if (operation != QLatin1String("set_numeric") || !runtime
+        || !value.isDouble()) {
+      break;
+    }
+    runtime->handleActivation(value.toDouble());
+    return 1;
+  }
+  case CandidateKind::kWheel: {
+    auto *element = static_cast<WheelSwitchElement *>(candidate.widget);
+    WheelSwitchRuntime *runtime = wheelSwitchRuntimes_.value(element, nullptr);
+    if (operation != QLatin1String("set_numeric") || !runtime
+        || !value.isDouble()) {
+      break;
+    }
+    runtime->handleActivation(value.toDouble());
+    return 1;
+  }
+  case CandidateKind::kWaterfall: {
+    auto *element = static_cast<WaterfallPlotElement *>(candidate.widget);
+    WaterfallPlotRuntime *runtime =
+        waterfallPlotRuntimes_.value(element, nullptr);
+    if (operation != QLatin1String("reset_samples") || !runtime
+        || runtime->latestWaveform_.isEmpty()) {
+      break;
+    }
+    element->clearBuffer(false);
+    runtime->pushLatestWaveform();
+    return 1;
+  }
+  }
+
+  if (errorMessage) {
+    *errorMessage = QStringLiteral(
+        "Operation %1 is unsupported for selector type %2 or its runtime "
+        "is unavailable.").arg(operation, expectedType);
+  }
+  return -1;
+}
+
 QJsonObject DisplayWindow::testStateObject() const
 {
   auto rectToJson = [](const QRect &rect) {
@@ -26743,6 +26777,42 @@ QJsonObject DisplayWindow::testStateObject() const
     case TextColorMode::kStatic:
     default:
       return QStringLiteral("static");
+    }
+  };
+  auto visibilityModeToString = [](TextVisibilityMode mode) {
+    switch (mode) {
+    case TextVisibilityMode::kIfZero:
+      return QStringLiteral("if_zero");
+    case TextVisibilityMode::kIfNotZero:
+      return QStringLiteral("if_not_zero");
+    case TextVisibilityMode::kCalc:
+      return QStringLiteral("calc");
+    case TextVisibilityMode::kStatic:
+    default:
+      return QStringLiteral("static");
+    }
+  };
+  auto cartesianTraceModeToString = [](CartesianPlotTraceMode mode) {
+    switch (mode) {
+    case CartesianPlotTraceMode::kXYScalar:
+      return QStringLiteral("xy_scalar");
+    case CartesianPlotTraceMode::kXScalar:
+      return QStringLiteral("x_scalar");
+    case CartesianPlotTraceMode::kYScalar:
+      return QStringLiteral("y_scalar");
+    case CartesianPlotTraceMode::kXVector:
+      return QStringLiteral("x_vector");
+    case CartesianPlotTraceMode::kYVector:
+      return QStringLiteral("y_vector");
+    case CartesianPlotTraceMode::kXVectorYScalar:
+      return QStringLiteral("x_vector_y_scalar");
+    case CartesianPlotTraceMode::kYVectorXScalar:
+      return QStringLiteral("y_vector_x_scalar");
+    case CartesianPlotTraceMode::kXYVector:
+      return QStringLiteral("xy_vector");
+    case CartesianPlotTraceMode::kNone:
+    default:
+      return QStringLiteral("none");
     }
   };
   auto meterLabelToString = [](MeterLabel label) {
@@ -27016,6 +27086,69 @@ QJsonObject DisplayWindow::testStateObject() const
     widgets.append(widgetObject);
   }
 
+  for (TextEntryElement *element : textEntryElements_) {
+    if (!element) {
+      continue;
+    }
+    TextEntryRuntime *runtime = textEntryRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "text_entry", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    appendColorState(widgetObject, element->effectiveForegroundColor(),
+        element->effectiveBackgroundColor());
+    widgetObject[QStringLiteral("displayed_value")] = element->runtimeText_;
+    widgetObject[QStringLiteral("format")] =
+        AdlWriter::textMonitorFormatString(element->format());
+    widgetObject[QStringLiteral("low_limit")] = element->displayLowLimit();
+    widgetObject[QStringLiteral("high_limit")] = element->displayHighLimit();
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("initial_update")] =
+          runtime->initialUpdateTracked_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("write_access")] =
+          runtime->lastWriteAccess_;
+      widgetObject[QStringLiteral("native_field_type")] = runtime->fieldType_;
+      widgetObject[QStringLiteral("element_count")] =
+          static_cast<qint64>(runtime->elementCount_);
+      widgetObject[QStringLiteral("has_numeric_value")] =
+          runtime->hasNumericValue_;
+      widgetObject[QStringLiteral("has_string_value")] =
+          runtime->hasStringValue_;
+      if (runtime->hasNumericValue_) {
+        widgetObject[QStringLiteral("numeric_value")] =
+            runtime->lastNumericValue_;
+      }
+      if (runtime->hasStringValue_) {
+        widgetObject[QStringLiteral("string_value")] =
+            runtime->lastStringValue_;
+      }
+      widgetObject[QStringLiteral("labels")] =
+          stringListToJson(runtime->enumStrings_);
+      const char *valueKind = "none";
+      switch (runtime->valueKind_) {
+      case TextEntryRuntime::ValueKind::kString:
+        valueKind = "string";
+        break;
+      case TextEntryRuntime::ValueKind::kEnum:
+        valueKind = "enum";
+        break;
+      case TextEntryRuntime::ValueKind::kCharArray:
+        valueKind = "char_array";
+        break;
+      case TextEntryRuntime::ValueKind::kNumeric:
+        valueKind = "numeric";
+        break;
+      case TextEntryRuntime::ValueKind::kNone:
+      default:
+        break;
+      }
+      widgetObject[QStringLiteral("value_kind")] = QLatin1String(valueKind);
+    }
+    widgets.append(widgetObject);
+  }
+
   for (MeterElement *element : meterElements_) {
     if (!element) {
       continue;
@@ -27146,6 +27279,13 @@ QJsonObject DisplayWindow::testStateObject() const
         element->effectiveBackground());
     widgetObject[QStringLiteral("effective_value_text_color")] =
         colorToString(element->effectiveForegroundForValueText());
+    widgetObject[QStringLiteral("low_limit")] = element->displayLowLimit();
+    widgetObject[QStringLiteral("high_limit")] = element->displayHighLimit();
+    widgetObject[QStringLiteral("precision")] = element->effectivePrecision();
+    widgetObject[QStringLiteral("runtime_limits_valid")] =
+        element->runtimeLimitsValid_;
+    widgetObject[QStringLiteral("runtime_precision")] =
+        element->runtimePrecision_;
     if (runtime) {
       widgetObject[QStringLiteral("connected")] = runtime->connected_;
       widgetObject[QStringLiteral("initial_update")] =
@@ -27305,6 +27445,10 @@ QJsonObject DisplayWindow::testStateObject() const
     widgetObject[QStringLiteral("color_mode")] =
         colorModeToString(element->colorMode());
     widgetObject[QStringLiteral("label")] = element->label();
+    appendColorState(widgetObject, element->effectiveForeground(),
+        element->effectiveBackground());
+    widgetObject[QStringLiteral("displayed_value")] =
+        element->effectiveLabel();
     if (element->isQtedmToggle()) {
       widgetObject[QStringLiteral("off_value")] = element->offValue();
       widgetObject[QStringLiteral("on_value")] = element->onValue();
@@ -27347,9 +27491,13 @@ QJsonObject DisplayWindow::testStateObject() const
         element->runtimeWriteAccess();
     widgetObject[QStringLiteral("severity")] =
         element->runtimeSetpointSeverity();
+    appendColorState(widgetObject, element->effectiveForegroundColor(),
+        element->effectiveBackgroundColor());
     widgetObject[QStringLiteral("has_value")] = element->hasSetpointValue();
     if (element->hasSetpointValue()) {
       widgetObject[QStringLiteral("numeric_value")] =
+          element->runtimeSetpointValue();
+      widgetObject[QStringLiteral("displayed_value")] =
           element->runtimeSetpointValue();
     }
     if (element->isQtedmSpinBox()) {
@@ -27391,6 +27539,39 @@ QJsonObject DisplayWindow::testStateObject() const
       widgetObject[QStringLiteral("selected_index")] = runtime->lastValue_;
       widgetObject[QStringLiteral("labels")] =
           stringListToJson(runtime->enumStrings_);
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (MenuElement *element : menuElements_) {
+    if (!element) {
+      continue;
+    }
+    MenuRuntime *runtime = menuRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "menu", element, element->channel());
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    appendColorState(widgetObject, element->effectiveForegroundColor(),
+        element->effectiveBackgroundColor());
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] = runtime->connected_;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+      widgetObject[QStringLiteral("read_access_known")] =
+          runtime->lastReadAccessKnown_;
+      widgetObject[QStringLiteral("read_access")] = runtime->lastReadAccess_;
+      widgetObject[QStringLiteral("write_access")] =
+          runtime->lastWriteAccess_;
+      widgetObject[QStringLiteral("value_out_of_range")] =
+          runtime->lastValueOutOfRange_;
+      widgetObject[QStringLiteral("selected_index")] = runtime->lastValue_;
+      widgetObject[QStringLiteral("labels")] =
+          stringListToJson(runtime->enumStrings_);
+      if (runtime->lastValue_ >= 0
+          && runtime->lastValue_ < runtime->enumStrings_.size()) {
+        widgetObject[QStringLiteral("displayed_value")] =
+            runtime->enumStrings_.at(runtime->lastValue_);
+      }
     }
     widgets.append(widgetObject);
   }
@@ -27450,6 +27631,67 @@ QJsonObject DisplayWindow::testStateObject() const
           runtime->pens_[0].archiveComplete;
       widgetObject[QStringLiteral("archive_failed")] =
           runtime->pens_[0].archiveFailed;
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (CartesianPlotElement *element : cartesianPlotElements_) {
+    if (!element) {
+      continue;
+    }
+    CartesianPlotRuntime *runtime =
+        cartesianPlotRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "cartesian_plot", element,
+        element->traceYChannel(0));
+    widgetObject[QStringLiteral("title")] = element->title();
+    widgetObject[QStringLiteral("trigger_channel")] =
+        element->triggerChannel();
+    widgetObject[QStringLiteral("erase_channel")] = element->eraseChannel();
+    widgetObject[QStringLiteral("count_channel")] = element->countChannel();
+    widgetObject[QStringLiteral("configured_count")] = element->count();
+    widgetObject[QStringLiteral("effective_capacity")] =
+        element->effectiveSampleCapacity();
+    widgetObject[QStringLiteral("zoomed")] = element->isZoomed();
+    QJsonArray traces;
+    for (int index = 0; index < element->traceCount(); ++index) {
+      const QString xChannel = element->traceXChannel(index);
+      const QString yChannel = element->traceYChannel(index);
+      if (xChannel.trimmed().isEmpty() && yChannel.trimmed().isEmpty()) {
+        continue;
+      }
+      QJsonObject trace;
+      trace[QStringLiteral("index")] = index;
+      trace[QStringLiteral("x_channel")] = xChannel;
+      trace[QStringLiteral("y_channel")] = yChannel;
+      trace[QStringLiteral("point_count")] = element->dataPointCount(index);
+      if (element->dataPointCount(index) > 0) {
+        const QPointF latest = element->dataPoint(
+            index, element->dataPointCount(index) - 1);
+        trace[QStringLiteral("latest_x")] = latest.x();
+        trace[QStringLiteral("latest_y")] = latest.y();
+      }
+      if (runtime) {
+        const auto &runtimeTrace = runtime->traces_[index];
+        trace[QStringLiteral("connected")] =
+            runtime->traceConnected(runtimeTrace);
+        trace[QStringLiteral("mode")] =
+            cartesianTraceModeToString(runtimeTrace.mode);
+        trace[QStringLiteral("x_connected")] = runtimeTrace.x.connected;
+        trace[QStringLiteral("y_connected")] = runtimeTrace.y.connected;
+      }
+      traces.append(trace);
+    }
+    widgetObject[QStringLiteral("traces")] = traces;
+    if (runtime) {
+      widgetObject[QStringLiteral("trigger_connected")] =
+          runtime->triggerChannel_.connected;
+      widgetObject[QStringLiteral("erase_connected")] =
+          runtime->eraseChannel_.connected;
+      widgetObject[QStringLiteral("count_connected")] =
+          runtime->countChannel_.connected;
+      widgetObject[QStringLiteral("count_from_channel")] =
+          runtime->countFromChannel_;
     }
     widgets.append(widgetObject);
   }
@@ -27561,35 +27803,276 @@ QJsonObject DisplayWindow::testStateObject() const
     widgets.append(widgetObject);
   }
 
-  for (HeatmapElement *heatmap : heatmapElements_) {
-    auto *element = dynamic_cast<NtNdArrayImageElement *>(heatmap);
+  auto appendGraphicState = [&appendWidgetBase, &colorModeToString,
+      &visibilityModeToString, &colorToString, &widgets](
+          const char *typeName, auto *element, auto *runtime) {
+    if (!element) {
+      return;
+    }
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, typeName, element, element->channel(0));
+    widgetObject[QStringLiteral("color_mode")] =
+        colorModeToString(element->colorMode());
+    widgetObject[QStringLiteral("visibility_mode")] =
+        visibilityModeToString(element->visibilityMode());
+    widgetObject[QStringLiteral("visibility_calc")] =
+        element->visibilityCalc();
+    widgetObject[QStringLiteral("foreground")] =
+        colorToString(element->color());
+    widgetObject[QStringLiteral("runtime_visible")] = element->isVisible();
+    if (runtime) {
+      bool hasConfiguredChannel = false;
+      bool allConnected = true;
+      bool hasValue = false;
+      short severity = 0;
+      QJsonArray channels;
+      for (const auto &channel : runtime->channels_) {
+        if (channel.name.trimmed().isEmpty()) {
+          continue;
+        }
+        hasConfiguredChannel = true;
+        allConnected = allConnected && channel.connected;
+        hasValue = hasValue || channel.hasValue;
+        severity = std::max(severity, channel.severity);
+        QJsonObject channelObject;
+        channelObject[QStringLiteral("index")] = channel.index;
+        channelObject[QStringLiteral("name")] = channel.name;
+        channelObject[QStringLiteral("connected")] = channel.connected;
+        channelObject[QStringLiteral("has_value")] = channel.hasValue;
+        if (channel.hasValue) {
+          channelObject[QStringLiteral("numeric_value")] = channel.value;
+        }
+        channelObject[QStringLiteral("severity")] = channel.severity;
+        channels.append(channelObject);
+      }
+      widgetObject[QStringLiteral("connected")] =
+          hasConfiguredChannel && allConnected;
+      widgetObject[QStringLiteral("has_value")] = hasValue;
+      widgetObject[QStringLiteral("severity")] = severity;
+      widgetObject[QStringLiteral("channels")] = channels;
+    }
+    widgets.append(widgetObject);
+  };
+
+  for (RectangleElement *element : rectangleElements_) {
+    appendGraphicState("rectangle", element,
+        rectangleRuntimes_.value(element, nullptr));
+  }
+  for (OvalElement *element : ovalElements_) {
+    appendGraphicState("oval", element, ovalRuntimes_.value(element, nullptr));
+  }
+  for (ArcElement *element : arcElements_) {
+    appendGraphicState("arc", element, arcRuntimes_.value(element, nullptr));
+  }
+  for (LineElement *element : lineElements_) {
+    appendGraphicState("line", element, lineRuntimes_.value(element, nullptr));
+  }
+  for (PolylineElement *element : polylineElements_) {
+    appendGraphicState("polyline", element,
+        polylineRuntimes_.value(element, nullptr));
+  }
+  for (PolygonElement *element : polygonElements_) {
+    appendGraphicState("polygon", element,
+        polygonRuntimes_.value(element, nullptr));
+  }
+  for (ImageElement *element : imageElements_) {
+    if (!element) {
+      continue;
+    }
+    ImageRuntime *runtime = imageRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "image", element, element->channel(0));
+    widgetObject[QStringLiteral("image_name")] = element->imageName();
+    widgetObject[QStringLiteral("frame_count")] = element->frameCount();
+    widgetObject[QStringLiteral("frame_index")] = element->runtimeFrameIndex();
+    widgetObject[QStringLiteral("frame_valid")] = element->runtimeFrameValid();
+    widgetObject[QStringLiteral("animating")] = element->runtimeAnimating();
+    widgetObject[QStringLiteral("runtime_visible")] = element->isVisible();
+    if (runtime) {
+      bool connected = false;
+      short severity = 0;
+      for (const auto &channel : runtime->channels_) {
+        if (!channel.name.trimmed().isEmpty()) {
+          connected = connected || channel.connected;
+          severity = std::max(severity, channel.severity);
+        }
+      }
+      widgetObject[QStringLiteral("connected")] = connected;
+      widgetObject[QStringLiteral("severity")] = severity;
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (RelatedDisplayElement *element : relatedDisplayElements_) {
     if (!element) {
       continue;
     }
     QJsonObject widgetObject;
-    appendWidgetBase(widgetObject, "qtedm_ndarray_image", element,
-        element->dataChannel());
-    widgetObject[QStringLiteral("data_channel")] = element->dataChannel();
-    widgetObject[QStringLiteral("connected")] = element->streamConnected();
-    widgetObject[QStringLiteral("dropped_frames")] =
-        static_cast<qint64>(element->droppedFrames());
-    widgetObject[QStringLiteral("last_error")] = element->lastError();
-    widgetObject[QStringLiteral("zoomed")] = element->isImageZoomed();
-    widgetObject[QStringLiteral("show_pixel_probe")] =
-        element->showPixelProbe();
-    widgetObject[QStringLiteral("max_input_bytes")] =
-        static_cast<qint64>(element->maximumInputBytes());
-    widgetObject[QStringLiteral("max_output_bytes")] =
-        static_cast<qint64>(element->maximumOutputBytes());
-    widgetObject[QStringLiteral("max_dimension")] =
-        element->maximumDimension();
-    const NtNdArrayDecodedFrame &frame = element->decodedFrame();
-    widgetObject[QStringLiteral("frame_valid")] = frame.valid;
-    widgetObject[QStringLiteral("width")] = frame.image.width();
-    widgetObject[QStringLiteral("height")] = frame.image.height();
-    widgetObject[QStringLiteral("unique_id")] = frame.source.uniqueId;
-    widgetObject[QStringLiteral("seconds_past_epoch")] =
-        frame.source.secondsPastEpoch;
+    appendWidgetBase(widgetObject, "related_display", element, QString());
+    widgetObject[QStringLiteral("label")] = element->label();
+    const char *visual = "menu";
+    switch (element->visual()) {
+    case RelatedDisplayVisual::kRowOfButtons:
+      visual = "row_of_buttons";
+      break;
+    case RelatedDisplayVisual::kColumnOfButtons:
+      visual = "column_of_buttons";
+      break;
+    case RelatedDisplayVisual::kHiddenButton:
+      visual = "hidden_button";
+      break;
+    case RelatedDisplayVisual::kMenu:
+    default:
+      break;
+    }
+    widgetObject[QStringLiteral("visual")] = QLatin1String(visual);
+    QJsonArray entries;
+    for (int index = 0; index < element->entryCount(); ++index) {
+      const RelatedDisplayEntry entry = element->entry(index);
+      if (entry.name.trimmed().isEmpty() && entry.label.trimmed().isEmpty()) {
+        continue;
+      }
+      QJsonObject entryObject;
+      entryObject[QStringLiteral("index")] = index;
+      entryObject[QStringLiteral("label")] = entry.label;
+      entryObject[QStringLiteral("name")] = entry.name;
+      entryObject[QStringLiteral("args")] = entry.args;
+      entryObject[QStringLiteral("mode")] =
+          entry.mode == RelatedDisplayMode::kReplace
+              ? QStringLiteral("replace") : QStringLiteral("add");
+      entries.append(entryObject);
+    }
+    widgetObject[QStringLiteral("entries")] = entries;
+    widgets.append(widgetObject);
+  }
+
+  for (ShellCommandElement *element : shellCommandElements_) {
+    if (!element) {
+      continue;
+    }
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "shell_command", element, QString());
+    widgetObject[QStringLiteral("label")] = element->label();
+    QJsonArray entries;
+    for (int index = 0; index < element->entryCount(); ++index) {
+      const ShellCommandEntry entry = element->entry(index);
+      if (entry.command.trimmed().isEmpty() && entry.label.trimmed().isEmpty()) {
+        continue;
+      }
+      QJsonObject entryObject;
+      entryObject[QStringLiteral("index")] = index;
+      entryObject[QStringLiteral("label")] = entry.label;
+      entryObject[QStringLiteral("command")] = entry.command;
+      entryObject[QStringLiteral("args")] = entry.args;
+      entries.append(entryObject);
+    }
+    widgetObject[QStringLiteral("entries")] = entries;
+    widgets.append(widgetObject);
+  }
+
+  for (CompositeElement *element : compositeElements_) {
+    if (!element) {
+      continue;
+    }
+    CompositeRuntime *runtime = compositeRuntimes_.value(element, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "composite", element, element->channel(0));
+    widgetObject[QStringLiteral("name")] = element->compositeName();
+    widgetObject[QStringLiteral("file")] = element->compositeFile();
+    widgetObject[QStringLiteral("child_count")] =
+        element->childWidgets().size();
+    widgetObject[QStringLiteral("connected")] =
+        element->isChannelConnected();
+    widgetObject[QStringLiteral("runtime_visible")] = element->isVisible();
+    if (runtime) {
+      QJsonArray channels;
+      for (int index = 0; index < static_cast<int>(runtime->channels_.size());
+           ++index) {
+        const auto &channel = runtime->channels_[index];
+        if (channel.name.trimmed().isEmpty()) {
+          continue;
+        }
+        QJsonObject channelObject;
+        channelObject[QStringLiteral("index")] = index;
+        channelObject[QStringLiteral("name")] = channel.name;
+        channelObject[QStringLiteral("connected")] = channel.connected;
+        channelObject[QStringLiteral("has_value")] = channel.hasValue;
+        if (channel.hasValue) {
+          channelObject[QStringLiteral("numeric_value")] = channel.value;
+        }
+        channelObject[QStringLiteral("severity")] = channel.severity;
+        channels.append(channelObject);
+      }
+      widgetObject[QStringLiteral("channels")] = channels;
+    }
+    widgets.append(widgetObject);
+  }
+
+  for (HeatmapElement *heatmap : heatmapElements_) {
+    if (auto *element = dynamic_cast<NtNdArrayImageElement *>(heatmap)) {
+      QJsonObject widgetObject;
+      appendWidgetBase(widgetObject, "qtedm_ndarray_image", element,
+          element->dataChannel());
+      widgetObject[QStringLiteral("data_channel")] = element->dataChannel();
+      widgetObject[QStringLiteral("connected")] = element->streamConnected();
+      widgetObject[QStringLiteral("dropped_frames")] =
+          static_cast<qint64>(element->droppedFrames());
+      widgetObject[QStringLiteral("last_error")] = element->lastError();
+      widgetObject[QStringLiteral("zoomed")] = element->isImageZoomed();
+      widgetObject[QStringLiteral("show_pixel_probe")] =
+          element->showPixelProbe();
+      widgetObject[QStringLiteral("max_input_bytes")] =
+          static_cast<qint64>(element->maximumInputBytes());
+      widgetObject[QStringLiteral("max_output_bytes")] =
+          static_cast<qint64>(element->maximumOutputBytes());
+      widgetObject[QStringLiteral("max_dimension")] =
+          element->maximumDimension();
+      const NtNdArrayDecodedFrame &frame = element->decodedFrame();
+      widgetObject[QStringLiteral("frame_valid")] = frame.valid;
+      widgetObject[QStringLiteral("width")] = frame.image.width();
+      widgetObject[QStringLiteral("height")] = frame.image.height();
+      widgetObject[QStringLiteral("unique_id")] = frame.source.uniqueId;
+      widgetObject[QStringLiteral("seconds_past_epoch")] =
+          frame.source.secondsPastEpoch;
+      widgets.append(widgetObject);
+      continue;
+    }
+    if (!heatmap) {
+      continue;
+    }
+    HeatmapRuntime *runtime = heatmapRuntimes_.value(heatmap, nullptr);
+    QJsonObject widgetObject;
+    appendWidgetBase(widgetObject, "heatmap", heatmap,
+        heatmap->dataChannel());
+    widgetObject[QStringLiteral("data_channel")] = heatmap->dataChannel();
+    widgetObject[QStringLiteral("x_dimension_channel")] =
+        heatmap->xDimensionChannel();
+    widgetObject[QStringLiteral("y_dimension_channel")] =
+        heatmap->yDimensionChannel();
+    const QSize dimensions = heatmap->effectiveDimensions();
+    widgetObject[QStringLiteral("x_dimension")] = dimensions.width();
+    widgetObject[QStringLiteral("y_dimension")] = dimensions.height();
+    widgetObject[QStringLiteral("data_count")] = heatmap->runtimeDataCount();
+    widgetObject[QStringLiteral("has_data")] = heatmap->hasRuntimeData();
+    widgetObject[QStringLiteral("has_range")] = heatmap->hasRuntimeRange();
+    if (heatmap->hasRuntimeRange()) {
+      widgetObject[QStringLiteral("runtime_minimum")] =
+          heatmap->runtimeMinimum();
+      widgetObject[QStringLiteral("runtime_maximum")] =
+          heatmap->runtimeMaximum();
+    }
+    widgetObject[QStringLiteral("color_map")] =
+        heatmapColorMapToString(heatmap->colorMap());
+    widgetObject[QStringLiteral("zoomed")] = heatmap->isZoomed();
+    if (runtime) {
+      widgetObject[QStringLiteral("connected")] =
+          runtime->dataChannel_.connected;
+      widgetObject[QStringLiteral("x_dimension_connected")] =
+          runtime->xDimensionChannel_.connected;
+      widgetObject[QStringLiteral("y_dimension_connected")] =
+          runtime->yDimensionChannel_.connected;
+      widgetObject[QStringLiteral("severity")] = runtime->lastSeverity_;
+    }
     widgets.append(widgetObject);
   }
 
@@ -29917,61 +30400,17 @@ bool DisplayWindow::buildShellCommandString(
     }
   }
 
-  QString output;
-  output.reserve(current.size());
-
-  for (int i = 0; i < current.size(); ++i) {
-    const QChar ch = current.at(i);
-    if (ch != QLatin1Char('&')) {
-      output.append(ch);
-      continue;
+  ShellCommandExpansionContext context;
+  context.displayPath = shellCommandDisplayPath();
+  context.displayTitle = shellCommandDisplayTitle();
+  context.windowId = static_cast<qulonglong>(winId());
+  if (current.contains(QStringLiteral("&P"))) {
+    context.pvNames = promptForShellCommandPvNames();
+    if (context.pvNames.isEmpty()) {
+      return false;
     }
-    if (i + 1 >= current.size()) {
-      output.append(ch);
-      continue;
-    }
-    const QChar token = current.at(i + 1);
-    if (token == QLatin1Char('P')) {
-      QStringList pvNames = promptForShellCommandPvNames();
-      if (pvNames.isEmpty()) {
-        return false;
-      }
-      output.append(pvNames.join(QStringLiteral(" ")));
-      ++i;
-      continue;
-    }
-    if (token == QLatin1Char('A')) {
-      output.append(shellCommandDisplayPath());
-      ++i;
-      continue;
-    }
-    if (token == QLatin1Char('T')) {
-      output.append(shellCommandDisplayTitle());
-      ++i;
-      continue;
-    }
-    if (token == QLatin1Char('X')) {
-      output.append(QString::number(static_cast<qulonglong>(winId())));
-      ++i;
-      continue;
-    }
-    if (token == QLatin1Char('?')) {
-      QString defaultCommand = output;
-      if (!defaultCommand.endsWith(QLatin1Char('&'))) {
-        defaultCommand.append(QLatin1Char('&'));
-      }
-      QString userCommand;
-      if (!promptForShellCommandInput(defaultCommand, &userCommand)) {
-        return false;
-      }
-      *result = userCommand;
-      return true;
-    }
-    output.append(ch);
   }
-
-  *result = output;
-  return true;
+  return expandShellCommandTokens(current, context, result);
 }
 
 bool DisplayWindow::promptForShellCommandInput(
@@ -30119,13 +30558,12 @@ void DisplayWindow::runShellCommand(const QString &command)
     return;
   }
 
-  const QByteArray encoded = trimmed.toLocal8Bit();
-  int status = std::system(encoded.constData());
+  QString error;
+  const int status = executeShellCommand(trimmed, &error);
   if (status == -1) {
-    qWarning() << "Failed to start shell command:" << trimmed;
+    qWarning() << error << trimmed;
   } else if (status != 0) {
-    qWarning() << "Shell command exited with status" << status
-               << ":" << trimmed;
+    qWarning() << error << trimmed;
   }
 }
 
@@ -30267,15 +30705,19 @@ void DisplayWindow::handleRelatedDisplayActivation(
     return;
   }
 
-  RelatedDisplayEntry entry = element->entry(entryIndex);
-  const QString fileName = entry.name.trimmed();
-  if (fileName.isEmpty()) {
+  const RelatedDisplayEntry entry = element->entry(entryIndex);
+  RelatedDisplayLaunchSpec launch;
+  QString launchError;
+  if (!prepareRelatedDisplayLaunch(entry, modifiers, macroDefinitions_,
+          &launch, &launchError)) {
+    if (!launchError.isEmpty()) {
+      QMessageBox::warning(this, QStringLiteral("Related Display"),
+          launchError);
+    }
     return;
   }
-
-  const bool replaceRequested = modifiers.testFlag(Qt::ControlModifier);
-  const bool replace = replaceRequested
-      || entry.mode == RelatedDisplayMode::kReplace;
+  const QString fileName = launch.fileName;
+  const bool replace = launch.replace;
 
   const QString resolved = resolveRelatedDisplayFile(fileName);
   if (resolved.isEmpty()) {
@@ -30285,10 +30727,7 @@ void DisplayWindow::handleRelatedDisplayActivation(
     return;
   }
 
-  const QString substitutedArgs = applyMacroSubstitutions(entry.args,
-      macroDefinitions_);
-  QHash<QString, QString> macros =
-      parseMacroDefinitionString(substitutedArgs);
+  const QHash<QString, QString> macros = launch.macros;
 
   if (replace) {
     const QPoint preservePos = pos();

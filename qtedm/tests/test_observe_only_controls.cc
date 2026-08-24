@@ -37,9 +37,11 @@
 #include "meter_element.h"
 #include "plugin_element.h"
 #include "polyline_element.h"
+#include "polygon_element.h"
 #include "pv_channel_manager.h"
 #include "pv_limits_dialog.h"
 #include "pv_table_element.h"
+#include "rectangle_element.h"
 #include "setpoint_control_element.h"
 #include "slider_element.h"
 #include "soft_pv_registry.h"
@@ -48,6 +50,7 @@
 #include "text_area_element.h"
 #include "wave_table_element.h"
 #include "waterfall_plot_element.h"
+#include "waterfall_plot_runtime.h"
 #include "wheel_switch_element.h"
 #include "window_utils.h"
 
@@ -91,6 +94,8 @@ private slots:
   void pvLimitsPickerRoutesEverySupportedControl();
   void middleButtonTooltipRoutesThroughChildControls();
   void editorOperationsCoverExtensionInventories();
+  void editorGeometryCommandsTrackDirtyUndoAndRedo();
+  void testActionsRejectInvalidAndAmbiguousSelectors();
   void reopenedExecuteDisplayDeliversMessageButtonReleaseBeforeMove();
   void extensionWidgetPropertiesRoundTripInMemory();
 
@@ -1365,6 +1370,211 @@ void TestObserveOnlyControls::editorOperationsCoverExtensionInventories()
   for (TextElement *text : std::as_const(regression.textElements_)) {
     QCOMPARE(regression.propertyRuleSets_.value(text).rules.size(), 2);
   }
+}
+
+void TestObserveOnlyControls::editorGeometryCommandsTrackDirtyUndoAndRedo()
+{
+  QTemporaryDir fixtureDirectory;
+  QVERIFY(fixtureDirectory.isValid());
+  const QString fixturePath =
+      fixtureDirectory.filePath(QStringLiteral("editor_geometry.adl"));
+  QFile fixture(fixturePath);
+  QVERIFY(fixture.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray contents = QByteArrayLiteral(
+      "file { name=\"editor_geometry.adl\" version=040004 }\n"
+      "display { object { x=0 y=0 width=420 height=260 } clr=14 bclr=4 "
+      "cmap=\"\" gridSpacing=5 gridOn=0 snapToGrid=0 }\n"
+      "rectangle { object { x=13 y=17 width=20 height=20 } "
+      "\"basic attribute\" { clr=20 fill=\"solid\" } }\n"
+      "rectangle { object { x=73 y=50 width=30 height=20 } "
+      "\"basic attribute\" { clr=25 fill=\"solid\" } }\n"
+      "rectangle { object { x=150 y=90 width=40 height=40 } "
+      "\"basic attribute\" { clr=30 fill=\"solid\" } }\n"
+      "polygon { object { x=230 y=30 width=80 height=60 } "
+      "\"basic attribute\" { clr=35 fill=\"outline\" } "
+      "points { (230,80) (270,30) (310,80) (230,80) } }\n");
+  QCOMPARE(fixture.write(contents), contents.size());
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixturePath, &error), qPrintable(error));
+  QCOMPARE(window.rectangleElements_.size(), 3);
+  QCOMPARE(window.polygonElements_.size(), 1);
+  QVERIFY(!window.isDirty());
+
+  auto selectRectangles = [&window]() {
+    window.clearSelections();
+    for (RectangleElement *rectangle : window.rectangleElements_) {
+      window.addWidgetToMultiSelection(rectangle);
+    }
+  };
+
+  selectRectangles();
+  window.alignSelectionLeft();
+  for (RectangleElement *rectangle : window.rectangleElements_) {
+    QCOMPARE(rectangle->x(), 13);
+  }
+  QVERIFY(window.isDirty());
+  QCOMPARE(window.undoStack()->undoText(), QStringLiteral("Align Left"));
+  window.triggerUndo();
+  QCOMPARE(window.rectangleElements_.at(1)->x(), 73);
+  QVERIFY(!window.isDirty());
+  window.triggerRedo();
+  QCOMPARE(window.rectangleElements_.at(2)->x(), 13);
+  QVERIFY(window.isDirty());
+  window.triggerUndo();
+
+  selectRectangles();
+  window.spaceSelectionHorizontal();
+  QCOMPARE(window.rectangleElements_.at(0)->x(), 13);
+  QCOMPARE(window.rectangleElements_.at(1)->x(),
+      window.rectangleElements_.at(0)->x()
+          + window.rectangleElements_.at(0)->width() + window.gridSpacing());
+  QCOMPARE(window.rectangleElements_.at(2)->x(),
+      window.rectangleElements_.at(1)->x()
+          + window.rectangleElements_.at(1)->width() + window.gridSpacing());
+  window.triggerUndo();
+
+  selectRectangles();
+  int totalWidth = 0;
+  int totalHeight = 0;
+  for (RectangleElement *rectangle : window.rectangleElements_) {
+    totalWidth += rectangle->width();
+    totalHeight += rectangle->height();
+  }
+  const int rectangleCount = window.rectangleElements_.size();
+  const QSize expectedAverageSize(
+      (totalWidth + rectangleCount / 2) / rectangleCount,
+      (totalHeight + rectangleCount / 2) / rectangleCount);
+  window.sizeSelectionSameSize();
+  for (RectangleElement *rectangle : window.rectangleElements_) {
+    QCOMPARE(rectangle->size(), expectedAverageSize);
+  }
+  window.triggerUndo();
+
+  window.clearSelections();
+  window.selectRectangleElement(window.rectangleElements_.at(0));
+  window.alignSelectionPositionToGrid();
+  QCOMPARE(window.rectangleElements_.at(0)->pos(), QPoint(15, 15));
+  window.triggerUndo();
+
+  window.clearSelections();
+  window.selectRectangleElement(window.rectangleElements_.at(1));
+  const QSize sizeBeforeRotation = window.rectangleElements_.at(1)->size();
+  window.rotateSelectionClockwise();
+  QCOMPARE(window.rectangleElements_.at(1)->size(),
+      QSize(sizeBeforeRotation.height(), sizeBeforeRotation.width()));
+  window.triggerUndo();
+
+  RectangleElement *first = window.rectangleElements_.at(0);
+  window.clearSelections();
+  window.selectRectangleElement(first);
+  window.raiseSelection();
+  QCOMPARE(window.elementStack_.last().data(), first);
+  window.triggerUndo();
+  QCOMPARE(window.elementStack_.first().data(),
+      static_cast<QWidget *>(window.rectangleElements_.at(0)));
+
+  window.clearSelections();
+  PolygonElement *polygon = window.polygonElements_.front();
+  const QVector<QPoint> originalPoints = polygon->absolutePoints();
+  window.selectPolygonElement(polygon);
+  window.orientSelectionFlipHorizontal();
+  QVERIFY(window.polygonElements_.front()->absolutePoints() != originalPoints);
+  window.triggerUndo();
+  const QVector<QPoint> restoredPoints =
+      window.polygonElements_.front()->absolutePoints();
+  QCOMPARE(restoredPoints.size(), originalPoints.size());
+  for (const QPoint &point : originalPoints) {
+    QVERIFY(restoredPoints.contains(point));
+  }
+}
+
+void TestObserveOnlyControls::testActionsRejectInvalidAndAmbiguousSelectors()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  auto *first = new TextEntryElement(window.displayArea_);
+  first->setChannel(QStringLiteral("action:test:duplicate"));
+  first->setGeometry(10, 10, 100, 24);
+  window.textEntryElements_.append(first);
+  auto *second = new TextEntryElement(window.displayArea_);
+  second->setChannel(QStringLiteral("action:test:duplicate"));
+  second->setGeometry(10, 50, 100, 24);
+  window.textEntryElements_.append(second);
+
+  QString error;
+  QJsonObject action{
+      {QStringLiteral("selector"), QJsonObject{
+          {QStringLiteral("type"), QStringLiteral("text_entry")},
+          {QStringLiteral("channel"),
+              QStringLiteral("action:test:duplicate")}}},
+      {QStringLiteral("operation"), QStringLiteral("commit_text")},
+      {QStringLiteral("value"), QStringLiteral("42")}};
+  QCOMPARE(window.applyTestAction(action, &error), -1);
+  QVERIFY(error.contains(QStringLiteral("matched 2 widgets")));
+
+  QJsonObject selector = action.value(QStringLiteral("selector")).toObject();
+  selector[QStringLiteral("geometry")] = QJsonObject{
+      {QStringLiteral("x"), 10}, {QStringLiteral("y"), 10},
+      {QStringLiteral("width"), 100}, {QStringLiteral("height"), 24}};
+  action[QStringLiteral("selector")] = selector;
+  action[QStringLiteral("operation")] = QStringLiteral("unsupported");
+  error.clear();
+  QCOMPARE(window.applyTestAction(action, &error), -1);
+  QVERIFY(error.contains(QStringLiteral("unsupported")));
+
+  selector[QStringLiteral("channel")] = QStringLiteral("action:test:missing");
+  action[QStringLiteral("selector")] = selector;
+  error.clear();
+  QCOMPARE(window.applyTestAction(action, &error), 0);
+
+  action.remove(QStringLiteral("selector"));
+  QCOMPARE(window.applyTestAction(action, &error), -1);
+  QVERIFY(error.contains(QStringLiteral("requires an object selector")));
+
+  const QString waterfallChannel =
+      QStringLiteral("__test:waterfall_action_reset");
+  auto &soft = SoftPvRegistry::instance();
+  soft.registerName(waterfallChannel, true);
+  registeredNames_.append(waterfallChannel);
+  soft.setConnected(waterfallChannel, true);
+  soft.publishArrayValue(waterfallChannel, {1.0, 2.0, 3.0});
+
+  auto *waterfall = new WaterfallPlotElement(window.displayArea_);
+  waterfall->setGeometry(150, 100, 220, 120);
+  waterfall->setDataChannel(waterfallChannel);
+  window.waterfallPlotElements_.append(waterfall);
+  auto *waterfallRuntime = new WaterfallPlotRuntime(waterfall);
+  window.waterfallPlotRuntimes_.insert(waterfall, waterfallRuntime);
+  waterfallRuntime->start();
+  QTRY_COMPARE(waterfall->bufferedSampleCount(), 1);
+  soft.publishArrayValue(waterfallChannel, {4.0, 5.0, 6.0});
+  QTRY_COMPARE(waterfall->bufferedSampleCount(), 2);
+
+  QJsonObject waterfallAction{
+      {QStringLiteral("selector"), QJsonObject{
+          {QStringLiteral("type"), QStringLiteral("waterfall_plot")},
+          {QStringLiteral("channel"), waterfallChannel},
+          {QStringLiteral("geometry"), QJsonObject{
+              {QStringLiteral("x"), 150}, {QStringLiteral("y"), 100},
+              {QStringLiteral("width"), 220},
+              {QStringLiteral("height"), 120}}}}},
+      {QStringLiteral("operation"), QStringLiteral("reset_samples")}};
+  error.clear();
+  QCOMPARE(window.applyTestAction(waterfallAction, &error), 1);
+  QCOMPARE(waterfall->bufferedSampleCount(), 1);
+  QCOMPARE(waterfall->sampleLength(0), 3);
+  QCOMPARE(waterfall->sampleValue(0, 0), 4.0);
 }
 
 void TestObserveOnlyControls::

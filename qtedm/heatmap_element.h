@@ -86,6 +86,12 @@ public:
   void setRuntimeSharedData(std::shared_ptr<const double> sharedData, size_t size);
   void setRuntimeDimensions(int xDim, int yDim);
   void clearRuntimeState();
+  QSize effectiveDimensions() const;
+  int runtimeDataCount() const;
+  bool hasRuntimeData() const;
+  bool hasRuntimeRange() const;
+  double runtimeMinimum() const;
+  double runtimeMaximum() const;
 
   // Zoom/pan support (execute mode only)
   bool isZoomed() const;
@@ -118,7 +124,6 @@ private:
   void rebuildImage(const QSize &targetSize);
   QImage maxPoolDownsample(const QImage &source,
       const QSize &targetSize) const;
-  QSize effectiveDimensions() const;
   QSize visibleDataSize() const;
   QSize renderTargetSize(const QSize &availableSize) const;
   QColor backgroundColor() const;

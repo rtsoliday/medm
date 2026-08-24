@@ -13,6 +13,7 @@ PV_PREFIX=""
 EXECUTION_TIME="0"
 REGENERATE="0"
 STANDALONE="1"
+INIT_PROFILE="full"
 
 usage() {
   cat <<'EOF'
@@ -28,6 +29,7 @@ Options:
   --execution-time <sec>   IOC runtime in seconds, 0 means forever
   --regenerate             Regenerate SDDS file from tests/*.adl first
   --no-standalone          Do not pass -standalone to sddsSoftIOC
+  --init-profile <name>    Initialization set: full or slider (default: full)
   --help                   Show this help
 EOF
 }
@@ -82,6 +84,14 @@ while [[ $# -gt 0 ]]; do
       STANDALONE="0"
       shift
       ;;
+    --init-profile)
+      [[ $# -ge 2 ]] || {
+        echo "Missing value for $1" >&2
+        exit 1
+      }
+      INIT_PROFILE="$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -93,6 +103,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "${INIT_PROFILE}" != "full" && "${INIT_PROFILE}" != "slider" ]]; then
+  echo "Unknown initialization profile: ${INIT_PROFILE}" >&2
+  exit 1
+fi
 
 if [[ ! -x "${IOC_BIN}" ]]; then
   echo "sddsSoftIOC binary not found or not executable: ${IOC_BIN}" >&2
@@ -2093,6 +2108,16 @@ set_qtedm_plugins_rules_test_pvs() {
   echo "QtEDM property-rule input initialized by the LED monitor harness."
 }
 
+set_qtedm_visual_coverage_test_pvs() {
+  local _prefix="$1"
+
+  # The focused visual fixtures intentionally reuse values initialized by the
+  # Cartesian, waterfall, control, image, graphic, tab, archive, and extension
+  # harnesses above. Keeping this explicit makes additions to visual_*.adl
+  # auditable without duplicating writes or creating another IOC namespace.
+  echo "QtEDM focused visual fixtures reuse deterministic harness PVs."
+}
+
 cleanup() {
   local status=$?
   if [[ -n "${waterfall_driver_pid}" ]] \
@@ -2115,6 +2140,7 @@ set_local_epics_runtime_env
 "${cmd[@]}" > "${LOG_FILE}" 2>&1 &
 ioc_pid="$!"
 set_slider_test_pvs "${PV_PREFIX}" || true
+if [[ "${INIT_PROFILE}" == "full" ]]; then
 set_scale_monitor_test_pvs "${PV_PREFIX}" || true
 set_led_monitor_test_pvs "${PV_PREFIX}" || true
 set_meter_test_pvs "${PV_PREFIX}" || true
@@ -2151,8 +2177,12 @@ set_qtedm_tabbed_displays_test_pvs "${PV_PREFIX}" || true
 set_qtedm_archive_snapshot_test_pvs "${PV_PREFIX}" || true
 set_qtedm_ndarray_test_pvs "${PV_PREFIX}" || true
 set_qtedm_plugins_rules_test_pvs "${PV_PREFIX}" || true
+set_qtedm_visual_coverage_test_pvs "${PV_PREFIX}" || true
 set_wheel_switch_test_pvs "${PV_PREFIX}" || true
 set_slider_alarm_probe_pvs "${PV_PREFIX}" || true
+else
+  echo "Slider-only IOC initialization profile complete."
+fi
 if [[ -n "${READY_FILE}" ]]; then
   printf 'ready\n' > "${READY_FILE}"
   echo "Wrote IOC ready file: ${READY_FILE}"

@@ -20,6 +20,8 @@ class QToolButton;
 
 class SetpointControlElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit SetpointControlElement(QWidget *parent = nullptr);
 

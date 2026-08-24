@@ -21,3 +21,23 @@ record(ao, "$(P)sp:test:compact:setpoint") {
   field(PREC, "2")
   field(EGU, "V")
 }
+
+record(stringout, "$(P)pva:test:string") {
+  field(DESC, "QtEDM PVA string write source")
+  field(VAL, "PVA_INITIAL")
+}
+
+record(mbbo, "$(P)pva:test:enum") {
+  field(DESC, "QtEDM PVA enum write source")
+  field(ZRST, "Idle")
+  field(ONST, "Running")
+  field(TWST, "Complete")
+  field(THST, "Fault")
+  field(VAL, "1")
+}
+
+record(waveform, "$(P)pva:test:array") {
+  field(DESC, "QtEDM PVA numeric array source")
+  field(FTVL, "DOUBLE")
+  field(NELM, "8")
+}

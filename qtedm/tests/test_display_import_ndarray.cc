@@ -9,7 +9,10 @@
 #include <QTemporaryDir>
 
 #include <memory>
+#include <algorithm>
 #include <vector>
+
+#include <pv/ntndarray.h>
 
 #include "display_converter.h"
 #include "display_state.h"
@@ -18,6 +21,7 @@
 #include "ntndarray_image_decoder.h"
 #include "ntndarray_image_element.h"
 #include "ntndarray_image_runtime.h"
+#include "pva_ntndarray_source.h"
 #include "adl_parser.h"
 
 namespace {
@@ -60,6 +64,46 @@ QByteArray readAll(const QString &path)
   return file.readAll();
 }
 
+epics::pvData::PVStructurePtr rawNtNdArray(
+    const std::vector<epics::pvData::uint8> &values,
+    const QVector<int> &dimensions)
+{
+  using namespace epics::nt;
+  using namespace epics::pvData;
+  PVStructurePtr root = NTNDArray::createBuilder()->createPVStructure();
+  PVUnionPtr value = root->getSubField<PVUnion>("value");
+  PVUByteArrayPtr array = value->select<PVUByteArray>("ubyteValue");
+  PVUByteArray::svector arrayValues(array->reuse());
+  arrayValues.resize(values.size());
+  std::copy(values.begin(), values.end(), arrayValues.begin());
+  array->replace(freeze(arrayValues));
+
+  PVStructureArrayPtr dimensionField =
+      root->getSubField<PVStructureArray>("dimension");
+  PVStructureArray::svector dimensionValues(dimensionField->reuse());
+  dimensionValues.resize(dimensions.size());
+  for (int index = 0; index < dimensions.size(); ++index) {
+    PVStructurePtr dimension = getPVDataCreate()->createPVStructure(
+        dimensionField->getStructureArray()->getStructure());
+    dimension->getSubField<PVInt>("size")->put(dimensions.at(index));
+    dimension->getSubField<PVInt>("offset")->put(index);
+    dimension->getSubField<PVInt>("fullSize")->put(
+        dimensions.at(index) + index);
+    dimension->getSubField<PVInt>("binning")->put(index + 1);
+    dimension->getSubField<PVBoolean>("reverse")->put(index != 0);
+    dimensionValues[index] = dimension;
+  }
+  dimensionField->replace(freeze(dimensionValues));
+  root->getSubField<PVString>("codec.name")->put("");
+  root->getSubField<PVLong>("compressedSize")->put(values.size());
+  root->getSubField<PVLong>("uncompressedSize")->put(values.size());
+  root->getSubField<PVInt>("uniqueId")->put(73);
+  root->getSubField<PVLong>(
+      "dataTimeStamp.secondsPastEpoch")->put(1700000123);
+  root->getSubField<PVInt>("dataTimeStamp.nanoseconds")->put(456);
+  return root;
+}
+
 } // namespace
 
 class TestDisplayImportNdArray : public QObject
@@ -79,6 +123,8 @@ private slots:
   void imageElementTracksDisconnectsAndDimensionChanges();
   void asynchronousDecodePublishesAFrame();
   void newestFrameQueueDropsObsoletePendingFrames();
+  void pvaExtractorRetainsRawFrameAndMetadata();
+  void pvaExtractorRejectsMalformedFrames();
 };
 
 void TestDisplayImportNdArray::registryContainsNtNdArrayImage()
@@ -88,6 +134,50 @@ void TestDisplayImportNdArray::registryContainsNtNdArrayImage()
   QVERIFY(descriptor);
   QCOMPARE(descriptor->createTool, CreateTool::kQtedmNdArrayImage);
   QCOMPARE(descriptor->category, QStringLiteral("Monitors"));
+}
+
+void TestDisplayImportNdArray::pvaExtractorRetainsRawFrameAndMetadata()
+{
+  const auto root = rawNtNdArray({1, 2, 3, 4, 5, 6}, {3, 2});
+  NtNdArrayFrame frame;
+  QString error;
+  QVERIFY2(pvaNtNdArrayExtractFrame(root, &frame, &error),
+      qPrintable(error));
+  QCOMPARE(frame.scalarType, NtNdArrayScalarType::kUInt8);
+  QCOMPARE(frame.colorMode, NtNdArrayColorMode::kMono);
+  QCOMPARE(frame.elementCount, std::size_t(6));
+  QCOMPARE(frame.byteCount, std::size_t(6));
+  QCOMPARE(frame.dimensions.size(), 2);
+  QCOMPARE(frame.dimensions.at(0).size, 3);
+  QCOMPARE(frame.dimensions.at(1).size, 2);
+  QCOMPARE(frame.dimensions.at(1).offset, 1);
+  QCOMPARE(frame.dimensions.at(1).fullSize, 3);
+  QCOMPARE(frame.dimensions.at(1).binning, 2);
+  QVERIFY(frame.dimensions.at(1).reverse);
+  QCOMPARE(frame.uniqueId, 73);
+  QCOMPARE(frame.secondsPastEpoch, qint64(1700000123));
+  QCOMPARE(frame.nanoseconds, 456);
+  const auto *bytes =
+      static_cast<const epics::pvData::uint8 *>(frame.data.get());
+  QVERIFY(bytes);
+  QCOMPARE(bytes[0], epics::pvData::uint8(1));
+  QCOMPARE(bytes[5], epics::pvData::uint8(6));
+}
+
+void TestDisplayImportNdArray::pvaExtractorRejectsMalformedFrames()
+{
+  NtNdArrayFrame frame;
+  QString error;
+  QVERIFY(!pvaNtNdArrayExtractFrame(
+      epics::pvData::PVStructurePtr(), &frame, &error));
+
+  const auto oneDimension = rawNtNdArray({1, 2, 3}, {3});
+  QVERIFY(!pvaNtNdArrayExtractFrame(oneDimension, &frame, &error));
+  QVERIFY(error.contains(QStringLiteral("2D")));
+
+  const auto empty = rawNtNdArray({}, {2, 2});
+  QVERIFY(!pvaNtNdArrayExtractFrame(empty, &frame, &error));
+  QVERIFY(error.contains(QStringLiteral("empty")));
 }
 
 void TestDisplayImportNdArray::converterProducesDeterministicDisplaysAndReport()

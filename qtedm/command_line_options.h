@@ -50,6 +50,7 @@ struct CommandLineOptions {
   QString displayFont = QStringLiteral("alias");
   QString testSaveOutputPath = QStringLiteral("/tmp/qtedmTest.adl");
   QString testDumpStatePath;
+  QString testActionsPath;
   QString testCaptureScreenshotPath;
   QString testReadyFilePath;
   QString testActiveTabId;

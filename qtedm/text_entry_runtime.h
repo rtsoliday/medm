@@ -19,6 +19,7 @@ class DisplayWindow;
 class TextEntryRuntime : public QObject
 {
   friend class DisplayWindow;
+  friend class TestTextEntryRuntime;
 public:
   explicit TextEntryRuntime(TextEntryElement *element);
   ~TextEntryRuntime() override;

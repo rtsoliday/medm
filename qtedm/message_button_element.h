@@ -16,6 +16,8 @@ class QMouseEvent;
 
 class MessageButtonElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit MessageButtonElement(QWidget *parent = nullptr);
 

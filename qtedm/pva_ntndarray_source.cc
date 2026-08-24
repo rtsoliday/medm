@@ -156,7 +156,7 @@ int readColorMode(const epics::pvData::PVStructurePtr &root)
   return -1;
 }
 
-bool extractFrame(const epics::pvData::PVStructurePtr &root,
+bool extractFrameImpl(const epics::pvData::PVStructurePtr &root,
     NtNdArrayFrame *frame, QString *error)
 {
   if (!root || !frame) {
@@ -294,6 +294,13 @@ bool extractFrame(const epics::pvData::PVStructurePtr &root,
 
 } // namespace
 
+bool pvaNtNdArrayExtractFrame(
+    const epics::pvData::PVStructurePtr &root,
+    NtNdArrayFrame *frame, QString *error)
+{
+  return extractFrameImpl(root, frame, error);
+}
+
 struct PvaNtNdArraySource
 {
   QString rawName;
@@ -403,7 +410,7 @@ PvaNtNdArrayPollResult pvaNtNdArrayPoll(PvaNtNdArraySource *source)
       const auto root = monitor->getData()->getPVStructure();
       NtNdArrayFrame candidate;
       QString error;
-      if (extractFrame(root, &candidate, &error)) {
+      if (pvaNtNdArrayExtractFrame(root, &candidate, &error)) {
         if (result.hasFrame) {
           ++result.droppedFrames;
         }

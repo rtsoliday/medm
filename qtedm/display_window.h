@@ -801,6 +801,7 @@ public:
   QString filePath() const;
 
   QJsonObject testStateObject() const;
+  int applyTestAction(const QJsonObject &action, QString *errorMessage);
 
   const QHash<QString, QString> &macroDefinitions() const;
 

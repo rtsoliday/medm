@@ -17,7 +17,9 @@ from typing import List, Match, Optional, Set
 
 
 CHANNEL_PATTERN = re.compile(
-    r'((?:chan(?:[ABCD])?|channelA|channelB|channelC|channelD|variable|setpoint|readback|readbackPv|readbackChannel)=")([^"]*)(")',
+    r'((?:chan(?:[ABCD])?|channel(?:[ABCD])?|variable|setpoint|readback|'
+    r'readbackPv|readbackChannel|dataPv|countPvName|xdata|ydata|trigger|'
+    r'erase)=")([^"]*)(")',
     re.IGNORECASE)
 
 
@@ -159,49 +161,91 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
   else:
     display_to_run = display_path
 
-  ready_path = temp_dir / f"{case['name']}.ready"
-  actual_path = temp_dir / f"{case['name']}.png"
+  def capture(repeat_index: int) -> Path:
+    suffix = "" if repeat_index == 0 else f".repeat{repeat_index + 1}"
+    ready_path = temp_dir / f"{case['name']}{suffix}.ready"
+    actual_path = temp_dir / f"{case['name']}{suffix}.png"
+    actions_path = temp_dir / f"{case['name']}{suffix}.actions.json"
+    command = [
+        str(qtedm_bin),
+        "-x",
+        "-testReadyFile",
+        native_child_path(ready_path),
+        "-testCaptureScreenshot",
+        native_child_path(actual_path),
+        "-testExitAfterMs",
+        str(case.get("exit_after_ms", 1500)),
+        native_child_path(display_to_run),
+    ]
+    actions = case.get("actions", [])
+    if actions:
+      if not isinstance(actions, list):
+        raise CaseFailure(
+            f"Visual actions must be a list for {case['name']}")
+      rewritten_actions = json.loads(json.dumps(actions))
+      if case.get("use_ioc"):
+        for action in rewritten_actions:
+          selector = action.get("selector", {})
+          if "channel" in selector:
+            selector["channel"] = prefix_channel_name(
+                str(selector["channel"]), prefix)
+      actions_path.write_text(
+          json.dumps(rewritten_actions, indent=2) + "\n", encoding="utf-8")
+      command[1:1] = [
+          "-testActions",
+          native_child_path(actions_path),
+      ]
+    process = subprocess.Popen(
+        command,
+        env=process_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    try:
+      wait_for_file(ready_path, process, timeout_seconds=20)
+      stdout, stderr = process.communicate(
+          timeout=float(case.get("exit_after_ms", 1500)) / 1000.0 + 10.0)
+    except subprocess.TimeoutExpired as exc:
+      terminate_process(process)
+      raise CaseFailure(
+          f"Timed out waiting for qtedm in visual case {case['name']}") from exc
+    finally:
+      if process.poll() is None:
+        terminate_process(process)
+
+    if process.returncode != 0:
+      raise CaseFailure(
+          f"qtedm exited with status {process.returncode} for visual case "
+          f"{case['name']}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+    if not actual_path.is_file():
+      raise CaseFailure(
+          f"Missing screenshot for visual case {case['name']}: {actual_path}")
+    return actual_path
+
+  repeat_count = int(case.get("deterministic_repeats", 1))
+  if repeat_count < 1:
+    raise CaseFailure(
+        f"deterministic_repeats must be positive for {case['name']}")
+  actual_paths = [capture(index) for index in range(repeat_count)]
+  actual_path = actual_paths[0]
+
+  if repeat_count > 1:
+    if update_goldens:
+      raise CaseFailure(
+          f"Deterministic visual case {case['name']} has no golden to update")
+    for index, repeat_path in enumerate(actual_paths[1:], start=2):
+      diff_path = temp_dir / f"{case['name']}.repeat{index}.diff.png"
+      compare_images(compare_tool, actual_path, repeat_path, diff_path,
+          case.get("tolerance", {}), f"{case['name']} repeat {index}")
+    print(f"PASS {case['name']} ({repeat_count} deterministic captures)")
+    return
+
+  if "golden" not in case:
+    raise CaseFailure(
+        f"Visual case {case['name']} needs a golden or deterministic repeats")
   diff_path = temp_dir / f"{case['name']}.diff.png"
   golden_path = resolve_golden_path(repo_root, case, update_goldens)
-
-  command = [
-      str(qtedm_bin),
-      "-x",
-      "-testReadyFile",
-      native_child_path(ready_path),
-      "-testCaptureScreenshot",
-      native_child_path(actual_path),
-      "-testExitAfterMs",
-      str(case.get("exit_after_ms", 1500)),
-      native_child_path(display_to_run),
-  ]
-  process = subprocess.Popen(
-      command,
-      env=process_env,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.PIPE,
-      universal_newlines=True,
-  )
-  try:
-    wait_for_file(ready_path, process, timeout_seconds=20)
-    stdout, stderr = process.communicate(
-        timeout=float(case.get("exit_after_ms", 1500)) / 1000.0 + 10.0)
-  except subprocess.TimeoutExpired as exc:
-    terminate_process(process)
-    raise CaseFailure(
-        f"Timed out waiting for qtedm in visual case {case['name']}") from exc
-  finally:
-    if process.poll() is None:
-      terminate_process(process)
-
-  if process.returncode != 0:
-    raise CaseFailure(
-        f"qtedm exited with status {process.returncode} for visual case "
-        f"{case['name']}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
-
-  if not actual_path.is_file():
-    raise CaseFailure(
-        f"Missing screenshot for visual case {case['name']}: {actual_path}")
 
   golden_path.parent.mkdir(parents=True, exist_ok=True)
   if update_goldens:

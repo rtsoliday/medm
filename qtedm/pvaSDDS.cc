@@ -49,6 +49,7 @@
 #include <inttypes.h>
 #include <map>
 #include <sstream>
+#include <stdexcept>
 
 static uint32_t GetElementCountFromNelm(PVA_OVERALL *pva, long index, size_t currentCount);
 
@@ -205,11 +206,18 @@ static bool GetPVARequestedPath(PVA_OVERALL *pva, long index, std::string &path)
 }
 
 static bool HasGetData(PVA_OVERALL *pva, long index) {
-  return pva != NULL && index >= 0 && index < pva->numPVs &&
-         (size_t)index < pva->isConnected.size() && pva->isConnected[index] &&
-         (size_t)index < pva->pvaClientGetPtr.size() && pva->pvaClientGetPtr[index] &&
-         pva->pvaClientGetPtr[index]->getData() &&
-         pva->pvaClientGetPtr[index]->getData()->getPVStructure();
+  if (pva == NULL || index < 0 || index >= pva->numPVs ||
+      (size_t)index >= pva->isConnected.size() || !pva->isConnected[index] ||
+      (size_t)index >= pva->pvaClientGetPtr.size() ||
+      !pva->pvaClientGetPtr[index]) {
+    return false;
+  }
+  try {
+    return pva->pvaClientGetPtr[index]->getData() &&
+           pva->pvaClientGetPtr[index]->getData()->getPVStructure();
+  } catch (const std::runtime_error &) {
+    return false;
+  }
 }
 
 static void UpdateAlarmSeverity(PVA_OVERALL *pva, long index,
@@ -2833,6 +2841,11 @@ long PollMonitoredPVA(PVA_OVERALL **pva, long count) {
         if (MonitorPVAValues(pva[n]) != 0) {
           return (-1);
         }
+        /* Refresh values and metadata after a provider transition.  Existing
+           PvaClientGet objects reconnect, but their old data may be absent. */
+        if (GetPVAValues(pva[n]) != 0) {
+          return (-1);
+        }
         connectionChange = false;
       }
 
@@ -2843,8 +2856,19 @@ long PollMonitoredPVA(PVA_OVERALL **pva, long count) {
         if (pva[n]->isConnected[i] && pva[n]->pvaData[i].haveMonitorPtr && pva[n]->pvaClientMonitorPtr[i]) {
           if (pva[n]->pvaClientMonitorPtr[i]->poll()) {
             MonitorEventGuard eventGuard(pva[n]->pvaClientMonitorPtr[i]);
+            try {
+              pvStructurePtr =
+                pva[n]->pvaClientMonitorPtr[i]->getData()->getPVStructure();
+            } catch (const std::runtime_error &) {
+              /* A monitor can report an event without data while its provider
+                 is disconnecting or reconnecting.  Release the event and wait
+                 for the next connection/data notification. */
+              continue;
+            }
+            if (!pvStructurePtr) {
+              continue;
+            }
             result++;
-            pvStructurePtr = pva[n]->pvaClientMonitorPtr[i]->getData()->getPVStructure();
             UpdateAlarmSeverity(pva[n], i, pvStructurePtr);
             std::string requestedPath;
             if (GetPVARequestedPath(pva[n], i, requestedPath)) {
@@ -2944,7 +2968,16 @@ long WaitEventMonitoredPVA(PVA_OVERALL *pva, long index, double secondsToWait) {
     if (pva->isConnected[i] && pva->pvaData[i].haveMonitorPtr && pva->pvaClientMonitorPtr[i]) {
       if (pva->pvaClientMonitorPtr[i]->waitEvent(secondsToWait)) {
         MonitorEventGuard eventGuard(pva->pvaClientMonitorPtr[i]);
-        pvStructurePtr = pva->pvaClientMonitorPtr[i]->getData()->getPVStructure();
+        try {
+          pvStructurePtr =
+            pva->pvaClientMonitorPtr[i]->getData()->getPVStructure();
+        } catch (const std::runtime_error &) {
+          /* See PollMonitoredPVA: provider transitions may have no data. */
+          continue;
+        }
+        if (!pvStructurePtr) {
+          continue;
+        }
         UpdateAlarmSeverity(pva, i, pvStructurePtr);
         std::string requestedPath;
         if (GetPVARequestedPath(pva, i, requestedPath)) {

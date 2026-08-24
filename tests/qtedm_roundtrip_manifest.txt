@@ -21,6 +21,7 @@ test_QtEDMTabbedDisplaysSessions.adl
 test_QtEDMArchiveSnapshots.adl
 test_QtEDMDisplayImportNDArray.adl
 test_QtEDMPluginsPropertyRules.adl
+test_QtEDMRuntimeExtensionsRoundTrip.adl
 test_RelatedDisplay.adl
 test_ScaleMonitor.adl
 test_SetpointControl.adl

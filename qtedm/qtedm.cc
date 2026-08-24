@@ -19,6 +19,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMainWindow>
@@ -85,6 +86,7 @@ typedef int Status;
 #include "audit_logger.h"
 #include "audit_log_viewer_dialog.h"
 #include "command_line_options.h"
+#include "remote_request_codec.h"
 #include "display_common_properties.h"
 #include "display_converter.h"
 #include "display_state.h"
@@ -124,6 +126,7 @@ void printUsage(const QString &program)
       "  [-testSave]\n"
       "  [-testSaveOutput output-file]\n"
       "  [-testDumpState output-file]\n"
+      "  [-testActions input-file]\n"
       "  [-testCaptureScreenshot output-file]\n"
       "  [-testReadyFile output-file]\n"
       "  [-testExitAfterMs milliseconds]\n"
@@ -228,6 +231,69 @@ bool writeTestStateFile(const QString &path,
   root[QStringLiteral("displays")] = displays;
   return writeTextFile(path, QJsonDocument(root).toJson(QJsonDocument::Indented),
       errorMessage);
+}
+
+bool applyTestActionsFile(const QString &path,
+    const std::shared_ptr<DisplayState> &state, QString *errorMessage)
+{
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Failed to open %1: %2")
+          .arg(path, file.errorString());
+    }
+    return false;
+  }
+
+  QJsonParseError parseError;
+  const QJsonDocument document =
+      QJsonDocument::fromJson(file.readAll(), &parseError);
+  if (parseError.error != QJsonParseError::NoError || !document.isArray()) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Invalid test action file %1: %2")
+          .arg(path, parseError.errorString());
+    }
+    return false;
+  }
+
+  const QJsonArray actions = document.array();
+  for (int actionIndex = 0; actionIndex < actions.size(); ++actionIndex) {
+    if (!actions.at(actionIndex).isObject()) {
+      if (errorMessage) {
+        *errorMessage = QStringLiteral("Test action %1 is not an object.")
+            .arg(actionIndex);
+      }
+      return false;
+    }
+    int matchCount = 0;
+    if (state) {
+      for (const QPointer<DisplayWindow> &displayPtr : state->displays) {
+        if (displayPtr.isNull()) {
+          continue;
+        }
+        QString actionError;
+        const int result = displayPtr->applyTestAction(
+            actions.at(actionIndex).toObject(), &actionError);
+        if (result < 0) {
+          if (errorMessage) {
+            *errorMessage = QStringLiteral("Test action %1 failed: %2")
+                .arg(actionIndex).arg(actionError);
+          }
+          return false;
+        }
+        matchCount += result;
+      }
+    }
+    if (matchCount != 1) {
+      if (errorMessage) {
+        *errorMessage = QStringLiteral(
+            "Test action %1 matched %2 widgets; exactly one is required.")
+            .arg(actionIndex).arg(matchCount);
+      }
+      return false;
+    }
+  }
+  return true;
 }
 
 bool areDisplaysReadyForAutomation(const std::shared_ptr<DisplayState> &state)
@@ -563,42 +629,16 @@ void sendRemoteRequestMessages(Display *display, Window targetWindow, Atom atom,
   clientMessageEvent.message_type = atom;
   clientMessageEvent.format = 8;
 
-  const QByteArray pathBytes = QFile::encodeName(fullPathName);
-  const QByteArray macroBytes =
-      macroString.isEmpty() ? QByteArray() : QByteArray(macroString.toLocal8Bit());
-  const QByteArray geometryBytes = geometryString.isEmpty()
-      ? QByteArray()
-      : QByteArray(geometryString.toLocal8Bit());
-
-  int index = 0;
-  auto flushEvent = [&]() {
+  const QByteArray encoded = encodeRemoteDisplayRequest(
+      fullPathName, macroString, geometryString);
+  const QVector<QByteArray> chunks =
+      chunkRemoteDisplayRequest(encoded, kMaxCharsInClientMessage);
+  for (const QByteArray &chunk : chunks) {
+    std::memcpy(clientMessageEvent.data.b, chunk.constData(),
+        static_cast<size_t>(kMaxCharsInClientMessage));
     XSendEvent(display, targetWindow, True, NoEventMask,
         reinterpret_cast<XEvent *>(&clientMessageEvent));
-  };
-  auto appendChar = [&](char ch) {
-    if (index == kMaxCharsInClientMessage) {
-      flushEvent();
-      index = 0;
-    }
-    clientMessageEvent.data.b[index++] = ch;
-  };
-  auto appendString = [&](const QByteArray &bytes) {
-    for (char ch : bytes) {
-      appendChar(ch);
-    }
-  };
-
-  appendChar('(');
-  appendString(pathBytes);
-  appendChar(';');
-  appendString(macroBytes);
-  appendChar(';');
-  appendString(geometryBytes);
-  appendChar(')');
-  for (int i = index; i < kMaxCharsInClientMessage; ++i) {
-    clientMessageEvent.data.b[i] = ' ';
   }
-  flushEvent();
   XFlush(display);
 }
 
@@ -640,82 +680,23 @@ class RemoteRequestFilter : public QAbstractNativeEventFilter {
     if (clientMessage->window != hostWindow_) {
       return false;
     }
-    const char *data =
-        reinterpret_cast<const char *>(clientMessage->data.data8);
-    for (int i = 0; i < kMaxCharsInClientMessage; ++i) {
-      const char ch = data[i];
-      if (ch == '(') {
-        collecting_ = true;
-        messageClass_ = MessageClass::kFilename;
-        filenameBuffer_.clear();
-        macroBuffer_.clear();
-        geometryBuffer_.clear();
-        continue;
-      }
-      if (!collecting_) {
-        continue;
-      }
-      if (ch == ';') {
-        if (messageClass_ == MessageClass::kFilename) {
-          messageClass_ = MessageClass::kMacro;
-        } else {
-          messageClass_ = MessageClass::kGeometry;
-        }
-        continue;
-      }
-      if (ch == ')') {
-        collecting_ = false;
-        messageClass_ = MessageClass::kNone;
-        if (handler_) {
-          const QString filename =
-              QString::fromLocal8Bit(filenameBuffer_.constData(),
-                  filenameBuffer_.size());
-          const QString macro =
-              QString::fromLocal8Bit(macroBuffer_.constData(),
-                  macroBuffer_.size());
-          const QString geometry =
-              QString::fromLocal8Bit(geometryBuffer_.constData(),
-                  geometryBuffer_.size());
-          handler_(filename, macro, geometry);
-        }
-        continue;
-      }
-      if (ch == '\0') {
-        continue;
-      }
-      switch (messageClass_) {
-      case MessageClass::kFilename:
-        filenameBuffer_.append(ch);
-        break;
-      case MessageClass::kMacro:
-        macroBuffer_.append(ch);
-        break;
-      case MessageClass::kGeometry:
-        geometryBuffer_.append(ch);
-        break;
-      case MessageClass::kNone:
-        break;
+    const QByteArray chunk(
+        reinterpret_cast<const char *>(clientMessage->data.data8),
+        kMaxCharsInClientMessage);
+    const QVector<RemoteDisplayRequest> requests = decoder_.consume(chunk);
+    for (const RemoteDisplayRequest &request : requests) {
+      if (handler_) {
+        handler_(request.filePath, request.macros, request.geometry);
       }
     }
     return false;
   }
 
  private:
-  enum class MessageClass {
-    kNone,
-    kFilename,
-    kMacro,
-    kGeometry,
-  };
-
   Atom propertyAtom_ = 0;
   Window hostWindow_ = 0;
   RequestHandler handler_;
-  bool collecting_ = false;
-  MessageClass messageClass_ = MessageClass::kNone;
-  QByteArray filenameBuffer_;
-  QByteArray macroBuffer_;
-  QByteArray geometryBuffer_;
+  RemoteDisplayRequestDecoder decoder_;
 };
 #endif  // defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
 
@@ -2383,12 +2364,21 @@ int main(int argc, char *argv[])
     auto *readyTimer = new QTimer(&app);
     readyTimer->setInterval(25);
     QObject::connect(readyTimer, &QTimer::timeout, &app,
-        [readyTimer, state, readyPath = options.testReadyFilePath]() {
+        [readyTimer, state, readyPath = options.testReadyFilePath,
+            actionsPath = options.testActionsPath]() {
           if (!areDisplaysReadyForAutomation(state)) {
             return;
           }
           readyTimer->stop();
           QString errorMessage;
+          if (!actionsPath.isEmpty()
+              && !applyTestActionsFile(actionsPath, state, &errorMessage)) {
+            fprintf(stderr, "\n%s\n",
+                errorMessage.toLocal8Bit().constData());
+            fflush(stderr);
+            QCoreApplication::exit(1);
+            return;
+          }
           if (!writeReadyFile(readyPath, &errorMessage)) {
             fprintf(stderr, "\n%s\n", errorMessage.toLocal8Bit().constData());
             fflush(stderr);

@@ -15,6 +15,8 @@ class QResizeEvent;
 
 class TextEntryElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit TextEntryElement(QWidget *parent = nullptr);
 

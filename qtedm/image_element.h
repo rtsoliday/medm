@@ -30,6 +30,9 @@ public:
   void setRuntimeInvalidCalc(bool invalid);
 
   int frameCount() const;
+  int runtimeFrameIndex() const;
+  bool runtimeFrameValid() const;
+  bool runtimeAnimating() const;
 
 protected:
   void paintEvent(QPaintEvent *event) override;

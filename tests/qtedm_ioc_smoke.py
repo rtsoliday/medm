@@ -13,12 +13,14 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import List, Match, Optional, Set
+from typing import Callable, List, Match, Optional, Set
 from urllib.parse import parse_qs, urlparse
 
 
 CHANNEL_PATTERN = re.compile(
-    r'((?:chan(?:[ABCD])?|channel(?:[ABCD])?|variable|setpoint|readback|readbackPv|readbackChannel)=")([^"]*)(")',
+    r'((?:chan(?:[ABCD])?|channel(?:[ABCD])?|variable|setpoint|readback|'
+    r'readbackPv|readbackChannel|dataPv|countPvName|xdata|ydata|trigger|'
+    r'erase)=")([^"]*)(")',
     re.IGNORECASE)
 CHILD_DISPLAY_PATTERN = re.compile(
     r'((?:^|\n)\s*display=")([^"]+\.adl)(")', re.IGNORECASE)
@@ -108,6 +110,16 @@ def rewrite_display_with_prefix(display_path: Path, prefix: str,
 def run_cavput(cavput_bin: Path, pv: str, value: str) -> subprocess.CompletedProcess:
   return subprocess.run(
       [str(cavput_bin), f"-list={pv}={value}"],
+      check=False,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      universal_newlines=True,
+  )
+
+
+def run_caget(caget_bin: Path, pv: str) -> subprocess.CompletedProcess:
+  return subprocess.run(
+      [str(caget_bin), "-t", pv],
       check=False,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
@@ -333,8 +345,9 @@ def compare_expected(actual, expected, path: str, failures: List[str]) -> None:
     failures.append(f"{path} expected {expected!r}, got {actual!r}")
 
 
-def assert_expectations(case: dict, widgets: List[dict]) -> None:
-  expect = dict(case.get("expect", {}))
+def assert_expectations(case_name: str, expect_source: dict,
+    widgets: List[dict]) -> None:
+  expect = dict(expect_source)
   numeric_expected = expect.pop("numeric_value", None)
   numeric_tolerance = float(expect.pop("numeric_tolerance", 0.0))
 
@@ -357,17 +370,83 @@ def assert_expectations(case: dict, widgets: List[dict]) -> None:
 
   if failures:
     joined = "\n".join(failures)
-    raise CaseFailure(f"Case {case['name']} failed:\n{joined}")
+    raise CaseFailure(f"Case {case_name} failed:\n{joined}")
+
+
+def assert_case_state(case: dict, state_data: dict, prefix: str,
+    provider: str) -> None:
+  assertions = case.get("assertions")
+  if assertions is None:
+    widgets = matching_widgets(
+        state_data, case["selector"], prefix, provider)
+    assert_expectations(case["name"], case.get("expect", {}), widgets)
+    return
+  if not isinstance(assertions, list) or not assertions:
+    raise CaseFailure(
+        f"Case {case['name']} assertions must be a non-empty list")
+  for index, assertion in enumerate(assertions):
+    if not isinstance(assertion, dict) or "selector" not in assertion:
+      raise CaseFailure(
+          f"Case {case['name']} assertion {index} requires a selector")
+    widgets = matching_widgets(
+        state_data, assertion["selector"], prefix, provider)
+    if not assertion.get("allow_multiple", False) and len(widgets) != 1:
+      raise CaseFailure(
+          f"Case {case['name']} assertion {index} matched {len(widgets)} "
+          "widgets; exactly one is required")
+    assert_expectations(
+        f"{case['name']} assertion {index}",
+        assertion.get("expect", {}), widgets)
+
+
+def verify_pv_values(case: dict, provider: str, prefix: str,
+    caget_bin: Path, pvget_bin: Optional[Path]) -> None:
+  number_pattern = re.compile(
+      r"(?<![A-Za-z_])[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
+  for verification in case.get("verify_pvs", []):
+    pv = prefix_channel_name(verification["pv"], prefix)
+    if provider == "pva":
+      if pvget_bin is None:
+        raise CaseFailure("PVA verification requested without pvget")
+      result = subprocess.run(
+          [str(pvget_bin), "-q", "-w", "5", pv],
+          check=False,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE,
+          universal_newlines=True,
+      )
+    else:
+      result = run_caget(caget_bin, pv)
+    output = (result.stdout or result.stderr).strip()
+    if result.returncode != 0:
+      raise CaseFailure(f"Failed to read back {pv}: {output}")
+    if "contains" in verification:
+      expected_text = str(verification["contains"])
+      if expected_text not in output:
+        raise CaseFailure(
+            f"PV {pv} expected output containing {expected_text!r}, "
+            f"got {output!r}")
+    if "numeric_value" in verification:
+      expected_number = float(verification["numeric_value"])
+      tolerance = float(verification.get("numeric_tolerance", 0.0))
+      numbers = [float(item) for item in number_pattern.findall(output)]
+      if not any(abs(item - expected_number) <= tolerance for item in numbers):
+        raise CaseFailure(
+            f"PV {pv} expected numeric value {expected_number} +/- "
+            f"{tolerance}, got {output!r}")
 
 
 def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
-    pvput_bin: Optional[Path], prefix: str, temp_dir: Path) -> None:
+    caget_bin: Path, pvget_bin: Optional[Path], pvput_bin: Optional[Path],
+    prefix: str, temp_dir: Path,
+    restart_provider: Optional[Callable[[], None]] = None) -> None:
   provider = str(case.get("provider", "ca")).lower()
   display_path = (repo_root / case["display"]).resolve()
   rewritten_display = rewrite_display_with_prefix(
       display_path, prefix, temp_dir, provider)
   ready_path = temp_dir / f"{case['name']}.ready"
   state_path = temp_dir / f"{case['name']}.json"
+  actions_path = temp_dir / f"{case['name']}.actions.json"
   archive_server: Optional[ArchiveFixtureServer] = None
   process: Optional[subprocess.Popen] = None
 
@@ -393,6 +472,30 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       str(case.get("exit_after_ms", 4500)),
       native_child_path(rewritten_display),
   ]
+  actions = case.get("actions", [])
+  if actions:
+    normalized_actions = []
+    for action in actions:
+      normalized_action = dict(action)
+      normalized_action["selector"] = normalize_selector(
+          action.get("selector", {}), prefix, provider)
+      normalized_actions.append(normalized_action)
+    actions_path.write_text(
+        json.dumps(normalized_actions, indent=2), encoding="utf-8")
+    command[1:1] = ["-testActions", native_child_path(actions_path)]
+
+  for write in case.get("pre_writes", []):
+    pv = prefix_channel_name(write["pv"], prefix)
+    if provider == "pva":
+      if pvput_bin is None:
+        raise CaseFailure("PVA case requested without a pvput executable")
+      result = run_pvput(pvput_bin, pv, str(write["value"]))
+    else:
+      result = run_cavput(cavput_bin, pv, str(write["value"]))
+    if result.returncode != 0:
+      raise CaseFailure(
+          f"Failed pre-launch write {pv}={write['value']}: "
+          f"{(result.stderr or result.stdout).strip()}")
   process = subprocess.Popen(
       command,
       stdout=subprocess.PIPE,
@@ -405,6 +508,12 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
     post_ready_delay_ms = float(case.get("post_ready_delay_ms", 0))
     if post_ready_delay_ms > 0:
       time.sleep(post_ready_delay_ms / 1000.0)
+
+    if case.get("restart_provider", False):
+      if restart_provider is None:
+        raise CaseFailure(
+            f"Case {case['name']} requested an unavailable provider restart")
+      restart_provider()
 
     for write in case.get("writes", []):
       delay_ms = float(write.get("delay_ms", 0))
@@ -442,9 +551,12 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
     raise CaseFailure(f"Missing state dump for case {case['name']}: {state_path}")
 
   state_data = json.loads(state_path.read_text(encoding="utf-8"))
-  widgets = matching_widgets(
-      state_data, case["selector"], prefix, provider)
-  assert_expectations(case, widgets)
+  try:
+    assert_case_state(case, state_data, prefix, provider)
+    verify_pv_values(case, provider, prefix, caget_bin, pvget_bin)
+  except CaseFailure as exc:
+    raise CaseFailure(
+        f"{exc}\nQTEDM STDOUT:\n{stdout}\nQTEDM STDERR:\n{stderr}") from exc
 
 
 def main() -> int:
@@ -454,6 +566,7 @@ def main() -> int:
   parser.add_argument(
       "--run-local-ioc", required=True, help="Path to tests/run_local_ioc.sh")
   parser.add_argument("--cavput", required=True, help="Path to tests/cavput")
+  parser.add_argument("--caget", required=True, help="Path to EPICS caget")
   parser.add_argument(
       "--soft-ioc-pva", help="Path to the EPICS softIocPVA executable")
   parser.add_argument("--pvget", help="Path to the EPICS pvget executable")
@@ -469,6 +582,7 @@ def main() -> int:
   qtedm_bin = Path(args.qtedm).expanduser().resolve()
   run_local_ioc = Path(args.run_local_ioc).expanduser().resolve()
   cavput_bin = Path(args.cavput).expanduser().resolve()
+  caget_bin = Path(args.caget).expanduser().resolve()
   soft_ioc_pva = (
       Path(args.soft_ioc_pva).expanduser().resolve()
       if args.soft_ioc_pva else None)
@@ -482,7 +596,7 @@ def main() -> int:
   cases_path = Path(args.cases).expanduser().resolve()
   repo_root = Path(__file__).resolve().parents[1]
 
-  for path in (qtedm_bin, run_local_ioc, cavput_bin, cases_path):
+  for path in (qtedm_bin, run_local_ioc, cavput_bin, caget_bin, cases_path):
     if not path.exists():
       raise CaseFailure(f"Required path not found: {path}")
 
@@ -541,49 +655,93 @@ def main() -> int:
       "--ready-file",
       str(ioc_ready_file),
   ]
-  runner_log_handle = ioc_runner_log.open("w", encoding="utf-8")
-  ioc_process = subprocess.Popen(
-      ioc_command,
-      stdout=runner_log_handle,
-      stderr=subprocess.STDOUT,
-      universal_newlines=True,
-  )
+  runner_log_handle = None
   pva_log_handle = None
 
-  try:
+  def start_ca_fixture(initialization_profile: str = "full") -> None:
+    nonlocal ioc_process, runner_log_handle
+    if ioc_process is not None and ioc_process.poll() is None:
+      return
+    ioc_ready_file.unlink(missing_ok=True)
+    runner_log_handle = ioc_runner_log.open("a", encoding="utf-8")
+    command = list(ioc_command)
+    if initialization_profile != "full":
+      command.extend(["--init-profile", initialization_profile])
+    ioc_process = subprocess.Popen(
+        command,
+        stdout=runner_log_handle,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+    )
     wait_for_ioc_ready(ioc_process, ioc_ready_file, timeout_seconds=120)
+
+  def restart_ca_fixture() -> None:
+    nonlocal ioc_process, runner_log_handle
+    terminate_process(ioc_process)
+    ioc_process = None
+    if runner_log_handle is not None:
+      runner_log_handle.close()
+      runner_log_handle = None
+    start_ca_fixture("slider")
+
+  def start_pva_fixture() -> None:
+    nonlocal pva_process, pva_log_handle
+    if pva_process is not None and pva_process.poll() is None:
+      return
+    pva_log_handle = pva_log.open("a", encoding="utf-8")
+    pva_process = subprocess.Popen(
+        [
+            str(soft_ioc_pva),
+            "-S",
+            "-m",
+            f"P={pva_prefix}",
+            "-d",
+            native_child_path(pva_database),
+        ],
+        # softIocPVA treats stdin EOF as a request to exit. Keep a private
+        # pipe open for the complete PVA lifetime; terminate_process() still
+        # provides bounded shutdown without an executable wrapper.
+        stdin=subprocess.PIPE,
+        stdout=pva_log_handle,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+    )
+    wait_for_pva_ready(
+        pva_process, pvget_bin,
+        f"{pva_prefix}sp:test:compact:setpoint",
+        timeout_seconds=30)
+
+  def restart_pva_fixture() -> None:
+    nonlocal pva_process, pva_log_handle
+    terminate_process(pva_process)
+    pva_process = None
+    if pva_log_handle is not None:
+      pva_log_handle.close()
+      pva_log_handle = None
+    start_pva_fixture()
+
+  try:
+    start_ca_fixture()
     for case in cases:
       provider = str(case.get("provider", "ca")).lower()
       if provider == "pva" and pva_process is None:
-        pva_log_handle = pva_log.open("w", encoding="utf-8")
-        pva_process = subprocess.Popen(
-            [
-                str(soft_ioc_pva),
-                "-S",
-                "-m",
-                f"P={pva_prefix}",
-                "-d",
-                native_child_path(pva_database),
-            ],
-            stdin=subprocess.DEVNULL,
-            stdout=pva_log_handle,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-        )
-        wait_for_pva_ready(
-            pva_process, pvget_bin,
-            f"{pva_prefix}sp:test:compact:setpoint",
-            timeout_seconds=30)
+        start_pva_fixture()
+      if provider == "pva" and pva_process.poll() is not None:
+        raise CaseFailure(
+            "softIocPVA exited between PVA integration cases")
       case_prefix = pva_prefix if provider == "pva" else prefix
       run_case(
-          case, repo_root, qtedm_bin, cavput_bin, pvput_bin,
-          case_prefix, temp_dir)
+          case, repo_root, qtedm_bin, cavput_bin, caget_bin, pvget_bin,
+          pvput_bin, case_prefix, temp_dir,
+          restart_pva_fixture if provider == "pva" else restart_ca_fixture)
       print(f"PASS {case['name']}")
   except Exception as exc:
     keep_temp_dir = True
     terminate_process(ioc_process)
     terminate_process(pva_process)
-    runner_log_handle.close()
+    if runner_log_handle is not None:
+      runner_log_handle.close()
+      runner_log_handle = None
     if pva_log_handle is not None:
       pva_log_handle.close()
     if isinstance(exc, CaseFailure):
@@ -603,7 +761,8 @@ def main() -> int:
   finally:
     terminate_process(ioc_process)
     terminate_process(pva_process)
-    runner_log_handle.close()
+    if runner_log_handle is not None:
+      runner_log_handle.close()
     if pva_log_handle is not None:
       pva_log_handle.close()
     if not keep_temp_dir:

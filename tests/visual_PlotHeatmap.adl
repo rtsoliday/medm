@@ -1,0 +1,56 @@
+file {
+  name="visual_PlotHeatmap.adl"
+  version=040004
+}
+display {
+  object { x=0 y=0 width=780 height=400 }
+  clr=14
+  bclr=4
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+text {
+  object { x=20 y=12 width=740 height=28 }
+  "basic attribute" { clr=14 }
+  textix="Deterministic Cartesian Plot and Heatmap"
+  align="horiz. centered"
+}
+"cartesian plot" {
+  object { x=20 y=55 width=350 height=315 }
+  plotcom {
+    title="Vector Trace"
+    xlabel="Sample"
+    ylabel="Value"
+    clr=14
+    bclr=4
+  }
+  style="line"
+  erase_oldest="plot last n pts"
+  trace[0] {
+    ydata="waterfall:test:alpha:waveform"
+    data_clr=25
+    yaxis=0
+    yside=0
+  }
+  x_axis { rangeStyle="auto-scale" }
+  y1_axis {
+    rangeStyle="user-specified"
+    minRange=0
+    maxRange=120
+  }
+}
+heatmap {
+  object { x=405 y=55 width=350 height=315 }
+  title="8 x 8 Heatmap"
+  dataPv="waterfall:test:alpha:waveform"
+  xDim=8
+  yDim=8
+  colorMap="turbo"
+  rangeMode="manual"
+  rangeMin=0
+  rangeMax=120
+  showTopProfile="yes"
+  showRightProfile="yes"
+}

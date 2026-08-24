@@ -1,0 +1,62 @@
+file {
+  name="test_QtEDMPvaCoverage.adl"
+  version=040004
+}
+display {
+  object { x=0 y=0 width=620 height=420 }
+  clr=14
+  bclr=4
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+text {
+  object { x=20 y=12 width=580 height=28 }
+  "basic attribute" { clr=14 }
+  textix="QtEDM PVA type and write coverage"
+  align="horiz. centered"
+}
+text {
+  object { x=20 y=62 width=120 height=24 }
+  "basic attribute" { clr=14 }
+  textix="String"
+}
+"text entry" {
+  object { x=150 y=60 width=420 height=28 }
+  control { chan="pva:test:string" clr=14 bclr=0 }
+  format="string"
+}
+text {
+  object { x=20 y=112 width=120 height=24 }
+  "basic attribute" { clr=14 }
+  textix="Enum"
+}
+menu {
+  object { x=150 y=110 width=240 height=30 }
+  control { chan="pva:test:enum" clr=14 bclr=0 }
+}
+wave_table {
+  object { x=20 y=165 width=270 height=220 }
+  "basic attribute" { clr=14 bclr=0 }
+  chan="pva:test:array"
+  colorMode="static"
+  showHeaders=1
+  layout="grid"
+  columns=4
+  maxElements=8
+  indexBase=0
+  valueFormat="default"
+  charMode="bytes"
+}
+heatmap {
+  object { x=320 y=165 width=280 height=220 }
+  title="PVA 4 x 2 array"
+  dataPv="pva:test:array"
+  xDim=4
+  yDim=2
+  colorMap="turbo"
+  rangeMode="auto"
+  showTopProfile="yes"
+  showRightProfile="yes"
+}

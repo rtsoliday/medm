@@ -96,6 +96,13 @@ CommandLineOptions parseCommandLine(const QStringList &args)
       } else {
         options.invalidOption = arg;
       }
+    } else if (arg == QLatin1String("-testActions") ||
+               arg == QLatin1String("--test-actions")) {
+      if ((i + 1) < args.size()) {
+        options.testActionsPath = args.at(++i);
+      } else {
+        options.invalidOption = arg;
+      }
     } else if (arg == QLatin1String("-testCaptureScreenshot") ||
                arg == QLatin1String("--test-capture-screenshot")) {
       if ((i + 1) < args.size()) {

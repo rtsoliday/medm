@@ -19,6 +19,8 @@ class CenteredDisplayComboBox;
 
 class MenuElement : public QWidget
 {
+  friend class DisplayWindow;
+
 public:
   explicit MenuElement(QWidget *parent = nullptr);
 

@@ -424,6 +424,35 @@ void HeatmapElement::setRuntimeDimensions(int xDim, int yDim)
   invalidateCache();
 }
 
+int HeatmapElement::runtimeDataCount() const
+{
+  return runtimeSharedValues_
+      ? static_cast<int>(std::min<std::size_t>(
+            runtimeSharedSize_,
+            static_cast<std::size_t>(std::numeric_limits<int>::max())))
+      : runtimeValues_.size();
+}
+
+bool HeatmapElement::hasRuntimeData() const
+{
+  return runtimeDataValid_;
+}
+
+bool HeatmapElement::hasRuntimeRange() const
+{
+  return runtimeRangeValid_;
+}
+
+double HeatmapElement::runtimeMinimum() const
+{
+  return runtimeMinValue_;
+}
+
+double HeatmapElement::runtimeMaximum() const
+{
+  return runtimeMaxValue_;
+}
+
 void HeatmapElement::clearRuntimeState()
 {
   runtimeValues_.clear();

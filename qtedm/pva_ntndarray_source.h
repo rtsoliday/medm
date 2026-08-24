@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <memory>
 
+#include <pv/pvData.h>
+
 enum class NtNdArrayScalarType {
   kInt8,
   kUInt8,
@@ -65,8 +67,11 @@ struct PvaNtNdArrayPollResult
 
 struct PvaNtNdArraySource;
 
+bool pvaNtNdArrayExtractFrame(
+    const epics::pvData::PVStructurePtr &root,
+    NtNdArrayFrame *frame, QString *error);
+
 PvaNtNdArraySource *pvaNtNdArrayCreateSource(
     const QString &rawName, const QString &pvName, QString *error);
 void pvaNtNdArrayDestroySource(PvaNtNdArraySource *source);
 PvaNtNdArrayPollResult pvaNtNdArrayPoll(PvaNtNdArraySource *source);
-

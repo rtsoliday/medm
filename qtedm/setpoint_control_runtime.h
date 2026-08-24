@@ -11,9 +11,11 @@
 #include "runtime_utils.h"
 
 class SetpointControlElement;
+class DisplayWindow;
 
 class SetpointControlRuntime : public QObject
 {
+  friend class DisplayWindow;
 public:
   explicit SetpointControlRuntime(SetpointControlElement *element);
   ~SetpointControlRuntime() override;

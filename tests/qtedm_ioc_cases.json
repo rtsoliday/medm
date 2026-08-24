@@ -1444,5 +1444,260 @@
         "text": "STOPPED"
       }
     }
+  },
+  {
+    "name": "slider_gui_write_reaches_ca_pv",
+    "display": "tests/test_Slider.adl",
+    "exit_after_ms": 4500,
+    "actions": [
+      {
+        "selector": {
+          "type": "slider",
+          "channel": "slider:test:alpha",
+          "geometry": {"x": 119, "y": 225, "width": 190, "height": 22}
+        },
+        "operation": "set_numeric",
+        "value": 41.25
+      }
+    ],
+    "assertions": [
+      {
+        "selector": {
+          "type": "slider",
+          "channel": "slider:test:alpha",
+          "geometry": {"x": 119, "y": 225, "width": 190, "height": 22}
+        },
+        "expect": {
+          "connected": true,
+          "write_access": true,
+          "numeric_value": 41.25,
+          "numeric_tolerance": 0.000001
+        }
+      }
+    ],
+    "verify_pvs": [
+      {
+        "pv": "slider:test:alpha",
+        "numeric_value": 41.25,
+        "numeric_tolerance": 0.000001
+      }
+    ]
+  },
+  {
+    "name": "text_entry_gui_string_write_reaches_ca_pv",
+    "display": "tests/test_TextEntry.adl",
+    "exit_after_ms": 5000,
+    "actions": [
+      {
+        "selector": {
+          "type": "text_entry",
+          "channel": "tm:string:status",
+          "geometry": {"x": 1480, "y": 320, "width": 220, "height": 36}
+        },
+        "operation": "commit_text",
+        "value": "WRITTEN_BY_QTEDM"
+      }
+    ],
+    "assertions": [
+      {
+        "selector": {
+          "type": "text_entry",
+          "channel": "tm:string:status",
+          "geometry": {"x": 1480, "y": 320, "width": 220, "height": 36}
+        },
+        "expect": {
+          "connected": true,
+          "write_access": true,
+          "value_kind": "string",
+          "string_value": "WRITTEN_BY_QTEDM"
+        }
+      }
+    ],
+    "verify_pvs": [
+      {
+        "pv": "tm:string:status",
+        "contains": "WRITTEN_BY_QTEDM"
+      }
+    ]
+  },
+  {
+    "name": "slider_shared_ca_reconnect_after_provider_restart",
+    "display": "tests/test_Slider.adl",
+    "restart_provider": true,
+    "exit_after_ms": 30000,
+    "writes": [
+      {
+        "pv": "slider:test:alpha",
+        "value": "33.75"
+      }
+    ],
+    "assertions": [
+      {
+        "selector": {
+          "type": "slider",
+          "channel": "slider:test:alpha"
+        },
+        "allow_multiple": true,
+        "expect": {
+          "connected": true,
+          "write_access": true,
+          "runtime_limits_valid": true,
+          "runtime_precision": 2,
+          "numeric_value": 33.75,
+          "numeric_tolerance": 0.000001
+        }
+      },
+      {
+        "selector": {
+          "type": "slider",
+          "channel": "slider:test:alpha",
+          "geometry": {
+            "x": 60,
+            "y": 994,
+            "width": 500,
+            "height": 86
+          }
+        },
+        "expect": {
+          "low_limit": -12.5,
+          "high_limit": 84.30000305175781,
+          "precision": 2,
+          "runtime_limits_valid": true,
+          "runtime_precision": 2
+        }
+      }
+    ],
+    "verify_pvs": [
+      {
+        "pv": "slider:test:alpha",
+        "numeric_value": 33.75,
+        "numeric_tolerance": 0.000001
+      }
+    ]
+  },
+  {
+    "name": "qtedm_pva_spinbox_reconnect_after_provider_restart",
+    "provider": "pva",
+    "display": "tests/test_QtEDMSafetyControls.adl",
+    "restart_provider": true,
+    "selector": {
+      "type": "qtedm_spinbox",
+      "channel": "sp:test:compact:setpoint"
+    },
+    "exit_after_ms": 10000,
+    "writes": [
+      {
+        "pv": "sp:test:compact:setpoint",
+        "value": "77.25"
+      }
+    ],
+    "expect": {
+      "connected": true,
+      "write_access": true,
+      "has_value": true,
+      "low_limit": -10,
+      "high_limit": 100,
+      "precision": 2,
+      "numeric_value": 77.25,
+      "numeric_tolerance": 0.000001
+    },
+    "verify_pvs": [
+      {
+        "pv": "sp:test:compact:setpoint",
+        "numeric_value": 77.25,
+        "numeric_tolerance": 0.000001
+      }
+    ]
+  },
+  {
+    "name": "qtedm_pva_string_enum_array_and_heatmap",
+    "display": "tests/test_QtEDMPvaCoverage.adl",
+    "provider": "pva",
+    "exit_after_ms": 5000,
+    "pre_writes": [
+      {
+        "pv": "pva:test:array",
+        "value": "[1,2,3,4,5,6,7,8]"
+      }
+    ],
+    "actions": [
+      {
+        "selector": {
+          "type": "text_entry",
+          "channel": "pva:test:string"
+        },
+        "operation": "commit_text",
+        "value": "WRITTEN_BY_QTEDM"
+      },
+      {
+        "selector": {
+          "type": "menu",
+          "channel": "pva:test:enum"
+        },
+        "operation": "select_index",
+        "value": 2
+      }
+    ],
+    "assertions": [
+      {
+        "selector": {
+          "type": "text_entry",
+          "channel": "pva:test:string"
+        },
+        "expect": {
+          "connected": true,
+          "write_access": true,
+          "value_kind": "string",
+          "string_value": "WRITTEN_BY_QTEDM"
+        }
+      },
+      {
+        "selector": {
+          "type": "menu",
+          "channel": "pva:test:enum"
+        },
+        "expect": {
+          "connected": true,
+          "write_access": true,
+          "selected_index": 2,
+          "labels": ["Idle", "Running", "Complete", "Fault"]
+        }
+      },
+      {
+        "selector": {
+          "type": "wave_table",
+          "channel": "pva:test:array"
+        },
+        "expect": {
+          "connected": true,
+          "received_element_count": 8,
+          "displayed_element_count": 8
+        }
+      },
+      {
+        "selector": {
+          "type": "heatmap",
+          "channel": "pva:test:array"
+        },
+        "expect": {
+          "connected": true,
+          "has_data": true,
+          "data_count": 8,
+          "x_dimension": 4,
+          "y_dimension": 2
+        }
+      }
+    ],
+    "verify_pvs": [
+      {
+        "pv": "pva:test:string",
+        "contains": "WRITTEN_BY_QTEDM"
+      },
+      {
+        "pv": "pva:test:enum",
+        "numeric_value": 2,
+        "numeric_tolerance": 0
+      }
+    ]
   }
 ]

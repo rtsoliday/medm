@@ -118,6 +118,11 @@ endif
 
 qtedm_SRC = qtedm.cc \
             command_line_options.cc \
+            remote_request_codec.cc \
+            shell_command_utils.cc \
+            related_display_utils.cc \
+            plot_export_utils.cc \
+            widget_image_export_utils.cc \
             adl_parser.cc \
             audit_logger.cc \
             display_converter.cc \
@@ -468,13 +473,20 @@ $(OBJ_DIR)/medm$(EXEEXT): $(medm_OBJS) $(PROD_DEPS)
 	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
 
 QTEDM_UNIT_TEST_NAMES = test_command_line \
+                        test_channel_protocols \
+                        test_remote_request_codec \
+                        test_shell_command_utils \
+                        test_related_display_utils \
                         test_adl_parser \
                         test_adl_writer \
                         test_text_format_utils \
+                        test_text_entry_runtime \
                         test_legacy_fonts \
                         test_wave_table_model \
                         test_runtime_utils \
                         test_cartesian_plot_properties \
+                        test_plot_graphic_runtimes \
+                        test_diagnostics_tracking \
                         test_soft_pv_registry \
                         test_update_coordinator \
                         test_pv_table_model \
@@ -486,12 +498,24 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_extension_resource_palettes
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
+QTEDM_UNIT_TEST_HELPERS = $(OBJ_DIR)/qtedm_shell_command_helper$(EXEEXT)
 
 QTEDM_UNIT_TEST_BINARIES = $(addprefix $(OBJ_DIR)/,$(addsuffix $(EXEEXT),$(QTEDM_UNIT_TEST_NAMES)))
 QTEDM_UNIT_TEST_MOCS = $(addprefix $(OBJ_DIR)/,$(addsuffix .moc,$(QTEDM_UNIT_TEST_NAMES)))
 
 test_command_line_OBJS = $(OBJ_DIR)/test_command_line.$(OBJEXT) \
                          $(OBJ_DIR)/command_line_options.$(OBJEXT)
+test_channel_protocols_OBJS = \
+  $(OBJ_DIR)/test_channel_protocols.$(OBJEXT)
+test_remote_request_codec_OBJS = \
+  $(OBJ_DIR)/test_remote_request_codec.$(OBJEXT) \
+  $(OBJ_DIR)/remote_request_codec.$(OBJEXT)
+test_shell_command_utils_OBJS = \
+  $(OBJ_DIR)/test_shell_command_utils.$(OBJEXT) \
+  $(OBJ_DIR)/shell_command_utils.$(OBJEXT)
+test_related_display_utils_OBJS = \
+  $(OBJ_DIR)/test_related_display_utils.$(OBJEXT) \
+  $(OBJ_DIR)/related_display_utils.$(OBJEXT)
 test_adl_parser_OBJS = $(OBJ_DIR)/test_adl_parser.$(OBJEXT) \
                        $(OBJ_DIR)/adl_parser.$(OBJEXT)
 test_adl_writer_OBJS = $(OBJ_DIR)/test_adl_writer.$(OBJEXT) \
@@ -499,6 +523,9 @@ test_adl_writer_OBJS = $(OBJ_DIR)/test_adl_writer.$(OBJEXT) \
                        $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_text_format_utils_OBJS = $(OBJ_DIR)/test_text_format_utils.$(OBJEXT) \
                               $(OBJ_DIR)/text_format_utils.$(OBJEXT)
+test_text_entry_runtime_OBJS = \
+  $(OBJ_DIR)/test_text_entry_runtime.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 test_legacy_fonts_OBJS = $(OBJ_DIR)/test_legacy_fonts.$(OBJEXT) \
                          $(OBJ_DIR)/legacy_fonts.$(OBJEXT)
 test_wave_table_model_OBJS = $(OBJ_DIR)/test_wave_table_model.$(OBJEXT) \
@@ -508,6 +535,14 @@ test_runtime_utils_OBJS = $(OBJ_DIR)/test_runtime_utils.$(OBJEXT) \
                           $(OBJ_DIR)/runtime_utils.$(OBJEXT)
 test_cartesian_plot_properties_OBJS = \
   $(OBJ_DIR)/test_cartesian_plot_properties.$(OBJEXT)
+test_plot_graphic_runtimes_OBJS = \
+  $(OBJ_DIR)/test_plot_graphic_runtimes.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_diagnostics_tracking_OBJS = \
+  $(OBJ_DIR)/test_diagnostics_tracking.$(OBJEXT) \
+  $(OBJ_DIR)/audit_logger.$(OBJEXT) \
+  $(OBJ_DIR)/statistics_tracker.$(OBJEXT) \
+  $(OBJ_DIR)/memory_tracker.$(OBJEXT)
 test_soft_pv_registry_OBJS = $(OBJ_DIR)/test_soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/subscription_handle.$(OBJEXT)
@@ -564,6 +599,10 @@ $(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc \
 
 $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT): tests/qtedm_image_compare.cc \
                                           $(QTEDM_PCH_FILE) | $(OBJ_DIR)
+	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+
+$(OBJ_DIR)/qtedm_shell_command_helper.$(OBJEXT): \
+    tests/qtedm_shell_command_helper.cc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
 	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
 $(OBJ_DIR)/plugin_api_discovery_plugin.moc: \
@@ -638,6 +677,10 @@ $(OBJ_DIR)/test_plugins_property_rules$(EXEEXT): | \
 $(OBJ_DIR)/qtedm_image_compare$(EXEEXT): $(qtedm_image_compare_OBJS)
 	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
 
+$(OBJ_DIR)/qtedm_shell_command_helper$(EXEEXT): \
+    $(OBJ_DIR)/qtedm_shell_command_helper.$(OBJEXT)
+	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
+
 check-qt-test:
 ifeq ($(QT_TEST_AVAILABLE),1)
 	@:
@@ -647,13 +690,15 @@ else
 endif
 
 build-tests: check-qt-test $(PLUGIN_API_TEST_METADATA) \
-  $(PLUGIN_API_THUMBS_METADATA) $(QTEDM_UNIT_TEST_BINARIES)
+  $(PLUGIN_API_THUMBS_METADATA) $(QTEDM_UNIT_TEST_HELPERS) \
+  $(QTEDM_UNIT_TEST_BINARIES)
 
 tests: test
 
 test: test-cli test-unit test-ioc test-visual
 
 test-unit: build-tests
+	@python3 ../tests/validate_qtedm_coverage.py
 	@set -e; \
 	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/qtedm-unit.XXXXXX"); \
 	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
@@ -678,6 +723,7 @@ test-ioc: $(OBJ_DIR)/qtedm$(EXEEXT)
 	QTEDM_SOFT_IOC_PVA="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/softIocPVA$(EXEEXT)" \
 	QTEDM_PVGET="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/pvget$(EXEEXT)" \
 	QTEDM_PVPUT="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/pvput$(EXEEXT)" \
+	QTEDM_CAGET="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/caget$(EXEEXT)" \
 	../tests/run_qtedm_ioc_tests.sh
 
 test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
@@ -687,7 +733,8 @@ test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
 
 clean-tests:
 	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS) \
-	  $(QTEDM_VISUAL_TEST_TOOLS) $(PLUGIN_API_TEST_LIBRARY) \
+	  $(QTEDM_UNIT_TEST_HELPERS) $(QTEDM_VISUAL_TEST_TOOLS) \
+	  $(PLUGIN_API_TEST_LIBRARY) \
 	  $(PLUGIN_API_TEST_METADATA) $(PLUGIN_API_THUMBS_LIBRARY) \
 	  $(PLUGIN_API_THUMBS_METADATA) \
 	  $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) \

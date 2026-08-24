@@ -1,0 +1,81 @@
+file {
+  name="visual_OperatorControls.adl"
+  version=040004
+}
+display {
+  object { x=0 y=0 width=760 height=420 }
+  clr=14
+  bclr=4
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+text {
+  object { x=20 y=12 width=720 height=28 }
+  "basic attribute" { clr=14 }
+  textix="Deterministic Writable-Control States"
+  align="horiz. centered"
+}
+text { object { x=30 y=65 width=130 height=24 } "basic attribute" { clr=14 } textix="Text Entry" }
+"text entry" {
+  object { x=175 y=62 width=210 height=28 }
+  control { chan="tm:compact:1" clr=14 bclr=0 }
+  format="compact"
+}
+text { object { x=410 y=65 width=95 height=24 } "basic attribute" { clr=14 } textix="Menu" }
+menu {
+  object { x=515 y=62 width=210 height=28 }
+  control { chan="mn:ctrl:8127" clr=14 bclr=0 }
+}
+text { object { x=30 y=120 width=130 height=24 } "basic attribute" { clr=14 } textix="Message" }
+"message button" {
+  object { x=175 y=116 width=210 height=34 }
+  control { chan="mb:stat:01" clr=14 bclr=45 }
+  label="Apply"
+  press_msg="1"
+  release_msg="0"
+}
+text { object { x=410 y=120 width=95 height=24 } "basic attribute" { clr=14 } textix="Choice" }
+"choice button" {
+  object { x=515 y=110 width=210 height=48 }
+  control { chan="cb:test:4193" clr=14 bclr=0 }
+  stacking="row column"
+}
+setpoint_control {
+  object { x=30 y=190 width=695 height=42 }
+  "basic attribute" { clr=14 bclr=4 }
+  label="Setpoint"
+  setpoint="sp:test:compact:setpoint"
+  readback="sp:test:compact:readback"
+  colorMode="alarm"
+  toleranceMode="absolute"
+  tolerance=1
+  limits {
+    loprSrc="default" loprDefault=-10
+    hoprSrc="default" hoprDefault=100
+    precSrc="default" precDefault=2
+  }
+}
+text { object { x=30 y=270 width=130 height=24 } "basic attribute" { clr=14 } textix="Slider" }
+valuator {
+  object { x=175 y=264 width=550 height=34 }
+  control { chan="slider:test:alpha" clr=14 bclr=12 }
+  dPrecision=0.25
+  limits {
+    loprSrc="default" loprDefault=-12.5
+    hoprSrc="default" hoprDefault=84.3
+    precSrc="default" precDefault=2
+  }
+}
+text { object { x=30 y=345 width=130 height=24 } "basic attribute" { clr=14 } textix="Wheel" }
+"wheel switch" {
+  object { x=175 y=338 width=550 height=40 }
+  control { chan="wheel:test:A1" clr=14 bclr=45 }
+  format="%+8.2f"
+  limits {
+    loprSrc="default" loprDefault=-17.25
+    hoprSrc="default" hoprDefault=103.5
+    precSrc="default" precDefault=2
+  }
+}

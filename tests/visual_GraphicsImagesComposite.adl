@@ -1,0 +1,78 @@
+file {
+  name="visual_GraphicsImagesComposite.adl"
+  version=040004
+}
+display {
+  object { x=0 y=0 width=780 height=430 }
+  clr=14
+  bclr=4
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+text {
+  object { x=20 y=12 width=740 height=28 }
+  "basic attribute" { clr=14 }
+  textix="Dynamic Shapes, Image, Layering, and Composite"
+  align="horiz. centered"
+}
+rectangle {
+  object { x=30 y=65 width=150 height=90 }
+  "basic attribute" { clr=25 fill="solid" width=2 }
+  "dynamic attribute" { clr="alarm" vis="if not zero" chan="channelA_PV" }
+}
+oval {
+  object { x=220 y=65 width=150 height=90 }
+  "basic attribute" { clr=30 fill="outline" width=4 }
+  "dynamic attribute" { clr="alarm" vis="if not zero" chan="channelA_PV" }
+}
+arc {
+  object { x=410 y=65 width=150 height=90 }
+  "basic attribute" { clr=35 fill="outline" width=4 }
+  begin=0
+  path=14400
+}
+polyline {
+  object { x=600 y=65 width=145 height=90 }
+  "basic attribute" { clr=45 width=4 }
+  points { (600,150) (635,70) (690,145) (745,75) }
+}
+polygon {
+  object { x=30 y=195 width=180 height=100 }
+  "basic attribute" { clr=50 fill="solid" width=2 }
+  points { (40,280) (85,200) (150,215) (200,280) (40,280) }
+}
+image {
+  object { x=245 y=190 width=180 height=110 }
+  type="gif"
+  "image name"="test.gif"
+  calc="A"
+  "dynamic attribute" { clr="alarm" vis="if not zero" chan="img:vis:a" }
+}
+composite {
+  object { x=465 y=190 width=280 height=110 }
+  "composite name"="coverage group"
+  children {
+    rectangle {
+      object { x=475 y=200 width=260 height=90 }
+      "basic attribute" { clr=10 fill="solid" }
+    }
+    text {
+      object { x=490 y=225 width=230 height=40 }
+      "basic attribute" { clr=14 }
+      textix="Composite child above fill"
+      align="horiz. centered"
+    }
+  }
+}
+rectangle {
+  object { x=510 y=215 width=180 height=60 }
+  "basic attribute" { clr=55 fill="outline" width=3 }
+}
+text {
+  object { x=30 y=345 width=715 height=42 }
+  "basic attribute" { clr=14 }
+  textix="Shapes remain visible, GIF frame selection is valid, and composite children retain their layer."
+  align="horiz. centered"
+}

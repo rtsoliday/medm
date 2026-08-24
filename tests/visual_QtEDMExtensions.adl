@@ -1,0 +1,91 @@
+file {
+  name="visual_QtEDMExtensions.adl"
+  version=040004
+}
+display {
+  object { x=0 y=0 width=900 height=650 }
+  clr=14
+  bclr=4
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+text {
+  object { x=20 y=10 width=860 height=28 }
+  "basic attribute" { clr=14 }
+  textix="QtEDM Extension Runtime States"
+  align="horiz. centered"
+}
+qtedm_symbol {
+  object { x=25 y=55 width=170 height=100 }
+  monitor { chan="led:test:discrete" clr=14 bclr=4 }
+  colorMode="discrete"
+  shape="square"
+  stateCount=3
+  state { min=0 max=0 color=20 label="Stopped" }
+  state { min=1 max=2 color=30 label="Starting" }
+  state { min=3 max=10 color=15 label="Running" }
+}
+qtedm_toggle {
+  object { x=220 y=55 width=180 height=42 }
+  control { chan="led:test:binary_live" clr=14 bclr=45 }
+  label="Enable"
+  offValue="0"
+  onValue="1"
+  offLabel="Disabled"
+  onLabel="Enabled"
+}
+qtedm_spinbox {
+  object { x=220 y=112 width=300 height=43 }
+  "basic attribute" { clr=14 bclr=43 }
+  label="Demand"
+  setpoint="sp:test:compact:setpoint"
+  showReadback=0
+  step=0.25
+  limits {
+    loprSrc="default" loprDefault=-10
+    hoprSrc="default" hoprDefault=100
+    precSrc="default" precDefault=2
+  }
+}
+qtedm_plugin {
+  pluginId="org.qtedm.tests.missing-fixture"
+  typeId="operator_status"
+  schemaVersion="1"
+  object { x=545 y=55 width=330 height=100 }
+  property { name="text" type="string" value="WAITING" }
+}
+qtedm_tabbed_display {
+  object { x=25 y=185 width=520 height=260 }
+  mode="tabs"
+  active_page="live"
+  page {
+    id="live"
+    label="Live"
+    display="qtedm_tabbed_child_live.adl"
+    macros="TITLE=Live Extension,DETAIL=Active tab runtime"
+    keepAlive="true"
+  }
+}
+qtedm_archive_plot {
+  object { x=570 y=185 width=305 height=260 }
+  plotcom { title="Archive + Live" xlabel="Time" ylabel="Value" clr=14 bclr=4 }
+  maxPoints=128
+  liveMerge=true
+}
+qtedm_ndarray_image {
+  object { x=25 y=475 width=350 height=140 }
+  title="Structured PVA Disconnect State"
+  dataPv="pva://qtedm:test:visual:missing:NTNDArray"
+  colorMap="jet"
+  rangeMode="manual"
+  rangeMin=0
+  rangeMax=255
+}
+text {
+  object { x=410 y=500 width=465 height=70 }
+  "basic attribute" { clr=14 }
+  textix="Symbol, toggle, spin box, plugin fallback, tab, archive/live trace, and NDArray disconnect rendering."
+  align="horiz. centered"
+}

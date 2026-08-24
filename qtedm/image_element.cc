@@ -227,6 +227,21 @@ int ImageElement::frameCount() const
 	return 0;
 }
 
+int ImageElement::runtimeFrameIndex() const
+{
+  return runtimeFrameIndex_;
+}
+
+bool ImageElement::runtimeFrameValid() const
+{
+  return runtimeFrameValid_;
+}
+
+bool ImageElement::runtimeAnimating() const
+{
+  return runtimeAnimate_;
+}
+
 void ImageElement::paintEvent(QPaintEvent *event)
 {
   Q_UNUSED(event);

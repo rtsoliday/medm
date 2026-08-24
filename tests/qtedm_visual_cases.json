@@ -171,10 +171,88 @@
     "golden": "tests/golden/test_WaterfallPlot.png",
     "use_ioc": true,
     "exit_after_ms": 8000,
+    "actions": [
+      {
+        "selector": {
+          "type": "waterfall_plot",
+          "geometry": {"x": 42, "y": 116, "width": 290, "height": 142}
+        },
+        "operation": "reset_samples"
+      },
+      {
+        "selector": {
+          "type": "waterfall_plot",
+          "geometry": {"x": 426, "y": 116, "width": 290, "height": 142}
+        },
+        "operation": "reset_samples"
+      },
+      {
+        "selector": {
+          "type": "waterfall_plot",
+          "geometry": {"x": 42, "y": 316, "width": 290, "height": 142}
+        },
+        "operation": "reset_samples"
+      },
+      {
+        "selector": {
+          "type": "waterfall_plot",
+          "geometry": {"x": 426, "y": 316, "width": 290, "height": 142}
+        },
+        "operation": "reset_samples"
+      }
+    ],
     "tolerance": {
       "max_different_pixels": 250,
       "max_mean_absolute_delta": 0.03,
       "max_channel_delta": 160
+    }
+  },
+  {
+    "name": "plot_heatmap_runtime_visual",
+    "display": "tests/visual_PlotHeatmap.adl",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "deterministic_repeats": 2,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
+    }
+  },
+  {
+    "name": "operator_controls_runtime_visual",
+    "display": "tests/visual_OperatorControls.adl",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "deterministic_repeats": 2,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
+    }
+  },
+  {
+    "name": "graphics_images_composite_runtime_visual",
+    "display": "tests/visual_GraphicsImagesComposite.adl",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "deterministic_repeats": 2,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
+    }
+  },
+  {
+    "name": "qtedm_extensions_runtime_visual",
+    "display": "tests/visual_QtEDMExtensions.adl",
+    "use_ioc": true,
+    "exit_after_ms": 8000,
+    "deterministic_repeats": 2,
+    "tolerance": {
+      "max_different_pixels": 0,
+      "max_mean_absolute_delta": 0.0,
+      "max_channel_delta": 0
     }
   }
 ]

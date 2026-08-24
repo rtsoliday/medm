@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QChar>
 #include <QString>
 #include <QStringList>
 
@@ -60,6 +61,7 @@ using MacroMap = QHash<QString, QString>;
 
 QString programName(const QStringList &args);
 CommandLineOptions parseCommandLine(const QStringList &args);
+QStringList parseDisplaySearchPath(const QString &value, QChar separator);
 QStringList displaySearchPaths();
 QString resolveDisplayFile(const QString &fileArgument);
 QStringList resolveDisplayArguments(const QStringList &files);

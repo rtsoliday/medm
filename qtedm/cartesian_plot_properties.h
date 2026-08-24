@@ -63,6 +63,7 @@ enum class CartesianPlotTraceMode
 constexpr int kCartesianPlotTraceCount = 8;
 constexpr int kCartesianAxisCount = 5;
 constexpr int kCartesianPlotMaximumSampleCount = 256;
+constexpr int kCartesianPlotMaximumVectorElements = 100000;
 constexpr int kMinimumCartesianPlotWidth = 160;
 constexpr int kMinimumCartesianPlotHeight = 93;
 

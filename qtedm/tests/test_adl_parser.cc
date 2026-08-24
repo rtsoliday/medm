@@ -20,6 +20,8 @@ private slots:
   void preservesBlocksNamedProperty();
   void rejectsMalformedInput();
   void rejectsTopLevelUnterminatedString();
+  void rejectsOversizedInput();
+  void rejectsExcessiveNesting();
 };
 
 void TestAdlParser::parsesMinimalFixture()
@@ -445,6 +447,33 @@ void TestAdlParser::rejectsTopLevelUnterminatedString()
 
   QVERIFY(!root.has_value());
   QCOMPARE(errorMessage, QStringLiteral("Unterminated string literal"));
+}
+
+void TestAdlParser::rejectsOversizedInput()
+{
+  const QString text(kMaximumAdlInputCharacters + 1, QLatin1Char('x'));
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(text, &errorMessage);
+
+  QVERIFY(!root.has_value());
+  QVERIFY(errorMessage.contains(QStringLiteral("maximum size")));
+}
+
+void TestAdlParser::rejectsExcessiveNesting()
+{
+  QString text;
+  for (int depth = 0; depth <= kMaximumAdlNestingDepth; ++depth) {
+    text.append(QStringLiteral("node{"));
+  }
+  for (int depth = 0; depth <= kMaximumAdlNestingDepth; ++depth) {
+    text.append(QLatin1Char('}'));
+  }
+
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(text, &errorMessage);
+
+  QVERIFY(!root.has_value());
+  QVERIFY(errorMessage.contains(QStringLiteral("nesting depth")));
 }
 
 QTEST_APPLESS_MAIN(TestAdlParser)

@@ -13,6 +13,7 @@ class WaveTableElement;
 class WaveTableRuntime : public QObject
 {
   friend class DisplayWindow;
+  friend class TestObserveOnlyControls;
 
 public:
   explicit WaveTableRuntime(WaveTableElement *element);
@@ -39,6 +40,8 @@ private:
   QString formatCharString(const QByteArray &bytes) const;
   int resolvedPrecision() const;
   int displayLimit(int receivedCount) const;
+  static QVector<double> numericVectorFromSharedData(
+      const SharedChannelData &data, int maximumValues);
   void applyElementState(const QVector<QString> &values, long receivedCount);
 
   QPointer<WaveTableElement> element_;

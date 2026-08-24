@@ -617,7 +617,10 @@ void CartesianPlotRuntime::handleTraceValue(int index, bool isX,
     handleTraceControlInfo(index, isX, data);
   }
   TraceState &trace = traces_[index];
-  QVector<double> values = extractValues(data);
+  const int maximumValues = countFromChannel_ > 0
+      ? std::min(countFromChannel_, kCartesianPlotMaximumVectorElements)
+      : kCartesianPlotMaximumVectorElements;
+  QVector<double> values = extractValues(data, maximumValues);
   if (values.isEmpty()) {
     return;
   }
@@ -686,7 +689,7 @@ void CartesianPlotRuntime::handleEraseValue(const SharedChannelData &data)
   }
   updateChannelControlInfo(eraseChannel_, data);
   updateRuntimePaintState();
-  QVector<double> values = extractValues(data);
+  QVector<double> values = extractValues(data, 1);
   if (values.isEmpty()) {
     return;
   }
@@ -716,7 +719,7 @@ void CartesianPlotRuntime::handleCountValue(const SharedChannelData &data)
     countChannel_.canRead = true;
   }
   updateChannelControlInfo(countChannel_, data);
-  QVector<double> values = extractValues(data);
+  QVector<double> values = extractValues(data, 1);
   if (values.isEmpty()) {
     updateRuntimePaintState();
     return;
@@ -730,7 +733,8 @@ void CartesianPlotRuntime::handleCountValue(const SharedChannelData &data)
   if (newCount <= 0) {
     countFromChannel_ = 0;
   } else {
-    countFromChannel_ = newCount;
+    countFromChannel_ = std::min(newCount,
+        kCartesianPlotMaximumVectorElements);
   }
 
   invokeOnElement([count = countFromChannel_](CartesianPlotElement *element) {
@@ -1247,7 +1251,7 @@ int CartesianPlotRuntime::effectiveCapacity(int preferredCount,
     }
     capacity = preferredCount;
   }
-  return std::max(capacity, 0);
+  return std::clamp(capacity, 0, kCartesianPlotMaximumVectorElements);
 }
 
 bool CartesianPlotRuntime::traceConnected(const TraceState &trace) const
@@ -1284,15 +1288,20 @@ bool CartesianPlotRuntime::areAxisLimitsUsable(double low, double high)
 }
 
 QVector<double> CartesianPlotRuntime::extractValues(
-    const SharedChannelData &data)
+    const SharedChannelData &data, int maximumValues)
 {
   QVector<double> values;
+  const int limit = std::clamp(maximumValues, 0,
+      kCartesianPlotMaximumVectorElements);
+  if (limit == 0) {
+    return values;
+  }
   if (data.isArray) {
     if (!data.arrayValues.isEmpty()) {
-      values = data.arrayValues;
+      values = data.arrayValues.mid(0, limit);
     } else if (data.sharedArrayData && data.sharedArraySize > 0) {
       const size_t clampedSize = std::min<size_t>(data.sharedArraySize,
-          static_cast<size_t>(std::numeric_limits<int>::max()));
+          static_cast<size_t>(limit));
       const double *sharedValues = data.sharedArrayData.get();
       if (sharedValues) {
         values.reserve(static_cast<int>(clampedSize));

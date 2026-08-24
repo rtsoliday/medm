@@ -200,6 +200,7 @@ private:
   QVector<qint64> sampleTimestampsMs_;
   int writeCursor_ = 0;
   int bufferedSamples_ = 0;
+  bool bufferLimitWarningLogged_ = false;
 
   mutable bool paletteCacheValid_ = false;
   mutable QVector<QRgb> cachedPalette_;

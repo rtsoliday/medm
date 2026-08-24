@@ -164,7 +164,7 @@ void NtNdArrayImageRuntime::pollSource()
 
 void NtNdArrayImageRuntime::submitFrame(const NtNdArrayFrame &frame)
 {
-  if (!started_ || HeatmapRuntime::isGlobalUpdatesPaused()) {
+  if (!started_) {
     return;
   }
   StatisticsTracker::instance().registerUpdateRequest(true);

@@ -2,8 +2,13 @@
 
 #include <QList>
 #include <QString>
+#include <QtGlobal>
 
 #include <optional>
+
+constexpr qsizetype kMaximumAdlInputCharacters = 16 * 1024 * 1024;
+constexpr qint64 kMaximumAdlInputBytes = 16LL * 1024LL * 1024LL;
+constexpr int kMaximumAdlNestingDepth = 256;
 
 struct AdlProperty
 {

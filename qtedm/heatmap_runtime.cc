@@ -19,16 +19,40 @@ using RuntimeUtils::isNumericFieldType;
 using RuntimeUtils::kInvalidSeverity;
 }
 
-std::atomic<bool> HeatmapRuntime::globalUpdatesPaused_{false};
+std::atomic<unsigned int> HeatmapRuntime::globalUpdatePauseCount_{0};
 
-void HeatmapRuntime::setGlobalUpdatesPaused(bool paused)
+HeatmapRuntime::UpdatePause::UpdatePause()
 {
-  globalUpdatesPaused_.store(paused, std::memory_order_relaxed);
+  HeatmapRuntime::acquireGlobalUpdatePause();
+}
+
+HeatmapRuntime::UpdatePause::~UpdatePause()
+{
+  HeatmapRuntime::releaseGlobalUpdatePause();
+}
+
+void HeatmapRuntime::acquireGlobalUpdatePause()
+{
+  globalUpdatePauseCount_.fetch_add(1, std::memory_order_relaxed);
+}
+
+void HeatmapRuntime::releaseGlobalUpdatePause()
+{
+  unsigned int count = globalUpdatePauseCount_.load(
+      std::memory_order_relaxed);
+  while (count > 0) {
+    if (globalUpdatePauseCount_.compare_exchange_weak(count, count - 1,
+            std::memory_order_relaxed, std::memory_order_relaxed)) {
+      return;
+    }
+  }
+  Q_ASSERT_X(false, "HeatmapRuntime::releaseGlobalUpdatePause",
+      "global update pause count underflow");
 }
 
 bool HeatmapRuntime::isGlobalUpdatesPaused()
 {
-  return globalUpdatesPaused_.load(std::memory_order_relaxed);
+  return globalUpdatePauseCount_.load(std::memory_order_relaxed) != 0;
 }
 
 HeatmapRuntime::HeatmapRuntime(HeatmapElement *element)
@@ -217,10 +241,7 @@ void HeatmapRuntime::handleDataConnection(bool connected,
 
 void HeatmapRuntime::handleDataValue(const SharedChannelData &data)
 {
-    if (!started_) {
-    return;
-  }
-  if (globalUpdatesPaused_.load(std::memory_order_relaxed)) {
+  if (!started_) {
     return;
   }
   if (!data.isNumeric) {
@@ -270,9 +291,6 @@ void HeatmapRuntime::handleDimensionConnection(ChannelState &state,
 void HeatmapRuntime::handleDimensionValue(ChannelState &state, int value)
 {
   if (!started_) {
-    return;
-  }
-  if (globalUpdatesPaused_.load(std::memory_order_relaxed)) {
     return;
   }
   if (value <= 0) {

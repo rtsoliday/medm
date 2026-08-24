@@ -6,6 +6,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QEvent>
 #include <QFontMetrics>
 #include <QHelpEvent>
@@ -1029,16 +1030,33 @@ void WaterfallPlotElement::invalidatePaletteCache()
 
 void WaterfallPlotElement::ensureBufferCapacity(int columnCount)
 {
-  const int clampedColumns = std::max(columnCount, runtimeWaveformLength_);
+  const int requestedColumns = std::max(columnCount, runtimeWaveformLength_);
+  const int maximumColumns =
+      waterfallMaximumColumnsForHistory(historyCount_);
+  const int clampedColumns = std::min(requestedColumns, maximumColumns);
   if (clampedColumns <= 0) {
     return;
+  }
+  if (requestedColumns > maximumColumns) {
+    if (!bufferLimitWarningLogged_) {
+      qWarning() << "Waterfall plot waveform truncated from"
+                 << requestedColumns << "to" << maximumColumns
+                 << "columns to keep its history buffer bounded";
+      bufferLimitWarningLogged_ = true;
+    }
+  } else {
+    bufferLimitWarningLogged_ = false;
   }
   if (bufferColumnCount_ == clampedColumns && sampleLengths_.size() == historyCount_) {
     return;
   }
 
+  const qint64 bufferValueCount =
+      static_cast<qint64>(historyCount_) * clampedColumns;
+  Q_ASSERT(bufferValueCount > 0
+      && bufferValueCount <= kWaterfallMaxBufferedValues);
   bufferColumnCount_ = clampedColumns;
-  bufferValues_.resize(historyCount_ * bufferColumnCount_);
+  bufferValues_.resize(static_cast<int>(bufferValueCount));
   sampleLengths_.fill(0, historyCount_);
   sampleTimestampsMs_.fill(0, historyCount_);
   const double nan = std::numeric_limits<double>::quiet_NaN();

@@ -124,8 +124,8 @@ HeatmapElement::HeatmapElement(QWidget *parent)
 
   interactionTimer_.setSingleShot(true);
   interactionTimer_.setInterval(2000);
-  QObject::connect(&interactionTimer_, &QTimer::timeout, []() {
-    HeatmapRuntime::setGlobalUpdatesPaused(false);
+  QObject::connect(&interactionTimer_, &QTimer::timeout, [this]() {
+    interactionPause_.reset();
   });
 }
 
@@ -1512,7 +1512,10 @@ void HeatmapElement::mouseReleaseEvent(QMouseEvent *event)
 void HeatmapElement::mouseMoveEvent(QMouseEvent *event)
 {
   if (panning_) {
-    HeatmapRuntime::setGlobalUpdatesPaused(true);
+    if (!interactionPause_) {
+      interactionPause_ =
+          std::make_unique<HeatmapRuntime::UpdatePause>();
+    }
     interactionTimer_.start();
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -1587,7 +1590,9 @@ void HeatmapElement::wheelEvent(QWheelEvent *event)
     return;
   }
 
-  HeatmapRuntime::setGlobalUpdatesPaused(true);
+  if (!interactionPause_) {
+    interactionPause_ = std::make_unique<HeatmapRuntime::UpdatePause>();
+  }
   interactionTimer_.start();
   
   if (!zoomed_) {

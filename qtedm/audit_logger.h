@@ -16,6 +16,7 @@
 #include <QFile>
 #include <QMutex>
 #include <QDateTime>
+#include <QStringList>
 #include <memory>
 
 class AuditLogger
@@ -55,6 +56,10 @@ public:
   void logBlockedPut(const QString &pvName,
                      const QString &value,
                      const QString &reason);
+
+  /* Encode and decode the pipe-delimited audit record format. */
+  static QString encodeLogField(const QString &value);
+  static bool decodeLogRecord(const QString &line, QStringList *fields);
 
   /* Shutdown and close log file */
   void shutdown();

@@ -1,7 +1,6 @@
 #include "pva_channel_manager.h"
 
 #include "pva_bridge.h"
-#include "heatmap_runtime.h"
 
 #include <algorithm>
 
@@ -386,8 +385,7 @@ void PvaChannelManager::updateCachedData(PvaChannel *channel,
     return;
   }
 
-  if (refreshBridge && !pvaBridgeRefresh(channel->bridge,
-          HeatmapRuntime::isGlobalUpdatesPaused())) {
+  if (refreshBridge && !pvaBridgeRefresh(channel->bridge, false)) {
     return;
   }
 
@@ -522,24 +520,6 @@ void PvaChannelManager::pollChannels()
     return;
   }
 
-  bool isPaused = HeatmapRuntime::isGlobalUpdatesPaused();
-  static bool wasPaused = false;
-
-  if (isPaused && !wasPaused) {
-    for (auto *channel : channels_) {
-      if (channel->bridge && channel->cachedData.nativeElementCount > 1000) {
-        pvaBridgeSetMonitoringPaused(channel->bridge, true);
-      }
-    }
-  } else if (!isPaused && wasPaused) {
-    for (auto *channel : channels_) {
-      if (channel->bridge && channel->cachedData.nativeElementCount > 1000) {
-        pvaBridgeSetMonitoringPaused(channel->bridge, false);
-      }
-    }
-  }
-  wasPaused = isPaused;
-
   const QList<SharedChannelKey> channelKeys = channels_.keys();
   for (const SharedChannelKey &key : channelKeys) {
     PvaChannel *channel = channels_.value(key, nullptr);
@@ -549,7 +529,7 @@ void PvaChannelManager::pollChannels()
 
     bool connectionChanged = false;
     const short previousSeverity = channel->cachedData.severity;
-    int events = pvaBridgePoll(channel->bridge, &connectionChanged, isPaused);
+    int events = pvaBridgePoll(channel->bridge, &connectionChanged, false);
 
     if (connectionChanged) {
       updateCachedData(channel, false);

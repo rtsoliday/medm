@@ -1,11 +1,15 @@
 #include <QtTest/QtTest>
 
 #include <cmath>
+#include <limits>
+#include <memory>
 
 #include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
@@ -14,6 +18,7 @@
 #include <QMainWindow>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QProcess>
 #include <QPushButton>
 #include <QScreen>
 #include <QTemporaryDir>
@@ -24,6 +29,7 @@
 
 #include "audit_logger.h"
 #include "composite_element.h"
+#include "cartesian_plot_runtime.h"
 #include "display_state.h"
 #include "display_window.h"
 #include "expression_channel_element.h"
@@ -42,13 +48,17 @@
 #include "pv_limits_dialog.h"
 #include "pv_table_element.h"
 #include "rectangle_element.h"
+#include "related_display_element.h"
 #include "setpoint_control_element.h"
+#include "shell_command_element.h"
 #include "slider_element.h"
 #include "soft_pv_registry.h"
+#include "strip_chart_element.h"
 #include "tabbed_display_element.h"
 #include "text_element.h"
 #include "text_area_element.h"
 #include "wave_table_element.h"
+#include "wave_table_runtime.h"
 #include "waterfall_plot_element.h"
 #include "waterfall_plot_runtime.h"
 #include "wheel_switch_element.h"
@@ -88,7 +98,16 @@ private slots:
   void oversizedForcedExecuteDisplayStaysFitted();
   void modeSwitchReactivatesActiveDisplay();
   void forcedExecuteDisplayActivatesSafetyControls();
+  void globalUpdatePauseIsReferenceCounted();
+  void globalUpdatePauseRetainsHeatmapValues();
+  void recursiveExternalCompositeIncludesAreRejected();
+  void waterfallBufferIsBoundedForHugeWaveforms();
+  void stripChartPreservesSourceTimestamps();
+  void waveformCopiesAreBounded();
+  void shellCommandsDoNotBlockTheGuiThread();
+  void auditLogCodecRoundTripsEscapedFields();
   void findPvIncludesEverySafetyControlFamily();
+  void findPvIncludesRuleOnlyWidgets();
   void readOnlyPvInfoPickFindsSafetyControls();
   void embeddedDisplayTraversalKeepsSoftPvsLocal();
   void pvLimitsPickerRoutesEverySupportedControl();
@@ -604,6 +623,234 @@ void TestObserveOnlyControls::forcedExecuteDisplayActivatesSafetyControls()
   QTRY_COMPARE(spinbox->runtimeSetpointText(), QStringLiteral("42.50"));
 }
 
+void TestObserveOnlyControls::globalUpdatePauseIsReferenceCounted()
+{
+  QVERIFY(!HeatmapRuntime::isGlobalUpdatesPaused());
+  {
+    HeatmapRuntime::UpdatePause firstPause;
+    QVERIFY(HeatmapRuntime::isGlobalUpdatesPaused());
+    {
+      HeatmapRuntime::UpdatePause secondPause;
+      QVERIFY(HeatmapRuntime::isGlobalUpdatesPaused());
+    }
+    QVERIFY(HeatmapRuntime::isGlobalUpdatesPaused());
+  }
+  QVERIFY(!HeatmapRuntime::isGlobalUpdatesPaused());
+}
+
+void TestObserveOnlyControls::globalUpdatePauseRetainsHeatmapValues()
+{
+  const QString dataName = QStringLiteral("__test:heatmap_pause_data");
+  const QString xName = QStringLiteral("__test:heatmap_pause_x");
+  const QString yName = QStringLiteral("__test:heatmap_pause_y");
+  auto &soft = SoftPvRegistry::instance();
+  for (const QString &name : {dataName, xName, yName}) {
+    soft.registerName(name, true);
+    registeredNames_.append(name);
+    soft.setConnected(name, true);
+  }
+  soft.publishArrayValue(dataName, QVector<double>{0.0});
+  soft.publishValue(xName, 1.0);
+  soft.publishValue(yName, 1.0);
+
+  HeatmapElement heatmap;
+  heatmap.setDataChannel(dataName);
+  heatmap.setXDimensionSource(HeatmapDimensionSource::kChannel);
+  heatmap.setXDimensionChannel(xName);
+  heatmap.setYDimensionSource(HeatmapDimensionSource::kChannel);
+  heatmap.setYDimensionChannel(yName);
+  HeatmapRuntime runtime(&heatmap);
+  runtime.start();
+
+  QVector<double> expectedData(1201, 42.0);
+  expectedData.last() = 7.0;
+  {
+    HeatmapRuntime::UpdatePause pause;
+    auto &manager = PvChannelManager::instance();
+    QVERIFY(manager.putArrayValue(dataName, expectedData));
+    QVERIFY(manager.putValue(xName, 11.0));
+    QVERIFY(manager.putValue(yName, 109.0));
+    QTRY_COMPARE(heatmap.runtimeValues_, expectedData);
+    QTRY_COMPARE(heatmap.runtimeXDimension_, 11);
+    QTRY_COMPARE(heatmap.runtimeYDimension_, 109);
+  }
+
+  runtime.stop();
+}
+
+void TestObserveOnlyControls::recursiveExternalCompositeIncludesAreRejected()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString firstPath =
+      directory.filePath(QStringLiteral("first.adl"));
+  const QString secondPath =
+      directory.filePath(QStringLiteral("second.adl"));
+
+  auto writeCompositeDisplay = [](const QString &path,
+                                   const QString &name,
+                                   const QString &includedFile) {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      return false;
+    }
+    const QByteArray contents = QStringLiteral(
+        "file { name=\"%1\" version=040004 }\n"
+        "display { object { x=0 y=0 width=240 height=160 }"
+        " clr=1 bclr=0 }\n"
+        "color map { ncolors=2 colors { ffffff, 000000, } }\n"
+        "composite {\n"
+        "  object { x=10 y=10 width=100 height=80 }\n"
+        "  \"composite file\"=\"%2\"\n"
+        "}\n").arg(name, includedFile).toLatin1();
+    return file.write(contents) == static_cast<qint64>(contents.size());
+  };
+
+  QVERIFY(writeCompositeDisplay(firstPath, QStringLiteral("first.adl"),
+      QStringLiteral("second.adl")));
+  QVERIFY(writeCompositeDisplay(secondPath, QStringLiteral("second.adl"),
+      QStringLiteral("first.adl")));
+
+  auto state = std::make_shared<DisplayState>();
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(firstPath, &error), qPrintable(error));
+
+  QCOMPARE(window.compositeElements_.size(), 2);
+  QVERIFY(window.compositeElements_.constLast()->childWidgets().isEmpty());
+  QCOMPARE(window.loadAncestry_,
+      QStringList{QFileInfo(firstPath).canonicalFilePath()});
+}
+
+void TestObserveOnlyControls::waterfallBufferIsBoundedForHugeWaveforms()
+{
+  WaterfallPlotElement waterfall;
+  waterfall.setHistoryCount(1);
+  waterfall.setRuntimeWaveformLength(std::numeric_limits<int>::max());
+
+  QCOMPARE(waterfall.waveformLength(), kWaterfallMaxColumns);
+  QCOMPARE(waterfallMaximumColumnsForHistory(waterfall.historyCount()),
+      kWaterfallMaxColumns);
+  QVERIFY(static_cast<qint64>(waterfall.historyCount())
+      * waterfall.waveformLength() <= kWaterfallMaxBufferedValues);
+
+  const double sample = 3.25;
+  waterfall.pushWaveform(&sample, 1, 1234, false);
+  QCOMPARE(waterfall.bufferedSampleCount(), 1);
+  QCOMPARE(waterfall.sampleLength(0), 1);
+  QCOMPARE(waterfall.sampleValue(0, 0), sample);
+}
+
+void TestObserveOnlyControls::stripChartPreservesSourceTimestamps()
+{
+  StripChartElement chart;
+  chart.setChannel(0, QStringLiteral("source:timestamp"));
+  chart.setExecuteMode(true);
+  chart.setRuntimeConnected(0, true);
+  chart.setRuntimeReadAccessKnown(0, true);
+  chart.setRuntimeReadAccess(0, true);
+  chart.updateSamplingGeometry(4);
+
+  constexpr qint64 sourceTimestampMs = 1700000000250LL;
+  chart.addRuntimeSample(0, 3.25, sourceTimestampMs);
+  chart.appendSampleColumn();
+
+  QCOMPARE(chart.sampleCount(), 1);
+  QCOMPARE(chart.sampleValue(0, 0), 3.25);
+  QCOMPARE(chart.sampleTimestampMs(0), sourceTimestampMs);
+}
+
+void TestObserveOnlyControls::waveformCopiesAreBounded()
+{
+  constexpr int payloadSize = kCartesianPlotMaximumVectorElements + 1;
+  double *payload = new double[payloadSize];
+  for (int i = 0; i < payloadSize; ++i) {
+    payload[i] = static_cast<double>(i);
+  }
+
+  SharedChannelData data;
+  data.isArray = true;
+  data.sharedArrayData = std::shared_ptr<const double>(payload,
+      std::default_delete<double[]>());
+  data.sharedArraySize = payloadSize;
+
+  const QVector<double> tableValues =
+      WaveTableRuntime::numericVectorFromSharedData(data, 10000);
+  QCOMPARE(tableValues.size(), 10000);
+  QCOMPARE(tableValues.constLast(), 9999.0);
+
+  const QVector<double> plotValues = CartesianPlotRuntime::extractValues(
+      data, kCartesianPlotMaximumVectorElements);
+  QCOMPARE(plotValues.size(), kCartesianPlotMaximumVectorElements);
+  QCOMPARE(plotValues.constLast(),
+      static_cast<double>(kCartesianPlotMaximumVectorElements - 1));
+}
+
+void TestObserveOnlyControls::shellCommandsDoNotBlockTheGuiThread()
+{
+  auto state = std::make_shared<DisplayState>();
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+#ifdef Q_OS_WIN
+  const QString command = QStringLiteral("ping -n 2 127.0.0.1");
+#else
+  const QString command = QStringLiteral("sleep 1");
+#endif
+  QElapsedTimer elapsed;
+  elapsed.start();
+  window.runShellCommand(command);
+  QVERIFY2(elapsed.elapsed() < 500,
+      "Shell command execution blocked the GUI thread");
+
+  QProcess *process = window.findChild<QProcess *>();
+  QVERIFY(process);
+  QVERIFY(process->state() == QProcess::Running
+      || process->waitForStarted(1000));
+  process->kill();
+  QVERIFY(process->waitForFinished(3000));
+}
+
+void TestObserveOnlyControls::auditLogCodecRoundTripsEscapedFields()
+{
+  const QStringList expected{
+      QStringLiteral("2026-08-21T12:34:56"),
+      QStringLiteral("operator"),
+      QStringLiteral("Text|Entry"),
+      QStringLiteral("test:pv"),
+      QStringLiteral("value|with\\slashes\nand\rreturns"),
+      QStringLiteral("/tmp/a|b\\display.adl")};
+  QStringList encoded;
+  for (const QString &field : expected) {
+    encoded.append(AuditLogger::encodeLogField(field));
+  }
+
+  QStringList decoded;
+  QVERIFY(AuditLogger::decodeLogRecord(
+      encoded.join(QLatin1Char('|')), &decoded));
+  QCOMPARE(decoded, expected);
+
+  /* Older writers escaped value pipes but did not escape pipes in the
+   * trailing display field.  Preserve that recoverable case. */
+  QVERIFY(AuditLogger::decodeLogRecord(
+      QStringLiteral("time|user|widget|pv|a\\|b|/tmp/a|b.adl"),
+      &decoded));
+  QCOMPARE(decoded.size(), 6);
+  QCOMPARE(decoded.at(4), QStringLiteral("a|b"));
+  QCOMPARE(decoded.at(5), QStringLiteral("/tmp/a|b.adl"));
+
+  QVERIFY(AuditLogger::decodeLogRecord(
+      QStringLiteral("time|user|widget|pv|value|C:\\new\\display.adl"),
+      &decoded));
+  QCOMPARE(decoded.at(5), QStringLiteral("C:\\new\\display.adl"));
+
+  QVERIFY(!AuditLogger::decodeLogRecord(
+      QStringLiteral("not|enough|fields"), &decoded));
+}
+
 void TestObserveOnlyControls::findPvIncludesEverySafetyControlFamily()
 {
   const QString fixture =
@@ -649,6 +896,40 @@ void TestObserveOnlyControls::findPvIncludesEverySafetyControlFamily()
 
   state->displays.removeAll(&window);
   state->activeDisplay.clear();
+}
+
+void TestObserveOnlyControls::findPvIncludesRuleOnlyWidgets()
+{
+  auto state = std::make_shared<DisplayState>();
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+
+  auto *shellCommand = new ShellCommandElement(window.displayArea_);
+  auto *relatedDisplay = new RelatedDisplayElement(window.displayArea_);
+  window.shellCommandElements_.append(shellCommand);
+  window.relatedDisplayElements_.append(relatedDisplay);
+
+  auto rulesForChannel = [](const QString &channel) {
+    QtedmPropertyRule rule;
+    rule.id = QStringLiteral("visible_rule");
+    rule.expression = QStringLiteral("A>0");
+    rule.inputs = {{QLatin1Char('A'), channel,
+        QtedmRuleInputType::kNumber}};
+    QtedmRuleSet rules;
+    rules.rules.append(rule);
+    return rules;
+  };
+  const QString shellPv = QStringLiteral("rule:shell");
+  const QString relatedPv = QStringLiteral("rule:related");
+  window.propertyRuleSets_.insert(shellCommand, rulesForChannel(shellPv));
+  window.propertyRuleSets_.insert(relatedDisplay, rulesForChannel(relatedPv));
+
+  const QList<QWidget *> widgets = window.findPvWidgets();
+  QVERIFY(widgets.contains(shellCommand));
+  QVERIFY(widgets.contains(relatedDisplay));
+  QCOMPARE(window.channelsForWidget(shellCommand), QStringList{shellPv});
+  QCOMPARE(window.channelsForWidget(relatedDisplay), QStringList{relatedPv});
 }
 
 void TestObserveOnlyControls::readOnlyPvInfoPickFindsSafetyControls()

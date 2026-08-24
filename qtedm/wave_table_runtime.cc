@@ -24,21 +24,6 @@ constexpr short kInvalidAlarmSeverity = 3;
 constexpr int kDefaultPrecision = 3;
 constexpr int kMaxDisplayedElementsWithoutLimit = 10000;
 
-QVector<double> numericVectorFromSharedData(const SharedChannelData &data)
-{
-  if (data.sharedArrayData && data.sharedArraySize > 0) {
-    const size_t boundedSize = std::min(data.sharedArraySize,
-        static_cast<size_t>(std::numeric_limits<int>::max()));
-    QVector<double> result(static_cast<int>(boundedSize));
-    const double *source = data.sharedArrayData.get();
-    for (int i = 0; i < result.size(); ++i) {
-      result[i] = source[i];
-    }
-    return result;
-  }
-  return data.arrayValues;
-}
-
 } // namespace
 
 WaveTableRuntime::WaveTableRuntime(WaveTableElement *element)
@@ -212,8 +197,20 @@ void WaveTableRuntime::handleChannelData(const SharedChannelData &data)
     receivedCount = data.charArrayValue.size();
     values = formatCharValues(data.charArrayValue);
   } else if (data.isArray) {
-    const QVector<double> numericValues = numericVectorFromSharedData(data);
-    receivedCount = numericValues.size();
+    const size_t available = data.sharedArrayData && data.sharedArraySize > 0
+        ? data.sharedArraySize
+        : static_cast<size_t>(data.arrayValues.size());
+    const size_t nativeAvailable = static_cast<size_t>(std::max<long>(
+        data.nativeElementCount > 0 ? data.nativeElementCount
+                                    : nativeElementCount_,
+        0));
+    receivedCount = static_cast<long>(std::min(
+        std::max(available, nativeAvailable),
+        static_cast<size_t>(std::numeric_limits<long>::max())));
+    const int availableForLimit = static_cast<int>(std::min(available,
+        static_cast<size_t>(std::numeric_limits<int>::max())));
+    const QVector<double> numericValues = numericVectorFromSharedData(data,
+        displayLimit(availableForLimit));
     values = data.isEnum ? formatEnumValues(numericValues)
                          : formatNumericValues(numericValues);
   } else if (data.isEnum) {
@@ -251,14 +248,11 @@ chtype WaveTableRuntime::subscriptionTypeForNativeType(
 long WaveTableRuntime::subscriptionCountForNativeType(short nativeFieldType,
     long nativeElementCount) const
 {
-  switch (nativeFieldType) {
-  case DBR_STRING:
-  case DBR_ENUM:
-  case DBR_CHAR:
-    return std::max<long>(1, nativeElementCount);
-  default:
-    return 0;
-  }
+  Q_UNUSED(nativeFieldType);
+  const int available = static_cast<int>(std::min(
+      std::max<long>(nativeElementCount, 1),
+      static_cast<long>(std::numeric_limits<int>::max())));
+  return std::max<long>(1, displayLimit(available));
 }
 
 QVector<QString> WaveTableRuntime::formatNumericValues(
@@ -391,16 +385,12 @@ QString WaveTableRuntime::formatCharString(const QByteArray &bytes) const
   if (bytes.isEmpty()) {
     return QString();
   }
-  QByteArray payload = bytes;
-  const int nullIndex = payload.indexOf('\0');
-  if (nullIndex >= 0) {
-    payload.truncate(nullIndex);
+  int length = displayLimit(bytes.size());
+  const int nullIndex = bytes.indexOf('\0');
+  if (nullIndex >= 0 && nullIndex < length) {
+    length = nullIndex;
   }
-  const int maxElements = element_ ? element_->maxElements() : 0;
-  if (maxElements > 0 && payload.size() > maxElements) {
-    payload.truncate(maxElements);
-  }
-  return QString::fromLatin1(payload.constData(), payload.size());
+  return QString::fromLatin1(bytes.constData(), length);
 }
 
 int WaveTableRuntime::resolvedPrecision() const
@@ -419,6 +409,26 @@ int WaveTableRuntime::displayLimit(int receivedCount) const
   const int limit = configured > 0 ? configured
                                   : kMaxDisplayedElementsWithoutLimit;
   return std::min(receivedCount, limit);
+}
+
+QVector<double> WaveTableRuntime::numericVectorFromSharedData(
+    const SharedChannelData &data, int maximumValues)
+{
+  const int limit = std::max(maximumValues, 0);
+  if (limit == 0) {
+    return QVector<double>();
+  }
+  if (data.sharedArrayData && data.sharedArraySize > 0) {
+    const size_t boundedSize = std::min(data.sharedArraySize,
+        static_cast<size_t>(limit));
+    QVector<double> result(static_cast<int>(boundedSize));
+    const double *source = data.sharedArrayData.get();
+    for (int i = 0; i < result.size(); ++i) {
+      result[i] = source[i];
+    }
+    return result;
+  }
+  return data.arrayValues.mid(0, limit);
 }
 
 void WaveTableRuntime::applyElementState(const QVector<QString> &values,

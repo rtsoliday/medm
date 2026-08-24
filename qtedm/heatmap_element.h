@@ -12,10 +12,14 @@
 #include <QTimer>
 
 #include "heatmap_properties.h"
+#include "heatmap_runtime.h"
 #include "graphic_shape_element.h"
+
+class TestObserveOnlyControls;
 
 class HeatmapElement : public GraphicShapeElement
 {
+  friend class TestObserveOnlyControls;
 public:
   explicit HeatmapElement(QWidget *parent = nullptr);
 
@@ -198,4 +202,5 @@ private:
 
   QRectF lastHeatmapRect_;
   QTimer interactionTimer_;
+  std::unique_ptr<HeatmapRuntime::UpdatePause> interactionPause_;
 };

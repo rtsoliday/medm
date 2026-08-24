@@ -14,13 +14,24 @@ class HeatmapRuntime : public QObject
 {
   friend class DisplayWindow;
 public:
+  /* Interaction hint only. Data producers and runtimes must continue to
+   * accept the latest values while a pause is active. */
+  class UpdatePause
+  {
+  public:
+    UpdatePause();
+    ~UpdatePause();
+
+    UpdatePause(const UpdatePause &) = delete;
+    UpdatePause &operator=(const UpdatePause &) = delete;
+  };
+
   explicit HeatmapRuntime(HeatmapElement *element);
   ~HeatmapRuntime() override;
 
   virtual void start();
   virtual void stop();
 
-  static void setGlobalUpdatesPaused(bool paused);
   static bool isGlobalUpdatesPaused();
 
 private:
@@ -53,7 +64,10 @@ private:
   int runtimeXDimension_ = 0;
   int runtimeYDimension_ = 0;
 
-  static std::atomic<bool> globalUpdatesPaused_;
+  static void acquireGlobalUpdatePause();
+  static void releaseGlobalUpdatePause();
+
+  static std::atomic<unsigned int> globalUpdatePauseCount_;
 };
 
 template <typename Func>

@@ -128,7 +128,11 @@ CommandLineOptions parseCommandLine(const QStringList &args)
                arg == QLatin1String("--crash-test")) {
       options.crashTest = true;
     } else if (arg == QLatin1String("-macro")) {
-      if ((i + 1) < args.size()) {
+      const QString candidate = (i + 1) < args.size()
+          ? args.at(i + 1).trimmed()
+          : QString();
+      if (!candidate.isEmpty()
+          && !candidate.startsWith(QLatin1Char('-'))) {
         QString tmp = args.at(++i);
         if (!tmp.isEmpty() && tmp.front() == QLatin1Char('"')) {
           tmp.remove(0, 1);
@@ -137,11 +141,18 @@ CommandLineOptions parseCommandLine(const QStringList &args)
           tmp.chop(1);
         }
         options.macroString = tmp.trimmed();
+      } else {
+        options.invalidOption = arg;
       }
     } else if (arg == QLatin1String("-displayGeometry") ||
                arg == QLatin1String("-dg")) {
-      if ((i + 1) < args.size()) {
+      const QString candidate = (i + 1) < args.size()
+          ? args.at(i + 1).trimmed()
+          : QString();
+      if (geometrySpecFromString(candidate).has_value()) {
         options.displayGeometry = args.at(++i);
+      } else {
+        options.invalidOption = arg;
       }
     } else if (arg == QLatin1String("-displayFont")) {
       if ((i + 1) < args.size()) {
@@ -170,21 +181,27 @@ CommandLineOptions parseCommandLine(const QStringList &args)
   return options;
 }
 
-QStringList displaySearchPaths()
+QStringList parseDisplaySearchPath(const QString &value, QChar separator)
 {
   QStringList searchPaths;
-  const QByteArray env = qgetenv("EPICS_DISPLAY_PATH");
-  if (!env.isEmpty()) {
-    const QStringList parts = QString::fromLocal8Bit(env).split(
-        QDir::listSeparator(), Qt::SkipEmptyParts);
-    for (const QString &part : parts) {
-      const QString trimmed = part.trimmed();
-      if (!trimmed.isEmpty()) {
-        searchPaths.push_back(trimmed);
-      }
+  const QStringList parts = value.split(separator, Qt::SkipEmptyParts);
+  for (const QString &part : parts) {
+    const QString trimmed = part.trimmed();
+    if (!trimmed.isEmpty()) {
+      searchPaths.push_back(trimmed);
     }
   }
   return searchPaths;
+}
+
+QStringList displaySearchPaths()
+{
+  const QByteArray env = qgetenv("EPICS_DISPLAY_PATH");
+  if (env.isEmpty()) {
+    return QStringList();
+  }
+  return parseDisplaySearchPath(QString::fromLocal8Bit(env),
+      QDir::listSeparator());
 }
 
 QString resolveDisplayFile(const QString &fileArgument)

@@ -1,6 +1,7 @@
 #include "display_window.h"
 
 #include "channel_access_context.h"
+#include "command_line_options.h"
 #include "extension_object_registry.h"
 #include "startup_timing.h"
 #include "audit_logger.h"
@@ -23,10 +24,39 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QJsonValue>
+#include <QProcess>
 #include <QSpinBox>
 #include <QTableWidget>
 
 namespace {
+
+class LoadAncestryGuard
+{
+public:
+  LoadAncestryGuard(QStringList &ancestry, const QString &path)
+    : ancestry_(ancestry)
+    , path_(path)
+  {
+    ancestry_.append(path_);
+  }
+
+  ~LoadAncestryGuard()
+  {
+    if (ancestry_.isEmpty() || ancestry_.constLast() != path_) {
+      Q_ASSERT_X(false, "LoadAncestryGuard",
+          "display load ancestry changed out of order");
+      return;
+    }
+    ancestry_.removeLast();
+  }
+
+  LoadAncestryGuard(const LoadAncestryGuard &) = delete;
+  LoadAncestryGuard &operator=(const LoadAncestryGuard &) = delete;
+
+private:
+  QStringList &ancestry_;
+  QString path_;
+};
 
 void writeNtNdArrayImageAdl(QTextStream &stream, int level,
     const NtNdArrayImageElement *image, const QRect &geometry)
@@ -1762,7 +1792,6 @@ void DisplayWindow::exportStripChartData(StripChartElement *stripChart)
 
   bool success = false;
   const int sampleCount = stripChart->sampleCount();
-  const double interval = stripChart->sampleIntervalSeconds();
   const int penCount = stripChart->penCount();
 
   // Gather pen information
@@ -1803,13 +1832,17 @@ void DisplayWindow::exportStripChartData(StripChartElement *stripChart)
 
   QTextStream stream(&file);
   setUtf8Encoding(stream);
+  qint64 firstTimestampMs = 0;
+  for (int s = 0; s < sampleCount; ++s) {
+    const qint64 timestampMs = stripChart->sampleTimestampMs(s);
+    if (timestampMs > 0) {
+      firstTimestampMs = timestampMs;
+      break;
+    }
+  }
 
   if (suffix == QStringLiteral("sdds")) {
     // Export as SDDS format
-    // Get current epoch time for EPOCHTIME column (with millisecond precision)
-    const double currentEpochTime =
-        static_cast<double>(QDateTime::currentMSecsSinceEpoch()) / 1000.0;
-
     stream << QStringLiteral("SDDS1\n");
     stream << QStringLiteral("&description text=\"Strip Chart Data Export from QtEDM\", "
         "contents=\"strip chart data\" &end\n");
@@ -1840,11 +1873,17 @@ void DisplayWindow::exportStripChartData(StripChartElement *stripChart)
 
     // Write data rows
     for (int s = 0; s < sampleCount; ++s) {
-      // Time is relative, oldest sample at time 0
-      const double time = static_cast<double>(s) * interval;
-      const double epochTime = currentEpochTime + time;
-      stream << QString::number(time, 'g', 15);
-      stream << QStringLiteral(" ") << QString::number(epochTime, 'f', 6);
+      const qint64 timestampMs = stripChart->sampleTimestampMs(s);
+      if (timestampMs > 0 && firstTimestampMs > 0) {
+        const double time = static_cast<double>(timestampMs - firstTimestampMs)
+            / 1000.0;
+        stream << QString::number(time, 'g', 15);
+        stream << QStringLiteral(" ")
+               << QString::number(static_cast<double>(timestampMs) / 1000.0,
+                   'f', 6);
+      } else {
+        stream << QStringLiteral("nan nan");
+      }
       for (int pi : activePenIndices) {
         double value = stripChart->sampleValue(pi, s);
         stream << QStringLiteral(" ");
@@ -1859,10 +1898,6 @@ void DisplayWindow::exportStripChartData(StripChartElement *stripChart)
     success = true;
   } else {
     // Export as CSV format
-    // Get current epoch time for EPOCHTIME column (with millisecond precision)
-    const double currentEpochTime =
-        static_cast<double>(QDateTime::currentMSecsSinceEpoch()) / 1000.0;
-
     // Header row
     stream << QStringLiteral("Time,EPOCHTIME");
     for (const QString &ch : channelNames) {
@@ -1872,10 +1907,17 @@ void DisplayWindow::exportStripChartData(StripChartElement *stripChart)
 
     // Data rows
     for (int s = 0; s < sampleCount; ++s) {
-      const double time = static_cast<double>(s) * interval;
-      const double epochTime = currentEpochTime + time;
-      stream << QString::number(time, 'g', 15);
-      stream << QStringLiteral(",") << QString::number(epochTime, 'f', 6);
+      const qint64 timestampMs = stripChart->sampleTimestampMs(s);
+      if (timestampMs > 0 && firstTimestampMs > 0) {
+        const double time = static_cast<double>(timestampMs - firstTimestampMs)
+            / 1000.0;
+        stream << QString::number(time, 'g', 15);
+        stream << QStringLiteral(",")
+               << QString::number(static_cast<double>(timestampMs) / 1000.0,
+                   'f', 6);
+      } else {
+        stream << QStringLiteral(",");
+      }
       for (int pi : activePenIndices) {
         double value = stripChart->sampleValue(pi, s);
         stream << QStringLiteral(",");
@@ -1897,7 +1939,6 @@ void DisplayWindow::exportStripChartData(StripChartElement *stripChart)
         QStringLiteral("Failed to export strip chart data to:\n%1").arg(selectedFile));
   }
 }
-
 
 void DisplayWindow::exportCartesianPlotData(CartesianPlotElement *plot)
 {
@@ -10511,6 +10552,8 @@ QList<QWidget *> DisplayWindow::findPvWidgets() const
   appendList(choiceButtonElements_);
   appendList(menuElements_);
   appendList(messageButtonElements_);
+  appendList(shellCommandElements_);
+  appendList(relatedDisplayElements_);
   appendList(meterElements_);
   appendList(barMonitorElements_);
   appendList(thermometerElements_);
@@ -19210,9 +19253,8 @@ void DisplayWindow::showExecuteContextMenu(const QPoint &globalPos)
             clickedCartesianPlot->resetZoom();
           });
     }
-    HeatmapRuntime::setGlobalUpdatesPaused(true);
+    HeatmapRuntime::UpdatePause updatePause;
     menu.exec(globalPos);
-    HeatmapRuntime::setGlobalUpdatesPaused(false);
     return;
   }
 
@@ -19396,9 +19438,8 @@ void DisplayWindow::showExecuteContextMenu(const QPoint &globalPos)
     }
   }
 
-  HeatmapRuntime::setGlobalUpdatesPaused(true);
+  HeatmapRuntime::UpdatePause updatePause;
   menu.exec(globalPos);
-  HeatmapRuntime::setGlobalUpdatesPaused(false);
 }
 
 
@@ -21223,6 +21264,15 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
     if (errorMessage) {
       *errorMessage = QStringLiteral("Failed to open %1").arg(filePath);
+    }
+    return false;
+  }
+  if (file.size() > kMaximumAdlInputBytes) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral(
+          "ADL file exceeds maximum size of %1 bytes: %2")
+          .arg(kMaximumAdlInputBytes)
+          .arg(filePath);
     }
     return false;
   }
@@ -25936,19 +25986,54 @@ bool DisplayWindow::needsGraphicDynamicLayer(const QWidget *widget) const
 
 QStringList DisplayWindow::buildDisplaySearchPaths() const
 {
-  QStringList searchPaths;
   const QByteArray env = qgetenv("EPICS_DISPLAY_PATH");
-  if (!env.isEmpty()) {
-    const QStringList parts = QString::fromLocal8Bit(env).split(
-        QLatin1Char(':'), Qt::SkipEmptyParts);
-    for (const QString &part : parts) {
-      const QString trimmed = part.trimmed();
-      if (!trimmed.isEmpty()) {
-        searchPaths.push_back(trimmed);
-      }
-    }
+  if (env.isEmpty()) {
+    return QStringList();
   }
-  return searchPaths;
+  return parseDisplaySearchPath(QString::fromLocal8Bit(env),
+      QDir::listSeparator());
+}
+
+void DisplayWindow::runShellCommand(const QString &command)
+{
+  const QString trimmed = command.trimmed();
+  if (trimmed.isEmpty()) {
+    return;
+  }
+
+  QString program;
+  QStringList arguments;
+#ifdef Q_OS_WIN
+  program = qEnvironmentVariable("COMSPEC").trimmed();
+  if (program.isEmpty()) {
+    program = QStringLiteral("cmd.exe");
+  }
+  arguments << QStringLiteral("/C") << trimmed;
+#else
+  program = QStringLiteral("/bin/sh");
+  arguments << QStringLiteral("-c") << trimmed;
+#endif
+
+  auto *process = new QProcess(this);
+  process->setProcessChannelMode(QProcess::ForwardedChannels);
+  connect(process, &QProcess::errorOccurred, process,
+      [process, trimmed](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) {
+          qWarning() << "Failed to start shell command:" << trimmed
+                     << "-" << process->errorString();
+          process->deleteLater();
+        }
+      });
+  connect(process,
+      qOverload<int, QProcess::ExitStatus>(&QProcess::finished), process,
+      [process, trimmed](int exitCode, QProcess::ExitStatus exitStatus) {
+        if (exitStatus == QProcess::CrashExit || exitCode != 0) {
+          qWarning() << "Shell command exited with status" << exitCode
+                     << ":" << trimmed;
+        }
+        process->deleteLater();
+      });
+  process->start(program, arguments);
 }
 
 QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
@@ -30551,22 +30636,6 @@ QString DisplayWindow::shellCommandDisplayTitle() const
   return windowTitle();
 }
 
-void DisplayWindow::runShellCommand(const QString &command)
-{
-  const QString trimmed = command.trimmed();
-  if (trimmed.isEmpty()) {
-    return;
-  }
-
-  QString error;
-  const int status = executeShellCommand(trimmed, &error);
-  if (status == -1) {
-    qWarning() << error << trimmed;
-  } else if (status != 0) {
-    qWarning() << error << trimmed;
-  }
-}
-
 RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
     const AdlNode &relatedNode)
 {
@@ -34506,6 +34575,19 @@ CompositeElement *DisplayWindow::loadCompositeElement(
       qWarning() << "CompositeElement: Cannot resolve composite file:"
                  << fileName;
     } else {
+      const QString canonicalPath =
+          QFileInfo(resolvedPath).canonicalFilePath();
+      const QString normalizedPath = canonicalPath.isEmpty()
+          ? QFileInfo(resolvedPath).absoluteFilePath()
+          : canonicalPath;
+      if (loadAncestry_.contains(normalizedPath)) {
+        qWarning() << "CompositeElement: Recursive composite reference:"
+                   << normalizedPath;
+        composite->expandToFitChildren();
+        return composite;
+      }
+      LoadAncestryGuard ancestryGuard(loadAncestry_, normalizedPath);
+
       /* Parse macro definitions */
       QHash<QString, QString> compositeMacros = parseMacroDefinitionString(macroString);
 
@@ -34520,6 +34602,9 @@ CompositeElement *DisplayWindow::loadCompositeElement(
       if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         qWarning() << "CompositeElement: Cannot open composite file:"
                    << resolvedPath;
+      } else if (file.size() > kMaximumAdlInputBytes) {
+        qWarning() << "CompositeElement: ADL file exceeds maximum size of"
+                   << kMaximumAdlInputBytes << "bytes:" << resolvedPath;
       } else {
         QTextStream stream(&file);
         setLatin1Encoding(stream);

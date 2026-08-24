@@ -369,6 +369,7 @@ void StripChartElement::setPeriod(double period)
     pen.samples.clear();
     pen.minSamples.clear();
     pen.maxSamples.clear();
+    pen.sampleTimestampsMs.clear();
     pen.hasIntervalRange = false;
   }
   updateSamplingGeometry(chartRect().width());
@@ -399,6 +400,7 @@ void StripChartElement::setUnits(TimeUnits units)
     pen.samples.clear();
     pen.minSamples.clear();
     pen.maxSamples.clear();
+    pen.sampleTimestampsMs.clear();
     pen.hasIntervalRange = false;
   }
   updateSamplingGeometry(chartRect().width());
@@ -631,7 +633,6 @@ void StripChartElement::setRuntimeLimits(int index, double low, double high)
 
 void StripChartElement::addRuntimeSample(int index, double value, qint64 timestampMs)
 {
-  Q_UNUSED(timestampMs);
   if (!executeMode_ || index < 0 || index >= penCount()) {
     return;
   }
@@ -645,6 +646,8 @@ void StripChartElement::addRuntimeSample(int index, double value, qint64 timesta
 
   pen.runtimeValue = value;
   pen.hasRuntimeValue = true;
+  pen.runtimeTimestampMs = timestampMs;
+  pen.hasRuntimeTimestamp = timestampMs > 0;
   if (pen.hasIntervalRange) {
     pen.intervalLow = std::min(pen.intervalLow, value);
     pen.intervalHigh = std::max(pen.intervalHigh, value);
@@ -666,6 +669,7 @@ void StripChartElement::replaceRuntimeHistory(int index,
   pen.samples.clear();
   pen.minSamples.clear();
   pen.maxSamples.clear();
+  pen.sampleTimestampsMs.clear();
   const int capacity = std::max(chartRect().width(), 1);
   const qint64 span = windowEndMs - windowStartMs;
   const qsizetype count = std::min(values.size(), timestamps.size());
@@ -674,9 +678,11 @@ void StripChartElement::replaceRuntimeHistory(int index,
     pen.samples.assign(static_cast<std::size_t>(capacity), missingValue);
     pen.minSamples.assign(static_cast<std::size_t>(capacity), missingValue);
     pen.maxSamples.assign(static_cast<std::size_t>(capacity), missingValue);
+    pen.sampleTimestampsMs.assign(static_cast<std::size_t>(capacity), 0);
   }
   bool haveSample = false;
   double lastValue = 0.0;
+  qint64 lastTimestampMs = 0;
   for (qsizetype valueIndex = 0; valueIndex < count; ++valueIndex) {
     const double value = values.at(valueIndex);
     const qint64 timestamp = timestamps.at(valueIndex);
@@ -700,19 +706,24 @@ void StripChartElement::replaceRuntimeHistory(int index,
       pen.maxSamples[sampleIndex] = value;
     }
     pen.samples[sampleIndex] = value;
+    pen.sampleTimestampsMs[sampleIndex] = timestamp;
     lastValue = value;
+    lastTimestampMs = timestamp;
     haveSample = true;
   }
   if (!haveSample) {
     pen.samples.clear();
     pen.minSamples.clear();
     pen.maxSamples.clear();
+    pen.sampleTimestampsMs.clear();
   } else {
     pen.runtimeConnected = true;
     pen.runtimeReadAccessKnown = true;
     pen.runtimeReadAccess = true;
     pen.runtimeValue = lastValue;
     pen.hasRuntimeValue = !archivePlot_ || archiveLiveMerge_;
+    pen.runtimeTimestampMs = lastTimestampMs;
+    pen.hasRuntimeTimestamp = pen.runtimeTimestampMs > 0;
   }
   int newLength = 0;
   for (const Pen &candidate : pens_) {
@@ -823,8 +834,11 @@ void StripChartElement::clearRuntimeState()
     pen.samples.clear();
     pen.minSamples.clear();
     pen.maxSamples.clear();
+    pen.sampleTimestampsMs.clear();
     pen.runtimeValue = 0.0;
     pen.hasRuntimeValue = false;
+    pen.runtimeTimestampMs = 0;
+    pen.hasRuntimeTimestamp = false;
     pen.hasIntervalRange = false;
   }
   invalidatePenCache();
@@ -846,6 +860,8 @@ void StripChartElement::clearPenRuntimeState(int index)
   pen.runtimeHigh = pen.limits.highDefault;
   pen.runtimeValue = 0.0;
   pen.hasRuntimeValue = false;
+  pen.runtimeTimestampMs = 0;
+  pen.hasRuntimeTimestamp = false;
   pen.hasIntervalRange = false;
   const double missingValue = std::numeric_limits<double>::quiet_NaN();
   if (sampleHistoryLength_ > 0) {
@@ -855,10 +871,13 @@ void StripChartElement::clearPenRuntimeState(int index)
         missingValue);
     pen.maxSamples.assign(static_cast<std::size_t>(sampleHistoryLength_),
         missingValue);
+    pen.sampleTimestampsMs.assign(
+        static_cast<std::size_t>(sampleHistoryLength_), 0);
   } else {
     pen.samples.clear();
     pen.minSamples.clear();
     pen.maxSamples.clear();
+    pen.sampleTimestampsMs.clear();
   }
 }
 
@@ -877,6 +896,24 @@ double StripChartElement::sampleValue(int penIndex, int sampleIndex) const
     return std::numeric_limits<double>::quiet_NaN();
   }
   return pen.samples[static_cast<std::size_t>(sampleIndex)];
+}
+
+qint64 StripChartElement::sampleTimestampMs(int sampleIndex) const
+{
+  if (sampleIndex < 0) {
+    return 0;
+  }
+  qint64 latestTimestampMs = 0;
+  for (const Pen &pen : pens_) {
+    const std::size_t index = static_cast<std::size_t>(sampleIndex);
+    if (index >= pen.samples.size() || index >= pen.sampleTimestampsMs.size()
+        || !std::isfinite(pen.samples[index])) {
+      continue;
+    }
+    latestTimestampMs = std::max(latestTimestampMs,
+        pen.sampleTimestampsMs[index]);
+  }
+  return latestTimestampMs;
 }
 
 double StripChartElement::sampleIntervalSeconds() const
@@ -2131,6 +2168,9 @@ void StripChartElement::enforceSampleCapacity(int capacity)
     sampleHistoryLength_ = 0;
     for (Pen &pen : pens_) {
       pen.samples.clear();
+      pen.minSamples.clear();
+      pen.maxSamples.clear();
+      pen.sampleTimestampsMs.clear();
     }
     return;
   }
@@ -2145,6 +2185,9 @@ void StripChartElement::enforceSampleCapacity(int capacity)
     }
     while (static_cast<int>(pen.maxSamples.size()) > capacity) {
       pen.maxSamples.pop_front();
+    }
+    while (static_cast<int>(pen.sampleTimestampsMs.size()) > capacity) {
+      pen.sampleTimestampsMs.pop_front();
     }
     newLength = std::max(newLength, static_cast<int>(pen.samples.size()));
   }
@@ -2240,6 +2283,8 @@ void StripChartElement::appendSampleColumn()
     pen.samples.push_back(sampleValue);
     pen.minSamples.push_back(sampleLow);
     pen.maxSamples.push_back(sampleHigh);
+    pen.sampleTimestampsMs.push_back(
+        pen.hasRuntimeTimestamp ? pen.runtimeTimestampMs : 0);
     if (static_cast<int>(pen.samples.size()) > capacity) {
       pen.samples.pop_front();
     }
@@ -2248,6 +2293,9 @@ void StripChartElement::appendSampleColumn()
     }
     if (static_cast<int>(pen.maxSamples.size()) > capacity) {
       pen.maxSamples.pop_front();
+    }
+    if (static_cast<int>(pen.sampleTimestampsMs.size()) > capacity) {
+      pen.sampleTimestampsMs.pop_front();
     }
     if (pen.runtimeConnected && pen.hasRuntimeValue) {
       pen.intervalLow = pen.runtimeValue;

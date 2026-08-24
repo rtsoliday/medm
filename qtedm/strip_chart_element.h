@@ -23,6 +23,8 @@ class QResizeEvent;
 
 class StripChartElement : public QWidget
 {
+  friend class TestObserveOnlyControls;
+
 public:
   explicit StripChartElement(QWidget *parent = nullptr);
 
@@ -89,6 +91,7 @@ public:
   // Data export methods
   int sampleCount() const;
   double sampleValue(int penIndex, int sampleIndex) const;
+  qint64 sampleTimestampMs(int sampleIndex) const;
   double sampleIntervalSeconds() const;
   bool penHasData(int index) const;
 
@@ -149,8 +152,11 @@ private:
     std::deque<double> samples;
     std::deque<double> minSamples;
     std::deque<double> maxSamples;
+    std::deque<qint64> sampleTimestampsMs;
     double runtimeValue = 0.0;
     bool hasRuntimeValue = false;
+    qint64 runtimeTimestampMs = 0;
+    bool hasRuntimeTimestamp = false;
     double intervalLow = 0.0;
     double intervalHigh = 0.0;
     bool hasIntervalRange = false;

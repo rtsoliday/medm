@@ -85,9 +85,13 @@ void SoftPvRegistry::registerName(const QString &name, bool writable)
   if (writable) {
     ++entry->writableProducerCount;
   }
+
+  ++entry->dispatchDepth;
   if (wasWritable != (entry->writableProducerCount > 0)) {
     dispatchAccessRightsCallbacks(entry);
   }
+  --entry->dispatchDepth;
+  cleanupEntryIfUnused(entry);
 }
 
 void SoftPvRegistry::unregisterName(const QString &name, bool writable)
@@ -110,10 +114,14 @@ void SoftPvRegistry::unregisterName(const QString &name, bool writable)
   if (entry->connectedProducerCount > entry->producerCount) {
     entry->connectedProducerCount = entry->producerCount;
   }
+
+  /* A callback may remove the last subscriber while this function still
+   * needs the entry.  Keep it alive until the final cleanup below. */
+  ++entry->dispatchDepth;
   if (wasWritable != (entry->writableProducerCount > 0)) {
     dispatchAccessRightsCallbacks(entry);
   }
-
+  --entry->dispatchDepth;
   cleanupEntryIfUnused(entry);
 }
 
@@ -309,7 +317,11 @@ void SoftPvRegistry::setConnected(const QString &name, bool connected)
     clearValue(entry);
   }
 
+  /* A disconnect callback may unregister the final producer and subscriber.
+   * Keep the entry alive until this caller has finished with it. */
+  ++entry->dispatchDepth;
   dispatchConnectionCallbacks(entry);
+  --entry->dispatchDepth;
   cleanupEntryIfUnused(entry);
 }
 
@@ -688,10 +700,6 @@ void SoftPvRegistry::dispatchAccessRightsCallbacks(Entry *entry)
     }
   }
   --entry->dispatchDepth;
-
-  if (entry->dispatchDepth == 0 && entry->cleanupPending) {
-    cleanupEntryIfUnused(entry);
-  }
 }
 
 void SoftPvRegistry::dispatchConnectionCallbacks(Entry *entry)
@@ -714,10 +722,6 @@ void SoftPvRegistry::dispatchConnectionCallbacks(Entry *entry)
     }
   }
   --entry->dispatchDepth;
-
-  if (entry->dispatchDepth == 0 && entry->cleanupPending) {
-    cleanupEntryIfUnused(entry);
-  }
 }
 
 void SoftPvRegistry::dispatchValueCallbacks(Entry *entry,

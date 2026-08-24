@@ -5,6 +5,7 @@
  */
 
 #include "audit_log_viewer_dialog.h"
+#include "audit_logger.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -297,8 +298,9 @@ QStringList AuditLogViewerDialog::findUserLogFiles() const
           continue;
         }
         /* Check if data line contains current user */
-        QStringList parts = line.split(QLatin1Char('|'));
-        if (parts.size() >= 2 && parts.at(1) == currentUser_) {
+        QStringList parts;
+        if (AuditLogger::decodeLogRecord(line, &parts)
+            && parts.at(1) == currentUser_) {
           hasUserEntries = true;
           break;
         }
@@ -442,8 +444,8 @@ void AuditLogViewerDialog::loadSelectedLog()
     }
 
     /* Parse data line: timestamp|user|widgetType|pvName|value|displayFile */
-    QStringList parts = line.split(QLatin1Char('|'));
-    if (parts.size() >= 6) {
+    QStringList parts;
+    if (AuditLogger::decodeLogRecord(line, &parts)) {
       QString user = parts.at(1);
       /* Only show entries for the current user */
       if (user == currentUser_) {
@@ -452,11 +454,6 @@ void AuditLogViewerDialog::loadSelectedLog()
         QString pvName = parts.at(3);
         QString value = parts.at(4);
         QString displayFile = parts.at(5);
-
-        /* Unescape value */
-        value.replace(QStringLiteral("\\|"), QStringLiteral("|"));
-        value.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
-        value.replace(QStringLiteral("\\r"), QStringLiteral("\r"));
 
         /* Truncate long values for display */
         if (value.length() > 25) {
@@ -583,8 +580,8 @@ void AuditLogViewerDialog::performSearch()
       }
 
       /* Parse data line: timestamp|user|widgetType|pvName|value|displayFile */
-      QStringList parts = line.split(QLatin1Char('|'));
-      if (parts.size() >= 6) {
+      QStringList parts;
+      if (AuditLogger::decodeLogRecord(line, &parts)) {
         QString user = parts.at(1);
         /* Only show entries for the current user */
         if (user != currentUser_) {
@@ -610,11 +607,6 @@ void AuditLogViewerDialog::performSearch()
         QString widgetType = parts.at(2);
         QString value = parts.at(4);
         QString displayFile = parts.at(5);
-
-        /* Unescape value */
-        value.replace(QStringLiteral("\\|"), QStringLiteral("|"));
-        value.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
-        value.replace(QStringLiteral("\\r"), QStringLiteral("\r"));
 
         /* Truncate long values for display */
         if (value.length() > 25) {

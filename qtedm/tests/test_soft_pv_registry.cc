@@ -11,6 +11,8 @@ private slots:
   void arrayInfoSnapshotsIncludePayloads();
   void deliveryModesCoalesceAndRetainNewestValue();
   void callbackMayRemoveLastProducerAndSubscription();
+  void accessCallbackMayRemoveLastProducerAndSubscription();
+  void connectionCallbackMayRemoveLastProducerAndSubscription();
 };
 
 void TestSoftPvRegistry::expressionChannelInfoRoundTrips()
@@ -157,6 +159,60 @@ void TestSoftPvRegistry::callbackMayRemoveLastProducerAndSubscription()
 
   registry.publishValue(name, 1.0);
   QCOMPARE(callbacks, 1);
+
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(!registry.infoSnapshot(name, snapshot));
+}
+
+void TestSoftPvRegistry::accessCallbackMayRemoveLastProducerAndSubscription()
+{
+  auto &registry = SoftPvRegistry::instance();
+  const QString name = QStringLiteral("__test:self_removing_access");
+  registry.registerName(name, true);
+
+  int callbacks = 0;
+  SubscriptionHandle subscription;
+  subscription = registry.subscribe(name, nullptr, nullptr,
+      [&](bool readAccess, bool writeAccess) {
+        QVERIFY(readAccess);
+        ++callbacks;
+        if (!writeAccess) {
+          subscription.reset();
+        }
+      });
+
+  QCOMPARE(callbacks, 1);
+  registry.unregisterName(name, true);
+  QCOMPARE(callbacks, 2);
+  QVERIFY(!subscription.isValid());
+
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(!registry.infoSnapshot(name, snapshot));
+}
+
+void TestSoftPvRegistry::
+    connectionCallbackMayRemoveLastProducerAndSubscription()
+{
+  auto &registry = SoftPvRegistry::instance();
+  const QString name = QStringLiteral("__test:self_removing_connection");
+  registry.registerName(name);
+  registry.setConnected(name, true);
+
+  int callbacks = 0;
+  SubscriptionHandle subscription;
+  subscription = registry.subscribe(name, nullptr,
+      [&](bool connected, const SharedChannelData &) {
+        ++callbacks;
+        if (!connected) {
+          registry.unregisterName(name);
+          subscription.reset();
+        }
+      });
+
+  QCOMPARE(callbacks, 1);
+  registry.setConnected(name, false);
+  QCOMPARE(callbacks, 2);
+  QVERIFY(!subscription.isValid());
 
   SoftPvInfoSnapshot snapshot;
   QVERIFY(!registry.infoSnapshot(name, snapshot));

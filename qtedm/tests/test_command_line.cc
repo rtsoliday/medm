@@ -45,7 +45,9 @@ private slots:
   void parsesSession();
   void usesEnvironmentOverrides();
   void resolvesDisplayFilesFromSearchPath();
+  void parsesPlatformSpecificDisplaySearchPaths();
   void parsesMacrosAndGeometry();
+  void requiredOptionValuesAreNotSwallowed();
   void parsesTestAutomationOptions();
 };
 
@@ -142,6 +144,18 @@ void TestCommandLine::resolvesDisplayFilesFromSearchPath()
   QCOMPARE(resolved.first(), QFileInfo(file.fileName()).absoluteFilePath());
 }
 
+void TestCommandLine::parsesPlatformSpecificDisplaySearchPaths()
+{
+  QCOMPARE(parseDisplaySearchPath(
+      QStringLiteral(" C:\\screens ; D:\\operator ;; "), QLatin1Char(';')),
+      QStringList({QStringLiteral("C:\\screens"),
+                   QStringLiteral("D:\\operator")}));
+  QCOMPARE(parseDisplaySearchPath(
+      QStringLiteral(" /opt/screens:/usr/local/screens "), QLatin1Char(':')),
+      QStringList({QStringLiteral("/opt/screens"),
+                   QStringLiteral("/usr/local/screens")}));
+}
+
 void TestCommandLine::parsesMacrosAndGeometry()
 {
   const MacroMap macros = parseMacroDefinitionString(
@@ -166,6 +180,39 @@ void TestCommandLine::parsesMacrosAndGeometry()
   QVERIFY(spec->xFromRight);
   QVERIFY(!spec->yFromBottom);
   QVERIFY(!geometrySpecFromString(QStringLiteral("bogus")).has_value());
+}
+
+void TestCommandLine::requiredOptionValuesAreNotSwallowed()
+{
+  const CommandLineOptions missingMacro = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"), QStringLiteral("-macro"),
+      QStringLiteral("-x"), QStringLiteral("screen.adl")});
+  QCOMPARE(missingMacro.invalidOption, QStringLiteral("-macro"));
+  QVERIFY(missingMacro.startInExecuteMode);
+  QCOMPARE(missingMacro.displayFiles,
+      QStringList({QStringLiteral("screen.adl")}));
+
+  const CommandLineOptions missingGeometry = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"), QStringLiteral("-dg"),
+      QStringLiteral("-x"), QStringLiteral("screen.adl")});
+  QCOMPARE(missingGeometry.invalidOption, QStringLiteral("-dg"));
+  QVERIFY(missingGeometry.startInExecuteMode);
+  QCOMPARE(missingGeometry.displayFiles,
+      QStringList({QStringLiteral("screen.adl")}));
+
+  const CommandLineOptions invalidGeometry = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"), QStringLiteral("-displayGeometry"),
+      QStringLiteral("screen.adl")});
+  QCOMPARE(invalidGeometry.invalidOption,
+      QStringLiteral("-displayGeometry"));
+  QCOMPARE(invalidGeometry.displayFiles,
+      QStringList({QStringLiteral("screen.adl")}));
+
+  const CommandLineOptions negativePosition = parseCommandLine(QStringList{
+      QStringLiteral("qtedm"), QStringLiteral("-dg"),
+      QStringLiteral("-15+25")});
+  QVERIFY(negativePosition.invalidOption.isEmpty());
+  QCOMPARE(negativePosition.displayGeometry, QStringLiteral("-15+25"));
 }
 
 void TestCommandLine::parsesTestAutomationOptions()

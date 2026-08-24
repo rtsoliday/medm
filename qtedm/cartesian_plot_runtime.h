@@ -24,6 +24,7 @@ class DisplayWindow;
 class CartesianPlotRuntime : public QObject
 {
   friend class DisplayWindow;
+  friend class TestObserveOnlyControls;
 public:
   explicit CartesianPlotRuntime(CartesianPlotElement *element);
   ~CartesianPlotRuntime() override;
@@ -142,7 +143,8 @@ private:
   void logConfiguredAxisState();
   static bool areAxisLimitsUsable(double low, double high);
 
-  static QVector<double> extractValues(const SharedChannelData &data);
+  static QVector<double> extractValues(const SharedChannelData &data,
+      int maximumValues);
 
   QPointer<CartesianPlotElement> element_;
   std::array<TraceState, kCartesianPlotTraceCount> traces_{};

@@ -41,6 +41,12 @@ bool shouldClearOnTransition(double previous, double current,
   return previousZero && !currentZero;
 }
 
+int boundedNativeElementCount(long elementCount)
+{
+  return static_cast<int>(std::clamp<long>(elementCount, 1,
+      static_cast<long>(std::numeric_limits<int>::max())));
+}
+
 } // namespace
 
 WaterfallPlotRuntime::WaterfallPlotRuntime(WaterfallPlotElement *element)
@@ -183,7 +189,7 @@ void WaterfallPlotRuntime::handleConnection(ChannelState &state,
         });
         return;
       }
-      const int nativeLength = std::max<long>(1, state.elementCount);
+      const int nativeLength = boundedNativeElementCount(state.elementCount);
       invokeOnElement([nativeLength](WaterfallPlotElement *element) {
         element->setRuntimeWaveformLength(nativeLength);
         element->setRuntimeConnected(true);
@@ -226,13 +232,15 @@ void WaterfallPlotRuntime::handleDataValue(const SharedChannelData &data)
 
   if (data.isArray) {
     if (data.sharedArrayData && data.sharedArraySize > 0) {
-      latestWaveform_ = QVector<double>(static_cast<int>(data.sharedArraySize));
+      const size_t boundedSize = std::min(data.sharedArraySize,
+          static_cast<size_t>(kWaterfallMaxColumns));
+      latestWaveform_ = QVector<double>(static_cast<int>(boundedSize));
       const double *source = data.sharedArrayData.get();
       for (int i = 0; i < latestWaveform_.size(); ++i) {
         latestWaveform_[i] = source[i];
       }
     } else {
-      latestWaveform_ = data.arrayValues;
+      latestWaveform_ = data.arrayValues.mid(0, kWaterfallMaxColumns);
     }
   } else {
     latestWaveform_.resize(1);
@@ -242,9 +250,9 @@ void WaterfallPlotRuntime::handleDataValue(const SharedChannelData &data)
       ? epicsTimestampToMs(data.timestamp)
       : QDateTime::currentMSecsSinceEpoch();
 
-  const int runtimeLength = std::max<long>(1,
-      std::max(data.nativeElementCount,
-          static_cast<long>(latestWaveform_.size())));
+  const long observedLength = std::max(data.nativeElementCount,
+      static_cast<long>(latestWaveform_.size()));
+  const int runtimeLength = boundedNativeElementCount(observedLength);
   invokeOnElement([runtimeLength](WaterfallPlotElement *element) {
     element->setRuntimeWaveformLength(runtimeLength);
     element->setRuntimeConnected(true);

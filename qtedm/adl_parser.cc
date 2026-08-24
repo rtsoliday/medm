@@ -20,11 +20,14 @@ class Parser
 
 public:
 
-  Parser(const QString &text, QString *errorMessage)
+  Parser(const QString &text, QString *errorMessage,
+      int maximumNestingDepth)
 
     : text_(text)
 
     , errorMessage_(errorMessage)
+
+    , maximumNestingDepth_(maximumNestingDepth)
 
   {
 
@@ -44,7 +47,7 @@ public:
 
     while (!atEnd()) {
 
-      std::optional<AdlNode> child = parseNode();
+      std::optional<AdlNode> child = parseNode(0);
 
       if (!child) {
 
@@ -312,7 +315,7 @@ private:
 
 
 
-  std::optional<AdlNode> parseNode()
+  std::optional<AdlNode> parseNode(int depth)
 
   {
 
@@ -387,6 +390,16 @@ private:
 
     }
 
+    if (depth >= maximumNestingDepth_) {
+
+      setError(QStringLiteral("ADL nesting depth exceeds maximum of %1")
+
+          .arg(maximumNestingDepth_));
+
+      return std::nullopt;
+
+    }
+
 
 
     ++index_; // consume '{'
@@ -423,7 +436,7 @@ private:
 
       }
 
-      std::optional<AdlNode> entry = parseNode();
+      std::optional<AdlNode> entry = parseNode(depth + 1);
 
       if (!entry) {
 
@@ -473,6 +486,8 @@ private:
 
   QString *errorMessage_ = nullptr;
 
+  int maximumNestingDepth_ = kMaximumAdlNestingDepth;
+
   int index_ = 0;
 
   bool parseError_ = false;
@@ -488,7 +503,15 @@ private:
 std::optional<AdlNode> AdlParser::parse(const QString &text,
     QString *errorMessage)
 {
-  Parser parser(text, errorMessage);
+  if (text.size() > kMaximumAdlInputCharacters) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral(
+          "ADL input exceeds maximum size of %1 characters")
+          .arg(kMaximumAdlInputCharacters);
+    }
+    return std::nullopt;
+  }
+  Parser parser(text, errorMessage, kMaximumAdlNestingDepth);
   return parser.parse();
 }
 

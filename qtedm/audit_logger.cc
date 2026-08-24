@@ -160,20 +160,83 @@ void AuditLogger::logPut(const QString &pvName,
   QString timestamp = QDateTime::currentDateTime().toString(Qt::ISODate);
   QString display = displayFile.isEmpty() ? QStringLiteral("-") : displayFile;
 
-  /* Escape pipe characters in value */
-  QString safeValue = value;
-  safeValue.replace(QLatin1Char('|'), QStringLiteral("\\|"));
-  safeValue.replace(QLatin1Char('\n'), QStringLiteral("\\n"));
-  safeValue.replace(QLatin1Char('\r'), QStringLiteral("\\r"));
-
   QTextStream stream(logFile_.get());
-  stream << timestamp << "|"
-         << currentUser_ << "|"
-         << widgetType << "|"
-         << pvName << "|"
-         << safeValue << "|"
-         << display << "\n";
+  stream << encodeLogField(timestamp) << "|"
+         << encodeLogField(currentUser_) << "|"
+         << encodeLogField(widgetType) << "|"
+         << encodeLogField(pvName) << "|"
+         << encodeLogField(value) << "|"
+         << encodeLogField(display) << "\n";
   stream.flush();
+}
+
+QString AuditLogger::encodeLogField(const QString &value)
+{
+  QString encoded;
+  encoded.reserve(value.size());
+  for (QChar ch : value) {
+    if (ch == QLatin1Char('\\')) {
+      encoded.append(QStringLiteral("\\\\"));
+    } else if (ch == QLatin1Char('|')) {
+      encoded.append(QStringLiteral("\\|"));
+    } else if (ch == QLatin1Char('\n')) {
+      encoded.append(QStringLiteral("\\n"));
+    } else if (ch == QLatin1Char('\r')) {
+      encoded.append(QStringLiteral("\\r"));
+    } else {
+      encoded.append(ch);
+    }
+  }
+  return encoded;
+}
+
+bool AuditLogger::decodeLogRecord(const QString &line, QStringList *fields)
+{
+  if (!fields) {
+    return false;
+  }
+
+  fields->clear();
+  QString field;
+  bool escaped = false;
+  for (QChar ch : line) {
+    if (escaped) {
+      const bool valueField = fields->size() == 4;
+      if (valueField && ch == QLatin1Char('n')) {
+        field.append(QLatin1Char('\n'));
+      } else if (valueField && ch == QLatin1Char('r')) {
+        field.append(QLatin1Char('\r'));
+      } else if (ch == QLatin1Char('|') || ch == QLatin1Char('\\')) {
+        field.append(ch);
+      } else {
+        field.append(QLatin1Char('\\'));
+        field.append(ch);
+      }
+      escaped = false;
+    } else if (ch == QLatin1Char('\\')) {
+      escaped = true;
+    } else if (ch == QLatin1Char('|')) {
+      fields->append(field);
+      field.clear();
+    } else {
+      field.append(ch);
+    }
+  }
+  if (escaped) {
+    field.append(QLatin1Char('\\'));
+  }
+  fields->append(field);
+
+  if (fields->size() < 6) {
+    fields->clear();
+    return false;
+  }
+  if (fields->size() > 6) {
+    const QString display = fields->mid(5).join(QLatin1Char('|'));
+    *fields = fields->mid(0, 5);
+    fields->append(display);
+  }
+  return true;
 }
 
 void AuditLogger::logPut(const QString &pvName,

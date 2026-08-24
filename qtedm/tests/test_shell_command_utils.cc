@@ -24,7 +24,8 @@ void TestShellCommandUtils::expandsMedmTokensAndPreservesUnknownTokens()
   context.displayPath = QStringLiteral("/displays/main.adl");
   context.displayTitle = QStringLiteral("main.adl");
   context.windowId = 12345;
-  context.pvNames = {QStringLiteral("pv:a"), QStringLiteral("pv:b")};
+  context.pvNames = QStringList{
+      QStringLiteral("pv:a"), QStringLiteral("pv:b")};
   QString output;
   QString error;
   QVERIFY(expandShellCommandTokens(

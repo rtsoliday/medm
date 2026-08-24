@@ -116,7 +116,7 @@ void TestTextEntryRuntime::parsesEnumLabelsAndNumericRepresentations()
 {
   TextEntryElement element;
   TextEntryRuntime runtime(&element);
-  runtime.enumStrings_ = {
+  runtime.enumStrings_ = QStringList{
       QStringLiteral("Idle"), QStringLiteral("Running"),
       QStringLiteral("Complete")};
 

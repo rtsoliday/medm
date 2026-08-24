@@ -106,7 +106,9 @@ QByteArray serializeCartesianPlotData(const CartesianPlotElement &plot,
 
   QByteArray data;
   QBuffer buffer(&data);
-  if (!buffer.open(QIODevice::WriteOnly | QIODevice::Text)) {
+  /* Newlines are emitted explicitly so exports remain byte-for-byte
+   * identical across platforms. */
+  if (!buffer.open(QIODevice::WriteOnly)) {
     if (errorMessage) {
       *errorMessage = buffer.errorString();
     }

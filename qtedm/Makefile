@@ -12,6 +12,8 @@ include ../Makefile.rules
 
 .DEFAULT_GOAL := all
 
+PYTHON ?= python3
+
 # Detect if libCom.a was built with readline support by checking for an
 # unresolved readline symbol in the EPICS archive for the active platform.
 LIBCOM_PATH := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a
@@ -272,7 +274,6 @@ else
 endif
 
 ifeq ($(OS), Windows)
-  QT_TEST_CFLAGS :=
   QT_TEST_LIBS := Qt$(QT_VERSION)Test.lib
   QT_TEST_AVAILABLE := 1
 else
@@ -388,6 +389,8 @@ ifeq ($(OS), Windows)
 $(PVA_CXX17_OBJS): CCFLAGS := $(filter-out /std:c++20 /permissive-,$(CCFLAGS)) /std:c++17
 
 $(OBJ_DIR)/pva_ntndarray_source.$(OBJEXT): CCFLAGS := $(filter-out /std:c++20,$(CCFLAGS)) /std:c++17 /Zc:twoPhase-
+
+$(OBJ_DIR)/test_display_import_ndarray.$(OBJEXT): CCFLAGS := $(filter-out /std:c++20,$(CCFLAGS)) /std:c++17 /Zc:twoPhase-
 endif
 
 ifeq ($(QTEDM_PCH_ENABLED),1)
@@ -698,7 +701,7 @@ tests: test
 test: test-cli test-unit test-ioc test-visual
 
 test-unit: build-tests
-	@python3 ../tests/validate_qtedm_coverage.py
+	@$(PYTHON) ../tests/validate_qtedm_coverage.py
 	@set -e; \
 	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/qtedm-unit.XXXXXX"); \
 	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \

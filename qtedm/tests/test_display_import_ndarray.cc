@@ -24,6 +24,10 @@
 #include "pva_ntndarray_source.h"
 #include "adl_parser.h"
 
+bool pvaNtNdArrayExtractFrame(
+    const epics::pvData::PVStructurePtr &root,
+    NtNdArrayFrame *frame, QString *error);
+
 namespace {
 
 template <typename T>

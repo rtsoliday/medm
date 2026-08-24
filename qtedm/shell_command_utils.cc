@@ -57,7 +57,16 @@ int executeShellCommand(const QString &command, QString *errorMessage)
     }
     return -1;
   }
-  const int status = std::system(trimmed.toLocal8Bit().constData());
+  QByteArray nativeCommand = trimmed.toLocal8Bit();
+#ifdef Q_OS_WIN
+  /* cmd.exe strips the first quote from a /c command unless a quoted
+   * executable command line is enclosed in an additional pair. */
+  if (trimmed.startsWith(QLatin1Char('"'))) {
+    nativeCommand.prepend('"');
+    nativeCommand.append('"');
+  }
+#endif
+  const int status = std::system(nativeCommand.constData());
   if (status == -1 && errorMessage) {
     *errorMessage = QStringLiteral("Failed to start the shell command.");
   } else if (status != 0 && errorMessage) {

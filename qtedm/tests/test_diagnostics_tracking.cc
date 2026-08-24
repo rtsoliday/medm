@@ -97,15 +97,13 @@ void TestDiagnosticsTracking::memoryTrackerParsesConfigurationAndWritesCsv()
   QVERIFY(directory.isValid());
   const QString path = directory.filePath(QStringLiteral("memory.csv"));
   qputenv("TRACK_MEM", QByteArray("1:") + path.toUtf8());
-  {
-    MemoryTracker tracker;
-    QVERIFY(tracker.isEnabled());
-    QCOMPARE(tracker.intervalSeconds_, 1);
-    QCOMPARE(tracker.logFilePath_, path);
-    tracker.start();
-    tracker.logNow();
-    tracker.stop();
-  }
+  MemoryTracker &tracker = MemoryTracker::instance();
+  QVERIFY(tracker.isEnabled());
+  QCOMPARE(tracker.intervalSeconds_, 1);
+  QCOMPARE(tracker.logFilePath_, path);
+  tracker.start();
+  tracker.logNow();
+  tracker.stop();
   qunsetenv("TRACK_MEM");
 
   QFile file(path);

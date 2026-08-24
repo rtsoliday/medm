@@ -26,7 +26,7 @@ QVector<QByteArray> chunkRemoteDisplayRequest(const QByteArray &encoded,
   }
   for (int offset = 0; offset < encoded.size(); offset += chunkSize) {
     QByteArray chunk = encoded.mid(offset, chunkSize);
-    chunk.resize(chunkSize, ' ');
+    chunk.append(QByteArray(chunkSize - chunk.size(), ' '));
     chunks.append(chunk);
   }
   return chunks;

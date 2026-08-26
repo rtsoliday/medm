@@ -157,7 +157,7 @@
 <h1>QtEDM Reference Manual</h1>
 
 <p class="author">Robert Soliday</p>
-<p class="date">March 2026</p>
+<p class="date">Updated August 2026</p>
 <p class="affiliation">Advanced Photon Source</p>
 <p class="affiliation">Argonne National Laboratory</p>
 
@@ -182,7 +182,7 @@
 
 <h2><a name="Introduction"></a>Introduction</h2>
 
-<p>QtEDM (Qt Editor and Display Manager) is a modern Qt5-based reimplementation of MEDM, the classic Motif Editor and Display Manager for EPICS control systems. QtEDM provides a graphical user interface for designing and operating control screens that interact with EPICS process variables through Channel Access.</p>
+<p>QtEDM (Qt Editor and Display Manager) is a modern Qt5/Qt6 reimplementation of MEDM, the classic Motif Editor and Display Manager for EPICS control systems. QtEDM provides a graphical user interface for designing and operating control screens that interact with EPICS process variables through Channel Access (CA), PVAccess (PVA), and configured local data-provider plugins.</p>
 
 <p>Like MEDM, QtEDM uses ADL (ASCII Display List) files to define displays. These files describe the layout, appearance, and behavior of graphical objects that present and/or modify EPICS process variables. Typical widgets include buttons, meters, sliders, text fields, strip charts, Cartesian plots, and QtEDM-specific extensions such as expression channels.</p>
 
@@ -197,8 +197,8 @@
 <p>QtEDM is designed as a drop-in replacement for MEDM for the standard MEDM ADL feature set. It reads and writes the same core ADL format, while also supporting a small number of QtEDM-only extensions. The primary differences are:</p>
 
 <ul>
-  <li><strong>Modern GUI toolkit</strong> &ndash; Qt5 instead of Motif/X11</li>
-  <li><strong>Cross-platform potential</strong> &ndash; Qt enables easier porting to different platforms</li>
+  <li><strong>Modern GUI toolkit</strong> &ndash; Qt6 or Qt5 instead of Motif/X11</li>
+  <li><strong>Cross-platform runtime</strong> &ndash; Native Linux, macOS, and Windows builds</li>
   <li><strong>Improved rendering</strong> &ndash; Better font handling and anti-aliased graphics</li>
   <li><strong>Active development</strong> &ndash; Ongoing maintenance alongside the legacy MEDM</li>
 </ul>
@@ -210,14 +210,18 @@
 <p>QtEDM requires the following:</p>
 
 <ul>
-  <li><strong>Qt5</strong> &ndash; Version 5.12 or later (Qt6 is also supported)</li>
+  <li><strong>Qt</strong> &ndash; Qt6 is preferred; Qt5 is supported as a fallback. Core, Widgets, Print Support, SVG, Network, and the matching <code>moc</code>/<code>rcc</code> development tools are required.</li>
   <li><strong>EPICS Base</strong> &ndash; Version 7.0 or later, with Channel Access support</li>
-  <li><strong>SDDS Library</strong> &ndash; Required for building</li>
-  <li><strong>X11</strong> &ndash; On Linux/Unix systems for certain window management features</li>
-  <li><strong>C++11 compiler</strong> &ndash; GCC 4.9+, Clang 3.4+, or equivalent</li>
+  <li><strong>SDDS source tree</strong> &ndash; Required for the shared support libraries and SDDS plot export</li>
+  <li><strong>C++17 compiler</strong> &ndash; A compiler supported by the selected Qt and EPICS builds</li>
+  <li><strong>pkg-config</strong> &ndash; Used to detect Qt on Linux and macOS</li>
 </ul>
 
-<p>QtEDM is primarily developed and tested on Linux. The program should build on other Unix-like systems with Qt5 support.</p>
+<p>QtEDM builds natively on Linux, macOS, and Windows when the platform Qt,
+EPICS Base, SDDS, and compiler dependencies are installed. X11 is not required
+for normal QtEDM operation; the <code>-attach</code> and <code>-cleanup</code>
+single-instance request options are available only when Qt uses the X11
+<code>xcb</code> platform.</p>
 
 <h2><a name="CommandLine"></a>Command Line</h2>
 
@@ -258,19 +262,23 @@
   </tr>
   <tr>
     <td><code>-attach</code></td>
-    <td>Attach to an existing QtEDM instance</td>
+    <td>On X11, send requested displays to an existing compatible QtEDM instance</td>
   </tr>
   <tr>
     <td><code>-cleanup</code></td>
-    <td>Clean up shared resources from previous instances</td>
+    <td>On X11, replace stale single-instance request state and become the receiving instance</td>
   </tr>
   <tr>
     <td><code>-macro "xxx=aaa,yyy=bbb,..."</code></td>
-    <td>Define macro substitutions for PV names</td>
+    <td>Define macro substitutions for PV names in EXECUTE mode</td>
   </tr>
   <tr>
     <td><code>-dg geometry</code></td>
     <td>Specify display geometry (WxH+X+Y format)</td>
+  </tr>
+  <tr>
+    <td><code>-displayGeometry geometry</code></td>
+    <td>Long-form alias for <code>-dg</code></td>
   </tr>
   <tr>
     <td><code>-displayFont alias|scalable</code></td>
@@ -314,6 +322,9 @@ qtedm -x display.adl</pre>
 
 <p>The <code>-C</code> option compresses all data sent over the SSH connection, which reduces the bandwidth required for X11 protocol traffic. Without compression, high-frequency widget updates can overwhelm the connection and cause sluggish or jerky display behavior.</p>
 
+<p><code>-attach</code> and <code>-cleanup</code> use an X11 root-window request
+protocol and fall back to local mode on Wayland, macOS, and Windows.</p>
+
 <h2><a name="Modes"></a>Modes of Operation</h2>
 
 <h3>EDIT Mode</h3>
@@ -344,7 +355,10 @@ qtedm -x display.adl</pre>
   <li>Shell Command buttons execute system commands</li>
 </ul>
 
-<p>To switch between modes, use the Edit menu or press Ctrl+E (toggle Edit mode) or Ctrl+X (toggle Execute mode).</p>
+<p>When QtEDM starts without <code>-x</code>, use the Edit/Execute selector in
+the main window to change modes. A command-line EXECUTE launch locks the
+selector for that process. <code>Ctrl+X</code> remains the standard Cut shortcut
+in EDIT mode; it is not a mode switch.</p>
 
 <h2><a name="Widgets"></a>Supported Widgets</h2>
 
@@ -368,7 +382,7 @@ way.</p>
   <li><strong>Dynamic attributes</strong> &ndash; Many widgets support alarm-sensitive colors, discrete color rules, and visibility driven by a PV or a calculation.</li>
   <li><strong>Limits and precision</strong> &ndash; Numeric widgets can use display/alarm/control limits from the PV, or explicit values stored in the ADL.</li>
   <li><strong>Macros and protocols</strong> &ndash; PV names may contain macro substitutions such as <code>$(P)</code>. QtEDM also accepts <code>pva://</code> PV prefixes when PVAccess is required.</li>
-  <li><strong>Audit logging</strong> &ndash; When logging is enabled, writes from Text Entry, Text Area, Slider, Wheel Switch, Menu, Choice Button, and Message Button are recorded in the audit log.</li>
+  <li><strong>Audit logging</strong> &ndash; When logging is enabled, built-in controller, plugin-provider, and snapshot-restore writes are recorded in the audit log.</li>
 </ul>
 
 <div class="widget-nav">
@@ -388,9 +402,13 @@ way.</p>
   <a href="#WidgetPVTable">PV Table</a>,
   <a href="#WidgetWaveTable">Waveform Table</a>,
   <a href="#WidgetWaterfallPlot">Waterfall Plot</a>,
+  <a href="#WidgetQtedmNdArrayImage">NTNDArray Image</a>,
   <a href="#WidgetScaleMonitor">Scale Monitor</a>,
-  <a href="#WidgetMeter">Meter</a>, <a href="#WidgetStripChart">Strip Chart</a>,
+  <a href="#WidgetMeter">Meter</a>,
+  <a href="#WidgetStripChart">Strip Chart</a>,
+  <a href="#WidgetArchivePlot">Archive Plot</a>,
   <a href="#WidgetCartesianPlot">Cartesian Plot</a></p>
+  <p><strong>Containers:</strong> <a href="#WidgetQtedmTabbedDisplay">Tabbed / Stacked Display</a></p>
   <p><strong>Controllers:</strong> <a href="#WidgetTextEntry">Text Entry</a>,
   <a href="#WidgetTextArea">Text Area</a>,
   <a href="#WidgetSlider">Slider</a>,
@@ -401,6 +419,7 @@ way.</p>
   <a href="#WidgetQtedmToggle">Toggle</a>,
   <a href="#WidgetQtedmSpinBox">Spin Box</a>,
   <a href="#WidgetRelatedDisplay">Related Display</a>,
+  <a href="#WidgetSetpointControl">Setpoint Control</a>,
   <a href="#WidgetShellCommand">Shell Command</a></p>
 </div>
 
@@ -953,6 +972,20 @@ way.</p>
   </ul>
 </div>
 
+
+<div class="widget-entry">
+  <h4><a name="WidgetArchivePlot"></a>Archive Plot</h4>
+  <p>Archive Plot is a QtEDM-only historical variant of Strip Chart stored as
+  <code>qtedm_archive_plot</code>. On entering EXECUTE mode it requests each
+  configured pen's current time window from the selected archive provider and
+  continues subscribing to the live PV.</p>
+  <ul>
+    <li><strong>Configure:</strong> Use the normal Strip Chart properties for pens and time span. QtEDM Extension Properties adds the maximum historical point count and whether live samples are merged after history loads.</li>
+    <li><strong>Built-in provider:</strong> Set <code>QTEDM_ARCHIVER_URL</code> to an EPICS Archiver Appliance retrieval root. The request is bounded by time, response size, timeout, and maximum points.</li>
+    <li><strong>Plugin provider:</strong> Set <code>QTEDM_ARCHIVER_PROVIDER</code> to a registered archive-provider ID. Empty or <code>archiver-appliance</code> selects the built-in provider.</li>
+    <li><strong>Failure behavior:</strong> A missing provider, timeout, invalid response, or empty history is shown as a plot diagnostic; live plotting continues.</li>
+  </ul>
+</div>
 <div class="widget-entry">
   <h4><a name="WidgetCartesianPlot"></a>Cartesian Plot</h4>
   <div class="widget-figure">
@@ -969,12 +1002,12 @@ way.</p>
   </ul>
 </div>
 
-<p class="noindent"><strong>QtEDM-only note:</strong> The <code>text_area</code>,
-<code>heatmap</code>, <code>waterfall_plot</code>, <code>thermometer</code>,
-<code>led_monitor</code>, and <code>expression_channel</code> ADL blocks are
-extensions implemented only in QtEDM. Legacy MEDM does not provide runtime
-support for these widget types, so displays that rely on them are not fully
-backward compatible.</p>
+<p class="noindent"><strong>QtEDM-only note:</strong> Heatmaps, waterfall and
+archive plots, tables, symbols, tabbed displays, expression channels, and the
+other QtEDM extensions in this section use additional ADL block types. Legacy
+MEDM can continue to use the shared core subset, but it does not provide runtime
+support for QtEDM-only blocks. See <a href="#ADLFiles">ADL Files</a> for the
+complete extension list.</p>
 
 <h3>Controllers</h3>
 
@@ -1111,6 +1144,32 @@ backward compatible.</p>
 </div>
 
 <div class="widget-entry">
+  <h4><a name="WidgetSetpointControl"></a>Setpoint Control</h4>
+  <p>Setpoint Control is a QtEDM-only numeric controller stored as
+  <code>setpoint_control</code>. It combines an editable setpoint, optional
+  readback, and an in/out-of-tolerance indication in one widget.</p>
+  <ul>
+    <li><strong>Configure:</strong> Setpoint and readback PVs, label, numeric format, precision and limits, static/alarm color mode, absolute tolerance, and readback visibility.</li>
+    <li><strong>Runtime behavior:</strong> Entering a value validates numeric input and configured/channel limits before writing. Connection state, access rights, pending edits, units, and readback tolerance remain visible.</li>
+    <li><strong>Safety:</strong> The setpoint PV must be numeric and writable. Writes pass through observe-only policy and are audit logged.</li>
+  </ul>
+  <pre>setpoint_control {
+  object {
+    x=40 y=40 width=300 height=54
+  }
+  "basic attribute" {
+    clr=14 bclr=4
+  }
+  label="Temperature"
+  setpoint="HEATER:SP"
+  readback="HEATER:RBV"
+  colorMode="alarm"
+  toleranceMode="absolute"
+  tolerance=0.5
+}</pre>
+</div>
+
+<div class="widget-entry">
   <h4><a name="WidgetRelatedDisplay"></a>Related Display</h4>
   <div class="widget-figure">
     <img src="images/qtedm-widgets/related-display.png" alt="Related Display widget examples in QtEDM" loading="lazy">
@@ -1153,7 +1212,7 @@ backward compatible.</p>
   </tr>
   <tr>
     <td><code>EPICS_DISPLAY_PATH</code></td>
-    <td>Colon-separated list of directories to search for ADL files</td>
+    <td>Platform-separated list of directories to search for ADL files and referenced images (<code>:</code> on Unix, <code>;</code> on Windows)</td>
   </tr>
   <tr>
     <td><code>EPICS_CA_ADDR_LIST</code></td>
@@ -1179,9 +1238,29 @@ backward compatible.</p>
     <td><code>QTEDM_PLUGIN_PATH</code></td>
     <td>Platform-separated list of absolute local plugin directories. QtEDM also scans the <code>plugins</code> directory next to its executable.</td>
   </tr>
+  <tr>
+    <td><code>QTEDM_NOLOG</code></td>
+    <td>Set to a non-empty value other than <code>0</code> to disable control-write audit logging. Equivalent to <code>-nolog</code>.</td>
+  </tr>
+  <tr>
+    <td><code>MEDM_EXEC_LIST</code></td>
+    <td>MEDM-compatible semicolon-delimited entries added to the EXECUTE-mode context menu. Each item supplies a label and command.</td>
+  </tr>
+  <tr>
+    <td><code>QTEDM_TIMING_DIAGNOSTICS</code></td>
+    <td>Set to a non-empty value other than <code>0</code> to print timestamped startup-phase timing to standard error.</td>
+  </tr>
+  <tr>
+    <td><code>TRACK_MEM</code></td>
+    <td>Diagnostic memory sampling in the form <code>[interval][:logfile]</code>; the interval defaults to 60 seconds and output defaults to standard error.</td>
+  </tr>
 </table>
 
-<p>Standard EPICS Channel Access environment variables are also used. See the EPICS documentation for details.</p>
+<p>Standard EPICS CA and PVA environment variables are consumed by EPICS Base.
+Diagnostic variables are intended for troubleshooting, not routine operator
+configuration. Automated tests also use private <code>QTEDM_TEST_*</code>
+variables; those are test interfaces and are intentionally not part of the
+supported operator configuration surface.</p>
 
 <h2><a name="ADLFiles"></a>ADL Files</h2>
 
@@ -1215,11 +1294,17 @@ Both versions remain fully readable by QtEDM.</p>
 
 <h3>QtEDM-only ADL Extensions</h3>
 
-<p>QtEDM currently adds these widget block types beyond the legacy MEDM set:</p>
+<p>QtEDM currently adds these object and attached-rule block types beyond the legacy MEDM set:</p>
 
 <ul>
   <li><code>heatmap</code></li>
   <li><code>thermometer</code></li>
+  <li><code>led_monitor</code></li>
+  <li><code>text_area</code></li>
+  <li><code>pv_table</code></li>
+  <li><code>wave_table</code></li>
+  <li><code>waterfall_plot</code></li>
+  <li><code>setpoint_control</code></li>
   <li><code>expression_channel</code></li>
   <li><code>qtedm_symbol</code></li>
   <li><code>qtedm_toggle</code></li>
@@ -1241,6 +1326,16 @@ object as mapped, approximated, omitted, or unsupported. Unsupported objects
 remain visible as labeled placeholders. Command-line exit status is 0 for a
 complete mapping, 2 for a completed conversion with warnings, and 1 for fatal
 failure.</p>
+
+<pre>qtedm-convert [--output display.adl] [--report report.json]
+              [--source-copy preserved.source.ui] input.ui</pre>
+
+<p><code>-o</code> is accepted as an alias for <code>--output</code>. With no
+output options, <code>screen.ui</code> produces <code>screen.adl</code>,
+<code>screen.qtedm-conversion.json</code>, and
+<code>screen.source.ui</code> beside the input. Input, output, report, and
+preserved-source paths must be distinct. Version 1 accepts one <code>.ui</code>
+input up to 64 MiB.</p>
 
 <div class="widget-entry">
   <h4><a name="WidgetQtedmNdArrayImage"></a>NTNDArray Image</h4>
@@ -1332,6 +1427,28 @@ this:</p>
 Other widgets subscribe to the result by using the <code>variable</code> value
 as their ordinary channel name.</p>
 
+<h3>PV Snapshots</h3>
+
+<p><em>File &rarr; Save PV Snapshot...</em> captures the deduplicated channels
+used by the active display into a version-1
+<code>.qtedm-snapshot.json</code> file. Scalar numeric, string, enum, character
+array, and numeric-array values retain provider, exact type, timestamp, units,
+limits, connection state, access state, and enum metadata. Capture warnings are
+reported instead of silently inventing unavailable values.</p>
+
+<p><em>File &rarr; Compare / Restore PV Snapshot...</em> first shows saved and
+current values side by side. Nothing is selected by default. Rows are eligible
+only when the current PV is connected and writable and its provider, exact
+type, value kind, enum choices, and limits remain compatible. After the user
+selects rows, QtEDM asks for confirmation and repeats every safety check
+immediately before each write.</p>
+
+<p>Observe-only mode blocks restore, string-array restore is unsupported, and
+file, entry, and array sizes are bounded. Successful and failed restore attempts
+are audit logged. Snapshot files are local operational artifacts; review their
+contents and storage permissions before using them to change live equipment.</p>
+
+
 <h2><a name="Features"></a>Features</h2>
 
 <h3>Dynamic Attributes</h3>
@@ -1382,14 +1499,17 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
 
 <h2><a name="Differences"></a>Differences from MEDM</h2>
 
-<p>While QtEDM strives for full MEDM compatibility, there are some differences:</p>
+<p>QtEDM preserves the standard MEDM ADL subset, with these intentional differences and additions:</p>
 
 <ul>
   <li><strong>Appearance</strong> &ndash; Qt rendering may produce slightly different visual results than Motif</li>
   <li><strong>Font handling</strong> &ndash; QtEDM uses scalable fonts with alias mode for MEDM compatibility</li>
   <li><strong>Window management</strong> &ndash; Some window behaviors may differ depending on the desktop environment</li>
-  <li><strong>Platform support</strong> &ndash; QtEDM currently focuses on Linux; Windows and macOS support may vary</li>
-  <li><strong>qtedm-only widgets</strong> &ndash; Text Area, Heatmap, NTNDArray Image, Archive Plot, PV Table, Waveform Table, Waterfall Plot, Thermometer, LED Monitor, Expression Channel, plugin objects, and declarative rules are QtEDM ADL extensions and are not backward compatible with MEDM</li>
+  <li><strong>Platform behavior</strong> &ndash; QtEDM builds natively on Linux, macOS, and Windows, but window management, fonts, printing, and packaging remain platform dependent</li>
+  <li><strong>QtEDM-only objects</strong> &ndash; The <a href="#ADLFiles">listed extension blocks</a> are preserved by QtEDM but have no runtime behavior in legacy MEDM</li>
+  <li><strong>Observe-only operation</strong> &ndash; <code>--read-only</code> provides a process-wide, visibly indicated write-inhibition mode covering built-in controls, soft PVs, snapshots, and plugin-provider writes.</li>
+  <li><strong>Sessions and snapshots</strong> &ndash; Named window-layout sessions and explicitly selected, revalidated PV snapshot restores are QtEDM operational features rather than MEDM ADL behavior.</li>
+  <li><strong>Display import</strong> &ndash; QtEDM can convert caQtDM/Qt Designer <code>.ui</code> files with a preserved source copy and versioned mapping report.</li>
   <li><strong>Enhanced Statistics Window</strong> &ndash; The Statistics Window (View &gt; Statistics Window) includes a third mode called "PV Details" that displays a sortable table of all connected PVs with their connection status, writable status, update rate, and alarm severity. Click the Mode button to cycle through Interval, Average, and PV Details views.</li>
   <li><strong>Find PV Dialog</strong> &ndash; QtEDM provides a Find PV feature (View &gt; Find PV or Ctrl+F) that allows searching for process variables across all open displays. Enter a PV name pattern to locate widgets using matching PVs.</li>
   <li><strong>Export Image</strong> &ndash; QtEDM adds an "Export Image..." option to the right-click context menu in EXECUTE mode. This allows exporting displays as PNG, SVG, JPEG, or BMP images. MEDM supports XWD format via the print command; QtEDM provides more modern image formats including vector SVG output.</li>
@@ -1411,9 +1531,9 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
   <li><strong>Audit Logging</strong> &ndash; QtEDM provides audit logging of all control widget value changes (writes to PVs). This feature is enabled by default and logs to timestamped files in the <code>~/.medm</code> directory.
     <ul>
       <li><strong>Log Format:</strong> Each entry contains timestamp, username, widget type, PV name, value written, and display file (if available).</li>
-      <li><strong>Log Location:</strong> Logs are written to <code>~/.medm/audit_YYYYMMDD_HHMMSS_PID.log</code> where PID is the process ID, ensuring unique log files when multiple QtEDM instances run concurrently on shared accounts.</li>
+      <li><strong>Log Location:</strong> Logs are written to <code>~/.medm/audit_YYYYMMDD_HHMMSS_PID.log</code> by default. <code>QTEDM_AUDIT_DIR</code> selects another directory.</li>
       <li><strong>Disable Logging:</strong> Use the <code>-nolog</code> command line option or set the environment variable <code>QTEDM_NOLOG=1</code></li>
-      <li><strong>Logged Widgets:</strong> TextEntry, Slider, WheelSwitch, Menu, ChoiceButton, and MessageButton writes are logged.</li>
+      <li><strong>Logged writes:</strong> Text Entry, Text Area, Slider, Wheel Switch, Menu, Choice Button, Message Button/Toggle, Setpoint Control/Spin Box, plugin-provider, and snapshot-restore writes use the audit path.</li>
       <li><strong>Observe-only records:</strong> Writes blocked by <code>--read-only</code> use the widget type <code>BLOCKED:ObserveOnly</code>, so they remain distinct from successful puts without changing the six-column log format.</li>
     </ul>
   </li>
@@ -1425,7 +1545,10 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
 
 <pre>make -j4</pre>
 
-<p>This builds both MEDM and QtEDM. The QtEDM binary is installed to <code>bin/&lt;arch&gt;/qtedm</code>.</p>
+<p>This builds QtEDM and <code>qtedm-convert</code>; it also builds MEDM when
+Motif/X11 development files are available. Programs are copied to
+<code>bin/&lt;OS&gt;-&lt;architecture&gt;/</code>, for example
+<code>bin/Linux-x86_64/qtedm</code>.</p>
 
 <p>On a clean tree, a full build can take several minutes. If you are trying to
 diagnose a warning or an error and want less interleaved output, rerun the same
@@ -1433,13 +1556,23 @@ build without <code>-j4</code>.</p>
 
 <p>Build requirements:</p>
 <ul>
-  <li>Qt5 development packages (qt5-devel or equivalent)</li>
-  <li>EPICS Base with headers and libraries</li>
-  <li>SDDS library</li>
-  <li>pkg-config for Qt detection</li>
+  <li>Qt6 development packages (preferred) or Qt5 development packages, including Widgets, Print Support, SVG, and Network</li>
+  <li>Matching Qt <code>moc</code> and <code>rcc</code> tools</li>
+  <li>EPICS Base 7 headers and libraries</li>
+  <li>SDDS source tree and support libraries</li>
+  <li>A C++17 compiler</li>
+  <li><code>pkg-config</code> for Qt detection on non-Windows platforms</li>
 </ul>
 
-<p>The build system automatically detects Qt5 using pkg-config and configures the appropriate compiler and linker flags.</p>
+<p>On non-Windows platforms the build system prefers Qt6 when its
+<code>pkg-config</code> modules are present and otherwise falls back to Qt5.
+See the repository <code>README.md</code> for dependency layout and
+platform-specific notes.</p>
+
+<p>From the repository root, <code>make test-qtedm</code> runs CLI, unit, IOC,
+and visual regression suites. The narrower targets are
+<code>test-qtedm-cli</code>, <code>test-qtedm-unit</code>,
+<code>test-qtedm-ioc</code>, and <code>test-qtedm-visual</code>.</p>
 
 <h2><a name="Acknowledgments"></a>Acknowledgments</h2>
 
@@ -1451,7 +1584,7 @@ build without <code>-j4</code>.</p>
   <li><strong>Kenneth Evans, Jr.</strong> &ndash; Long-time maintainer, wrote the original reference manual, and made substantial improvements.</li>
 </ul>
 
-<p>QtEDM was developed by Robert Soliday at Argonne National Laboratory as a modern alternative to the Motif-based MEDM, ensuring continued support for EPICS display management on contemporary Linux systems.</p>
+<p>QtEDM was developed by Robert Soliday at Argonne National Laboratory as a modern alternative to the Motif-based MEDM, ensuring continued support for EPICS display management on contemporary Linux, macOS, and Windows systems.</p>
 
 <p>The EPICS community has contributed numerous bug fixes, platform ports, and suggestions that have improved both MEDM and QtEDM.</p>
 

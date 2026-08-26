@@ -8,7 +8,7 @@
 
 ## Abstract
 
-QtEDM is a modern Qt-based reimplementation of MEDM (Motif Editor and Display Manager), the widely-used graphical user interface for EPICS control systems. QtEDM supports both Qt5 and Qt6 and runs natively on Linux, macOS, and Windows. As the Motif toolkit becomes harder to maintain on contemporary systems, QtEDM provides a sustainable path forward while maintaining full backward compatibility with existing ADL display files. This paper describes the motivation for QtEDM, its architecture and implementation, key features and enhancements over the original MEDM, and the transition path for existing installations.
+QtEDM is a modern Qt-based reimplementation of MEDM (Motif Editor and Display Manager), the widely-used graphical user interface for EPICS control systems. QtEDM supports both Qt5 and Qt6 and runs natively on Linux, macOS, and Windows. As the Motif toolkit becomes harder to maintain on contemporary systems, QtEDM provides a sustainable path forward while preserving the standard MEDM ADL subset and explicitly separating QtEDM-only extensions. This paper describes the motivation for QtEDM, its architecture and implementation, key features and enhancements over the original MEDM, and the transition path for existing installations.
 
 ---
 
@@ -18,7 +18,7 @@ MEDM has served as a cornerstone application for EPICS-based control systems for
 
 Despite its proven reliability and widespread adoption, MEDM faces a significant challenge: its dependence on the Motif toolkit. Motif, once the standard GUI toolkit for X11/Unix systems, has seen declining support, uneven packaging on modern Linux distributions, and no native path for macOS or Windows deployments. Font rendering issues, widget appearance inconsistencies, and maintenance difficulties have made continued reliance on Motif increasingly untenable.
 
-QtEDM addresses these challenges by reimplementing MEDM's functionality using Qt (versions 5 or 6), a modern, actively-maintained, cross-platform GUI framework. The result is a display manager that reads and writes the same ADL file format, supports all existing widget types, and provides equivalent functionality—while benefiting from Qt's superior rendering, font handling, and long-term support.
+QtEDM addresses these challenges by reimplementing MEDM's functionality using Qt (versions 5 or 6), a modern, actively-maintained, cross-platform GUI framework. The result is a display manager that reads and writes the common MEDM ADL format, supports the standard widget set, and adds versioned QtEDM blocks for new capabilities—while benefiting from Qt's rendering, font handling, and long-term support.
 
 ## 2. Motivation
 
@@ -34,7 +34,7 @@ The Motif toolkit, while historically significant, presents several challenges f
 
 ### 2.2 Preserving Investment in ADL Files
 
-EPICS facilities have accumulated substantial investments in ADL display files. These displays represent significant engineering effort in designing operator interfaces. Any successor to MEDM must preserve this investment by maintaining full compatibility with existing ADL files.
+EPICS facilities have accumulated substantial investments in ADL display files. These displays represent significant engineering effort in designing operator interfaces. Any successor to MEDM must preserve this investment by retaining the standard ADL subset and making any new, implementation-specific extensions explicit.
 
 ### 2.3 Modern Feature Requirements
 
@@ -59,11 +59,11 @@ This separation allows for cleaner code organization and easier testing. Runtime
 
 ### 3.2 Channel Access and PVAccess Integration
 
-QtEDM uses the standard EPICS Channel Access library for process variable communication and accepts `pva://` PV prefixes when PVAccess is required. A centralized `ChannelAccessContext` manages CA initialization and periodic polling. Each runtime class that requires PV connectivity follows established patterns for channel creation, callback registration, and event handling.
+QtEDM uses the standard EPICS Channel Access library and accepts `pva://` PV prefixes when PVAccess is required. A shared channel layer centralizes subscriptions, access rights, protocol selection, observe-only enforcement, and writes. Trusted local plugins may add URI-based data providers without bypassing the common write policy.
 
 ### 3.3 ADL File Compatibility
 
-QtEDM reads and writes the identical ADL file format used by MEDM. The ADL parser is implemented in C++ and carefully replicates MEDM's parsing behavior. Display files created by either application can be opened in the other without modification.
+QtEDM reads and writes the core ADL format used by MEDM. The C++ parser carefully replicates MEDM behavior and preserves unknown extension data during round trips. Displays confined to the common subset remain portable; displays using QtEDM-only blocks require QtEDM for those objects to function.
 
 ### 3.4 Dual Build System
 
@@ -95,6 +95,12 @@ QtEDM implements the complete set of MEDM widget types:
 - PV Table
 - Waveform Table
 - Expression Channel
+- Multi-State Symbol
+- Tabbed / Stacked Display container
+- Archive Plot
+- NTNDArray Image
+- Plugin display objects
+
 
 ### 4.3 Controller Widgets
 - Text Entry
@@ -106,8 +112,12 @@ QtEDM implements the complete set of MEDM widget types:
 - Message Button
 - Related Display
 - Shell Command
+- Setpoint Control
+- Toggle
+- Spin Box
 
-Standard MEDM widgets support the same dynamic attributes (visibility, color modes) as MEDM, ensuring behavioral compatibility. QtEDM-only widgets extend ADL for newer diagnostic and operator workflows.
+
+Standard MEDM widgets support MEDM dynamic attributes such as visibility and color modes. QtEDM-only widgets, containers, plugin objects, and declarative property rules extend ADL for newer diagnostic and operator workflows.
 
 ## 5. Enhancements Over MEDM
 
@@ -148,13 +158,45 @@ Cartesian Plots support:
 
 QtEDM logs all control widget value changes (writes to PVs). Log entries include timestamp, username, widget type, PV name, value written, and display file. Logging can be disabled with `-nolog` or the environment variable QTEDM_NOLOG=1 if not required.
 
-### 5.8 Native Desktop Platforms
+### 5.8 Observe-Only Operation
 
+`--read-only` starts in EXECUTE mode with a persistent red indicator and blocks
+all writes through the central CA, PVA, soft-PV, snapshot, and plugin-provider
+paths. Monitoring, navigation, and diagnostics remain available, while blocked
+attempts are distinguished in the audit log.
+
+### 5.9 Sessions and Controlled PV Snapshots
+
+Named sessions explicitly save and restore top-level displays, macros, window
+geometry, screens, and active tabs. PV snapshots capture the deduplicated
+channels used by a display and provide a compare-first restore dialog. Nothing
+is selected by default; connection, write access, exact type, enum choices,
+limits, and observe-only policy are revalidated immediately before every write.
+
+### 5.10 Historical Trends and Structured Images
+
+Archive Plot requests bounded history from an EPICS Archiver Appliance or a
+local archive-provider plugin, merges optional live data, and continues live
+plotting if history is unavailable. NTNDArray Image reads uncompressed
+`epics:nt/NTNDArray` structures over PVA with zoom, pan, transforms, color maps,
+pixel probing, and explicit memory/dimension limits.
+
+### 5.11 Display Import and Extension APIs
+
+The File menu and `qtedm-convert` convert caQtDM or Qt Designer `.ui` files to
+ADL while preserving a source copy and producing a versioned mapping report.
+Unsupported objects become visible placeholders. A version-1 local plugin API
+supports reviewed display objects, data providers, and archive providers;
+declarative property rules provide a bounded, no-script alternative for common
+visibility, text, color, enabled-state, and geometry behavior.
+
+
+### 5.12 Native Desktop Platforms
 QtEDM runs natively on Linux, macOS, and Windows when the local Qt, EPICS Base, and SDDS dependencies are available. This gives sites a path away from X11/Motif constraints without giving up existing ADL files.
 
 ## 6. Command Line Interface
 
-QtEDM accepts MEDM-compatible command line options:
+QtEDM accepts the common MEDM-style command line plus QtEDM safety and session options:
 
 ```
 qtedm [options] [display-files]
@@ -162,6 +204,12 @@ qtedm [options] [display-files]
 Options:
   -x              Start in EXECUTE mode
   -macro "..."    Define macro substitutions
+  --read-only     Start in EXECUTE mode and block writes
+  --session name  Explicitly restore a named session in EXECUTE mode
+  -local          Run as an independent instance (default)
+  -attach         On X11, dispatch displays to an existing instance
+  -cleanup        On X11, replace stale single-instance request state
+  -bigMousePointer  Use the larger accessibility cursor
   -dg geometry    Specify display geometry
   -displayFont    Select font mode (alias|scalable)
   -nolog          Disable audit logging
@@ -181,7 +229,7 @@ Facilities can deploy QtEDM alongside MEDM, allowing gradual transition:
 
 ### 7.2 Known Differences
 
-While QtEDM strives for exact compatibility, minor differences exist:
+QtEDM preserves the common MEDM ADL subset, but intentional extensions and toolkit differences exist:
 
 - Qt rendering may produce slightly different anti-aliasing
 - Window management behaviors depend on desktop environment
@@ -189,29 +237,34 @@ While QtEDM strives for exact compatibility, minor differences exist:
 
 ### 7.3 Training Requirements
 
-The user interface is intentionally similar to MEDM. Operators familiar with MEDM require minimal training—the same menus, keyboard shortcuts, and workflows apply.
+The user interface is intentionally similar to MEDM. Operators familiar with MEDM require minimal training, but sites should validate local shortcuts, window-management behavior, shell commands, fonts, and QtEDM-only workflows before deployment.
 
 ## 8. Implementation Status
 
 QtEDM is ready for widespread testing. The implementation includes:
 
-- Complete widget set with all dynamic attributes
-- Full ADL file read/write compatibility
+- Complete standard MEDM widget set plus explicit QtEDM extensions
+- Core ADL read/write compatibility with preservation of unknown extension data
 - Execute and Edit mode operation
 - Channel Access and PVAccess PV naming
 - Printing and image export
 - Macro substitution and related displays
-- QtEDM-only widgets including Heatmap, Waterfall Plot, PV Table, Waveform Table, Thermometer, LED Monitor, Text Area, and Expression Channel
-- All standard EPICS environment variables
+- QtEDM-only widgets and containers including Heatmap, Waterfall Plot, Archive Plot, NTNDArray Image, PV Table, Waveform Table, Thermometer, LED Monitor, Multi-State Symbol, Text Area, Setpoint Control, Toggle, Spin Box, Tabbed Display, and Expression Channel
+- Global observe-only write inhibition with audit records
+- Explicit named sessions and controlled PV snapshot compare/restore
+- caQtDM/Qt Designer display import with reports and visible placeholders
+- Trusted local plugin APIs and sandboxed declarative property rules
+- CLI, unit, IOC, and visual regression suites
+- Standard EPICS environment integration
 
 ## 9. Future Work
 
 Potential future enhancements include:
 
 - Continue expanding QtEDM-native widgets for workflows that MEDM never covered.
-- Implement "Save PV Values" snapshot feature for current display state.
-- Add "Restore PV Values" to write saved snapshot back to IOC.
-- Continue broadening platform packaging and validation for Linux, macOS, and Windows sites.
+- Extend tested import mappings while preserving explicit warnings for approximations.
+- Broaden packaging and deployment validation for Linux, macOS, and Windows sites.
+- Evolve extension APIs conservatively while retaining versioned compatibility checks.
 
 ## 10. Availability
 
@@ -224,11 +277,15 @@ The upstream MEDM source distribution is maintained at:
 
 - GitHub: https://github.com/epics-extensions/medm
 
-Building QtEDM requires Qt5 or Qt6 development packages, EPICS Base, and the SDDS library. The same QtEDM source is intended for native Linux, macOS, and Windows builds when the platform-specific toolchain and dependencies are installed. The build system automatically detects dependencies and produces both MEDM and QtEDM executables where the required components are available.
+Building QtEDM requires Qt5 or Qt6 development packages, matching `moc` and
+`rcc` tools, a C++17 compiler, EPICS Base 7, and the SDDS source tree. From the
+repository root, `make -j4` produces QtEDM and `qtedm-convert`; MEDM is also
+built when Motif/X11 development files are available. The executables are
+copied below `bin/<OS>-<architecture>/`.
 
 ## 11. Conclusion
 
-QtEDM provides a sustainable path forward for EPICS display management as Motif support wanes. By maintaining full ADL file compatibility while leveraging Qt's modern capabilities, QtEDM protects existing investments in display files while enabling new features and long-term maintainability. The dual-build approach allows facilities to transition at their own pace while ensuring continued support for both implementations.
+QtEDM provides a sustainable path forward for EPICS display management as Motif support wanes. By preserving the common MEDM ADL subset while clearly versioning QtEDM extensions, QtEDM protects existing display investments and enables new features and long-term maintainability. The dual-build approach allows facilities to transition at their own pace while retaining the legacy implementation for validated edge cases.
 
 ## Acknowledgments
 

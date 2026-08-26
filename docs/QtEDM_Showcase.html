@@ -1544,11 +1544,11 @@
             </article>
             <article class="proof-point">
               <h3>Operational gains</h3>
-              <p>Find PV, PV details, image export, data export, zoom, pan, and audit logs solve everyday control-room friction.</p>
+              <p>Find PV, archives, snapshots, sessions, display import, export, and audit workflows solve everyday control-room friction.</p>
             </article>
             <article class="proof-point">
               <h3>Controlled transition</h3>
-              <p>Run QtEDM alongside MEDM on the same ADL files to verify 100% backwards compatibility.</p>
+              <p>Run QtEDM alongside MEDM to validate the shared ADL subset and identify screens that intentionally use QtEDM extensions.</p>
             </article>
           </div>
         </div>
@@ -1637,7 +1637,7 @@
               <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M7 7l10 10M17 7 7 17"/>
             </svg>
             <h3>More signal views</h3>
-            <p>Use QtEDM-only widgets such as Heatmap, Waterfall Plot, PV Table, Waveform Table, LED Monitor, and Thermometer.</p>
+            <p>Use Heatmap, Waterfall and Archive plots, NTNDArray images, tables, symbols, setpoint controls, and tabbed displays.</p>
           </article>
 
           <article class="feature-card">
@@ -1653,7 +1653,39 @@
               <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
             <h3>Audit every write</h3>
-            <p>Record control widget value changes with timestamp, user, widget type, PV name, value, and display file.</p>
+            <p>Record built-in control, plugin-provider, snapshot-restore, and blocked observe-only writes with operator context.</p>
+          </article>
+
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3l8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7l8-4zm-3 9l2 2 4-5"/>
+            </svg>
+            <h3>Observe without writing</h3>
+            <p>Start with <code>--read-only</code> to keep monitoring and navigation while centrally blocking CA, PVA, soft-PV, snapshot, and plugin writes.</p>
+          </article>
+
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 5h16v14H4zM8 9h8M8 13h5"/>
+            </svg>
+            <h3>Compare before restore</h3>
+            <p>Capture display PVs, compare saved and live values, select nothing by default, and revalidate every chosen write immediately before restore.</p>
+          </article>
+
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 18V6m0 12h16M7 15l3-3 3 1 4-6"/>
+            </svg>
+            <h3>Load historical context</h3>
+            <p>Archive Plot loads bounded history from an Archiver Appliance or local provider plugin, then optionally merges live samples.</p>
+          </article>
+
+          <article class="feature-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 4h10l4 4v12H5zM15 4v4h4M8 13h8M8 16h6"/>
+            </svg>
+            <h3>Import with evidence</h3>
+            <p>Convert caQtDM or Qt Designer files to ADL with a preserved source, a versioned mapping report, and visible placeholders for unsupported objects.</p>
           </article>
         </div>
       </div>
@@ -1776,9 +1808,9 @@
                 <td data-label="Note">Graphics, monitors, controls, plots, related displays, and shell commands remain part of the workflow.</td>
               </tr>
               <tr>
-                <td data-label="Capability">QtEDM-only widgets</td>
+                <td data-label="Capability">QtEDM-only extensions</td>
                 <td data-label="Status">Extension</td>
-                <td data-label="Note">Text Area, Heatmap, PV Table, Waveform Table, Waterfall Plot, Thermometer, LED Monitor, and Expression Channel are QtEDM ADL extensions.</td>
+                <td data-label="Note">New controls, tables, image/archive widgets, tabbed containers, plugin objects, and declarative rules use explicit QtEDM ADL blocks.</td>
               </tr>
               <tr>
                 <td data-label="Capability">Round-trip back to legacy MEDM</td>
@@ -1789,6 +1821,26 @@
                 <td data-label="Capability">EPICS Channel Access and PVAccess names</td>
                 <td data-label="Status">Supported</td>
                 <td data-label="Note">Use normal CA PV names or the <code>pva://</code> prefix when PVAccess is required.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">Observe-only operation</td>
+                <td data-label="Status">Supported</td>
+                <td data-label="Note"><code>--read-only</code> visibly blocks writes through built-in, snapshot, soft-PV, and plugin-provider paths.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">Sessions and PV snapshots</td>
+                <td data-label="Status">Explicit restore</td>
+                <td data-label="Note">Layouts never auto-restore; snapshot rows are opt-in and revalidated before every write.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">caQtDM / Qt Designer import</td>
+                <td data-label="Status">Report-backed</td>
+                <td data-label="Note">Version 1 accepts <code>.ui</code> input and classifies mapped, approximated, omitted, and unsupported objects.</td>
+              </tr>
+              <tr>
+                <td data-label="Capability">Local extension API</td>
+                <td data-label="Status">Version 1</td>
+                <td data-label="Note">Reviewed native plugins require metadata and exact Qt, compiler, architecture, and QtEDM compatibility.</td>
               </tr>
               <tr>
                 <td data-label="Capability">Qt toolkit version</td>
@@ -1827,6 +1879,8 @@
             <li>Export displays to PNG, SVG, JPEG, or BMP for reports and documentation.</li>
             <li>Use expression channels for local derived values without IOC-side logic.</li>
           </ul>
+            <li>Use <code>--read-only</code> for monitor-only operation with visible write inhibition.</li>
+            <li>Compare saved PV snapshots with live values before selecting any controlled restore.</li>
         </div>
 
         <div class="display-wall" aria-label="QtEDM widget screenshots">
@@ -1931,6 +1985,17 @@
           </details>
 
           <details class="faq-item">
+            <summary>How can we prevent writes during evaluation?</summary>
+            <p>
+              Launch with <code>--read-only</code>. QtEDM stays in EXECUTE mode
+              for realistic monitoring and navigation, shows a persistent red
+              observe-only indicator, and blocks writes through built-in CA,
+              PVA, soft-PV, snapshot, and plugin-provider paths. Blocked
+              attempts remain distinguishable in the audit log.
+            </p>
+          </details>
+
+          <details class="faq-item">
             <summary>What platforms should we target first?</summary>
             <p>
               QtEDM works natively on Linux, macOS, and Windows. Start with the
@@ -1959,13 +2024,14 @@
           <article class="source-card">
             <h3>EPICS Extensions</h3>
             <p>Use the EPICS Extensions MEDM page for background on the long-running display-manager family.</p>
-            <a href="http://www.aps.anl.gov/epics/extensions/medm/">EPICS Extensions MEDM</a>
+            <a href="https://epics.anl.gov/extensions/medm/index.php">EPICS Extensions MEDM</a>
           </article>
 
           <article class="source-card">
             <h3>Local documentation</h3>
-            <p>Open the full QtEDM reference manual, announcement brief, and repository build notes from this checkout.</p>
+            <p>Open the reference manual, announcement brief, plugin contract, and repository build notes from this checkout.</p>
             <a href="QtEDM.html">QtEDM Reference Manual</a>
+            <br><a href="QtEDM_Plugin_API.md">QtEDM Plugin API v1</a>
           </article>
         </div>
 
@@ -2000,7 +2066,7 @@
             <span>from repository root</span>
           </div>
           <pre><code>make -j4
-bin/&lt;arch&gt;/qtedm
+bin/&lt;OS&gt;-&lt;architecture&gt;/qtedm
 # Then choose Help -> Demo for the live soft-PV demo.
 
 make test-qtedm

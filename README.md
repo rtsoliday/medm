@@ -65,7 +65,7 @@ the SDDS README/build notes and then rerun `make`.
 4. From this repository root, build:
 
 ```bash
-make
+make -j4
 ```
 
 Notes:
@@ -77,6 +77,56 @@ Notes:
 - On macOS and Windows, use the equivalent native compiler, Qt development
 	tools, EPICS Base, and SDDS setup for that platform. The repository uses the
 	same `.adl` display files across platforms.
+
+The resulting programs are copied to `bin/<OS>-<architecture>/`. For example,
+a typical 64-bit Linux build produces:
+
+```text
+bin/Linux-x86_64/qtedm
+bin/Linux-x86_64/qtedm-convert
+```
+
+### Run QtEDM
+
+Launch in EDIT mode with no arguments, or open one or more displays directly:
+
+```bash
+bin/Linux-x86_64/qtedm
+bin/Linux-x86_64/qtedm -x -macro "P=SR:,R=Orbit" displays/orbit.adl
+bin/Linux-x86_64/qtedm --read-only displays/operator.adl
+```
+
+`-x` starts in EXECUTE mode. `--read-only` also starts in EXECUTE mode, but
+blocks CA, PVA, soft-PV, snapshot-restore, and plugin-provider writes while
+leaving monitoring and navigation available. Use `EPICS_DISPLAY_PATH` to find
+ADL files that are not supplied with an explicit path; its separator is `:` on
+Unix and `;` on Windows.
+
+QtEDM can also convert a caQtDM or Qt Designer `.ui` file to ADL. The conversion
+preserves a source copy and writes a JSON mapping report so approximated or
+unsupported objects remain visible:
+
+```bash
+bin/Linux-x86_64/qtedm-convert \
+  --output converted.adl --report converted.json source.ui
+```
+
+The converter returns 0 for a complete mapping, 2 for a completed conversion
+with warnings, and 1 for a fatal error.
+
+### QtEDM Documentation
+
+- [Reference manual](docs/QtEDM.html) &ndash; command line, widgets, ADL
+  extensions, environment, sessions, snapshots, archives, imports, and build
+  notes. The same file is embedded in QtEDM under **Help &gt; Overview**.
+- [Public showcase](docs/QtEDM_Showcase.html) &ndash; concise, external-facing
+  overview for evaluating QtEDM at an EPICS facility.
+- [Plugin API version 1](docs/QtEDM_Plugin_API.md) &ndash; trusted local display,
+  data-provider, and archive-provider extension contract.
+- [Announcement brief](docs/QtEDM_Announcement.md) &ndash; architecture,
+  migration rationale, and current implementation summary.
+- [Expression Channel guide](qtedm/ExpressionChannelUsage.md) &ndash; local calc
+  channels and process-local soft PVs.
 
 ### Automated QtEDM Tests
 

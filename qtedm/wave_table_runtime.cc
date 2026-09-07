@@ -200,12 +200,14 @@ void WaveTableRuntime::handleChannelData(const SharedChannelData &data)
     const size_t available = data.sharedArrayData && data.sharedArraySize > 0
         ? data.sharedArraySize
         : static_cast<size_t>(data.arrayValues.size());
+    /* CA subscriptions can be capped to the display limit; retain their
+     * native-count reporting. PVA delivers the actual waveform, whose length
+     * can shrink to zero independently of the native capacity. */
+    const bool pva = parsePvName(channelName_).protocol == PvProtocol::kPva;
     const size_t nativeAvailable = static_cast<size_t>(std::max<long>(
-        data.nativeElementCount > 0 ? data.nativeElementCount
-                                    : nativeElementCount_,
-        0));
+        nativeElementCount_, 0));
     receivedCount = static_cast<long>(std::min(
-        std::max(available, nativeAvailable),
+        pva ? available : std::max(available, nativeAvailable),
         static_cast<size_t>(std::numeric_limits<long>::max())));
     const int availableForLimit = static_cast<int>(std::min(available,
         static_cast<size_t>(std::numeric_limits<int>::max())));

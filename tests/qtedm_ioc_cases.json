@@ -1699,5 +1699,101 @@
         "numeric_tolerance": 0
       }
     ]
+  },
+  {
+    "name": "pva_empty_waveform_clears_displays",
+    "display": "tests/test_QtEDMPvaCoverage.adl",
+    "provider": "pva",
+    "exit_after_ms": 5000,
+    "pre_writes": [
+      {
+        "pv": "pva:test:array",
+        "value": "[1,2,3,4,5,6,7,8]"
+      }
+    ],
+    "writes": [
+      {
+        "pv": "pva:test:array",
+        "value": "[]",
+        "delay_ms": 500
+      }
+    ],
+    "assertions": [
+      {
+        "selector": {
+          "type": "wave_table",
+          "channel": "pva:test:array"
+        },
+        "expect": {
+          "connected": true,
+          "received_element_count": 0,
+          "displayed_element_count": 0
+        }
+      },
+      {
+        "selector": {
+          "type": "heatmap",
+          "channel": "pva:test:array"
+        },
+        "expect": {
+          "connected": true,
+          "data_count": 0,
+          "has_data": false
+        }
+      }
+    ]
+  },
+  {
+    "name": "slider_ca_metadata_changes_without_value_change",
+    "display": "tests/test_Slider.adl",
+    "exit_after_ms": 4500,
+    "pre_writes": [
+      {"pv": "slider:test:alpha.LOPR", "value": "-12.5"},
+      {"pv": "slider:test:alpha.HOPR", "value": "84.3"},
+      {"pv": "slider:test:alpha.PREC", "value": "2"},
+      {"pv": "slider:test:alpha", "value": "10"}
+    ],
+    "writes": [
+      {"pv": "slider:test:alpha.LOPR", "value": "0", "delay_ms": 500},
+      {"pv": "slider:test:alpha.HOPR", "value": "20"},
+      {"pv": "slider:test:alpha.PREC", "value": "3"},
+      {"pv": "slider:test:alpha.LOPR", "value": "5", "delay_ms": 500},
+      {"pv": "slider:test:alpha.HOPR", "value": "15"},
+      {"pv": "slider:test:alpha.PREC", "value": "4"}
+    ],
+    "assertions": [
+      {
+        "selector": {
+          "type": "slider",
+          "channel": "slider:test:alpha",
+          "geometry": {"x": 60, "y": 994, "width": 500, "height": 86}
+        },
+        "expect": {
+          "connected": true,
+          "write_access": true,
+          "numeric_value": 10,
+          "low_limit": 5,
+          "high_limit": 15,
+          "precision": 4,
+          "runtime_limits_valid": true,
+          "runtime_precision": 4
+        }
+      },
+      {
+        "selector": {
+          "type": "slider",
+          "channel": "slider:test:alpha",
+          "geometry": {"x": 119, "y": 225, "width": 190, "height": 22}
+        },
+        "expect": {
+          "connected": true,
+          "numeric_value": 10,
+          "low_limit": -12.5,
+          "high_limit": 84.3,
+          "precision": 2,
+          "runtime_precision": 4
+        }
+      }
+    ]
   }
 ]

@@ -1,5 +1,7 @@
 #include "image_runtime.h"
 
+#include "medm_calc.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -7,11 +9,6 @@
 
 #include "image_element.h"
 #include "runtime_utils.h"
-
-extern "C" {
-long calcPerform(double *parg, double *presult, char *post);
-long postfix(char *pinfix, char *ppostfix, short *perror);
-}
 
 namespace {
 constexpr int kCalcInputCount = 12;
@@ -37,10 +34,11 @@ void ImageRuntime::onBeforeFirstEvaluation()
     /* Normalize expression: convert == to = and != to # for MEDM calc engine */
     QString normalized = RuntimeUtils::normalizeCalcExpression(imageCalcExpr);
     QByteArray infix = normalized.toLatin1();
-    imageCalcPostfix_.resize(512);
+    imageCalcPostfix_.resize(QTEDM_CALC_POSTFIX_CAPACITY);
     imageCalcPostfix_.fill('\0');
     short error = 0;
-    long status = postfix(infix.data(), imageCalcPostfix_.data(), &error);
+    long status = qtedmPostfix(infix.data(), imageCalcPostfix_.data(),
+        imageCalcPostfix_.size(), &error);
     if (status == 0) {
       imageCalcValid_ = true;
     } else {

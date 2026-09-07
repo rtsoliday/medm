@@ -1,4 +1,6 @@
 #include "composite_runtime.h"
+
+#include "medm_calc.h"
 #include "composite_element.h"
 #include "text_properties.h"
 #include "channel_access_context.h"
@@ -10,11 +12,6 @@
 #include <cmath>
 
 #include <db_access.h>
-
-extern "C" {
-long calcPerform(double *parg, double *presult, char *post);
-long postfix(char *pinfix, char *ppostfix, short *perror);
-}
 
 namespace {
 
@@ -60,10 +57,11 @@ void CompositeRuntime::start()
     if (!calcExpr.isEmpty()) {
       QString normalized = normalizeCalcExpression(calcExpr);
       QByteArray infix = normalized.toLatin1();
-      calcPostfix_.resize(512);
+      calcPostfix_.resize(QTEDM_CALC_POSTFIX_CAPACITY);
       calcPostfix_.fill('\0');
       short error = 0;
-      long status = postfix(infix.data(), calcPostfix_.data(), &error);
+      long status = qtedmPostfix(infix.data(), calcPostfix_.data(),
+          calcPostfix_.size(), &error);
       if (status == 0) {
         calcValid_ = true;
       } else {

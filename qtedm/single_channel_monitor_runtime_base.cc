@@ -1,5 +1,7 @@
 #include "single_channel_monitor_runtime_base.h"
 
+#include "medm_calc.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -20,11 +22,6 @@
 #include "soft_pv_registry.h"
 #include "startup_timing.h"
 #include "statistics_tracker.h"
-
-extern "C" {
-long calcPerform(double *parg, double *presult, char *post);
-long postfix(char *pinfix, char *ppostfix, short *perror);
-}
 
 namespace {
 using RuntimeUtils::kInvalidSeverity;
@@ -230,10 +227,11 @@ void SingleChannelMonitorRuntimeBase<ElementType>::start()
       if (!calcExpr.isEmpty()) {
         const QString normalized = RuntimeUtils::normalizeCalcExpression(calcExpr);
         QByteArray infix = normalized.toLatin1();
-        visibilityCalcPostfix_.resize(512);
+        visibilityCalcPostfix_.resize(QTEDM_CALC_POSTFIX_CAPACITY);
         visibilityCalcPostfix_.fill('\0');
         short error = 0;
-        long status = postfix(infix.data(), visibilityCalcPostfix_.data(), &error);
+        long status = qtedmPostfix(infix.data(), visibilityCalcPostfix_.data(),
+            visibilityCalcPostfix_.size(), &error);
         if (status == 0) {
           visibilityCalcValid_ = true;
         } else {

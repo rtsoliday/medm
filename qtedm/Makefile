@@ -535,7 +535,8 @@ test_wave_table_model_OBJS = $(OBJ_DIR)/test_wave_table_model.$(OBJEXT) \
                              $(OBJ_DIR)/wave_table_model.$(OBJEXT) \
                              $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_runtime_utils_OBJS = $(OBJ_DIR)/test_runtime_utils.$(OBJEXT) \
-                          $(OBJ_DIR)/runtime_utils.$(OBJEXT)
+                          $(OBJ_DIR)/runtime_utils.$(OBJEXT) \
+                          $(OBJ_DIR)/text_runtime_calc_bridge.$(OBJEXT)
 test_cartesian_plot_properties_OBJS = \
   $(OBJ_DIR)/test_cartesian_plot_properties.$(OBJEXT)
 test_plot_graphic_runtimes_OBJS = \

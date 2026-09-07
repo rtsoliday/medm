@@ -73,6 +73,10 @@ public:
   void unsubscribe(quint64 subscriptionId) override;
 
 private:
+  friend class TestObserveOnlyControls;
+  static void copySnapshotValue(const SharedChannelData &data,
+      PvaInfoSnapshot &snapshot);
+
   PvaChannelManager();
   ~PvaChannelManager() override;
   void shutdown();

@@ -19,6 +19,7 @@ class TestTabbedDisplaysSessions : public QObject
 private slots:
   void registryContainsTabbedDisplay();
   void tabbedDisplayLoadsLazily();
+  void tabbedDisplayRebuildsSelectedPage();
   void tabbedDisplayReportsDiagnostics();
   void tabbedDisplayNormalizesIdsAndSupportsStackedMode();
   void tabbedDisplayRoutesEditModeMouseEventsToContainer();
@@ -71,6 +72,54 @@ void TestTabbedDisplaysSessions::tabbedDisplayLoadsLazily()
   QCOMPARE(element.loadedPageCount(), 2);
 
   element.setExecuteMode(false);
+  QCOMPARE(element.loadedPageCount(), 0);
+}
+
+void TestTabbedDisplaysSessions::tabbedDisplayRebuildsSelectedPage()
+{
+  TabbedDisplayElement element;
+  QList<TabbedDisplayPage> pages = {
+      {QStringLiteral("one"), QStringLiteral("One"),
+          QStringLiteral("one.adl"), {}, false},
+      {QStringLiteral("two"), QStringLiteral("Two"),
+          QStringLiteral("two.adl"), {}, true},
+      {QStringLiteral("three"), QStringLiteral("Three"),
+          QStringLiteral("three.adl"), {}, false},
+  };
+  element.setPages(pages);
+  QList<QPointer<QWidget>> contents;
+  element.setPageLoader([&](const TabbedDisplayPage &, QWidget *host,
+      QString *) -> QWidget * {
+    auto *content = new QWidget(host);
+    contents.append(content);
+    return content;
+  });
+  element.setExecuteMode(true);
+  element.setActivePageId(QStringLiteral("two"));
+  element.setActivePageId(QStringLiteral("three"));
+  QCOMPARE(element.loadedPageCount(), 2);
+  element.setExecuteMode(false);
+  for (const auto &content : contents) {
+    QVERIFY(content.isNull());
+  }
+  /* Accepting the editor with the third tab selected used to dereference
+   * deleted hosts from the tab bar's synchronous currentChanged signal. */
+  element.setPages(pages);
+  QCOMPARE(element.activePageId(), QStringLiteral("three"));
+  QCOMPARE(element.loadedPageCount(), 0);
+  element.setExecuteMode(true);
+  QCOMPARE(element.loadedPageCount(), 1);
+  const QPointer<QWidget> oldContent = contents.last();
+  element.setPages(pages);
+  QVERIFY(oldContent.isNull());
+  QCOMPARE(element.activePageId(), QStringLiteral("three"));
+  QCOMPARE(element.loadedPageCount(), 1);
+  pages.removeLast();
+  element.setPages(pages);
+  QCOMPARE(element.activePageId(), QStringLiteral("one"));
+  QCOMPARE(element.loadedPageCount(), 1);
+  element.setPages({});
+  QCOMPARE(element.activePageId(), QStringLiteral("page-1"));
   QCOMPARE(element.loadedPageCount(), 0);
 }
 

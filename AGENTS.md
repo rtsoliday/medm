@@ -119,10 +119,9 @@ This supplement is generated from repository evidence and leaves the handwritten
 - `medm/notes/README.WHITEPAGE`: Supporting documentation with operational details
 
 ## Build and test
-- Documented setup/build commands: `make -j4`, `make`, `make these fonts available. If you have Netscape or Internet Explorer`.
+- Documented setup/build commands: `make -j4`, `make`.
 - Detected build systems: GNU Make.
 - Documented test commands: `make test-qtedm-cli`, `make test-qtedm-unit`, `make test-qtedm-ioc`, `make test-qtedm-visual`, `make test-qtedm`.
-- Likely run commands or operator entry points: `level as this repository (for example, ../epics-base when you are in`, `python3 - <<'PY'`, `../tests/run_qtedm_visual_tests.sh`.
 
 ## Operational warnings
 - Local checkout layout appears significant; avoid casual changes to sibling-repo assumptions or relative paths.

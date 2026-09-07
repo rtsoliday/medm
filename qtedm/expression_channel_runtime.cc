@@ -1,5 +1,7 @@
 #include "expression_channel_runtime.h"
 
+#include "medm_calc.h"
+
 #include <cmath>
 
 #include <QDebug>
@@ -12,11 +14,6 @@
 #include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "soft_pv_registry.h"
-
-extern "C" {
-long calcPerform(double *parg, double *presult, char *post);
-long postfix(char *pinfix, char *ppostfix, short *perror);
-}
 
 namespace {
 
@@ -88,7 +85,8 @@ void ExpressionChannelRuntime::start()
     QString normalized = RuntimeUtils::normalizeCalcExpression(calcExpression);
     QByteArray infix = normalized.toLatin1();
     short error = 0;
-    const long status = postfix(infix.data(), postfix_.data(), &error);
+    const long status = qtedmPostfix(infix.data(), postfix_.data(),
+        postfix_.size(), &error);
     if (status == 0) {
       postfixValid_ = true;
     } else {
@@ -99,6 +97,13 @@ void ExpressionChannelRuntime::start()
     qWarning() << "ExpressionChannelRuntime: empty calc expression for"
                << outputName_;
   }
+
+  /* Soft-PV subscriptions can deliver a cached input synchronously. Publish
+   * the initial value before any callback can publish a calculation. */
+  const double initialValue = element_->initialValue();
+  lastPublishedResult_ = initialValue;
+  hasLastPublishedResult_ = true;
+  SoftPvRegistry::instance().publishValue(outputName_, initialValue);
 
   auto &manager = PvChannelManager::instance();
   for (int i = 0; i < static_cast<int>(subscriptions_.size()); ++i) {
@@ -119,11 +124,6 @@ void ExpressionChannelRuntime::start()
         nullptr,
         ChannelDeliveryMode::kRealtime);
   }
-
-  const double initialValue = element_->initialValue();
-  SoftPvRegistry::instance().publishValue(outputName_, initialValue);
-  lastPublishedResult_ = initialValue;
-  hasLastPublishedResult_ = true;
 }
 
 void ExpressionChannelRuntime::stop()

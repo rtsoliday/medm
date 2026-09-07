@@ -418,22 +418,10 @@ void ImageElement::updateCurrentPixmap()
 
 QColor ImageElement::foregroundColor() const
 {
-	if (const QWidget *parent = parentWidget()) {
-		return parent->palette().color(QPalette::WindowText);
-	}
-	if (qApp) {
-		return qApp->palette().color(QPalette::WindowText);
-	}
-	return Qt::black;
+  return palette().color(QPalette::WindowText);
 }
 
 QColor ImageElement::backgroundColor() const
 {
-	if (const QWidget *parent = parentWidget()) {
-		return parent->palette().color(QPalette::Window);
-	}
-	if (qApp) {
-		return qApp->palette().color(QPalette::Window);
-	}
-	return Qt::white;
+  return palette().color(QPalette::Window);
 }

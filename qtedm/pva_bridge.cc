@@ -85,7 +85,10 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
     elementCount = reading.numGetElements;
   }
 
-  if (source && reading.numeric && source[0].values) {
+  if (source && reading.numeric
+      && (elementCount == 0 || source[0].values)) {
+    /* An empty waveform is a value update even when its data pointer is null. */
+    data.isNumeric = true;
     const size_t arraySize = elementCount > 0
         ? static_cast<size_t>(elementCount)
         : 0u;

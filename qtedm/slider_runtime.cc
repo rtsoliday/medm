@@ -166,9 +166,8 @@ void SliderRuntime::handleChannelData(const SharedChannelData &data)
     stats.registerUpdateExecuted();
   }
 
-  /* Apply limits from control info if available and not yet done */
-  if (!hasControlInfo_ && (data.hasControlInfo || data.lopr != 0.0 || data.hopr != 0.0)) {
-    hasControlInfo_ = true;
+  /* Apply refreshed metadata without repainting for unchanged limits. */
+  if (data.hasControlInfo || data.lopr != 0.0 || data.hopr != 0.0) {
     /* MEDM path converts CA limits through float before use. Mirror that
      * behavior for compatibility, including possible +/-inf from overflow. */
     double low = static_cast<double>(static_cast<float>(data.lopr));
@@ -180,7 +179,14 @@ void SliderRuntime::handleChannelData(const SharedChannelData &data)
       high += 1.0;
     }
 
-    if (low != high || low != 0.0) {
+    if ((low != high || low != 0.0)
+        && (!hasControlInfo_ || low != lastControlLow_
+            || high != lastControlHigh_
+            || precision != lastControlPrecision_)) {
+      hasControlInfo_ = true;
+      lastControlLow_ = low;
+      lastControlHigh_ = high;
+      lastControlPrecision_ = precision;
       invokeOnElement([low, high, precision](SliderElement *element) {
         element->setRuntimeLimits(low, high);
         element->setRuntimePrecision(precision);

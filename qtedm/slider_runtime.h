@@ -46,6 +46,9 @@ private:
   bool hasLastValue_ = false;
   short lastSeverity_ = 0;
   bool hasControlInfo_ = false;
+  double lastControlLow_ = 0.0;
+  double lastControlHigh_ = 0.0;
+  int lastControlPrecision_ = -1;
   bool lastWriteAccess_ = false;
   bool initialUpdateTracked_ = false;
 };

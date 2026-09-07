@@ -1345,9 +1345,6 @@ QImage HeatmapElement::maxPoolDownsample(const QImage &source,
 
 QColor HeatmapElement::backgroundColor() const
 {
-  if (const QWidget *parent = parentWidget()) {
-    return parent->palette().color(QPalette::Window);
-  }
   return palette().color(QPalette::Window);
 }
 
@@ -1448,6 +1445,9 @@ void HeatmapElement::onExecuteStateApplied()
 
 bool HeatmapElement::event(QEvent *event)
 {
+  if (event->type() == QEvent::PaletteChange) {
+    invalidateCache();
+  }
   return QWidget::event(event);
 }
 

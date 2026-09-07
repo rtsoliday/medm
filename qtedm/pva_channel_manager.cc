@@ -461,10 +461,24 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
   snapshot.states = data.enumStrings;
   snapshot.hasStates = !data.enumStrings.isEmpty();
 
+  copySnapshotValue(data, snapshot);
+
+  cleanupChannel(channel);
+  return true;
+}
+
+void PvaChannelManager::copySnapshotValue(const SharedChannelData &data,
+    PvaInfoSnapshot &snapshot)
+{
   if (data.hasValue) {
     snapshot.hasValue = true;
     snapshot.isArray = data.isArray;
-    snapshot.arrayValues = data.arrayValues;
+    if (data.sharedArrayData && data.sharedArraySize > 0) {
+      snapshot.arrayValues = QVector<double>(data.sharedArrayData.get(),
+          data.sharedArrayData.get() + data.sharedArraySize);
+    } else {
+      snapshot.arrayValues = data.arrayValues;
+    }
     if (data.isString) {
       snapshot.value = data.stringValue;
     } else if (data.isEnum && !data.enumStrings.isEmpty()) {
@@ -478,9 +492,6 @@ bool PvaChannelManager::getInfoSnapshot(const QString &pvName,
       snapshot.value = QString::number(data.numericValue, 'g', 12);
     }
   }
-
-  cleanupChannel(channel);
-  return true;
 }
 
 void PvaChannelManager::notifySubscribers(PvaChannel *channel,

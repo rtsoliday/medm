@@ -10273,8 +10273,29 @@ QWidget *DisplayWindow::elementAt(const QPoint &windowPos,
     includeCompositeChildren = executeModeActive_;
     break;
   }
+  /* QWidget sibling order follows raise()/lower(). Execute-mode layering
+   * differs from ADL order, both here and inside composites. Keep graphics
+   * in this search even when they are mouse-transparent, for PV picking.
+   * Editing continues to use the document's stacking order. */
+  auto pickOrder = [this](QWidget *parent, QList<QWidget *> widgets) {
+    if (executeModeActive_) {
+      QHash<QWidget *, int> positions;
+      int position = 0;
+      for (QObject *object : parent->children()) {
+        if (auto *widget = qobject_cast<QWidget *>(object)) {
+          positions.insert(widget, position++);
+        }
+      }
+      std::stable_sort(widgets.begin(), widgets.end(),
+          [&positions](QWidget *left, QWidget *right) {
+            return positions.value(left, -1) < positions.value(right, -1);
+          });
+    }
+    return widgets;
+  };
   auto hitTest = [&](QWidget *candidate, const auto &self) -> QWidget * {
-    if (!candidate) {
+    if (!candidate || (executeModeActive_
+        && !candidate->isVisibleTo(displayArea_))) {
       return nullptr;
     }
 
@@ -10286,7 +10307,8 @@ QWidget *DisplayWindow::elementAt(const QPoint &windowPos,
 
     if (includeCompositeChildren) {
       if (auto *composite = dynamic_cast<CompositeElement *>(candidate)) {
-        const QList<QWidget *> children = composite->childWidgets();
+        const QList<QWidget *> children =
+            pickOrder(composite, composite->childWidgets());
         for (auto it = children.crbegin(); it != children.crend(); ++it) {
           QWidget *child = *it;
           if (!child) {
@@ -10314,16 +10336,20 @@ QWidget *DisplayWindow::elementAt(const QPoint &windowPos,
       }
     }
 
+    /* Shape helpers use parent-relative coordinates, not display-area
+     * coordinates. These differ for children of offset composites. */
+    const QPoint parentPos = candidate->mapFrom(displayArea_, areaPos)
+        + candidate->pos();
     if (auto *polyline = dynamic_cast<PolylineElement *>(candidate)) {
-      if (!polyline->containsGlobalPoint(areaPos)) {
+      if (!polyline->containsGlobalPoint(parentPos)) {
         return nullptr;
       }
     } else if (auto *oval = dynamic_cast<OvalElement *>(candidate)) {
-      if (!oval->containsGlobalPoint(areaPos)) {
+      if (!oval->containsGlobalPoint(parentPos)) {
         return nullptr;
       }
     } else if (auto *polygon = dynamic_cast<PolygonElement *>(candidate)) {
-      if (!polygon->containsGlobalPoint(areaPos)) {
+      if (!polygon->containsGlobalPoint(parentPos)) {
         return nullptr;
       }
     }
@@ -10385,8 +10411,15 @@ QWidget *DisplayWindow::elementAt(const QPoint &windowPos,
     return candidate;
   };
 
-  for (auto it = elementStack_.crbegin(); it != elementStack_.crend(); ++it) {
-    QWidget *widget = it->data();
+  QList<QWidget *> widgets;
+  for (const auto &entry : elementStack_) {
+    if (entry) {
+      widgets.append(entry.data());
+    }
+  }
+  widgets = pickOrder(displayArea_, widgets);
+  for (auto it = widgets.crbegin(); it != widgets.crend(); ++it) {
+    QWidget *widget = *it;
     if (QWidget *hit = hitTest(widget, hitTest)) {
       return hit;
     }
@@ -19015,8 +19048,17 @@ void DisplayWindow::ensureExecuteContextMenuEntriesLoaded()
 
 bool DisplayWindow::showExecuteSliderDialogForRightClick(const QPoint &globalPos)
 {
-  const QPoint windowPos = mapFromGlobal(globalPos);
-  QWidget *clickedWidget = elementAt(windowPos);
+  /* Use Qt's actual mouse target: execute stacking raises MEDM controls
+   * above graphics. PV picking also considers mouse-transparent graphics.
+   * childAt also respects hidden widgets and mouse-transparent overlays,
+   * and mapping via displayArea supports embedded tab pages. */
+  QWidget *clickedWidget = displayArea_
+      ? displayArea_->childAt(displayArea_->mapFromGlobal(globalPos))
+      : nullptr;
+  while (clickedWidget && clickedWidget != displayArea_
+      && !dynamic_cast<SliderElement *>(clickedWidget)) {
+    clickedWidget = clickedWidget->parentWidget();
+  }
   auto *slider = dynamic_cast<SliderElement *>(clickedWidget);
   if (!slider) {
     return false;
@@ -35043,7 +35085,7 @@ bool DisplayWindow::restoreSerializedState(const QByteArray &data)
   suppressUndoCapture_ = true;
   restoringState_ = true;
 
-  const QString textData = QString::fromLatin1(data);
+  const QString textData = QString::fromUtf8(data);
   std::optional<AdlNode> document = AdlParser::parse(textData, nullptr);
   if (!document) {
     restoringState_ = false;

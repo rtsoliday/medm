@@ -41,7 +41,9 @@ same running QtEDM process, including embedded and tabbed displays.
 Input channels are subscribed in real-time mode. A missing or nonnumeric value
 is treated as zero for evaluation; a non-finite value is ignored. An invalid or
 empty calc expression does not publish calculated updates, but the Initial
-Value is still available.
+Value is still available. Calculations are limited to 79 characters after
+operator normalization, protecting the legacy calculator's fixed-size stacks.
+This limit also applies to visibility and image-frame calculations.
 
 ## Event Signal behavior
 

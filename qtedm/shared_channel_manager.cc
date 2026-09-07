@@ -388,6 +388,12 @@ void SharedChannelManager::destroyChannelIfUnused(SharedChannel *channel)
     }
     channel->subscriptionId = nullptr;
   }
+  if (channel->controlSubscriptionId) {
+    if (canUseCa) {
+      ca_clear_subscription(channel->controlSubscriptionId);
+    }
+    channel->controlSubscriptionId = nullptr;
+  }
   if (channel->channelId) {
     if (canUseCa) {
       /* Remove access rights callback before clearing channel. */
@@ -447,7 +453,7 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findChannelByInstance
 
 void SharedChannelManager::requestControlInfo(SharedChannel *channel)
 {
-  if (!channel || !channel->channelId || channel->controlInfoRequested) {
+  if (!channel || !channel->channelId || channel->controlSubscriptionId) {
     return;
   }
 
@@ -470,17 +476,23 @@ void SharedChannelManager::requestControlInfo(SharedChannel *channel)
     return;
   }
 
-  channel->controlInfoRequested = true;
-
-  int status = ca_array_get_callback(
+  /* A property subscription supplies initial metadata and subsequent
+   * changes even when the PV value itself stays constant. */
+  int status = ca_create_subscription(
       controlType,
       1,
       channel->channelId,
+      DBE_PROPERTY,
       &SharedChannelManager::controlInfoCallback,
-      callbackUserDataForInstanceId(channel->instanceId));
+      callbackUserDataForInstanceId(channel->instanceId),
+      &channel->controlSubscriptionId);
 
   if (status == ECA_NORMAL) {
     scheduleDeferredFlush();
+  } else {
+    channel->controlSubscriptionId = nullptr;
+    qWarning() << "SharedChannelManager: metadata subscription failed for"
+               << channel->key.pvName << ":" << ca_message(status);
   }
 }
 
@@ -785,10 +797,13 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
     channel->cachedData.hasValue = false;
     channel->cachedData.hasControlInfo = false;
     channel->subscribed = false;
-    channel->controlInfoRequested = false;
     if (channel->subscriptionId) {
       ca_clear_subscription(channel->subscriptionId);
       channel->subscriptionId = nullptr;
+    }
+    if (channel->controlSubscriptionId) {
+      ca_clear_subscription(channel->controlSubscriptionId);
+      channel->controlSubscriptionId = nullptr;
     }
   }
 
@@ -1653,6 +1668,12 @@ void SharedChannelManager::shutdown()
         ca_clear_subscription(channel->subscriptionId);
       }
       channel->subscriptionId = nullptr;
+    }
+    if (channel->controlSubscriptionId) {
+      if (canUseCa) {
+        ca_clear_subscription(channel->controlSubscriptionId);
+      }
+      channel->controlSubscriptionId = nullptr;
     }
     if (channel->channelId) {
       if (canUseCa) {

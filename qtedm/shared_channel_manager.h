@@ -112,9 +112,9 @@ private:
     quint64 instanceId = 0;
     chid channelId = nullptr;
     evid subscriptionId = nullptr;
+    evid controlSubscriptionId = nullptr;
     bool connected = false;
     bool subscribed = false;
-    bool controlInfoRequested = false;
     bool canRead = false;
     bool canWrite = false;
     SharedChannelData cachedData;

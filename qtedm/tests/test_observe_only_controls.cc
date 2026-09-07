@@ -6,6 +6,7 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QComboBox>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -21,6 +22,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QScreen>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTextEdit>
 #include <QTimer>
@@ -28,11 +30,14 @@
 #include <QWindow>
 
 #include "audit_logger.h"
+#include "pva_channel_manager.h"
 #include "composite_element.h"
 #include "cartesian_plot_runtime.h"
+#include "cartesian_plot_element.h"
 #include "display_state.h"
 #include "display_window.h"
 #include "expression_channel_element.h"
+#include "expression_channel_runtime.h"
 #include "extension_object_registry.h"
 #include "find_pv_dialog.h"
 #include "heatmap_element.h"
@@ -41,6 +46,7 @@
 #include "message_button_element.h"
 #include "message_button_runtime.h"
 #include "meter_element.h"
+#include "oval_element.h"
 #include "plugin_element.h"
 #include "polyline_element.h"
 #include "polygon_element.h"
@@ -52,6 +58,7 @@
 #include "setpoint_control_element.h"
 #include "shell_command_element.h"
 #include "slider_element.h"
+#include "slider_runtime.h"
 #include "soft_pv_registry.h"
 #include "strip_chart_element.h"
 #include "tabbed_display_element.h"
@@ -91,6 +98,8 @@ private slots:
   void init();
   void cleanup();
   void registryContainsSafetyControlObjects();
+  void expressionStartupPreservesCalculation_data();
+  void expressionStartupPreservesCalculation();
   void observeOnlyBlocksEverySoftPvWriteKind();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
@@ -104,6 +113,8 @@ private slots:
   void waterfallBufferIsBoundedForHugeWaveforms();
   void stripChartPreservesSourceTimestamps();
   void waveformCopiesAreBounded();
+  void waveformCountsTrackPayloadLength();
+  void pvaSnapshotsCopySharedArrays();
   void shellCommandsDoNotBlockTheGuiThread();
   void auditLogCodecRoundTripsEscapedFields();
   void findPvIncludesEverySafetyControlFamily();
@@ -111,6 +122,10 @@ private slots:
   void readOnlyPvInfoPickFindsSafetyControls();
   void embeddedDisplayTraversalKeepsSoftPvsLocal();
   void pvLimitsPickerRoutesEverySupportedControl();
+  void sliderRightClickRespectsActualStacking();
+  void executePickingFollowsVisibleStacking();
+  void compositeShapePicking_data();
+  void compositeShapePicking();
   void middleButtonTooltipRoutesThroughChildControls();
   void editorOperationsCoverExtensionInventories();
   void editorGeometryCommandsTrackDirtyUndoAndRedo();
@@ -140,6 +155,63 @@ void TestObserveOnlyControls::cleanup()
   AuditLogger::instance().shutdown();
   AuditLogger::instance().initialize(false);
   qunsetenv("QTEDM_AUDIT_DIR");
+}
+
+void TestObserveOnlyControls::expressionStartupPreservesCalculation_data()
+{
+  QTest::addColumn<bool>("sourceFirst");
+  QTest::addColumn<bool>("firstChangeOnly");
+  QTest::newRow("source-first-any") << true << false;
+  QTest::newRow("source-last-any") << false << false;
+  QTest::newRow("source-first-once") << true << true;
+  QTest::newRow("source-last-once") << false << true;
+}
+
+void TestObserveOnlyControls::expressionStartupPreservesCalculation()
+{
+  QFETCH(bool, sourceFirst);
+  QFETCH(bool, firstChangeOnly);
+  auto &soft = SoftPvRegistry::instance();
+  const QString sourceName = QStringLiteral("__test:expression_source");
+  const QString resultName = QStringLiteral("__test:expression_result");
+  soft.prepareName(sourceName);
+  const auto releasePrepared = qScopeGuard([&]() {
+    soft.releasePreparedName(sourceName);
+  });
+
+  ExpressionChannelElement source;
+  source.setVariable(sourceName);
+  source.setCalc(QStringLiteral("0"));
+  source.setInitialValue(1.0);
+  source.setEventSignalMode(ExpressionChannelEventSignalMode::kNever);
+  ExpressionChannelElement result;
+  result.setVariable(resultName);
+  result.setChannel(0, sourceName);
+  result.setCalc(QStringLiteral("A*2"));
+  result.setInitialValue(0.0);
+  result.setEventSignalMode(firstChangeOnly
+      ? ExpressionChannelEventSignalMode::kOnFirstChange
+      : ExpressionChannelEventSignalMode::kOnAnyChange);
+  ExpressionChannelRuntime sourceRuntime(&source);
+  ExpressionChannelRuntime resultRuntime(&result);
+  if (sourceFirst) {
+    sourceRuntime.start();
+    resultRuntime.start();
+  } else {
+    resultRuntime.start();
+    sourceRuntime.start();
+  }
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(resultName, snapshot));
+  QVERIFY(snapshot.connected);
+  QVERIFY(snapshot.hasValue);
+  QCOMPARE(snapshot.value, 2.0);
+
+  /* Exercise subsequent publications and the one-shot latch, too. */
+  soft.publishValue(sourceName, 3.0);
+  QTest::qWait(250);
+  QVERIFY(soft.infoSnapshot(resultName, snapshot));
+  QCOMPARE(snapshot.value, firstChangeOnly ? 2.0 : 6.0);
 }
 
 void TestObserveOnlyControls::registryContainsSafetyControlObjects()
@@ -788,6 +860,58 @@ void TestObserveOnlyControls::waveformCopiesAreBounded()
       static_cast<double>(kCartesianPlotMaximumVectorElements - 1));
 }
 
+void TestObserveOnlyControls::waveformCountsTrackPayloadLength()
+{
+  WaveTableElement table;
+  table.setExecuteMode(true);
+  WaveTableRuntime runtime(&table);
+  runtime.start();
+  runtime.channelName_ = QStringLiteral("pva://test:waveform");
+  SharedChannelData data;
+  data.connected = true;
+  data.isNumeric = true;
+  data.isArray = true;
+  data.hasValue = true;
+  data.nativeElementCount = 8;
+  data.arrayValues = {1, 2, 3, 4, 5, 6, 7, 8};
+  runtime.handleChannelData(data);
+  QCOMPARE(table.receivedElementCount(), 8L);
+  QTRY_COMPARE(table.displayedElementCount(), 8);
+  data.arrayValues = {2, 4};
+  runtime.handleChannelData(data);
+  QCOMPARE(table.receivedElementCount(), 2L);
+  QTRY_COMPARE(table.displayedElementCount(), 2);
+  data.arrayValues.clear();
+  runtime.handleChannelData(data);
+  QCOMPARE(table.receivedElementCount(), 0L);
+  QTRY_COMPARE(table.displayedElementCount(), 0);
+}
+
+void TestObserveOnlyControls::pvaSnapshotsCopySharedArrays()
+{
+  SharedChannelData data;
+  data.hasValue = true;
+  data.isArray = true;
+  data.isNumeric = true;
+  data.sharedArrayData = std::shared_ptr<const double>(
+      new double[3]{1.25, 2.5, 3.75}, std::default_delete<double[]>());
+  data.sharedArraySize = 3;
+  PvaChannelManager::PvaInfoSnapshot snapshot;
+  PvaChannelManager::copySnapshotValue(data, snapshot);
+  QVERIFY(snapshot.hasValue);
+  QVERIFY(snapshot.isArray);
+  data.sharedArrayData.reset();
+  data.sharedArraySize = 0;
+  QCOMPARE(snapshot.arrayValues, QVector<double>({1.25, 2.5, 3.75}));
+  PvaChannelManager::copySnapshotValue(data, snapshot);
+  QVERIFY(snapshot.hasValue);
+  QVERIFY(snapshot.isArray);
+  QVERIFY(snapshot.arrayValues.isEmpty());
+  data.arrayValues = {4, 5};
+  PvaChannelManager::copySnapshotValue(data, snapshot);
+  QCOMPARE(snapshot.arrayValues, data.arrayValues);
+}
+
 void TestObserveOnlyControls::shellCommandsDoNotBlockTheGuiThread()
 {
   auto state = std::make_shared<DisplayState>();
@@ -1178,6 +1302,258 @@ void TestObserveOnlyControls::embeddedDisplayTraversalKeepsSoftPvsLocal()
   state->displays.removeAll(&window);
   state->activeDisplay.clear();
   QCoreApplication::processEvents();
+}
+
+void TestObserveOnlyControls::sliderRightClickRespectsActualStacking()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.resize(400, 300);
+  window.show();
+  window.executeModeActive_ = true;
+
+  const QString name = QStringLiteral("slider:rightclick:soft");
+  auto &soft = SoftPvRegistry::instance();
+  registeredNames_.append(name);
+  soft.registerName(name, true);
+  soft.setConnected(name, true);
+  soft.publishValue(name, 1.0);
+
+  auto *slider = new SliderElement(window.displayArea_);
+  slider->setGeometry(30, 40, 165, 25);
+  slider->setChannel(name);
+  slider->setExecuteMode(true);
+  window.sliderElements_.append(slider);
+  window.ensureElementInStack(slider);
+  slider->show();
+  auto *runtime = new SliderRuntime(slider);
+  window.sliderRuntimes_.insert(slider, runtime);
+  runtime->start();
+
+  /* liRf.adl places an alarm rectangle after the sliders it surrounds. */
+  auto *outline = new RectangleElement(window.displayArea_);
+  outline->setGeometry(20, 20, 190, 100);
+  outline->setColorMode(TextColorMode::kAlarm);
+  window.rectangleElements_.append(outline);
+  window.ensureElementInStack(outline);
+  outline->show();
+  window.refreshStackingOrder();
+  QCoreApplication::processEvents();
+  const QPoint point = slider->mapToGlobal(slider->rect().center());
+  QCOMPARE(window.elementAt(window.mapFromGlobal(point)),
+      static_cast<QWidget *>(slider));
+  QCOMPARE(window.displayArea_->childAt(
+      window.displayArea_->mapFromGlobal(point)),
+      static_cast<QWidget *>(slider));
+
+  bool dialogShown = false;
+  QTimer::singleShot(0, &window, [&]() {
+    auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+    if (!dialog) {
+      return;
+    }
+    auto *combo = dialog->findChild<QComboBox *>();
+    dialogShown = dialog->windowTitle() == name && combo;
+    dialog->reject();
+  });
+  QVERIFY(window.showExecuteSliderDialogForRightClick(point));
+  QVERIFY(dialogShown);
+
+  /* A real control in front must block the underlying slider. */
+  auto *button = new QPushButton(window.displayArea_);
+  button->setGeometry(slider->geometry());
+  button->show();
+  button->raise();
+  QVERIFY(!window.showExecuteSliderDialogForRightClick(point));
+  button->hide();
+  slider->hide();
+  QVERIFY(!window.showExecuteSliderDialogForRightClick(point));
+  slider->show();
+  runtime->stop();
+  /* Disconnected sliders consume the click without opening a dialog. */
+  QVERIFY(window.showExecuteSliderDialogForRightClick(point));
+  QVERIFY(!QApplication::activeModalWidget());
+}
+
+void TestObserveOnlyControls::executePickingFollowsVisibleStacking()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.resize(500, 400);
+  window.show();
+  window.executeModeActive_ = true;
+
+  auto *slider = new SliderElement(window.displayArea_);
+  slider->setGeometry(30, 40, 165, 25);
+  slider->setChannel(QStringLiteral("pick:slider"));
+  window.sliderElements_.append(slider);
+  window.ensureElementInStack(slider);
+  slider->show();
+  auto *outline = new RectangleElement(window.displayArea_);
+  outline->setGeometry(20, 20, 190, 100);
+  outline->setChannel(0, QStringLiteral("pick:alarm"));
+  outline->setColorMode(TextColorMode::kAlarm);
+  window.rectangleElements_.append(outline);
+  window.ensureElementInStack(outline);
+  outline->show();
+  window.refreshStackingOrder();
+  QCoreApplication::processEvents();
+  const QPoint point = window.mapFromGlobal(
+      slider->mapToGlobal(slider->rect().center()));
+  QCOMPARE(window.elementAt(point), static_cast<QWidget *>(slider));
+  QVERIFY(window.prepareExecuteChannelDrag(point));
+  QCOMPARE(window.executeDragChannels_, QStringList{slider->channel()});
+
+  window.startPvInfoPickMode();
+  window.completePvInfoPick(point, slider);
+  auto *info = window.findChild<QDialog *>(QStringLiteral("qtedmPvInfoDialog"));
+  QVERIFY(info);
+  auto *text = info->findChild<QPlainTextEdit *>();
+  QVERIFY(text);
+  QVERIFY(text->toPlainText().contains(slider->channel()));
+  QVERIFY(!text->toPlainText().contains(QStringLiteral("pick:alarm")));
+  info->hide();
+
+  window.startPvLimitsPickMode();
+  window.completePvLimitsPick(point, slider);
+  QVERIFY(window.pvLimitsDialog_);
+  bool sliderLimits = false;
+  for (QLabel *label : window.pvLimitsDialog_->findChildren<QLabel *>()) {
+    sliderLimits |= label->text() == slider->channel();
+  }
+  QVERIFY(sliderLimits);
+  window.pvLimitsDialog_->hide();
+
+  /* Dynamic, mouse-transparent graphics must remain pickable. Hidden
+   * controls and graphics must not block the visible object underneath. */
+  slider->hide();
+  QCOMPARE(window.elementAt(point), static_cast<QWidget *>(outline));
+  QVERIFY(window.prepareExecuteChannelDrag(point));
+  QCOMPARE(window.executeDragChannels_, QStringList{QStringLiteral("pick:alarm")});
+  outline->hide();
+  QVERIFY(!window.elementAt(point));
+  slider->show();
+  QCOMPARE(window.elementAt(point), static_cast<QWidget *>(slider));
+  outline->show();
+
+  /* Editing still selects the later ADL rectangle. */
+  window.executeModeActive_ = false;
+  QCOMPARE(window.elementAt(point), static_cast<QWidget *>(outline));
+  window.executeModeActive_ = true;
+
+  auto *plot = new CartesianPlotElement(window.displayArea_);
+  plot->setGeometry(slider->geometry());
+  window.cartesianPlotElements_.append(plot);
+  window.ensureElementInStack(plot);
+  plot->show();
+  /* Put the rectangle last in ADL order, but below controls on screen. */
+  window.elementStack_.removeAll(QPointer<QWidget>(outline));
+  window.elementStack_.append(outline);
+  window.refreshStackingOrder();
+  QCOMPARE(window.elementAt(point), static_cast<QWidget *>(plot));
+  bool axisMenuShown = false;
+  QTimer::singleShot(0, &window, [&]() {
+    auto *menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+    if (menu) {
+      for (QAction *action : menu->actions()) {
+        axisMenuShown |= action->text() == QStringLiteral("Modify Axis Values...");
+      }
+      menu->close();
+    }
+  });
+  window.showExecuteContextMenu(window.mapToGlobal(point));
+  QVERIFY(axisMenuShown);
+}
+
+void TestObserveOnlyControls::compositeShapePicking_data()
+{
+  QTest::addColumn<int>("shapeKind");
+  QTest::addColumn<bool>("execute");
+  for (int kind = 0; kind < 3; ++kind) {
+    QTest::newRow(qPrintable(QStringLiteral("shape-%1-execute").arg(kind)))
+        << kind << true;
+    QTest::newRow(qPrintable(QStringLiteral("shape-%1-edit").arg(kind)))
+        << kind << false;
+  }
+}
+
+void TestObserveOnlyControls::compositeShapePicking()
+{
+  QFETCH(int, shapeKind);
+  QFETCH(bool, execute);
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = !execute;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.resize(600, 450);
+  window.show();
+  window.executeModeActive_ = execute;
+  auto *outer = new CompositeElement(window.displayArea_);
+  outer->setGeometry(100, 90, 300, 250);
+  window.compositeElements_.append(outer);
+  window.ensureElementInStack(outer);
+  auto *inner = new CompositeElement(outer);
+  inner->setGeometry(40, 30, 180, 150);
+  outer->adoptChild(inner);
+  GraphicShapeElement *shape = nullptr;
+  if (shapeKind == 0) {
+    auto *oval = new OvalElement(inner);
+    oval->setGeometry(20, 20, 80, 80);
+    oval->setFill(RectangleFill::kSolid);
+    shape = oval;
+  } else if (shapeKind == 1) {
+    auto *polygon = new PolygonElement(inner);
+    polygon->setAbsolutePoints({QPoint(20, 20), QPoint(100, 20),
+        QPoint(100, 100), QPoint(20, 100)});
+    shape = polygon;
+  } else {
+    auto *line = new PolylineElement(inner);
+    line->setAbsolutePoints({QPoint(20, 20), QPoint(100, 100)});
+    shape = line;
+  }
+  shape->setColorMode(TextColorMode::kAlarm);
+  shape->setChannel(0, QStringLiteral("pick:shape"));
+  inner->adoptChild(shape);
+  outer->show();
+  inner->show();
+  shape->show();
+  QCoreApplication::processEvents();
+  const QPoint point = window.mapFromGlobal(
+      shape->mapToGlobal(shape->rect().center()));
+  const auto include = DisplayWindow::CompositeHitMode::kIncludeChildren;
+  QCOMPARE(window.elementAt(point, include), static_cast<QWidget *>(shape));
+  if (shapeKind != 1) {
+    const QPoint outsideShape = window.mapFromGlobal(
+        shape->mapToGlobal(QPoint(shape->width() - 2, 1)));
+    QVERIFY(window.elementAt(outsideShape, include) != shape);
+  }
+  if (execute) {
+    inner->hide();
+    QVERIFY(!window.elementAt(point));
+    inner->show();
+    outer->hide();
+    QVERIFY(!window.elementAt(point));
+    outer->show();
+
+    /* Nested controls also draw above later alarm graphics. */
+    auto *slider = new SliderElement(inner);
+    slider->setGeometry(shape->geometry());
+    slider->setChannel(QStringLiteral("pick:nested-slider"));
+    inner->adoptChild(slider);
+    slider->show();
+    shape->raise();
+    inner->setExecuteMode(true);
+    QCOMPARE(window.elementAt(point), static_cast<QWidget *>(slider));
+  } else {
+    QCOMPARE(window.elementAt(point), static_cast<QWidget *>(outer));
+  }
 }
 
 void TestObserveOnlyControls::pvLimitsPickerRoutesEverySupportedControl()

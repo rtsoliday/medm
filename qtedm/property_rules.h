@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QPalette>
+
 #include <QElapsedTimer>
 #include <QHash>
 #include <QJsonArray>
@@ -145,4 +147,6 @@ private:
   QTimer evaluationTimer_;
   QString diagnostic_;
   bool started_ = false;
+  bool originalAutoFillBackground_ = false;
+  QPalette originalPalette_;
 };

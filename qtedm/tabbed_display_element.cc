@@ -16,6 +16,7 @@
 #include <QPushButton>
 #include <QSet>
 #include <QShortcut>
+#include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QTableWidget>
@@ -265,9 +266,14 @@ void TabbedDisplayElement::mouseDoubleClickEvent(QMouseEvent *event)
 
 void TabbedDisplayElement::rebuildPages()
 {
+  /* Removing or adding tabs emits currentChanged synchronously. Do not let
+   * activatePage inspect the old page hosts while they are being deleted. */
+  const QSignalBlocker blockTabs(tabBar_);
+  previousIndex_ = -1;
   for (int index = 0; index < runtimes_.size(); ++index) {
     unloadPage(index);
   }
+  runtimes_.clear();
   while (stack_->count() > 0) {
     QWidget *page = stack_->widget(0);
     stack_->removeWidget(page);
@@ -276,7 +282,6 @@ void TabbedDisplayElement::rebuildPages()
   while (tabBar_->count() > 0) {
     tabBar_->removeTab(0);
   }
-  runtimes_.clear();
 
   for (int index = 0; index < pages_.size(); ++index) {
     const TabbedDisplayPage &page = pages_.at(index);

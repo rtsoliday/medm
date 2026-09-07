@@ -1,5 +1,7 @@
 #pragma once
 
+#include "medm_calc.h"
+
 #include <array>
 
 #include <QObject>
@@ -30,7 +32,7 @@ private:
   std::array<double, 4> values_{{0.0, 0.0, 0.0, 0.0}};
   std::array<bool, 4> connected_{{false, false, false, false}};
   QString outputName_;
-  std::array<char, 300> postfix_{};
+  std::array<char, QTEDM_CALC_POSTFIX_CAPACITY> postfix_{};
   bool postfixValid_ = false;
   bool started_ = false;
   bool firstEvaluationPublished_ = false;

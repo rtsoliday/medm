@@ -18,14 +18,14 @@
  *
  * The external functions are:
  *   calcPerform
- *   postfix
+ *   qtedmPostfix
  *
- * The calling program should provide char arrays (as for the EPICS calcRecord):
- *   calc[40];    (for calc expression)
- *   post[200];   (for calculated postfix expression)
+ * Buffer sizes and the supported infix limit are declared in medm_calc.h.
  *
  * The input values are passed as a double array with length up to 12
  *   or as a pointer to a double.  */
+
+#include "medm_calc.h"
 
 #define NOT_SET         0
 #define TRUE_COND       1
@@ -115,6 +115,7 @@
 #include        <stdio.h>
 #include        <string.h>
 #include        <math.h>
+#include        <limits.h>
 #include        <ctype.h>
 
 #ifndef PI
@@ -275,7 +276,6 @@ static struct expression_element        elements[] = {
 /* Function prototypes */
 
 long calcPerform(double *parg, double *presult, char  *post);
-long postfix(char *pinfix, char *ppostfix, short *perror);
 static int find_element(char *pbuffer, struct expression_element **pelement,
   short *pno_bytes);
 static int get_element(char *pinfix, struct expression_element  **pelement,
@@ -315,8 +315,6 @@ long calcPerform(double *parg, double *presult, char *post)
 {
     double *pstacktop;  /* stack of values      */
     double              stack[80];
-    short               temp1;
-    short       i;
     double              *top;
     int                 itop;           /* integer top value    */
     int                 inexttop;       /* ineteger next to top value   */
@@ -326,6 +324,7 @@ long calcPerform(double *parg, double *presult, char *post)
     pstacktop = &stack[0];
 
 #if 0
+    short i;
     for (i=0;i<184;i++){
         printf ("%d_",post[i]);
         if ( post[i] == END_STACK ) break;
@@ -501,12 +500,11 @@ long calcPerform(double *parg, double *presult, char *post)
             --pstacktop;
             if (*pstacktop == 0) break;
             if (*pstacktop < 0){
-                temp1 = (int) *(pstacktop+1);
-                                /* is exponent an integer */
-                if ((*(pstacktop+1) - (double)temp1) != 0) return (-1);
-                *pstacktop = exp(*(pstacktop+1) * log(-*pstacktop));
-                                /* is value negative */
-                if ((temp1 % 2) > 0) *pstacktop = -*pstacktop;
+                /* Avoid narrowing the exponent; pow handles the sign of
+                 * both positive and negative integral exponents. */
+                if (!isfinite(*(pstacktop+1)) ||
+                    trunc(*(pstacktop+1)) != *(pstacktop+1)) return (-1);
+                *pstacktop = pow(*pstacktop, *(pstacktop+1));
             }else{
                 *pstacktop = exp(*(pstacktop+1) * log(*pstacktop));
             }
@@ -514,12 +512,18 @@ long calcPerform(double *parg, double *presult, char *post)
 
         case MODULO:
             --pstacktop;
+            if (!isfinite(*pstacktop) || !isfinite(*(pstacktop+1)) ||
+                trunc(*pstacktop) < INT_MIN ||
+                trunc(*pstacktop) > INT_MAX ||
+                trunc(*(pstacktop+1)) < INT_MIN ||
+                trunc(*(pstacktop+1)) > INT_MAX) return (-1);
             itop = (int)*pstacktop;
             inexttop = (int)*(pstacktop+1);
             if (inexttop == 0)
               return(-1);
-            i =  itop % inexttop;
-            *pstacktop = i;
+            /* INT_MIN / -1 overflows, but its remainder is exactly zero. */
+            *pstacktop = (itop == INT_MIN && inexttop == -1)
+                ? 0.0 : (double)(itop % inexttop);
             break;
 
         case REL_OR:
@@ -816,7 +820,7 @@ static int get_element(char *pinfix, struct expression_element  **pelement,
  *
  * convert an infix expression to a postfix expression
  */
-long postfix(char *pinfix, char *ppostfix, short *perror)
+long qtedmPostfix(char *pinfix, char *ppostfix, size_t capacity, short *perror)
 {
     short               no_bytes;
     register short      operand_needed;
@@ -829,9 +833,18 @@ long postfix(char *pinfix, char *ppostfix, short *perror)
     char in_stack_pri, in_coming_pri, code;
     char           *ppostfixStart = ppostfix;
 
+    if (!perror) return(-1);
+    *perror = 8;
+    if (!ppostfix || capacity == 0) return(-1);
+    *ppostfix = BAD_EXPRESSION;
+    if (!pinfix || strlen(pinfix) > QTEDM_CALC_MAX_INFIX
+        || capacity < 9 * strlen(pinfix) + 2) return(-1);
+    memset(stack, 0, sizeof(stack));
+
   /* convert infix expression to upper case */
     for (pc=pinfix; *pc; pc++) {
-        if (islower(*pc)) *pc = toupper(*pc);
+        if (islower((unsigned char)*pc))
+            *pc = toupper((unsigned char)*pc);
     }
 
   /* place the expression elements into postfix */

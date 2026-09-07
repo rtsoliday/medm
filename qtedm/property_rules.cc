@@ -1,5 +1,7 @@
 #include "property_rules.h"
 
+#include "medm_calc.h"
+
 #include <QAbstractButton>
 #include <QColor>
 #include <QJsonDocument>
@@ -18,28 +20,133 @@
 
 #include <db_access.h>
 
+#include "bar_monitor_element.h"
+#include "byte_monitor_element.h"
+#include "cartesian_plot_element.h"
+#include "choice_button_element.h"
+#include "composite_element.h"
+#include "expression_channel_element.h"
+#include "led_monitor_element.h"
+#include "menu_element.h"
+#include "message_button_element.h"
+#include "meter_element.h"
+#include "pv_table_element.h"
+#include "related_display_element.h"
+#include "scale_monitor_element.h"
+#include "setpoint_control_element.h"
+#include "shell_command_element.h"
+#include "slider_element.h"
+#include "strip_chart_element.h"
+#include "text_area_element.h"
+#include "text_entry_element.h"
+#include "text_monitor_element.h"
+#include "thermometer_element.h"
+#include "waterfall_plot_element.h"
+#include "wave_table_element.h"
+#include "wheel_switch_element.h"
+#include "graphic_shape_element.h"
+#include "image_element.h"
+
 #include "adl_writer.h"
 #include "plugin_element.h"
 #include "pv_channel_manager.h"
 #include "runtime_utils.h"
 #include "text_element.h"
 
-extern "C" {
-long calcPerform(double *parg, double *presult, char *post);
-long postfix(char *pinfix, char *ppostfix, short *perror);
-}
-
 namespace {
 
 constexpr int kMaximumRulesPerWidget = 64;
 constexpr int kMaximumInputsPerRule = 12;
-/* medm_calc.c has fixed 80-entry parser and evaluation stacks and no output
- * length argument. Keeping the infix below 80 characters bounds both stack
- * use and the worst-case encoded postfix size. */
-constexpr int kMaximumExpressionLength = 79;
-constexpr int kMaximumPostfixLength = 1024;
+/* Use the same expression limits as the runtime calculation compiler. */
+constexpr int kMaximumExpressionLength = QTEDM_CALC_MAX_INFIX;
+constexpr int kMaximumPostfixLength = QTEDM_CALC_POSTFIX_CAPACITY;
 constexpr double kMinimumRateHz = 1.0;
 constexpr double kMaximumRateHz = 60.0;
+
+/* Built-in widgets paint from their stored colors, rather than QPalette.
+ * Keep rule capture, application and restoration on those same properties. */
+template <typename Element, typename Operation>
+bool visitColorElement(QWidget *target, Operation operation)
+{
+  if (auto *element = dynamic_cast<Element *>(target)) {
+    operation(element);
+    return true;
+  }
+  return false;
+}
+
+template <typename Operation>
+bool visitColorElement(QWidget *target, Operation operation)
+{
+  return visitColorElement<BarMonitorElement>(target, operation)
+      || visitColorElement<ByteMonitorElement>(target, operation)
+      || visitColorElement<CartesianPlotElement>(target, operation)
+      || visitColorElement<ChoiceButtonElement>(target, operation)
+      || visitColorElement<CompositeElement>(target, operation)
+      || visitColorElement<ExpressionChannelElement>(target, operation)
+      || visitColorElement<LedMonitorElement>(target, operation)
+      || visitColorElement<MenuElement>(target, operation)
+      || visitColorElement<MessageButtonElement>(target, operation)
+      || visitColorElement<MeterElement>(target, operation)
+      || visitColorElement<PvTableElement>(target, operation)
+      || visitColorElement<RelatedDisplayElement>(target, operation)
+      || visitColorElement<ScaleMonitorElement>(target, operation)
+      || visitColorElement<SetpointControlElement>(target, operation)
+      || visitColorElement<ShellCommandElement>(target, operation)
+      || visitColorElement<SliderElement>(target, operation)
+      || visitColorElement<StripChartElement>(target, operation)
+      || visitColorElement<TextAreaElement>(target, operation)
+      || visitColorElement<TextEntryElement>(target, operation)
+      || visitColorElement<TextMonitorElement>(target, operation)
+      || visitColorElement<ThermometerElement>(target, operation)
+      || visitColorElement<WaterfallPlotElement>(target, operation)
+      || visitColorElement<WaveTableElement>(target, operation)
+      || visitColorElement<WheelSwitchElement>(target, operation);
+}
+
+QColor widgetColor(QWidget *target, bool foreground)
+{
+  QColor result = target->palette().color(
+      foreground ? QPalette::WindowText : QPalette::Window);
+  if (foreground) {
+    if (auto *text = dynamic_cast<TextElement *>(target)) {
+      return text->foregroundColor();
+    }
+    if (!dynamic_cast<ImageElement *>(target)) {
+      if (auto *graphic = dynamic_cast<GraphicShapeElement *>(target)) {
+        return graphic->color().isValid() ? graphic->color() : result;
+      }
+    }
+  }
+  visitColorElement(target, [&](auto *element) {
+    result = foreground ? element->foregroundColor()
+                        : element->backgroundColor();
+  });
+  return result;
+}
+
+bool setWidgetColor(QWidget *target, bool foreground, const QColor &color)
+{
+  if (foreground) {
+    if (auto *text = dynamic_cast<TextElement *>(target)) {
+      text->setForegroundColor(color);
+      return true;
+    }
+    if (!dynamic_cast<ImageElement *>(target)) {
+      if (auto *graphic = dynamic_cast<GraphicShapeElement *>(target)) {
+        graphic->setForegroundColor(color);
+        return true;
+      }
+    }
+  }
+  return visitColorElement(target, [&](auto *element) {
+    if (foreground) {
+      element->setForegroundColor(color);
+    } else {
+      element->setBackgroundColor(color);
+    }
+  });
+}
 
 QStringList splitDependencies(const QString &value)
 {
@@ -539,7 +646,8 @@ bool PropertyRules::isExpressionSandboxed(const QString &expression,
   std::array<char, kMaximumPostfixLength> compiled{};
   short parseError = 0;
   if (infix.isEmpty()
-      || postfix(infix.data(), compiled.data(), &parseError) != 0) {
+      || qtedmPostfix(infix.data(), compiled.data(), compiled.size(),
+          &parseError) != 0) {
     if (error) {
       *error = QStringLiteral("Calculation grammar rejected the expression (error %1).")
           .arg(parseError);
@@ -709,6 +817,8 @@ bool PropertyRuleRuntime::start(QString *error)
     return false;
   }
 
+  originalAutoFillBackground_ = target_->autoFillBackground();
+  originalPalette_ = target_->palette();
   for (const QtedmPropertyRule &rule : ruleSet_.rules) {
     const int propertyKey = static_cast<int>(rule.property);
     if (!originalValues_.contains(propertyKey)) {
@@ -722,7 +832,8 @@ bool PropertyRuleRuntime::start(QString *error)
     QByteArray infix = normalized.toLatin1();
     short parseError = 0;
     state->postfixValid =
-        postfix(infix.data(), state->postfix.data(), &parseError) == 0;
+        qtedmPostfix(infix.data(), state->postfix.data(),
+            state->postfix.size(), &parseError) == 0;
     if (!state->postfixValid) {
       diagnostic_ = QStringLiteral("%1: expression compile failed (%2).")
           .arg(rule.id).arg(parseError);
@@ -775,7 +886,7 @@ void PropertyRuleRuntime::stop()
   }
   for (auto it = originalValues_.cbegin(); it != originalValues_.cend();
        ++it) {
-    applyProperty(static_cast<QtedmRuleProperty>(it.key()), it.value());
+    restoreProperty(static_cast<QtedmRuleProperty>(it.key()));
   }
   states_.clear();
   originalValues_.clear();
@@ -966,6 +1077,26 @@ void PropertyRuleRuntime::restoreProperty(QtedmRuleProperty property)
   const auto it = originalValues_.constFind(static_cast<int>(property));
   if (it != originalValues_.cend()) {
     applyProperty(property, it.value());
+    if (target_ && (property == QtedmRuleProperty::kForeground
+        || property == QtedmRuleProperty::kBackground)) {
+      QPalette palette = target_->palette();
+      const bool foreground = property == QtedmRuleProperty::kForeground;
+      const auto roles = foreground
+          ? QList<QPalette::ColorRole>{QPalette::WindowText, QPalette::Text,
+                QPalette::ButtonText}
+          : QList<QPalette::ColorRole>{QPalette::Window, QPalette::Base,
+                QPalette::Button};
+      for (QPalette::ColorGroup group : {QPalette::Active, QPalette::Inactive,
+               QPalette::Disabled}) {
+        for (QPalette::ColorRole role : roles) {
+          palette.setBrush(group, role, originalPalette_.brush(group, role));
+        }
+      }
+      target_->setPalette(palette);
+      if (!foreground) {
+        target_->setAutoFillBackground(originalAutoFillBackground_);
+      }
+    }
   }
 }
 
@@ -983,9 +1114,9 @@ QVariant PropertyRuleRuntime::captureProperty(
   case QtedmRuleProperty::kText:
     return widgetText(target_);
   case QtedmRuleProperty::kForeground:
-    return target_->palette().color(QPalette::WindowText);
+    return widgetColor(target_, true);
   case QtedmRuleProperty::kBackground:
-    return target_->palette().color(QPalette::Window);
+    return widgetColor(target_, false);
   case QtedmRuleProperty::kGeometry:
     return target_->geometry();
   }
@@ -1013,6 +1144,9 @@ bool PropertyRuleRuntime::applyProperty(QtedmRuleProperty property,
   case QtedmRuleProperty::kForeground: {
     const QColor color = value.value<QColor>();
     if (color.isValid()) {
+      if (setWidgetColor(target_, true, color)) {
+        return true;
+      }
       QPalette palette = target_->palette();
       palette.setColor(QPalette::WindowText, color);
       palette.setColor(QPalette::Text, color);
@@ -1026,6 +1160,9 @@ bool PropertyRuleRuntime::applyProperty(QtedmRuleProperty property,
   case QtedmRuleProperty::kBackground: {
     const QColor color = value.value<QColor>();
     if (color.isValid()) {
+      if (setWidgetColor(target_, false, color)) {
+        return true;
+      }
       QPalette palette = target_->palette();
       palette.setColor(QPalette::Window, color);
       palette.setColor(QPalette::Base, color);

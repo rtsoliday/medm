@@ -16,6 +16,12 @@
 #include "plugin_element.h"
 #include "plugin_manager.h"
 #include "property_rules.h"
+#include "rectangle_element.h"
+#include "text_element.h"
+#include "bar_monitor_element.h"
+#include "heatmap_element.h"
+
+#include <QImage>
 #include "pv_channel_manager.h"
 #include "soft_pv_registry.h"
 
@@ -337,6 +343,7 @@ private slots:
   void constructionFailureCreatesDiagnosticPlaceholder();
   void rulesParseRoundTripCyclesAndSandbox();
   void rulesEvaluateRateLimitDisconnectAndRestore();
+  void colorRulesPaintAndRestoreBuiltInWidgets();
   void displayRulesAndMissingPluginSurviveSaveAndUndo();
 };
 
@@ -904,6 +911,71 @@ void TestPluginsPropertyRules::rulesEvaluateRateLimitDisconnectAndRestore()
   soft.unregisterName(pv);
 }
 
+void TestPluginsPropertyRules::colorRulesPaintAndRestoreBuiltInWidgets()
+{
+  RectangleElement rectangle;
+  rectangle.resize(50, 50);
+  rectangle.setFill(RectangleFill::kSolid);
+  rectangle.setForegroundColor(Qt::blue);
+  QtedmPropertyRule rule;
+  rule.id = QStringLiteral("color");
+  rule.property = QtedmRuleProperty::kForeground;
+  rule.expression = QStringLiteral("1");
+  rule.trueValue = QStringLiteral("#ff0000");
+  rule.falseValue = QStringLiteral("#00ff00");
+  QtedmRuleSet rules;
+  rules.rules = {rule};
+  PropertyRuleRuntime runtime(&rectangle, rules);
+  QVERIFY(runtime.start());
+  QTRY_COMPARE(rectangle.color(), QColor(Qt::red));
+  QImage image(rectangle.size(), QImage::Format_ARGB32);
+  image.fill(Qt::transparent);
+  rectangle.render(&image);
+  QCOMPARE(image.pixelColor(25, 25), QColor(Qt::red));
+  runtime.stop();
+  QCOMPARE(rectangle.color(), QColor(Qt::blue));
+  rectangle.render(&image);
+  QCOMPARE(image.pixelColor(25, 25), QColor(Qt::blue));
+
+  TextElement text;
+  text.setForegroundColor(Qt::blue);
+  PropertyRuleRuntime textRuntime(&text, rules);
+  QVERIFY(textRuntime.start());
+  QTRY_COMPARE(text.foregroundColor(), QColor(Qt::red));
+  textRuntime.stop();
+  QCOMPARE(text.foregroundColor(), QColor(Qt::blue));
+
+  BarMonitorElement bar;
+  bar.setForegroundColor(Qt::blue);
+  bar.setBackgroundColor(Qt::yellow);
+  rule.id = QStringLiteral("background");
+  rule.property = QtedmRuleProperty::kBackground;
+  rule.trueValue = QStringLiteral("#000000");
+  rules.rules.append(rule);
+  PropertyRuleRuntime barRuntime(&bar, rules);
+  QVERIFY(barRuntime.start());
+  QTRY_COMPARE(bar.foregroundColor(), QColor(Qt::red));
+  QTRY_COMPARE(bar.backgroundColor(), QColor(Qt::black));
+  barRuntime.stop();
+  QCOMPARE(bar.foregroundColor(), QColor(Qt::blue));
+  QCOMPARE(bar.backgroundColor(), QColor(Qt::yellow));
+
+  QWidget parent;
+  QPalette palette = parent.palette();
+  palette.setColor(QPalette::Window, Qt::yellow);
+  parent.setPalette(palette);
+  HeatmapElement heatmap(&parent);
+  rules.rules = {rule};
+  PropertyRuleRuntime heatmapRuntime(&heatmap, rules);
+  const bool originalAutoFill = heatmap.autoFillBackground();
+  QVERIFY(heatmapRuntime.start());
+  QTRY_COMPARE(heatmap.palette().color(QPalette::Window), QColor(Qt::black));
+  heatmapRuntime.stop();
+  QCOMPARE(heatmap.palette().color(QPalette::Window), QColor(Qt::yellow));
+  QCOMPARE(heatmap.autoFillBackground(), originalAutoFill);
+  QCOMPARE(parent.palette().color(QPalette::Window), QColor(Qt::yellow));
+}
+
 void TestPluginsPropertyRules::displayRulesAndMissingPluginSurviveSaveAndUndo()
 {
   QTemporaryDir directory;
@@ -916,7 +988,7 @@ void TestPluginsPropertyRules::displayRulesAndMissingPluginSurviveSaveAndUndo()
       "file { name=\"plugins-property-rules.adl\" version=040004 }\n"
       "display { object { x=0 y=0 width=320 height=160 } clr=14 bclr=0 }\n"
       "color map { ncolors=2 colors { ffffff, 000000, } }\n"
-      "text { object { x=20 y=20 width=120 height=30 } textix=\"Rules\" }\n"
+      "text { object { x=20 y=20 width=120 height=30 } textix=\"Caf\351 20\260C\" }\n"
       "qtedm_plugin {\n"
       "  pluginId=\"org.missing.plugin\"\n"
       "  typeId=\"future_widget\"\n"
@@ -968,6 +1040,7 @@ void TestPluginsPropertyRules::displayRulesAndMissingPluginSurviveSaveAndUndo()
   QVERIFY(saved.open(QIODevice::ReadOnly));
   QByteArray savedText = saved.readAll();
   QVERIFY(savedText.contains("qtedm_rules"));
+  QVERIFY(savedText.contains("Caf\351 20\260C"));
   QVERIFY(savedText.contains("futureFlag=\"preserve-me\""));
   QVERIFY(savedText.contains("opaque=\"still-here\""));
 
@@ -982,7 +1055,15 @@ void TestPluginsPropertyRules::displayRulesAndMissingPluginSurviveSaveAndUndo()
   QVERIFY(undoFile.open(QIODevice::ReadOnly));
   savedText = undoFile.readAll();
   QVERIFY(savedText.contains("qtedm_rules"));
+  QVERIFY(savedText.contains("Caf\351 20\260C"));
   QVERIFY(savedText.contains("futureFlag=\"preserve-me\""));
+
+  window.triggerRedo();
+  const QString afterRedo = directory.filePath(QStringLiteral("after-redo.adl"));
+  QVERIFY(window.saveToPath(afterRedo));
+  QFile redoFile(afterRedo);
+  QVERIFY(redoFile.open(QIODevice::ReadOnly));
+  QVERIFY(redoFile.readAll().contains("Caf\351 20\260C"));
 
   DisplayWindow reopened(QApplication::palette(), QApplication::palette(),
       QApplication::font(), QApplication::font(), state);

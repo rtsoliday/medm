@@ -1,5 +1,7 @@
 #include "graphic_element_runtime_base.h"
 
+#include "medm_calc.h"
+
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -13,12 +15,6 @@
 #include "runtime_utils.h"
 #include "pv_channel_manager.h"
 #include "startup_timing.h"
-
-/* External C functions for MEDM calc expression evaluation */
-extern "C" {
-long calcPerform(double *parg, double *presult, char *post);
-long postfix(char *pinfix, char *ppostfix, short *perror);
-}
 
 /* Implementation of ElementCalcChannelTraits for ImageElement.
  * Images need channels if they have a calc expression for frame selection. */
@@ -118,10 +114,11 @@ void GraphicElementRuntimeBase<ElementType, ChannelCount>::start()
       /* Normalize expression: convert == to = and != to # for MEDM calc engine */
       QString normalized = RuntimeUtils::normalizeCalcExpression(calcExpr);
       QByteArray infix = normalized.toLatin1();
-      calcPostfix_.resize(512);
+      calcPostfix_.resize(QTEDM_CALC_POSTFIX_CAPACITY);
       calcPostfix_.fill('\0');
       short error = 0;
-      long status = postfix(infix.data(), calcPostfix_.data(), &error);
+      long status = qtedmPostfix(infix.data(), calcPostfix_.data(),
+          calcPostfix_.size(), &error);
       if (status == 0) {
         calcValid_ = true;
       } else {

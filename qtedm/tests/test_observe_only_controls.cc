@@ -123,6 +123,8 @@ private slots:
   void embeddedDisplayTraversalKeepsSoftPvsLocal();
   void pvLimitsPickerRoutesEverySupportedControl();
   void sliderRightClickRespectsActualStacking();
+  void sliderTrackEnclosesHandle_data();
+  void sliderTrackEnclosesHandle();
   void executePickingFollowsVisibleStacking();
   void hiddenRelatedDisplayUnderGraphicComposite();
   void compositeShapePicking_data();
@@ -1343,6 +1345,56 @@ void TestObserveOnlyControls::embeddedDisplayTraversalKeepsSoftPvsLocal()
   state->displays.removeAll(&window);
   state->activeDisplay.clear();
   QCoreApplication::processEvents();
+}
+
+void TestObserveOnlyControls::sliderTrackEnclosesHandle_data()
+{
+  QTest::addColumn<int>("direction");
+  QTest::addColumn<double>("value");
+  QTest::addColumn<int>("length");
+  for (auto direction : {BarDirection::kRight, BarDirection::kLeft,
+           BarDirection::kUp, BarDirection::kDown}) {
+    for (double value : {0.0, 50.0, 100.0}) {
+      for (int length : {60, 200, 500}) {
+        const QByteArray name = QStringLiteral("direction-%1-value-%2-size-%3")
+            .arg(static_cast<int>(direction)).arg(value).arg(length).toLatin1();
+        QTest::newRow(name.constData())
+            << static_cast<int>(direction) << value << length;
+      }
+    }
+  }
+}
+
+void TestObserveOnlyControls::sliderTrackEnclosesHandle()
+{
+  QFETCH(int, direction);
+  QFETCH(double, value);
+  QFETCH(int, length);
+  SliderElement slider;
+  const auto orientation = static_cast<BarDirection>(direction);
+  const bool vertical = orientation == BarDirection::kUp
+      || orientation == BarDirection::kDown;
+  slider.resize(vertical ? QSize(40, length) : QSize(length, 40));
+  slider.setDirection(orientation);
+  slider.setLabel(MeterLabel::kNone);
+  const QColor background(160, 160, 160);
+  slider.setBackgroundColor(background);
+  slider.setChannel(QStringLiteral("test:slider:geometry"));
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeValue(value);
+  QImage rendered(slider.size(), QImage::Format_ARGB32);
+  rendered.fill(Qt::transparent);
+  slider.render(&rendered);
+
+  /* The thumb's outer edges reach 3 and length-4 at the limits. The
+   * recessed track border must remain visible just outside those edges,
+   * including when the thumb is at the opposite limit or in the middle. */
+  for (int end : {2, length - 3}) {
+    const QPoint point = vertical ? QPoint(20, end) : QPoint(end, 20);
+    QVERIFY2(rendered.pixelColor(point) != background,
+        "Track must extend beyond the entire handle at both limits");
+  }
 }
 
 void TestObserveOnlyControls::sliderRightClickRespectsActualStacking()

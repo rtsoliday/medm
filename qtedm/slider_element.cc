@@ -765,7 +765,14 @@ void SliderElement::paintEvent(QPaintEvent *event)
     return;
   }
 
-  paintTrack(painter, trackRect);
+  /* trackRect describes the thumb center's travel. Extend the painted
+   * trough past both limits so the entire thumb fits inside its bevel,
+   * without changing drag positions or the mapping from position to value. */
+  const qreal endPadding = thumbExtent / 2.0 + 2.0;
+  const QRectF troughRect = isVertical()
+      ? trackRect.adjusted(0.0, -endPadding, 0.0, endPadding)
+      : trackRect.adjusted(-endPadding, 0.0, endPadding, 0.0);
+  paintTrack(painter, troughRect);
   /* Ticks removed per user request */
   /* paintTicks(painter, trackRect); */
   paintThumb(painter, trackRect, thumbExtent);

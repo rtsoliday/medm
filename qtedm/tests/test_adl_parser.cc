@@ -12,6 +12,7 @@ private slots:
   void parsesMinimalFixture();
   void parsesCommentsAndQuotedValues();
   void parsesEscapedQuotedValues();
+  void parsesLiteralDownArrow();
   void parsesTrailingLiteralBackslash_data();
   void parsesTrailingLiteralBackslash();
   void parsesExpressionChannelBlock();
@@ -96,6 +97,23 @@ void TestAdlParser::parsesEscapedQuotedValues()
   QVERIFY(textNode);
   QCOMPARE(propertyValue(*textNode, QStringLiteral("textix")),
       QStringLiteral("chan=\" \" path=\\tmp\\screen adl\\n"));
+}
+
+void TestAdlParser::parsesLiteralDownArrow()
+{
+  /* The first value is MEDM's literal arrow; the second uses the writer's
+   * escaped backslash. Both must retain the two arrowhead strokes. */
+  QString error;
+  const auto root = AdlParser::parse(QStringLiteral(
+      "text { textix=\"\\/\" }\n"
+      "text { textix=\"\\\\/\" }\n"), &error);
+  QVERIFY2(root.has_value(), qPrintable(error));
+  const auto texts = ::findChildren(*root, QStringLiteral("text"));
+  QCOMPARE(texts.size(), 2);
+  for (const auto *text : texts) {
+    QCOMPARE(propertyValue(*text, QStringLiteral("textix")),
+        QStringLiteral("\\/"));
+  }
 }
 
 void TestAdlParser::parsesTrailingLiteralBackslash_data()

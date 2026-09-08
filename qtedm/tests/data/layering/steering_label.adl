@@ -26,3 +26,23 @@ text {
   "basic attribute" { clr=14 fill="outline" }
   textix="L2:SC3"
 }
+text {
+  object { x=53 y=88 width=34 height=18 }
+  "basic attribute" { clr=0 width=2 }
+  textix="|"
+}
+text {
+  object { x=49 y=99 width=34 height=14 }
+  "basic attribute" { clr=0 width=2 }
+  textix="\/"
+}
+text {
+  object { x=149 y=99 width=34 height=14 }
+  "basic attribute" { clr=0 width=2 }
+  textix="\\/"
+}
+text {
+  object { x=153 y=88 width=34 height=18 }
+  "basic attribute" { clr=0 width=2 }
+  textix="|"
+}

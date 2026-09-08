@@ -35,3 +35,8 @@ QT_QPA_PLATFORM=offscreen QTEDM_NOLOG=1 qtedm/O.Linux-x86_64/test_layering
 The test is also registered in `make test-qtedm-unit`. It covers the parser compatibility fix for a literal
 backslash before a closing quote. The parser assertion distinguishes label loss during
 parsing from later rendering/stacking failures.
+
+The fixture also includes the shaft and lower `\/` arrowhead at their original
+relative positions. A separate arrowhead uses an escaped backslash as the
+rendering reference; both lower arrowheads must render identically. This
+checks that the parser preserves MEDM's literal backslash before a slash.

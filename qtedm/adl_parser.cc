@@ -213,6 +213,11 @@ private:
           result.append(QChar('"'));
           break;
         }
+        case '/':
+          /* MEDM uses literal backslash-slash text for down arrowheads. */
+          result.append(QChar('\\'));
+          result.append(escaped);
+          break;
         case 'n':
           result.append(QChar('\n'));
           break;

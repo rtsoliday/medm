@@ -38,13 +38,17 @@ void TestLayering::steeringLabelSurvivesArrowText()
 
   /* MEDM preserves the literal arrow and the following, separate label. */
   const auto texts = ::findChildren(*root, QStringLiteral("text"));
-  QCOMPARE(texts.size(), 3);
+  QCOMPARE(texts.size(), 7);
   QCOMPARE(propertyValue(*texts[0], QStringLiteral("textix")),
       QStringLiteral("L2:SC3"));
   QCOMPARE(propertyValue(*texts[1], QStringLiteral("textix")),
       QStringLiteral("/\\"));
   QCOMPARE(propertyValue(*texts[2], QStringLiteral("textix")),
       QStringLiteral("L2:SC3"));
+  QCOMPARE(propertyValue(*texts[3], QStringLiteral("textix")),
+      QStringLiteral("|"));
+  QCOMPARE(propertyValue(*texts[4], QStringLiteral("textix")),
+      QStringLiteral("\\/"));
   const auto *object = ::findChild(*texts[2], QStringLiteral("object"));
   QVERIFY(object);
   QCOMPARE(propertyValue(*object, QStringLiteral("x")), QStringLiteral("760"));
@@ -105,6 +109,12 @@ void TestLayering::steeringLabelRendersLikeMedmReference()
 
   /* Both labels are identical in MEDM. Compare within one capture to avoid
    * platform font goldens, and reject an empty reference before comparing. */
+  /* Compare the MEDM literal arrowhead with an escaped-backslash reference.
+   * The full arrow retains the original display's relative coordinates. */
+  QVERIFY2(screenshot.copy(QRect(49, 99, 34, 14))
+          == screenshot.copy(QRect(149, 99, 34, 14)),
+      "The downward arrowhead must retain both strokes");
+
   const QImage reference = screenshot.copy(QRect(760, 59, 70, 20));
   const QImage actual = screenshot.copy(QRect(760, 19, 70, 20));
   int darkPixels = 0;

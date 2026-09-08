@@ -1,0 +1,28 @@
+file {
+  name="steering_label.adl"
+  version=030120
+}
+display {
+  object { x=0 y=0 width=880 height=140 }
+  clr=14
+  bclr=55
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+text {
+  object { x=760 y=59 width=70 height=20 }
+  "basic attribute" { clr=14 fill="outline" }
+  textix="L2:SC3"
+}
+text {
+  object { x=49 y=79 width=34 height=14 }
+  "basic attribute" { clr=0 width=2 }
+  textix="/\"
+}
+text {
+  object { x=760 y=19 width=70 height=20 }
+  "basic attribute" { clr=14 fill="outline" }
+  textix="L2:SC3"
+}

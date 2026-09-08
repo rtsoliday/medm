@@ -12,6 +12,8 @@ private slots:
   void parsesMinimalFixture();
   void parsesCommentsAndQuotedValues();
   void parsesEscapedQuotedValues();
+  void parsesTrailingLiteralBackslash_data();
+  void parsesTrailingLiteralBackslash();
   void parsesExpressionChannelBlock();
   void parsesLedMonitorBlock();
   void parsesTextAreaBlock();
@@ -94,6 +96,37 @@ void TestAdlParser::parsesEscapedQuotedValues()
   QVERIFY(textNode);
   QCOMPARE(propertyValue(*textNode, QStringLiteral("textix")),
       QStringLiteral("chan=\" \" path=\\tmp\\screen adl\\n"));
+}
+
+void TestAdlParser::parsesTrailingLiteralBackslash_data()
+{
+  QTest::addColumn<QString>("ending");
+  QTest::newRow("newline") << QStringLiteral("\n");
+  QTest::newRow("crlf") << QStringLiteral("\r\n");
+  QTest::newRow("inline-block-end") << QStringLiteral(" ");
+  QTest::newRow("comment") << QStringLiteral(" # arrow\n");
+}
+
+void TestAdlParser::parsesTrailingLiteralBackslash()
+{
+  QFETCH(QString, ending);
+  const QString text = QStringLiteral("text { textix=\"/\\\"")
+      + ending + QStringLiteral("}\ntext { textix=\"following\" }\n");
+  QString error;
+  const auto root = AdlParser::parse(text, &error);
+  QVERIFY2(root.has_value(), qPrintable(error));
+  const auto texts = ::findChildren(*root, QStringLiteral("text"));
+  QCOMPARE(texts.size(), 2);
+  QCOMPARE(propertyValue(*texts[0], QStringLiteral("textix")),
+      QStringLiteral("/\\"));
+  QCOMPARE(propertyValue(*texts[1], QStringLiteral("textix")),
+      QStringLiteral("following"));
+
+  const auto assignment = AdlParser::parse(QStringLiteral("value=\"/\\\""),
+      &error);
+  QVERIFY2(assignment.has_value(), qPrintable(error));
+  QCOMPARE(assignment->children.first().properties.first().value,
+      QStringLiteral("/\\"));
 }
 
 void TestAdlParser::parsesExpressionChannelBlock()

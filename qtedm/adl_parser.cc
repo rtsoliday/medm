@@ -184,9 +184,35 @@ private:
         case '\\':
           result.append(QChar('\\'));
           break;
-        case '"':
+        case '"': {
+          /* MEDM allows a literal backslash before the closing quote.
+           * QtEDM also writes escaped quotes, so retain that interpretation
+           * when a closing quote remains on this line. Its writer escapes
+           * newlines; do not consume subsequent ADL lines to find a quote. */
+          bool closingQuote = false;
+          for (int next = index_; next < text_.size(); ++next) {
+            const QChar candidate = text_.at(next);
+            if (candidate == QChar('\n') || candidate == QChar('\r')) {
+              break;
+            }
+            if (candidate == QChar('\\')) {
+              if (next + 1 < text_.size()
+                  && text_.at(next + 1) != QChar('\n')
+                  && text_.at(next + 1) != QChar('\r')) {
+                ++next;
+              }
+            } else if (candidate == QChar('"')) {
+              closingQuote = true;
+              break;
+            }
+          }
+          if (!closingQuote) {
+            result.append(QChar('\\'));
+            return result;
+          }
           result.append(QChar('"'));
           break;
+        }
         case 'n':
           result.append(QChar('\n'));
           break;

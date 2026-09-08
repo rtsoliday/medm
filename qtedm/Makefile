@@ -481,6 +481,7 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_shell_command_utils \
                         test_related_display_utils \
                         test_adl_parser \
+                        test_layering \
                         test_adl_writer \
                         test_text_format_utils \
                         test_text_entry_runtime \
@@ -521,6 +522,9 @@ test_related_display_utils_OBJS = \
   $(OBJ_DIR)/related_display_utils.$(OBJEXT)
 test_adl_parser_OBJS = $(OBJ_DIR)/test_adl_parser.$(OBJEXT) \
                        $(OBJ_DIR)/adl_parser.$(OBJEXT)
+test_layering_OBJS = $(OBJ_DIR)/test_layering.$(OBJEXT) \
+                    $(OBJ_DIR)/adl_parser.$(OBJEXT)
+$(OBJ_DIR)/test_layering$(EXEEXT): | $(OBJ_DIR)/qtedm$(EXEEXT)
 test_adl_writer_OBJS = $(OBJ_DIR)/test_adl_writer.$(OBJEXT) \
                        $(OBJ_DIR)/adl_writer.$(OBJEXT) \
                        $(OBJ_DIR)/medm_colors.$(OBJEXT)
@@ -551,7 +555,8 @@ test_soft_pv_registry_OBJS = $(OBJ_DIR)/test_soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/subscription_handle.$(OBJEXT)
 test_update_coordinator_OBJS = $(OBJ_DIR)/test_update_coordinator.$(OBJEXT) \
-                               $(OBJ_DIR)/update_coordinator.$(OBJEXT)
+                               $(OBJ_DIR)/update_coordinator.$(OBJEXT) \
+                               $(OBJ_DIR)/statistics_tracker.$(OBJEXT)
 test_pv_table_model_OBJS = $(OBJ_DIR)/test_pv_table_model.$(OBJEXT) \
                            $(OBJ_DIR)/pv_table_element.$(OBJEXT) \
                            $(OBJ_DIR)/medm_colors.$(OBJEXT)

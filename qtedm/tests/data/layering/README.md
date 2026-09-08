@@ -40,3 +40,24 @@ The fixture also includes the shaft and lower `\/` arrowhead at their original
 relative positions. A separate arrowhead uses an escaped backslash as the
 rendering reference; both lower arrowheads must render identically. This
 checks that the parser preserves MEDM's literal backslash before a slash.
+
+## Hidden related display under status graphics
+
+`hidden_related_composite.adl` preserves the FS#10 composite from
+`FS_ctrl.adl`: an invisible related display followed by a rectangle, a nested
+composite of dynamic status rectangles, and a text label. The target is
+`linac/xxlinacflags.adl` with the original FS10 macros. Neither that external
+file nor connected PVs is needed for the regression test.
+
+`TestObserveOnlyControls::hiddenRelatedDisplayUnderGraphicComposite` loads
+this fixture, resolves the real Qt mouse target at the label, and verifies
+that clicking activates the related display entry. It substitutes a callback
+to avoid opening the unavailable target and repeats after an edit/execute mode
+cycle. Before the fix, the graphics-only nested composite intercepted the
+click. The outer composite must remain interactive to preserve its button.
+
+Run from `qtedm/` after building the test binary:
+
+```sh
+QT_QPA_PLATFORM=offscreen QTEDM_NOLOG=1 O.Linux-x86_64/test_observe_only_controls hiddenRelatedDisplayUnderGraphicComposite
+```

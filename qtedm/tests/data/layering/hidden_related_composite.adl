@@ -1,0 +1,96 @@
+file { name="hidden_related_composite.adl" version=030107 }
+display { object { x=0 y=0 width=200 height=320 } clr=14 bclr=4 }
+composite {
+	object {
+		x=65
+		y=267
+		width=60
+		height=25
+	}
+	"composite name"=""
+	children {
+		"related display" {
+			object {
+				x=65
+				y=267
+				width=60
+				height=25
+			}
+			display[0] {
+				name="linac/xxlinacflags.adl"
+				args="flag=LI:FL:FS10,cam=LI:FL:FS10:CID"
+			}
+			clr=57
+			bclr=55
+			visual="invisible"
+		}
+		rectangle {
+			object {
+				x=65
+				y=267
+				width=60
+				height=25
+			}
+			"basic attribute" {
+				clr=57
+			}
+		}
+		composite {
+			object {
+				x=65
+				y=267
+				width=60
+				height=25
+			}
+			"composite name"=""
+			children {
+				rectangle {
+					object {
+						x=65
+						y=267
+						width=60
+						height=25
+					}
+					"basic attribute" {
+						clr=16
+					}
+					"dynamic attribute" {
+						vis="if not zero"
+						chan="LI:FL:FS10:Act1OutM"
+					}
+				}
+				rectangle {
+					object {
+						x=65
+						y=267
+						width=60
+						height=25
+					}
+					"basic attribute" {
+						clr=20
+					}
+					"dynamic attribute" {
+						vis="if not zero"
+						chan="LI:FL:FS10:Act1InM"
+					}
+				}
+			}
+		}
+		text {
+			object {
+				x=65
+				y=267
+				width=60
+				height=25
+			}
+			"basic attribute" {
+				clr=54
+			}
+			"dynamic attribute" {
+				chan="LI:FL:FS10:LampOnC"
+			}
+			textix="FS#10"
+			align="horiz. centered"
+		}
+	}
+}

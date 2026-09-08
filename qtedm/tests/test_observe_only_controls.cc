@@ -124,6 +124,7 @@ private slots:
   void pvLimitsPickerRoutesEverySupportedControl();
   void sliderRightClickRespectsActualStacking();
   void executePickingFollowsVisibleStacking();
+  void hiddenRelatedDisplayUnderGraphicComposite();
   void compositeShapePicking_data();
   void compositeShapePicking();
   void middleButtonTooltipRoutesThroughChildControls();
@@ -136,6 +137,46 @@ private slots:
 private:
   QStringList registeredNames_;
 };
+
+void TestObserveOnlyControls::hiddenRelatedDisplayUnderGraphicComposite()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(QFINDTESTDATA(
+      "data/layering/hidden_related_composite.adl"), &error),
+      qPrintable(error));
+  QCOMPARE(window.relatedDisplayElements_.size(), 1);
+  auto *related = window.relatedDisplayElements_.first();
+  QCOMPARE(related->entryName(0), QStringLiteral("linac/xxlinacflags.adl"));
+  QCOMPARE(related->entryArgs(0),
+      QStringLiteral("flag=LI:FL:FS10,cam=LI:FL:FS10:CID"));
+  int activations = 0;
+  related->setActivationCallback([&](int index, Qt::KeyboardModifiers) {
+    QCOMPARE(index, 0);
+    ++activations;
+  });
+  window.show();
+  for (int pass = 0; pass < 2; ++pass) {
+    window.enterExecuteMode();
+    QCoreApplication::processEvents();
+    const QPoint position = related->mapTo(window.displayArea_,
+        related->rect().center());
+    /* Resolve the actual Qt mouse target, rather than sending directly to
+     * the button and bypassing the overlapping FS#10 status composite. */
+    QWidget *target = window.displayArea_->childAt(position);
+    QCOMPARE(target, static_cast<QWidget *>(related));
+    QTest::mouseClick(target, Qt::LeftButton, Qt::NoModifier,
+        target->rect().center());
+    QCOMPARE(activations, pass + 1);
+    window.leaveExecuteMode();
+  }
+}
 
 void TestObserveOnlyControls::init()
 {

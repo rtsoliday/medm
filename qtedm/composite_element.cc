@@ -373,7 +373,6 @@ void CompositeElement::setExecuteMode(bool execute)
   }
 
   executeMode_ = execute;
-  updateMouseTransparency();
 
   /* Propagate the execute mode to ALL children FIRST
    * so they update their internal state before we modify visibility. */
@@ -517,10 +516,26 @@ bool CompositeElement::hasActiveChannel() const
 
 void CompositeElement::updateMouseTransparency()
 {
-  /* In execute mode, always allow mouse events so child widgets can receive
-   * them (for cursors, tooltips, interaction). In edit mode, be transparent
-   * so clicks select/manipulate the composite itself rather than children. */
-  setAttribute(Qt::WA_TransparentForMouseEvents, !executeMode_);
+  /* A graphics-only composite must pass clicks through to underlying
+   * related displays, just like its individual graphics do. Keep containers
+   * with mouse-sensitive descendants interactive, including hidden buttons.
+   * Inspect descendants directly so nested containers do not depend on the
+   * order in which execute mode and child stacking are updated. */
+  const auto hasMouseTarget = [](const CompositeElement *composite,
+                                const auto &self) -> bool {
+    for (QWidget *child : composite->childWidgets()) {
+      if (const auto *nested = dynamic_cast<const CompositeElement *>(child)) {
+        if (self(nested, self)) {
+          return true;
+        }
+      } else if (!child->testAttribute(Qt::WA_TransparentForMouseEvents)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  setAttribute(Qt::WA_TransparentForMouseEvents,
+      !executeMode_ || !hasMouseTarget(this, hasMouseTarget));
 }
 
 void CompositeElement::mousePressEvent(QMouseEvent *event)
@@ -835,6 +850,7 @@ void CompositeElement::refreshChildStackingOrder()
     return;
   }
   childStackingOrderInternallyUpdating_ = true;
+  updateMouseTransparency();
 
   QList<QWidget *> staticWidgets;
   QList<QWidget *> dynamicWidgets;

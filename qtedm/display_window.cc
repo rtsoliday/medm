@@ -30754,7 +30754,7 @@ RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
     RelatedDisplayEntry entry = element->entry(entryIndex);
 
     const QString entryLabel = propertyValue(child,
-        QStringLiteral("label")).trimmed();
+        QStringLiteral("label"));
     if (!entryLabel.isEmpty()) {
       entry.label = entryLabel;
     }

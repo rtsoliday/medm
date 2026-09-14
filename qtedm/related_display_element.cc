@@ -34,20 +34,6 @@ QString sanitizedLabel(const QString &value, bool &showIcon)
   return trimmed.trimmed();
 }
 
-QString entryDisplayLabel(const RelatedDisplayEntry &entry)
-{
-  bool dummy = true;
-  QString result = sanitizedLabel(entry.label, dummy);
-  if (!result.isEmpty()) {
-    return result;
-  }
-  QString name = entry.name.trimmed();
-  if (!name.isEmpty()) {
-    return name;
-  }
-  return QString();
-}
-
 int messageButtonPixelLimit(int height)
 {
   if (height <= 0) {
@@ -428,7 +414,7 @@ QVector<int> RelatedDisplayElement::buttonEntryIndices() const
   QVector<int> indices;
   indices.reserve(entryCount());
   for (int i = 0; i < entryCount(); ++i) {
-    if (!entries_[i].label.trimmed().isEmpty()) {
+    if (!entries_[i].label.isEmpty()) {
       indices.append(i);
     }
   }
@@ -615,7 +601,8 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
         showIcon = true;
         text = displayLabel(showIcon);
       } else if (index < activeCount) {
-        text = entryDisplayLabel(entries_[buttonIndices[index]]);
+        /* MEDM centers the complete entry label, including padding. */
+        text = entries_[buttonIndices[index]].label;
       }
       if (!singleButton && text.isEmpty()) {
         text = QStringLiteral("Display %1").arg(index + 1);
@@ -642,7 +629,8 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
             interior.right() - iconRect.right() - 1, interior.height());
         painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
       } else {
-        painter.drawText(interior, Qt::AlignCenter, text);
+        painter.drawText(interior,
+            Qt::AlignCenter | Qt::TextIncludeTrailingSpaces, text);
       }
       ++index;
     }

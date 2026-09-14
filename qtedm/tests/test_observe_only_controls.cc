@@ -95,6 +95,7 @@ class TestObserveOnlyControls : public QObject
   Q_OBJECT
 
 private slots:
+  void relatedDisplayLabelPadding();
   void init();
   void cleanup();
   void registryContainsSafetyControlObjects();
@@ -2560,6 +2561,61 @@ void TestObserveOnlyControls::extensionWidgetPropertiesRoundTripInMemory()
   spinbox.setSetpointWriteAccess(true);
   for (QToolButton *button : stepButtons) {
     QVERIFY(button->isEnabled());
+  }
+}
+
+void TestObserveOnlyControls::relatedDisplayLabelPadding()
+{
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QFile file(dir.filePath(QStringLiteral("padding.adl")));
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write("display { object { width=300 height=80 } }\n"
+      "\"related display\" { object { width=300 height=80 }\n"
+      "visual=\"a column of buttons\"\n"
+      "display[0] { label=\"   Label   \" name=\"child.adl\" }\n"
+      "display[1] { label=\"Other\" name=\"child.adl\" } }\n");
+  file.close();
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(file.fileName(), &error), qPrintable(error));
+  QCOMPARE(window.relatedDisplayElements_.size(), 1);
+  QCOMPARE(window.relatedDisplayElements_.first()->entryLabel(0),
+      QStringLiteral("   Label   "));
+
+  for (const auto visual : {RelatedDisplayVisual::kColumnOfButtons,
+           RelatedDisplayVisual::kRowOfButtons}) {
+    RelatedDisplayElement element;
+    element.setVisual(visual);
+    element.resize(visual == RelatedDisplayVisual::kColumnOfButtons
+        ? QSize(300, 80) : QSize(600, 40));
+    element.setForegroundColor(Qt::black);
+    element.setBackgroundColor(Qt::white);
+    element.setEntryLabel(1, QStringLiteral("Other"));
+    auto textLeft = [&](const QString &label) {
+      element.setEntryLabel(0, label);
+      QImage image(element.size(), QImage::Format_ARGB32);
+      image.fill(Qt::white);
+      element.render(&image);
+      int left = 300;
+      for (int y = 4; y < 36; ++y) {
+        for (int x = 4; x < 296; ++x) {
+          if (image.pixelColor(x, y) == QColor(Qt::black)) {
+            left = std::min(left, x);
+          }
+        }
+      }
+      return left;
+    };
+    const int plain = textLeft(QStringLiteral("Label"));
+    QVERIFY(plain < 296);
+    QVERIFY(textLeft(QStringLiteral("Label      ")) < plain);
+    QVERIFY(textLeft(QStringLiteral("      Label")) > plain);
+    QVERIFY(std::abs(textLeft(QStringLiteral("   Label   ")) - plain) <= 1);
   }
 }
 

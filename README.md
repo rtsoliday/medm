@@ -78,7 +78,13 @@ Notes:
 	tools, EPICS Base, and SDDS setup for that platform. The repository uses the
 	same `.adl` display files across platforms.
 
-The resulting programs are copied to `bin/<OS>-<architecture>/`. For example,
+The resulting programs are always copied to `bin/<OS>-<architecture>/`.
+When the checkout is under an EPICS `extensions/src/` directory containing
+`configure/CONFIG` and `configure/RELEASE`, they are also copied to
+`<INSTALL_LOCATION_EXTENSIONS>/bin/<EPICS_HOST_ARCH>/`, falling back to
+`<INSTALL_LOCATION>/bin/<EPICS_HOST_ARCH>/`. The default shared destination is
+`extensions/bin/<EPICS_HOST_ARCH>/`; extensions configuration overrides apply.
+For example,
 a typical 64-bit Linux build produces:
 
 ```text
@@ -202,3 +208,7 @@ Additional background, release notes, and documentation are available on the EPI
 
 MEDM and QtEDM are distributed under the terms described in the included
 [`LICENSE`](LICENSE) file.
+
+The shared `Makefile.build` is kept identical to QtALH’s. Both projects use
+the same platform and extensions-installation setup in `Makefile.rules`;
+application-specific dependency and compiler settings follow that setup.

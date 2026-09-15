@@ -754,3 +754,9 @@ clean-tests:
 .PHONY: tests test build-tests test-unit test-cli test-ioc test-visual clean-tests check-qt-test
 
 .NOTPARALLEL: test
+
+.PHONY: install-converter
+all: install-converter
+install-converter: $(OBJ_DIR)/qtedm-convert$(EXEEXT) | $(BIN_DIR) $(EPICS_BIN_DIR)
+	cp -f $< $(BIN_DIR)/
+	$(if $(EPICS_BIN_DIR),cp -f $< $(EPICS_BIN_DIR)/)

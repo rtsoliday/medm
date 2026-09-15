@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.vitepress/cache/
+public/images/
+public/downloads/
+public/manual/
+
+# Generated from the embedded manual and supporting documentation.
+/understand/overview.md
+/understand/medm.md
+/get-started/requirements.md
+/reference/command-line.md
+/operate/modes.md
+/reference/widgets.md
+/reference/environment.md
+/reference/adl.md
+/configure/features.md
+/understand/compatibility.md
+/get-started/build-reference.md
+/project/authors.md
+/project/support.md
+/project/copyright.md
+/develop/plugins.md
+/configure/expressions.md
+/get-started/install.md
+/project/license.md

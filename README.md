@@ -116,6 +116,11 @@ with warnings, and 1 for a fatal error.
 
 ### QtEDM Documentation
 
+- [Documentation website source](docs/site/index.md) &ndash; task-based guides,
+  searchable reference, and an illustrated widget catalog in the QtALH style.
+  Build with `make docs`, then serve `docs/html` over HTTP. See
+  [Maintain these docs](docs/site/develop/documentation.md) for preview and
+  subdirectory-hosting instructions.
 - [Reference manual](docs/QtEDM.html) &ndash; command line, widgets, ADL
   extensions, environment, sessions, snapshots, archives, imports, and build
   notes. The same file is embedded in QtEDM under **Help &gt; Overview**.
@@ -195,4 +200,5 @@ Additional background, release notes, and documentation are available on the EPI
 
 ## Licensing
 
-MEDM is distributed under the terms described in the included `LICENSE` file.
+MEDM and QtEDM are distributed under the terms described in the included
+[`LICENSE`](LICENSE) file.

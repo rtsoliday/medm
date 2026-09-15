@@ -1,3 +1,11 @@
+# Documentation-only commands do not need Qt, EPICS, or the Windows GSL tree.
+ifneq ($(strip $(MAKECMDGOALS)),)
+ifeq ($(filter-out docs docs-clean docs-distclean,$(MAKECMDGOALS)),)
+DOCS_ONLY := 1
+endif
+endif
+
+ifneq ($(DOCS_ONLY),1)
 # Detect OS and Architecture
 OS := $(shell uname -s)
 ifeq ($(findstring CYGWIN, $(OS)),CYGWIN)
@@ -148,3 +156,17 @@ endif
 distclean: clean
 	rm -rf bin/$(OS)-$(ARCH)
 	rm -rf lib/$(OS)-$(ARCH)
+
+endif
+
+# Documentation can be built independently of the application binaries.
+DOCS_BASE ?= /
+.PHONY: docs docs-clean docs-distclean
+docs:
+	python3 scripts/build-docs.py --base "$(DOCS_BASE)"
+
+docs-clean:
+	python3 scripts/sync-docs.py --clean
+
+docs-distclean:
+	python3 scripts/sync-docs.py --distclean

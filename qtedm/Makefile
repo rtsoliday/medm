@@ -100,10 +100,6 @@ else
   RCC_OBJ_OUT := -o 
 endif
 
-ifneq ($(OS), Windows)
-  PROD_LIBS += -lANLwidgets -lPrintUtils
-endif
-
 PROD = qtedm
 QTEDM_PCH ?= 0
 QTEDM_PCH_ENABLED = 0
@@ -263,8 +259,8 @@ ifeq ($(OS), Linux)
   endif
 endif
 
-CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
-CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR) -I../printUtils -I../xc
+CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR)
+CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR)
 ifeq ($(OS), Windows)
  CCFLAGS += /std:c++20 /Zc:__cplusplus /permissive- $(QT_WIDGETS_CFLAGS)
  LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt$(QT_VERSION)PrintSupport.lib Qt$(QT_VERSION)Svg.lib Qt$(QT_VERSION)Network.lib Qt$(QT_VERSION)Widgets.lib Qt$(QT_VERSION)Gui.lib Qt$(QT_VERSION)Core.lib

@@ -2723,8 +2723,12 @@ void DisplayWindow::mouseMoveEvent(QMouseEvent *event)
   if (executeDragPending_) {
     if (event->buttons() & Qt::MiddleButton) {
       updateExecuteDragTooltip(event->pos());
+      // Keep the local tooltip/text-entry gesture inside the display, but
+      // hand an ordinary middle-button drag to Qt when it leaves this window.
+      // External receivers such as qtstriptool need a real QDrag transfer.
       if (!executeDragStarted_
-          && event->modifiers().testFlag(Qt::ControlModifier)) {
+          && (event->modifiers().testFlag(Qt::ControlModifier)
+              || !rect().contains(event->pos()))) {
         const QPoint delta =
             event->pos() - executeDragStartWindowPos_;
         if (delta.manhattanLength() >= QApplication::startDragDistance()) {

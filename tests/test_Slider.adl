@@ -828,7 +828,7 @@ text {
 	"basic attribute" {
 		clr=30
 	}
-	textix="2) Right-click on writable sliders: dialog should open with VALUE and increment controls; change increment via both dropdown and text field."
+	textix="2) Right-click on writable sliders: dialog should open with VALUE and increment controls; test exponent buttons and Enter in the increment field."
 }
 text {
 	object {

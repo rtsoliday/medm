@@ -15,6 +15,7 @@
 #include "widget_image_export_utils.h"
 #include "window_utils.h"
 
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -27,6 +28,7 @@
 #include <QProcess>
 #include <QSpinBox>
 #include <QTableWidget>
+#include <QTextBrowser>
 
 namespace {
 
@@ -19077,18 +19079,18 @@ bool DisplayWindow::showExecuteSliderDialogForRightClick(const QPoint &globalPos
     return true;
   }
 
-  const PvLimits limits = slider->limits();
-  const double absLimit = std::max(std::abs(limits.lowDefault),
-      std::abs(limits.highDefault));
-  int maxExponent = 0;
+  /* MEDM builds its presets from the active limits and display precision,
+   * including channel metadata. Leave room for the decimal separator in
+   * its maximum of 20 columns, while handling zero/nonfinite limits safely. */
+  const int precision = slider->effectivePrecision();
+  const double absLimit = std::max(std::abs(slider->effectiveLowLimit()),
+      std::abs(slider->effectiveHighLimit()));
+  int positiveColumns = 1;
   if (std::isfinite(absLimit) && absLimit > 0.0) {
-    maxExponent = static_cast<int>(std::floor(std::log10(absLimit)));
+    positiveColumns = std::max(0,
+        static_cast<int>(std::log10(absLimit)) + 1);
   }
-  maxExponent = std::clamp(maxExponent, -12, 12);
-  int minExponent = -std::clamp(limits.precisionDefault, 0, 12);
-  if (minExponent > maxExponent) {
-    minExponent = maxExponent;
-  }
+  positiveColumns = std::min(positiveColumns, 19 - precision);
 
   double currentValue = runtime->hasLastValue_ ? runtime->lastValue_ : 0.0;
   if (!std::isfinite(currentValue)) {
@@ -19096,130 +19098,158 @@ bool DisplayWindow::showExecuteSliderDialogForRightClick(const QPoint &globalPos
   }
 
   QDialog dialog(this);
+  dialog.setObjectName(QStringLiteral("qtedmSliderEntryDialog"));
   dialog.setWindowTitle(channelName);
   dialog.setModal(true);
   dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+  dialog.setPalette(resourcePaletteBase_);
+  dialog.setFont(font());
+
+  /* Square raised buttons and recessed entries/frame match the Motif
+   * controls rather than the rounded, gradient Fusion defaults. */
+  const QColor background = resourcePaletteBase_.color(QPalette::Window);
+  QColor topShadow, bottomShadow;
+  MedmColors::computeShadowColors(background, topShadow, bottomShadow);
+  dialog.setStyleSheet(QStringLiteral(
+      "QPushButton { background-color: %1; color: %2; "
+      "border: 2px solid; border-top-color: %3; border-left-color: %3; "
+      "border-bottom-color: %4; border-right-color: %4; padding: 3px 8px; }"
+      "QPushButton:pressed, QPushButton:checked { "
+      "border-top-color: %4; border-left-color: %4; "
+      "border-bottom-color: %3; border-right-color: %3; }"
+      "QPushButton:default { border-width: 3px; }"
+      "QLineEdit { background-color: %1; color: %2; "
+      "border: 2px solid; border-top-color: %4; border-left-color: %4; "
+      "border-bottom-color: %3; border-right-color: %3; padding: 3px; }"
+      "QGroupBox { border: 2px solid; "
+      "border-top-color: %4; border-left-color: %4; "
+      "border-bottom-color: %3; border-right-color: %3; "
+      "margin-top: 0.6em; }"
+      "QGroupBox::title { subcontrol-origin: margin; "
+      "subcontrol-position: top left; left: 6px; padding: 0 2px; }")
+      .arg(background.name(),
+          resourcePaletteBase_.color(QPalette::WindowText).name(),
+          topShadow.name(), bottomShadow.name()));
 
   auto *layout = new QVBoxLayout(&dialog);
-
-  auto *valueLabel = new QLabel(
-      QStringLiteral("VALUE: %1").arg(channelName), &dialog);
-  layout->addWidget(valueLabel);
-
-  auto *valueEdit = new QLineEdit(&dialog);
-  valueEdit->setText(QString::number(currentValue, 'g', 12));
-  valueEdit->selectAll();
-  layout->addWidget(valueEdit);
+  layout->setContentsMargins(8, 8, 8, 8);
+  layout->setSpacing(8);
 
   auto *incrementGroup = new QGroupBox(
       QStringLiteral("Increment (Buttons set 10^N)"), &dialog);
+  incrementGroup->setFont(dialog.font());
+  incrementGroup->setObjectName(QStringLiteral("sliderIncrementGroup"));
   auto *incrementLayout = new QVBoxLayout(incrementGroup);
-  auto *incrementCombo = new QComboBox(incrementGroup);
-  for (int exponent = maxExponent; exponent >= minExponent; --exponent) {
-    incrementCombo->addItem(QString::number(exponent), exponent);
+  incrementLayout->setContentsMargins(6, 12, 6, 6);
+  incrementLayout->setSpacing(4);
+  auto *presetLayout = new QHBoxLayout();
+  presetLayout->setSpacing(0);
+  auto *presets = new QButtonGroup(&dialog);
+  presets->setExclusive(true);
+  auto addPreset = [&](int exponent) {
+    auto *button = new QPushButton(QString::number(exponent), incrementGroup);
+    button->setFont(dialog.font());
+    button->setObjectName(QStringLiteral("sliderIncrementExponent_%1")
+        .arg(exponent));
+    button->setCheckable(true);
+    button->setAutoDefault(false);
+    const double step = std::pow(10.0, static_cast<double>(exponent));
+    button->setChecked(std::abs(slider->increment() - step) <= step * 1e-9);
+    button->setToolTip(QStringLiteral("Increment: %1")
+        .arg(QString::number(step, 'g', 12)));
+    presets->addButton(button);
+    presetLayout->addWidget(button);
+    QObject::connect(button, &QPushButton::clicked, &dialog,
+        [&dialog, slider, step]() {
+          slider->setIncrement(step);
+          dialog.reject();
+        });
+  };
+  for (int exponent = positiveColumns - 1; exponent >= 0; --exponent) {
+    addPreset(exponent);
   }
-  incrementLayout->addWidget(incrementCombo);
+  auto *decimal = new QLabel(QStringLiteral("."), incrementGroup);
+  decimal->setFont(dialog.font());
+  decimal->setObjectName(QStringLiteral("sliderIncrementDecimal"));
+  decimal->setAlignment(Qt::AlignCenter);
+  presetLayout->addWidget(decimal);
+  for (int exponent = -1; exponent >= -precision; --exponent) {
+    addPreset(exponent);
+  }
+  incrementLayout->addLayout(presetLayout);
 
   auto *incrementEdit = new QLineEdit(incrementGroup);
+  incrementEdit->setFont(dialog.font());
+  incrementEdit->setObjectName(QStringLiteral("sliderIncrementEdit"));
   incrementEdit->setText(QString::number(slider->increment(), 'g', 12));
   incrementLayout->addWidget(incrementEdit);
   layout->addWidget(incrementGroup);
 
-  int currentExponent = 0;
-  const double increment = slider->increment();
-  if (std::isfinite(increment) && increment > 0.0) {
-    currentExponent = static_cast<int>(std::round(std::log10(increment)));
-  }
-  currentExponent = std::clamp(currentExponent, minExponent, maxExponent);
-  const int exponentIndex = incrementCombo->findData(currentExponent);
-  if (exponentIndex >= 0) {
-    incrementCombo->setCurrentIndex(exponentIndex);
-  }
+  auto *valueLabel = new QLabel(
+      QStringLiteral("VALUE: %1").arg(channelName), &dialog);
+  layout->addWidget(valueLabel);
+  auto *valueEdit = new QLineEdit(&dialog);
+  valueEdit->setObjectName(QStringLiteral("sliderValueEdit"));
+  valueEdit->setText(QString::number(currentValue, 'f', precision));
+  valueEdit->selectAll();
+  layout->addWidget(valueEdit);
 
-  auto syncIncrementCombo = [incrementCombo, minExponent, maxExponent](
-                                double increment) {
-    if (!std::isfinite(increment) || increment <= 0.0) {
-      return;
-    }
-    const double exponentValue = std::log10(increment);
-    const int roundedExponent = static_cast<int>(std::round(exponentValue));
-    const double roundedIncrement =
-        std::pow(10.0, static_cast<double>(roundedExponent));
-    const double tolerance = std::max(1e-12, std::abs(increment) * 1e-9);
-    if (std::abs(roundedIncrement - increment) > tolerance) {
-      return;
-    }
-    const int clampedExponent =
-        std::clamp(roundedExponent, minExponent, maxExponent);
-    const int comboIndex = incrementCombo->findData(clampedExponent);
-    if (comboIndex >= 0 && comboIndex != incrementCombo->currentIndex()) {
-      const bool blocked = incrementCombo->blockSignals(true);
-      incrementCombo->setCurrentIndex(comboIndex);
-      incrementCombo->blockSignals(blocked);
-    }
-  };
+  auto *separator = new QFrame(&dialog);
+  separator->setFrameStyle(QFrame::HLine | QFrame::Sunken);
+  layout->addWidget(separator);
+  auto *buttonLayout = new QHBoxLayout();
+  buttonLayout->setSpacing(12);
+  auto *okButton = new QPushButton(QStringLiteral("OK"), &dialog);
+  auto *cancelButton = new QPushButton(QStringLiteral("Cancel"), &dialog);
+  auto *helpButton = new QPushButton(QStringLiteral("Help"), &dialog);
+  okButton->setDefault(true);
+  cancelButton->setAutoDefault(false);
+  helpButton->setAutoDefault(false);
+  buttonLayout->addWidget(okButton);
+  buttonLayout->addWidget(cancelButton);
+  buttonLayout->addWidget(helpButton);
+  layout->addLayout(buttonLayout);
 
-  QObject::connect(incrementCombo,
-      static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
-      &dialog, [slider, incrementCombo, incrementEdit](int index) {
-        if (index < 0) {
-          return;
-        }
-        bool ok = false;
-        int exponent = incrementCombo->itemData(index).toInt(&ok);
-        if (!ok) {
-          return;
-        }
-        const double nextIncrement =
-            std::pow(10.0, static_cast<double>(exponent));
-        if (!std::isfinite(nextIncrement) || nextIncrement <= 0.0) {
-          return;
-        }
-        slider->setIncrement(nextIncrement);
-        incrementEdit->setText(QString::number(nextIncrement, 'g', 12));
-      });
-
+  /* As in MEDM, only Enter in the increment entry commits a typed step.
+   * Losing focus restores the current step; OK submits only the PV value. */
   QObject::connect(incrementEdit, &QLineEdit::editingFinished, &dialog,
-      [slider, incrementEdit, syncIncrementCombo]() {
+      [slider, incrementEdit]() {
+        incrementEdit->setText(QString::number(slider->increment(), 'g', 12));
+      });
+  bool incrementOnly = false;
+  QObject::connect(incrementEdit, &QLineEdit::returnPressed, &dialog,
+      [&dialog, slider, incrementEdit, &incrementOnly]() {
         bool ok = false;
-        const double typedIncrement =
-            incrementEdit->text().trimmed().toDouble(&ok);
-        if (!ok || !std::isfinite(typedIncrement) || typedIncrement <= 0.0) {
+        const double step = incrementEdit->text().trimmed().toDouble(&ok);
+        if (!ok || !std::isfinite(step) || step <= 0.0) {
           incrementEdit->setText(QString::number(slider->increment(), 'g', 12));
           incrementEdit->selectAll();
           return;
         }
-        slider->setIncrement(typedIncrement);
-        syncIncrementCombo(typedIncrement);
+        slider->setIncrement(step);
+        incrementOnly = true;
+        dialog.reject();
       });
-
-  auto *buttonLayout = new QHBoxLayout();
-  buttonLayout->addStretch(1);
-  auto *okButton = new QPushButton(QStringLiteral("OK"), &dialog);
-  auto *cancelButton = new QPushButton(QStringLiteral("Cancel"), &dialog);
-  okButton->setDefault(true);
-  buttonLayout->addWidget(okButton);
-  buttonLayout->addWidget(cancelButton);
-  layout->addLayout(buttonLayout);
-
   QObject::connect(cancelButton, &QPushButton::clicked, &dialog,
       &QDialog::reject);
+  QObject::connect(helpButton, &QPushButton::clicked, &dialog, [this, &dialog]() {
+    const QString title = QStringLiteral("QtEDM Help - Slider");
+    showHelpBrowser(&dialog, title, QStringLiteral(":/help/QtEDM.html"),
+        font(), resourcePaletteBase_);
+    if (auto *help = dialog.findChild<QDialog *>(
+            QStringLiteral("qtedmHelpBrowser_QtEDM_Help_-_Slider"))) {
+      if (auto *browser = help->findChild<QTextBrowser *>()) {
+        browser->scrollToAnchor(QStringLiteral("WidgetSlider"));
+      }
+    }
+  });
   QObject::connect(okButton, &QPushButton::clicked, &dialog,
-      [&dialog, slider, valueEdit, incrementEdit, syncIncrementCombo]() {
-        bool incrementOk = false;
-        const double typedIncrement =
-            incrementEdit->text().trimmed().toDouble(&incrementOk);
-        if (!incrementOk || !std::isfinite(typedIncrement)
-            || typedIncrement <= 0.0) {
-          QMessageBox::warning(&dialog, QStringLiteral("Invalid Increment"),
-              QStringLiteral("Enter a positive finite increment value."));
-          incrementEdit->setFocus(Qt::OtherFocusReason);
-          incrementEdit->selectAll();
+      [&dialog, valueEdit, incrementEdit, &incrementOnly]() {
+        /* Return from the increment field must never activate the dialog's
+         * default OK button and inadvertently write the value entry. */
+        if (incrementOnly || dialog.focusWidget() == incrementEdit) {
           return;
         }
-        slider->setIncrement(typedIncrement);
-        syncIncrementCombo(typedIncrement);
-
         bool ok = false;
         const double enteredValue = valueEdit->text().trimmed().toDouble(&ok);
         if (!ok || !std::isfinite(enteredValue)) {
@@ -19236,7 +19266,7 @@ bool DisplayWindow::showExecuteSliderDialogForRightClick(const QPoint &globalPos
       &QPushButton::click);
 
   valueEdit->setFocus(Qt::OtherFocusReason);
-  if (dialog.exec() == QDialog::Accepted) {
+  if (dialog.exec() == QDialog::Accepted && !incrementOnly) {
     bool ok = false;
     const double enteredValue = dialog.property("_sliderEntryValue")
         .toDouble(&ok);

@@ -945,6 +945,15 @@ complete extension list.</p>
     <li><strong>Configure:</strong> Orientation, channel, limits, labels, colors, and scale appearance.</li>
     <li><strong>Use when:</strong> Smooth adjustment is more natural than typing a number.</li>
     <li><strong>Runtime behavior:</strong> Interaction is live in EXECUTE mode and writes are included in audit logs.</li>
+    <li><strong>Right-click dialog:</strong> On a connected, writable slider,
+    the MEDM-style dialog shows increment exponent buttons above the value
+    entry. Presets use the active limits and decimal precision; for example,
+    <code>-2</code> selects a step of <code>0.01</code>. Clicking a preset
+    applies the step and closes the dialog without writing the PV.</li>
+    <li><strong>Typed entries:</strong> Press Enter in the increment field to
+    apply a positive step and close the dialog. Leaving that field discards
+    an uncommitted edit. OK or Enter in the value field writes the entered PV
+    value; Cancel closes without writing. Help opens the Slider reference.</li>
   </ul>
 </div>
 

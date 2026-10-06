@@ -11,6 +11,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QGroupBox>
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
@@ -42,6 +43,7 @@
 #include "find_pv_dialog.h"
 #include "heatmap_element.h"
 #include "led_monitor_element.h"
+#include "legacy_fonts.h"
 #include "main_window_controller.h"
 #include "message_button_element.h"
 #include "message_button_runtime.h"
@@ -124,8 +126,18 @@ private slots:
   void embeddedDisplayTraversalKeepsSoftPvsLocal();
   void pvLimitsPickerRoutesEverySupportedControl();
   void sliderRightClickRespectsActualStacking();
+  void sliderIncrementDialogMatchesMedm_data();
+  void sliderIncrementDialogMatchesMedm();
+  void sliderIncrementDialogActions_data();
+  void sliderIncrementDialogActions();
   void sliderTrackEnclosesHandle_data();
   void sliderTrackEnclosesHandle();
+  void sliderTroughClicks_data();
+  void sliderTroughClicks();
+  void sliderThumbClickDoesNotStep_data();
+  void sliderThumbClickDoesNotStep();
+  void sliderTroughRespectsAccess_data();
+  void sliderTroughRespectsAccess();
   void executePickingFollowsVisibleStacking();
   void hiddenRelatedDisplayUnderGraphicComposite();
   void compositeShapePicking_data();
@@ -1398,6 +1410,174 @@ void TestObserveOnlyControls::sliderTrackEnclosesHandle()
   }
 }
 
+void TestObserveOnlyControls::sliderTroughClicks_data()
+{
+  QTest::addColumn<int>("direction");
+  QTest::addColumn<int>("label");
+  QTest::addColumn<QSize>("size");
+  QTest::addColumn<QPoint>("point");
+  QTest::addColumn<double>("low");
+  QTest::addColumn<double>("high");
+  QTest::addColumn<double>("value");
+  QTest::addColumn<double>("increment");
+  QTest::addColumn<double>("delta");
+
+  /* liRf.adl's K4 slider and its live display limits. Its remaining
+   * trough near 8.4 lies beyond the thumb center's travel rectangle. */
+  QTest::newRow("K4-phase-above-8")
+      << int(BarDirection::kRight) << int(MeterLabel::kLimits)
+      << QSize(160, 24) << QPoint(156, 5)
+      << -1.5 << 10.0 << 8.4 << 0.05 << 0.05;
+  QTest::newRow("K5-phase")
+      << int(BarDirection::kRight) << int(MeterLabel::kLimits)
+      << QSize(165, 25) << QPoint(161, 5)
+      << -200.0 << 200.0 << 160.0 << 0.2 << 0.2;
+
+  for (auto direction : {BarDirection::kRight, BarDirection::kLeft,
+           BarDirection::kUp, BarDirection::kDown}) {
+    const bool vertical = direction == BarDirection::kUp
+        || direction == BarDirection::kDown;
+    const bool inverted = direction == BarDirection::kLeft
+        || direction == BarDirection::kDown;
+    for (auto label : {MeterLabel::kNone, MeterLabel::kLimits,
+             MeterLabel::kChannel}) {
+      for (int length : {60, 160, 500}) {
+        /* A short vertical channel slider uses most of its length for
+         * the channel label, leaving no exposed trough beside the thumb. */
+        if (vertical && label == MeterLabel::kChannel && length == 60) {
+          continue;
+        }
+        for (bool increase : {false, true}) {
+          const bool farEnd = vertical ? increase == inverted
+                                       : increase != inverted;
+          const int nearEnd = vertical && label == MeterLabel::kChannel
+              ? 31 : 3;
+          const int end = farEnd ? length - 4 : nearEnd;
+          const int y = label == MeterLabel::kNone ? 30
+              : label == MeterLabel::kLimits ? 17 : 32;
+          const QPoint point = vertical ? QPoint(57, end) : QPoint(end, y);
+          const QByteArray name = QStringLiteral("dir-%1-label-%2-size-%3-%4")
+              .arg(int(direction)).arg(int(label)).arg(length)
+              .arg(increase ? "increase" : "decrease").toLatin1();
+          QTest::newRow(name.constData()) << int(direction) << int(label)
+              << (vertical ? QSize(60, length) : QSize(length, 60)) << point
+              << -1.5 << 10.0 << (increase ? 8.4 : 0.1) << 0.05
+              << (increase ? 0.05 : -0.05);
+        }
+      }
+    }
+  }
+}
+
+void TestObserveOnlyControls::sliderTroughClicks()
+{
+  QFETCH(int, direction);
+  QFETCH(int, label);
+  QFETCH(QSize, size);
+  QFETCH(QPoint, point);
+  QFETCH(double, low);
+  QFETCH(double, high);
+  QFETCH(double, value);
+  QFETCH(double, increment);
+  QFETCH(double, delta);
+  SliderElement slider;
+  slider.resize(size);
+  slider.setDirection(static_cast<BarDirection>(direction));
+  slider.setLabel(static_cast<MeterLabel>(label));
+  const QColor background(160, 160, 160);
+  slider.setBackgroundColor(background);
+  slider.setChannel(QStringLiteral("test:slider:click"));
+  slider.setLimits(PvLimits{});
+  slider.setIncrement(increment);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(low, high);
+  slider.setRuntimeValue(value);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+
+  QImage rendered(slider.size(), QImage::Format_ARGB32);
+  rendered.fill(Qt::transparent);
+  slider.render(&rendered);
+  QVERIFY2(rendered.pixelColor(point) != background,
+      "Click point must lie on the painted trough");
+
+  for (int click = 1; click <= 3; ++click) {
+    QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier, point);
+    QCOMPARE(writes.size(), click);
+    QVERIFY(std::abs(writes.last() - (value + click * delta)) < 1e-9);
+  }
+}
+
+void TestObserveOnlyControls::sliderThumbClickDoesNotStep_data()
+{
+  QTest::addColumn<int>("direction");
+  for (auto direction : {BarDirection::kRight, BarDirection::kLeft,
+           BarDirection::kUp, BarDirection::kDown}) {
+    const QByteArray name = QByteArray::number(int(direction));
+    QTest::newRow(name.constData()) << int(direction);
+  }
+}
+
+void TestObserveOnlyControls::sliderThumbClickDoesNotStep()
+{
+  QFETCH(int, direction);
+  const auto orientation = static_cast<BarDirection>(direction);
+  const bool vertical = orientation == BarDirection::kUp
+      || orientation == BarDirection::kDown;
+  SliderElement slider;
+  slider.resize(vertical ? QSize(40, 160) : QSize(160, 40));
+  slider.setDirection(orientation);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:thumb"));
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeValue(orientation == BarDirection::kLeft
+      || orientation == BarDirection::kUp ? 100.0 : 0.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+
+  /* These points lie on the visible thumb, outside the old inset used
+   * only for hit testing. A stationary thumb click must not step the PV. */
+  QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier,
+      vertical ? QPoint(39, 30) : QPoint(30, 36));
+  QVERIFY(writes.isEmpty());
+}
+
+void TestObserveOnlyControls::sliderTroughRespectsAccess_data()
+{
+  QTest::addColumn<bool>("execute");
+  QTest::addColumn<bool>("connected");
+  QTest::addColumn<bool>("writable");
+  QTest::newRow("edit-mode") << false << true << true;
+  QTest::newRow("disconnected") << true << false << true;
+  QTest::newRow("read-only") << true << true << false;
+}
+
+void TestObserveOnlyControls::sliderTroughRespectsAccess()
+{
+  QFETCH(bool, execute);
+  QFETCH(bool, connected);
+  QFETCH(bool, writable);
+  SliderElement slider;
+  slider.resize(160, 24);
+  slider.setLabel(MeterLabel::kLimits);
+  slider.setChannel(QStringLiteral("test:slider:access"));
+  slider.setExecuteMode(execute);
+  slider.setRuntimeConnected(connected);
+  slider.setRuntimeWriteAccess(writable);
+  slider.setRuntimeValue(50.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+  QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier, QPoint(156, 5));
+  QVERIFY(writes.isEmpty());
+}
+
 void TestObserveOnlyControls::sliderRightClickRespectsActualStacking()
 {
   auto state = std::make_shared<DisplayState>();
@@ -1449,8 +1629,9 @@ void TestObserveOnlyControls::sliderRightClickRespectsActualStacking()
     if (!dialog) {
       return;
     }
-    auto *combo = dialog->findChild<QComboBox *>();
-    dialogShown = dialog->windowTitle() == name && combo;
+    auto *group = dialog->findChild<QGroupBox *>(
+        QStringLiteral("sliderIncrementGroup"));
+    dialogShown = dialog->windowTitle() == name && group;
     dialog->reject();
   });
   QVERIFY(window.showExecuteSliderDialogForRightClick(point));
@@ -1470,6 +1651,284 @@ void TestObserveOnlyControls::sliderRightClickRespectsActualStacking()
   /* Disconnected sliders consume the click without opening a dialog. */
   QVERIFY(window.showExecuteSliderDialogForRightClick(point));
   QVERIFY(!QApplication::activeModalWidget());
+}
+
+void TestObserveOnlyControls::sliderIncrementDialogMatchesMedm_data()
+{
+  QTest::addColumn<bool>("useChannel");
+  QTest::addColumn<double>("low");
+  QTest::addColumn<double>("high");
+  QTest::addColumn<int>("precision");
+  QTest::addColumn<QStringList>("expectedPresets");
+  QTest::newRow("channel-limits") << true << -12.5 << 84.3 << 2
+      << QStringList({"1", "0", ".", "-1", "-2"});
+  QTest::newRow("configured-limits") << false << 0.0 << 360.0 << 3
+      << QStringList({"2", "1", "0", ".", "-1", "-2", "-3"});
+  QTest::newRow("subunit-limits") << true << -0.5 << 0.5 << 3
+      << QStringList({"0", ".", "-1", "-2", "-3"});
+  QTest::newRow("small-limits") << true << 0.0 << 0.03 << 4
+      << QStringList({".", "-1", "-2", "-3", "-4"});
+  QTest::newRow("integer-precision") << true << 0.0 << 42.0 << 0
+      << QStringList({"1", "0", "."});
+  QTest::newRow("bounded-preset-row") << true << 0.0 << 1e20 << 17
+      << QStringList({"1", "0", ".", "-1", "-2", "-3", "-4", "-5",
+          "-6", "-7", "-8", "-9", "-10", "-11", "-12", "-13", "-14",
+          "-15", "-16", "-17"});
+}
+
+void TestObserveOnlyControls::sliderIncrementDialogMatchesMedm()
+{
+  QFETCH(bool, useChannel);
+  QFETCH(double, low);
+  QFETCH(double, high);
+  QFETCH(int, precision);
+  QFETCH(QStringList, expectedPresets);
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  QPalette uiPalette = QApplication::palette();
+  for (auto role : {QPalette::Window, QPalette::Base, QPalette::Button}) {
+    uiPalette.setColor(role, QColor(0xb0, 0xc3, 0xca));
+  }
+  DisplayWindow window(uiPalette, uiPalette,
+      LegacyFonts::fontOrDefault(QStringLiteral("widgetDM_10"),
+          QApplication::font()), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.resize(400, 300);
+  window.show();
+  window.executeModeActive_ = true;
+
+  const QString name = QStringLiteral("slider:dialog:soft");
+  auto &soft = SoftPvRegistry::instance();
+  registeredNames_.append(name);
+  soft.registerName(name, true);
+  soft.setConnected(name, true);
+  soft.setControlInfo(name, useChannel ? low : -12.5,
+      useChannel ? high : 84.3, useChannel ? precision : 2);
+  soft.publishValue(name, 1.25);
+  auto *slider = new SliderElement(window.displayArea_);
+  slider->setGeometry(30, 40, 165, 25);
+  slider->setChannel(name);
+  PvLimits limits;
+  /* Deliberately disagree with channel metadata to catch the original bug. */
+  limits.lowDefault = useChannel ? 0.0 : low;
+  limits.highDefault = useChannel ? 100.0 : high;
+  limits.precisionDefault = useChannel ? 0 : precision;
+  if (!useChannel) {
+    limits.lowSource = limits.highSource = limits.precisionSource
+        = PvLimitSource::kUser;
+  }
+  slider->setLimits(limits);
+  slider->setIncrement(0.01);
+  slider->setExecuteMode(true);
+  window.sliderElements_.append(slider);
+  window.ensureElementInStack(slider);
+  slider->show();
+  auto *runtime = new SliderRuntime(slider);
+  window.sliderRuntimes_.insert(slider, runtime);
+  runtime->start();
+  QCoreApplication::processEvents();
+
+  bool inspected = false;
+  QTimer::singleShot(0, &window, [&]() {
+    auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+    QVERIFY(dialog);
+    const auto closeDialog = qScopeGuard([dialog]() { dialog->reject(); });
+    QCOMPARE(dialog->windowTitle(), name);
+    QVERIFY(!dialog->findChild<QComboBox *>());
+    auto *group = dialog->findChild<QGroupBox *>(
+        QStringLiteral("sliderIncrementGroup"));
+    auto *incrementEdit = dialog->findChild<QLineEdit *>(
+        QStringLiteral("sliderIncrementEdit"));
+    auto *valueEdit = dialog->findChild<QLineEdit *>(
+        QStringLiteral("sliderValueEdit"));
+    QVERIFY(group);
+    QVERIFY(incrementEdit);
+    QVERIFY(valueEdit);
+    QCOMPARE(valueEdit->text(), QString::number(1.25, 'f', precision));
+    QCOMPARE(incrementEdit->text(), QStringLiteral("0.01"));
+    QVERIFY(group->geometry().bottom() < valueEdit->geometry().top());
+    auto *presetLayout = qobject_cast<QHBoxLayout *>(
+        group->layout()->itemAt(0)->layout());
+    QVERIFY(presetLayout);
+    QStringList actualPresets;
+    for (int i = 0; i < presetLayout->count(); ++i) {
+      QWidget *widget = presetLayout->itemAt(i)->widget();
+      if (auto *button = qobject_cast<QPushButton *>(widget)) {
+        actualPresets.append(button->text());
+        QCOMPARE(button->isChecked(), button->text() == QStringLiteral("-2"));
+      } else {
+        auto *decimal = qobject_cast<QLabel *>(widget);
+        QVERIFY(decimal);
+        actualPresets.append(decimal->text());
+      }
+    }
+    QCOMPARE(actualPresets, expectedPresets);
+    QStringList actions;
+    for (auto *button : dialog->findChildren<QPushButton *>(QString(),
+             Qt::FindDirectChildrenOnly)) {
+      actions.append(button->text());
+    }
+    QCOMPARE(actions, QStringList({"OK", "Cancel", "Help"}));
+
+    /* Optional rendered artifact for reviewing this dialog's appearance. */
+    const QString artifactDir = qEnvironmentVariable("QTEDM_TEST_ARTIFACT_DIR");
+    if (!artifactDir.isEmpty()
+        && QByteArray(QTest::currentDataTag()) == "channel-limits") {
+      QVERIFY(QDir().mkpath(artifactDir));
+      QVERIFY(dialog->grab().save(QDir(artifactDir).filePath(
+          QStringLiteral("slider_increment_dialog.png"))));
+    }
+    inspected = true;
+  });
+  QVERIFY(window.showExecuteSliderDialogForRightClick(
+      slider->mapToGlobal(slider->rect().center())));
+  QVERIFY(inspected);
+  QCOMPARE(slider->increment(), 0.01);
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 1.25);
+}
+
+void TestObserveOnlyControls::sliderIncrementDialogActions_data()
+{
+  QTest::addColumn<QString>("action");
+  QTest::addColumn<QString>("typedIncrement");
+  QTest::addColumn<double>("initialIncrement");
+  QTest::addColumn<double>("expectedIncrement");
+  QTest::addColumn<double>("expectedValue");
+  QTest::newRow("preset-closes-without-write")
+      << QString("preset") << QString("0.25") << 0.1 << 0.01 << 1.25;
+  QTest::newRow("custom-enter-closes-without-write")
+      << QString("increment-enter") << QString("0.25") << 0.1 << 0.25 << 1.25;
+  QTest::newRow("small-increment-change")
+      << QString("increment-enter") << QString("1e-10")
+      << 1e-9 << 1e-10 << 1.25;
+  QTest::newRow("focus-loss-discards-increment")
+      << QString("cancel") << QString("0.25") << 0.1 << 0.1 << 1.25;
+  QTest::newRow("ok-writes-value-only")
+      << QString("ok") << QString("0.25") << 0.1 << 0.1 << 3.75;
+  QTest::newRow("value-enter-writes-value-only")
+      << QString("value-enter") << QString("0.25") << 0.1 << 0.1 << 3.75;
+  QTest::newRow("help-keeps-dialog-open")
+      << QString("help") << QString("0.25") << 0.1 << 0.1 << 1.25;
+  for (const QString &invalid : {QString("0"), QString("-1"),
+           QString("nan"), QString("abc"), QString("1e309")}) {
+    const QByteArray rowName = "invalid-increment-" + invalid.toLatin1();
+    QTest::newRow(rowName.constData()) << QString("invalid-enter")
+        << invalid << 0.1 << 0.1 << 1.25;
+  }
+}
+
+void TestObserveOnlyControls::sliderIncrementDialogActions()
+{
+  QFETCH(QString, action);
+  QFETCH(QString, typedIncrement);
+  QFETCH(double, initialIncrement);
+  QFETCH(double, expectedIncrement);
+  QFETCH(double, expectedValue);
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.resize(400, 300);
+  window.show();
+  window.executeModeActive_ = true;
+
+  const QString name = QStringLiteral("slider:dialog:actions:soft");
+  auto &soft = SoftPvRegistry::instance();
+  registeredNames_.append(name);
+  soft.registerName(name, true);
+  soft.setConnected(name, true);
+  soft.setControlInfo(name, -12.5, 84.3, 2);
+  soft.publishValue(name, 1.25);
+  auto *slider = new SliderElement(window.displayArea_);
+  slider->setGeometry(30, 40, 165, 25);
+  slider->setChannel(name);
+  slider->setLimits(PvLimits{});
+  slider->setIncrement(initialIncrement);
+  slider->setExecuteMode(true);
+  window.sliderElements_.append(slider);
+  window.ensureElementInStack(slider);
+  slider->show();
+  auto *runtime = new SliderRuntime(slider);
+  window.sliderRuntimes_.insert(slider, runtime);
+  runtime->start();
+  QCoreApplication::processEvents();
+
+  bool exercised = false;
+  QTimer::singleShot(0, &window, [&]() {
+    auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+    QVERIFY(dialog);
+    const auto closeDialog = qScopeGuard([dialog]() {
+      if (dialog->isVisible()) {
+        dialog->reject();
+      }
+    });
+    dialog->activateWindow();
+    QCoreApplication::processEvents();
+    auto *incrementEdit = dialog->findChild<QLineEdit *>(
+        QStringLiteral("sliderIncrementEdit"));
+    auto *valueEdit = dialog->findChild<QLineEdit *>(
+        QStringLiteral("sliderValueEdit"));
+    QVERIFY(incrementEdit);
+    QVERIFY(valueEdit);
+    valueEdit->setText(QStringLiteral("3.75"));
+    incrementEdit->setFocus();
+    incrementEdit->selectAll();
+    QTest::keyClicks(incrementEdit, typedIncrement);
+    if (action == QStringLiteral("increment-enter")
+        || action == QStringLiteral("invalid-enter")) {
+      QTest::keyClick(incrementEdit, Qt::Key_Return);
+      if (action == QStringLiteral("invalid-enter")) {
+        QVERIFY(dialog->isVisible());
+        QCOMPARE(incrementEdit->text(), QStringLiteral("0.1"));
+      } else {
+        QVERIFY(!dialog->isVisible());
+      }
+    } else if (action == QStringLiteral("preset")) {
+      auto *preset = dialog->findChild<QPushButton *>(
+          QStringLiteral("sliderIncrementExponent_-2"));
+      QVERIFY(preset);
+      QTest::mouseClick(preset, Qt::LeftButton);
+      QVERIFY(!dialog->isVisible());
+    } else if (action == QStringLiteral("value-enter")) {
+      valueEdit->setFocus();
+      QCOMPARE(incrementEdit->text(), QStringLiteral("0.1"));
+      QTest::keyClick(valueEdit, Qt::Key_Return);
+      QVERIFY(!dialog->isVisible());
+    } else {
+      QString buttonText = action == QStringLiteral("ok")
+          ? QStringLiteral("OK") : action == QStringLiteral("help")
+              ? QStringLiteral("Help") : QStringLiteral("Cancel");
+      QPushButton *target = nullptr;
+      for (auto *button : dialog->findChildren<QPushButton *>(QString(),
+               Qt::FindDirectChildrenOnly)) {
+        if (button->text() == buttonText) {
+          target = button;
+        }
+      }
+      QVERIFY(target);
+      QTest::mouseClick(target, Qt::LeftButton);
+      if (action == QStringLiteral("help")) {
+        QVERIFY(dialog->isVisible());
+        auto *help = dialog->findChild<QDialog *>();
+        QVERIFY(help);
+        QVERIFY(help->isVisible());
+        help->close();
+      } else {
+        QVERIFY(!dialog->isVisible());
+      }
+    }
+    exercised = true;
+  });
+  QVERIFY(window.showExecuteSliderDialogForRightClick(
+      slider->mapToGlobal(slider->rect().center())));
+  QVERIFY(exercised);
+  QCOMPARE(slider->increment(), expectedIncrement);
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, expectedValue);
 }
 
 void TestObserveOnlyControls::executePickingFollowsVisibleStacking()

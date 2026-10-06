@@ -388,6 +388,7 @@ build_waterfall_waveform_values() {
 
 set_slider_test_pvs() {
   local prefix="$1"
+  # Both right-click dialogs use these active limits and precision for presets.
   local -a slider_init_values=(
     # pv value lopr hopr prec
     "slider:test:alpha   24.5  -12.5   84.3   2"

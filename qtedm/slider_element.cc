@@ -319,7 +319,7 @@ void SliderElement::setIncrement(double increment)
   if (sanitized < 0.0) {
     sanitized = -sanitized;
   }
-  if (std::abs(increment_ - sanitized) < 1e-9) {
+  if (increment_ == sanitized) {
     return;
   }
   increment_ = sanitized;
@@ -580,8 +580,8 @@ void SliderElement::mousePressEvent(QMouseEvent *event)
   QRectF limitRect;
   QRectF channelRect;
   qreal thumbExtent = 0.0;
-  const QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0,
-      -2.0, -2.0), limitRect, channelRect, &thumbExtent);
+  const QRectF trackRect = trackRectForPainting(rect(), limitRect, channelRect,
+      &thumbExtent);
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     QWidget::mousePressEvent(event);
     return;
@@ -596,7 +596,7 @@ void SliderElement::mousePressEvent(QMouseEvent *event)
     return;
   }
 
-  if (!trackRect.contains(pos)) {
+  if (!troughRectForTrack(trackRect, thumbExtent).contains(pos)) {
     QWidget::mousePressEvent(event);
     return;
   }
@@ -672,8 +672,8 @@ void SliderElement::mouseReleaseEvent(QMouseEvent *event)
   QRectF limitRect;
   QRectF channelRect;
   qreal thumbExtent = 0.0;
-  const QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0,
-      -2.0, -2.0), limitRect, channelRect, &thumbExtent);
+  const QRectF trackRect = trackRectForPainting(rect(), limitRect, channelRect,
+      &thumbExtent);
 
   bool releaseOnThumb = false;
   if (trackRect.isValid() && !trackRect.isEmpty()) {
@@ -756,8 +756,8 @@ void SliderElement::paintEvent(QPaintEvent *event)
   QRectF limitRect;
   QRectF channelRect;
   qreal thumbExtent = 0.0;
-  QRectF trackRect = trackRectForPainting(rect().adjusted(0.0, 0.0, 0.0, 0.0),
-      limitRect, channelRect, &thumbExtent);
+  QRectF trackRect = trackRectForPainting(rect(), limitRect, channelRect,
+      &thumbExtent);
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);
@@ -765,14 +765,7 @@ void SliderElement::paintEvent(QPaintEvent *event)
     return;
   }
 
-  /* trackRect describes the thumb center's travel. Extend the painted
-   * trough past both limits so the entire thumb fits inside its bevel,
-   * without changing drag positions or the mapping from position to value. */
-  const qreal endPadding = thumbExtent / 2.0 + 2.0;
-  const QRectF troughRect = isVertical()
-      ? trackRect.adjusted(0.0, -endPadding, 0.0, endPadding)
-      : trackRect.adjusted(-endPadding, 0.0, endPadding, 0.0);
-  paintTrack(painter, troughRect);
+  paintTrack(painter, troughRectForTrack(trackRect, thumbExtent));
   /* Ticks removed per user request */
   /* paintTicks(painter, trackRect); */
   paintThumb(painter, trackRect, thumbExtent);
@@ -1469,8 +1462,7 @@ double SliderElement::valueFromPosition(const QPointF &pos) const
 {
   QRectF limitRect;
   QRectF channelRect;
-  QRectF trackRect = trackRectForPainting(rect().adjusted(2.0, 2.0, -2.0, -2.0),
-      limitRect, channelRect);
+  QRectF trackRect = trackRectForPainting(rect(), limitRect, channelRect);
   if (!trackRect.isValid() || trackRect.isEmpty()) {
     return currentDisplayedValue();
   }
@@ -1503,6 +1495,17 @@ double SliderElement::valueFromPosition(const QPointF &pos) const
     return low;
   }
   return low + normalized * span;
+}
+
+QRectF SliderElement::troughRectForTrack(const QRectF &trackRect,
+    qreal thumbExtent) const
+{
+  /* The track rectangle is the thumb center's travel. Painting and hit
+   * testing must both include the trough beyond the travel limits. */
+  const qreal endPadding = thumbExtent / 2.0 + 2.0;
+  return isVertical()
+      ? trackRect.adjusted(0.0, -endPadding, 0.0, endPadding)
+      : trackRect.adjusted(-endPadding, 0.0, endPadding, 0.0);
 }
 
 QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect,

@@ -105,6 +105,7 @@ private:
   int effectivePrecision() const;
   double clampToLimits(double value) const;
   double valueFromPosition(const QPointF &pos) const;
+  QRectF troughRectForTrack(const QRectF &trackRect, qreal thumbExtent) const;
   QRectF thumbRectForTrack(const QRectF &trackRect, qreal thumbExtent) const;
   void beginDrag(double value, bool sendInitial);
   void updateDrag(double value, bool force);

@@ -1,4 +1,5 @@
 #include "resource_palette_dialog.h"
+#include "help_dialog.h"
 
 #include <cmath>
 #include <limits>
@@ -77,9 +78,10 @@ ResourcePaletteDialog::ResourcePaletteDialog(const QPalette &basePalette, const 
   helpMenu->setFont(labelFont_);
   auto *helpAction = helpMenu->addAction(
       QStringLiteral("On &Resource Palette"));
+  helpAction->setObjectName(QStringLiteral("resourcePaletteHelpAction"));
+  helpAction->setShortcut(QKeySequence(Qt::Key_F1));
   QObject::connect(helpAction, &QAction::triggered, this, [this]() {
-    QMessageBox::information(this, windowTitle(),
-        QStringLiteral("Displays and edits display-related resources."));
+    showQtEdmHelp(this, QStringLiteral("ResourcePalette"));
   });
 
   mainLayout->setMenuBar(menuBar);

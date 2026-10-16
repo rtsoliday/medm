@@ -1,4 +1,5 @@
 #include "object_palette_dialog.h"
+#include "help_dialog.h"
 
 #include "extension_object_registry.h"
 #include <QAction>
@@ -13,7 +14,6 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
-#include <QMessageBox>
 #include <QPainter>
 #include <QToolButton>
 #include <QToolTip>
@@ -164,14 +164,15 @@ ObjectPaletteDialog::ObjectPaletteDialog(const QPalette &basePalette,
   auto *helpMenu = menuBar->addMenu(QStringLiteral("&Help"));
   helpMenu->setFont(labelFont_);
   auto *helpAction = helpMenu->addAction(QStringLiteral("On &Object Palette"));
+  helpAction->setObjectName(QStringLiteral("objectPaletteHelpAction"));
+  helpAction->setShortcut(QKeySequence(Qt::Key_F1));
   QObject::connect(helpAction, &QAction::triggered, this, [this]() {
-    QMessageBox::information(this, windowTitle(),
-        QStringLiteral("Select an object creation tool."));
+    showQtEdmHelp(this, QStringLiteral("ObjectPalette"));
   });
   auto *indexAction = helpMenu->addAction(QStringLiteral("Object &Index"));
+  indexAction->setObjectName(QStringLiteral("objectIndexHelpAction"));
   QObject::connect(indexAction, &QAction::triggered, this, [this]() {
-    QMessageBox::information(this, windowTitle(),
-        QStringLiteral("Displays a list of available MEDM objects."));
+    showQtEdmHelp(this, QStringLiteral("Widgets"));
   });
 
   mainLayout->setMenuBar(menuBar);

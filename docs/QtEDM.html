@@ -60,6 +60,8 @@
   <p><a href="#Requirements">Requirements</a></p>
   <p><a href="#CommandLine">Command Line</a></p>
   <p><a href="#Modes">Modes of Operation</a></p>
+  <p><a href="#Help">Help and Palettes</a></p>
+  <p><a href="#KeyboardShortcuts">Keyboard Shortcuts</a></p>
   <p><a href="#Widgets">Supported Widgets</a></p>
   <p><a href="#Environment">Environment Variables</a></p>
   <p><a href="#ADLFiles">ADL Files</a></p>
@@ -177,7 +179,7 @@ single-instance request options are available only when Qt uses the X11
   </tr>
   <tr>
     <td><code>-noMsg</code></td>
-    <td>Do not raise the message window on startup</td>
+    <td>Accepted for MEDM compatibility; currently has no effect</td>
   </tr>
   <tr>
     <td><code>-nolog</code></td>
@@ -189,7 +191,7 @@ single-instance request options are available only when Qt uses the X11
   </tr>
   <tr>
     <td><code>-cmap</code></td>
-    <td>Use a private colormap (compatibility option)</td>
+    <td>Accepted for MEDM compatibility; has no effect in QtEDM</td>
   </tr>
 </table>
 
@@ -250,6 +252,108 @@ protocol and fall back to local mode on Wayland, macOS, and Windows.</p>
 the main window to change modes. A command-line EXECUTE launch locks the
 selector for that process. <code>Ctrl+X</code> remains the standard Cut shortcut
 in EDIT mode; it is not a mode switch.</p>
+
+<h2><a name="Help"></a>Help and Palettes</h2>
+
+<p>This manual is built into QtEDM and works offline, including its widget
+illustrations. Open it with <strong>Help &gt; Help Topics</strong> or press
+<code>F1</code> in the main window.</p>
+
+<h3><a name="HelpWindow"></a>Using the Help Window</h3>
+<ul>
+  <li><strong>Browse:</strong> Click a topic in the sidebar, or just scroll.
+    The sidebar highlights the section you are reading.</li>
+  <li><strong>Search:</strong> Type in <strong>Find in help</strong> to search
+    the whole manual. Matching ignores case, and every match is highlighted.
+    Press <code>Ctrl+F</code> to jump to the search field.</li>
+  <li><strong>Step through matches:</strong> <code>Enter</code> or
+    <code>F3</code> goes to the next match; <code>Shift+Enter</code> or
+    <code>Shift+F3</code> goes back. Search wraps around at either end.</li>
+  <li><strong>Close:</strong> Press <code>Escape</code> or click
+    <strong>Close</strong>. Opening Help again brings back the same window.</li>
+</ul>
+<p>The Help window does not block other windows, so you can keep it open while
+you work. On macOS, use <code>Command</code> wherever this manual says
+<code>Ctrl</code>.</p>
+
+<h3><a name="HelpMenu"></a>Help Menu</h3>
+<ul>
+  <li><strong>Help Topics</strong> (<code>F1</code>) &ndash; Opens this manual.</li>
+  <li><strong>Keyboard Shortcuts</strong> &ndash; Opens the
+    <a href="#KeyboardShortcuts">shortcut list</a>.</li>
+  <li><strong>Online Manual</strong> &ndash; Opens the QtEDM documentation
+    website in your web browser. The <strong>Online manual</strong> button in
+    the Help window does the same.</li>
+  <li><strong>About QtEDM</strong> &ndash; Shows the QtEDM, Qt, and EPICS
+    versions and the author credits. Its <strong>Open help</strong> button
+    closes About and opens this manual.</li>
+</ul>
+
+<p>Each palette also has a Help menu. Press <code>F1</code> in a palette to
+open its section below.</p>
+
+<h3><a name="ObjectPalette"></a>Object Palette</h3>
+<p>Use the Object Palette in EDIT mode to add objects to a display:</p>
+<ol>
+  <li>Click a tool. Tools are grouped into Graphics, Monitor, Controller,
+    Container, and Misc sections, plus Plugins when plugins are loaded.</li>
+  <li>Click and drag in a display to draw the object.</li>
+  <li>Click the <strong>Select</strong> tool to go back to selecting and
+    editing existing objects.</li>
+</ol>
+<p><strong>Help &gt; Object Index</strong> opens the
+<a href="#Widgets">Supported Widgets</a> list.</p>
+
+<h3><a name="ResourcePalette"></a>Resource Palette</h3>
+<p>The Resource Palette shows the properties of the selected object or of the
+display itself. Use it to set position and size, channels,
+colors, and object-specific options. The fields change to match the
+selection. Clicking a color field opens the Color Palette.</p>
+
+<h3><a name="ColorPalette"></a>Color Palette</h3>
+<p>Click a color to apply it to the color property you are editing. The message
+at the bottom names that property and shows the selected color as a hex value
+and its MEDM color number.</p>
+
+<h2><a name="KeyboardShortcuts"></a>Keyboard Shortcuts</h2>
+<p>Shortcuts act on the window that has focus. On macOS, use
+<code>Command</code> in place of <code>Ctrl</code>. Editing shortcuts work
+only in EDIT mode.</p>
+
+<h3><a name="ShortcutsMain"></a>Main Window and Palettes</h3>
+<table>
+  <tr><th>Keys</th><th>Action</th></tr>
+  <tr><td><code>F1</code></td><td>Open this manual (in a palette, open that palette&rsquo;s section)</td></tr>
+  <tr><td><code>Ctrl+N</code></td><td>New display</td></tr>
+  <tr><td><code>Ctrl+O</code></td><td>Open display</td></tr>
+  <tr><td><code>Ctrl+S</code></td><td>Save display</td></tr>
+  <tr><td><code>Ctrl+P</code></td><td>Print</td></tr>
+  <tr><td><code>Ctrl+Q</code></td><td>Exit QtEDM</td></tr>
+  <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Shift+Z</code></td><td>Undo / Redo (Redo is <code>Ctrl+Y</code> on Windows)</td></tr>
+  <tr><td><code>Ctrl+F</code></td><td>Find PV</td></tr>
+</table>
+
+<h3><a name="ShortcutsDisplay"></a>Display Windows</h3>
+<table>
+  <tr><th>Keys</th><th>Action</th></tr>
+  <tr><td><code>Ctrl+X</code> / <code>Ctrl+C</code> / <code>Ctrl+V</code></td><td>Cut / Copy / Paste the selection (also in the main window)</td></tr>
+  <tr><td>Arrow keys</td><td>Move the selection 1 pixel</td></tr>
+  <tr><td><code>Shift</code>+Arrow</td><td>Move the selection 10 pixels</td></tr>
+  <tr><td><code>Ctrl</code>+Arrow</td><td>Resize the selection 1 pixel</td></tr>
+  <tr><td><code>Ctrl+Shift</code>+Arrow</td><td>Resize the selection 10 pixels</td></tr>
+  <tr><td><code>Escape</code></td><td>Cancel PV Info or PV Limits picking</td></tr>
+</table>
+<p><code>Ctrl+X</code> is always Cut; it does not switch modes. To change modes,
+use the Edit/Execute selector in the main window.</p>
+
+<h3><a name="ShortcutsHelp"></a>Help Window</h3>
+<table>
+  <tr><th>Keys</th><th>Action</th></tr>
+  <tr><td><code>Ctrl+F</code></td><td>Go to <strong>Find in help</strong></td></tr>
+  <tr><td><code>Enter</code> or <code>F3</code></td><td>Next match</td></tr>
+  <tr><td><code>Shift+Enter</code> or <code>Shift+F3</code></td><td>Previous match</td></tr>
+  <tr><td><code>Escape</code></td><td>Close Help</td></tr>
+</table>
 
 <h2><a name="Widgets"></a>Supported Widgets</h2>
 
@@ -374,7 +478,7 @@ way.</p>
   detail. A simple line is the two-point case of the polyline data model, so
   line and polyline styling stay consistent.</p>
   <ul>
-    <li><strong>Configure:</strong> Endpoints, line width, dash style, and arrow decorations.</li>
+    <li><strong>Configure:</strong> Endpoints, line width, dash style, and color.</li>
     <li><strong>Use when:</strong> You need simple directional marks, separators, or wiring runs on a schematic.</li>
     <li><strong>Dynamic support:</strong> Color and visibility can still be driven by PV state.</li>
   </ul>
@@ -390,7 +494,7 @@ way.</p>
   are the right choice for piping runs, beam lines, and other paths that must
   bend without becoming filled areas.</p>
   <ul>
-    <li><strong>Configure:</strong> A vertex list, line width, dash style, and optional arrow heads.</li>
+    <li><strong>Configure:</strong> A vertex list, line width, dash style, and color.</li>
     <li><strong>Use when:</strong> The path is not straight but should remain an open line rather than a closed polygon.</li>
     <li><strong>Edit behavior:</strong> In EDIT mode individual vertices can be repositioned to reshape the path.</li>
   </ul>
@@ -419,11 +523,12 @@ way.</p>
     <p class="figcaption">Static text examples covering alignment, font sizes, labels, and decorative uses.</p>
   </div>
   <p>Text widgets provide static labels, titles, engineering notes, and screen
-  annotations. They are not tied to PV updates and are intended for fixed
-  wording that helps operators interpret the rest of the display.</p>
+  annotations. The wording is fixed, but like the other graphics, a Text
+  widget's color and visibility can follow PVs.</p>
   <ul>
     <li><strong>Configure:</strong> String content, alignment, color, and font sizing through the display font model.</li>
     <li><strong>Use when:</strong> You need headings, units, labels, instructions, or other non-changing text.</li>
+    <li><strong>Dynamic support:</strong> Color can follow alarm state or a discrete PV value, and visibility can follow a PV or a calculation.</li>
     <li><strong>Tip:</strong> Static text is often paired with monitor widgets so the label remains stable while the readback changes.</li>
   </ul>
 </div>
@@ -773,19 +878,17 @@ way.</p>
       <th>Property</th>
       <th>Description</th>
     </tr>
-    <tr><td><code>dataChannel</code></td><td>Waveform PV. Each monitor update adds one sample to the waterfall.</td></tr>
-    <tr><td><code>countChannel</code></td><td>Optional PV supplying the active waveform length when the array is only partially populated.</td></tr>
-    <tr><td><code>triggerChannel</code></td><td>Optional PV used to trigger sampling of the most recent waveform update.</td></tr>
-    <tr><td><code>eraseChannel</code></td><td>Optional PV used to clear the rolling buffer when the configured erase transition occurs.</td></tr>
-    <tr><td><code>eraseMode</code></td><td>Controls whether a zero or non-zero transition clears the buffer.</td></tr>
-    <tr><td><code>title</code>, <code>xLabel</code>, <code>yLabel</code></td><td>Plot title and axis labels.</td></tr>
+    <tr><td><code>data { chan }</code></td><td>Waveform PV. Each monitor update adds one sample to the waterfall.</td></tr>
+    <tr><td><code>count { chan }</code></td><td>Optional PV supplying the active waveform length when the array is only partially populated.</td></tr>
+    <tr><td><code>trigger { chan }</code></td><td>Optional PV used to trigger sampling of the most recent waveform update.</td></tr>
+    <tr><td><code>erase { chan mode }</code></td><td>Optional PV that clears the rolling buffer. <code>mode</code> is <code>ifnotzero</code> (default) or <code>ifzero</code>.</td></tr>
+    <tr><td><code>plotcom { title xlabel ylabel clr bclr }</code></td><td>Plot title, axis labels, and the foreground and background colors used for labels, axes, and the plot area.</td></tr>
     <tr><td><code>historyCount</code></td><td>Number of waveform samples retained in the rolling buffer.</td></tr>
-    <tr><td><code>scrollDirection</code></td><td>Chooses where new samples appear: top, bottom, left, or right.</td></tr>
+    <tr><td><code>scrollDirection</code></td><td>Where new samples appear and which way they scroll: <code>topToBottom</code> (default), <code>bottomToTop</code>, <code>leftToRight</code>, or <code>rightToLeft</code>.</td></tr>
     <tr><td><code>colorMap</code>, <code>invertGreyscale</code></td><td>Intensity palette selection, reusing the Heatmap color maps.</td></tr>
-    <tr><td><code>intensityScale</code>, <code>intensityMin</code>, <code>intensityMax</code></td><td>Auto, manual, or logarithmic intensity scaling for the image and legend.</td></tr>
+    <tr><td><code>intensityScale</code>, <code>intensityMin</code>, <code>intensityMax</code></td><td><code>auto</code>, <code>manual</code>, or <code>log</code> intensity scaling for the image and legend.</td></tr>
     <tr><td><code>showLegend</code>, <code>showGrid</code></td><td>Optional legend bar and faint axis grid overlay.</td></tr>
     <tr><td><code>samplePeriod</code>, <code>units</code></td><td>Optional fixed sample spacing used for time-axis labeling and data export when timestamps are not available.</td></tr>
-    <tr><td><code>foreground</code>, <code>background</code></td><td>Colors used for labels, axes, and the plot background.</td></tr>
   </table>
   <p>Example ADL fragment:</p>
   <pre>waterfall_plot {
@@ -1144,7 +1247,7 @@ complete extension list.</p>
   </tr>
   <tr>
     <td><code>MEDM_EXEC_LIST</code></td>
-    <td>MEDM-compatible semicolon-delimited entries added to the EXECUTE-mode context menu. Each item supplies a label and command.</td>
+    <td>Extra commands for the EXECUTE-mode context menu, in MEDM's format: colon-separated entries, each written as <code>label;command</code>.</td>
   </tr>
   <tr>
     <td><code>QTEDM_TIMING_DIAGNOSTICS</code></td>
@@ -1188,9 +1291,10 @@ specific channel, prefix the PV name with <code>pva://</code>:</p>
 
 <h3>ADL Version Header</h3>
 
-<p>QtEDM writes a file header version of <strong>40001</strong> when any PV uses the
-<code>pva://</code> prefix. Displays with only CA PVs are saved with version <strong>40000</strong>.
-Both versions remain fully readable by QtEDM.</p>
+<p>QtEDM writes a file header version of <strong>040000</strong> when any PV uses the
+<code>pva://</code> prefix. Displays with only CA PVs are saved with MEDM's version,
+<strong>030122</strong>, so MEDM can open them. QtEDM reads both, and converts older
+MEDM formats when it opens them.</p>
 
 <h3>QtEDM-only ADL Extensions</h3>
 
@@ -1385,13 +1489,13 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
   <li><strong>Publish/subscribe model</strong> &ndash; Other widgets consume the result by setting their channel name to the expression channel's <code>variable</code> value.</li>
   <li><strong>Chaining</strong> &ndash; One expression channel can subscribe to another expression channel's output by referencing its variable name in Channel A through Channel D.</li>
   <li><strong>Startup behavior</strong> &ndash; The configured <code>initialValue</code> is published immediately when EXECUTE mode starts.</li>
-  <li><strong>Event control</strong> &ndash; Publication can be gated by <code>Never</code>, <code>On First Change</code>, <code>On Any Change</code>, <code>Trigger Zero To One</code>, or <code>Trigger One To Zero</code>.</li>
+  <li><strong>Event control</strong> &ndash; Publication can be gated by <code>Never</code>, <code>On First Change</code>, <code>On Any Change</code>, <code>Trigger 0-&gt;1</code>, or <code>Trigger 1-&gt;0</code>.</li>
   <li><strong>Scope</strong> &ndash; Soft PVs are visible within the same running QtEDM process, including across multiple open displays in that process.</li>
 </ul>
 
 <h3>Printing</h3>
 
-<p>Displays can be printed using the File &gt; Print menu. Page setup options allow configuring paper size and orientation.</p>
+<p>Print the active display with <strong>File &gt; Print</strong> (<code>Ctrl+P</code>). <strong>File &gt; Print Setup...</strong> sets the paper size and orientation.</p>
 
 <h3>PV Information</h3>
 
@@ -1462,6 +1566,7 @@ build without <code>-j4</code>.</p>
   <li>SDDS source tree and support libraries</li>
   <li>A C++17 compiler</li>
   <li><code>pkg-config</code> for Qt detection on non-Windows platforms</li>
+  <li>On Windows, a clone of <code>https://github.com/rtsoliday/gsl</code> next to the medm repository</li>
 </ul>
 
 <p>On non-Windows platforms the build system prefers Qt6 when its

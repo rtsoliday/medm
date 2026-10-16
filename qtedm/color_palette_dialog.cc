@@ -1,4 +1,5 @@
 #include "color_palette_dialog.h"
+#include "help_dialog.h"
 
 #include <array>
 
@@ -8,7 +9,6 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
@@ -48,9 +48,10 @@ ColorPaletteDialog::ColorPaletteDialog(const QPalette &basePalette,
   auto *helpMenu = menuBar->addMenu(QStringLiteral("&Help"));
   helpMenu->setFont(labelFont_);
   auto *helpAction = helpMenu->addAction(QStringLiteral("On &Color Palette"));
+  helpAction->setObjectName(QStringLiteral("colorPaletteHelpAction"));
+  helpAction->setShortcut(QKeySequence(Qt::Key_F1));
   QObject::connect(helpAction, &QAction::triggered, this, [this]() {
-    QMessageBox::information(this, windowTitle(),
-        QStringLiteral("Select a color to apply to the current resource."));
+    showQtEdmHelp(this, QStringLiteral("ColorPalette"));
   });
 
   mainLayout->setMenuBar(menuBar);

@@ -136,6 +136,7 @@ qtedm_SRC = qtedm.cc \
             legacy_fonts.cc \
             display_window.cc \
             window_utils.cc \
+            help_dialog.cc \
             adl_writer.cc \
             main_window_controller.cc \
             text_font_utils.cc \
@@ -495,7 +496,8 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_archives_snapshots \
                         test_display_import_ndarray \
                         test_plugins_property_rules \
-                        test_extension_resource_palettes
+                        test_extension_resource_palettes \
+                        test_help_dialogs
 
 QTEDM_VISUAL_TEST_TOOLS = $(OBJ_DIR)/qtedm_image_compare$(EXEEXT)
 QTEDM_UNIT_TEST_HELPERS = $(OBJ_DIR)/qtedm_shell_command_helper$(EXEEXT)
@@ -575,6 +577,8 @@ test_plugins_property_rules_OBJS = \
   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 test_extension_resource_palettes_OBJS = \
   $(OBJ_DIR)/test_extension_resource_palettes.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
+test_help_dialogs_OBJS = $(OBJ_DIR)/test_help_dialogs.$(OBJEXT) \
   $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 qtedm_image_compare_OBJS = $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT)
 
@@ -698,6 +702,12 @@ build-tests: check-qt-test $(PLUGIN_API_TEST_METADATA) \
   $(PLUGIN_API_THUMBS_METADATA) $(QTEDM_UNIT_TEST_HELPERS) \
   $(QTEDM_UNIT_TEST_BINARIES)
 
+test-help: $(OBJ_DIR)/test_help_dialogs$(EXEEXT)
+	@mkdir -p $(OBJ_DIR)/test-artifacts/help
+	QT_QPA_PLATFORM=offscreen QTEDM_NOLOG=1 \
+	  QTEDM_HELP_VISUAL_DIR=$(OBJ_DIR)/test-artifacts/help \
+	  $(OBJ_DIR)/test_help_dialogs$(EXEEXT)
+
 tests: test
 
 test: test-cli test-unit test-ioc test-visual
@@ -747,7 +757,7 @@ clean-tests:
 	  $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) \
 	  $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc
 
-.PHONY: tests test build-tests test-unit test-cli test-ioc test-visual clean-tests check-qt-test
+.PHONY: tests test build-tests test-unit test-cli test-ioc test-visual test-help clean-tests check-qt-test
 
 .NOTPARALLEL: test
 

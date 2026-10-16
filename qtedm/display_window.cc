@@ -14,6 +14,7 @@
 #include "shell_command_utils.h"
 #include "widget_image_export_utils.h"
 #include "window_utils.h"
+#include "help_dialog.h"
 
 #include <QButtonGroup>
 #include <QCheckBox>
@@ -19232,16 +19233,8 @@ bool DisplayWindow::showExecuteSliderDialogForRightClick(const QPoint &globalPos
       });
   QObject::connect(cancelButton, &QPushButton::clicked, &dialog,
       &QDialog::reject);
-  QObject::connect(helpButton, &QPushButton::clicked, &dialog, [this, &dialog]() {
-    const QString title = QStringLiteral("QtEDM Help - Slider");
-    showHelpBrowser(&dialog, title, QStringLiteral(":/help/QtEDM.html"),
-        font(), resourcePaletteBase_);
-    if (auto *help = dialog.findChild<QDialog *>(
-            QStringLiteral("qtedmHelpBrowser_QtEDM_Help_-_Slider"))) {
-      if (auto *browser = help->findChild<QTextBrowser *>()) {
-        browser->scrollToAnchor(QStringLiteral("WidgetSlider"));
-      }
-    }
+  QObject::connect(helpButton, &QPushButton::clicked, &dialog, [&dialog]() {
+    showQtEdmHelp(&dialog, QStringLiteral("WidgetSlider"));
   });
   QObject::connect(okButton, &QPushButton::clicked, &dialog,
       [&dialog, valueEdit, incrementEdit, &incrementOnly]() {

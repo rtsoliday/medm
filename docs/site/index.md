@@ -42,4 +42,4 @@ The [widget catalog](./reference/widgets) covers graphics, monitors, controllers
 
 ## Extend and maintain QtEDM
 
-Read the [plugin API](./develop/plugins), run the [test suites](./develop/testing), or consult the [ADL reference](./reference/adl). The [standalone reference manual](./project/manuals) is also available offline through **Help > Overview** in QtEDM.
+Read the [plugin API](./develop/plugins), run the [test suites](./develop/testing), or consult the [ADL reference](./reference/adl). The [standalone reference manual](./project/manuals) is also available offline through **Help > Help Topics** in QtEDM.

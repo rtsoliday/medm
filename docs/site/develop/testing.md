@@ -11,6 +11,8 @@ make test-qtedm-visual
 
 Run all suites with `make test-qtedm`. The targets build QtEDM first; Qt development libraries are required. IOC and visual suites have their own EPICS and rendering requirements.
 
+To test only the Help and About windows, run `make -C qtedm test-help`. It runs offscreen and saves screenshots (`help-topics.png`, `about.png`, and `about-beam.png`) to `test-artifacts/help/` in the QtEDM build directory, for example `qtedm/O.Linux-x86_64/`. The same checks also run in `make test-qtedm-unit`, without the screenshots.
+
 ## Visual baselines
 
 Visual regression goldens live in `tests/golden/`. Review differences before replacing a baseline. When a rendering change is intentional, the existing update command is:

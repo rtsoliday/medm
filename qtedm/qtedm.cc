@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QColor>
 #include <QDir>
 #include <QEvent>
@@ -104,6 +105,7 @@ typedef int Status;
 #include "startup_timing.h"
 #include "statistics_window.h"
 #include "window_utils.h"
+#include "help_dialog.h"
 #include "cursor_utils.h"
 
 namespace {
@@ -1167,18 +1169,36 @@ int main(int argc, char *argv[])
 
   auto *helpMenu = menuBar->addMenu("&Help");
   helpMenu->setFont(fixed13Font);
-  auto *overviewAct = helpMenu->addAction("&Overview");
+  auto *overviewAct = helpMenu->addAction("Help &Topics");
+  overviewAct->setObjectName(QStringLiteral("helpTopicsAction"));
+  auto helpKeys = QKeySequence::keyBindings(QKeySequence::HelpContents);
+  if (!helpKeys.contains(QKeySequence(Qt::Key_F1))) {
+    helpKeys.append(QKeySequence(Qt::Key_F1));
+  }
+  overviewAct->setShortcuts(helpKeys);
   QObject::connect(overviewAct, &QAction::triggered, &win,
-      [&win, &fixed13Font, &palette]() {
-        /* Use embedded resource for help file */
-        showHelpBrowser(&win, QStringLiteral("QtEDM Help - Overview"),
-            QStringLiteral(":/help/QtEDM.html"), fixed13Font, palette);
+      [&win]() {
+        showQtEdmHelp(&win, QStringLiteral("Introduction"));
       });
+  auto *shortcutsAct = helpMenu->addAction("&Keyboard Shortcuts");
+  shortcutsAct->setObjectName(QStringLiteral("keyboardShortcutsAction"));
+  QObject::connect(shortcutsAct, &QAction::triggered, &win, [&win]() {
+    showQtEdmHelp(&win, QStringLiteral("KeyboardShortcuts"));
+  });
+  auto *onlineManualAct = helpMenu->addAction("&Online Manual");
+  onlineManualAct->setObjectName(QStringLiteral("onlineManualAction"));
+  QObject::connect(onlineManualAct, &QAction::triggered, &win, []() {
+    QDesktopServices::openUrl(
+        QUrl(QStringLiteral("https://ops.aps.anl.gov/manuals/QtEDM/")));
+  });
+  helpMenu->addSeparator();
   auto *demoAct = helpMenu->addAction("&Demo");
-  auto *onVersionAct = helpMenu->addAction("&Version");
+  helpMenu->addSeparator();
+  auto *onVersionAct = helpMenu->addAction("&About QtEDM");
+  onVersionAct->setObjectName(QStringLiteral("aboutAction"));
   QObject::connect(onVersionAct, &QAction::triggered, &win,
-      [&win, &fixed13Font, &fixed10Font, &palette]() {
-        showVersionDialog(&win, fixed13Font, fixed10Font, palette, false);
+      [&win]() {
+        showQtEdmAbout(&win);
       });
   QTEDM_TIMING_MARK("Menus created");
 

@@ -28,6 +28,7 @@ export default defineConfig({
       ]},
       { text: 'OPERATE & CONFIGURE', collapsed: false, items: [
         { text: 'Edit & execute displays', link: '/operate/modes' },
+        { text: 'Help & palettes', link: '/operate/help' },
         { text: 'Macros & dynamic behavior', link: '/configure/features' },
         { text: 'Expression channels', link: '/configure/expressions' },
         { text: 'Sessions & snapshots', link: '/operate/sessions' }
@@ -35,6 +36,7 @@ export default defineConfig({
       { text: 'REFERENCE', collapsed: false, items: [
         { text: 'Widget catalog', link: '/reference/widgets' },
         { text: 'Command-line options', link: '/reference/command-line' },
+        { text: 'Keyboard shortcuts', link: '/reference/keyboard-shortcuts' },
         { text: 'ADL files & extensions', link: '/reference/adl' },
         { text: 'Environment variables', link: '/reference/environment' }
       ]},

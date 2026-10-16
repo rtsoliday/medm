@@ -1,6 +1,6 @@
 # Maintain these docs
 
-QtEDM's website uses the same VitePress layout and APS framing as the QtALH documentation. The complete HTML reference remains the source for the manual embedded in QtEDM's **Help > Overview**.
+QtEDM's website uses the same VitePress layout and APS framing as the QtALH documentation. The complete HTML reference remains the source for the manual embedded in QtEDM's **Help > Help Topics**.
 
 ## Build and preview
 

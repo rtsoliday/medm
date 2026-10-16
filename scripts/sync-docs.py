@@ -17,6 +17,8 @@ SECTIONS = {
     'Requirements': ('get-started/requirements', 'Requirements'),
     'CommandLine': ('reference/command-line', 'Command-line options'),
     'Modes': ('operate/modes', 'Edit and execute displays'),
+    'Help': ('operate/help', 'Help and palettes'),
+    'KeyboardShortcuts': ('reference/keyboard-shortcuts', 'Keyboard shortcuts'),
     'Widgets': ('reference/widgets', 'Widget catalog'),
     'Environment': ('reference/environment', 'Environment variables'),
     'ADLFiles': ('reference/adl', 'ADL files and extensions'),
@@ -123,9 +125,11 @@ class Renderer:
             return '\n\n![' + plain(node.attrs.get('alt', '')) + '](/' + node.attrs['src'] + ')\n\n'
         if tag == 'table':
             return '\n\n<div class="manual-table" v-pre>\n' + self.html(node) + '\n</div>\n\n'
-        if tag == 'ul':
-            return '\n\n' + '\n'.join('- ' + self.render(c).strip().replace('\n', '\n  ')
-                                      for c in node.children if isinstance(c, Node)) + '\n\n'
+        if tag in ('ul', 'ol'):
+            items = [c for c in node.children if isinstance(c, Node)]
+            marks = ['- '] * len(items) if tag == 'ul' else [f'{i}. ' for i in range(1, len(items) + 1)]
+            return '\n\n' + '\n'.join(mark + self.render(c).strip().replace('\n', '\n' + ' ' * len(mark))
+                                      for mark, c in zip(marks, items)) + '\n\n'
         if tag == 'p':
             return '\n\n' + body.strip() + '\n\n'
         if tag == 'div' and node.attrs.get('class') == 'note':

@@ -43,7 +43,7 @@ ifeq ($(OS), Windows)
   QT_TEST_CFLAGS := -I"$(QT_DIR_FWD)/include/QtTest"
 else
   # Detect Qt version: prefer Qt6, fallback to Qt5
-  QT6_AVAILABLE := $(shell pkg-config --exists Qt6Core 2>/dev/null && echo 1)
+  QT6_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt6Core 2>/dev/null && echo 1)
   ifeq ($(QT6_AVAILABLE),1)
     QT_VERSION := 6
     QT_WIDGETS_PKG := Qt6Widgets
@@ -53,7 +53,7 @@ else
     QT_TEST_PKG := Qt6Test
     QT_NETWORK_PKG := Qt6Network
   else
-    QT5_AVAILABLE := $(shell pkg-config --exists Qt5Core 2>/dev/null && echo 1)
+    QT5_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt5Core 2>/dev/null && echo 1)
     ifeq ($(QT5_AVAILABLE),1)
       QT_VERSION := 5
       QT_WIDGETS_PKG := Qt5Widgets
@@ -66,7 +66,7 @@ else
       $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
     endif
   endif
-  QT_WIDGETS_CFLAGS := $(shell pkg-config --cflags $(QT_WIDGETS_PKG))
+  QT_WIDGETS_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(QT_WIDGETS_PKG))
 endif
 
 ifeq ($(OS), Windows)
@@ -74,9 +74,9 @@ ifeq ($(OS), Windows)
   RCC_OBJ_OUT := /Fo
 else
   QT_RCC_DIRS := \
-    $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null) \
-    $(shell pkg-config --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null) \
-    $(shell pkg-config --variable=bindir $(QT_CORE_PKG) 2>/dev/null)
+    $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PKG) 2>/dev/null) \
+    $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null) \
+    $(shell $(PKG_CONFIG) --variable=bindir $(QT_CORE_PKG) 2>/dev/null)
   QT_RCC := $(firstword $(wildcard $(addsuffix /rcc,$(QT_RCC_DIRS))))
   ifeq ($(strip $(QT_RCC)),)
     ifeq ($(OS), Darwin)
@@ -266,27 +266,27 @@ ifeq ($(OS), Windows)
  CCFLAGS += /std:c++20 /Zc:__cplusplus /permissive- $(QT_WIDGETS_CFLAGS)
  LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt$(QT_VERSION)PrintSupport.lib Qt$(QT_VERSION)Svg.lib Qt$(QT_VERSION)Network.lib Qt$(QT_VERSION)Widgets.lib Qt$(QT_VERSION)Gui.lib Qt$(QT_VERSION)Core.lib
 else
- CCFLAGS += $(shell pkg-config --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
- LDFLAGS += $(shell pkg-config --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
+ CCFLAGS += $(shell $(PKG_CONFIG) --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
+ LDFLAGS += $(shell $(PKG_CONFIG) --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
 endif
 
 ifeq ($(OS), Windows)
   QT_TEST_LIBS := Qt$(QT_VERSION)Test.lib
   QT_TEST_AVAILABLE := 1
 else
-  QT_TEST_AVAILABLE := $(shell pkg-config --exists $(QT_TEST_PKG) 2>/dev/null && echo 1)
-  QT_TEST_CFLAGS := $(shell pkg-config --cflags $(QT_TEST_PKG))
-  QT_TEST_LIBS := $(shell pkg-config --libs $(QT_TEST_PKG))
+  QT_TEST_AVAILABLE := $(shell $(PKG_CONFIG) --exists $(QT_TEST_PKG) 2>/dev/null && echo 1)
+  QT_TEST_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(QT_TEST_PKG))
+  QT_TEST_LIBS := $(shell $(PKG_CONFIG) --libs $(QT_TEST_PKG))
 endif
 
 
 ifeq ($(OS), Linux)
   # Try to get MOC from pkg-config first, then fallback to known paths
-  MOC_DIR := $(shell pkg-config --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null)
+  MOC_DIR := $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null)
   ifneq ($(MOC_DIR),)
     MOC := $(MOC_DIR)/moc
   else
-    MOC_DIR := $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
+    MOC_DIR := $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
     ifneq ($(MOC_DIR),)
       MOC := $(MOC_DIR)/moc
     else
@@ -339,11 +339,11 @@ ifeq ($(OS), Darwin)
     $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
     $(Z_LIB) $(if $(LIBCOM_NEEDS_READLINE),-lreadline) $(PROD_SYS_LIBS)
   # Try to get MOC from pkg-config first, then fallback to known paths
-  MOC_DIR := $(shell pkg-config --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null)
+  MOC_DIR := $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null)
   ifneq ($(MOC_DIR),)
     MOC := $(MOC_DIR)/moc
   else
-    MOC_DIR := $(shell pkg-config --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
+    MOC_DIR := $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
     ifneq ($(MOC_DIR),)
       MOC := $(MOC_DIR)/moc
     else

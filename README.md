@@ -74,6 +74,13 @@ Notes:
 	legacy `medm` executable requires Motif/X11 where available.
 - If Qt is missing, the top-level build exits with an error after dependency
 	checks.
+- On Linux, the build prefers `/usr/bin/pkg-config` so an active Conda
+	environment does not select Conda's Qt through its `pkg-config` wrapper.
+	This also applies inside `rhel8-shell`, where `/usr` refers to the RHEL 8
+	container. To select another installation, set `PKG_CONFIG` and, if needed,
+	`PKG_CONFIG_PATH` explicitly. For example: `make -j4 PKG_CONFIG=/path/to/pkg-config`.
+	Clean before switching between host and container builds or Qt installations:
+	run `make clean`, then `make -j4` in the selected shell.
 - On macOS and Windows, use the equivalent native compiler, Qt development
 	tools, EPICS Base, and SDDS setup for that platform. The repository uses the
 	same `.adl` display files across platforms.

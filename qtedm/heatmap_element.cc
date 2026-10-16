@@ -30,6 +30,31 @@ constexpr int kLegendFontHeight = 12;
 constexpr int kRaisedFrameThickness = 2;
 constexpr int kRaisedFrameLeftGap = 2;
 constexpr int kRaisedFrameBottomGap = 2;
+constexpr int kDesignPreviewWidth = 32;
+constexpr int kDesignPreviewHeight = 24;
+
+/* Deterministic EDIT-mode preview data, like the synthetic traces drawn by
+ * Cartesian Plot and Strip Chart: a smooth off-centre spot over a faint
+ * ripple, scaled into [low, high] and laid out in the configured order. */
+QVector<double> designPreviewValues(int width, int height, bool rowMajor,
+    double low, double high)
+{
+  QVector<double> values(width * height);
+  for (int y = 0; y < height; ++y) {
+    const double fy = (y + 0.5) / height;
+    for (int x = 0; x < width; ++x) {
+      const double fx = (x + 0.5) / width;
+      const double dx = (fx - 0.45) / 0.17;
+      const double dy = (fy - 0.55) / 0.24;
+      const double spot = std::exp(-0.5 * (dx * dx + dy * dy));
+      const double ripple = 0.03 * (1.0 + std::sin(fx * 12.566 + fy * 6.283));
+      const double normalized = std::clamp(0.06 + 0.88 * spot + ripple, 0.0, 1.0);
+      const int index = rowMajor ? y * width + x : x * height + y;
+      values[index] = low + normalized * (high - low);
+    }
+  }
+  return values;
+}
 
 struct HeatmapLayout
 {
@@ -848,7 +873,10 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
   downsampledCachedImage_ = QImage();
   downsampledTargetSize_ = QSize();
 
-  const QSize dims = effectiveDimensions();
+  QSize dims = effectiveDimensions();
+  if (dims.isEmpty() && !isExecuteMode()) {
+    dims = QSize(kDesignPreviewWidth, kDesignPreviewHeight);
+  }
   if (dims.isEmpty()) {
     cachedRenderSize_ = QSize();
     cachedImage_ = QImage();
@@ -867,6 +895,7 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
 
   const double* dataValues = nullptr;
   int dataCount = 0;
+  QVector<double> designValues;
 
   if (isExecuteMode()) {
     if (runtimeSharedValues_) {
@@ -877,6 +906,19 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
       dataValues = runtimeValues_.constData();
       dataCount = runtimeValues_.size();
     }
+  } else {
+    double low = 0.0;
+    double high = 1.0;
+    if (rangeMode_ == HeatmapRangeMode::kManual
+        && std::isfinite(rangeMinimum_) && std::isfinite(rangeMaximum_)
+        && rangeMaximum_ > rangeMinimum_) {
+      low = rangeMinimum_;
+      high = rangeMaximum_;
+    }
+    designValues = designPreviewValues(width, height,
+        order_ == HeatmapOrder::kRowMajor, low, high);
+    dataValues = designValues.constData();
+    dataCount = designValues.size();
   }
 
   const int available = std::min(dataCount, totalCells);
@@ -1052,13 +1094,15 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
     if (!(maxValue > minValue)) {
       maxValue = minValue + 1.0;
     }
-  } else if (runtimeRangeValid_) {
+  } else if (isExecuteMode() && runtimeRangeValid_) {
     minValue = std::min(minValue, runtimeMinValue_);
     maxValue = std::max(maxValue, runtimeMaxValue_);
   }
-  runtimeRangeValid_ = true;
-  runtimeMinValue_ = minValue;
-  runtimeMaxValue_ = maxValue;
+  if (isExecuteMode()) {
+    runtimeRangeValid_ = true;
+    runtimeMinValue_ = minValue;
+    runtimeMaxValue_ = maxValue;
+  }
 
   const double range = maxValue - minValue;
 

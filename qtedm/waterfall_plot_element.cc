@@ -34,6 +34,34 @@ constexpr int kLegendWidth = 14;
 constexpr int kLegendPadding = 6;
 constexpr int kMinimumTimeViewPixels = 8;
 constexpr int kRaisedFrameThickness = 2;
+constexpr int kDesignPreviewColumns = 64;
+constexpr int kDesignPreviewMaxRows = 256;
+
+/* Deterministic EDIT-mode preview, like the synthetic traces drawn by
+ * Cartesian Plot and Strip Chart: bands that drift slowly with time,
+ * mapped through the configured color map. */
+QImage designPreviewImage(int columns, int rows, bool horizontal,
+    const QVector<QRgb> &palette)
+{
+  QImage image(horizontal ? rows : columns, horizontal ? columns : rows,
+      QImage::Format_ARGB32_Premultiplied);
+  for (int t = 0; t < rows; ++t) {
+    const double ft = (t + 0.5) / rows;
+    for (int i = 0; i < columns; ++i) {
+      const double fx = (i + 0.5) / columns;
+      const double value = 0.5 + 0.4 * std::sin(fx * 18.85 + ft * 4.0)
+          * (0.7 + 0.3 * std::cos(ft * 6.283));
+      const int paletteIndex = std::clamp(
+          static_cast<int>(value * 255.0 + 0.5), 0, 255);
+      if (horizontal) {
+        image.setPixel(t, columns - 1 - i, palette[paletteIndex]);
+      } else {
+        image.setPixel(i, t, palette[paletteIndex]);
+      }
+    }
+  }
+  return image;
+}
 
 QColor effectiveColor(const QWidget *widget, const QColor &candidate,
     QPalette::ColorRole role, const QColor &fallback)
@@ -738,6 +766,12 @@ void WaterfallPlotElement::paintEvent(QPaintEvent *event)
 
   if (executeMode_ && !visibleImage.isNull()) {
     painter.drawImage(layout.plotRect, visibleImage);
+  } else if (!executeMode_) {
+    const int columns = waveformLength() > 0
+        ? waveformLength() : kDesignPreviewColumns;
+    const int rows = std::clamp(historyCount_, 1, kDesignPreviewMaxRows);
+    painter.drawImage(layout.plotRect,
+        designPreviewImage(columns, rows, horizontal, cachedPalette()));
   } else {
     painter.fillRect(layout.plotRect, plotBackground);
     painter.setPen(QPen(plotForeground, 1, Qt::DashLine));

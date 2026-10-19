@@ -514,6 +514,8 @@ set_scale_monitor_test_pvs() {
   return 1
 }
 
+# tests/fixtures/visual/led-monitor.adl uses only the process-local expression
+# channels led:one and led:two; it needs no IOC PV initialization or additions.
 set_led_monitor_test_pvs() {
   local prefix="$1"
   local -a led_init_values=(

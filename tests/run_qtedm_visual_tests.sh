@@ -16,9 +16,8 @@ export QT_ENABLE_HIGHDPI_SCALING=0
 export QT_STYLE_OVERRIDE=Fusion
 export QT_FONT_DPI=96
 export QTEDM_WATERFALL_DRIVER_MODE=static
-export XDG_RUNTIME_DIR="${QTEDM_TEST_TMP_DIR}/xdg-runtime"
-mkdir -p "${XDG_RUNTIME_DIR}"
-chmod 700 "${XDG_RUNTIME_DIR}"
+XDG_RUNTIME_DIR="$(mktemp -d "${QTEDM_TEST_TMP_DIR}/xdg-runtime.XXXXXX")"
+export XDG_RUNTIME_DIR
 
 QTEDM_BIN="${QTEDM_BIN:-$(qtedm_test_default_qtedm_bin)}"
 QTEDM_IMAGE_COMPARE_BIN="${QTEDM_IMAGE_COMPARE_BIN:-${QTEDM_TEST_REPO_ROOT}/qtedm/O.$(uname -s)-$(uname -m)/qtedm_image_compare}"

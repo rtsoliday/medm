@@ -84,7 +84,7 @@
   },
   {
     "name": "led_monitor_visual",
-    "display": "docs/images/adl/led-monitor.adl",
+    "display": "tests/fixtures/visual/led-monitor.adl",
     "golden": "tests/golden/test_LedMonitor.png",
     "exit_after_ms": 1500,
     "tolerance": {

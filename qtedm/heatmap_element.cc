@@ -815,9 +815,21 @@ QSize HeatmapElement::effectiveDimensions() const
   return QSize(effectiveX, effectiveY);
 }
 
+QSize HeatmapElement::renderDataDimensions() const
+{
+  if (isExecuteMode()) {
+    return effectiveDimensions();
+  }
+  /* EDIT draws synthetic data only. Large configured detector grids must
+   * not allocate or traverse a full array just to preview the widget. Keep
+   * the actual dimensions unchanged for runtime data and ADL serialization. */
+  return QSize(std::clamp(xDimension_, 1, kDesignPreviewWidth),
+      std::clamp(yDimension_, 1, kDesignPreviewHeight));
+}
+
 QSize HeatmapElement::visibleDataSize() const
 {
-  const QSize dims = effectiveDimensions();
+  const QSize dims = renderDataDimensions();
   if (dims.isEmpty()) {
     return QSize();
   }
@@ -873,10 +885,7 @@ void HeatmapElement::rebuildImage(const QSize &targetSize)
   downsampledCachedImage_ = QImage();
   downsampledTargetSize_ = QSize();
 
-  QSize dims = effectiveDimensions();
-  if (dims.isEmpty() && !isExecuteMode()) {
-    dims = QSize(kDesignPreviewWidth, kDesignPreviewHeight);
-  }
+  const QSize dims = renderDataDimensions();
   if (dims.isEmpty()) {
     cachedRenderSize_ = QSize();
     cachedImage_ = QImage();

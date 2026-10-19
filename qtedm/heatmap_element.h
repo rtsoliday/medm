@@ -16,10 +16,12 @@
 #include "graphic_shape_element.h"
 
 class TestObserveOnlyControls;
+class TestPlotGraphicRuntimes;
 
 class HeatmapElement : public GraphicShapeElement
 {
   friend class TestObserveOnlyControls;
+  friend class TestPlotGraphicRuntimes;
 public:
   explicit HeatmapElement(QWidget *parent = nullptr);
 
@@ -128,6 +130,7 @@ private:
   void rebuildImage(const QSize &targetSize);
   QImage maxPoolDownsample(const QImage &source,
       const QSize &targetSize) const;
+  QSize renderDataDimensions() const;
   QSize visibleDataSize() const;
   QSize renderTargetSize(const QSize &availableSize) const;
   QColor backgroundColor() const;

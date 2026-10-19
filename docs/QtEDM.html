@@ -759,6 +759,9 @@ way.</p>
   <p>Heatmap is a QtEDM-only 2-D array monitor. It renders a waveform or array PV
   as a color image and can derive the X and Y dimensions from either fixed
   values or additional PVs.</p>
+  <p>EDIT mode uses a synthetic preview grid of at most 32 by 24 cells, so a
+  large configured detector grid does not allocate a full data array while
+  editing. Saved dimensions and EXECUTE-mode data geometry are unchanged.</p>
   <ul>
     <li><strong>Configure:</strong> Data PV, X/Y dimensions, dimension source, color map, flips, rotation, aspect ratio, and optional top/right profiles.</li>
     <li><strong>Use when:</strong> A 2-D image or matrix communicates structure that would be lost in a 1-D plot.</li>

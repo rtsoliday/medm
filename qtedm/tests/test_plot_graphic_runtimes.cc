@@ -35,6 +35,7 @@ class TestPlotGraphicRuntimes : public QObject
 private slots:
   void cartesianTracksTraceModesPointsAndCapacity();
   void heatmapTracksDimensionsRangeAndTransforms();
+  void heatmapBoundsSyntheticPreviewForLargeConfiguredGrids();
   void dynamicGraphicAppliesRuntimeVisibilityAndSeverity();
   void imageTracksRuntimeFrameSelection();
   void cartesianExportsCsvSddsAndFailures();
@@ -108,6 +109,40 @@ void TestPlotGraphicRuntimes::heatmapTracksDimensionsRangeAndTransforms()
   heatmap.clearRuntimeState();
   QVERIFY(!heatmap.hasRuntimeData());
   QCOMPARE(heatmap.runtimeDataCount(), 0);
+}
+
+void TestPlotGraphicRuntimes::heatmapBoundsSyntheticPreviewForLargeConfiguredGrids()
+{
+  HeatmapElement heatmap;
+  heatmap.resize(320, 220);
+  heatmap.setXDimension(50000);
+  heatmap.setYDimension(40000);
+  heatmap.setShowTopProfile(true);
+  heatmap.setShowRightProfile(true);
+  const QSize configuredDimensions(50000, 40000);
+  QCOMPARE(heatmap.effectiveDimensions(), configuredDimensions);
+  /* Check the bound before rendering so a regression cannot allocate the
+   * 16 GB synthetic array represented by this otherwise valid grid. */
+  QCOMPARE(heatmap.renderDataDimensions(), QSize(32, 24));
+  QVERIFY(!renderWidget(&heatmap).isNull());
+  QVERIFY(!heatmap.cachedImage_.isNull());
+  QVERIFY(heatmap.cachedImage_.width() <= 32);
+  QVERIFY(heatmap.cachedImage_.height() <= 24);
+  QCOMPARE(heatmap.topProfileData_.size(), 32);
+  QCOMPARE(heatmap.rightProfileData_.size(), 24);
+  QCOMPARE(heatmap.xDimension(), configuredDimensions.width());
+  QCOMPARE(heatmap.yDimension(), configuredDimensions.height());
+  QCOMPARE(heatmap.effectiveDimensions(), configuredDimensions);
+
+  heatmap.setExecuteMode(true);
+  heatmap.setRuntimeConnected(true);
+  heatmap.setRuntimeData({1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+  QCOMPARE(heatmap.renderDataDimensions(), configuredDimensions);
+  QCOMPARE(heatmap.runtimeDataCount(), 6);
+  QVERIFY(!renderWidget(&heatmap).isNull());
+  QCOMPARE(heatmap.runtimeMinimum(), 1.0);
+  QCOMPARE(heatmap.runtimeMaximum(), 6.0);
+  QCOMPARE(heatmap.effectiveDimensions(), configuredDimensions);
 }
 
 void TestPlotGraphicRuntimes::dynamicGraphicAppliesRuntimeVisibilityAndSeverity()

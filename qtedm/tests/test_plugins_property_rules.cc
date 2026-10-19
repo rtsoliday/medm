@@ -18,6 +18,8 @@
 #include "plugin_manager.h"
 #include "property_rules.h"
 #include "rectangle_element.h"
+#include "slider_element.h"
+#include "slider_runtime.h"
 #include "text_element.h"
 #include "bar_monitor_element.h"
 #include "heatmap_element.h"
@@ -345,6 +347,35 @@ QString propertyValueForTest(const AdlNode &node, const QString &name)
   return {};
 }
 
+bool readAuditRecordsForTest(const QString &path,
+    QList<QStringList> *records, QString *error)
+{
+  records->clear();
+  const QDir directory(path);
+  const QStringList logs = directory.entryList(
+      {QStringLiteral("audit_*.log")}, QDir::Files, QDir::Name);
+  for (const QString &name : logs) {
+    QFile file(directory.filePath(name));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      *error = file.errorString();
+      return false;
+    }
+    while (!file.atEnd()) {
+      const QString line = QString::fromUtf8(file.readLine()).trimmed();
+      if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) {
+        continue;
+      }
+      QStringList fields;
+      if (!AuditLogger::decodeLogRecord(line, &fields)) {
+        *error = QStringLiteral("Malformed audit record in %1").arg(name);
+        return false;
+      }
+      records->append(fields);
+    }
+  }
+  return true;
+}
+
 } // namespace
 
 class TestPluginsPropertyRules : public QObject
@@ -361,6 +392,9 @@ private slots:
   void pvThumbsPluginTracksZeroAndNonzeroValues();
   void providerSubscriptionsWritesArchivesAndShutdown();
   void observeOnlyBlocksPluginProviderWrites();
+  void providerPutAuditOwnership_data();
+  void providerPutAuditOwnership();
+  void builtInSliderProviderWriteHasOneAuditRecord();
   void pluginElementTypedRoundTripAndUnknownPreservation();
   void constructionFailureCreatesDiagnosticPlaceholder();
   void rulesParseRoundTripCyclesAndSandbox();
@@ -689,7 +723,8 @@ void TestPluginsPropertyRules::observeOnlyBlocksPluginProviderWrites()
 {
   FakePlugin plugin;
   QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
-  QTemporaryDir auditDirectory;
+  QTemporaryDir auditDirectory(QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("provider-observe-audit-XXXXXX")));
   QVERIFY(auditDirectory.isValid());
   qputenv("QTEDM_AUDIT_DIR", auditDirectory.path().toLocal8Bit());
   AuditLogger::instance().initialize(true);
@@ -710,16 +745,141 @@ void TestPluginsPropertyRules::observeOnlyBlocksPluginProviderWrites()
   QCOMPARE(plugin.putCount, 1);
   AuditLogger::instance().shutdown();
 
-  const QDir directory(auditDirectory.path());
-  const QStringList logs = directory.entryList(
-      {QStringLiteral("audit_*.log")}, QDir::Files, QDir::Time);
-  QVERIFY(!logs.isEmpty());
-  QFile logFile(directory.filePath(logs.first()));
-  QVERIFY(logFile.open(QIODevice::ReadOnly | QIODevice::Text));
-  const QByteArray audit = logFile.readAll();
-  QVERIFY(audit.contains("BLOCKED:ObserveOnly"));
-  QVERIFY(audit.contains("PluginDataProvider"));
-  QVERIFY(audit.contains("fake://setpoint"));
+  QList<QStringList> records;
+  QVERIFY2(readAuditRecordsForTest(auditDirectory.path(), &records, &error),
+      qPrintable(error));
+  QCOMPARE(records.size(), 3);
+  QCOMPARE(records.at(0).at(2), QStringLiteral("BLOCKED:ObserveOnly"));
+  QCOMPARE(records.at(0).at(3), QStringLiteral("fake://setpoint"));
+  QCOMPARE(records.at(1).at(2), QStringLiteral("BLOCKED:ObserveOnly"));
+  QCOMPARE(records.at(1).at(3), QStringLiteral("fake://setpoint"));
+  QCOMPARE(records.at(2).at(2), QStringLiteral("PluginDataProvider"));
+  QCOMPARE(records.at(2).at(3), QStringLiteral("fake://setpoint"));
+  QCOMPARE(records.at(2).at(4), QStringLiteral("11"));
+}
+
+void TestPluginsPropertyRules::providerPutAuditOwnership_data()
+{
+  QTest::addColumn<int>("valueKind");
+  QTest::addColumn<bool>("callerOwnsAudit");
+  QTest::addColumn<bool>("observeOnly");
+  const QStringList kinds = {QStringLiteral("numeric"),
+      QStringLiteral("string"), QStringLiteral("enum"),
+      QStringLiteral("char-array"), QStringLiteral("numeric-array")};
+  for (int kind = 0; kind < kinds.size(); ++kind) {
+    const QByteArray name = kinds.at(kind).toLatin1();
+    QTest::newRow((name + "-default-audit").constData())
+        << kind << false << false;
+    QTest::newRow((name + "-caller-audit").constData())
+        << kind << true << false;
+    QTest::newRow((name + "-blocked-caller-audit").constData())
+        << kind << true << true;
+  }
+}
+
+void TestPluginsPropertyRules::providerPutAuditOwnership()
+{
+  QFETCH(int, valueKind);
+  QFETCH(bool, callerOwnsAudit);
+  QFETCH(bool, observeOnly);
+
+  FakePlugin plugin;
+  QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
+  QTemporaryDir auditDirectory(QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("provider-ownership-audit-XXXXXX")));
+  QVERIFY(auditDirectory.isValid());
+  qputenv("QTEDM_AUDIT_DIR", auditDirectory.path().toLocal8Bit());
+  AuditLogger::instance().initialize(true);
+  auto &manager = PvChannelManager::instance();
+  manager.setObserveOnly(observeOnly);
+  const QString uri = QStringLiteral("fake://audit-ownership");
+  bool success = false;
+  switch (valueKind) {
+  case 0:
+    success = callerOwnsAudit ? manager.putValue(uri, 3.5, false)
+                             : manager.putValue(uri, 3.5);
+    break;
+  case 1: {
+    const QString value = QStringLiteral("operator value");
+    success = callerOwnsAudit ? manager.putValue(uri, value, false)
+                             : manager.putValue(uri, value);
+    break;
+  }
+  case 2: {
+    const auto value = static_cast<dbr_enum_t>(1);
+    success = callerOwnsAudit ? manager.putValue(uri, value, false)
+                             : manager.putValue(uri, value);
+    break;
+  }
+  case 3: {
+    const QByteArray value("byte value");
+    success = callerOwnsAudit ? manager.putCharArrayValue(uri, value, false)
+                             : manager.putCharArrayValue(uri, value);
+    break;
+  }
+  case 4: {
+    const QVector<double> values{2.0, 3.0};
+    success = callerOwnsAudit ? manager.putArrayValue(uri, values, false)
+                             : manager.putArrayValue(uri, values);
+    break;
+  }
+  default:
+    QFAIL("Unknown provider value kind");
+  }
+  QCOMPARE(success, !observeOnly);
+  QCOMPARE(plugin.putCount, observeOnly ? 0 : 1);
+  AuditLogger::instance().shutdown();
+
+  QList<QStringList> records;
+  QString error;
+  QVERIFY2(readAuditRecordsForTest(auditDirectory.path(), &records, &error),
+      qPrintable(error));
+  const int expectedRecords = observeOnly || !callerOwnsAudit ? 1 : 0;
+  QCOMPARE(records.size(), expectedRecords);
+  if (expectedRecords) {
+    QCOMPARE(records.first().at(2), observeOnly
+        ? QStringLiteral("BLOCKED:ObserveOnly")
+        : QStringLiteral("PluginDataProvider"));
+    QCOMPARE(records.first().at(3), uri);
+  }
+}
+
+void TestPluginsPropertyRules::builtInSliderProviderWriteHasOneAuditRecord()
+{
+  FakePlugin plugin;
+  QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
+  QTemporaryDir auditDirectory(QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("slider-provider-audit-XXXXXX")));
+  QVERIFY(auditDirectory.isValid());
+  qputenv("QTEDM_AUDIT_DIR", auditDirectory.path().toLocal8Bit());
+  AuditLogger::instance().initialize(true);
+
+  SliderElement slider;
+  slider.resize(240, 40);
+  slider.setChannel(QStringLiteral("fake://slider-audit"));
+  slider.setLabel(MeterLabel::kNone);
+  slider.setIncrement(0.25);
+  slider.setExecuteMode(true);
+  slider.show();
+  SliderRuntime runtime(&slider);
+  runtime.start();
+  QCoreApplication::processEvents();
+  QCOMPARE(plugin.putCount, 0);
+
+  QTest::keyClick(&slider, Qt::Key_Right);
+  QCOMPARE(plugin.putCount, 1);
+  QCOMPARE(plugin.lastPut.toDouble(), 8.5);
+  runtime.stop();
+  AuditLogger::instance().shutdown();
+
+  QList<QStringList> records;
+  QString error;
+  QVERIFY2(readAuditRecordsForTest(auditDirectory.path(), &records, &error),
+      qPrintable(error));
+  QCOMPARE(records.size(), 1);
+  QCOMPARE(records.first().at(2), QStringLiteral("Slider"));
+  QCOMPARE(records.first().at(3), QStringLiteral("fake://slider-audit"));
+  QCOMPARE(records.first().at(4), QStringLiteral("8.5"));
 }
 
 void TestPluginsPropertyRules::pluginElementTypedRoundTripAndUnknownPreservation()

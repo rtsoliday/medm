@@ -426,7 +426,7 @@ void TextAreaRuntime::handleActivation(const QByteArray &bytes)
 
   switch (valueKind_) {
   case ValueKind::kString:
-    success = PvChannelManager::instance().putValue(channelName_, rawText);
+    success = PvChannelManager::instance().putValue(channelName_, rawText, false);
     if (!success) {
       errorMessage = QStringLiteral("Text Area write failed for %1.")
                          .arg(channelName_);
@@ -440,7 +440,7 @@ void TextAreaRuntime::handleActivation(const QByteArray &bytes)
     QByteArray payload = bytes;
     payload.append('\0');
     success = PvChannelManager::instance().putCharArrayValue(channelName_,
-        payload);
+        payload, false);
     if (!success) {
       errorMessage = QStringLiteral("Text Area write failed for %1.")
                          .arg(channelName_);
@@ -460,7 +460,7 @@ void TextAreaRuntime::handleActivation(const QByteArray &bytes)
       break;
     }
     success = PvChannelManager::instance().putValue(channelName_,
-        static_cast<dbr_enum_t>(enumValue));
+        static_cast<dbr_enum_t>(enumValue), false);
     if (!success) {
       errorMessage = QStringLiteral("Text Area write failed for %1.")
                          .arg(channelName_);
@@ -481,7 +481,7 @@ void TextAreaRuntime::handleActivation(const QByteArray &bytes)
       qWarning() << errorMessage << channelName_ << trimmed;
       break;
     }
-    success = PvChannelManager::instance().putValue(channelName_, numeric);
+    success = PvChannelManager::instance().putValue(channelName_, numeric, false);
     if (!success) {
       errorMessage = QStringLiteral("Text Area write failed for %1.")
                          .arg(channelName_);

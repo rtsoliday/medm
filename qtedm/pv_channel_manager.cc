@@ -61,7 +61,8 @@ SubscriptionHandle PvChannelManager::subscribe(
       std::move(accessRightsCallback), deliveryMode);
 }
 
-bool PvChannelManager::putValue(const QString &pvName, double value)
+bool PvChannelManager::putValue(const QString &pvName, double value,
+    bool logProviderPut)
 {
   if (rejectWrite(pvName, QString::number(value, 'g', 15))) {
     return false;
@@ -70,7 +71,7 @@ bool PvChannelManager::putValue(const QString &pvName, double value)
     QString error;
     const bool success = QtedmPluginManager::instance().putDataProvider(
         pvName, value, &error);
-    if (success) {
+    if (success && logProviderPut) {
       AuditLogger::instance().logPut(pvName, value,
           QStringLiteral("PluginDataProvider"));
     }
@@ -87,7 +88,8 @@ bool PvChannelManager::putValue(const QString &pvName, double value)
   return SharedChannelManager::instance().putValue(pvName, value);
 }
 
-bool PvChannelManager::putValue(const QString &pvName, const QString &value)
+bool PvChannelManager::putValue(const QString &pvName, const QString &value,
+    bool logProviderPut)
 {
   if (rejectWrite(pvName, value)) {
     return false;
@@ -96,7 +98,7 @@ bool PvChannelManager::putValue(const QString &pvName, const QString &value)
     QString error;
     const bool success = QtedmPluginManager::instance().putDataProvider(
         pvName, value, &error);
-    if (success) {
+    if (success && logProviderPut) {
       AuditLogger::instance().logPut(pvName, value,
           QStringLiteral("PluginDataProvider"));
     }
@@ -113,7 +115,8 @@ bool PvChannelManager::putValue(const QString &pvName, const QString &value)
   return SharedChannelManager::instance().putValue(pvName, value);
 }
 
-bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value)
+bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value,
+    bool logProviderPut)
 {
   if (rejectWrite(pvName, QString::number(value))) {
     return false;
@@ -122,7 +125,7 @@ bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value)
     QString error;
     const bool success = QtedmPluginManager::instance().putDataProvider(
         pvName, QVariant::fromValue(static_cast<unsigned int>(value)), &error);
-    if (success) {
+    if (success && logProviderPut) {
       AuditLogger::instance().logPut(pvName, static_cast<int>(value),
           QStringLiteral("PluginDataProvider"));
     }
@@ -140,7 +143,7 @@ bool PvChannelManager::putValue(const QString &pvName, dbr_enum_t value)
 }
 
 bool PvChannelManager::putCharArrayValue(const QString &pvName,
-    const QByteArray &value)
+    const QByteArray &value, bool logProviderPut)
 {
   if (rejectWrite(pvName, QStringLiteral("<char-array:%1 bytes>")
           .arg(value.size()))) {
@@ -150,7 +153,7 @@ bool PvChannelManager::putCharArrayValue(const QString &pvName,
     QString error;
     const bool success = QtedmPluginManager::instance().putDataProvider(
         pvName, value, &error);
-    if (success) {
+    if (success && logProviderPut) {
       AuditLogger::instance().logPut(pvName,
           QStringLiteral("<char-array:%1 bytes>").arg(value.size()),
           QStringLiteral("PluginDataProvider"));
@@ -170,7 +173,7 @@ bool PvChannelManager::putCharArrayValue(const QString &pvName,
 }
 
 bool PvChannelManager::putArrayValue(const QString &pvName,
-    const QVector<double> &values)
+    const QVector<double> &values, bool logProviderPut)
 {
   if (rejectWrite(pvName, QStringLiteral("<numeric-array:%1 elements>")
           .arg(values.size()))) {
@@ -185,7 +188,7 @@ bool PvChannelManager::putArrayValue(const QString &pvName,
     QString error;
     const bool success = QtedmPluginManager::instance().putDataProvider(
         pvName, list, &error);
-    if (success) {
+    if (success && logProviderPut) {
       AuditLogger::instance().logPut(pvName,
           QStringLiteral("<numeric-array:%1 elements>").arg(values.size()),
           QStringLiteral("PluginDataProvider"));

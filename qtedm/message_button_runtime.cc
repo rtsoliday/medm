@@ -302,7 +302,7 @@ bool MessageButtonRuntime::sendValue(const QString &value)
 
 bool MessageButtonRuntime::sendStringValue(const QString &value)
 {
-  if (!PvChannelManager::instance().putValue(channelName_, value)) {
+  if (!PvChannelManager::instance().putValue(channelName_, value, false)) {
     qWarning() << "Failed to write string" << value << "to"
                << channelName_;
     return false;
@@ -328,7 +328,8 @@ bool MessageButtonRuntime::sendCharArrayValue(const QString &value)
     std::memcpy(data.data(), bytes.constData(), copyCount);
   }
 
-  if (!PvChannelManager::instance().putCharArrayValue(channelName_, data)) {
+  if (!PvChannelManager::instance().putCharArrayValue(channelName_,
+      data, false)) {
     qWarning() << "Failed to write char array" << value << "to"
                << channelName_;
     return false;
@@ -368,7 +369,7 @@ bool MessageButtonRuntime::sendEnumValue(const QString &value)
     }
   }
 
-  if (!PvChannelManager::instance().putValue(channelName_, toSend)) {
+  if (!PvChannelManager::instance().putValue(channelName_, toSend, false)) {
     qWarning() << "Failed to write enum" << value << "to"
                << channelName_;
     return false;
@@ -388,7 +389,7 @@ bool MessageButtonRuntime::sendNumericValue(const QString &value)
     return false;
   }
 
-  if (!PvChannelManager::instance().putValue(channelName_, numeric)) {
+  if (!PvChannelManager::instance().putValue(channelName_, numeric, false)) {
     qWarning() << "Failed to write numeric" << value << "to"
                << channelName_;
     return false;

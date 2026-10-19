@@ -19,11 +19,18 @@ public:
       ChannelAccessRightsCallback accessRightsCallback = nullptr,
       ChannelDeliveryMode deliveryMode = ChannelDeliveryMode::kPassive);
 
-  bool putValue(const QString &pvName, double value);
-  bool putValue(const QString &pvName, const QString &value);
-  bool putValue(const QString &pvName, dbr_enum_t value);
-  bool putCharArrayValue(const QString &pvName, const QByteArray &value);
-  bool putArrayValue(const QString &pvName, const QVector<double> &values);
+  /* Callers that append an attributed success record pass false to avoid
+   * a second provider record. Observe-only blocked records are unconditional. */
+  bool putValue(const QString &pvName, double value,
+      bool logProviderPut = true);
+  bool putValue(const QString &pvName, const QString &value,
+      bool logProviderPut = true);
+  bool putValue(const QString &pvName, dbr_enum_t value,
+      bool logProviderPut = true);
+  bool putCharArrayValue(const QString &pvName, const QByteArray &value,
+      bool logProviderPut = true);
+  bool putArrayValue(const QString &pvName, const QVector<double> &values,
+      bool logProviderPut = true);
 
   void setObserveOnly(bool observeOnly);
   bool isObserveOnly() const;

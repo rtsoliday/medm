@@ -264,7 +264,7 @@ void ChoiceButtonRuntime::handleActivation(int value)
   }
 
   dbr_enum_t toSend = static_cast<dbr_enum_t>(value);
-  if (!PvChannelManager::instance().putValue(channelName_, toSend)) {
+  if (!PvChannelManager::instance().putValue(channelName_, toSend, false)) {
     qWarning() << "Failed to write choice button value" << value << "to"
                << channelName_;
     return;

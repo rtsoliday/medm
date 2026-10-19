@@ -225,7 +225,7 @@ void WheelSwitchRuntime::handleActivation(double value)
     return;
   }
 
-  if (!PvChannelManager::instance().putValue(channelName_, value)) {
+  if (!PvChannelManager::instance().putValue(channelName_, value, false)) {
     qWarning() << "Failed to write wheel switch value" << value << "to"
                << channelName_;
     return;

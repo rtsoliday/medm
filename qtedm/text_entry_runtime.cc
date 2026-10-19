@@ -395,7 +395,7 @@ void TextEntryRuntime::handleActivation(const QString &text)
 
   switch (valueKind_) {
   case ValueKind::kString: {
-    if (!PvChannelManager::instance().putValue(channelName_, rawText)) {
+    if (!PvChannelManager::instance().putValue(channelName_, rawText, false)) {
       qWarning() << "Failed to write Text Entry value" << rawText << "to"
                  << channelName_;
       return;
@@ -412,7 +412,8 @@ void TextEntryRuntime::handleActivation(const QString &text)
                    << "value" << rawText;
         return;
       }
-      if (!PvChannelManager::instance().putCharArrayValue(channelName_, bytes)) {
+      if (!PvChannelManager::instance().putCharArrayValue(channelName_,
+          bytes, false)) {
         qWarning() << "Failed to write Text Entry value" << rawText << "to"
                    << channelName_;
         return;
@@ -426,7 +427,7 @@ void TextEntryRuntime::handleActivation(const QString &text)
                    << "value" << trimmed;
         return;
       }
-      if (!PvChannelManager::instance().putValue(channelName_, numeric)) {
+      if (!PvChannelManager::instance().putValue(channelName_, numeric, false)) {
         qWarning() << "Failed to write Text Entry value" << trimmed << "to"
                    << channelName_;
         return;
@@ -444,7 +445,7 @@ void TextEntryRuntime::handleActivation(const QString &text)
       return;
     }
     if (!PvChannelManager::instance().putValue(channelName_,
-        static_cast<dbr_enum_t>(enumValue))) {
+        static_cast<dbr_enum_t>(enumValue), false)) {
       qWarning() << "Failed to write Text Entry value" << trimmed << "to"
                  << channelName_;
       return;
@@ -462,7 +463,7 @@ void TextEntryRuntime::handleActivation(const QString &text)
                  << "value" << trimmed;
       return;
     }
-    if (!PvChannelManager::instance().putValue(channelName_, numeric)) {
+    if (!PvChannelManager::instance().putValue(channelName_, numeric, false)) {
       qWarning() << "Failed to write Text Entry value" << trimmed << "to"
                  << channelName_;
       return;

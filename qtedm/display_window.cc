@@ -12782,18 +12782,18 @@ bool DisplayWindow::restoreSnapshotEntry(const PvSnapshotEntry &entry,
   auto &manager = PvChannelManager::instance();
   switch (entry.kind) {
   case PvSnapshotValueKind::kNumeric:
-    ok = manager.putValue(entry.pvName, entry.value.toDouble());
+    ok = manager.putValue(entry.pvName, entry.value.toDouble(), false);
     break;
   case PvSnapshotValueKind::kString:
-    ok = manager.putValue(entry.pvName, entry.value.toString());
+    ok = manager.putValue(entry.pvName, entry.value.toString(), false);
     break;
   case PvSnapshotValueKind::kEnum:
     ok = manager.putValue(entry.pvName,
-        static_cast<dbr_enum_t>(entry.value.toInt()));
+        static_cast<dbr_enum_t>(entry.value.toInt()), false);
     break;
   case PvSnapshotValueKind::kCharArray:
     ok = manager.putCharArrayValue(entry.pvName,
-        QByteArray::fromBase64(entry.value.toString().toLatin1()));
+        QByteArray::fromBase64(entry.value.toString().toLatin1()), false);
     break;
   case PvSnapshotValueKind::kNumericArray: {
     QVector<double> values;
@@ -12802,7 +12802,7 @@ bool DisplayWindow::restoreSnapshotEntry(const PvSnapshotEntry &entry,
     for (const QJsonValue &value : array) {
       values.append(value.toDouble());
     }
-    ok = manager.putArrayValue(entry.pvName, values);
+    ok = manager.putArrayValue(entry.pvName, values, false);
     break;
   }
   case PvSnapshotValueKind::kStringArray:

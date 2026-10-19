@@ -314,7 +314,7 @@ void SetpointControlRuntime::handleActivation(const QString &text)
     return;
   }
 
-  if (!PvChannelManager::instance().putValue(setpointChannel_, value)) {
+  if (!PvChannelManager::instance().putValue(setpointChannel_, value, false)) {
     invokeOnElement([](SetpointControlElement *element) {
       element->setRuntimeNotice(QStringLiteral("Write failed"));
     });

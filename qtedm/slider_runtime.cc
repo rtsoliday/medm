@@ -252,7 +252,7 @@ void SliderRuntime::handleActivation(double value)
   }
 
   /* Use SharedChannelManager for the put operation */
-  if (!PvChannelManager::instance().putValue(channelName_, value)) {
+  if (!PvChannelManager::instance().putValue(channelName_, value, false)) {
     qWarning() << "Failed to write slider value" << value << "to"
                << channelName_;
     return;

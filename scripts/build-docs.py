@@ -135,10 +135,14 @@ def main():
         npm = shutil.which('npm') or shutil.which('npm.cmd')
         if not npm:
             raise RuntimeError('Install Node.js and npm to build the documentation.')
+        # The site build is local; keep npm from querying the registry for its
+        # own update notice.
+        npm_env = {**os.environ, 'npm_config_update_notifier': 'false'}
         if not (SITE / 'node_modules/vitepress').is_dir():
-            subprocess.run([npm, 'ci', '--no-audit', '--no-fund'], cwd=SITE, check=True)
+            subprocess.run([npm, 'ci', '--no-audit', '--no-fund'], cwd=SITE,
+                           check=True, env=npm_env)
         subprocess.run([npm, 'run', 'build'], cwd=SITE, check=True,
-                       env={**os.environ, 'DOCS_BASE': options.base})
+                       env={**npm_env, 'DOCS_BASE': options.base})
     if not (OUTPUT / 'index.html').is_file():
         raise RuntimeError('No built documentation found. Run without --check-only first.')
     verify(options.base)

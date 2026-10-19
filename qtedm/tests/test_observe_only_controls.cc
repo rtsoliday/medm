@@ -151,6 +151,8 @@ private slots:
   void testActionsRejectInvalidAndAmbiguousSelectors();
   void reopenedExecuteDisplayDeliversMessageButtonReleaseBeforeMove();
   void extensionWidgetPropertiesRoundTripInMemory();
+  void inlineColorMapsSurviveRenderingSaveAndUndo();
+  void invalidInlineColorMapPreservesLoadedDisplay();
 
 private:
   QStringList registeredNames_;
@@ -3120,6 +3122,127 @@ void TestObserveOnlyControls::extensionWidgetPropertiesRoundTripInMemory()
     QVERIFY(button->isEnabled());
   }
 }
+
+void TestObserveOnlyControls::inlineColorMapsSurviveRenderingSaveAndUndo()
+{
+  QTemporaryDir directory(QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("colormap-test-XXXXXX")));
+  QVERIFY(directory.isValid());
+  const QString source = directory.filePath(QStringLiteral("colors.adl"));
+  QFile fixture(source);
+  QVERIFY(fixture.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray contents = QByteArrayLiteral(
+      "file { name=\"colors.adl\" version=030122 }\n"
+      "display { object { x=0 y=0 width=240 height=160 } clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=4 colors { 123456, ab3412, 234567, 345678, } }\n"
+      "rectangle { object { x=10 y=10 width=30 height=30 } "
+      "\"basic attribute\" { clr=2 fill=\"solid\" } }\n"
+      "composite { object { x=60 y=10 width=40 height=40 } children { "
+      "rectangle { object { x=65 y=15 width=20 height=20 } "
+      "\"basic attribute\" { clr=3 fill=\"solid\" } } } }\n"
+      "valuator { object { x=10 y=80 width=100 height=20 } "
+      "control { clr=2 bclr=0 } }\n");
+  QCOMPARE(fixture.write(contents), qint64(contents.size()));
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(source, &error), qPrintable(error));
+  auto verifyColors = [](DisplayWindow &display) {
+    QCOMPARE(display.rectangleElements_.size(), 2);
+    QCOMPARE(display.sliderElements_.size(), 1);
+    QCOMPARE(display.displayArea_->palette().color(QPalette::WindowText),
+        QColor(0xab, 0x34, 0x12));
+    QCOMPARE(display.displayArea_->palette().color(QPalette::Window),
+        QColor(0x12, 0x34, 0x56));
+    QCOMPARE(display.rectangleElements_.at(0)->color(), QColor(0x23, 0x45, 0x67));
+    QCOMPARE(display.rectangleElements_.at(1)->color(), QColor(0x34, 0x56, 0x78));
+    QCOMPARE(display.sliderElements_.first()->foregroundColor(),
+        QColor(0x23, 0x45, 0x67));
+    RectangleElement *rectangle = display.rectangleElements_.first();
+    QImage rendered(rectangle->size(), QImage::Format_ARGB32);
+    rendered.fill(Qt::transparent);
+    rectangle->render(&rendered);
+    QCOMPARE(rendered.pixelColor(rendered.width() / 2, rendered.height() / 2),
+        QColor(0x23, 0x45, 0x67));
+  };
+  verifyColors(window);
+
+  /* A second display must not inherit another window's custom palette. */
+  DisplayWindow defaultWindow(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  defaultWindow.setAttribute(Qt::WA_DeleteOnClose, false);
+  QCOMPARE(defaultWindow.colorForIndex(0), QColor(Qt::white));
+
+  const QString savedPath = directory.filePath(QStringLiteral("saved.adl"));
+  QVERIFY(window.writeAdlFile(savedPath));
+  QFile saved(savedPath);
+  QVERIFY(saved.open(QIODevice::ReadOnly | QIODevice::Text));
+  const QByteArray savedContents = saved.readAll();
+  const auto document = AdlParser::parse(QString::fromLatin1(savedContents), &error);
+  QVERIFY2(document.has_value(), qPrintable(error));
+  const AdlNode *map = ::findChild(*document, QStringLiteral("color map"));
+  QVERIFY(map);
+  QCOMPARE(propertyValue(*map, QStringLiteral("ncolors")), QStringLiteral("4"));
+  const AdlNode *values = ::findChild(*map, QStringLiteral("colors"));
+  QVERIFY(values);
+  QCOMPARE(values->properties.size(), 4);
+  QCOMPARE(values->properties.at(2).value, QStringLiteral("234567"));
+  const AdlNode *display = ::findChild(*document, QStringLiteral("display"));
+  QVERIFY(display);
+  QCOMPARE(propertyValue(*display, QStringLiteral("clr")), QStringLiteral("1"));
+
+  DisplayWindow reopened(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  reopened.setAttribute(Qt::WA_DeleteOnClose, false);
+  QVERIFY2(reopened.loadFromFile(savedPath, &error), qPrintable(error));
+  verifyColors(reopened);
+  const QByteArray undoState = window.serializeStateForUndo(source);
+  window.rectangleElements_.first()->setForegroundColor(QColor(Qt::red));
+  QVERIFY(window.restoreSerializedState(undoState));
+  verifyColors(window);
+
+  /* Legacy decimal RGB maps must produce the same colors after conversion. */
+  const QByteArray legacyState = QByteArrayLiteral(
+      "display { object { width=100 height=80 } clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=2 "
+      "dl_color { r=18 g=52 b=86 } dl_color { r=171 g=52 b=18 } }\n");
+  QVERIFY(window.restoreSerializedState(legacyState));
+  QCOMPARE(window.colorForIndex(0), QColor(0x12, 0x34, 0x56));
+  QCOMPARE(window.colorForIndex(1), QColor(0xab, 0x34, 0x12));
+  QVERIFY(window.restoreSerializedState(undoState));
+  verifyColors(window);
+
+  /* A later file without an inline map returns to the default palette. */
+  QVERIFY(window.restoreSerializedState(QByteArrayLiteral(
+      "display { object { width=100 height=80 } clr=14 bclr=0 }\n")));
+  QCOMPARE(window.colorForIndex(0), QColor(Qt::white));
+}
+
+void TestObserveOnlyControls::invalidInlineColorMapPreservesLoadedDisplay()
+{
+  auto state = std::make_shared<DisplayState>();
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const QByteArray valid = QByteArrayLiteral(
+      "display { object { width=100 height=80 } clr=0 bclr=0 }\n"
+      "\"color map\" { ncolors=1 colors { 123456, } }\n");
+  QVERIFY(window.restoreSerializedState(valid));
+  const QList<QByteArray> invalid = {
+      QByteArrayLiteral("\"color map\" { ncolors=66 colors { 123456, } }"),
+      QByteArrayLiteral("\"color map\" { ncolors=2 colors { 123456, } }"),
+      QByteArrayLiteral("\"color map\" { ncolors=1 colors { nothex, } }"),
+  };
+  for (const QByteArray &map : invalid) {
+    QVERIFY(!window.restoreSerializedState(map));
+    QCOMPARE(window.colorForIndex(0), QColor(0x12, 0x34, 0x56));
+  }
+}
+
 
 void TestObserveOnlyControls::relatedDisplayLabelPadding()
 {

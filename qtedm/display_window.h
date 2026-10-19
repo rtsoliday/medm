@@ -946,6 +946,9 @@ private:
   bool needsGraphicDynamicLayer(const QWidget *widget) const;
   bool isStaticGraphicWidget(const QWidget *widget) const;
   QColor colorForIndex(int index) const;
+  int displayColorIndex(const QColor &color) const;
+  bool readInlineColorMap(const AdlNode &document, QVector<QColor> *colors,
+      QString *errorMessage) const;
   QRect widgetDisplayRect(const QWidget *widget) const;
   void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
   QRect absoluteGeometryForWidget(const QWidget *widget,
@@ -1044,6 +1047,7 @@ private:
   bool suppressLoadRegistration_ = false;
   CompositeElement *currentCompositeOwner_ = nullptr;
   QString colormapName_;
+  QVector<QColor> inlineColorMap_;
   QHash<QString, QString> macroDefinitions_;
   std::optional<AdlNode> pendingBasicAttribute_;
   std::optional<AdlNode> pendingDynamicAttribute_;

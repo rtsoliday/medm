@@ -21389,6 +21389,11 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
     loadingLegacyAdl_ = previousLegacyMode;
     return false;
   }
+  QVector<QColor> loadedColorMap;
+  if (!readInlineColorMap(*document, &loadedColorMap, errorMessage)) {
+    loadingLegacyAdl_ = previousLegacyMode;
+    return false;
+  }
   QTEDM_TIMING_MARK_COUNT("loadFromFile: ADL nodes parsed", static_cast<int>(document->children.size()));
 
   QTEDM_TIMING_MARK("loadFromFile: Clearing existing elements");
@@ -21401,6 +21406,9 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   }
   destroyHiddenButtonMarkers();
   clearAllElements();
+
+  /* Colors must be available before the display and widget indices load. */
+  inlineColorMap_ = std::move(loadedColorMap);
 
   /* Set restoringState_ to defer per-element stacking order updates during bulk load */
   restoringState_ = true;
@@ -21949,9 +21957,9 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       ? displayArea_->palette().color(QPalette::Window)
       : palette().color(QPalette::Window);
   AdlWriter::writeIndentedLine(stream, 1,
-      QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(foreground)));
+      QStringLiteral("clr=%1").arg(displayColorIndex(foreground)));
   AdlWriter::writeIndentedLine(stream, 1,
-      QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(background)));
+      QStringLiteral("bclr=%1").arg(displayColorIndex(background)));
   const QString cmapName = colormapName_.trimmed();
   const bool cmapDefault = cmapName.isEmpty()
       || cmapName.compare(QStringLiteral("default"), Qt::CaseInsensitive) == 0;
@@ -21970,7 +21978,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
   AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
 
   AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("\"color map\" {"));
-  const auto &colors = MedmColors::palette();
+  const auto &defaultColors = MedmColors::palette();
+  const QVector<QColor> colors = inlineColorMap_.isEmpty()
+      ? QVector<QColor>(defaultColors.begin(), defaultColors.end())
+      : inlineColorMap_;
   AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("ncolors=%1").arg(static_cast<int>(colors.size())));
   AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("colors {"));
@@ -22088,7 +22099,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor textForeground = resolvedForegroundColor(text,
       text->foregroundColor());
       AdlWriter::writeBasicAttributeSection(stream, 1,
-      AdlWriter::medmColorIndex(textForeground),
+      displayColorIndex(textForeground),
           RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
         const auto textChannels = AdlWriter::channelsForMedmFourValues(
           AdlWriter::collectChannels(text));
@@ -22120,8 +22131,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor entryBackground = resolvedBackgroundColor(entry,
       entry->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, entry->channel(),
-      AdlWriter::medmColorIndex(entryForeground),
-      AdlWriter::medmColorIndex(entryBackground));
+      displayColorIndex(entryForeground),
+      displayColorIndex(entryBackground));
       if (entry->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -22150,11 +22161,11 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("\"basic attribute\" {"));
       AdlWriter::writeIndentedLine(stream, 2,
-          QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+          QStringLiteral("clr=%1").arg(displayColorIndex(
               resolvedForegroundColor(setpoint,
                   setpoint->foregroundColor()))));
       AdlWriter::writeIndentedLine(stream, 2,
-          QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+          QStringLiteral("bclr=%1").arg(displayColorIndex(
               resolvedBackgroundColor(setpoint,
                   setpoint->backgroundColor()))));
       AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
@@ -22212,8 +22223,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       const QColor areaBackground = resolvedBackgroundColor(area,
           area->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, area->channel(),
-          AdlWriter::medmColorIndex(areaForeground),
-          AdlWriter::medmColorIndex(areaBackground));
+          displayColorIndex(areaForeground),
+          displayColorIndex(areaBackground));
       if (area->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -22286,8 +22297,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor sliderBackground = resolvedBackgroundColor(slider,
       slider->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, slider->channel(),
-      AdlWriter::medmColorIndex(sliderForeground),
-      AdlWriter::medmColorIndex(sliderBackground));
+      displayColorIndex(sliderForeground),
+      displayColorIndex(sliderBackground));
       if (slider->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -22325,8 +22336,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor wheelBackground = resolvedBackgroundColor(wheel,
       wheel->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, wheel->channel(),
-      AdlWriter::medmColorIndex(wheelForeground),
-      AdlWriter::medmColorIndex(wheelBackground));
+      displayColorIndex(wheelForeground),
+      displayColorIndex(wheelBackground));
       if (wheel->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -22355,8 +22366,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor choiceBackground = resolvedBackgroundColor(choice,
       choice->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, choice->channel(),
-      AdlWriter::medmColorIndex(choiceForeground),
-      AdlWriter::medmColorIndex(choiceBackground));
+      displayColorIndex(choiceForeground),
+      displayColorIndex(choiceBackground));
       if (choice->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -22380,8 +22391,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor menuBackground = resolvedBackgroundColor(menu,
       menu->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, menu->channel(),
-      AdlWriter::medmColorIndex(menuForeground),
-      AdlWriter::medmColorIndex(menuBackground));
+      displayColorIndex(menuForeground),
+      displayColorIndex(menuBackground));
       if (menu->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -22401,8 +22412,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor messageBackground = resolvedBackgroundColor(message,
       message->backgroundColor());
       AdlWriter::writeControlSection(stream, 1, message->channel(),
-      AdlWriter::medmColorIndex(messageForeground),
-      AdlWriter::medmColorIndex(messageBackground));
+      displayColorIndex(messageForeground),
+      displayColorIndex(messageBackground));
       const QString label = message->label().trimmed();
       if (!label.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -22488,10 +22499,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       shell->backgroundColor());
     AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("clr=%1")
-        .arg(AdlWriter::medmColorIndex(shellForeground)));
+        .arg(displayColorIndex(shellForeground)));
     AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("bclr=%1")
-        .arg(AdlWriter::medmColorIndex(shellBackground)));
+        .arg(displayColorIndex(shellBackground)));
       const QString shellLabel = shell->label();
       if (!shellLabel.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -22520,10 +22531,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       related->backgroundColor());
     AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("clr=%1")
-        .arg(AdlWriter::medmColorIndex(relatedForeground)));
+        .arg(displayColorIndex(relatedForeground)));
     AdlWriter::writeIndentedLine(stream, 1,
       QStringLiteral("bclr=%1")
-        .arg(AdlWriter::medmColorIndex(relatedBackground)));
+        .arg(displayColorIndex(relatedBackground)));
       const QString label = related->label();
       if (!label.isEmpty()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -22547,8 +22558,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor meterBackground = resolvedBackgroundColor(meter,
       meter->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, meter->channel(),
-      AdlWriter::medmColorIndex(meterForeground),
-      AdlWriter::medmColorIndex(meterBackground));
+      displayColorIndex(meterForeground),
+      displayColorIndex(meterBackground));
       if (meter->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -22576,8 +22587,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor barBackground = resolvedBackgroundColor(bar,
       bar->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, bar->channel(),
-      AdlWriter::medmColorIndex(barForeground),
-      AdlWriter::medmColorIndex(barBackground));
+      displayColorIndex(barForeground),
+      displayColorIndex(barBackground));
       if (bar->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -22614,8 +22625,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       const QColor thermometerBackground = resolvedBackgroundColor(thermometer,
           thermometer->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, thermometer->channel(),
-          AdlWriter::medmColorIndex(thermometerForeground),
-          AdlWriter::medmColorIndex(thermometerBackground));
+          displayColorIndex(thermometerForeground),
+          displayColorIndex(thermometerBackground));
       const auto thermometerChannels = AdlWriter::channelsForMedmFourValues(
           AdlWriter::collectChannels(thermometer));
       AdlWriter::writeDynamicAttributeSection(stream, 1,
@@ -22637,7 +22648,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (thermometerText.isValid() && thermometerText != thermometerForeground) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("textclr=%1")
-                .arg(AdlWriter::medmColorIndex(thermometerText)));
+                .arg(displayColorIndex(thermometerText)));
       }
       if (thermometer->format() != TextMonitorFormat::kDecimal) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -22669,8 +22680,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor scaleBackground = resolvedBackgroundColor(scale,
       scale->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, scale->channel(),
-      AdlWriter::medmColorIndex(scaleForeground),
-      AdlWriter::medmColorIndex(scaleBackground));
+      displayColorIndex(scaleForeground),
+      displayColorIndex(scaleBackground));
       if (scale->label() != MeterLabel::kNone) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("label=\"%1\"")
@@ -22702,8 +22713,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor byteBackground = resolvedBackgroundColor(byte,
       byte->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, byte->channel(),
-      AdlWriter::medmColorIndex(byteForeground),
-      AdlWriter::medmColorIndex(byteBackground));
+      displayColorIndex(byteForeground),
+      displayColorIndex(byteBackground));
       if (byte->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -22736,8 +22747,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       const QColor ledBackground = resolvedBackgroundColor(led,
           led->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, led->channel(),
-          AdlWriter::medmColorIndex(ledForeground),
-          AdlWriter::medmColorIndex(ledBackground));
+          displayColorIndex(ledForeground),
+          displayColorIndex(ledBackground));
       const bool needsPrimaryVisibilityFallback =
           led->visibilityMode() != TextVisibilityMode::kStatic
           || !led->visibilityCalc().trimmed().isEmpty();
@@ -22759,13 +22770,13 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           QStringLiteral("stateCount=%1").arg(led->stateCount()));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("onColor=%1")
-              .arg(AdlWriter::medmColorIndex(led->onColor())));
+              .arg(displayColorIndex(led->onColor())));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("offColor=%1")
-              .arg(AdlWriter::medmColorIndex(led->offColor())));
+              .arg(displayColorIndex(led->offColor())));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("undefinedColor=%1")
-              .arg(AdlWriter::medmColorIndex(led->undefinedColor())));
+              .arg(displayColorIndex(led->undefinedColor())));
       for (int i = 0; i < led->stateCount(); ++i) {
         const QColor stateColor = led->stateColor(i);
         if (!stateColor.isValid()) {
@@ -22774,7 +22785,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("stateColor%1=%2")
                 .arg(i)
-                .arg(AdlWriter::medmColorIndex(stateColor)));
+                .arg(displayColorIndex(stateColor)));
       }
       if (led->isQtedmSymbol()) {
         for (const auto &state : led->symbolStates()) {
@@ -22788,7 +22799,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           if (state.color.isValid()) {
             AdlWriter::writeIndentedLine(stream, 2,
                 QStringLiteral("color=%1").arg(
-                    AdlWriter::medmColorIndex(state.color)));
+                    displayColorIndex(state.color)));
           }
           if (!state.label.isEmpty()) {
             AdlWriter::writeIndentedLine(stream, 2,
@@ -22843,10 +22854,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           expression->backgroundColor());
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("clr=%1")
-              .arg(AdlWriter::medmColorIndex(expressionForeground)));
+              .arg(displayColorIndex(expressionForeground)));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("bclr=%1")
-              .arg(AdlWriter::medmColorIndex(expressionBackground)));
+              .arg(displayColorIndex(expressionBackground)));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("precision=%1").arg(expression->precision()));
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
@@ -22863,8 +22874,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor monitorBackground = resolvedBackgroundColor(monitor,
       monitor->backgroundColor());
       AdlWriter::writeMonitorSection(stream, 1, monitor->channel(0),
-      AdlWriter::medmColorIndex(monitorForeground),
-      AdlWriter::medmColorIndex(monitorBackground));
+      displayColorIndex(monitorForeground),
+      displayColorIndex(monitorBackground));
       if (monitor->colorMode() != TextColorMode::kStatic) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("clrmod=\"%1\"")
@@ -22903,8 +22914,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     const QColor stripBackground = resolvedBackgroundColor(strip,
       strip->backgroundColor());
       AdlWriter::writePlotcom(stream, 1, strip->title(), strip->xLabel(),
-      stripYLabels, AdlWriter::medmColorIndex(stripForeground),
-      AdlWriter::medmColorIndex(stripBackground));
+      stripYLabels, displayColorIndex(stripForeground),
+      displayColorIndex(stripBackground));
       const double period = strip->period();
       if (period > 0.0
           && std::abs(period - kDefaultStripChartPeriod) > 1e-6) {
@@ -22931,7 +22942,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
         const QColor penColor = strip->penColor(i);
         const PvLimits limits = strip->penLimits(i);
         AdlWriter::writeStripChartPenSection(stream, 1, i, channel,
-            AdlWriter::medmColorIndex(penColor), limits);
+            displayColorIndex(penColor), limits);
       }
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
       continue;
@@ -22952,8 +22963,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           cartesian->backgroundColor());
       AdlWriter::writePlotcom(stream, 1, cartesian->title(),
           cartesian->xLabel(), yLabels,
-          AdlWriter::medmColorIndex(cartesianForeground),
-          AdlWriter::medmColorIndex(cartesianBackground));
+          displayColorIndex(cartesianForeground),
+          displayColorIndex(cartesianBackground));
       if (!cartesian->drawMajorGrid()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("drawMajor=0"));
@@ -22999,7 +23010,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       for (int i = 0; i < cartesian->traceCount(); ++i) {
         const QString xChannel = cartesian->traceXChannel(i);
         const QString yChannel = cartesian->traceYChannel(i);
-        const int colorIndex = AdlWriter::medmColorIndex(
+        const int colorIndex = displayColorIndex(
             cartesian->traceColor(i));
         const int axisIndex = axisIndexFor(cartesian->traceYAxis(i));
         const bool usesRightAxis = cartesian->traceUsesRightAxis(i);
@@ -23045,7 +23056,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeObjectSection(stream, 1,
           serializedGeometry(rectangle));
       AdlWriter::writeBasicAttributeSection(stream, 1,
-          AdlWriter::medmColorIndex(rectangle->color()),
+          displayColorIndex(rectangle->color()),
           rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
           true, !rectangle->shouldSerializeLineWidth());
     const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
@@ -23210,10 +23221,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(pvTable));
       AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("\"basic attribute\" {"));
       AdlWriter::writeIndentedLine(stream, 2,
-          QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+          QStringLiteral("clr=%1").arg(displayColorIndex(
               resolvedForegroundColor(pvTable, pvTable->foregroundColor()))));
       AdlWriter::writeIndentedLine(stream, 2,
-          QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+          QStringLiteral("bclr=%1").arg(displayColorIndex(
               resolvedBackgroundColor(pvTable, pvTable->backgroundColor()))));
       AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
       AdlWriter::writeIndentedLine(stream, 1,
@@ -23250,11 +23261,11 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("\"basic attribute\" {"));
       AdlWriter::writeIndentedLine(stream, 2,
-          QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+          QStringLiteral("clr=%1").arg(displayColorIndex(
               resolvedForegroundColor(waveTable,
                   waveTable->foregroundColor()))));
       AdlWriter::writeIndentedLine(stream, 2,
-          QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+          QStringLiteral("bclr=%1").arg(displayColorIndex(
               resolvedBackgroundColor(waveTable,
                   waveTable->backgroundColor()))));
       AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("}"));
@@ -23304,8 +23315,8 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           waterfall->backgroundColor());
       AdlWriter::writePlotcom(stream, 1, waterfall->title(),
           waterfall->xLabel(), yLabels,
-          AdlWriter::medmColorIndex(waterfallForeground),
-          AdlWriter::medmColorIndex(waterfallBackground));
+          displayColorIndex(waterfallForeground),
+          displayColorIndex(waterfallBackground));
 
       const QString dataChannel = waterfall->dataChannel().trimmed();
       if (!dataChannel.isEmpty()) {
@@ -23410,7 +23421,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     if (auto *oval = dynamic_cast<OvalElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("oval {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(oval));
-      AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(oval->color()),
+      AdlWriter::writeBasicAttributeSection(stream, 1, displayColorIndex(oval->color()),
           oval->lineStyle(), oval->fill(), oval->lineWidth());
     const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(oval));
@@ -23424,7 +23435,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     if (auto *arc = dynamic_cast<ArcElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("arc {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(arc));
-      AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(arc->color()),
+      AdlWriter::writeBasicAttributeSection(stream, 1, displayColorIndex(arc->color()),
           arc->lineStyle(), arc->fill(), arc->lineWidth());
       const auto arcChannels = AdlWriter::channelsForMedmFourValues(
           AdlWriter::collectChannels(arc));
@@ -23442,7 +23453,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
     if (auto *line = dynamic_cast<LineElement *>(widget)) {
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("polyline {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(line));
-    AdlWriter::writeBasicAttributeSection(stream, 1, AdlWriter::medmColorIndex(line->color()),
+    AdlWriter::writeBasicAttributeSection(stream, 1, displayColorIndex(line->color()),
       line->lineStyle(), RectangleFill::kSolid, line->lineWidth(), true);
     const auto lineChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(line));
@@ -23466,7 +23477,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeObjectSection(stream, 1,
           serializedGeometry(polyline));
     AdlWriter::writeBasicAttributeSection(stream, 1,
-      AdlWriter::medmColorIndex(polyline->color()), polyline->lineStyle(),
+      displayColorIndex(polyline->color()), polyline->lineStyle(),
       RectangleFill::kSolid, polyline->lineWidth(), true);
     const auto polylineChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(polyline));
@@ -23488,7 +23499,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("polygon {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(polygon));
       AdlWriter::writeBasicAttributeSection(stream, 1,
-          AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
+          displayColorIndex(polygon->color()), polygon->lineStyle(),
           polygon->fill(), polygon->lineWidth());
       const auto polygonChannels = AdlWriter::channelsForMedmFourValues(
           AdlWriter::collectChannels(polygon));
@@ -23684,7 +23695,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor textForeground = resolveForeground(text,
         text->foregroundColor());
     AdlWriter::writeBasicAttributeSection(stream, next,
-        AdlWriter::medmColorIndex(textForeground),
+        displayColorIndex(textForeground),
         RectangleLineStyle::kSolid, RectangleFill::kSolid, 0);
     const auto textChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(text));
@@ -23718,8 +23729,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor entryBackground = resolveBackground(entry,
         entry->backgroundColor());
     AdlWriter::writeControlSection(stream, next, entry->channel(),
-        AdlWriter::medmColorIndex(entryForeground),
-        AdlWriter::medmColorIndex(entryBackground));
+        displayColorIndex(entryForeground),
+        displayColorIndex(entryBackground));
     if (entry->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("clrmod=\"%1\"")
@@ -23748,10 +23759,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("\"basic attribute\" {"));
     AdlWriter::writeIndentedLine(stream, next + 1,
-        QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+        QStringLiteral("clr=%1").arg(displayColorIndex(
             resolveForeground(setpoint, setpoint->foregroundColor()))));
     AdlWriter::writeIndentedLine(stream, next + 1,
-        QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+        QStringLiteral("bclr=%1").arg(displayColorIndex(
             resolveBackground(setpoint, setpoint->backgroundColor()))));
     AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
     const QString label = setpoint->label();
@@ -23807,8 +23818,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor areaBackground = resolveBackground(area,
         area->backgroundColor());
     AdlWriter::writeControlSection(stream, next, area->channel(),
-        AdlWriter::medmColorIndex(areaForeground),
-        AdlWriter::medmColorIndex(areaBackground));
+        displayColorIndex(areaForeground),
+        displayColorIndex(areaBackground));
     if (area->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("clrmod=\"%1\"")
@@ -23881,8 +23892,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor sliderBackground = resolveBackground(slider,
         slider->backgroundColor());
     AdlWriter::writeControlSection(stream, next, slider->channel(),
-        AdlWriter::medmColorIndex(sliderForeground),
-        AdlWriter::medmColorIndex(sliderBackground));
+        displayColorIndex(sliderForeground),
+        displayColorIndex(sliderBackground));
     if (slider->label() != MeterLabel::kNone) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("label=\"%1\"")
@@ -23921,8 +23932,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor wheelBackground = resolveBackground(wheel,
         wheel->backgroundColor());
     AdlWriter::writeControlSection(stream, next, wheel->channel(),
-        AdlWriter::medmColorIndex(wheelForeground),
-        AdlWriter::medmColorIndex(wheelBackground));
+        displayColorIndex(wheelForeground),
+        displayColorIndex(wheelBackground));
     if (wheel->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("clrmod=\"%1\"")
@@ -23952,8 +23963,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor choiceBackground = resolveBackground(choice,
         choice->backgroundColor());
     AdlWriter::writeControlSection(stream, next, choice->channel(),
-        AdlWriter::medmColorIndex(choiceForeground),
-        AdlWriter::medmColorIndex(choiceBackground));
+        displayColorIndex(choiceForeground),
+        displayColorIndex(choiceBackground));
     if (choice->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("clrmod=\"%1\"")
@@ -23977,8 +23988,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor menuBackground = resolveBackground(menu,
         menu->backgroundColor());
     AdlWriter::writeControlSection(stream, next, menu->channel(),
-        AdlWriter::medmColorIndex(menuForeground),
-        AdlWriter::medmColorIndex(menuBackground));
+        displayColorIndex(menuForeground),
+        displayColorIndex(menuBackground));
     if (menu->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("clrmod=\"%1\"")
@@ -23999,8 +24010,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor messageBackground = resolveBackground(message,
         message->backgroundColor());
     AdlWriter::writeControlSection(stream, next, message->channel(),
-        AdlWriter::medmColorIndex(messageForeground),
-        AdlWriter::medmColorIndex(messageBackground));
+        displayColorIndex(messageForeground),
+        displayColorIndex(messageBackground));
     const QString label = message->label().trimmed();
     if (!label.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -24088,10 +24099,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         shell->backgroundColor());
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("clr=%1")
-            .arg(AdlWriter::medmColorIndex(shellForeground)));
+            .arg(displayColorIndex(shellForeground)));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("bclr=%1")
-            .arg(AdlWriter::medmColorIndex(shellBackground)));
+            .arg(displayColorIndex(shellBackground)));
     const QString shellLabel = shell->label();
     if (!shellLabel.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -24121,10 +24132,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         related->backgroundColor());
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("clr=%1")
-            .arg(AdlWriter::medmColorIndex(relatedForeground)));
+            .arg(displayColorIndex(relatedForeground)));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("bclr=%1")
-            .arg(AdlWriter::medmColorIndex(relatedBackground)));
+            .arg(displayColorIndex(relatedBackground)));
     const QString label = related->label();
     if (!label.isEmpty()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -24149,8 +24160,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor meterBackground = resolveBackground(meter,
         meter->backgroundColor());
     AdlWriter::writeMonitorSection(stream, next, meter->channel(),
-        AdlWriter::medmColorIndex(meterForeground),
-        AdlWriter::medmColorIndex(meterBackground));
+        displayColorIndex(meterForeground),
+        displayColorIndex(meterBackground));
     if (meter->label() != MeterLabel::kNone) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("label=\"%1\"")
@@ -24179,8 +24190,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor barBackground = resolveBackground(bar,
         bar->backgroundColor());
     AdlWriter::writeMonitorSection(stream, next, bar->channel(),
-        AdlWriter::medmColorIndex(barForeground),
-        AdlWriter::medmColorIndex(barBackground));
+        displayColorIndex(barForeground),
+        displayColorIndex(barBackground));
     if (bar->label() != MeterLabel::kNone) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("label=\"%1\"")
@@ -24218,8 +24229,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor thermometerBackground = resolveBackground(thermometer,
         thermometer->backgroundColor());
     AdlWriter::writeMonitorSection(stream, next, thermometer->channel(),
-        AdlWriter::medmColorIndex(thermometerForeground),
-        AdlWriter::medmColorIndex(thermometerBackground));
+        displayColorIndex(thermometerForeground),
+        displayColorIndex(thermometerBackground));
     const auto thermometerChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(thermometer));
     AdlWriter::writeDynamicAttributeSection(stream, next,
@@ -24239,7 +24250,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (thermometerText.isValid() && thermometerText != thermometerForeground) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("textclr=%1")
-              .arg(AdlWriter::medmColorIndex(thermometerText)));
+              .arg(displayColorIndex(thermometerText)));
     }
     if (thermometer->format() != TextMonitorFormat::kDecimal) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -24271,8 +24282,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor scaleBackground = resolveBackground(scale,
         scale->backgroundColor());
     AdlWriter::writeMonitorSection(stream, next, scale->channel(),
-        AdlWriter::medmColorIndex(scaleForeground),
-        AdlWriter::medmColorIndex(scaleBackground));
+        displayColorIndex(scaleForeground),
+        displayColorIndex(scaleBackground));
     if (scale->label() != MeterLabel::kNone) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("label=\"%1\"")
@@ -24305,8 +24316,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor byteBackground = resolveBackground(byte,
         byte->backgroundColor());
     AdlWriter::writeMonitorSection(stream, next, byte->channel(),
-        AdlWriter::medmColorIndex(byteForeground),
-        AdlWriter::medmColorIndex(byteBackground));
+        displayColorIndex(byteForeground),
+        displayColorIndex(byteBackground));
     if (byte->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("clrmod=\"%1\"")
@@ -24340,8 +24351,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor ledBackground = resolveBackground(led,
         led->backgroundColor());
     AdlWriter::writeMonitorSection(stream, next, led->channel(),
-        AdlWriter::medmColorIndex(ledForeground),
-        AdlWriter::medmColorIndex(ledBackground));
+        displayColorIndex(ledForeground),
+        displayColorIndex(ledBackground));
     const bool needsPrimaryVisibilityFallback =
         led->visibilityMode() != TextVisibilityMode::kStatic
         || !led->visibilityCalc().trimmed().isEmpty();
@@ -24363,13 +24374,13 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         QStringLiteral("stateCount=%1").arg(led->stateCount()));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("onColor=%1")
-            .arg(AdlWriter::medmColorIndex(led->onColor())));
+            .arg(displayColorIndex(led->onColor())));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("offColor=%1")
-            .arg(AdlWriter::medmColorIndex(led->offColor())));
+            .arg(displayColorIndex(led->offColor())));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("undefinedColor=%1")
-            .arg(AdlWriter::medmColorIndex(led->undefinedColor())));
+            .arg(displayColorIndex(led->undefinedColor())));
     for (int i = 0; i < led->stateCount(); ++i) {
       const QColor stateColor = led->stateColor(i);
       if (!stateColor.isValid()) {
@@ -24378,7 +24389,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("stateColor%1=%2")
               .arg(i)
-              .arg(AdlWriter::medmColorIndex(stateColor)));
+              .arg(displayColorIndex(stateColor)));
     }
     if (led->isQtedmSymbol()) {
       for (const auto &state : led->symbolStates()) {
@@ -24392,7 +24403,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         if (state.color.isValid()) {
           AdlWriter::writeIndentedLine(stream, next + 1,
               QStringLiteral("color=%1").arg(
-                  AdlWriter::medmColorIndex(state.color)));
+                  displayColorIndex(state.color)));
         }
         if (!state.label.isEmpty()) {
           AdlWriter::writeIndentedLine(stream, next + 1,
@@ -24448,10 +24459,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         expression->backgroundColor());
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("clr=%1")
-            .arg(AdlWriter::medmColorIndex(expressionForeground)));
+            .arg(displayColorIndex(expressionForeground)));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("bclr=%1")
-            .arg(AdlWriter::medmColorIndex(expressionBackground)));
+            .arg(displayColorIndex(expressionBackground)));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("precision=%1").arg(expression->precision()));
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
@@ -24468,8 +24479,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor monitorBackground = resolveBackground(monitor,
         monitor->backgroundColor());
     AdlWriter::writeMonitorSection(stream, next, monitor->channel(0),
-        AdlWriter::medmColorIndex(monitorForeground),
-        AdlWriter::medmColorIndex(monitorBackground));
+        displayColorIndex(monitorForeground),
+        displayColorIndex(monitorBackground));
     if (monitor->colorMode() != TextColorMode::kStatic) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("clrmod=\"%1\"")
@@ -24509,8 +24520,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QColor stripBackground = resolveBackground(strip,
         strip->backgroundColor());
     AdlWriter::writePlotcom(stream, next, strip->title(), strip->xLabel(),
-        yLabels, AdlWriter::medmColorIndex(stripForeground),
-        AdlWriter::medmColorIndex(stripBackground));
+        yLabels, displayColorIndex(stripForeground),
+        displayColorIndex(stripBackground));
     const double period = strip->period();
     if (period > 0.0 && std::abs(period - kDefaultStripChartPeriod) > 1e-6) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -24536,7 +24547,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
       const QColor penColor = strip->penColor(i);
       const PvLimits limits = strip->penLimits(i);
       AdlWriter::writeStripChartPenSection(stream, next, i, channel,
-          AdlWriter::medmColorIndex(penColor), limits);
+          displayColorIndex(penColor), limits);
     }
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
     return;
@@ -24557,8 +24568,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         cartesian->backgroundColor());
     AdlWriter::writePlotcom(stream, next, cartesian->title(),
         cartesian->xLabel(), yLabels,
-        AdlWriter::medmColorIndex(cartesianForeground),
-        AdlWriter::medmColorIndex(cartesianBackground));
+        displayColorIndex(cartesianForeground),
+        displayColorIndex(cartesianBackground));
     if (!cartesian->drawMajorGrid()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("drawMajor=0"));
@@ -24604,7 +24615,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     for (int i = 0; i < cartesian->traceCount(); ++i) {
       const QString xChannel = cartesian->traceXChannel(i);
       const QString yChannel = cartesian->traceYChannel(i);
-      const int colorIndex = AdlWriter::medmColorIndex(
+      const int colorIndex = displayColorIndex(
           cartesian->traceColor(i));
       const int axisIndex = axisIndexFor(cartesian->traceYAxis(i));
       const bool usesRightAxis = cartesian->traceUsesRightAxis(i);
@@ -24651,7 +24662,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     const QRect serialized = serializedGeometry(rectangle);
     AdlWriter::writeObjectSection(stream, next, serialized);
     AdlWriter::writeBasicAttributeSection(stream, next,
-        AdlWriter::medmColorIndex(rectangle->color()),
+        displayColorIndex(rectangle->color()),
         rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
         true);
     const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
@@ -24818,10 +24829,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeObjectSection(stream, next, serializedGeometry(pvTable));
     AdlWriter::writeIndentedLine(stream, next, QStringLiteral("\"basic attribute\" {"));
     AdlWriter::writeIndentedLine(stream, next + 1,
-        QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+        QStringLiteral("clr=%1").arg(displayColorIndex(
             resolveForeground(pvTable, pvTable->foregroundColor()))));
     AdlWriter::writeIndentedLine(stream, next + 1,
-        QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+        QStringLiteral("bclr=%1").arg(displayColorIndex(
             resolveBackground(pvTable, pvTable->backgroundColor()))));
     AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
     AdlWriter::writeIndentedLine(stream, next,
@@ -24858,10 +24869,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("\"basic attribute\" {"));
     AdlWriter::writeIndentedLine(stream, next + 1,
-        QStringLiteral("clr=%1").arg(AdlWriter::medmColorIndex(
+        QStringLiteral("clr=%1").arg(displayColorIndex(
             resolveForeground(waveTable, waveTable->foregroundColor()))));
     AdlWriter::writeIndentedLine(stream, next + 1,
-        QStringLiteral("bclr=%1").arg(AdlWriter::medmColorIndex(
+        QStringLiteral("bclr=%1").arg(displayColorIndex(
             resolveBackground(waveTable, waveTable->backgroundColor()))));
     AdlWriter::writeIndentedLine(stream, next, QStringLiteral("}"));
     AdlWriter::writeIndentedLine(stream, next,
@@ -24908,8 +24919,8 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         waterfall->backgroundColor());
     AdlWriter::writePlotcom(stream, next, waterfall->title(),
         waterfall->xLabel(), yLabels,
-        AdlWriter::medmColorIndex(waterfallForeground),
-        AdlWriter::medmColorIndex(waterfallBackground));
+        displayColorIndex(waterfallForeground),
+        displayColorIndex(waterfallBackground));
 
     const QString dataChannel = waterfall->dataChannel().trimmed();
     if (!dataChannel.isEmpty()) {
@@ -25017,7 +25028,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(oval));
     AdlWriter::writeBasicAttributeSection(stream, next,
-        AdlWriter::medmColorIndex(oval->color()), oval->lineStyle(),
+        displayColorIndex(oval->color()), oval->lineStyle(),
         oval->fill(), oval->lineWidth());
     const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(oval));
@@ -25033,7 +25044,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(arc));
     AdlWriter::writeBasicAttributeSection(stream, next,
-        AdlWriter::medmColorIndex(arc->color()), arc->lineStyle(),
+        displayColorIndex(arc->color()), arc->lineStyle(),
         arc->fill(), arc->lineWidth());
     const auto arcChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(arc));
@@ -25054,7 +25065,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(line));
     AdlWriter::writeBasicAttributeSection(stream, next,
-        AdlWriter::medmColorIndex(line->color()), line->lineStyle(),
+        displayColorIndex(line->color()), line->lineStyle(),
         RectangleFill::kSolid, line->lineWidth(), true);
     const auto lineChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(line));
@@ -25080,7 +25091,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(polyline));
     AdlWriter::writeBasicAttributeSection(stream, next,
-        AdlWriter::medmColorIndex(polyline->color()),
+        displayColorIndex(polyline->color()),
         polyline->lineStyle(), RectangleFill::kSolid,
         polyline->lineWidth(), true);
     const auto polylineChannels = AdlWriter::channelsForMedmFourValues(
@@ -25105,7 +25116,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeObjectSection(stream, next,
         serializedGeometry(polygon));
     AdlWriter::writeBasicAttributeSection(stream, next,
-        AdlWriter::medmColorIndex(polygon->color()), polygon->lineStyle(),
+        displayColorIndex(polygon->color()), polygon->lineStyle(),
         polygon->fill(), polygon->lineWidth());
     const auto polygonChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(polygon));
@@ -25249,6 +25260,7 @@ void DisplayWindow::clearAllElements()
   polylineCreationPoints_.clear();
   activePolylineElement_ = nullptr;
   colormapName_.clear();
+  inlineColorMap_.clear();
   if (!restoringState_) {
     macroDefinitions_.clear();
   }
@@ -25416,11 +25428,85 @@ bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
 
 QColor DisplayWindow::colorForIndex(int index) const
 {
+  if (!inlineColorMap_.isEmpty()) {
+    return index >= 0 && index < inlineColorMap_.size()
+        ? inlineColorMap_.at(index) : QColor(Qt::black);
+  }
   const auto &palette = MedmColors::palette();
   if (index >= 0 && index < static_cast<int>(palette.size())) {
     return palette[static_cast<std::size_t>(index)];
   }
   return QColor(Qt::black);
+}
+
+int DisplayWindow::displayColorIndex(const QColor &color) const
+{
+  if (inlineColorMap_.isEmpty()) {
+    return AdlWriter::medmColorIndex(color);
+  }
+  const QColor target = color.isValid() ? color.toRgb() : QColor(Qt::black);
+  int bestIndex = 0;
+  int bestDistance = std::numeric_limits<int>::max();
+  for (int index = 0; index < inlineColorMap_.size(); ++index) {
+    const QColor candidate = inlineColorMap_.at(index).toRgb();
+    const int dr = candidate.red() - target.red();
+    const int dg = candidate.green() - target.green();
+    const int db = candidate.blue() - target.blue();
+    const int distance = dr * dr + dg * dg + db * db;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+      if (distance == 0) {
+        break;
+      }
+    }
+  }
+  return bestIndex;
+}
+
+bool DisplayWindow::readInlineColorMap(const AdlNode &document,
+    QVector<QColor> *colors, QString *errorMessage) const
+{
+  colors->clear();
+  const AdlNode *map = ::findChild(document, QStringLiteral("color map"));
+  if (!map) {
+    return true;
+  }
+  auto invalidMap = [errorMessage]() {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Invalid ADL color map");
+    }
+    return false;
+  };
+  bool ok = false;
+  const int count = propertyValue(*map, QStringLiteral("ncolors")).toInt(&ok);
+  if (!ok || count < 1 || count > static_cast<int>(MedmColors::palette().size())) {
+    return invalidMap();
+  }
+  if (const AdlNode *values = ::findChild(*map, QStringLiteral("colors"))) {
+    for (const AdlProperty &property : values->properties) {
+      const uint rgb = property.value.toUInt(&ok, 16);
+      if (!property.key.isEmpty() || !ok || rgb > 0xffffffU) {
+        return invalidMap();
+      }
+      colors->append(QColor::fromRgb(rgb));
+    }
+  } else {
+    /* Pre-2.02 MEDM files store each color as decimal RGB components. */
+    for (const AdlNode *value : ::findChildren(*map, QStringLiteral("dl_color"))) {
+      int rgb[3];
+      const QString components[] = {QStringLiteral("r"),
+          QStringLiteral("g"), QStringLiteral("b")};
+      for (int index = 0; index < 3; ++index) {
+        rgb[index] = propertyValue(*value, components[index]).toInt(&ok);
+        if (!ok || rgb[index] < 0 || rgb[index] > 255) {
+          return invalidMap();
+        }
+      }
+      colors->append(QColor(rgb[0], rgb[1], rgb[2]));
+    }
+  }
+  return colors->size() == count ? true : invalidMap();
 }
 
 TextColorMode DisplayWindow::parseTextColorMode(
@@ -35119,12 +35205,20 @@ bool DisplayWindow::restoreSerializedState(const QByteArray &data)
     suppressUndoCapture_ = false;
     return false;
   }
+  QVector<QColor> loadedColorMap;
+  if (!readInlineColorMap(*document, &loadedColorMap, nullptr)) {
+    restoringState_ = false;
+    suppressUndoCapture_ = false;
+    return false;
+  }
 
   const bool restartExecuteModeAfterRestore = executeModeActive_;
   if (restartExecuteModeAfterRestore) {
     leaveExecuteMode();
   }
   clearAllElements();
+
+  inlineColorMap_ = std::move(loadedColorMap);
 
   bool displayLoaded = false;
   bool elementLoaded = false;

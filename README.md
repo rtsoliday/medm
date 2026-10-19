@@ -136,7 +136,7 @@ with warnings, and 1 for a fatal error.
   subdirectory-hosting instructions.
 - [Reference manual](docs/QtEDM.html) &ndash; command line, widgets, ADL
   extensions, environment, sessions, snapshots, archives, imports, and build
-  notes. The same file is embedded in QtEDM under **Help &gt; Overview**.
+  notes. The same file is embedded in QtEDM under **Help &gt; Help Topics**.
 - [Public showcase](docs/QtEDM_Showcase.html) &ndash; concise, external-facing
   overview for evaluating QtEDM at an EPICS facility.
 - [Plugin API version 1](docs/QtEDM_Plugin_API.md) &ndash; trusted local display,

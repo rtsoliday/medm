@@ -48,7 +48,7 @@ def verify(base="/"):
         if path == OUTPUT / 'manual/MEDM.html':
             continue
         parser = Page()
-        parser.feed(path.read_text())
+        parser.feed(path.read_text(encoding='utf-8'))
         pages[path.resolve()] = parser
     issues = []
     links = 0
@@ -87,7 +87,7 @@ def verify(base="/"):
     # Every named help anchor must survive the conversion, including targets
     # not currently referenced by another page.
     manual = Page()
-    manual.feed((ROOT / 'docs/QtEDM.html').read_text())
+    manual.feed((ROOT / 'docs/QtEDM.html').read_text(encoding='utf-8'))
     web_ids = set().union(*(p.ids for path, p in pages.items()
                            if 'manual' not in path.relative_to(OUTPUT).parts))
     for ident in manual.ids - {'Contents'} - web_ids:
@@ -96,7 +96,7 @@ def verify(base="/"):
     # must not silently omit a paragraph, list item, or code example.
     source = runpy.run_path(str(ROOT / 'scripts/sync-docs.py'))
     tree = source['Manual']()
-    tree.feed((ROOT / 'docs/QtEDM.html').read_text())
+    tree.feed((ROOT / 'docs/QtEDM.html').read_text(encoding='utf-8'))
     body = next(n for n in tree.root.walk() if n.tag == 'body')
     section, passages = None, 0
     normalize = lambda text: re.sub(r'\s+', '', text)

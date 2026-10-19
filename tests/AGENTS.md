@@ -91,11 +91,22 @@ Use deterministic PV initialization before manual testing.
 
 Before PV writes, set and export:
 
-- `EPICS_CA_ADDR_LIST=localhost`
+- `EPICS_CA_ADDR_LIST=127.0.0.1`
 - `EPICS_CA_AUTO_ADDR_LIST=NO`
+- `EPICS_CAS_INTF_ADDR_LIST=127.0.0.1`, so the test IOC listens only on
+  loopback
+- the matching PVA settings (`EPICS_PVA_ADDR_LIST=127.0.0.1`,
+  `EPICS_PVA_AUTO_ADDR_LIST=NO`, `EPICS_PVAS_INTF_ADDR_LIST=127.0.0.1`)
+
+Use the numeric loopback address rather than `localhost`, and unset
+`EPICS_CA_NAME_SERVERS` and `EPICS_PVA_NAME_SERVERS`, so isolation does not
+depend on name resolution or site configuration.
 
 In script form, use a helper (`set_local_ca_env`) and call it before starting
-the IOC and before `cavput` initialization loops.
+the IOC and before `cavput` initialization loops. The shared suite setup in
+`tests/lib/qtedm_test_env.sh` applies the same settings and also clears
+`EPICS_DISPLAY_PATH`, `QTEDM_ARCHIVER_URL`, `QTEDM_ARCHIVER_PROVIDER`,
+`QTEDM_PLUGIN_PATH`, and `MEDM_EXEC_LIST`.
 
 ### Normal test PV initialization
 

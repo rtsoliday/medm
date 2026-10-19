@@ -153,9 +153,26 @@ ioc_pid=""
 waterfall_driver_pid=""
 
 set_local_ca_env() {
-  EPICS_CA_ADDR_LIST=localhost
+  # The IOC, cavput, and caput must stay on loopback. Bind the test servers
+  # there too, so a direct run of this script is not reachable from the
+  # facility network.
+  EPICS_CA_ADDR_LIST=127.0.0.1
   EPICS_CA_AUTO_ADDR_LIST=NO
+  EPICS_CAS_INTF_ADDR_LIST=127.0.0.1
+  EPICS_CAS_BEACON_ADDR_LIST=127.0.0.1
+  EPICS_CAS_AUTO_BEACON_ADDR_LIST=NO
+  EPICS_PVA_ADDR_LIST=127.0.0.1
+  EPICS_PVA_AUTO_ADDR_LIST=NO
+  EPICS_PVAS_INTF_ADDR_LIST=127.0.0.1
+  EPICS_PVAS_BEACON_ADDR_LIST=127.0.0.1
+  EPICS_PVAS_AUTO_BEACON_ADDR_LIST=NO
   export EPICS_CA_ADDR_LIST EPICS_CA_AUTO_ADDR_LIST
+  export EPICS_CAS_INTF_ADDR_LIST EPICS_CAS_BEACON_ADDR_LIST
+  export EPICS_CAS_AUTO_BEACON_ADDR_LIST
+  export EPICS_PVA_ADDR_LIST EPICS_PVA_AUTO_ADDR_LIST
+  export EPICS_PVAS_INTF_ADDR_LIST EPICS_PVAS_BEACON_ADDR_LIST
+  export EPICS_PVAS_AUTO_BEACON_ADDR_LIST
+  unset EPICS_CA_NAME_SERVERS EPICS_PVA_NAME_SERVERS
 }
 
 set_local_epics_runtime_env() {

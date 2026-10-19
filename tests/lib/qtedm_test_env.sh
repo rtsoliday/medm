@@ -67,13 +67,23 @@ qtedm_test_setup_env() {
   export LC_ALL=C.UTF-8
   export TZ=UTC
   export HOME="${QTEDM_TEST_TMP_DIR}/home"
-  export EPICS_CA_ADDR_LIST=localhost
+  # Keep every CA/PVA client and test server on the loopback interface. Use
+  # the numeric address so isolation does not depend on name resolution, and
+  # clear site settings that could reach production gateways, archivers,
+  # display trees, or plugins.
+  export EPICS_CA_ADDR_LIST=127.0.0.1
   export EPICS_CA_AUTO_ADDR_LIST=NO
+  export EPICS_CAS_INTF_ADDR_LIST=127.0.0.1
+  export EPICS_CAS_BEACON_ADDR_LIST=127.0.0.1
+  export EPICS_CAS_AUTO_BEACON_ADDR_LIST=NO
   export EPICS_PVA_ADDR_LIST=127.0.0.1
   export EPICS_PVA_AUTO_ADDR_LIST=NO
   export EPICS_PVAS_INTF_ADDR_LIST=127.0.0.1
   export EPICS_PVAS_BEACON_ADDR_LIST=127.0.0.1
   export EPICS_PVAS_AUTO_BEACON_ADDR_LIST=NO
+  unset EPICS_CA_NAME_SERVERS EPICS_PVA_NAME_SERVERS EPICS_DISPLAY_PATH
+  unset QTEDM_ARCHIVER_URL QTEDM_ARCHIVER_PROVIDER QTEDM_PLUGIN_PATH
+  unset MEDM_EXEC_LIST
   qtedm_test_setup_sdds_tools
 }
 

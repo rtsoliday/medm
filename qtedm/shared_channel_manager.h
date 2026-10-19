@@ -206,6 +206,9 @@ private:
    * Channel objects remain confined to the Qt thread. */
   std::mutex callbackMutex_;
   QSet<quint64> callbackChannels_;
+  /* Ordered bursts are fixed-capacity. Overload may also retain the newest
+   * connection/access state and preceding disconnect per active ID, bounding
+   * lifecycle storage by active channels without losing epoch resets. */
   std::deque<CallbackEvent> callbackEvents_;
   size_t callbackBytes_ = 0;
   bool callbackDrainScheduled_ = false;

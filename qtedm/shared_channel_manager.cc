@@ -22,6 +22,8 @@ constexpr qint64 kPassiveNotifyIntervalMs = 200;
 constexpr int kConnectionCompletionIdleMs = 100;
 constexpr size_t kMaximumCallbackBytes = 128 * 1024 * 1024;
 constexpr size_t kMaximumCallbackPayloadBytes = 64 * 1024 * 1024;
+/* Payload events use this fixed capacity. During overload, connection and
+ * access state may additionally retain up to three entries per active ID. */
 constexpr size_t kMaximumCallbackEvents = 4096;
 constexpr size_t kCallbackDrainBatch = 64;
 std::atomic<SharedChannelManager *> gSharedChannelManager{nullptr};
@@ -635,28 +637,72 @@ void SharedChannelManager::queueCallbackEvent(CallbackEvent event,
     if (dataBytes > kMaximumCallbackPayloadBytes) {
       ++droppedCallbackEvents_;
     } else {
-      /* Preserve ordered bursts (including triggers and alarms). Only on
-       * overload discard old values first, keeping the newest state. */
+      const bool lifecycle = event.kind == CallbackKind::kConnection
+          || event.kind == CallbackKind::kAccessRights;
+      const auto overloaded = [this, dataBytes]() {
+        return callbackEvents_.size() >= kMaximumCallbackEvents
+            || callbackBytes_ + dataBytes > kMaximumCallbackBytes;
+      };
+      /* Preserve ordinary ordered bursts, including triggers and alarms.
+       * Under overload replace this channel's older lifecycle state, then
+       * append the newest state after all surviving older events. A reconnect
+       * must retain the last disconnect in its original position: processing
+       * it clears the previous epoch's values, metadata and subscriptions.
+       * Never discard another channel's sole lifecycle notification. */
+      if (lifecycle && overloaded()) {
+        bool retainedDisconnect = false;
+        for (size_t index = callbackEvents_.size(); index > 0; --index) {
+          auto it = callbackEvents_.begin()
+              + static_cast<std::deque<CallbackEvent>::difference_type>(index - 1);
+          if (it->channelInstanceId == event.channelInstanceId
+              && it->kind == event.kind) {
+            if (event.kind == CallbackKind::kConnection && event.firstFlag
+                && !it->firstFlag && !retainedDisconnect) {
+              retainedDisconnect = true;
+              continue;
+            }
+            callbackBytes_ -= it->data.size();
+            callbackEvents_.erase(it);
+            ++droppedCallbackEvents_;
+          }
+        }
+      }
       while (!callbackEvents_.empty()
-          && (callbackEvents_.size() >= kMaximumCallbackEvents
-              || callbackBytes_ + dataBytes > kMaximumCallbackBytes)) {
+          && overloaded()) {
         auto oldest = std::find_if(callbackEvents_.begin(), callbackEvents_.end(),
             [](const CallbackEvent &queued) {
               return queued.kind == CallbackKind::kValue;
             });
         if (oldest == callbackEvents_.end()) {
-          oldest = callbackEvents_.begin();
+          oldest = std::find_if(callbackEvents_.begin(), callbackEvents_.end(),
+              [](const CallbackEvent &queued) {
+                return queued.kind == CallbackKind::kControlInfo;
+              });
+        }
+        if (oldest == callbackEvents_.end()) {
+          break;
         }
         callbackBytes_ -= oldest->data.size();
         callbackEvents_.erase(oldest);
         ++droppedCallbackEvents_;
       }
-      if (data && dataBytes > 0) {
-        event.data = QByteArray(static_cast<const char *>(data),
-            static_cast<int>(dataBytes));
+      /* Lifecycle events carry no payload. Distinct active channels must
+       * keep their final state even when there are more than 4096 of them.
+       * Coalescing retains at most a disconnect, a reconnect and access state
+       * per active ID beyond the ordinary burst capacity: 4096 + 3 * active
+       * IDs. Payload storage retains its independent fixed byte bound.
+       * Expendable events cannot displace a lifecycle-only inbox. */
+      if ((!lifecycle && overloaded())
+          || callbackBytes_ + dataBytes > kMaximumCallbackBytes) {
+        ++droppedCallbackEvents_;
+      } else {
+        if (data && dataBytes > 0) {
+          event.data = QByteArray(static_cast<const char *>(data),
+              static_cast<int>(dataBytes));
+        }
+        callbackBytes_ += event.data.size();
+        callbackEvents_.push_back(std::move(event));
       }
-      callbackBytes_ += event.data.size();
-      callbackEvents_.push_back(std::move(event));
     }
     if (!callbackDrainScheduled_) {
       callbackDrainScheduled_ = true;
@@ -923,6 +969,9 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
     /* Clear cached value state on disconnect */
     channel->cachedData.hasValue = false;
     channel->cachedData.hasControlInfo = false;
+    /* A reconnect starts a new value epoch. The first fresh sample must be
+     * delivered even when it equals the last value from the old circuit. */
+    channel->lastNotifiedSeverity = -1;
     channel->subscribed = false;
     if (channel->subscriptionId) {
       ca_clear_subscription(channel->subscriptionId);

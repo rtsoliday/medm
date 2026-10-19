@@ -980,7 +980,7 @@ way.</p>
     <li><strong>Configure:</strong> Use the normal Strip Chart properties for pens and time span. QtEDM Extension Properties adds the maximum historical point count and whether live samples are merged after history loads.</li>
     <li><strong>Built-in provider:</strong> Set <code>QTEDM_ARCHIVER_URL</code> to an EPICS Archiver Appliance retrieval root. The request is bounded by time, response size, timeout, and maximum points.</li>
     <li><strong>Plugin provider:</strong> Set <code>QTEDM_ARCHIVER_PROVIDER</code> to a registered archive-provider ID. Empty or <code>archiver-appliance</code> selects the built-in provider.</li>
-    <li><strong>Failure behavior:</strong> A missing provider, timeout, invalid response, or empty history is shown as a plot diagnostic; live plotting continues.</li>
+    <li><strong>Failure behavior:</strong> A missing provider, timeout, invalid response, or empty history is shown as a plot diagnostic; live plotting continues. Failed pens remain named in the diagnostic even when another pen succeeds, until that pen is requested again or the runtime stops.</li>
   </ul>
 </div>
 <div class="widget-entry">

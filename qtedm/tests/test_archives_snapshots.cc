@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 #include <QFile>
 #include <QImage>
@@ -21,6 +22,7 @@
 #include "pv_snapshot.h"
 #include "pv_snapshot_dialog.h"
 #include "strip_chart_element.h"
+#include "strip_chart_runtime.h"
 
 class StalledNetworkReply : public QNetworkReply
 {
@@ -63,6 +65,35 @@ protected:
   }
 };
 
+/* Complete requests explicitly; no network, IOC, or plugin is involved. */
+class ControlledArchiveProvider : public ArchiveProvider
+{
+public:
+  struct Pending
+  {
+    QPointer<ArchiveRequest> request;
+    Completion completion;
+  };
+  QVector<Pending> pending;
+
+  ArchiveRequest *query(const ArchiveQuery &, QObject *owner,
+      Completion completion) override
+  {
+    auto *request = new ArchiveRequest(owner);
+    pending.append({request, std::move(completion)});
+    return request;
+  }
+
+  void finish(int index, const ArchiveResult &result)
+  {
+    Completion completion = std::move(pending[index].completion);
+    if (pending[index].request) {
+      pending[index].request->deleteLater();
+    }
+    completion(result);
+  }
+};
+
 class TestArchivesSnapshots : public QObject
 {
   Q_OBJECT
@@ -75,6 +106,7 @@ private slots:
   void archiveRequestCanBeCancelled();
   void archiveRequestTimesOut();
   void archiveOwnerDestructionReleasesReply();
+  void archivePenFailuresSurviveOtherPenCompletions();
   void archiveHistoryPreservesTimestampGaps();
   void archiveHistoryRendersConnectedLine();
   void snapshotDefaultExtensionIsAppended();
@@ -274,6 +306,74 @@ void TestArchivesSnapshots::archiveOwnerDestructionReleasesReply()
   QVERIFY(!completed);
   QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
   QVERIFY(!network.lastReply);
+}
+
+void TestArchivesSnapshots::archivePenFailuresSurviveOtherPenCompletions()
+{
+  ControlledArchiveProvider provider;
+  StripChartElement chart;
+  chart.setArchivePlot(true);
+  StripChartRuntime runtime(&chart);
+  runtime.archiveProvider_ = &provider;
+  runtime.started_ = true;
+  runtime.pens_[0].channelName = QStringLiteral("TEST:FIRST");
+  runtime.pens_[1].channelName = QStringLiteral("TEST:SECOND");
+  runtime.requestArchive(0);
+  runtime.requestArchive(1);
+  QCOMPARE(provider.pending.size(), 2);
+
+  ArchiveResult failed;
+  failed.error = QStringLiteral("First pen archive unavailable.");
+  provider.finish(0, failed);
+  QVERIFY(chart.archiveStatus().contains(QStringLiteral("TEST:FIRST")));
+  QVERIFY(chart.archiveStatus().contains(failed.error));
+  ArchiveResult succeeded;
+  succeeded.samples.append({QDateTime::currentMSecsSinceEpoch() - 1000,
+      12.5, 0, 0});
+  provider.finish(1, succeeded);
+  QVERIFY(runtime.pens_[0].archiveFailed);
+  QVERIFY(!runtime.pens_[1].archiveFailed);
+  QCOMPARE(runtime.pens_[1].historicalSamples.size(), 1);
+  QVERIFY(chart.archiveStatus().contains(failed.error));
+  QVERIFY(chart.toolTip().contains(failed.error));
+  /* A successful pen retaining its history after a disconnect must also
+   * leave the other pen's diagnostic visible. */
+  runtime.handleConnectionEvent(1, false, SharedChannelData{});
+  QVERIFY(chart.archiveStatus().contains(failed.error));
+
+  runtime.requestArchive(0);
+  QCOMPARE(chart.archiveStatus(), QStringLiteral("Loading archive history…"));
+  runtime.requestArchive(0);
+  QVERIFY(provider.pending[2].request->isCancelled());
+  provider.finish(2, failed);
+  QVERIFY(runtime.pens_[0].archiveError.isEmpty());
+  QCOMPARE(chart.archiveStatus(), QStringLiteral("Loading archive history…"));
+  provider.finish(3, succeeded);
+  QCOMPARE(chart.archiveStatus(), QStringLiteral("Loaded 1 archive sample(s)."));
+
+  runtime.requestArchive(0);
+  runtime.requestArchive(1);
+  failed.error = QStringLiteral("Second pen archive unavailable.");
+  provider.finish(5, failed);
+  provider.pending[4].request->cancel();
+  ArchiveResult cancelled;
+  cancelled.cancelled = true;
+  cancelled.error = QStringLiteral("Archive query cancelled.");
+  provider.finish(4, cancelled);
+  QVERIFY(runtime.pens_[0].archiveError.isEmpty());
+  QVERIFY(chart.archiveStatus().contains(QStringLiteral("TEST:SECOND")));
+  QVERIFY(chart.archiveStatus().contains(failed.error));
+  QVERIFY(!chart.archiveStatus().contains(cancelled.error));
+
+  runtime.requestArchive(1);
+  provider.finish(6, ArchiveResult{});
+  QCOMPARE(chart.archiveStatus(), QStringLiteral(
+      "Archive returned no samples; live data continues."));
+  runtime.stop();
+  QVERIFY(runtime.pens_[0].archiveError.isEmpty());
+  QVERIFY(runtime.pens_[1].archiveError.isEmpty());
+  QVERIFY(chart.archiveStatus().isEmpty());
+  QVERIFY(chart.toolTip().isEmpty());
 }
 
 void TestArchivesSnapshots::archiveHistoryPreservesTimestampGaps()

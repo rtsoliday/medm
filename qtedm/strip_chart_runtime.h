@@ -15,10 +15,12 @@
 class StripChartElement;
 
 class DisplayWindow;
+class TestArchivesSnapshots;
 
 class StripChartRuntime : public QObject
 {
   friend class DisplayWindow;
+  friend class TestArchivesSnapshots;
 public:
   explicit StripChartRuntime(StripChartElement *element);
   ~StripChartRuntime() override;
@@ -42,10 +44,12 @@ private:
     quint64 archiveGeneration = 0;
     bool archiveComplete = false;
     bool archiveFailed = false;
+    QString archiveError;
   };
 
   void subscribePen(int index);
   void requestArchive(int index);
+  void updateArchiveStatus(const QString &status);
   void applyMergedHistory(int index);
   void handleAccessRightsEvent(int index, bool canRead, bool canWrite);
   void handleConnectionEvent(int index, bool connected,

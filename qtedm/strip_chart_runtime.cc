@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QDateTime>
 #include <QPointer>
+#include <QStringList>
 
 #include <db_access.h>
 #include <epicsTime.h>
@@ -100,6 +101,7 @@ void StripChartRuntime::start()
     pen.liveSamples.clear();
     pen.archiveComplete = false;
     pen.archiveFailed = false;
+    pen.archiveError.clear();
 
     if (pen.channelName.isEmpty()) {
       continue;
@@ -126,6 +128,7 @@ void StripChartRuntime::stop()
 
   invokeOnElement([](StripChartElement *element) {
     element->clearRuntimeState();
+    element->setArchiveStatus(QString());
   });
 }
 
@@ -160,19 +163,20 @@ void StripChartRuntime::requestArchive(int index)
       || index < 0 || index >= kStripChartPenCount) {
     return;
   }
+  PenState &pen = pens_[index];
+  pen.archiveError.clear();
   if (!archiveProvider_) {
-    element_->setArchiveStatus(QStringLiteral(
-        "%1 Live data continues.")
-        .arg(archiveProviderError_.isEmpty()
-            ? QStringLiteral("Archive provider is unavailable.")
-            : archiveProviderError_));
+    pen.archiveError = archiveProviderError_.isEmpty()
+        ? QStringLiteral("Archive provider is unavailable.")
+        : archiveProviderError_;
+    updateArchiveStatus(QString());
     return;
   }
-  PenState &pen = pens_[index];
+  /* Supersede the old request before cancellation can finish synchronously. */
+  const quint64 generation = ++pen.archiveGeneration;
   if (pen.archiveRequest) {
     pen.archiveRequest->cancel();
   }
-  const quint64 generation = ++pen.archiveGeneration;
   const QDateTime to = QDateTime::currentDateTimeUtc();
   ArchiveQuery query;
   query.channel = stripPvProtocol(pen.channelName);
@@ -180,7 +184,7 @@ void StripChartRuntime::requestArchive(int index)
   query.from = to.addMSecs(-static_cast<qint64>(
       element_->historyDurationSeconds() * 1000.0));
   query.maximumPoints = element_->archiveMaximumPoints();
-  element_->setArchiveStatus(QStringLiteral("Loading archive history…"));
+  updateArchiveStatus(QStringLiteral("Loading archive history…"));
 
   QPointer<StripChartRuntime> self(this);
   pen.archiveRequest = archiveProvider_->query(query, this,
@@ -198,17 +202,40 @@ void StripChartRuntime::requestArchive(int index)
         current.archiveFailed = !result.ok();
         if (result.ok()) {
           current.historicalSamples = result.samples;
-          self->element_->setArchiveStatus(
+          self->updateArchiveStatus(
               result.samples.isEmpty()
               ? QStringLiteral("Archive returned no samples; live data continues.")
               : QStringLiteral("Loaded %1 archive sample(s).")
                     .arg(result.samples.size()));
           self->applyMergedHistory(index);
         } else if (!result.cancelled) {
-          self->element_->setArchiveStatus(
-              QStringLiteral("%1 Live data continues.").arg(result.error));
+          current.archiveError = result.error.isEmpty()
+              ? QStringLiteral("Archive query failed.") : result.error;
+          self->updateArchiveStatus(QString());
         }
       });
+}
+
+void StripChartRuntime::updateArchiveStatus(const QString &status)
+{
+  if (!element_) {
+    return;
+  }
+  QStringList failures;
+  for (const PenState &pen : pens_) {
+    if (!pen.archiveError.isEmpty()) {
+      failures.append(QStringLiteral("%1: %2")
+          .arg(pen.channelName, pen.archiveError));
+    }
+  }
+  /* One pen finishing successfully must not hide another pen's failure.
+   * Each diagnostic lasts until that pen is requested again or cleared. */
+  const QString summary = failures.isEmpty() ? status
+      : failures.join(QLatin1Char('\n'))
+          + QStringLiteral("\nLive data continues.");
+  invokeOnElement([summary](StripChartElement *element) {
+    element->setArchiveStatus(summary);
+  });
 }
 
 void StripChartRuntime::applyMergedHistory(int index)
@@ -309,9 +336,9 @@ void StripChartRuntime::handleConnectionEvent(int index,
         element->setRuntimeConnected(index, true);
         element->setRuntimeReadAccessKnown(index, true);
         element->setRuntimeReadAccess(index, true);
-        element->setArchiveStatus(
-            QStringLiteral("Live PV disconnected; showing archive history."));
       });
+      updateArchiveStatus(
+          QStringLiteral("Live PV disconnected; showing archive history."));
       return;
     }
     invokeOnElement([index](StripChartElement *element) {
@@ -398,6 +425,7 @@ void StripChartRuntime::resetPen(int index)
   pen.liveSamples.clear();
   pen.archiveComplete = false;
   pen.archiveFailed = false;
+  pen.archiveError.clear();
 }
 
 void StripChartRuntime::unsubscribePen(int index)

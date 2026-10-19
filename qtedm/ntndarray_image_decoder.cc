@@ -274,28 +274,33 @@ void transformedToSource(const NtNdArrayDecodedFrame &frame,
 
 } // namespace
 
-NtNdArrayDecodedFrame NtNdArrayImageDecoder::decode(
-    const NtNdArrayFrame &frame, const NtNdArrayDecodeOptions &options)
+bool NtNdArrayImageDecoder::validate(const NtNdArrayFrame &frame,
+    const NtNdArrayDecodeOptions &options, quint64 *workingBytes,
+    QString *error)
 {
-  NtNdArrayDecodedFrame result;
-  result.source = frame;
-  result.options = options;
-
+  QString ignored;
+  if (!error) {
+    error = &ignored;
+  }
+  error->clear();
+  if (workingBytes) {
+    *workingBytes = 0;
+  }
   const QString codec = frame.codec.trimmed().toLower();
   if (!codec.isEmpty() && codec != QLatin1String("none")
       && codec != QLatin1String("raw")) {
-    result.error = QStringLiteral(
+    *error = QStringLiteral(
         "Compressed NTNDArray codec “%1” is not supported.").arg(frame.codec);
-    return result;
+    return false;
   }
   if (!frame.data || frame.elementCount == 0 || frame.byteCount == 0) {
-    result.error = QStringLiteral("NTNDArray frame has no raw pixel data.");
-    return result;
+    *error = QStringLiteral("NTNDArray frame has no raw pixel data.");
+    return false;
   }
   if (frame.byteCount > options.maximumInputBytes) {
-    result.error = QStringLiteral(
+    *error = QStringLiteral(
         "NTNDArray input exceeds the configured memory limit.");
-    return result;
+    return false;
   }
   const int bytesPerElement = scalarSize(frame.scalarType);
   if (bytesPerElement <= 0
@@ -304,32 +309,32 @@ NtNdArrayDecodedFrame NtNdArrayImageDecoder::decode(
               / static_cast<std::size_t>(bytesPerElement)
       || frame.byteCount != frame.elementCount
           * static_cast<std::size_t>(bytesPerElement)) {
-    result.error = QStringLiteral("NTNDArray byte count does not match its type.");
-    return result;
+    *error = QStringLiteral("NTNDArray byte count does not match its type.");
+    return false;
   }
   if (frame.compressedSize > 0
       && static_cast<quint64>(frame.compressedSize) != frame.byteCount) {
-    result.error = QStringLiteral(
+    *error = QStringLiteral(
         "Raw NTNDArray compressedSize does not match its value array.");
-    return result;
+    return false;
   }
   if (frame.uncompressedSize > 0
       && static_cast<quint64>(frame.uncompressedSize) != frame.byteCount) {
-    result.error = QStringLiteral(
+    *error = QStringLiteral(
         "Raw NTNDArray uncompressedSize does not match its value array.");
-    return result;
+    return false;
   }
 
   Layout layout;
-  if (!frameLayout(frame, &layout, &result.error)) {
-    return result;
+  if (!frameLayout(frame, &layout, error)) {
+    return false;
   }
   if (layout.width <= 0 || layout.height <= 0
       || layout.width > options.maximumDimension
       || layout.height > options.maximumDimension) {
-    result.error = QStringLiteral(
+    *error = QStringLiteral(
         "NTNDArray dimensions exceed the configured size limit.");
-    return result;
+    return false;
   }
   quint64 pixels = 0;
   quint64 outputBytes = 0;
@@ -341,14 +346,49 @@ NtNdArrayDecodedFrame NtNdArrayImageDecoder::decode(
           &expectedElements)
       || outputBytes > options.maximumOutputBytes
       || expectedElements != frame.elementCount) {
-    result.error = QStringLiteral(
+    *error = QStringLiteral(
         "NTNDArray dimensions, element count, or output memory are invalid.");
+    return false;
+  }
+
+  if (outputBytes > (std::numeric_limits<quint64>::max()
+          - static_cast<quint64>(frame.byteCount)) / 2) {
+    *error = QStringLiteral("NTNDArray working memory size overflow.");
+    return false;
+  }
+  if (workingBytes) {
+    *workingBytes = static_cast<quint64>(frame.byteCount) + 2 * outputBytes;
+  }
+  return true;
+}
+
+NtNdArrayDecodedFrame NtNdArrayImageDecoder::decode(
+    const NtNdArrayFrame &frame, const NtNdArrayDecodeOptions &options,
+    const std::atomic<bool> *cancelled)
+{
+  NtNdArrayDecodedFrame result;
+  result.options = options;
+  auto wasCancelled = [&]() {
+    if (cancelled && cancelled->load(std::memory_order_relaxed)) {
+      result.error = QStringLiteral("NTNDArray decode cancelled.");
+      return true;
+    }
+    return false;
+  };
+  if (wasCancelled() || !validate(frame, options, nullptr, &result.error)) {
+    return result;
+  }
+  Layout layout;
+  if (!frameLayout(frame, &layout, &result.error)) {
     return result;
   }
 
   double minimum = std::numeric_limits<double>::infinity();
   double maximum = -std::numeric_limits<double>::infinity();
   for (std::size_t index = 0; index < frame.elementCount; ++index) {
+    if ((index % 4096) == 0 && wasCancelled()) {
+      return result;
+    }
     const double value = valueAt(frame, index);
     if (std::isfinite(value)) {
       minimum = std::min(minimum, value);
@@ -378,6 +418,9 @@ NtNdArrayDecodedFrame NtNdArrayImageDecoder::decode(
     return result;
   }
   for (int y = 0; y < layout.height; ++y) {
+    if (wasCancelled()) {
+      return result;
+    }
     QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
     for (int x = 0; x < layout.width; ++x) {
       if (layout.components == 1) {
@@ -429,6 +472,10 @@ NtNdArrayDecodedFrame NtNdArrayImageDecoder::decode(
     image = image.transformed(transform, Qt::FastTransformation);
   }
 
+  if (wasCancelled()) {
+    return result;
+  }
+  result.source = frame; /* Failed decodes never retain raw pixel storage. */
   result.image = image;
   result.sourceWidth = layout.width;
   result.sourceHeight = layout.height;

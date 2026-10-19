@@ -66,6 +66,8 @@ public:
   using Completion = std::function<void(const ArchiveResult &)>;
 
   virtual ~ArchiveProvider() = default;
+  /* The built-in provider deletes its request after completion. Keep a
+   * QPointer when cancellation is needed while the request is outstanding. */
   virtual ArchiveRequest *query(const ArchiveQuery &query, QObject *owner,
       Completion completion) = 0;
 };

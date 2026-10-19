@@ -549,7 +549,15 @@ void QtedmPluginManager::shutdown()
 
 QStringList QtedmPluginManager::diagnostics() const
 {
-  return diagnostics_;
+  std::lock_guard<std::mutex> lock(diagnosticsMutex_);
+  QStringList result;
+  for (const Diagnostic &entry : diagnostics_) {
+    result.append(entry.occurrences > 1
+        ? QStringLiteral("%1 (repeated %2 times)")
+              .arg(entry.text).arg(entry.occurrences)
+        : entry.text);
+  }
+  return result;
 }
 
 QStringList QtedmPluginManager::loadedPluginIds() const
@@ -884,7 +892,11 @@ void QtedmPluginManager::resetForTesting()
     }
   }
   loaders_.clear();
-  diagnostics_.clear();
+  {
+    std::lock_guard<std::mutex> lock(diagnosticsMutex_);
+    diagnostics_.clear();
+    diagnosticCharacters_ = 0;
+  }
   nextSubscriptionId_ = 1;
   configuredPluginsLoaded_ = false;
   shutdownComplete_ = false;
@@ -974,7 +986,32 @@ void QtedmPluginManager::reportDiagnostic(const QString &pluginId,
 void QtedmPluginManager::addDiagnostic(const QString &source,
     const QString &message)
 {
-  diagnostics_.append(QStringLiteral("%1: %2").arg(source, message));
+  /* Bound individual messages as well as the process-lifetime history.
+   * Copy short slices so a QString view cannot retain a huge source buffer. */
+  const QString text = QStringLiteral("%1: %2%3")
+      .arg(source.left(256), message.left(2048),
+          message.size() > 2048 ? QStringLiteral("… [truncated]") : QString());
+  std::lock_guard<std::mutex> lock(diagnosticsMutex_);
+  const auto duplicate = std::find_if(diagnostics_.begin(), diagnostics_.end(),
+      [&text](const Diagnostic &entry) { return entry.text == text; });
+  if (duplicate != diagnostics_.end()) {
+    Diagnostic entry = std::move(*duplicate);
+    diagnostics_.erase(duplicate);
+    if (entry.occurrences < std::numeric_limits<quint64>::max()) {
+      ++entry.occurrences;
+    }
+    diagnostics_.push_back(std::move(entry));
+    return;
+  }
+  constexpr qsizetype maximumCharacters = 256 * 1024;
+  while (!diagnostics_.empty()
+      && (diagnostics_.size() >= 256
+          || diagnosticCharacters_ + text.size() > maximumCharacters)) {
+    diagnosticCharacters_ -= diagnostics_.front().text.size();
+    diagnostics_.pop_front();
+  }
+  diagnostics_.push_back({text, 1});
+  diagnosticCharacters_ += text.size();
 }
 
 QtedmChannelSample QtedmPluginManager::sampleFromShared(

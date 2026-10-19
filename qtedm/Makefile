@@ -488,6 +488,7 @@ QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_cartesian_plot_properties \
                         test_plot_graphic_runtimes \
                         test_diagnostics_tracking \
+                        test_memory_growth \
                         test_soft_pv_registry \
                         test_update_coordinator \
                         test_pv_table_model \
@@ -549,6 +550,9 @@ test_diagnostics_tracking_OBJS = \
   $(OBJ_DIR)/audit_logger.$(OBJEXT) \
   $(OBJ_DIR)/statistics_tracker.$(OBJEXT) \
   $(OBJ_DIR)/memory_tracker.$(OBJEXT)
+test_memory_growth_OBJS = \
+  $(OBJ_DIR)/test_memory_growth.$(OBJEXT) \
+  $(filter-out $(OBJ_DIR)/qtedm.$(OBJEXT),$(qtedm_OBJS))
 test_soft_pv_registry_OBJS = $(OBJ_DIR)/test_soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/soft_pv_registry.$(OBJEXT) \
                              $(OBJ_DIR)/subscription_handle.$(OBJEXT)

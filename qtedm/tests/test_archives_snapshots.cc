@@ -52,11 +52,14 @@ protected:
 
 class StalledNetworkAccessManager : public QNetworkAccessManager
 {
+public:
+  QPointer<QNetworkReply> lastReply;
 protected:
   QNetworkReply *createRequest(Operation,
       const QNetworkRequest &request, QIODevice *) override
   {
-    return new StalledNetworkReply(request, this);
+    lastReply = new StalledNetworkReply(request, this);
+    return lastReply;
   }
 };
 
@@ -71,6 +74,7 @@ private slots:
   void archiveMergePrefersLiveTimestamp();
   void archiveRequestCanBeCancelled();
   void archiveRequestTimesOut();
+  void archiveOwnerDestructionReleasesReply();
   void archiveHistoryPreservesTimestampGaps();
   void archiveHistoryRendersConnectedLine();
   void snapshotDefaultExtensionIsAppended();
@@ -210,7 +214,7 @@ void TestArchivesSnapshots::archiveRequestCanBeCancelled()
   query.channel = QStringLiteral("TEST:PV");
   query.from = QDateTime::currentDateTimeUtc().addSecs(-60);
   query.to = QDateTime::currentDateTimeUtc();
-  ArchiveRequest *request = provider.query(query, &provider,
+  QPointer<ArchiveRequest> request = provider.query(query, &provider,
       [&completed, &observed](const ArchiveResult &result) {
         completed = true;
         observed = result;
@@ -219,6 +223,8 @@ void TestArchivesSnapshots::archiveRequestCanBeCancelled()
   request->cancel();
   QTRY_VERIFY(completed);
   QVERIFY(observed.cancelled);
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  QVERIFY(!request);
 }
 
 void TestArchivesSnapshots::archiveRequestTimesOut()
@@ -234,14 +240,40 @@ void TestArchivesSnapshots::archiveRequestTimesOut()
   query.from = QDateTime::currentDateTimeUtc().addSecs(-60);
   query.to = QDateTime::currentDateTimeUtc();
   query.timeoutMs = 100;
-  QVERIFY(provider.query(query, &provider,
+  QPointer<ArchiveRequest> request = provider.query(query, &provider,
       [&completed, &observed](const ArchiveResult &result) {
         completed = true;
         observed = result;
-      }));
+      });
+  QVERIFY(request);
   QTRY_VERIFY_WITH_TIMEOUT(completed, 1000);
   QVERIFY(observed.timedOut);
   QVERIFY(observed.error.contains(QStringLiteral("timed out")));
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  QVERIFY(!request);
+  QVERIFY(!network.lastReply);
+}
+
+void TestArchivesSnapshots::archiveOwnerDestructionReleasesReply()
+{
+  StalledNetworkAccessManager network;
+  ArchiverApplianceProvider provider(nullptr, &network);
+  provider.setRetrievalUrl(QStringLiteral("https://archive.example/retrieval"));
+  ArchiveQuery query;
+  query.channel = QStringLiteral("TEST:PV");
+  query.from = QDateTime::currentDateTimeUtc().addSecs(-60);
+  query.to = QDateTime::currentDateTimeUtc();
+  bool completed = false;
+  auto *owner = new QObject;
+  QPointer<ArchiveRequest> request = provider.query(query, owner,
+      [&completed](const ArchiveResult &) { completed = true; });
+  QVERIFY(request);
+  QVERIFY(network.lastReply);
+  delete owner;
+  QVERIFY(!request);
+  QVERIFY(!completed);
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  QVERIFY(!network.lastReply);
 }
 
 void TestArchivesSnapshots::archiveHistoryPreservesTimestampGaps()

@@ -2,6 +2,8 @@
 
 #include <QPointer>
 #include <QTimer>
+#include <atomic>
+#include <memory>
 
 #include "heatmap_runtime.h"
 #include "ntndarray_image_decoder.h"
@@ -37,6 +39,7 @@ private:
   bool decodeBusy_ = false;
   bool hasPendingFrame_ = false;
   NtNdArrayFrame pendingFrame_;
+  std::shared_ptr<std::atomic<bool>> decodeCancelled_;
   quint64 generation_ = 0;
   quint64 droppedFrames_ = 0;
   QString lastError_;

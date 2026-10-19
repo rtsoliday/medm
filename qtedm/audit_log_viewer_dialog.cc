@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGroupBox>
+#include <QHideEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -23,6 +24,32 @@
 #include <QTextEdit>
 #include <QTextStream>
 #include <QVBoxLayout>
+
+namespace {
+constexpr qint64 kBrowseTailBytes = 1024 * 1024;
+constexpr int kMaximumLogLineBytes = 64 * 1024;
+constexpr int kMaximumDisplayedEntries = 5000;
+constexpr int kMaximumDisplayCharacters = 512 * 1024;
+
+QString readLogLine(QFile &file)
+{
+  QByteArray line = file.readLine(kMaximumLogLineBytes + 1);
+  if (!line.endsWith('\n') && !file.atEnd()) {
+    /* Discard an oversized record in bounded chunks, including its suffix. */
+    do {
+      line = file.readLine(kMaximumLogLineBytes + 1);
+    } while (!line.endsWith('\n') && !file.atEnd() && !line.isEmpty());
+    return QStringLiteral("# Oversized audit record omitted");
+  }
+  if (line.endsWith('\n')) {
+    line.chop(1);
+  }
+  if (line.endsWith('\r')) {
+    line.chop(1);
+  }
+  return QString::fromUtf8(line);
+}
+}
 
 #ifdef Q_OS_UNIX
 #include <pwd.h>
@@ -111,6 +138,7 @@ AuditLogViewerDialog::AuditLogViewerDialog(const QPalette &basePalette,
   pvLabel->setFont(itemFont_);
   pvLayout->addWidget(pvLabel);
   pvSearchEdit_ = new QLineEdit;
+  pvSearchEdit_->setMaxLength(1024);
   pvSearchEdit_->setFont(itemFont_);
   pvSearchEdit_->setPlaceholderText(QStringLiteral("Enter PV name or pattern (e.g., SR:*, *:status)"));
   pvLayout->addWidget(pvSearchEdit_);
@@ -223,8 +251,20 @@ void AuditLogViewerDialog::showAndRaise()
   activateWindow();
 }
 
+void AuditLogViewerDialog::hideEvent(QHideEvent *event)
+{
+  logContent_->clear();
+  searchResults_->clear();
+  logFileCombo_->clear();
+  QDialog::hideEvent(event);
+}
+
 QString AuditLogViewerDialog::getLogDirectory() const
 {
+  const QString configured = qEnvironmentVariable("QTEDM_AUDIT_DIR").trimmed();
+  if (!configured.isEmpty()) {
+    return QDir(configured).absolutePath();
+  }
   QString homeDir = QDir::homePath();
   return QDir(homeDir).filePath(QStringLiteral(".medm"));
 }
@@ -284,10 +324,9 @@ QStringList AuditLogViewerDialog::findUserLogFiles() const
   for (const QFileInfo &fileInfo : files) {
     QFile file(fileInfo.absoluteFilePath());
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-      QTextStream stream(&file);
       bool hasUserEntries = false;
-      while (!stream.atEnd()) {
-        QString line = stream.readLine();
+      while (!file.atEnd()) {
+        QString line = readLogLine(file);
         /* Skip comments */
         if (line.startsWith(QLatin1Char('#'))) {
           /* Check if this is "# User: username" header line */
@@ -417,7 +456,13 @@ void AuditLogViewerDialog::loadSelectedLog()
   }
 
   QString content;
-  QTextStream stream(&file);
+  bool limited = file.size() > kBrowseTailBytes;
+  if (limited) {
+    file.seek(file.size() - kBrowseTailBytes);
+    readLogLine(file); /* Ignore the first, possibly partial record. */
+  }
+  QStringList rows;
+  int rowCharacters = 0;
 
   /* Header */
   content.append(QStringLiteral("=== Audit Log for user: %1 ===\n")
@@ -431,9 +476,8 @@ void AuditLogViewerDialog::loadSelectedLog()
       .arg(QStringLiteral("Display")));
   content.append(QString(100, QLatin1Char('-')) + QStringLiteral("\n"));
 
-  int entryCount = 0;
-  while (!stream.atEnd()) {
-    QString line = stream.readLine();
+  while (!file.atEnd()) {
+    QString line = readLogLine(file);
 
     /* Skip comment lines but show session header */
     if (line.startsWith(QLatin1Char('#'))) {
@@ -460,24 +504,37 @@ void AuditLogViewerDialog::loadSelectedLog()
           value = value.left(22) + QStringLiteral("...");
         }
 
-        content.append(QStringLiteral("%1 %2 %3 %4 %5\n")
+        const QString row = QStringLiteral("%1 %2 %3 %4 %5\n")
             .arg(timestamp.leftJustified(25))
             .arg(widgetType.leftJustified(15))
             .arg(pvName.left(20).leftJustified(20))
             .arg(value.leftJustified(30))
-            .arg(displayFile == QStringLiteral("-") ? QString() : displayFile));
+            .arg(displayFile == QStringLiteral("-") ? QString() : displayFile);
+        while (!rows.isEmpty()
+            && (rows.size() >= kMaximumDisplayedEntries
+                || rowCharacters + row.size() > kMaximumDisplayCharacters)) {
+          rowCharacters -= rows.takeFirst().size();
+          limited = true;
+        }
+        rows.append(row);
+        rowCharacters += row.size();
 
-        entryCount++;
       }
     }
   }
 
   file.close();
 
+  content += rows.join(QString());
   content.append(QString(100, QLatin1Char('-')) + QStringLiteral("\n"));
-  content.append(QStringLiteral("Total entries for %1: %2\n")
+  content.append(QStringLiteral("Displayed entries for %1: %2\n")
       .arg(currentUser_)
-      .arg(entryCount));
+      .arg(rows.size()));
+  if (limited) {
+    content += QStringLiteral("Showing a bounded tail of the log; older entries "
+        "remain in the file.\n");
+  }
+  content += QStringLiteral("Records longer than 64 KiB are omitted.\n");
 
   logContent_->setPlainText(content);
   /* Scroll to bottom to show most recent entries */
@@ -561,6 +618,7 @@ void AuditLogViewerDialog::performSearch()
 
   int totalMatches = 0;
   int filesSearched = 0;
+  bool limited = false;
 
   for (const QString &filePath : logFiles) {
     QFile file(filePath);
@@ -569,10 +627,8 @@ void AuditLogViewerDialog::performSearch()
     }
 
     filesSearched++;
-    QTextStream stream(&file);
-
-    while (!stream.atEnd()) {
-      QString line = stream.readLine();
+    while (!file.atEnd()) {
+      QString line = readLogLine(file);
 
       /* Skip comments */
       if (line.startsWith(QLatin1Char('#'))) {
@@ -613,24 +669,38 @@ void AuditLogViewerDialog::performSearch()
           value = value.left(22) + QStringLiteral("...");
         }
 
-        content.append(QStringLiteral("%1 %2 %3 %4 %5\n")
+        const QString row = QStringLiteral("%1 %2 %3 %4 %5\n")
             .arg(timestampStr.leftJustified(25))
             .arg(widgetType.leftJustified(15))
             .arg(pvName.left(30).leftJustified(30))
             .arg(value.leftJustified(30))
-            .arg(displayFile == QStringLiteral("-") ? QString() : displayFile));
+            .arg(displayFile == QStringLiteral("-") ? QString() : displayFile);
+        if (totalMatches >= kMaximumDisplayedEntries
+            || content.size() + row.size() > kMaximumDisplayCharacters) {
+          limited = true;
+          break;
+        }
+        content += row;
 
         totalMatches++;
       }
     }
 
     file.close();
+    if (limited) {
+      break;
+    }
   }
 
   content.append(QString(110, QLatin1Char('-')) + QStringLiteral("\n"));
   content.append(QStringLiteral("Found %1 matching entries in %2 log files.\n")
       .arg(totalMatches)
       .arg(filesSearched));
+  if (limited) {
+    content += QStringLiteral("Results truncated at the display limit. "
+        "Narrow the time range or PV pattern to see more.\n");
+  }
+  content += QStringLiteral("Records longer than 64 KiB are omitted.\n");
 
   searchResults_->setPlainText(content);
   searchResults_->moveCursor(QTextCursor::Start);

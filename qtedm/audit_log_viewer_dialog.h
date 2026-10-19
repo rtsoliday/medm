@@ -24,11 +24,15 @@ class QCheckBox;
 
 class AuditLogViewerDialog : public QDialog
 {
+  friend class TestMemoryGrowth;
 public:
   AuditLogViewerDialog(const QPalette &basePalette, const QFont &itemFont,
       QWidget *parent = nullptr);
 
   void showAndRaise();
+
+protected:
+  void hideEvent(QHideEvent *event) override;
 
 private:
   void populateLogFiles();

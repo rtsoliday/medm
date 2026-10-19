@@ -9,6 +9,8 @@
 #include <QVector>
 
 #include <memory>
+#include <deque>
+#include <mutex>
 #include <vector>
 
 #include "channel_subscription.h"
@@ -119,7 +121,14 @@ private:
   QHash<quint64, DataSubscription> dataSubscriptions_;
   std::vector<std::unique_ptr<QPluginLoader>> loaders_;
   QSet<QString> loadedPluginIds_;
-  QStringList diagnostics_;
+  struct Diagnostic
+  {
+    QString text;
+    quint64 occurrences = 1;
+  };
+  mutable std::mutex diagnosticsMutex_;
+  std::deque<Diagnostic> diagnostics_;
+  qsizetype diagnosticCharacters_ = 0;
   quint64 nextSubscriptionId_ = 1;
   bool configuredPluginsLoaded_ = false;
   bool shutdownComplete_ = false;

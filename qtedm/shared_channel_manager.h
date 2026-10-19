@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <deque>
 
 #include <QElapsedTimer>
 #include <QHash>
@@ -9,6 +10,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QSet>
 
 #include "channel_subscription.h"
 
@@ -84,6 +86,7 @@ public:
 
 private:
   friend class SubscriptionHandle;
+  friend class TestMemoryGrowth;
 
   SharedChannelManager();
   ~SharedChannelManager() override;
@@ -160,6 +163,23 @@ private:
   void requestControlInfo(SharedChannel *channel);
   void shutdown();
 
+  enum class CallbackKind { kConnection, kValue, kControlInfo, kAccessRights };
+  struct CallbackEvent
+  {
+    CallbackKind kind = CallbackKind::kValue;
+    quint64 channelInstanceId = 0;
+    QByteArray data;
+    int status = ECA_NORMAL;
+    long type = 0;
+    long count = 0;
+    bool firstFlag = false;
+    bool secondFlag = false;
+  };
+  void queueCallbackEvent(CallbackEvent event, const void *data = nullptr,
+      size_t dataBytes = 0);
+  void removeCallbackChannel(quint64 channelInstanceId);
+  void drainCallbackEvents();
+
   /* Deferred flush mechanism - batches CA operations to avoid blocking */
   void scheduleDeferredFlush();
   void performDeferredFlush();
@@ -182,7 +202,16 @@ private Q_SLOTS:
 
 private:
   /* Data */
-  mutable std::mutex channelMutex_;  /* Protects channel access from CA thread */
+  /* Only this inbox and its active-id set are shared with CA threads.
+   * Channel objects remain confined to the Qt thread. */
+  std::mutex callbackMutex_;
+  QSet<quint64> callbackChannels_;
+  std::deque<CallbackEvent> callbackEvents_;
+  size_t callbackBytes_ = 0;
+  bool callbackDrainScheduled_ = false;
+  quint64 droppedCallbackEvents_ = 0;
+  quint64 reportedDroppedCallbackEvents_ = 0;
+  qint64 lastCallbackWarningMs_ = -5000;
   QHash<SharedChannelKey, SharedChannel *> channels_;
   QHash<quint64, SharedChannel *> instanceIdToChannel_;
   bool flushScheduled_ = false;

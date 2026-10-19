@@ -84,7 +84,14 @@ ArchiveRequest::ArchiveRequest(QObject *parent)
 
 ArchiveRequest::~ArchiveRequest()
 {
-  cancel();
+  if (reply_) {
+    QNetworkReply *reply = reply_;
+    reply_.clear();
+    /* Owner destruction must not call completion on a dying runtime. */
+    QObject::disconnect(reply, nullptr, this, nullptr);
+    reply->abort();
+    reply->deleteLater();
+  }
 }
 
 void ArchiveRequest::cancel()
@@ -149,6 +156,7 @@ ArchiveRequest *ArchiverApplianceProvider::query(const ArchiveQuery &input,
             result.error = QStringLiteral("Archive query cancelled.");
             result.cancelled = true;
           }
+          request->deleteLater();
           completion(result);
         });
     return request;
@@ -170,6 +178,7 @@ ArchiveRequest *ArchiverApplianceProvider::query(const ArchiveQuery &input,
       QNetworkRequest::NoLessSafeRedirectPolicy);
 #endif
   QNetworkReply *reply = networkManager_->get(networkRequest);
+  reply->setReadBufferSize(query.maximumResponseBytes + 1);
   request->reply_ = reply;
 
   struct RequestState {
@@ -197,10 +206,9 @@ ArchiveRequest *ArchiverApplianceProvider::query(const ArchiveQuery &input,
   QObject::connect(reply, &QIODevice::readyRead, request,
       [request, reply, state, limit = query.maximumResponseBytes]() {
         if (state->completed || request->isCancelled()) {
-          reply->readAll();
           return;
         }
-        state->payload.append(reply->readAll());
+        state->payload.append(reply->read(limit - state->payload.size() + 1));
         if (state->payload.size() > limit) {
           state->oversized = true;
           reply->abort();
@@ -215,8 +223,11 @@ ArchiveRequest *ArchiverApplianceProvider::query(const ArchiveQuery &input,
         }
         state->completed = true;
         timer->stop();
+        QObject::disconnect(timer, nullptr, request, nullptr);
+        timer->deleteLater();
         if (!state->oversized && !request->isCancelled()) {
-          state->payload.append(reply->readAll());
+          state->payload.append(reply->read(
+              query.maximumResponseBytes - state->payload.size() + 1));
           if (state->payload.size() > query.maximumResponseBytes) {
             state->oversized = true;
           }
@@ -242,6 +253,10 @@ ArchiveRequest *ArchiverApplianceProvider::query(const ArchiveQuery &input,
         }
         request->reply_.clear();
         reply->deleteLater();
+        /* Release the raw JSON before notifying the consumer, even if it
+         * keeps the request's owner alive for the rest of the session. */
+        state->payload = QByteArray();
+        request->deleteLater();
         completion(result);
       });
   return request;

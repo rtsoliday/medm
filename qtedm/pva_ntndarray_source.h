@@ -39,6 +39,7 @@ struct NtNdArrayDimension
 struct NtNdArrayFrame
 {
   std::shared_ptr<const void> data;
+  std::shared_ptr<void> memoryReservation;
   std::size_t elementCount = 0;
   std::size_t byteCount = 0;
   NtNdArrayScalarType scalarType = NtNdArrayScalarType::kUInt8;
@@ -68,4 +69,5 @@ struct PvaNtNdArraySource;
 PvaNtNdArraySource *pvaNtNdArrayCreateSource(
     const QString &rawName, const QString &pvName, QString *error);
 void pvaNtNdArrayDestroySource(PvaNtNdArraySource *source);
-PvaNtNdArrayPollResult pvaNtNdArrayPoll(PvaNtNdArraySource *source);
+PvaNtNdArrayPollResult pvaNtNdArrayPoll(PvaNtNdArraySource *source,
+    quint64 maximumInputBytes = 512ULL * 1024 * 1024);

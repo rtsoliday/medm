@@ -13,6 +13,13 @@ Run all suites with `make test-qtedm`. The targets build QtEDM first; Qt develop
 
 To test only the Help and About windows, run `make -C qtedm test-help`. It runs offscreen and saves screenshots (`help-topics.png`, `about.png`, and `about-beam.png`) to `test-artifacts/help/` in the QtEDM build directory, for example `qtedm/O.Linux-x86_64/`. The same checks also run in `make test-qtedm-unit`, without the screenshots.
 
+The unit suite includes `test_memory_growth`, which checks PVA get-buffer reuse,
+CA inbox overflow and ordered bursts, plugin diagnostic bounds, audit-viewer
+limits and cleanup, and shared image-memory reservations without an IOC. Archive
+request cleanup and image cancellation are covered by `test_archives_snapshots`
+and `test_display_import_ndarray`. These are short regression tests; they do not
+replace a multi-day soak test with representative displays and reconnects.
+
 ## Visual baselines
 
 Visual regression goldens live in `tests/golden/`. Review differences before replacing a baseline. When a rendering change is intentional, the existing update command is:

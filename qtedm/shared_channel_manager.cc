@@ -20,7 +20,28 @@ constexpr qint64 kRealtimeNotifyIntervalMs = 100;
 constexpr qint64 kPassiveNotifyIntervalMs = 200;
 /* Idle time after the last connection change before reporting completion. */
 constexpr int kConnectionCompletionIdleMs = 100;
+constexpr size_t kMaximumCallbackBytes = 128 * 1024 * 1024;
+constexpr size_t kMaximumCallbackPayloadBytes = 64 * 1024 * 1024;
+constexpr size_t kMaximumCallbackEvents = 4096;
+constexpr size_t kCallbackDrainBatch = 64;
 std::atomic<SharedChannelManager *> gSharedChannelManager{nullptr};
+
+size_t callbackPayloadSize(const event_handler_args &args)
+{
+  if (!args.dbr || args.status != ECA_NORMAL) {
+    return 0;
+  }
+  if (INVALID_DB_REQ(args.type) || args.count <= 0) {
+    return kMaximumCallbackPayloadBytes + 1;
+  }
+  const size_t valueBytes = dbr_value_size[args.type];
+  const size_t headerBytes = dbr_size[args.type] - valueBytes;
+  if (valueBytes == 0 || static_cast<size_t>(args.count)
+      > (kMaximumCallbackPayloadBytes - headerBytes) / valueBytes) {
+    return kMaximumCallbackPayloadBytes + 1;
+  }
+  return headerBytes + static_cast<size_t>(args.count) * valueBytes;
+}
 
 void *callbackUserDataForInstanceId(quint64 instanceId)
 {
@@ -320,6 +341,10 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
   channel->cachedData.connected = false;
 
   QByteArray pvBytes = key.pvName.toLatin1();
+  {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    callbackChannels_.insert(channel->instanceId);
+  }
   int status = ca_create_channel(
       pvBytes.constData(),
       &SharedChannelManager::connectionCallback,
@@ -330,6 +355,7 @@ SharedChannelManager::SharedChannel *SharedChannelManager::findOrCreateChannel(
   if (status != ECA_NORMAL) {
     qWarning() << "SharedChannelManager: ca_create_channel failed for"
                << key.pvName << ":" << ca_message(status);
+    removeCallbackChannel(channel->instanceId);
     delete channel;
     return nullptr;
   }
@@ -375,6 +401,7 @@ void SharedChannelManager::destroyChannelIfUnused(SharedChannel *channel)
   }
   channel->destroyPending = false;
 
+  removeCallbackChannel(channel->instanceId);
   /* Remove from hash */
   channels_.remove(channel->key);
   instanceIdToChannel_.remove(channel->instanceId);
@@ -517,15 +544,13 @@ void SharedChannelManager::connectionCallback(connection_handler_args args)
   short nativeType = connected ? ca_field_type(args.chid) : -1;
   long nativeCount = connected ? ca_element_count(args.chid) : 0;
 
-  /* With preemptive callbacks, we're on the CA thread.
-   * Queue the event to the main thread for processing. */
-  QMetaObject::invokeMethod(manager,
-      "onConnectionChanged",
-      Qt::QueuedConnection,
-      Q_ARG(quint64, channelInstanceId),
-      Q_ARG(bool, connected),
-      Q_ARG(short, nativeType),
-      Q_ARG(long, nativeCount));
+  CallbackEvent event;
+  event.kind = CallbackKind::kConnection;
+  event.channelInstanceId = channelInstanceId;
+  event.firstFlag = connected;
+  event.type = nativeType;
+  event.count = nativeCount;
+  manager->queueCallbackEvent(std::move(event));
 }
 
 void SharedChannelManager::valueCallback(event_handler_args args)
@@ -540,23 +565,14 @@ void SharedChannelManager::valueCallback(event_handler_args args)
     return;
   }
 
-  /* Copy the event data so it can be passed to the main thread.
-   * The args.dbr pointer is only valid during this callback. */
-  QByteArray eventData;
-  if (args.dbr && args.status == ECA_NORMAL) {
-    size_t dataSize = dbr_size_n(args.type, args.count);
-    eventData = QByteArray(static_cast<const char *>(args.dbr),
-                           static_cast<int>(dataSize));
-  }
-
-  QMetaObject::invokeMethod(manager,
-      "onValueReceived",
-      Qt::QueuedConnection,
-      Q_ARG(quint64, channelInstanceId),
-      Q_ARG(QByteArray, eventData),
-      Q_ARG(int, args.status),
-      Q_ARG(long, args.type),
-      Q_ARG(long, args.count));
+  CallbackEvent event;
+  event.kind = CallbackKind::kValue;
+  event.channelInstanceId = channelInstanceId;
+  event.status = args.status;
+  event.type = args.type;
+  event.count = args.count;
+  manager->queueCallbackEvent(std::move(event), args.dbr,
+      callbackPayloadSize(args));
 }
 
 void SharedChannelManager::controlInfoCallback(event_handler_args args)
@@ -571,21 +587,13 @@ void SharedChannelManager::controlInfoCallback(event_handler_args args)
     return;
   }
 
-  /* Copy the event data for main thread processing */
-  QByteArray eventData;
-  if (args.dbr && args.status == ECA_NORMAL) {
-    size_t dataSize = dbr_size_n(args.type, args.count);
-    eventData = QByteArray(static_cast<const char *>(args.dbr),
-                           static_cast<int>(dataSize));
-  }
-
-  QMetaObject::invokeMethod(manager,
-      "onControlInfoReceived",
-      Qt::QueuedConnection,
-      Q_ARG(quint64, channelInstanceId),
-      Q_ARG(QByteArray, eventData),
-      Q_ARG(int, args.status),
-      Q_ARG(long, args.type));
+  CallbackEvent event;
+  event.kind = CallbackKind::kControlInfo;
+  event.channelInstanceId = channelInstanceId;
+  event.status = args.status;
+  event.type = args.type;
+  manager->queueCallbackEvent(std::move(event), args.dbr,
+      callbackPayloadSize(args));
 }
 
 void SharedChannelManager::accessRightsCallback(access_rights_handler_args args)
@@ -606,12 +614,131 @@ void SharedChannelManager::accessRightsCallback(access_rights_handler_args args)
   bool canRead = ca_read_access(args.chid) != 0;
   bool canWrite = ca_write_access(args.chid) != 0;
 
-  QMetaObject::invokeMethod(manager,
-      "onAccessRightsChanged",
-      Qt::QueuedConnection,
-      Q_ARG(quint64, channelInstanceId),
-      Q_ARG(bool, canRead),
-      Q_ARG(bool, canWrite));
+  CallbackEvent event;
+  event.kind = CallbackKind::kAccessRights;
+  event.channelInstanceId = channelInstanceId;
+  event.firstFlag = canRead;
+  event.secondFlag = canWrite;
+  manager->queueCallbackEvent(std::move(event));
+}
+
+void SharedChannelManager::queueCallbackEvent(CallbackEvent event,
+    const void *data, size_t dataBytes)
+{
+  bool schedule = false;
+  {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    if (!acceptingCallbacks_.load(std::memory_order_acquire)
+        || !callbackChannels_.contains(event.channelInstanceId)) {
+      return;
+    }
+    if (dataBytes > kMaximumCallbackPayloadBytes) {
+      ++droppedCallbackEvents_;
+    } else {
+      /* Preserve ordered bursts (including triggers and alarms). Only on
+       * overload discard old values first, keeping the newest state. */
+      while (!callbackEvents_.empty()
+          && (callbackEvents_.size() >= kMaximumCallbackEvents
+              || callbackBytes_ + dataBytes > kMaximumCallbackBytes)) {
+        auto oldest = std::find_if(callbackEvents_.begin(), callbackEvents_.end(),
+            [](const CallbackEvent &queued) {
+              return queued.kind == CallbackKind::kValue;
+            });
+        if (oldest == callbackEvents_.end()) {
+          oldest = callbackEvents_.begin();
+        }
+        callbackBytes_ -= oldest->data.size();
+        callbackEvents_.erase(oldest);
+        ++droppedCallbackEvents_;
+      }
+      if (data && dataBytes > 0) {
+        event.data = QByteArray(static_cast<const char *>(data),
+            static_cast<int>(dataBytes));
+      }
+      callbackBytes_ += event.data.size();
+      callbackEvents_.push_back(std::move(event));
+    }
+    if (!callbackDrainScheduled_) {
+      callbackDrainScheduled_ = true;
+      schedule = true;
+    }
+  }
+  if (schedule) {
+    QMetaObject::invokeMethod(this, [this]() { drainCallbackEvents(); },
+        Qt::QueuedConnection);
+  }
+}
+
+void SharedChannelManager::removeCallbackChannel(quint64 channelInstanceId)
+{
+  std::lock_guard<std::mutex> lock(callbackMutex_);
+  callbackChannels_.remove(channelInstanceId);
+  for (auto it = callbackEvents_.begin(); it != callbackEvents_.end();) {
+    if (it->channelInstanceId == channelInstanceId) {
+      callbackBytes_ -= it->data.size();
+      it = callbackEvents_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void SharedChannelManager::drainCallbackEvents()
+{
+  /* Take one event at a time so a batch cannot retain another inbox-sized
+   * allocation while CA refills it. Yield to Qt after a bounded batch. */
+  for (size_t index = 0; index < kCallbackDrainBatch; ++index) {
+    CallbackEvent event;
+    {
+      std::lock_guard<std::mutex> lock(callbackMutex_);
+      if (callbackEvents_.empty()) {
+        break;
+      }
+      event = std::move(callbackEvents_.front());
+      callbackEvents_.pop_front();
+      callbackBytes_ -= event.data.size();
+    }
+    switch (event.kind) {
+    case CallbackKind::kConnection:
+      onConnectionChanged(event.channelInstanceId, event.firstFlag,
+          static_cast<short>(event.type), event.count);
+      break;
+    case CallbackKind::kValue:
+      onValueReceived(event.channelInstanceId, std::move(event.data),
+          event.status, event.type, event.count);
+      break;
+    case CallbackKind::kControlInfo:
+      onControlInfoReceived(event.channelInstanceId, std::move(event.data),
+          event.status, event.type);
+      break;
+    case CallbackKind::kAccessRights:
+      onAccessRightsChanged(event.channelInstanceId,
+          event.firstFlag, event.secondFlag);
+      break;
+    }
+  }
+  quint64 dropped = 0;
+  bool schedule = false;
+  {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    dropped = droppedCallbackEvents_;
+    schedule = !callbackEvents_.empty();
+    if (!schedule) {
+      callbackDrainScheduled_ = false;
+    }
+  }
+  if (dropped != reportedDroppedCallbackEvents_
+      && deliveryTimer_.elapsed() - lastCallbackWarningMs_ >= 5000) {
+    qWarning() << "QtEDM: bounded CA inbox discarded"
+               << dropped - reportedDroppedCallbackEvents_
+               << "events (overload, invalid payload, or payload over 64 MiB)";
+    reportedDroppedCallbackEvents_ = dropped;
+    lastCallbackWarningMs_ = deliveryTimer_.elapsed();
+  }
+  if (schedule) {
+    QMetaObject::invokeMethod(this, [this]() { drainCallbackEvents(); },
+        Qt::QueuedConnection);
+  }
 }
 
 /* Slot implementations - these run on the main Qt thread */
@@ -1657,6 +1784,12 @@ void SharedChannelManager::shutdown()
 
   shutdownComplete_ = true;
   acceptingCallbacks_.store(false, std::memory_order_release);
+  {
+    std::lock_guard<std::mutex> lock(callbackMutex_);
+    callbackChannels_.clear();
+    callbackEvents_.clear();
+    callbackBytes_ = 0;
+  }
   connectionCompletionTimer_.stop();
   flushScheduled_ = false;
 

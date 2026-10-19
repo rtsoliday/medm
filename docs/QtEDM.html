@@ -1246,6 +1246,10 @@ complete extension list.</p>
     <td>Set to a non-empty value other than <code>0</code> to disable control-write audit logging. Equivalent to <code>-nolog</code>.</td>
   </tr>
   <tr>
+    <td><code>QTEDM_IMAGE_MEMORY_MB</code></td>
+    <td>Shared NTNDArray application frame budget in MiB (default 1024, range 1–16384). Reservations cover retained raw frames, decoded images, and transform scratch space. EPICS transport buffers are separate. Frames are dropped with a visible status when the budget is exhausted.</td>
+  </tr>
+  <tr>
     <td><code>MEDM_EXEC_LIST</code></td>
     <td>Extra commands for the EXECUTE-mode context menu, in MEDM's format: colon-separated entries, each written as <code>label;command</code>.</td>
   </tr>
@@ -1264,6 +1268,19 @@ Diagnostic variables are intended for troubleshooting, not routine operator
 configuration. Automated tests also use private <code>QTEDM_TEST_*</code>
 variables; those are test interfaces and are intentionally not part of the
 supported operator configuration surface.</p>
+
+<p>For long-running sessions, the Channel Access callback inbox is limited to
+4096 events and 128 MiB of copied payloads, with a 64 MiB limit per event.
+Ordinary bursts retain FIFO ordering; overload discards older values first and
+reports a rate-limited warning on standard error. PVA reconnect gets reuse the
+latest reading. Plugin diagnostics retain at most 256 messages and 256 Ki
+characters, truncate long messages, and count repeated reports.</p>
+
+<p>The audit-log browser shows a bounded tail of the last 1 MiB, limited to 5000
+entries and 512 Ki characters. Searches stop at those result limits and display
+a truncation notice; narrow the search to inspect more results. Records larger
+than 64 KiB are omitted from the viewer. Closing the viewer releases its loaded
+contents; the audit files themselves are preserved.</p>
 
 <h2><a name="ADLFiles"></a>ADL Files</h2>
 

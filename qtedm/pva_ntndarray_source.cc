@@ -39,9 +39,10 @@ private:
 
 template <typename T>
 bool retainArray(const epics::pvData::PVScalarArrayPtr &array,
-    NtNdArrayFrame *frame)
+    NtNdArrayFrame *frame, quint64 maximumInputBytes)
 {
-  if (!array || !frame) {
+  if (!array || !frame
+      || array->getLength() > maximumInputBytes / sizeof(T)) {
     return false;
   }
   using Vector = epics::pvData::shared_vector<const T>;
@@ -157,7 +158,8 @@ int readColorMode(const epics::pvData::PVStructurePtr &root)
 }
 
 bool extractFrameImpl(const epics::pvData::PVStructurePtr &root,
-    NtNdArrayFrame *frame, QString *error)
+    NtNdArrayFrame *frame, QString *error,
+    quint64 maximumInputBytes = 512ULL * 1024 * 1024)
 {
   if (!root || !frame) {
     return false;
@@ -185,43 +187,43 @@ bool extractFrameImpl(const epics::pvData::PVStructurePtr &root,
   switch (array->getScalarArray()->getElementType()) {
   case epics::pvData::pvByte:
     candidate.scalarType = NtNdArrayScalarType::kInt8;
-    retained = retainArray<epics::pvData::int8>(array, &candidate);
+    retained = retainArray<epics::pvData::int8>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvUByte:
     candidate.scalarType = NtNdArrayScalarType::kUInt8;
-    retained = retainArray<epics::pvData::uint8>(array, &candidate);
+    retained = retainArray<epics::pvData::uint8>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvShort:
     candidate.scalarType = NtNdArrayScalarType::kInt16;
-    retained = retainArray<epics::pvData::int16>(array, &candidate);
+    retained = retainArray<epics::pvData::int16>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvUShort:
     candidate.scalarType = NtNdArrayScalarType::kUInt16;
-    retained = retainArray<epics::pvData::uint16>(array, &candidate);
+    retained = retainArray<epics::pvData::uint16>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvInt:
     candidate.scalarType = NtNdArrayScalarType::kInt32;
-    retained = retainArray<epics::pvData::int32>(array, &candidate);
+    retained = retainArray<epics::pvData::int32>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvUInt:
     candidate.scalarType = NtNdArrayScalarType::kUInt32;
-    retained = retainArray<epics::pvData::uint32>(array, &candidate);
+    retained = retainArray<epics::pvData::uint32>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvLong:
     candidate.scalarType = NtNdArrayScalarType::kInt64;
-    retained = retainArray<epics::pvData::int64>(array, &candidate);
+    retained = retainArray<epics::pvData::int64>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvULong:
     candidate.scalarType = NtNdArrayScalarType::kUInt64;
-    retained = retainArray<epics::pvData::uint64>(array, &candidate);
+    retained = retainArray<epics::pvData::uint64>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvFloat:
     candidate.scalarType = NtNdArrayScalarType::kFloat32;
-    retained = retainArray<float>(array, &candidate);
+    retained = retainArray<float>(array, &candidate, maximumInputBytes);
     break;
   case epics::pvData::pvDouble:
     candidate.scalarType = NtNdArrayScalarType::kFloat64;
-    retained = retainArray<double>(array, &candidate);
+    retained = retainArray<double>(array, &candidate, maximumInputBytes);
     break;
   default:
     break;
@@ -229,7 +231,8 @@ bool extractFrameImpl(const epics::pvData::PVStructurePtr &root,
   if (!retained) {
     if (error) {
       *error = QStringLiteral(
-          "NTNDArray scalar type is unsupported or the frame is empty.");
+          "NTNDArray scalar type is unsupported, the frame is empty, "
+          "or the input memory limit was exceeded.");
     }
     return false;
   }
@@ -362,7 +365,8 @@ void pvaNtNdArrayDestroySource(PvaNtNdArraySource *source)
   delete source;
 }
 
-PvaNtNdArrayPollResult pvaNtNdArrayPoll(PvaNtNdArraySource *source)
+PvaNtNdArrayPollResult pvaNtNdArrayPoll(PvaNtNdArraySource *source,
+    quint64 maximumInputBytes)
 {
   PvaNtNdArrayPollResult result;
   if (!source || !source->pva) {
@@ -410,7 +414,7 @@ PvaNtNdArrayPollResult pvaNtNdArrayPoll(PvaNtNdArraySource *source)
       const auto root = monitor->getData()->getPVStructure();
       NtNdArrayFrame candidate;
       QString error;
-      if (pvaNtNdArrayExtractFrame(root, &candidate, &error)) {
+      if (extractFrameImpl(root, &candidate, &error, maximumInputBytes)) {
         if (result.hasFrame) {
           ++result.droppedFrames;
         }

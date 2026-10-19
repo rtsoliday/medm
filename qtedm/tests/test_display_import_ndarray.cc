@@ -7,6 +7,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QTemporaryDir>
+#include <QSemaphore>
+#include <QRunnable>
+#include <QThreadPool>
 
 #include <memory>
 #include <algorithm>
@@ -127,6 +130,9 @@ private slots:
   void imageElementTracksDisconnectsAndDimensionChanges();
   void asynchronousDecodePublishesAFrame();
   void newestFrameQueueDropsObsoletePendingFrames();
+  void rejectedFramesDoNotRetainPixels();
+  void stopCancelsDecodeAndReleasesPixels();
+  void saturatedPoolKeepsOnlyOnePendingFrame();
   void pvaExtractorRetainsRawFrameAndMetadata();
   void pvaExtractorRejectsMalformedFrames();
 };
@@ -630,6 +636,75 @@ void TestDisplayImportNdArray::newestFrameQueueDropsObsoletePendingFrames()
   runtime.started_ = false;
   runtime.decodeBusy_ = false;
   runtime.hasPendingFrame_ = false;
+}
+
+void TestDisplayImportNdArray::rejectedFramesDoNotRetainPixels()
+{
+  auto frame = frameFrom<quint8>({1, 2, 3, 4},
+      NtNdArrayScalarType::kUInt8, {2, 2}, NtNdArrayColorMode::kMono);
+  std::weak_ptr<const void> pixels = frame.data;
+  NtNdArrayDecodeOptions options;
+  options.maximumInputBytes = 1;
+  const auto decoded = NtNdArrayImageDecoder::decode(frame, options);
+  QVERIFY(!decoded.valid);
+  QVERIFY(!decoded.source.data);
+  frame = {};
+  QVERIFY(pixels.expired());
+}
+
+void TestDisplayImportNdArray::stopCancelsDecodeAndReleasesPixels()
+{
+  NtNdArrayImageElement element;
+  NtNdArrayImageRuntime runtime(&element);
+  runtime.started_ = true;
+  auto frame = frameFrom<quint8>(std::vector<quint8>(1024 * 1024, 1),
+      NtNdArrayScalarType::kUInt8, {1024, 1024}, NtNdArrayColorMode::kMono);
+  std::weak_ptr<const void> pixels = frame.data;
+  runtime.submitFrame(frame);
+  const auto cancellation = runtime.decodeCancelled_;
+  QVERIFY(cancellation);
+  frame = {};
+  runtime.stop();
+  QVERIFY(cancellation->load());
+  QTRY_VERIFY_WITH_TIMEOUT(pixels.expired(), 2000);
+  QVERIFY(!element.decodedFrame().source.data);
+}
+
+void TestDisplayImportNdArray::saturatedPoolKeepsOnlyOnePendingFrame()
+{
+  struct PoolGuard {
+    QThreadPool *pool = QThreadPool::globalInstance();
+    int previousMaximum = pool->maxThreadCount();
+    QSemaphore started;
+    QSemaphore release;
+    PoolGuard()
+    {
+      pool->setMaxThreadCount(1);
+      pool->start(QRunnable::create([this]() {
+        started.release();
+        release.acquire();
+      }));
+    }
+    ~PoolGuard()
+    {
+      release.release();
+      pool->waitForDone();
+      pool->setMaxThreadCount(previousMaximum);
+    }
+  } guard;
+  QVERIFY(guard.started.tryAcquire(1, 1000));
+  NtNdArrayImageElement element;
+  NtNdArrayImageRuntime runtime(&element);
+  runtime.started_ = true;
+  auto frame = frameFrom<quint8>({1}, NtNdArrayScalarType::kUInt8,
+      {1, 1}, NtNdArrayColorMode::kMono);
+  std::weak_ptr<const void> pixels = frame.data;
+  runtime.submitFrame(frame);
+  QVERIFY(!runtime.decodeBusy_);
+  QVERIFY(runtime.hasPendingFrame_);
+  frame = {};
+  runtime.stop();
+  QVERIFY(pixels.expired());
 }
 
 QTEST_MAIN(TestDisplayImportNdArray)

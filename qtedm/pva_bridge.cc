@@ -213,6 +213,8 @@ PvaBridgeChannel *pvaBridgeCreateChannel(const std::string &rawName,
   channel->impl.pva = new PVA_OVERALL();
 
   allocPVA(channel->impl.pva, 1);
+  /* A display needs only the latest get, including after reconnects. */
+  channel->impl.pva->limitGetReadings = true;
   channel->impl.pva->includeAlarmSeverity = true;
 
   epics::pvData::shared_vector<std::string> names(1);

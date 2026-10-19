@@ -3,6 +3,7 @@
 #include <QImage>
 #include <QString>
 #include <QVector>
+#include <atomic>
 
 #include "heatmap_properties.h"
 #include "pva_ntndarray_source.h"
@@ -37,8 +38,14 @@ struct NtNdArrayDecodedFrame
 class NtNdArrayImageDecoder
 {
 public:
+  /* Validate metadata without allocating or retaining pixel storage. The
+   * estimate includes raw pixels and two output images for transforms. */
+  static bool validate(const NtNdArrayFrame &frame,
+      const NtNdArrayDecodeOptions &options, quint64 *workingBytes,
+      QString *error);
   static NtNdArrayDecodedFrame decode(const NtNdArrayFrame &frame,
-      const NtNdArrayDecodeOptions &options);
+      const NtNdArrayDecodeOptions &options,
+      const std::atomic<bool> *cancelled = nullptr);
 
   static QVector<double> pixelValues(
       const NtNdArrayDecodedFrame &frame, int transformedX, int transformedY);

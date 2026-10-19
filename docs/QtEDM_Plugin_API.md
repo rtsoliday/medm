@@ -91,8 +91,11 @@ QtEDM calls the plugin to:
 
 Runtime code receives only `QtedmPluginHost`. Use it for subscriptions,
 diagnostics, and writes. Never retain a widget or host subscription past
-`stop()`. Construction, property, serialization, channel, and runtime
-exceptions are contained and reported as plugin diagnostics.
+`stop()`. Guarded construction, property, serialization, channel, and runtime
+calls report exceptions as plugin diagnostics. This is not a general exception
+boundary: exceptions from subscription cancellation or object destruction can
+terminate QtEDM. Plugin destructors and cancellation implementations must not
+throw.
 
 Saved objects use an explicit extension block:
 
@@ -116,7 +119,7 @@ original raw node survives save, reopen, copy/paste, and undo/redo.
 Implement `QtedmDataProviderPluginInterface` and register one or more URI
 schemes such as `facility://`. The built-in `ca` and `pva` schemes are
 reserved. Subscriptions return a `QtedmDataSubscription`; `cancel()` must be
-idempotent and promptly detach provider callbacks.
+idempotent, must not throw, and must promptly detach provider callbacks.
 
 The provider reports value, connection, and access-right changes with
 `QtedmChannelCallbacks`. It must honor the requested passive or realtime
@@ -149,7 +152,10 @@ failures, and provider errors appear in QtEDM test-state and application
 diagnostics. QtEDM cancels data subscriptions before unregistering types and
 unloading libraries. Plugin shutdown and subscription cancellation must be
 idempotent because handles can be released during display close as well as
-application teardown.
+application teardown. Subscription cancellation is not protected by an
+exception handler; throwing during handle destruction can terminate the
+application. QtEDM cannot safely unload a provider whose callbacks have not
+been detached.
 
 ## Security boundary
 

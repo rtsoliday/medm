@@ -50,9 +50,12 @@ QtEDM requires an exact match for:
 - the build CPU architecture; and
 - compiler family and version ABI.
 
-Rebuild plugins for each QtEDM toolchain and target architecture. A library
-compiled for another Qt major, compiler version, or architecture is rejected
-with a diagnostic rather than loaded optimistically.
+Rebuild plugins for each QtEDM toolchain and target architecture. QtEDM checks
+the compatibility reported by a plugin after Qt has instantiated its native
+object, before registering its display objects or providers. A reported
+mismatch prevents registration and produces a diagnostic. Library static
+initializers and the plugin constructor may already have run at that point;
+these checks are not a safety boundary for untrusted native code.
 
 The Qt plugin class needs `Q_OBJECT`, one `Q_PLUGIN_METADATA` declaration, and
 all implemented interfaces in `Q_INTERFACES`. The checked-in

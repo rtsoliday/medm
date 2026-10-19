@@ -4,6 +4,7 @@
 import argparse
 import os
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -88,26 +89,8 @@ def run_qtedm(adl_path: Path, qtedm_path: Path, output_path: Path) -> int:
   return result.returncode
 
 
-def diff_has_only_name_changes(diff_output: str) -> bool:
-  """Return True if diff output only shows changes to name fields."""
-  for line in diff_output.splitlines():
-    if not line:
-      continue
-    if line.startswith(("+++", "---", "@@")):
-      continue
-    if line[0] in {"-", "+"}:
-      payload = line[1:].strip().lower()
-      if not payload:
-        continue
-      if "name" not in payload:
-        return False
-  return True
-
-
 def report_first_difference(diff_output: str) -> None:
   """Print the first non-ignored difference for quick visibility."""
-  ignore_tokens = ("name", "version=")
-
   def is_actionable(line: str) -> bool:
     if line.startswith(("+++", "---")):
       return False
@@ -116,7 +99,7 @@ def report_first_difference(diff_output: str) -> None:
     payload = line[1:].strip().lower()
     if not payload:
       return False
-    return not any(token in payload for token in ignore_tokens)
+    return True
 
   removed_line = None
   removed_text = None
@@ -875,35 +858,75 @@ def strip_noop_dynamic_attribute_blocks(lines: List[str]) -> List[str]:
   return result
 
 
-def strip_edge_spaces_in_quotes(lines: List[str]) -> List[str]:
-  """Trim leading/trailing whitespace inside quoted attribute values."""
-  entries = strip_edge_spaces_in_quotes_entries(_entries_from_lines(lines))
-  return [entry.text for entry in entries]
+def _unquoted_characters(line: str) -> str:
+  """Return characters outside strings, respecting escaped quote characters."""
+  result: List[str] = []
+  quoted = False
+  escaped = False
+  for character in line:
+    if quoted:
+      if escaped:
+        escaped = False
+      elif character == "\\":
+        escaped = True
+      elif character == '"':
+        quoted = False
+    elif character == '"':
+      quoted = True
+    else:
+      result.append(character)
+  return "".join(result)
 
 
-def strip_edge_spaces_in_quotes_entries(
+def strip_file_header_metadata_entries(
     entries: List[LineEntry]) -> List[LineEntry]:
-  """Entry-aware version of quote trimming that preserves line numbers."""
+  """Ignore only direct name/version assignments in the top-level file block."""
   result: List[LineEntry] = []
+  depth = 0
+  file_depth: Optional[int] = None
   for entry in entries:
-    line = entry.text
-    first = line.find('"')
-    last = line.rfind('"')
-    if first == -1 or last == -1 or last <= first:
+    structure = _unquoted_characters(entry.text)
+    compact = "".join(structure.split())
+    if depth == 0 and compact == "file{":
+      file_depth = 1
+    is_metadata = (file_depth is not None and depth == file_depth
+                   and re.match(r"^\s*(?:name|version)\s*=", entry.text)
+                   is not None)
+    if not is_metadata:
       result.append(entry)
-      continue
-    value = line[first + 1:last]
-    trimmed = value.strip()
-    if trimmed != value:
-      line = line[:first + 1] + trimmed + line[last:]
-    result.append(LineEntry(text=line, line_no=entry.line_no))
+    depth += structure.count("{") - structure.count("}")
+    if file_depth is not None and depth < file_depth:
+      file_depth = None
   return result
+
+
+def normalize_unquoted_whitespace(line: str) -> str:
+  """Ignore ADL formatting whitespace while preserving all string contents."""
+  result: List[str] = []
+  quoted = False
+  escaped = False
+  for character in line:
+    if quoted:
+      result.append(character)
+      if escaped:
+        escaped = False
+      elif character == "\\":
+        escaped = True
+      elif character == '"':
+        quoted = False
+    elif character == '"':
+      result.append(character)
+      quoted = True
+    elif not character.isspace():
+      result.append(character)
+  return "".join(result)
 
 
 def normalize_entries_for_allowed_differences(
     lines: List[str]) -> List[LineEntry]:
   """Return LineEntries after removing allowed variations."""
   entries = _entries_from_lines(lines)
+  entries = strip_file_header_metadata_entries(entries)
   entries = _apply_string_filter(entries, strip_noop_dynamic_attribute_blocks)
   entries = _apply_string_filter(entries, strip_blank_channel_lines)
   entries = _apply_string_filter(entries, strip_default_basic_attribute_width)
@@ -930,18 +953,12 @@ def normalize_entries_for_allowed_differences(
   entries = _apply_string_filter(entries, strip_default_direction_right)
   entries = _apply_string_filter(entries, strip_default_dprecision_one)
   entries = _apply_string_filter(entries, strip_default_arc_angles)
-  entries = strip_edge_spaces_in_quotes_entries(entries)
-
   normalized: List[LineEntry] = []
   for entry in entries:
-    stripped_lower = entry.text.strip().lower()
-    if not stripped_lower:
+    text = normalize_unquoted_whitespace(entry.text)
+    if not text:
       continue
-    if "name" in stripped_lower:
-      continue
-    if stripped_lower.startswith("version="):
-      continue
-    normalized.append(LineEntry(text=entry.text.strip(), line_no=entry.line_no))
+    normalized.append(LineEntry(text=text, line_no=entry.line_no))
   return normalized
 
 
@@ -970,7 +987,7 @@ def files_match_with_allowed_variations(original: Path, saved: Path) -> bool:
 def compare_files(original: Path, saved: Path) -> bool:
   """Run diff and allow only approved differences between files."""
   result = subprocess.run(
-      ["diff", "-w", "-u", str(saved), str(original)],
+      ["diff", "-u", str(saved), str(original)],
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
       universal_newlines=True,
@@ -979,8 +996,6 @@ def compare_files(original: Path, saved: Path) -> bool:
   if result.returncode == 0:
     return True
   if result.returncode == 1:
-    if diff_has_only_name_changes(result.stdout):
-      return True
     if files_match_with_allowed_variations(original, saved):
       return True
   if result.returncode not in (0, 1):
@@ -1092,9 +1107,69 @@ def collect_adl_files(
   return unique_files
 
 
+def run_normalization_self_tests() -> int:
+  """Check comparison rules using in-memory data, without launching QtEDM."""
+  cases = [
+      ("file header metadata", 'file {\nname="old.adl"\nversion=030122\n}',
+       'file {\nname="new.adl"\nversion=040004\n}', True),
+      ("formatting whitespace", 'object {\n x = 3\n}',
+       'object{\n\tx=3\n}', True),
+      ("default basic width", '"basic attribute" {\nclr=14\n}',
+       '"basic attribute" {\nclr=14\nwidth=1\n}', True),
+      ("blank channel", 'monitor {\nchan="  "\n}',
+       'monitor {\n}', True),
+      ("widget name", '"related display" {\nname="first.adl"\n}',
+       '"related display" {\nname="second.adl"\n}', False),
+      ("count PV name", 'countPvName="first"',
+       'countPvName="second"', False),
+      ("X PV name", 'xPvName="first"', 'xPvName="second"', False),
+      ("Y PV name", 'yPvName="first"', 'yPvName="second"', False),
+      ("channel containing name", 'chan="device:name:one"',
+       'chan="device:name:two"', False),
+      ("plugin property name", 'property {\nname="text"\n}',
+       'property {\nname="channel"\n}', False),
+      ("non-header version", 'qtedm_plugin {\nversion=1\n}',
+       'qtedm_plugin {\nversion=2\n}', False),
+      ("leading quoted whitespace", 'textix=" label"',
+       'textix="label"', False),
+      ("trailing quoted whitespace", 'textix="label "',
+       'textix="label"', False),
+      ("shell argument whitespace", 'args=" first second "',
+       'args="first second"', False),
+      ("internal quoted whitespace", 'textix="one two"',
+       'textix="onetwo"', False),
+      ("quoted braces and escapes",
+       'file {\nname="old.adl"\n}\ntext {\ntextix="\\\" } name \\\""\n}',
+       'file {\nname="new.adl"\n}\ntext {\ntextix="\\\" } name\\\""\n}',
+       False),
+      ("nested header name", 'file {\nchild {\nname="one"\n}\n}',
+       'file {\nchild {\nname="two"\n}\n}', False),
+  ]
+  for name, original, saved, expected_equal in cases:
+    equal = (normalize_lines_for_allowed_differences(original.splitlines())
+             == normalize_lines_for_allowed_differences(saved.splitlines()))
+    if equal != expected_equal:
+      sys.stderr.write(f"Normalization self-test failed: {name}\n")
+      return EXIT_DIFF_FAILURE
+  entries = normalize_entries_for_allowed_differences(
+      ['file {', 'name="old.adl"', 'version=1', '}', 'name="widget"'])
+  if [entry.line_no for entry in entries] != [1, 4, 5]:
+    sys.stderr.write("Normalization self-test failed: source line numbers\n")
+    return EXIT_DIFF_FAILURE
+  print(f"SUMMARY: PASS normalization_self_tests={len(cases) + 1}")
+  return 0
+
+
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(
       description="Run qtedm -testSave on ADL files and check for changes."
+  )
+  parser.add_argument(
+      "--self-test",
+      action="store_true",
+      help="Run in-memory comparison regressions without launching qtedm",
   )
   parser.add_argument(
       "paths",
@@ -1123,6 +1198,8 @@ def main() -> int:
       help="Path used for qtedm -testSave output",
   )
   args = parser.parse_args()
+  if args.self_test:
+    return run_normalization_self_tests()
 
   repo_root = Path(__file__).resolve().parents[1]
   qtedm_path = (

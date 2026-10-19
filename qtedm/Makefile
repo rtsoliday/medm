@@ -726,6 +726,7 @@ tests: test
 test: test-cli test-unit test-ioc test-visual
 
 test-unit: build-tests
+	@$(PYTHON) ../tests/testADL_SaveFiles.py --self-test
 	@$(PYTHON) ../tests/validate_qtedm_coverage.py
 	@set -e; \
 	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/qtedm-unit.XXXXXX"); \
@@ -743,6 +744,7 @@ test-unit: build-tests
 	done
 
 test-cli: $(OBJ_DIR)/qtedm$(EXEEXT) $(OBJ_DIR)/qtedm-convert$(EXEEXT)
+	@$(PYTHON) ../tests/testADL_SaveFiles.py --self-test
 	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
 	QTEDM_CONVERT_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm-convert$(EXEEXT)" \
 	../tests/run_qtedm_cli_tests.sh

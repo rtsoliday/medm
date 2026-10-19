@@ -277,7 +277,14 @@ bool QtedmPluginManager::loadPluginFile(const QString &path)
   }
 
   auto loader = std::make_unique<QPluginLoader>(info.absoluteFilePath());
-  QObject *instance = loader->instance();
+  QObject *instance = nullptr;
+  try {
+    instance = loader->instance();
+  } catch (...) {
+    addDiagnostic(path,
+        QStringLiteral("Plugin instance construction threw an exception."));
+    return false;
+  }
   if (!instance) {
     addDiagnostic(path, loader->errorString());
     return false;
@@ -299,12 +306,18 @@ bool QtedmPluginManager::loadPluginFile(const QString &path)
     actualInterfaces.insert(QStringLiteral("archive"));
   }
   QString actualPluginId;
-  if (displayPlugin) {
-    actualPluginId = displayPlugin->pluginId().trimmed();
-  } else if (dataPlugin) {
-    actualPluginId = dataPlugin->pluginId().trimmed();
-  } else if (archivePlugin) {
-    actualPluginId = archivePlugin->pluginId().trimmed();
+  try {
+    if (displayPlugin) {
+      actualPluginId = displayPlugin->pluginId().trimmed();
+    } else if (dataPlugin) {
+      actualPluginId = dataPlugin->pluginId().trimmed();
+    } else if (archivePlugin) {
+      actualPluginId = archivePlugin->pluginId().trimmed();
+    }
+  } catch (...) {
+    addDiagnostic(path, QStringLiteral("Plugin ID query threw an exception."));
+    loader->unload();
+    return false;
   }
   if (metadata.pluginId.compare(actualPluginId,
           Qt::CaseInsensitive) != 0
@@ -376,14 +389,20 @@ bool QtedmPluginManager::registerPluginObject(QObject *object,
     return true;
   };
 
-  if ((displayPlugin && !considerInterface(displayPlugin->pluginId(),
-          displayPlugin->compatibility()))
-      || (dataPlugin && !considerInterface(dataPlugin->pluginId(),
-          dataPlugin->compatibility()))
-      || (archivePlugin && !considerInterface(archivePlugin->pluginId(),
-          archivePlugin->compatibility()))) {
+  try {
+    if ((displayPlugin && !considerInterface(displayPlugin->pluginId(),
+            displayPlugin->compatibility()))
+        || (dataPlugin && !considerInterface(dataPlugin->pluginId(),
+            dataPlugin->compatibility()))
+        || (archivePlugin && !considerInterface(archivePlugin->pluginId(),
+            archivePlugin->compatibility()))) {
+      addDiagnostic(source,
+          QStringLiteral("Plugin interfaces disagree about plugin ID or ABI."));
+      return false;
+    }
+  } catch (...) {
     addDiagnostic(source,
-        QStringLiteral("Plugin interfaces disagree about plugin ID or ABI."));
+        QStringLiteral("Plugin identity or compatibility query threw an exception."));
     return false;
   }
 
@@ -403,7 +422,14 @@ bool QtedmPluginManager::registerPluginObject(QObject *object,
   QVector<QtedmLoadedDisplayObject> displayRegistrations;
   QSet<QString> newTypeIds;
   if (displayPlugin) {
-    const QVector<QtedmDisplayObjectType> types = displayPlugin->objectTypes();
+    QVector<QtedmDisplayObjectType> types;
+    try {
+      types = displayPlugin->objectTypes();
+    } catch (...) {
+      addDiagnostic(source,
+          QStringLiteral("Display type metadata query threw an exception."));
+      return false;
+    }
     if (types.isEmpty() || types.size() > 128) {
       addDiagnostic(source,
           QStringLiteral("Display plugin must register between 1 and 128 types."));
@@ -455,7 +481,15 @@ bool QtedmPluginManager::registerPluginObject(QObject *object,
 
   QStringList dataSchemes;
   if (dataPlugin) {
-    for (QString scheme : dataPlugin->schemes()) {
+    QStringList schemes;
+    try {
+      schemes = dataPlugin->schemes();
+    } catch (...) {
+      addDiagnostic(source,
+          QStringLiteral("Data-provider scheme query threw an exception."));
+      return false;
+    }
+    for (QString scheme : schemes) {
       scheme = scheme.trimmed().toLower();
       static const QRegularExpression schemePattern(
           QStringLiteral("^[a-z][a-z0-9+.-]{1,31}$"));
@@ -480,7 +514,15 @@ bool QtedmPluginManager::registerPluginObject(QObject *object,
 
   QStringList archiveIds;
   if (archivePlugin) {
-    for (QString providerId : archivePlugin->providerIds()) {
+    QStringList providerIds;
+    try {
+      providerIds = archivePlugin->providerIds();
+    } catch (...) {
+      addDiagnostic(source,
+          QStringLiteral("Archive-provider ID query threw an exception."));
+      return false;
+    }
+    for (QString providerId : providerIds) {
       providerId = providerId.trimmed().toLower();
       static const QRegularExpression providerIdPattern(
           QStringLiteral("^[a-z][a-z0-9_.-]{1,63}$"));
@@ -502,6 +544,7 @@ bool QtedmPluginManager::registerPluginObject(QObject *object,
     }
   }
 
+  /* Publish only after every plugin metadata query has succeeded. */
   for (const QtedmLoadedDisplayObject &registration :
        displayRegistrations) {
     displayObjectsByKey_.insert(objectKey(pluginId,

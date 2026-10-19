@@ -8,6 +8,7 @@
 #include <QTemporaryDir>
 
 #include <memory>
+#include <stdexcept>
 
 #include "archive_provider.h"
 #include "audit_logger.h"
@@ -115,14 +116,26 @@ public:
   {
   }
 
-  QString pluginId() const override { return id_; }
+  QString pluginId() const override
+  {
+    if (throwingMetadataCall_ == 1) {
+      throw std::runtime_error("intentional plugin ID failure");
+    }
+    return id_;
+  }
   QtedmPluginCompatibility compatibility() const override
   {
+    if (throwingMetadataCall_ == 2) {
+      throw std::runtime_error("intentional compatibility failure");
+    }
     return compatibility_;
   }
 
   QVector<QtedmDisplayObjectType> objectTypes() const override
   {
+    if (throwingMetadataCall_ == 3) {
+      throw std::runtime_error("intentional display metadata failure");
+    }
     QtedmDisplayObjectType descriptor;
     descriptor.typeId = typeId_;
     descriptor.displayName = QStringLiteral("Fake Label");
@@ -212,6 +225,9 @@ public:
 
   QStringList schemes() const override
   {
+    if (throwingMetadataCall_ == 4) {
+      throw std::runtime_error("intentional data metadata failure");
+    }
     return {scheme_};
   }
 
@@ -266,6 +282,9 @@ public:
 
   QStringList providerIds() const override
   {
+    if (throwingMetadataCall_ == 5) {
+      throw std::runtime_error("intentional archive metadata failure");
+    }
     return {QStringLiteral("fake-archive")};
   }
 
@@ -283,6 +302,7 @@ public:
       qtedmCurrentPluginCompatibility();
   bool failConstruction_ = false;
   bool rejectProperties_ = false;
+  int throwingMetadataCall_ = 0;
   int putCount = 0;
   int cancelCount = 0;
   QVariant lastPut;
@@ -335,6 +355,8 @@ private slots:
   void init();
   void cleanup();
   void exactCompatibilityAndDuplicateRegistration();
+  void registrationMetadataExceptionsAreContained_data();
+  void registrationMetadataExceptionsAreContained();
   void configuredPluginDirectoryIsDiscovered();
   void pvThumbsPluginTracksZeroAndNonzeroValues();
   void providerSubscriptionsWritesArchivesAndShutdown();
@@ -418,6 +440,43 @@ void TestPluginsPropertyRules::exactCompatibilityAndDuplicateRegistration()
   FakePlugin badAbi;
   badAbi.compatibility_.qtMajorVersion += 1;
   QVERIFY(!QtedmPluginManager::instance().registerPluginObject(&badAbi));
+}
+
+void TestPluginsPropertyRules::registrationMetadataExceptionsAreContained_data()
+{
+  QTest::addColumn<int>("metadataCall");
+  QTest::newRow("plugin-id") << 1;
+  QTest::newRow("compatibility") << 2;
+  QTest::newRow("display-types") << 3;
+  QTest::newRow("data-schemes") << 4;
+  QTest::newRow("archive-providers") << 5;
+}
+
+void TestPluginsPropertyRules::registrationMetadataExceptionsAreContained()
+{
+  QFETCH(int, metadataCall);
+  FakePlugin plugin;
+  plugin.throwingMetadataCall_ = metadataCall;
+  auto &manager = QtedmPluginManager::instance();
+  bool escaped = false;
+  bool registered = false;
+  try {
+    registered = manager.registerPluginObject(&plugin);
+  } catch (...) {
+    escaped = true;
+  }
+  plugin.throwingMetadataCall_ = 0;
+  const bool noPartialRegistration = manager.loadedPluginIds().isEmpty()
+      && !manager.displayObject(plugin.id_, plugin.typeId_)
+      && !manager.supportsDataProvider(QStringLiteral("fake://temperature"))
+      && !ExtensionObjectRegistry::instance().descriptor(plugin.typeId_);
+  const QStringList diagnostics = manager.diagnostics();
+  manager.resetForTesting();
+
+  QVERIFY2(!escaped, "Plugin metadata exception escaped registration.");
+  QVERIFY(!registered);
+  QVERIFY(noPartialRegistration);
+  QVERIFY(!diagnostics.isEmpty());
 }
 
 void TestPluginsPropertyRules::configuredPluginDirectoryIsDiscovered()

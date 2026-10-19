@@ -11,6 +11,53 @@
 #include "memory_tracker.h"
 #undef private
 
+struct AuditWriteState
+{
+  QByteArray bytes;
+  int attempts = 0;
+  bool closed = false;
+};
+
+class AuditWriteDevice : public QIODevice
+{
+public:
+  explicit AuditWriteDevice(AuditWriteState *state, bool fail,
+      bool shortWrite = false)
+    : state_(state), fail_(fail), shortWrite_(shortWrite)
+  {
+    open(QIODevice::WriteOnly | QIODevice::Unbuffered);
+  }
+
+  void close() override
+  {
+    state_->closed = true;
+    QIODevice::close();
+  }
+
+protected:
+  qint64 readData(char *, qint64) override { return -1; }
+
+  qint64 writeData(const char *data, qint64 size) override
+  {
+    ++state_->attempts;
+    if (fail_) {
+      setErrorString(QStringLiteral("simulated audit write failure"));
+      return -1;
+    }
+    const qint64 written = shortWrite_ ? qMax<qint64>(0, size - 1) : size;
+    state_->bytes.append(data, static_cast<int>(written));
+    if (shortWrite_) {
+      setErrorString(QStringLiteral("simulated short audit write"));
+    }
+    return written;
+  }
+
+private:
+  AuditWriteState *state_;
+  bool fail_;
+  bool shortWrite_;
+};
+
 class TestDiagnosticsTracking : public QObject
 {
   Q_OBJECT
@@ -18,6 +65,9 @@ class TestDiagnosticsTracking : public QObject
 private slots:
   void statisticsSnapshotsResetIntervalCounters();
   void auditLogRecordsWritesBlocksAndEscapedValues();
+  void auditLogWriteFailuresDisableSession_data();
+  void auditLogWriteFailuresDisableSession();
+  void auditLogWritesThroughDeviceAndKeepsSessionEnabled();
   void memoryTrackerParsesConfigurationAndWritesCsv();
 };
 
@@ -89,6 +139,70 @@ void TestDiagnosticsTracking::auditLogRecordsWritesBlocksAndEscapedValues()
   QVERIFY(contents.contains(QStringLiteral(
       "|BLOCKED:read-only|audit:test:readonly|7|-")));
   qunsetenv("QTEDM_AUDIT_DIR");
+}
+
+void TestDiagnosticsTracking::auditLogWriteFailuresDisableSession_data()
+{
+  QTest::addColumn<QString>("section");
+  QTest::addColumn<bool>("shortWrite");
+  QTest::newRow("header-error") << QStringLiteral("header") << false;
+  QTest::newRow("header-short-write") << QStringLiteral("header") << true;
+  QTest::newRow("record-error") << QStringLiteral("record") << false;
+  QTest::newRow("record-short-write") << QStringLiteral("record") << true;
+}
+
+void TestDiagnosticsTracking::auditLogWriteFailuresDisableSession()
+{
+  QFETCH(QString, section);
+  QFETCH(bool, shortWrite);
+  AuditWriteState state;
+  AuditLogger logger;
+  logger.initialized_ = true;
+  logger.logFile_ = std::make_unique<AuditWriteDevice>(
+      &state, !shortWrite, shortWrite);
+
+  QTest::ignoreMessage(QtWarningMsg, QRegularExpression(
+      QStringLiteral("AuditLogger: Failed to write %1 to .*"
+                     "Audit logging disabled for this session\\.")
+          .arg(section)));
+  if (section == QStringLiteral("header")) {
+    QVERIFY(!logger.writeLogText(QStringLiteral("# QtEDM Audit Log\n"),
+        "header"));
+  } else {
+    logger.logPut(QStringLiteral("audit:test:value"),
+        QStringLiteral("7"), QStringLiteral("TextEntry"));
+  }
+  QVERIFY(state.attempts > 0);
+  QVERIFY(state.closed);
+  QVERIFY(!logger.logFile_);
+  QVERIFY(!logger.isEnabled());
+
+  const int attemptsAfterFailure = state.attempts;
+  logger.logPut(QStringLiteral("audit:test:later"),
+      QStringLiteral("8"), QStringLiteral("TextEntry"));
+  QCOMPARE(state.attempts, attemptsAfterFailure);
+  QVERIFY(!logger.logFile_);
+}
+
+void TestDiagnosticsTracking::auditLogWritesThroughDeviceAndKeepsSessionEnabled()
+{
+  AuditWriteState state;
+  AuditLogger logger;
+  logger.initialized_ = true;
+  logger.logFile_ = std::make_unique<AuditWriteDevice>(&state, false);
+  QVERIFY(logger.writeLogText(QStringLiteral("# QtEDM Audit Log\n"),
+      "header"));
+  logger.logPut(QStringLiteral("audit:test:value"),
+      QStringLiteral("a|b\nc"), QStringLiteral("TextEntry"),
+      QStringLiteral("coverage.adl"));
+  QVERIFY(state.bytes.startsWith("# QtEDM Audit Log\n"));
+  QVERIFY(state.bytes.contains(
+      "|TextEntry|audit:test:value|a\\|b\\nc|coverage.adl\n"));
+  QVERIFY(logger.isEnabled());
+  QVERIFY(logger.logFile_);
+  QVERIFY(!state.closed);
+  logger.shutdown();
+  QVERIFY(state.closed);
 }
 
 void TestDiagnosticsTracking::memoryTrackerParsesConfigurationAndWritesCsv()

@@ -10,6 +10,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QMutexLocker>
@@ -131,15 +132,41 @@ bool AuditLogger::ensureLogFileOpen()
   }
 
   /* Write header for new file */
-  QTextStream stream(logFile_.get());
+  QString header;
+  QTextStream stream(&header);
   stream << "# QtEDM Audit Log\n";
   stream << "# Session started: " << sessionStart_.toString(Qt::ISODate) << "\n";
   stream << "# User: " << currentUser_ << "\n";
   stream << "# Format: timestamp|user|widgetType|pvName|value|displayFile\n";
   stream << "#\n";
   stream.flush();
+  return writeLogText(header, "header");
+}
 
-  return true;
+bool AuditLogger::writeLogText(const QString &text, const char *section)
+{
+  bool written = false;
+  {
+    QTextStream stream(logFile_.get());
+    stream << text;
+    stream.flush();
+    written = stream.status() == QTextStream::Ok;
+  }
+  if (auto *file = qobject_cast<QFile *>(logFile_.get())) {
+    const bool flushed = file->flush();
+    written = written && flushed && file->error() == QFileDevice::NoError;
+  }
+  if (!written) {
+    qWarning() << "AuditLogger: Failed to write" << section << "to"
+               << getLogFilePath() << logFile_->errorString()
+               << "Audit logging disabled for this session.";
+    /* A short write may leave an incomplete record. Do not append another
+     * record to it, or retry a failed device on every control operation. */
+    logFile_->close();
+    logFile_.reset();
+    enabled_ = false;
+  }
+  return written;
 }
 
 void AuditLogger::logPut(const QString &pvName,
@@ -147,11 +174,11 @@ void AuditLogger::logPut(const QString &pvName,
                          const QString &widgetType,
                          const QString &displayFile)
 {
+  QMutexLocker lock(&mutex_);
+
   if (!enabled_ || !initialized_) {
     return;
   }
-
-  QMutexLocker lock(&mutex_);
 
   if (!ensureLogFileOpen()) {
     return;
@@ -160,7 +187,8 @@ void AuditLogger::logPut(const QString &pvName,
   QString timestamp = QDateTime::currentDateTime().toString(Qt::ISODate);
   QString display = displayFile.isEmpty() ? QStringLiteral("-") : displayFile;
 
-  QTextStream stream(logFile_.get());
+  QString record;
+  QTextStream stream(&record);
   stream << encodeLogField(timestamp) << "|"
          << encodeLogField(currentUser_) << "|"
          << encodeLogField(widgetType) << "|"
@@ -168,6 +196,7 @@ void AuditLogger::logPut(const QString &pvName,
          << encodeLogField(value) << "|"
          << encodeLogField(display) << "\n";
   stream.flush();
+  writeLogText(record, "record");
 }
 
 QString AuditLogger::encodeLogField(const QString &value)

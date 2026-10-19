@@ -13,10 +13,11 @@
 #define AUDIT_LOGGER_H
 
 #include <QString>
-#include <QFile>
+#include <QIODevice>
 #include <QMutex>
 #include <QDateTime>
 #include <QStringList>
+#include <atomic>
 #include <memory>
 
 class AuditLogger
@@ -65,6 +66,8 @@ public:
   void shutdown();
 
 private:
+  friend class TestDiagnosticsTracking;
+
   AuditLogger();
   ~AuditLogger();
 
@@ -73,13 +76,14 @@ private:
   AuditLogger &operator=(const AuditLogger &) = delete;
 
   bool ensureLogFileOpen();
+  bool writeLogText(const QString &text, const char *section);
   QString getLogFilePath() const;
   QString getLogDirectory() const;
   QString getCurrentUser() const;
 
-  bool enabled_ = true;
+  std::atomic<bool> enabled_{true};
   bool initialized_ = false;
-  std::unique_ptr<QFile> logFile_;
+  std::unique_ptr<QIODevice> logFile_;
   QMutex mutex_;
   QString currentUser_;
   QDateTime sessionStart_;

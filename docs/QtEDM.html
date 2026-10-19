@@ -1564,6 +1564,9 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
     <ul>
       <li><strong>Log Format:</strong> Each entry contains timestamp, username, widget type, PV name, value written, and display file (if available).</li>
       <li><strong>Log Location:</strong> Logs are written to <code>~/.medm/audit_YYYYMMDD_HHMMSS_PID.log</code> by default. <code>QTEDM_AUDIT_DIR</code> selects another directory.</li>
+      <li><strong>Storage failures:</strong> A failed audit write or flush emits
+      a warning and disables logging for that session. PV operations continue;
+      resolve the storage problem and restart QtEDM to resume logging.</li>
       <li><strong>Disable Logging:</strong> Use the <code>-nolog</code> command line option or set the environment variable <code>QTEDM_NOLOG=1</code></li>
       <li><strong>Logged writes:</strong> Text Entry, Text Area, Slider, Wheel Switch, Menu, Choice Button, Message Button/Toggle, Setpoint Control/Spin Box, plugin-provider, and snapshot-restore writes use the audit path.</li>
       <li><strong>Observe-only records:</strong> Writes blocked by <code>--read-only</code> use the widget type <code>BLOCKED:ObserveOnly</code>, so they remain distinct from successful puts without changing the six-column log format.</li>

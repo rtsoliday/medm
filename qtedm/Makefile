@@ -706,8 +706,19 @@ build-tests: check-qt-test $(PLUGIN_API_TEST_METADATA) \
   $(PLUGIN_API_THUMBS_METADATA) $(QTEDM_UNIT_TEST_HELPERS) \
   $(QTEDM_UNIT_TEST_BINARIES)
 
+# The unit binaries link the full CA/PVA runtime. Keep any channel they create
+# on loopback instead of inheriting a site gateway or broadcast list, and clear
+# site settings that could load displays, archive data, or plugins.
+QTEDM_TEST_ISOLATION = \
+  export EPICS_CA_ADDR_LIST=127.0.0.1 EPICS_CA_AUTO_ADDR_LIST=NO \
+    EPICS_PVA_ADDR_LIST=127.0.0.1 EPICS_PVA_AUTO_ADDR_LIST=NO; \
+  unset EPICS_CA_NAME_SERVERS EPICS_PVA_NAME_SERVERS EPICS_DISPLAY_PATH \
+    QTEDM_ARCHIVER_URL QTEDM_ARCHIVER_PROVIDER QTEDM_PLUGIN_PATH \
+    MEDM_EXEC_LIST
+
 test-help: $(OBJ_DIR)/test_help_dialogs$(EXEEXT)
 	@mkdir -p $(OBJ_DIR)/test-artifacts/help
+	$(QTEDM_TEST_ISOLATION); \
 	QT_QPA_PLATFORM=offscreen QTEDM_NOLOG=1 \
 	  QTEDM_HELP_VISUAL_DIR=$(OBJ_DIR)/test-artifacts/help \
 	  $(OBJ_DIR)/test_help_dialogs$(EXEEXT)
@@ -726,6 +737,7 @@ test-unit: build-tests
 	export LC_ALL=C.UTF-8; \
 	export TZ=UTC; \
 	export HOME="$$tmp_dir/home"; \
+	$(QTEDM_TEST_ISOLATION); \
 	mkdir -p "$$HOME"; \
 	for test_bin in $(QTEDM_UNIT_TEST_BINARIES); do \
 	  echo "Running $$test_bin"; \

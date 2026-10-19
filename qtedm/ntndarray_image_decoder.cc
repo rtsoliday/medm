@@ -224,9 +224,23 @@ int scaled(double value, double minimum, double maximum)
   if (!std::isfinite(value) || !(maximum > minimum)) {
     return 0;
   }
-  const double normalized = (value - minimum) / (maximum - minimum);
-  return std::clamp(static_cast<int>(std::lround(normalized * 255.0)),
-      0, 255);
+  /* Saturate before rounding: an out-of-range finite pixel can exceed even
+   * long's range, and narrowing before clamping can invert its intensity. */
+  if (value <= minimum) {
+    return 0;
+  }
+  if (value >= maximum) {
+    return 255;
+  }
+  const double span = maximum - minimum;
+  /* Opposite finite extremes can overflow their difference. Halving first
+   * keeps the ratio finite without relying on a wider long double type. */
+  const double normalized = std::isfinite(span)
+      ? (value - minimum) / span
+      : (value * 0.5 - minimum * 0.5)
+          / (maximum * 0.5 - minimum * 0.5);
+  return static_cast<int>(std::lround(
+      std::clamp(normalized, 0.0, 1.0) * 255.0));
 }
 
 void transformedToSource(const NtNdArrayDecodedFrame &frame,

@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <algorithm>
+#include <limits>
 #include <vector>
 
 #include <pv/ntndarray.h>
@@ -125,6 +126,8 @@ private slots:
   void tabbedChildLoadFailureDoesNotLeakWindow();
   void decoderSupportsEveryScalarType();
   void decoderSupportsMonoAndRgbLayouts();
+  void decoderClampsExtremeFiniteIntensities();
+  void decoderScalesRangesSpanningFiniteExtremes();
   void decoderRejectsUnsafeOrMalformedFrames();
   void decoderMapsTransformedPixelCoordinates();
   void imageElementTracksDisconnectsAndDimensionChanges();
@@ -492,6 +495,44 @@ void TestDisplayImportNdArray::decoderSupportsMonoAndRgbLayouts()
         decoded, 0, 0), QVector<double>({255.0, 0.0, 0.0}));
     QCOMPARE(NtNdArrayImageDecoder::pixelValues(
         decoded, 1, 0), QVector<double>({0.0, 255.0, 0.0}));
+  }
+}
+
+void TestDisplayImportNdArray::decoderClampsExtremeFiniteIntensities()
+{
+  const double largest = std::numeric_limits<double>::max();
+  const NtNdArrayFrame frame = frameFrom<double>(
+      {-largest, -1.0e7, 0.0, 0.5, 1.0, 1.0e7, largest},
+      NtNdArrayScalarType::kFloat64, {7, 1}, NtNdArrayColorMode::kMono);
+  NtNdArrayDecodeOptions options;
+  options.rangeMode = HeatmapRangeMode::kManual;
+  options.rangeMinimum = 0.0;
+  options.rangeMaximum = 1.0;
+  const auto decoded = NtNdArrayImageDecoder::decode(frame, options);
+  QVERIFY2(decoded.valid, qPrintable(decoded.error));
+  const QVector<int> expected{0, 0, 0, 128, 255, 255, 255};
+  for (int x = 0; x < expected.size(); ++x) {
+    QCOMPARE(qGray(decoded.image.pixel(x, 0)), expected.at(x));
+  }
+}
+
+void TestDisplayImportNdArray::decoderScalesRangesSpanningFiniteExtremes()
+{
+  const double largest = std::numeric_limits<double>::max();
+  const NtNdArrayFrame frame = frameFrom<double>(
+      {-largest, 0.0, largest}, NtNdArrayScalarType::kFloat64,
+      {3, 1}, NtNdArrayColorMode::kMono);
+  for (HeatmapRangeMode mode :
+      {HeatmapRangeMode::kAuto, HeatmapRangeMode::kManual}) {
+    NtNdArrayDecodeOptions options;
+    options.rangeMode = mode;
+    options.rangeMinimum = -largest;
+    options.rangeMaximum = largest;
+    const auto decoded = NtNdArrayImageDecoder::decode(frame, options);
+    QVERIFY2(decoded.valid, qPrintable(decoded.error));
+    QCOMPARE(qGray(decoded.image.pixel(0, 0)), 0);
+    QCOMPARE(qGray(decoded.image.pixel(1, 0)), 128);
+    QCOMPARE(qGray(decoded.image.pixel(2, 0)), 255);
   }
 }
 

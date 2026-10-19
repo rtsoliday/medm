@@ -10,6 +10,10 @@ trap 'qtedm_test_cleanup $?' EXIT INT TERM
 
 qtedm_test_setup_env
 
+# The dynamic waterfall driver launches several caput/cavput processes every
+# 0.35 s for the whole run. No IOC case needs changing waveforms, so seed
+# static data unless a caller asks for the driver explicitly.
+export QTEDM_WATERFALL_DRIVER_MODE="${QTEDM_WATERFALL_DRIVER_MODE:-static}"
 export XDG_RUNTIME_DIR="${QTEDM_TEST_TMP_DIR}/xdg-runtime"
 mkdir -p "${XDG_RUNTIME_DIR}"
 chmod 700 "${XDG_RUNTIME_DIR}"

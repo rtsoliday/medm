@@ -4,6 +4,8 @@
 #include <QFileInfo>
 #include <QTemporaryDir>
 
+#include <epicsVersion.h>
+
 #include "command_line_options.h"
 
 namespace {
@@ -49,6 +51,7 @@ private slots:
   void parsesMacrosAndGeometry();
   void requiredOptionValuesAreNotSwallowed();
   void parsesTestAutomationOptions();
+  void versionReportsBuildEpicsBase();
 };
 
 void TestCommandLine::parsesCommonOptions()
@@ -247,6 +250,18 @@ void TestCommandLine::parsesTestAutomationOptions()
   QCOMPARE(options.testActiveTabId, QStringLiteral("diagnostics"));
   QCOMPARE(options.testExitAfterMs, 250);
   QCOMPARE(options.displayFiles, QStringList{QStringLiteral("screen.adl")});
+}
+
+void TestCommandLine::versionReportsBuildEpicsBase()
+{
+  /* -version and the usage banner must name the EPICS Base the binary was
+   * built against, matching the About dialog footer. */
+  const QString version = QString::fromLatin1(kQtEdmVersionString);
+  QVERIFY2(version.startsWith(QStringLiteral("QtEDM Version ")),
+      qPrintable(version));
+  QVERIFY2(version.endsWith(
+               QStringLiteral("(" EPICS_VERSION_STRING ")")),
+      qPrintable(version));
 }
 
 QTEST_APPLESS_MAIN(TestCommandLine)

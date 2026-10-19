@@ -152,7 +152,8 @@ void SetpointControlRuntime::handleSetpointConnection(bool connected,
     if (!setpointNumeric_) {
       invokeOnElement([](SetpointControlElement *element) {
         element->setSetpointConnected(false);
-        element->setRuntimeNotice(QStringLiteral("Setpoint PV is not numeric"));
+        element->setRuntimeNotice(
+            QStringLiteral("Setpoint PV is not a numeric scalar"));
       });
       return;
     }
@@ -174,10 +175,19 @@ void SetpointControlRuntime::handleSetpointConnection(bool connected,
 
 void SetpointControlRuntime::handleSetpointData(const SharedChannelData &data)
 {
-  if (!started_ || !data.isNumeric) {
+  if (!started_) {
     return;
   }
-  setpointNumeric_ = true;
+  const bool wasNumeric = setpointNumeric_;
+  setpointNumeric_ = data.isNumeric && isSupportedNumeric(data);
+  if (!setpointNumeric_) {
+    invokeOnElement([](SetpointControlElement *element) {
+      element->setSetpointConnected(false);
+      element->setRuntimeNotice(
+          QStringLiteral("Setpoint PV is not a numeric scalar"));
+    });
+    return;
+  }
   updateMetadataFromSetpoint(data);
   const int precision = resolvedPrecision();
   const double value = data.numericValue;
@@ -188,10 +198,18 @@ void SetpointControlRuntime::handleSetpointData(const SharedChannelData &data)
   stats.registerUpdateRequest(true);
   stats.registerUpdateExecuted();
 
-  invokeOnElement([value, text, severity](SetpointControlElement *element) {
+  const bool unsupportedReadback = readbackConnected_ && !readbackNumeric_;
+  invokeOnElement([value, text, severity, canWrite = writeAccess_, wasNumeric,
+                      unsupportedReadback](
+                      SetpointControlElement *element) {
     element->setSetpointConnected(true);
+    element->setSetpointWriteAccess(canWrite);
     element->setSetpointSeverity(severity);
     element->setSetpointValue(value, text);
+    if (!wasNumeric) {
+      element->setRuntimeNotice(unsupportedReadback
+          ? QStringLiteral("Readback PV is not a numeric scalar") : QString());
+    }
   });
 }
 
@@ -207,7 +225,8 @@ void SetpointControlRuntime::handleReadbackConnection(bool connected,
     invokeOnElement([numeric = readbackNumeric_](SetpointControlElement *element) {
       element->setReadbackConnected(numeric);
       if (!numeric) {
-        element->setRuntimeNotice(QStringLiteral("Readback PV is not numeric"));
+        element->setRuntimeNotice(
+            QStringLiteral("Readback PV is not a numeric scalar"));
       }
     });
   } else {
@@ -222,10 +241,19 @@ void SetpointControlRuntime::handleReadbackConnection(bool connected,
 
 void SetpointControlRuntime::handleReadbackData(const SharedChannelData &data)
 {
-  if (!started_ || !data.isNumeric) {
+  if (!started_) {
     return;
   }
-  readbackNumeric_ = true;
+  const bool wasNumeric = readbackNumeric_;
+  readbackNumeric_ = data.isNumeric && isSupportedNumeric(data);
+  if (!readbackNumeric_) {
+    invokeOnElement([](SetpointControlElement *element) {
+      element->setReadbackConnected(false);
+      element->setRuntimeNotice(
+          QStringLiteral("Readback PV is not a numeric scalar"));
+    });
+    return;
+  }
   const bool useReadbackChannelPrecision = element_
       && element_->precisionSource() == PvLimitSource::kChannel
       && data.hasPrecision;
@@ -240,10 +268,16 @@ void SetpointControlRuntime::handleReadbackData(const SharedChannelData &data)
   stats.registerUpdateRequest(true);
   stats.registerUpdateExecuted();
 
-  invokeOnElement([value, text, severity](SetpointControlElement *element) {
+  const bool unsupportedSetpoint = setpointConnected_ && !setpointNumeric_;
+  invokeOnElement([value, text, severity, wasNumeric, unsupportedSetpoint](
+                      SetpointControlElement *element) {
     element->setReadbackConnected(true);
     element->setReadbackSeverity(severity);
     element->setReadbackValue(value, text);
+    if (!wasNumeric) {
+      element->setRuntimeNotice(unsupportedSetpoint
+          ? QStringLiteral("Setpoint PV is not a numeric scalar") : QString());
+    }
   });
 }
 
@@ -433,5 +467,6 @@ bool SetpointControlRuntime::isSupportedNumeric(
     const SharedChannelData &data) const
 {
   return isNumericFieldType(data.nativeFieldType)
-      && data.nativeElementCount <= 1;
+      && data.nativeElementCount <= 1
+      && !data.isArray && !data.isCharArray;
 }

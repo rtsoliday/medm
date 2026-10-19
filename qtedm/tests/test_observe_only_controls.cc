@@ -58,6 +58,7 @@
 #include "rectangle_element.h"
 #include "related_display_element.h"
 #include "setpoint_control_element.h"
+#include "setpoint_control_runtime.h"
 #include "shell_command_element.h"
 #include "slider_element.h"
 #include "slider_runtime.h"
@@ -104,6 +105,8 @@ private slots:
   void expressionStartupPreservesCalculation_data();
   void expressionStartupPreservesCalculation();
   void observeOnlyBlocksEverySoftPvWriteKind();
+  void setpointRejectsNumericArrays_data();
+  void setpointRejectsNumericArrays();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
@@ -367,6 +370,101 @@ void TestObserveOnlyControls::observeOnlyBlocksEverySoftPvWriteKind()
   QVERIFY(audit.contains("pva://__test:readonly_transport"));
   logFile.close();
   AuditLogger::instance().shutdown();
+}
+
+void TestObserveOnlyControls::setpointRejectsNumericArrays_data()
+{
+  QTest::addColumn<int>("arrayLength");
+  QTest::addColumn<bool>("initiallyScalar");
+  QTest::newRow("empty-array") << 0 << false;
+  QTest::newRow("single-element-array") << 1 << false;
+  QTest::newRow("multiple-element-array") << 2 << false;
+  QTest::newRow("scalar-to-empty-array") << 0 << true;
+  QTest::newRow("scalar-to-single-element-array") << 1 << true;
+  QTest::newRow("scalar-to-multiple-element-array") << 2 << true;
+}
+
+void TestObserveOnlyControls::setpointRejectsNumericArrays()
+{
+  QFETCH(int, arrayLength);
+  QFETCH(bool, initiallyScalar);
+  auto &soft = SoftPvRegistry::instance();
+  const QString setpointName = QStringLiteral("__test:setpoint_array");
+  const QString readbackName = QStringLiteral("__test:readback_array");
+  QVector<double> setpointValues;
+  QVector<double> readbackValues;
+  for (int index = 0; index < arrayLength; ++index) {
+    setpointValues.append(index + 1.0);
+    readbackValues.append(index + 3.0);
+  }
+  for (const QString &name : {setpointName, readbackName}) {
+    soft.registerName(name, true);
+    registeredNames_.append(name);
+    soft.setConnected(name, true);
+    soft.setControlInfo(name, -10.0, 100.0, 1);
+  }
+  if (initiallyScalar) {
+    soft.publishValue(setpointName, 1.0);
+    soft.publishValue(readbackName, 3.0);
+  } else {
+    soft.publishArrayValue(setpointName, setpointValues);
+    soft.publishArrayValue(readbackName, readbackValues);
+  }
+
+  SetpointControlElement spinbox;
+  spinbox.resize(400, 60);
+  spinbox.setQtedmSpinBox(true);
+  spinbox.setSetpointChannel(setpointName);
+  spinbox.setReadbackChannel(readbackName);
+  spinbox.setExecuteMode(true);
+  SetpointControlRuntime runtime(&spinbox);
+  runtime.start();
+  spinbox.show();
+  QCoreApplication::processEvents();
+
+  auto *incrementButton = spinbox.findChild<QToolButton *>(
+      QStringLiteral("qtedmSpinBoxIncrementButton"));
+  auto *setpointEdit = spinbox.findChild<QLineEdit *>();
+  QVERIFY(incrementButton);
+  QVERIFY(setpointEdit);
+
+  if (initiallyScalar) {
+    QVERIFY(spinbox.runtimeSetpointConnected());
+    QVERIFY(spinbox.runtimeReadbackConnected());
+    QVERIFY(incrementButton->isEnabled());
+    soft.publishArrayValue(setpointName, setpointValues);
+    soft.publishArrayValue(readbackName, readbackValues);
+    QTRY_VERIFY(!spinbox.runtimeSetpointConnected());
+    QTRY_VERIFY(!spinbox.runtimeReadbackConnected());
+  }
+
+  /* A numeric monitor must not undo the scalar-type rejection from the
+   * connection callback. Even an attempted step must preserve the array. */
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(setpointName, snapshot));
+  QCOMPARE(snapshot.arrayValues, setpointValues);
+  QTest::mouseClick(incrementButton, Qt::LeftButton);
+  QVERIFY(soft.infoSnapshot(setpointName, snapshot));
+  QVERIFY(snapshot.isArray);
+  QCOMPARE(snapshot.arrayValues, setpointValues);
+  QVERIFY(soft.infoSnapshot(readbackName, snapshot));
+  QCOMPARE(snapshot.arrayValues, readbackValues);
+  QVERIFY(!spinbox.runtimeSetpointConnected());
+  QVERIFY(!spinbox.runtimeReadbackConnected());
+  QVERIFY(setpointEdit->isReadOnly());
+  QVERIFY(!incrementButton->isEnabled());
+
+  /* Restoring scalar data must restore normal writable operation. */
+  soft.publishValue(setpointName, 1.0);
+  soft.publishValue(readbackName, 3.0);
+  QTRY_VERIFY(spinbox.runtimeSetpointConnected());
+  QTRY_VERIFY(spinbox.runtimeReadbackConnected());
+  QTRY_VERIFY(incrementButton->isEnabled());
+  QVERIFY(!setpointEdit->isReadOnly());
+  QTest::mouseClick(incrementButton, Qt::LeftButton);
+  QVERIFY(soft.infoSnapshot(setpointName, snapshot));
+  QVERIFY(!snapshot.isArray);
+  QCOMPARE(snapshot.value, 2.0);
 }
 
 void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()

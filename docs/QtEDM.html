@@ -1154,7 +1154,7 @@ complete extension list.</p>
   <ul>
     <li><strong>Configure:</strong> Setpoint and readback PVs, label, numeric format, precision and limits, static/alarm color mode, absolute tolerance, and readback visibility.</li>
     <li><strong>Runtime behavior:</strong> Entering a value validates numeric input and configured/channel limits before writing. Connection state, access rights, pending edits, units, and readback tolerance remain visible.</li>
-    <li><strong>Safety:</strong> The setpoint PV must be numeric and writable. Writes pass through observe-only policy and are audit logged.</li>
+    <li><strong>Safety:</strong> Setpoint and readback PVs must contain scalar numeric values; array PVs are rejected by Setpoint Control and Spin Box. The setpoint PV must also be writable. Writes pass through observe-only policy and are audit logged.</li>
   </ul>
   <pre>setpoint_control {
   object {

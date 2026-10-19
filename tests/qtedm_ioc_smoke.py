@@ -584,14 +584,16 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       str(qtedm_bin),
       *qtedm_args,
       "-x",
-      "-testReadyFile",
-      native_child_path(ready_path),
+  ]
+  if case.get("use_ioc", True):
+    command.extend(["-testReadyFile", native_child_path(ready_path)])
+  command.extend([
       "-testDumpState",
       native_child_path(state_path),
       "-testExitAfterMs",
       str(case.get("exit_after_ms", 4500)),
       native_child_path(rewritten_display),
-  ]
+  ])
   actions = case.get("actions", [])
   if actions:
     normalized_actions = []
@@ -628,7 +630,8 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       resources = OwnedProcessResourceLog(
           process, case["name"], command, resource_log)
       resources.start()
-    wait_for_file(ready_path, process, timeout_seconds=15)
+    if case.get("use_ioc", True):
+      wait_for_file(ready_path, process, timeout_seconds=15)
     post_ready_delay_ms = float(case.get("post_ready_delay_ms", 0))
     if post_ready_delay_ms > 0:
       time.sleep(post_ready_delay_ms / 1000.0)
@@ -763,9 +766,10 @@ def main() -> int:
       if str(case.get("provider", "ca")).lower() == "pva":
         raise CaseFailure(f"Case {case['name']} use_ioc:false supports CA only")
       if any(case.get(field) for field in (
-          "pre_writes", "writes", "verify_pvs", "restart_provider")):
+          "pre_writes", "writes", "verify_pvs", "restart_provider", "actions")):
         raise CaseFailure(
-            f"Case {case['name']} use_ioc:false cannot write, verify, or restart PVs")
+            f"Case {case['name']} use_ioc:false cannot write, verify, "
+            "restart PVs, or run actions")
   resource_log = (
       Path(args.resource_log).expanduser().resolve() if args.resource_log else None)
   if resource_log is not None:

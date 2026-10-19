@@ -118,11 +118,16 @@ the run. Without `--resource-log`, the normal suite behavior is unchanged.
 For a disconnected CA workload, set `"use_ioc": false` in its case object.
 The default is `true`. The runner defers CA IOC startup until a case needs it,
 and stops its own CA fixture before a disconnected case. Such a case cannot
-use `pre_writes`, `writes`, `verify_pvs`, or `restart_provider`. This option is
-CA-only; PVA cases continue to use the PVA fixture. Display rewriting still
-assigns the run's unique PV prefix, and the suite's loopback CA/PVA environment
-still applies. Use the existing `exit_after_ms`, `actions`, selectors, and
-expectations to describe bounded workloads, with one QtEDM child at a time.
+use `pre_writes`, `writes`, `verify_pvs`, `restart_provider`, or `actions`.
+This option is CA-only; PVA cases continue to use the PVA fixture. Display
+rewriting still assigns the run's unique PV prefix, and the loopback CA/PVA environment
+still applies. Offline cases omit `-testReadyFile` and do not wait for connected
+widget readiness, which a deliberately disconnected display cannot satisfy.
+They still require a successful bounded exit and the final structured-state
+assertions. Omitting that option also avoids the application's readiness
+polling timer during idle measurements. Use `exit_after_ms`, selectors, and
+expectations to describe bounded workloads, with one QtEDM child at a time;
+online cases may additionally use `actions`.
 
 ## Visual baselines
 

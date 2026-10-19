@@ -1795,5 +1795,18 @@
         }
       }
     ]
+  },
+  {
+    "name": "offline_strip_chart_load_exits_without_ready_file",
+    "display": "tests/test_StripChartLoad.adl",
+    "use_ioc": false,
+    "exit_after_ms": 2000,
+    "selector": {
+      "type": "strip_chart",
+      "channel": "ORB:TUNE:X411"
+    },
+    "expect": {
+      "connected": false
+    }
   }
 ]

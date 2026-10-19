@@ -42,29 +42,27 @@ ifeq ($(OS), Windows)
   QT_WIDGETS_CFLAGS := $(QT_MODULE_DEFINES) -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg" -I"$(QT_DIR_FWD)/include/QtNetwork"
   QT_TEST_CFLAGS := -I"$(QT_DIR_FWD)/include/QtTest"
 else
-  # Detect Qt version: prefer Qt6, fallback to Qt5
+  # Prefer Qt6 by default, but honor an explicitly selected Qt major.
   QT6_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt6Core 2>/dev/null && echo 1)
-  ifeq ($(QT6_AVAILABLE),1)
-    QT_VERSION := 6
-    QT_WIDGETS_PKG := Qt6Widgets
-    QT_PRINT_PKG := Qt6PrintSupport
-    QT_SVG_PKG := Qt6Svg
-    QT_CORE_PKG := Qt6Core
-    QT_TEST_PKG := Qt6Test
-    QT_NETWORK_PKG := Qt6Network
-  else
-    QT5_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt5Core 2>/dev/null && echo 1)
-    ifeq ($(QT5_AVAILABLE),1)
-      QT_VERSION := 5
-      QT_WIDGETS_PKG := Qt5Widgets
-      QT_PRINT_PKG := Qt5PrintSupport
-      QT_SVG_PKG := Qt5Svg
-      QT_CORE_PKG := Qt5Core
-      QT_TEST_PKG := Qt5Test
-      QT_NETWORK_PKG := Qt5Network
-    else
-      $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
-    endif
+  QT5_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt5Core 2>/dev/null && echo 1)
+  QT_VERSION ?= $(if $(filter 1,$(QT6_AVAILABLE)),6,$(if $(filter 1,$(QT5_AVAILABLE)),5))
+  ifeq ($(strip $(QT_VERSION)),)
+    $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
+  endif
+  ifeq ($(filter $(QT_VERSION),5 6),)
+    $(error Unsupported QT_VERSION=$(QT_VERSION). Use QT_VERSION=5 or QT_VERSION=6.)
+  endif
+  QT_WIDGETS_PKG := Qt$(QT_VERSION)Widgets
+  QT_PRINT_PKG := Qt$(QT_VERSION)PrintSupport
+  QT_SVG_PKG := Qt$(QT_VERSION)Svg
+  QT_CORE_PKG := Qt$(QT_VERSION)Core
+  QT_TEST_PKG := Qt$(QT_VERSION)Test
+  QT_NETWORK_PKG := Qt$(QT_VERSION)Network
+  QT_REQUIRED_PACKAGES := $(QT_CORE_PKG) $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) \
+                          $(QT_SVG_PKG) $(QT_NETWORK_PKG)
+  QT_SELECTED_AVAILABLE := $(shell $(PKG_CONFIG) --exists $(QT_REQUIRED_PACKAGES) 2>/dev/null && echo 1)
+  ifneq ($(QT_SELECTED_AVAILABLE),1)
+    $(error Qt$(QT_VERSION) development packages not found: $(QT_REQUIRED_PACKAGES). Check PKG_CONFIG and PKG_CONFIG_PATH.)
   endif
   QT_WIDGETS_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(QT_WIDGETS_PKG))
 endif

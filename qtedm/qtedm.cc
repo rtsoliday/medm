@@ -183,7 +183,7 @@ void printUsage(const QString &program)
       "            Enable memory usage tracking for leak detection.\n"
       "            interval   Optional sampling interval in seconds (default: 60)\n"
       "            logfile    Optional path to CSV log file (default: stderr)\n"
-      "            Examples:  TRACK_MEM=1        (log to stderr every 60 sec)\n"
+      "            Examples:  TRACK_MEM=60       (log to stderr every 60 sec)\n"
       "                       TRACK_MEM=30       (log to stderr every 30 sec)\n"
       "                       TRACK_MEM=/tmp/mem.csv  (log to file every 60 sec)\n"
       "                       TRACK_MEM=10:/tmp/mem.csv  (file, every 10 sec)\n"

@@ -1299,6 +1299,11 @@ contents; the audit files themselves are preserved.</p>
 
 <p>QtEDM reads ADL files created by MEDM. MEDM can read the common ADL subset written by QtEDM, but displays that use QtEDM-only extensions are not behaviorally compatible with legacy MEDM. The common file format is documented in the MEDM Reference Manual.</p>
 
+<p>Input files are limited to 16 MiB and parser nesting to 256 levels.
+Macro expansion is checked before parsing and stops with an error if a
+substituted result exceeds 16 MiB of UTF-8 text or 16 Mi characters, including
+intermediate results of recursive substitutions.</p>
+
 <h3>PV Protocol Prefix</h3>
 
 <p>QtEDM supports both Channel Access (CA) and PVAccess (PVA). To force PVA for a

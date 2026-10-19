@@ -153,6 +153,7 @@ private slots:
   void extensionWidgetPropertiesRoundTripInMemory();
   void inlineColorMapsSurviveRenderingSaveAndUndo();
   void invalidInlineColorMapPreservesLoadedDisplay();
+  void macroExpansionIsBoundedBeforeParsing();
 
 private:
   QStringList registeredNames_;
@@ -3243,6 +3244,64 @@ void TestObserveOnlyControls::invalidInlineColorMapPreservesLoadedDisplay()
   }
 }
 
+
+void TestObserveOnlyControls::macroExpansionIsBoundedBeforeParsing()
+{
+  QString output;
+  QString error;
+  QHash<QString, QString> macros;
+  macros.insert(QStringLiteral("A"), QStringLiteral("$(B)"));
+  macros.insert(QStringLiteral("B"), QString::fromUtf8("\xe4\xb8\x96\xe7\x95\x8c"));
+  QVERIFY(DisplayWindow::applyMacroSubstitutions(
+      QStringLiteral("hello $(A) $(unknown)"), macros, &output, &error));
+  QCOMPARE(output, QString::fromUtf8("hello \xe4\xb8\x96\xe7\x95\x8c $(unknown)"));
+  QVERIFY(error.isEmpty());
+
+  macros.clear();
+  macros.insert(QStringLiteral("M"), QStringLiteral("$(M)$(M)"));
+  QVERIFY(DisplayWindow::applyMacroSubstitutions(QStringLiteral("$(M)"),
+      macros, &output, &error));
+  QCOMPARE(output, QStringLiteral("$(M)").repeated(1024));
+
+  /* This recursive input would exceed the parser cap during expansion. */
+  macros[QStringLiteral("M")] = QString(64 * 1024, QLatin1Char('x'))
+      + QStringLiteral("$(M)$(M)");
+  QVERIFY(!DisplayWindow::applyMacroSubstitutions(QStringLiteral("$(M)"),
+      macros, &output, &error));
+  QVERIFY(output.isEmpty());
+  QVERIFY(error.contains(QStringLiteral("Macro expansion exceeds maximum size")));
+
+  /* UTF-8 output bytes are checked before appending multibyte values. */
+  macros[QStringLiteral("M")] = QString(kMaximumAdlInputBytes / 3 + 1,
+      QChar(0x20ac));
+  QVERIFY(!DisplayWindow::applyMacroSubstitutions(QStringLiteral("$(M)"),
+      macros, &output, &error));
+  QVERIFY(output.isEmpty());
+
+  QTemporaryDir directory(QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("macro-test-XXXXXX")));
+  QVERIFY(directory.isValid());
+  const QString source = directory.filePath(QStringLiteral("macro.adl"));
+  QFile fixture(source);
+  QVERIFY(fixture.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray contents = QByteArrayLiteral(
+      "file { name=\"macro.adl\" version=030122 }\n"
+      "display { object { width=100 height=80 } }\n"
+      "text { object { x=0 y=0 width=30 height=20 } textix=\"$(M)\" }\n");
+  QCOMPARE(fixture.write(contents), qint64(contents.size()));
+  fixture.close();
+  auto state = std::make_shared<DisplayState>();
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QVERIFY(window.restoreSerializedState(QByteArrayLiteral(
+      "display { object { width=100 height=80 } }\n"
+      "rectangle { object { x=0 y=0 width=20 height=20 } }\n")));
+  QVERIFY(!window.loadFromFile(source, &error, macros));
+  QVERIFY(error.contains(QStringLiteral("Macro expansion exceeds maximum size")));
+  QCOMPARE(window.rectangleElements_.size(), 1);
+  QVERIFY(window.textElements_.isEmpty());
+}
 
 void TestObserveOnlyControls::relatedDisplayLabelPadding()
 {

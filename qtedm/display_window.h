@@ -953,8 +953,9 @@ private:
   void setWidgetDisplayRect(QWidget *widget, const QRect &displayRect) const;
   QRect absoluteGeometryForWidget(const QWidget *widget,
       const QRect &localGeometry) const;
-  static QString applyMacroSubstitutions(const QString &input,
-      const QHash<QString, QString> &macros);
+  static bool applyMacroSubstitutions(const QString &input,
+      const QHash<QString, QString> &macros, QString *output,
+      QString *errorMessage = nullptr);
   void writeWidgetAdl(QTextStream &stream, QWidget *widget, int indent,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveForeground,
       const std::function<QColor(const QWidget *, const QColor &)> &resolveBackground) const;

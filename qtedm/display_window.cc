@@ -21381,7 +21381,12 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   loadingLegacyAdl_ = (fileVersion < 20200);
 
   QTEDM_TIMING_MARK("loadFromFile: Applying macro substitutions");
-  const QString processedContents = applyMacroSubstitutions(adlContent, macros);
+  QString processedContents;
+  if (!applyMacroSubstitutions(adlContent, macros, &processedContents,
+          errorMessage)) {
+    loadingLegacyAdl_ = previousLegacyMode;
+    return false;
+  }
 
   QTEDM_TIMING_MARK("loadFromFile: Parsing ADL");
   std::optional<AdlNode> document = AdlParser::parse(processedContents, errorMessage);
@@ -21611,11 +21616,31 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   return displayLoaded || elementLoaded;
 }
 
-QString DisplayWindow::applyMacroSubstitutions(const QString &input,
-    const QHash<QString, QString> &macros)
+bool DisplayWindow::applyMacroSubstitutions(const QString &input,
+    const QHash<QString, QString> &macros, QString *output,
+    QString *errorMessage)
 {
+  if (!output) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("Macro expansion requires an output string");
+    }
+    return false;
+  }
+  output->clear();
+  auto sizeError = [errorMessage]() {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral(
+          "Macro expansion exceeds maximum size of %1 bytes or %2 characters")
+          .arg(kMaximumAdlInputBytes).arg(kMaximumAdlInputCharacters);
+    }
+    return false;
+  };
+  if (input.size() > kMaximumAdlInputCharacters) {
+    return sizeError();
+  }
   if (macros.isEmpty()) {
-    return input;
+    *output = input;
+    return true;
   }
 
   static constexpr int kMaxIterations = 10;
@@ -21624,29 +21649,71 @@ QString DisplayWindow::applyMacroSubstitutions(const QString &input,
   for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
     QString result;
     result.reserve(current.size());
+    qint64 utf8Bytes = 0;
+    auto appendBounded = [&result, &utf8Bytes](const QString &value,
+        qsizetype start, qsizetype length) {
+      if (length > kMaximumAdlInputCharacters - result.size()) {
+        return false;
+      }
+      /* Count UTF-8 bytes without allocating a potentially oversized copy.
+       * Macro/literal boundaries cannot split a valid surrogate pair. */
+      qint64 bytes = 0;
+      for (qsizetype index = start; index < start + length; ++index) {
+        const ushort ch = value.at(index).unicode();
+        if (ch < 0x80) {
+          ++bytes;
+        } else if (ch < 0x800) {
+          bytes += 2;
+        } else if (QChar::isHighSurrogate(ch) && index + 1 < start + length
+            && value.at(index + 1).isLowSurrogate()) {
+          bytes += 4;
+          ++index;
+        } else {
+          bytes += 3;
+        }
+        if (bytes > kMaximumAdlInputBytes - utf8Bytes) {
+          return false;
+        }
+      }
+      result.append(value.constData() + start, length);
+      utf8Bytes += bytes;
+      return true;
+    };
     int lastIndex = 0;
     QRegularExpressionMatchIterator it = pattern.globalMatch(current);
     bool replaced = false;
     while (it.hasNext()) {
       const QRegularExpressionMatch match = it.next();
-      result.append(current.mid(lastIndex, match.capturedStart() - lastIndex));
+      if (!appendBounded(current, lastIndex,
+              match.capturedStart() - lastIndex)) {
+        return sizeError();
+      }
       const QString name = match.captured(1);
       const auto macroIt = macros.constFind(name);
       if (macroIt != macros.constEnd()) {
-        result.append(*macroIt);
+        if (!appendBounded(*macroIt, 0, macroIt->size())) {
+          return sizeError();
+        }
         replaced = true;
       } else {
-        result.append(match.captured(0));
+        if (!appendBounded(current, match.capturedStart(),
+                match.capturedLength())) {
+          return sizeError();
+        }
       }
       lastIndex = match.capturedEnd();
     }
-    result.append(current.mid(lastIndex));
+    if (!appendBounded(current, lastIndex, current.size() - lastIndex)) {
+      return sizeError();
+    }
     if (!replaced) {
-      return current;
+      *output = current;
+      return true;
     }
     current = result;
   }
-  return current;
+  *output = current;
+  return true;
 }
 
 QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
@@ -30591,8 +30658,14 @@ void DisplayWindow::handleShellCommandActivation(
     commandTemplate.append(args);
   }
 
-  commandTemplate =
-      applyMacroSubstitutions(commandTemplate, macroDefinitions_);
+  QString expandedCommand;
+  QString expansionError;
+  if (!applyMacroSubstitutions(commandTemplate, macroDefinitions_,
+          &expandedCommand, &expansionError)) {
+    qWarning() << "Shell command macro expansion failed:" << expansionError;
+    return;
+  }
+  commandTemplate = std::move(expandedCommand);
 
   QString resolved;
   if (!buildShellCommandString(commandTemplate, &resolved)) {
@@ -34793,10 +34866,13 @@ CompositeElement *DisplayWindow::loadCompositeElement(
         loadingLegacyAdl_ = (fileVersion < 20200);
 
         /* Apply macro substitutions */
-        const QString processedContents = applyMacroSubstitutions(adlContent, mergedMacros);
-
         QString errorMessage;
-        std::optional<AdlNode> document = AdlParser::parse(processedContents, &errorMessage);
+        QString processedContents;
+        std::optional<AdlNode> document;
+        if (applyMacroSubstitutions(adlContent, mergedMacros,
+                &processedContents, &errorMessage)) {
+          document = AdlParser::parse(processedContents, &errorMessage);
+        }
         if (!document) {
           loadingLegacyAdl_ = previousLegacyMode;
           qWarning() << "CompositeElement: Failed to parse composite file:"

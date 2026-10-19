@@ -1269,10 +1269,13 @@ configuration. Automated tests also use private <code>QTEDM_TEST_*</code>
 variables; those are test interfaces and are intentionally not part of the
 supported operator configuration surface.</p>
 
-<p>For long-running sessions, the Channel Access callback inbox is limited to
-4096 events and 128 MiB of copied payloads, with a 64 MiB limit per event.
-Ordinary bursts retain FIFO ordering; overload discards older values first and
-reports a rate-limited warning on standard error. PVA reconnect gets reuse the
+<p>For long-running sessions, the Channel Access callback inbox retains ordinary
+bursts of up to 4096 events and at most 128 MiB of copied payloads, with a
+64 MiB limit per event. During overload it may also retain up to three
+connection/access-state events per active channel so a disconnect and the
+latest reconnect or access state cannot be lost. Ordinary bursts retain FIFO
+ordering; overload discards older values first and reports a rate-limited
+warning on standard error. PVA reconnect gets reuse the
 latest reading. Plugin diagnostics retain at most 256 messages and 256 Ki
 characters, truncate long messages, and count repeated reports.</p>
 

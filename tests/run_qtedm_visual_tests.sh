@@ -9,6 +9,7 @@ source "${SCRIPT_DIR}/lib/qtedm_test_env.sh"
 trap 'qtedm_test_cleanup $?' EXIT INT TERM
 
 qtedm_test_setup_env
+qtedm_test_start_repeater
 
 export QT_SCALE_FACTOR=1
 export QT_AUTO_SCREEN_SCALE_FACTOR=0

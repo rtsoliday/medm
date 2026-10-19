@@ -2148,6 +2148,7 @@ cleanup() {
   if [[ -n "${ioc_pid}" ]] && kill -0 "${ioc_pid}" >/dev/null 2>&1; then
     kill "${ioc_pid}" >/dev/null 2>&1 || true
     wait "${ioc_pid}" >/dev/null 2>&1 || true
+    echo "Local IOC cleanup completed PID: ${ioc_pid}"
   fi
   if [[ ${status} -eq 130 ]]; then
     echo "IOC stopped by user."
@@ -2159,6 +2160,7 @@ set_local_ca_env
 set_local_epics_runtime_env
 "${cmd[@]}" > "${LOG_FILE}" 2>&1 &
 ioc_pid="$!"
+echo "Started local IOC PID: ${ioc_pid}"
 set_slider_test_pvs "${PV_PREFIX}" || true
 if [[ "${INIT_PROFILE}" == "full" ]]; then
 set_scale_monitor_test_pvs "${PV_PREFIX}" || true
@@ -2208,3 +2210,4 @@ if [[ -n "${READY_FILE}" ]]; then
   echo "Wrote IOC ready file: ${READY_FILE}"
 fi
 wait "${ioc_pid}"
+echo "Local IOC cleanup completed PID: ${ioc_pid}"

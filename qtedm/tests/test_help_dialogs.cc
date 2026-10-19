@@ -59,6 +59,15 @@ void TestHelpDialogs::guideNavigationSearchAndReuse()
   QCOMPARE(topics->currentItem()->data(Qt::UserRole).toString(),
       QStringLiteral("Introduction"));
   QVERIFY(browser->toPlainText().contains(QStringLiteral("Channel Access")));
+  const QString guideText = browser->toPlainText();
+  QVERIFY(guideText.contains(QStringLiteral(
+      "synthetic preview grid of at most 32 by 24 cells")));
+  QVERIFY(guideText.contains(QStringLiteral(
+      "Macro expansion is checked before parsing")));
+  QVERIFY(guideText.contains(QStringLiteral(
+      "A failed audit write or flush emits a warning")));
+  QVERIFY(guideText.contains(QStringLiteral(
+      "Failed pens remain named in the diagnostic")));
   QVERIFY(browser->document()->resource(QTextDocument::ImageResource,
       QUrl(QStringLiteral("qrc:/help/images/qtedm-widgets/slider.png")))
       .isValid());

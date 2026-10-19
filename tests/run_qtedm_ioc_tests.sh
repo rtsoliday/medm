@@ -9,6 +9,7 @@ source "${SCRIPT_DIR}/lib/qtedm_test_env.sh"
 trap 'qtedm_test_cleanup $?' EXIT INT TERM
 
 qtedm_test_setup_env
+qtedm_test_start_repeater
 
 # The dynamic waterfall driver launches several caput/cavput processes every
 # 0.35 s for the whole run. No IOC case needs changing waveforms, so seed

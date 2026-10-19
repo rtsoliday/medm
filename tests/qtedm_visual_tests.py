@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import math
 import os
 import platform
 import re
@@ -154,7 +155,7 @@ def resolve_golden_path(repo_root: Path, case: dict,
 
 def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
     prefix: str, temp_dir: Path, update_goldens: bool,
-    process_env: dict) -> None:
+    process_env: dict, launch_delay_seconds: float = 0) -> None:
   display_path = (repo_root / case["display"]).resolve()
   if case.get("use_ioc"):
     display_to_run = rewrite_display_with_prefix(display_path, prefix, temp_dir)
@@ -195,6 +196,8 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
           "-testActions",
           native_child_path(actions_path),
       ]
+    if launch_delay_seconds:
+      time.sleep(launch_delay_seconds)
     process = subprocess.Popen(
         command,
         env=process_env,
@@ -238,7 +241,8 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
       diff_path = temp_dir / f"{case['name']}.repeat{index}.diff.png"
       compare_images(compare_tool, actual_path, repeat_path, diff_path,
           case.get("tolerance", {}), f"{case['name']} repeat {index}")
-    print(f"PASS {case['name']} ({repeat_count} deterministic captures)")
+    print(f"PASS {case['name']} ({repeat_count} deterministic captures)",
+        flush=True)
     return
 
   if "golden" not in case:
@@ -250,7 +254,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
   golden_path.parent.mkdir(parents=True, exist_ok=True)
   if update_goldens:
     shutil.copyfile(actual_path, golden_path)
-    print(f"UPDATED {case['name']}")
+    print(f"UPDATED {case['name']}", flush=True)
     return
 
   if not golden_path.is_file():
@@ -259,7 +263,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, compare_tool: Path,
 
   compare_images(compare_tool, golden_path, actual_path, diff_path,
       case.get("tolerance", {}), case["name"])
-  print(f"PASS {case['name']}")
+  print(f"PASS {case['name']}", flush=True)
 
 
 def main() -> int:
@@ -277,7 +281,15 @@ def main() -> int:
   parser.add_argument(
       "--update-goldens", action="store_true",
       help="Replace golden images with the newly captured screenshots")
+  parser.add_argument(
+      "--keep-going", action="store_true",
+      help="Run all selected cases after failures, preserving artifacts and a failing exit status")
+  parser.add_argument(
+      "--launch-delay-seconds", type=float, default=0,
+      help="Delay before each QtEDM capture, including repeats (default: 0 seconds)")
   args = parser.parse_args()
+  if not math.isfinite(args.launch_delay_seconds) or args.launch_delay_seconds < 0:
+    parser.error("--launch-delay-seconds must be finite and nonnegative")
 
   qtedm_bin = Path(args.qtedm).expanduser().resolve()
   compare_tool = Path(args.compare_tool).expanduser().resolve()
@@ -299,6 +311,9 @@ def main() -> int:
   selected_names = set(args.case)
   cases = load_cases(cases_path, selected_names)
   needs_ioc = any(case.get("use_ioc") for case in cases)
+  capture_count = sum(max(1, int(case.get("deterministic_repeats", 1)))
+                      for case in cases)
+  ioc_execution_seconds = 240 + math.ceil(args.launch_delay_seconds * capture_count)
 
   # Visual goldens can render channel labels, so keep the IOC prefix stable.
   prefix = os.environ.get("QTEDM_VISUAL_PV_PREFIX", "qtedm_visual:")
@@ -309,6 +324,8 @@ def main() -> int:
   ioc_runner_log = temp_dir / "run_local_ioc.out"
   ioc_ready_file = temp_dir / "ioc.ready"
   runner_log_handle = None
+  passed_cases = 0
+  failed_cases: List[str] = []
   process_env = os.environ.copy()
   if needs_ioc:
     # The visual prefix must remain stable because some goldens display channel
@@ -327,7 +344,7 @@ def main() -> int:
       ioc_command = [
           str(run_local_ioc),
           "--execution-time",
-          "240",
+          str(ioc_execution_seconds),
           "--pv-prefix",
           prefix,
           "--log-file",
@@ -346,8 +363,24 @@ def main() -> int:
       wait_for_file(ioc_ready_file, ioc_process, timeout_seconds=120)
 
     for case in cases:
-      run_case(case, repo_root, qtedm_bin, compare_tool, prefix, temp_dir,
-          args.update_goldens, process_env)
+      try:
+        run_case(case, repo_root, qtedm_bin, compare_tool, prefix, temp_dir,
+            args.update_goldens, process_env, args.launch_delay_seconds)
+      except Exception as exc:
+        failed_cases.append(str(case.get("name", "<unnamed>")))
+        if not args.keep_going:
+          raise
+        keep_temp_dir = True
+        message = (str(exc) if isinstance(exc, CaseFailure)
+                   else f"Unexpected visual test failure: {exc}")
+        print(f"FAIL {failed_cases[-1]}: {message}",
+            file=sys.stderr, flush=True)
+      else:
+        passed_cases += 1
+    if failed_cases:
+      raise CaseFailure(
+          f"{len(failed_cases)} visual case(s) failed: "
+          + ", ".join(failed_cases))
   except Exception as exc:
     keep_temp_dir = True
     terminate_process(ioc_process)
@@ -364,6 +397,10 @@ def main() -> int:
     if ioc_runner_log.exists():
       log_hint.append(f"IOC runner log: {ioc_runner_log}")
     sys.stderr.write(f"{message}\n" + "\n".join(log_hint) + "\n")
+    print(f"SUMMARY: FAIL cases={len(cases)} passed={passed_cases} "
+          f"failed={len(failed_cases)} "
+          f"not_run={len(cases) - passed_cases - len(failed_cases)}",
+        file=sys.stderr, flush=True)
     return 1
   finally:
     terminate_process(ioc_process)
@@ -372,6 +409,8 @@ def main() -> int:
     if not keep_temp_dir:
       shutil.rmtree(temp_dir, ignore_errors=True)
 
+  print(f"SUMMARY: PASS cases={len(cases)} passed={passed_cases} failed=0",
+      flush=True)
   return 0
 
 

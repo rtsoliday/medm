@@ -1071,6 +1071,9 @@ void TestObserveOnlyControls::pvaSnapshotsCopySharedArrays()
 
 void TestObserveOnlyControls::shellCommandsDoNotBlockTheGuiThread()
 {
+  if (qEnvironmentVariableIntValue("QTEDM_TEST_RESTRICTED") == 1) {
+    QSKIP("Restricted tests do not execute external shell commands.");
+  }
   auto state = std::make_shared<DisplayState>();
   DisplayWindow window(QApplication::palette(), QApplication::palette(),
       QApplication::font(), QApplication::font(), state);

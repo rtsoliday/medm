@@ -481,6 +481,9 @@ void TestPluginsPropertyRules::registrationMetadataExceptionsAreContained()
 
 void TestPluginsPropertyRules::configuredPluginDirectoryIsDiscovered()
 {
+  if (qEnvironmentVariableIntValue("QTEDM_TEST_RESTRICTED") == 1) {
+    QSKIP("Restricted tests do not load native plugin fixtures.");
+  }
   const QDir applicationPluginDirectory(
       QDir(QCoreApplication::applicationDirPath())
           .filePath(QStringLiteral("plugins")));
@@ -530,6 +533,9 @@ void TestPluginsPropertyRules::configuredPluginDirectoryIsDiscovered()
 
 void TestPluginsPropertyRules::pvThumbsPluginTracksZeroAndNonzeroValues()
 {
+  if (qEnvironmentVariableIntValue("QTEDM_TEST_RESTRICTED") == 1) {
+    QSKIP("Restricted tests do not load native plugin fixtures.");
+  }
   auto &manager = QtedmPluginManager::instance();
   manager.loadConfiguredPlugins();
   const QString pluginId = QStringLiteral("org.qtedm.examples.pv-thumbs");

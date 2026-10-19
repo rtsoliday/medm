@@ -9,6 +9,7 @@ source "${SCRIPT_DIR}/lib/qtedm_test_env.sh"
 trap 'qtedm_test_cleanup $?' EXIT INT TERM
 
 qtedm_test_setup_env
+qtedm_test_start_repeater
 
 QTEDM_BIN="${QTEDM_BIN:-$(qtedm_test_default_qtedm_bin)}"
 QTEDM_CONVERT_BIN="${QTEDM_CONVERT_BIN:-}"

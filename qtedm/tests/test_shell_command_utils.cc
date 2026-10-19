@@ -14,6 +14,7 @@ class TestShellCommandUtils : public QObject
 
 private slots:
   void expandsMedmTokensAndPreservesUnknownTokens();
+  void preservesTokenValuesWithoutRecursiveExpansion();
   void rejectsMissingPvSelectionAndEmptyCommands();
   void invokesCheckedInHelperAndReportsFailures();
 };
@@ -50,8 +51,29 @@ void TestShellCommandUtils::rejectsMissingPvSelectionAndEmptyCommands()
   QVERIFY(error.contains(QStringLiteral("empty")));
 }
 
+void TestShellCommandUtils::preservesTokenValuesWithoutRecursiveExpansion()
+{
+  ShellCommandExpansionContext context;
+  context.displayPath = QStringLiteral("/displays/Operator's screens/main.adl");
+  context.displayTitle = QStringLiteral("Operator's screen &A");
+  context.windowId = 42;
+  context.pvNames = QStringList{QStringLiteral("TEST:VALUE")};
+  QString output;
+  QString error;
+  QVERIFY(expandShellCommandTokens(
+      QStringLiteral("viewer \"&A\" \"&T\" &X &P"), context,
+      &output, &error));
+  QCOMPARE(output, QStringLiteral(
+      "viewer \"/displays/Operator's screens/main.adl\" "
+      "\"Operator's screen &A\" 42 TEST:VALUE"));
+  QVERIFY(error.isEmpty());
+}
+
 void TestShellCommandUtils::invokesCheckedInHelperAndReportsFailures()
 {
+  if (qEnvironmentVariableIntValue("QTEDM_TEST_RESTRICTED") == 1) {
+    QSKIP("Restricted tests check command strings without executing them.");
+  }
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
   QString helper = QDir(QCoreApplication::applicationDirPath())

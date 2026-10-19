@@ -2,11 +2,13 @@
 """Validate round-trip ADL saves produced by qtedm."""
 
 import argparse
+import math
 import os
 import platform
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Callable, List, NamedTuple, Optional, Set, Tuple
 
@@ -1162,6 +1164,17 @@ def run_normalization_self_tests() -> int:
 
 
 
+def nonnegative_launch_delay(value: str) -> float:
+  """Parse a finite, nonnegative interval for sequential QtEDM launches."""
+  try:
+    delay = float(value)
+  except ValueError as exc:
+    raise argparse.ArgumentTypeError("delay must be a number") from exc
+  if not math.isfinite(delay) or delay < 0:
+    raise argparse.ArgumentTypeError("delay must be finite and nonnegative")
+  return delay
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(
       description="Run qtedm -testSave on ADL files and check for changes."
@@ -1170,6 +1183,12 @@ def main() -> int:
       "--self-test",
       action="store_true",
       help="Run in-memory comparison regressions without launching qtedm",
+  )
+  parser.add_argument(
+      "--launch-delay-seconds",
+      type=nonnegative_launch_delay,
+      default=0.0,
+      help="Wait this many seconds before each subsequent qtedm launch (default: 0)",
   )
   parser.add_argument(
       "paths",
@@ -1224,13 +1243,15 @@ def main() -> int:
   output_path = Path(args.output).expanduser().resolve()
   output_path.parent.mkdir(parents=True, exist_ok=True)
 
-  for adl_path in adl_files:
+  for file_index, adl_path in enumerate(adl_files):
     if not adl_path.is_file():
       sys.stderr.write(f"ADL file not found: {adl_path}\n")
       print(f"SUMMARY: FAIL stage=setup file={adl_path}")
       return EXIT_SETUP_ERROR
     if output_path.exists():
       output_path.unlink()
+    if file_index and args.launch_delay_seconds:
+      time.sleep(args.launch_delay_seconds)
     qtedm_status = run_qtedm(adl_path, qtedm_path, output_path)
     if qtedm_status != 0:
       print(f"SUMMARY: FAIL stage=qtedm file={adl_path}")

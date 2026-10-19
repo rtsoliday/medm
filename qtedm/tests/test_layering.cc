@@ -64,6 +64,9 @@ void TestLayering::steeringLabelRendersLikeMedmReference_data()
 
 void TestLayering::steeringLabelRendersLikeMedmReference()
 {
+  if (qEnvironmentVariableIntValue("QTEDM_TEST_RESTRICTED") == 1) {
+    QSKIP("Restricted tests do not launch a qtedm child that loads plugin fixtures.");
+  }
   QFETCH(bool, literalBackslash);
   QTemporaryDir directory;
   QVERIFY(directory.isValid());

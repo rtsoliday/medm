@@ -4,6 +4,7 @@
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 import os
 import re
 import shutil
@@ -28,6 +29,123 @@ CHILD_DISPLAY_PATTERN = re.compile(
 
 class CaseFailure(RuntimeError):
   """Raised when an IOC-backed integration case fails."""
+
+
+RESOURCE_LOG_LOCK = threading.Lock()
+
+
+def append_resource_record(path: Path, record: dict) -> None:
+  # IOC restarts can occur while the QtEDM sampler thread is writing.
+  with RESOURCE_LOG_LOCK:
+    with path.open("a", encoding="utf-8") as output:
+      output.write(json.dumps(record, ensure_ascii=True) + "\n")
+
+
+class OwnedProcessResourceLog:
+  """Drain one owned QtEDM child while collecting optional resource samples."""
+
+  def __init__(self, process: subprocess.Popen, case_name: str,
+      command: List[str], path: Path):
+    self.process = process
+    self.case_name = case_name
+    self.command = command
+    self.path = path
+    self.started = time.monotonic()
+    self.stdout = ""
+    self.stderr = ""
+    self.error: Optional[str] = None
+    self.thread = threading.Thread(
+        target=self._collect, name="qtedm-owned-resource-log", daemon=True)
+
+  def _record(self, event: str, **fields) -> None:
+    record = {
+        "event": event,
+        "case": self.case_name,
+        "pid": self.process.pid,
+        "elapsed_seconds": time.monotonic() - self.started,
+        **fields,
+    }
+    append_resource_record(self.path, record)
+
+  def _sample(self) -> None:
+    if self.process.poll() is not None:
+      return
+    command = [
+        "ps", "-o", "pid,rss,vsz,etime,cmd", "-p", str(self.process.pid)]
+    fields = {"ps_command": command}
+    try:
+      result = subprocess.run(
+          command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+          universal_newlines=True, check=False, timeout=5)
+      if self.process.poll() is not None:
+        return
+      fields.update({
+          "ps_returncode": result.returncode,
+          "ps_stdout": result.stdout,
+          "ps_stderr": result.stderr,
+      })
+    except (OSError, subprocess.TimeoutExpired) as exc:
+      fields["ps_error"] = str(exc)
+    if sys.platform.startswith("linux") and self.process.poll() is None:
+      owned_proc = Path("/proc") / str(self.process.pid)
+      try:
+        fields["proc_status"] = (owned_proc / "status").read_text(
+            encoding="utf-8")
+      except OSError as exc:
+        fields["proc_status_error"] = str(exc)
+      if self.process.poll() is None:
+        try:
+          fields["fd_count"] = sum(1 for _ in (owned_proc / "fd").iterdir())
+        except OSError as exc:
+          fields["fd_error"] = str(exc)
+    else:
+      fields["fd_unavailable"] = "/proc sampling is available only on Linux"
+    self._record("sample", **fields)
+
+  def _collect(self) -> None:
+    sampling = True
+    try:
+      self._record("start", command=self.command)
+    except Exception as exc:
+      self.error = str(exc)
+      sampling = False
+    while True:
+      if sampling:
+        try:
+          self._sample()
+        except Exception as exc:
+          self.error = str(exc)
+          sampling = False
+      try:
+        self.stdout, self.stderr = self.process.communicate(timeout=5)
+        break
+      except subprocess.TimeoutExpired:
+        # Repeating communicate() preserves buffered output and continues
+        # draining both pipes, including during readiness and IOC restart.
+        continue
+      except Exception as exc:
+        self.error = str(exc)
+        return
+    if sampling:
+      try:
+        self._record("exit", returncode=self.process.returncode,
+            stdout=self.stdout, stderr=self.stderr)
+      except Exception as exc:
+        self.error = str(exc)
+
+  def start(self) -> None:
+    self.thread.start()
+
+  def communicate(self, timeout_seconds: float):
+    self.thread.join(timeout=timeout_seconds)
+    if self.thread.is_alive():
+      raise subprocess.TimeoutExpired(self.command, timeout_seconds)
+    if self.error:
+      raise CaseFailure(f"Resource logging failed for {self.case_name}: {self.error}")
+    return self.stdout, self.stderr
+
+  def finish(self) -> None:
+    self.thread.join(timeout=10)
 
 
 def native_child_path(path: Path) -> str:
@@ -439,7 +557,8 @@ def verify_pv_values(case: dict, provider: str, prefix: str,
 def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
     caget_bin: Path, pvget_bin: Optional[Path], pvput_bin: Optional[Path],
     prefix: str, temp_dir: Path,
-    restart_provider: Optional[Callable[[], None]] = None) -> None:
+    restart_provider: Optional[Callable[[], None]] = None,
+    resource_log: Optional[Path] = None) -> None:
   provider = str(case.get("provider", "ca")).lower()
   display_path = (repo_root / case["display"]).resolve()
   rewritten_display = rewrite_display_with_prefix(
@@ -449,6 +568,7 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
   actions_path = temp_dir / f"{case['name']}.actions.json"
   archive_server: Optional[ArchiveFixtureServer] = None
   process: Optional[subprocess.Popen] = None
+  resources: Optional[OwnedProcessResourceLog] = None
 
   process_env = os.environ.copy()
   archive_fixture = case.get("archive_fixture")
@@ -504,6 +624,10 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
       env=process_env,
   )
   try:
+    if resource_log is not None:
+      resources = OwnedProcessResourceLog(
+          process, case["name"], command, resource_log)
+      resources.start()
     wait_for_file(ready_path, process, timeout_seconds=15)
     post_ready_delay_ms = float(case.get("post_ready_delay_ms", 0))
     if post_ready_delay_ms > 0:
@@ -531,14 +655,19 @@ def run_case(case: dict, repo_root: Path, qtedm_bin: Path, cavput_bin: Path,
             f"Failed to write {pv}={write['value']}: "
             f"{(result.stderr or result.stdout).strip()}")
 
-    stdout, stderr = process.communicate(
-        timeout=float(case.get("exit_after_ms", 4500)) / 1000.0 + 10.0)
+    completion_timeout = float(case.get("exit_after_ms", 4500)) / 1000.0 + 10.0
+    if resources is not None:
+      stdout, stderr = resources.communicate(completion_timeout)
+    else:
+      stdout, stderr = process.communicate(timeout=completion_timeout)
   except subprocess.TimeoutExpired as exc:
     terminate_process(process)
     raise CaseFailure(f"Timed out waiting for qtedm in case {case['name']}") from exc
   finally:
     if process is not None and process.poll() is None:
       terminate_process(process)
+    if resources is not None:
+      resources.finish()
     if archive_server is not None:
       archive_server.close()
 
@@ -577,7 +706,17 @@ def main() -> int:
   parser.add_argument(
       "--case", action="append", default=[],
       help="Specific case name to run (may be repeated)")
+  parser.add_argument(
+      "--provider", choices=("ca", "pva"),
+      help="Run only cases for this provider (default: both)")
+  parser.add_argument(
+      "--resource-log", help="Append owned QtEDM ps and Linux /proc samples as JSONL")
+  parser.add_argument(
+      "--launch-delay-seconds", type=float, default=0,
+      help="Delay between sequential QtEDM cases (default: 0 seconds)")
   args = parser.parse_args()
+  if not math.isfinite(args.launch_delay_seconds) or args.launch_delay_seconds < 0:
+    parser.error("--launch-delay-seconds must be finite and nonnegative")
 
   qtedm_bin = Path(args.qtedm).expanduser().resolve()
   run_local_ioc = Path(args.run_local_ioc).expanduser().resolve()
@@ -596,6 +735,16 @@ def main() -> int:
   cases_path = Path(args.cases).expanduser().resolve()
   repo_root = Path(__file__).resolve().parents[1]
 
+  if not cases_path.is_file():
+    raise CaseFailure(f"Case manifest not found: {cases_path}")
+  selected_names = set(args.case)
+  cases = load_cases(cases_path, selected_names)
+  if args.provider:
+    cases = [case for case in cases
+             if str(case.get("provider", "ca")).lower() == args.provider]
+  if not cases:
+    raise CaseFailure("No IOC cases selected after --case and --provider filters")
+
   for path in (qtedm_bin, run_local_ioc, cavput_bin, caget_bin, cases_path):
     if not path.exists():
       raise CaseFailure(f"Required path not found: {path}")
@@ -607,8 +756,24 @@ def main() -> int:
   if not os.access(cavput_bin, os.X_OK):
     raise CaseFailure(f"cavput helper is not executable: {cavput_bin}")
 
-  selected_names = set(args.case)
-  cases = load_cases(cases_path, selected_names)
+  for case in cases:
+    if not isinstance(case.get("use_ioc", True), bool):
+      raise CaseFailure(f"Case {case['name']} use_ioc must be a boolean")
+    if not case.get("use_ioc", True):
+      if str(case.get("provider", "ca")).lower() == "pva":
+        raise CaseFailure(f"Case {case['name']} use_ioc:false supports CA only")
+      if any(case.get(field) for field in (
+          "pre_writes", "writes", "verify_pvs", "restart_provider")):
+        raise CaseFailure(
+            f"Case {case['name']} use_ioc:false cannot write, verify, or restart PVs")
+  resource_log = (
+      Path(args.resource_log).expanduser().resolve() if args.resource_log else None)
+  if resource_log is not None:
+    protected_paths = {qtedm_bin, run_local_ioc, cavput_bin, caget_bin, cases_path}
+    protected_paths.update((repo_root / case["display"]).resolve() for case in cases)
+    if resource_log in protected_paths:
+      raise CaseFailure("Resource log must not replace a binary, helper, or input file")
+    resource_log.parent.mkdir(parents=True, exist_ok=True)
   ca_cases = [
       case for case in cases
       if str(case.get("provider", "ca")).lower() != "pva"
@@ -631,7 +796,8 @@ def main() -> int:
   case_runtime_ms = sum(
       int(case.get("exit_after_ms", 4500)) for case in cases)
   ioc_execution_seconds = max(
-      240, (case_runtime_ms + 999) // 1000 + 180)
+      240, (case_runtime_ms + 999) // 1000 + 180
+      + math.ceil(args.launch_delay_seconds * max(0, len(cases) - 1)))
 
   prefix = f"qtedm_ioc_{int(time.time())}_{os.getpid()}:"
   pva_prefix = f"{prefix}pva:"
@@ -657,31 +823,80 @@ def main() -> int:
   ]
   runner_log_handle = None
   pva_log_handle = None
+  ca_fixture_command: List[str] = []
+  ca_fixture_log_offset = 0
+  ca_fixture_started = 0.0
+  fixture_log_errors: List[str] = []
+
+  def record_ca_fixture(event: str, process: Optional[subprocess.Popen],
+      reason: str) -> None:
+    if resource_log is None or process is None:
+      return
+    try:
+      with ioc_runner_log.open("rb") as output:
+        output.seek(ca_fixture_log_offset)
+        lines = output.read().decode("utf-8", errors="replace").splitlines()
+      lifecycle_lines = [line for line in lines if line.startswith((
+          "Started local IOC PID:", "Local IOC cleanup completed PID:"))]
+      append_resource_record(resource_log, {
+          "event": event,
+          "fixture": "ca",
+          "runner_pid": process.pid,
+          "command": list(ca_fixture_command),
+          "returncode": process.poll(),
+          "reason": reason,
+          "elapsed_seconds": time.monotonic() - ca_fixture_started,
+          "runner_log": str(ioc_runner_log),
+          "lifecycle_lines": lifecycle_lines,
+      })
+    except Exception as exc:
+      # Logging is evidence collection, never a reason to skip teardown.
+      message = f"CA fixture resource logging failed: {exc}"
+      fixture_log_errors.append(message)
+      sys.stderr.write(message + "\n")
+
+  def stop_ca_fixture(reason: str) -> None:
+    nonlocal ioc_process, runner_log_handle
+    process = ioc_process
+    try:
+      terminate_process(process)
+    finally:
+      if runner_log_handle is not None:
+        runner_log_handle.close()
+        runner_log_handle = None
+      record_ca_fixture("ca_fixture_stop", process, reason)
+      if process is None or process.poll() is not None:
+        ioc_process = None
 
   def start_ca_fixture(initialization_profile: str = "full") -> None:
     nonlocal ioc_process, runner_log_handle
+    nonlocal ca_fixture_command, ca_fixture_log_offset, ca_fixture_started
     if ioc_process is not None and ioc_process.poll() is None:
       return
     ioc_ready_file.unlink(missing_ok=True)
+    if resource_log is not None:
+      ca_fixture_log_offset = (
+          ioc_runner_log.stat().st_size if ioc_runner_log.exists() else 0)
     runner_log_handle = ioc_runner_log.open("a", encoding="utf-8")
     command = list(ioc_command)
     if initialization_profile != "full":
       command.extend(["--init-profile", initialization_profile])
+    ca_fixture_command = list(command)
+    ca_fixture_started = time.monotonic()
     ioc_process = subprocess.Popen(
         command,
         stdout=runner_log_handle,
         stderr=subprocess.STDOUT,
         universal_newlines=True,
     )
-    wait_for_ioc_ready(ioc_process, ioc_ready_file, timeout_seconds=120)
+    try:
+      wait_for_ioc_ready(ioc_process, ioc_ready_file, timeout_seconds=120)
+    finally:
+      record_ca_fixture("ca_fixture_start", ioc_process,
+          initialization_profile)
 
   def restart_ca_fixture() -> None:
-    nonlocal ioc_process, runner_log_handle
-    terminate_process(ioc_process)
-    ioc_process = None
-    if runner_log_handle is not None:
-      runner_log_handle.close()
-      runner_log_handle = None
+    stop_ca_fixture("restart")
     start_ca_fixture("slider")
 
   def start_pva_fixture() -> None:
@@ -721,9 +936,18 @@ def main() -> int:
     start_pva_fixture()
 
   try:
-    start_ca_fixture()
-    for case in cases:
+    for case_index, case in enumerate(cases):
+      if case_index and args.launch_delay_seconds:
+        time.sleep(args.launch_delay_seconds)
       provider = str(case.get("provider", "ca")).lower()
+      if provider != "pva":
+        if case.get("use_ioc", True):
+          if ioc_process is None:
+            start_ca_fixture()
+          elif ioc_process.poll() is not None:
+            raise CaseFailure("CA IOC exited between integration cases")
+        elif ioc_process is not None:
+          stop_ca_fixture("disconnected_case")
       if provider == "pva" and pva_process is None:
         start_pva_fixture()
       if provider == "pva" and pva_process.poll() is not None:
@@ -733,15 +957,13 @@ def main() -> int:
       run_case(
           case, repo_root, qtedm_bin, cavput_bin, caget_bin, pvget_bin,
           pvput_bin, case_prefix, temp_dir,
-          restart_pva_fixture if provider == "pva" else restart_ca_fixture)
+          restart_pva_fixture if provider == "pva" else restart_ca_fixture,
+          resource_log)
       print(f"PASS {case['name']}")
   except Exception as exc:
     keep_temp_dir = True
-    terminate_process(ioc_process)
+    stop_ca_fixture("failure_cleanup")
     terminate_process(pva_process)
-    if runner_log_handle is not None:
-      runner_log_handle.close()
-      runner_log_handle = None
     if pva_log_handle is not None:
       pva_log_handle.close()
     if isinstance(exc, CaseFailure):
@@ -759,16 +981,17 @@ def main() -> int:
     sys.stderr.write(f"{message}\n" + "\n".join(log_hint) + "\n")
     return 1
   finally:
-    terminate_process(ioc_process)
+    stop_ca_fixture("final_cleanup")
     terminate_process(pva_process)
-    if runner_log_handle is not None:
-      runner_log_handle.close()
     if pva_log_handle is not None:
       pva_log_handle.close()
+    if fixture_log_errors:
+      keep_temp_dir = True
+      sys.stderr.write(f"Preserved IOC temp dir: {temp_dir}\n")
     if not keep_temp_dir:
       shutil.rmtree(temp_dir, ignore_errors=True)
 
-  return 0
+  return 1 if fixture_log_errors else 0
 
 
 if __name__ == "__main__":

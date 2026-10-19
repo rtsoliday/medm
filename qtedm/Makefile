@@ -725,6 +725,11 @@ tests: test
 
 test: test-cli test-unit test-ioc test-visual
 
+QTEDM_TEST_MANAGE_REPEATER ?= 0
+ifeq ($(QTEDM_TEST_MANAGE_REPEATER),1)
+test-unit: SHELL := /bin/bash
+endif
+
 test-unit: build-tests
 	@$(PYTHON) ../tests/testADL_SaveFiles.py --self-test
 	@$(PYTHON) ../tests/validate_qtedm_coverage.py
@@ -738,29 +743,42 @@ test-unit: build-tests
 	export HOME="$$tmp_dir/home"; \
 	$(QTEDM_TEST_ISOLATION); \
 	mkdir -p "$$HOME"; \
+	if [ "$(QTEDM_TEST_MANAGE_REPEATER)" = "1" ]; then \
+	  export QTEDM_TEST_MANAGE_REPEATER=1; \
+	  QTEDM_TEST_TMP_DIR="$$tmp_dir"; \
+	  . ../tests/lib/qtedm_test_env.sh; \
+	  trap 'qtedm_test_cleanup $$?' EXIT HUP INT TERM; \
+	  qtedm_test_setup_env; \
+	  qtedm_test_start_repeater; \
+	fi; \
 	for test_bin in $(QTEDM_UNIT_TEST_BINARIES); do \
 	  echo "Running $$test_bin"; \
 	  "$$test_bin"; \
 	done
 
+QTEDM_TEST_APP_BIN ?= $(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)
+QTEDM_CLI_TEST_ARGS ?=
+QTEDM_IOC_TEST_ARGS ?=
+QTEDM_VISUAL_TEST_ARGS ?=
+
 test-cli: $(OBJ_DIR)/qtedm$(EXEEXT) $(OBJ_DIR)/qtedm-convert$(EXEEXT)
 	@$(PYTHON) ../tests/testADL_SaveFiles.py --self-test
-	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
+	QTEDM_BIN="$(QTEDM_TEST_APP_BIN)" \
 	QTEDM_CONVERT_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm-convert$(EXEEXT)" \
-	../tests/run_qtedm_cli_tests.sh
+	../tests/run_qtedm_cli_tests.sh $(QTEDM_CLI_TEST_ARGS)
 
 test-ioc: $(OBJ_DIR)/qtedm$(EXEEXT)
-	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
+	QTEDM_BIN="$(QTEDM_TEST_APP_BIN)" \
 	QTEDM_SOFT_IOC_PVA="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/softIocPVA$(EXEEXT)" \
 	QTEDM_PVGET="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/pvget$(EXEEXT)" \
 	QTEDM_PVPUT="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/pvput$(EXEEXT)" \
 	QTEDM_CAGET="$(EPICS_BASE)/bin/$(EPICS_HOST)-$(EPICS_ARCH)/caget$(EXEEXT)" \
-	../tests/run_qtedm_ioc_tests.sh
+	../tests/run_qtedm_ioc_tests.sh $(QTEDM_IOC_TEST_ARGS)
 
 test-visual: $(OBJ_DIR)/qtedm$(EXEEXT) $(QTEDM_VISUAL_TEST_TOOLS)
-	QTEDM_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)" \
+	QTEDM_BIN="$(QTEDM_TEST_APP_BIN)" \
 	QTEDM_IMAGE_COMPARE_BIN="$(CURDIR)/$(OBJ_DIR)/qtedm_image_compare$(EXEEXT)" \
-	../tests/run_qtedm_visual_tests.sh
+	../tests/run_qtedm_visual_tests.sh $(QTEDM_VISUAL_TEST_ARGS)
 
 clean-tests:
 	rm -f $(QTEDM_UNIT_TEST_BINARIES) $(QTEDM_UNIT_TEST_MOCS) \

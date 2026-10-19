@@ -6,6 +6,7 @@ QTEDM_TEST_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QTEDM_TEST_REPO_ROOT="$(cd "${QTEDM_TEST_LIB_DIR}/../.." && pwd)"
 QTEDM_TEST_TMP_DIR="${QTEDM_TEST_TMP_DIR:-}"
 QTEDM_TEST_CHILD_PIDS="${QTEDM_TEST_CHILD_PIDS:-}"
+QTEDM_TEST_REPEATER_PID=""
 
 qtedm_test_posix_path() {
   local path="${1:-}"
@@ -98,16 +99,76 @@ qtedm_test_register_child() {
   fi
 }
 
+qtedm_test_start_repeater() {
+  local manage_repeater="${QTEDM_TEST_MANAGE_REPEATER:-0}"
+  local repeater_bin="${QTEDM_TEST_CA_REPEATER_BIN:-}"
+  local repeater_port="${EPICS_CA_REPEATER_PORT:-}"
+  local port_number=""
+
+  if [[ "${manage_repeater}" == "0" ]]; then
+    return 0
+  fi
+  if [[ "${manage_repeater}" != "1" ]]; then
+    echo "QTEDM_TEST_MANAGE_REPEATER must be 0 or 1." >&2
+    return 1
+  fi
+  if [[ "${repeater_bin}" != /* || ! -f "${repeater_bin}" \
+      || ! -x "${repeater_bin}" ]]; then
+    echo "Managed caRepeater requires an absolute executable QTEDM_TEST_CA_REPEATER_BIN." >&2
+    return 1
+  fi
+  if [[ ! "${repeater_port}" =~ ^[0-9]{1,5}$ ]]; then
+    echo "Managed caRepeater requires an explicit private EPICS_CA_REPEATER_PORT (49152..65535)." >&2
+    return 1
+  fi
+  port_number=$((10#${repeater_port}))
+  if (( port_number < 49152 || port_number > 65535 )); then
+    echo "Managed caRepeater requires EPICS_CA_REPEATER_PORT in 49152..65535." >&2
+    return 1
+  fi
+  if [[ -z "${QTEDM_TEST_TMP_DIR}" || ! -d "${QTEDM_TEST_TMP_DIR}" ]]; then
+    echo "Managed caRepeater requires qtedm_test_setup_env first." >&2
+    return 1
+  fi
+  if [[ -n "${QTEDM_TEST_REPEATER_PID}" ]]; then
+    if kill -0 "${QTEDM_TEST_REPEATER_PID}" >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "Owned caRepeater exited; refusing to continue with unmanaged CA." >&2
+    return 1
+  fi
+
+  export EPICS_CA_REPEATER_PORT="${port_number}"
+  export EPICS_CAS_BEACON_PORT="${port_number}"
+  "${repeater_bin}" > "${QTEDM_TEST_TMP_DIR}/caRepeater.log" 2>&1 &
+  QTEDM_TEST_REPEATER_PID="$!"
+  qtedm_test_register_child "${QTEDM_TEST_REPEATER_PID}"
+  echo "Started owned caRepeater PID: ${QTEDM_TEST_REPEATER_PID} (port ${port_number})"
+  sleep 1
+  if ! kill -0 "${QTEDM_TEST_REPEATER_PID}" >/dev/null 2>&1; then
+    echo "Owned caRepeater exited during startup; refusing to run CA tests." >&2
+    cat "${QTEDM_TEST_TMP_DIR}/caRepeater.log" >&2
+    return 1
+  fi
+}
+
 qtedm_test_cleanup() {
   local status="${1:-$?}"
   local pid=""
+  local wait_status=""
 
   for pid in ${QTEDM_TEST_CHILD_PIDS}; do
     if kill -0 "${pid}" >/dev/null 2>&1; then
+      echo "Stopping owned test child PID: ${pid}"
       kill "${pid}" >/dev/null 2>&1 || true
-      wait "${pid}" >/dev/null 2>&1 || true
     fi
+    wait_status=0
+    wait "${pid}" >/dev/null 2>&1 || wait_status=$?
+    echo "Owned test child cleanup completed PID: ${pid} (wait status ${wait_status})"
   done
+  QTEDM_TEST_CHILD_PIDS=""
+  QTEDM_TEST_REPEATER_PID=""
+  export QTEDM_TEST_CHILD_PIDS
 
   if [[ -n "${QTEDM_TEST_TMP_DIR}" && -d "${QTEDM_TEST_TMP_DIR}" ]]; then
     rm -rf "${QTEDM_TEST_TMP_DIR}"

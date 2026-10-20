@@ -12,6 +12,8 @@ private slots:
   void parsesMinimalFixture();
   void parsesCommentsAndQuotedValues();
   void parsesEscapedQuotedValues();
+  void parsesFixedWidthUnicodeEscapes();
+  void preservesMalformedUnicodeEscapeBehavior();
   void parsesLiteralDownArrow();
   void parsesTrailingLiteralBackslash_data();
   void parsesTrailingLiteralBackslash();
@@ -97,6 +99,31 @@ void TestAdlParser::parsesEscapedQuotedValues()
   QVERIFY(textNode);
   QCOMPARE(propertyValue(*textNode, QStringLiteral("textix")),
       QStringLiteral("chan=\" \" path=\\tmp\\screen adl\\n"));
+}
+
+void TestAdlParser::parsesFixedWidthUnicodeEscapes()
+{
+  QString error;
+  const auto root = AdlParser::parse(QStringLiteral(
+      "text { textix=\"\\u00b0C \\u03A9 \\u200b \\u2028 "
+      "\\ud83d\\ude80 \\u0041f\" }"), &error);
+  QVERIFY2(root.has_value(), qPrintable(error));
+  const AdlNode *text = ::findChild(*root, QStringLiteral("text"));
+  QVERIFY(text);
+  QCOMPARE(propertyValue(*text, QStringLiteral("textix")),
+      QStringLiteral("\u00b0C \u03a9 \u200b \u2028 \U0001f680 Af"));
+}
+
+void TestAdlParser::preservesMalformedUnicodeEscapeBehavior()
+{
+  QString error;
+  const auto root = AdlParser::parse(QStringLiteral(
+      "text { textix=\"\\u12g4 \\u123 \\u \\qvalue\" }"), &error);
+  QVERIFY2(root.has_value(), qPrintable(error));
+  const AdlNode *text = ::findChild(*root, QStringLiteral("text"));
+  QVERIFY(text);
+  QCOMPARE(propertyValue(*text, QStringLiteral("textix")),
+      QStringLiteral("u12g4 u123 u qvalue"));
 }
 
 void TestAdlParser::parsesLiteralDownArrow()

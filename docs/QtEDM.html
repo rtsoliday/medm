@@ -1307,6 +1307,14 @@ Macro expansion is checked before parsing and stops with an error if a
 substituted result exceeds 16 MiB of UTF-8 text or 16 Mi characters, including
 intermediate results of recursive substitutions.</p>
 
+<p>ADL files retain their legacy Latin-1 encoding. QtEDM saves characters
+outside Latin-1 as <code>\uXXXX</code> escapes with exactly four hexadecimal
+digits per UTF-16 code unit; supplementary characters use two escapes.
+QtEDM decodes these escapes when opening a display, preserving imported or
+edited Unicode text through saving and undo. Legacy MEDM does not decode
+QtEDM string escapes. The display converter uses the same encoding for both
+its main display and generated tab-page displays.</p>
+
 <h3>PV Protocol Prefix</h3>
 
 <p>QtEDM supports both Channel Access (CA) and PVAccess (PVA). To force PVA for a

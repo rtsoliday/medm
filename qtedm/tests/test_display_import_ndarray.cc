@@ -27,6 +27,7 @@
 #include "ntndarray_image_runtime.h"
 #include "pva_ntndarray_source.h"
 #include "adl_parser.h"
+#include "text_element.h"
 
 bool pvaNtNdArrayExtractFrame(
     const epics::pvData::PVStructurePtr &root,
@@ -121,6 +122,7 @@ class TestDisplayImportNdArray : public QObject
 private slots:
   void registryContainsNtNdArrayImage();
   void converterProducesDeterministicDisplaysAndReport();
+  void converterPreservesUnicodeThroughLoadAndSave();
   void converterRejectsMalformedAndUnsupportedInputs();
   void converterUsesSafeDefaultsAndAvoidsArtifactCollisions();
   void tabbedChildLoadFailureDoesNotLeakWindow();
@@ -255,6 +257,81 @@ void TestDisplayImportNdArray::converterProducesDeterministicDisplaysAndReport()
   QVERIFY2(second.success, qPrintable(second.error));
   QCOMPARE(readAll(second.outputPath), firstAdl);
   QCOMPARE(readAll(second.reportPath), firstReport);
+}
+
+void TestDisplayImportNdArray::converterPreservesUnicodeThroughLoadAndSave()
+{
+  QTemporaryDir directory(QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("unicode-import-XXXXXX")));
+  QVERIFY(directory.isValid());
+  const QString expectedText = QStringLiteral(
+      "Temperature \u00b0C \u03a9 \u200b \u2028 \U0001f680");
+  const QByteArray input = QStringLiteral(
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ui version=\"4.0\"><widget class=\"QWidget\" name=\"root\">"
+      "<property name=\"geometry\"><rect><x>0</x><y>0</y>"
+      "<width>600</width><height>300</height></rect></property>"
+      "<widget class=\"QLabel\" name=\"mainLabel\">"
+      "<property name=\"text\"><string>%1</string></property></widget>"
+      "<widget class=\"QTabWidget\" name=\"tabs\">"
+      "<widget class=\"QWidget\" name=\"page\">"
+      "<attribute name=\"title\"><string>Page</string></attribute>"
+      "<widget class=\"QLabel\" name=\"childLabel\">"
+      "<property name=\"text\"><string>%1</string></property></widget>"
+      "</widget></widget></widget></ui>").arg(expectedText).toUtf8();
+  DisplayConversionOptions options;
+  options.inputPath = directory.filePath(QStringLiteral("unicode.ui"));
+  options.outputPath = directory.filePath(QStringLiteral("unicode.adl"));
+  QFile source(options.inputPath);
+  QVERIFY(source.open(QIODevice::WriteOnly));
+  QCOMPARE(source.write(input), qint64(input.size()));
+  source.close();
+
+  const DisplayConversionResult converted = DisplayConverter::convert(options);
+  QVERIFY2(converted.success, qPrintable(converted.error));
+  const QJsonObject report = QJsonDocument::fromJson(
+      readAll(converted.reportPath)).object();
+  const QJsonArray generated =
+      report.value(QStringLiteral("generated_displays")).toArray();
+  QCOMPARE(generated.size(), 2);
+  for (const QJsonValue &pathValue : generated) {
+    const QString path = pathValue.toString();
+    const QByteArray adl = readAll(path);
+    QVERIFY(adl.contains(QByteArray("\xb0", 1)));
+    QVERIFY(adl.contains("\\u03a9"));
+    QVERIFY(adl.contains("\\u200b"));
+    QVERIFY(adl.contains("\\u2028"));
+    QVERIFY(adl.contains("\\ud83d\\ude80"));
+
+    auto state = std::make_shared<DisplayState>();
+    state->editMode = true;
+    DisplayWindow window(QApplication::palette(), QApplication::palette(),
+        QFont(), QFont(), state);
+    QString error;
+    QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+    auto loadedText = [&window]() {
+      QStringList texts;
+      for (QLabel *label : window.findChildren<QLabel *>()) {
+        if (auto *text = dynamic_cast<TextElement *>(label)) {
+          QWidget *owner = text->parentWidget();
+          while (owner && !dynamic_cast<DisplayWindow *>(owner)) {
+            owner = owner->parentWidget();
+          }
+          if (owner == &window) {
+            texts.append(text->text());
+          }
+        }
+      }
+      return texts;
+    };
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QCOMPARE(loadedText(), QStringList{expectedText});
+    const QString savedPath = path + QStringLiteral(".saved.adl");
+    QVERIFY(window.saveToPath(savedPath));
+    QVERIFY2(window.loadFromFile(savedPath, &error), qPrintable(error));
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QCOMPARE(loadedText(), QStringList{expectedText});
+  }
 }
 
 void TestDisplayImportNdArray::

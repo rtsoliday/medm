@@ -412,7 +412,9 @@ qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/demo_rcc.$(OBJEXT)
 
 qtedm_convert_OBJS = $(OBJ_DIR)/qtedm_convert.$(OBJEXT) \
-                     $(OBJ_DIR)/display_converter.$(OBJEXT)
+                     $(OBJ_DIR)/display_converter.$(OBJEXT) \
+                     $(OBJ_DIR)/adl_writer.$(OBJEXT) \
+                     $(OBJ_DIR)/medm_colors.$(OBJEXT)
 
 all: $(OBJ_DIR)/qtedm-convert$(EXEEXT)
 
@@ -524,6 +526,7 @@ test_layering_OBJS = $(OBJ_DIR)/test_layering.$(OBJEXT) \
 $(OBJ_DIR)/test_layering$(EXEEXT): | $(OBJ_DIR)/qtedm$(EXEEXT)
 test_adl_writer_OBJS = $(OBJ_DIR)/test_adl_writer.$(OBJEXT) \
                        $(OBJ_DIR)/adl_writer.$(OBJEXT) \
+                       $(OBJ_DIR)/adl_parser.$(OBJEXT) \
                        $(OBJ_DIR)/medm_colors.$(OBJEXT)
 test_text_format_utils_OBJS = $(OBJ_DIR)/test_text_format_utils.$(OBJEXT) \
                               $(OBJ_DIR)/text_format_utils.$(OBJEXT)

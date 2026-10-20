@@ -227,6 +227,25 @@ private:
         case 't':
           result.append(QChar('\t'));
           break;
+        case 'u': {
+          /* The writer escapes non-Latin-1 UTF-16 code units as exactly
+           * four hex digits, including each half of a surrogate pair.
+           * Preserve the existing unknown-escape behavior for malformed
+           * or incomplete sequences without consuming their suffix. */
+          bool valid = text_.size() - index_ >= 4;
+          for (int digit = 0; valid && digit < 4; ++digit) {
+            const QChar hex = text_.at(index_ + digit).toLower();
+            valid = (hex >= QChar('0') && hex <= QChar('9'))
+                || (hex >= QChar('a') && hex <= QChar('f'));
+          }
+          if (valid) {
+            result.append(QChar(text_.mid(index_, 4).toUShort(nullptr, 16)));
+            index_ += 4;
+          } else {
+            result.append(escaped);
+          }
+          break;
+        }
         case 'x':
         case 'X': {
           QString digits;

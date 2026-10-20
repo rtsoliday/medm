@@ -42,7 +42,13 @@ QString escapeAdlString(const QString &value)
       result.append(QStringLiteral("\\t"));
       break;
     default:
-      if (ch.isPrint()) {
+      if (ch.unicode() > 0xff) {
+        /* ADL files use Latin-1. Keep every UTF-16 code unit representable
+         * without emitting an overwide two-digit \x escape. */
+        result.append(QStringLiteral("\\u%1")
+            .arg(static_cast<unsigned int>(ch.unicode()), 4, 16,
+                QLatin1Char('0')));
+      } else if (ch.isPrint()) {
         result.append(ch);
       } else {
         result.append(QStringLiteral("\\x%1")

@@ -396,6 +396,8 @@ private slots:
   void providerPutAuditOwnership();
   void builtInSliderProviderWriteHasOneAuditRecord();
   void pluginElementTypedRoundTripAndUnknownPreservation();
+  void unknownIdentifiersRoundTripInLatin1_data();
+  void unknownIdentifiersRoundTripInLatin1();
   void constructionFailureCreatesDiagnosticPlaceholder();
   void rulesParseRoundTripCyclesAndSandbox();
   void rulesEvaluateRateLimitDisconnectAndRestore();
@@ -880,6 +882,57 @@ void TestPluginsPropertyRules::builtInSliderProviderWriteHasOneAuditRecord()
   QCOMPARE(records.first().at(2), QStringLiteral("Slider"));
   QCOMPARE(records.first().at(3), QStringLiteral("fake://slider-audit"));
   QCOMPARE(records.first().at(4), QStringLiteral("8.5"));
+}
+
+void TestPluginsPropertyRules::unknownIdentifiersRoundTripInLatin1_data()
+{
+  QTest::addColumn<QString>("identifier");
+  QTest::addColumn<QString>("encoded");
+  QTest::newRow("ascii") << QStringLiteral("future_extension[0]")
+      << QStringLiteral("future_extension[0]");
+  QTest::newRow("whitespace") << QStringLiteral("future extension")
+      << QStringLiteral("\"future extension\"");
+  QTest::newRow("unicode") << QStringLiteral("future_\u03a9")
+      << QStringLiteral("\"future_\\u03a9\"");
+  QTest::newRow("supplementary") << QStringLiteral("future_\U0001f680")
+      << QStringLiteral("\"future_\\ud83d\\ude80\"");
+  QTest::newRow("unpaired-surrogate")
+      << QStringLiteral("future_") + QChar(ushort(0xd83d))
+      << QStringLiteral("\"future_\\ud83d\"");
+  QTest::newRow("backslash") << QStringLiteral("future\\field")
+      << QStringLiteral("\"future\\\\field\"");
+  QTest::newRow("quote") << QStringLiteral("future\"field")
+      << QStringLiteral("\"future\\\"field\"");
+  QTest::newRow("delimiters") << QStringLiteral("future={x},field")
+      << QStringLiteral("\"future={x},field\"");
+  QTest::newRow("comment-prefix") << QStringLiteral("#future")
+      << QStringLiteral("\"#future\"");
+}
+
+void TestPluginsPropertyRules::unknownIdentifiersRoundTripInLatin1()
+{
+  QFETCH(QString, identifier);
+  QFETCH(QString, encoded);
+  AdlNode unknown;
+  unknown.name = identifier;
+  unknown.properties = {{identifier, QStringLiteral("value_\u03a9")}};
+  QString text;
+  QTextStream stream(&text);
+  PluginElement::writeAdlNode(stream, unknown);
+  stream.flush();
+  QVERIFY(text.contains(encoded + QStringLiteral(" {")));
+  QVERIFY(text.contains(encoded + QStringLiteral("=\"value_\\u03a9\"")));
+
+  QString error;
+  const auto parsed = AdlParser::parse(
+      QString::fromLatin1(text.toLatin1()), &error);
+  QVERIFY2(parsed.has_value(), qPrintable(error));
+  QCOMPARE(parsed->children.size(), 1);
+  const AdlNode &reopened = parsed->children.first();
+  QCOMPARE(reopened.name, identifier);
+  QCOMPARE(reopened.properties.size(), 1);
+  QCOMPARE(reopened.properties.first().key, identifier);
+  QCOMPARE(reopened.properties.first().value, QStringLiteral("value_\u03a9"));
 }
 
 void TestPluginsPropertyRules::pluginElementTypedRoundTripAndUnknownPreservation()

@@ -18,6 +18,8 @@
 
 #include <algorithm>
 
+#include "adl_writer.h"
+
 namespace {
 
 constexpr int kReportSchemaVersion = 1;
@@ -50,13 +52,7 @@ struct ConversionContext
 
 QString quoted(const QString &value)
 {
-  QString escaped = value;
-  escaped.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
-  escaped.replace(QLatin1Char('"'), QStringLiteral("\\\""));
-  escaped.replace(QLatin1Char('\n'), QStringLiteral("\\n"));
-  escaped.replace(QLatin1Char('\r'), QStringLiteral("\\r"));
-  escaped.replace(QLatin1Char('\t'), QStringLiteral("\\t"));
-  return QStringLiteral("\"%1\"").arg(escaped);
+  return QStringLiteral("\"%1\"").arg(AdlWriter::escapeAdlString(value));
 }
 
 QString normalizedClass(const QString &className)
@@ -576,7 +572,7 @@ void convertObject(const UiObject &object, QString &adl,
           QSize(pageWidth, pageHeight));
       convertChildren(page.children, childAdl, context, QPoint());
       QString error;
-      if (!writeFile(childPath, childAdl.toUtf8(), &error)) {
+      if (!writeFile(childPath, childAdl.toLatin1(), &error)) {
         appendRecord(context, page, DisplayConversionDisposition::kOmitted,
             QStringLiteral("tab_page"), error);
       } else {
@@ -1014,7 +1010,7 @@ DisplayConversionResult DisplayConverter::convert(
       QStringLiteral("Root Qt widget converted to the ADL display."));
   convertChildren(root.children, adl, context, QPoint());
 
-  if (!writeFile(options.outputPath, adl.toUtf8(), &result.error)) {
+  if (!writeFile(options.outputPath, adl.toLatin1(), &result.error)) {
     return result;
   }
   context.generatedPaths.prepend(outputInfo.absoluteFilePath());

@@ -4,6 +4,7 @@
 #include <QTextStream>
 
 #include "adl_writer.h"
+#include "adl_parser.h"
 
 namespace {
 
@@ -28,6 +29,8 @@ class TestAdlWriter : public QObject
 
 private slots:
   void escapesSpecialCharacters();
+  void roundTripsUnicodeStrings_data();
+  void roundTripsUnicodeStrings();
   void preservesSmallNonDefaultDoubles();
   void writesDynamicAttributeSection();
   void writesLimitsSection();
@@ -43,6 +46,47 @@ void TestAdlWriter::escapesSpecialCharacters()
 {
   QCOMPARE(AdlWriter::escapeAdlString(QStringLiteral("a\"b\nc\t\\")),
       QStringLiteral("a\\\"b\\nc\\t\\\\"));
+}
+
+void TestAdlWriter::roundTripsUnicodeStrings_data()
+{
+  QTest::addColumn<QString>("original");
+  QTest::addColumn<QString>("escaped");
+  QTest::newRow("latin1-degree")
+      << QStringLiteral("Temperature \u00b0C")
+      << QStringLiteral("Temperature \u00b0C");
+  QTest::newRow("non-latin1")
+      << QStringLiteral("\u03a9 \u4e16\u754c")
+      << QStringLiteral("\\u03a9 \\u4e16\\u754c");
+  QTest::newRow("nonprinting-format")
+      << QStringLiteral("left\u200bright")
+      << QStringLiteral("left\\u200bright");
+  QTest::newRow("line-paragraph-separators")
+      << QStringLiteral("left\u2028middle\u2029right")
+      << QStringLiteral("left\\u2028middle\\u2029right");
+  QTest::newRow("supplementary")
+      << QStringLiteral("\U0001f680")
+      << QStringLiteral("\\ud83d\\ude80");
+  QTest::newRow("literal-unicode-escape")
+      << QStringLiteral("\\u03a9")
+      << QStringLiteral("\\\\u03a9");
+}
+
+void TestAdlWriter::roundTripsUnicodeStrings()
+{
+  QFETCH(QString, original);
+  QFETCH(QString, escaped);
+  QCOMPARE(AdlWriter::escapeAdlString(original), escaped);
+
+  /* Exercise the actual file encoding, not only an in-memory UTF-16 parse. */
+  const QByteArray serialized = (QStringLiteral("text { textix=\"")
+      + escaped + QStringLiteral("\" }")).toLatin1();
+  QString error;
+  const auto root = AdlParser::parse(QString::fromLatin1(serialized), &error);
+  QVERIFY2(root.has_value(), qPrintable(error));
+  const AdlNode *text = ::findChild(*root, QStringLiteral("text"));
+  QVERIFY(text);
+  QCOMPARE(propertyValue(*text, QStringLiteral("textix")), original);
 }
 
 void TestAdlWriter::preservesSmallNonDefaultDoubles()

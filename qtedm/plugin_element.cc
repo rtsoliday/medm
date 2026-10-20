@@ -8,7 +8,6 @@
 #include <QPainter>
 #include <QPen>
 #include <QResizeEvent>
-#include <QRegularExpression>
 #include <QSet>
 #include <QTextStream>
 
@@ -154,7 +153,16 @@ QVariant parseVariant(const QString &typeName, const QString &value,
 
 QString nodeNameForOutput(const QString &name)
 {
-  if (name.contains(QRegularExpression(QStringLiteral("\\s")))) {
+  /* Quoted identifiers use the same Latin-1-safe encoding as values.
+   * Leave ordinary ASCII names unchanged, including legacy indexed names. */
+  const bool requiresQuotes = name.startsWith(QLatin1Char('#'))
+      || std::any_of(name.cbegin(), name.cend(), [](QChar ch) {
+           return ch.unicode() > 0xff || !ch.isPrint() || ch.isSpace()
+               || ch == QLatin1Char('\\') || ch == QLatin1Char('"')
+               || ch == QLatin1Char('{') || ch == QLatin1Char('}')
+               || ch == QLatin1Char('=') || ch == QLatin1Char(',');
+         });
+  if (requiresQuotes) {
     return QStringLiteral("\"%1\"").arg(AdlWriter::escapeAdlString(name));
   }
   return name;

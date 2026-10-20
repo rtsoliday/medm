@@ -1800,7 +1800,7 @@
               <tr>
                 <td data-label="Capability">Existing MEDM ADL display files</td>
                 <td data-label="Status">Supported</td>
-                <td data-label="Note">QtEDM reads and writes the same core ADL format used by MEDM.</td>
+                <td data-label="Note">QtEDM reads and writes the core ADL format used by MEDM, subject to the <a href="QtEDM.html#Differences">documented string and color-map differences and limitations</a>.</td>
               </tr>
               <tr>
                 <td data-label="Capability">Standard MEDM widget set</td>
@@ -1815,7 +1815,7 @@
               <tr>
                 <td data-label="Capability">Round-trip back to legacy MEDM</td>
                 <td data-label="Status">Shared subset</td>
-                <td data-label="Note">MEDM can use the common ADL subset; displays that rely on QtEDM-only blocks are not behaviorally compatible with legacy MEDM.</td>
+                <td data-label="Note">Review backslash strings, external color maps, and custom-palette edits or transfers before replacing an original display. QtEDM-only blocks require QtEDM; lossless interchange of every MEDM display is not guaranteed.</td>
               </tr>
               <tr>
                 <td data-label="Capability">EPICS Channel Access and PVAccess names</td>
@@ -1858,7 +1858,9 @@
         <p class="compatibility-note">
           Use this as a planning guide, then validate representative facility
           displays with local fonts, macros, EPICS environment, and operator
-          launch scripts.
+          launch scripts. The <a href="QtEDM.html#Differences">manual's
+          compatibility guidance</a> distinguishes intentional ADL escaping
+          from deferred color-map limitations.
         </p>
       </div>
     </section>

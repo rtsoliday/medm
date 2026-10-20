@@ -68,6 +68,14 @@ void TestHelpDialogs::guideNavigationSearchAndReuse()
       "A failed audit write or flush emits a warning")));
   QVERIFY(guideText.contains(QStringLiteral(
       "Failed pens remain named in the diagnostic")));
+  QVERIFY(guideText.contains(QStringLiteral(
+      "does not guarantee lossless interchange of every MEDM display")));
+  QVERIFY(guideText.contains(QStringLiteral(
+      "MEDM preserves backslashes literally")));
+  QVERIFY(guideText.contains(QStringLiteral(
+      "does not load that palette")));
+  QVERIFY(guideText.contains(QStringLiteral(
+      "saved as the nearest palette entry")));
   QVERIFY(browser->document()->resource(QTextDocument::ImageResource,
       QUrl(QStringLiteral("qrc:/help/images/qtedm-widgets/slider.png")))
       .isValid());

@@ -8,7 +8,7 @@
 
 ## Abstract
 
-QtEDM is a modern Qt-based reimplementation of MEDM (Motif Editor and Display Manager), the widely-used graphical user interface for EPICS control systems. QtEDM supports both Qt5 and Qt6 and runs natively on Linux, macOS, and Windows. As the Motif toolkit becomes harder to maintain on contemporary systems, QtEDM provides a sustainable path forward while preserving the standard MEDM ADL subset and explicitly separating QtEDM-only extensions. This paper describes the motivation for QtEDM, its architecture and implementation, key features and enhancements over the original MEDM, and the transition path for existing installations.
+QtEDM is a modern Qt-based reimplementation of MEDM (Motif Editor and Display Manager), the widely-used graphical user interface for EPICS control systems. QtEDM supports both Qt5 and Qt6 and runs natively on Linux, macOS, and Windows. As the Motif toolkit becomes harder to maintain on contemporary systems, QtEDM provides a sustainable path forward with the standard MEDM ADL object set and explicit QtEDM-only extensions, subject to the [documented compatibility differences and current limitations](QtEDM.html#Differences). This paper describes the motivation for QtEDM, its architecture and implementation, key features and enhancements over the original MEDM, and the transition path for existing installations.
 
 ---
 
@@ -63,7 +63,7 @@ QtEDM uses the standard EPICS Channel Access library and accepts `pva://` PV pre
 
 ### 3.3 ADL File Compatibility
 
-QtEDM reads and writes the core ADL format used by MEDM. The C++ parser carefully replicates MEDM behavior and preserves unknown extension data during round trips. Displays confined to the common subset remain portable; displays using QtEDM-only blocks require QtEDM for those objects to function.
+QtEDM reads and writes the core ADL format used by MEDM and preserves unknown extension data during round trips. Lossless interchange of every MEDM display is not guaranteed: QtEDM intentionally interprets backslash escapes differently, does not load external color maps, and has deferred custom-palette color-edit and cross-display transfer limitations. Review the [manual's compatibility guidance](QtEDM.html#Differences) and saved output before replacing an operational display. Displays using QtEDM-only blocks require QtEDM for those objects to function.
 
 ### 3.4 Dual Build System
 
@@ -229,7 +229,7 @@ Facilities can deploy QtEDM alongside MEDM, allowing gradual transition:
 
 ### 7.2 Known Differences
 
-QtEDM preserves the common MEDM ADL subset, but intentional extensions and toolkit differences exist:
+QtEDM supports the common MEDM ADL object set, with [documented string and color-map differences and limitations](QtEDM.html#Differences), intentional extensions, and toolkit differences:
 
 - Qt rendering may produce slightly different anti-aliasing
 - Window management behaviors depend on desktop environment
@@ -244,7 +244,7 @@ The user interface is intentionally similar to MEDM. Operators familiar with MED
 QtEDM is ready for widespread testing. The implementation includes:
 
 - Complete standard MEDM widget set plus explicit QtEDM extensions
-- Core ADL read/write compatibility with preservation of unknown extension data
+- Core ADL read/write support with preservation of unknown extension data and the compatibility qualifications above
 - Execute and Edit mode operation
 - Channel Access and PVAccess PV naming
 - Printing and image export
@@ -278,7 +278,8 @@ The upstream MEDM source distribution is maintained at:
 - GitHub: https://github.com/epics-extensions/medm
 
 Building QtEDM requires Qt5 or Qt6 development packages, matching `moc` and
-`rcc` tools, a C++17 compiler, EPICS Base 7, and the SDDS source tree. From the
+`rcc` tools, a C++17 compiler on Linux/macOS (an MSVC toolchain accepting
+`/std:c++20` on Windows), EPICS Base 7, and the SDDS source tree. From the
 repository root, `make -j4` produces QtEDM and `qtedm-convert`; MEDM is also
 built when Motif/X11 development files are available. The executables are
 copied below `bin/<OS>-<architecture>/`.

@@ -87,7 +87,11 @@
 
 <h2><a name="Relationship"></a>Relationship to MEDM</h2>
 
-<p>QtEDM is designed as a drop-in replacement for MEDM for the standard MEDM ADL feature set. It reads and writes the same core ADL format, while also supporting a small number of QtEDM-only extensions. The primary differences are:</p>
+<p>QtEDM reads and writes the core MEDM ADL format and supports additional
+QtEDM-only extensions. Review the <a href="#Differences">compatibility
+differences and current limitations</a> before migrating or editing a display,
+especially one with backslash escapes or a custom color map. The primary
+toolkit differences are:</p>
 
 <ul>
   <li><strong>Modern GUI toolkit</strong> &ndash; Qt6 or Qt5 instead of Motif/X11</li>
@@ -96,7 +100,10 @@
   <li><strong>Active development</strong> &ndash; Ongoing maintenance alongside the legacy MEDM</li>
 </ul>
 
-<p>Both MEDM and QtEDM are built from the same source repository and share the same overall display-model lineage, which keeps the common ADL subset compatible between the two implementations while still allowing QtEDM to add new block types for QtEDM-only widgets.</p>
+<p>Both MEDM and QtEDM are built from the same source repository and share the
+same overall display-model lineage. This supports reuse of existing displays,
+subject to the documented differences and limitations; it does not guarantee
+lossless interchange of every MEDM display.</p>
 
 <h2><a name="Requirements"></a>Requirements</h2>
 
@@ -106,7 +113,9 @@
   <li><strong>Qt</strong> &ndash; Qt6 is preferred; Qt5 is supported as a fallback. Core, Widgets, Print Support, SVG, Network, and the matching <code>moc</code>/<code>rcc</code> development tools are required.</li>
   <li><strong>EPICS Base</strong> &ndash; Version 7.0 or later, with Channel Access support</li>
   <li><strong>SDDS source tree</strong> &ndash; Required for the shared support libraries and SDDS plot export</li>
-  <li><strong>C++17 compiler</strong> &ndash; A compiler supported by the selected Qt and EPICS builds</li>
+  <li><strong>C++ compiler</strong> &ndash; C++17 on Linux and macOS; an MSVC
+    toolchain accepting <code>/std:c++20</code> on Windows. The compiler must
+    also be supported by the selected Qt and EPICS builds.</li>
   <li><strong>pkg-config</strong> &ndash; Used to detect Qt on Linux and macOS</li>
 </ul>
 
@@ -1300,7 +1309,12 @@ contents; the audit files themselves are preserved.</p>
   <li>Widget definitions with their properties and PV associations</li>
 </ul>
 
-<p>QtEDM reads ADL files created by MEDM. MEDM can read the common ADL subset written by QtEDM, but displays that use QtEDM-only extensions are not behaviorally compatible with legacy MEDM. The common file format is documented in the MEDM Reference Manual.</p>
+<p>QtEDM reads ADL files created by MEDM. MEDM can read the common ADL subset
+written by QtEDM, subject to the <a href="#Differences">string and color-map
+limitations below</a>. Displays that use QtEDM-only extensions are not
+behaviorally compatible with legacy MEDM. The common file format is documented
+in the MEDM Reference Manual. Keep an original copy and review a saved display
+before replacing an existing operational screen.</p>
 
 <p>Input files are limited to 16 MiB and parser nesting to 256 levels.
 Macro expansion is checked before parsing and stops with an error if a
@@ -1539,9 +1553,24 @@ channels and publishes the result as a named soft PV inside the QtEDM process.</
 
 <h2><a name="Differences"></a>Differences from MEDM</h2>
 
-<p>QtEDM preserves the standard MEDM ADL subset, with these intentional differences and additions:</p>
+<p>QtEDM supports the standard MEDM ADL object set, with these intentional
+differences, current limitations, and additions:</p>
 
 <ul>
+  <li><strong>ADL strings</strong> &ndash; QtEDM intentionally interprets
+    backslash escape sequences in quoted strings and escapes strings when
+    saving. MEDM preserves backslashes literally, so string values and saved
+    text can differ between the applications.</li>
+  <li><strong>External color maps</strong> &ndash; QtEDM retains a display's
+    external <code>cmap</code> filename but does not load that palette.
+    Displays that depend on it can render with different colors.</li>
+  <li><strong>Custom inline color maps</strong> &ndash; Loading and saving an
+    unchanged inline palette preserves its colors. An explicit color edit
+    outside that palette is saved as the nearest palette entry and can change
+    on reopen. Copying multiple objects between displays with different
+    palettes can also change colors. External-map loading and custom-palette
+    editing/transfer repairs are deferred; review affected displays before
+    saving or transferring objects.</li>
   <li><strong>Appearance</strong> &ndash; Qt rendering may produce slightly different visual results than Motif</li>
   <li><strong>Font handling</strong> &ndash; QtEDM uses scalable fonts with alias mode for MEDM compatibility</li>
   <li><strong>Window management</strong> &ndash; Some window behaviors may differ depending on the desktop environment</li>
@@ -1603,7 +1632,8 @@ build without <code>-j4</code>.</p>
   <li>Matching Qt <code>moc</code> and <code>rcc</code> tools</li>
   <li>EPICS Base 7 headers and libraries</li>
   <li>SDDS source tree and support libraries</li>
-  <li>A C++17 compiler</li>
+  <li>A C++17 compiler on Linux/macOS, or an MSVC toolchain accepting
+    <code>/std:c++20</code> on Windows</li>
   <li><code>pkg-config</code> for Qt detection on non-Windows platforms</li>
   <li>On Windows, a clone of <code>https://github.com/rtsoliday/gsl</code> next to the medm repository</li>
 </ul>

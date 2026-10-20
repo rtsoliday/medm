@@ -606,6 +606,8 @@ SharedChannelData SoftPvRegistry::buildData(const Entry &entry) const
 {
   SharedChannelData data;
   data.connected = entry.connectedProducerCount > 0;
+  data.canRead = true;
+  data.canWrite = entry.writableProducerCount > 0;
   data.nativeFieldType = DBF_DOUBLE;
   data.nativeElementCount = 1;
   data.severity = 0;

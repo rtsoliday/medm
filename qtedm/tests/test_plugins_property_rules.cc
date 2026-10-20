@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QLabel>
 #include <QLibrary>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 
 #include <memory>
@@ -237,6 +238,7 @@ public:
       const QtedmChannelCallbacks &callbacks, QtedmChannelDelivery,
       QString *) override
   {
+    activeCallbacks = callbacks;
     QtedmChannelSample sample;
     sample.connected = true;
     sample.canRead = true;
@@ -308,6 +310,7 @@ public:
   int putCount = 0;
   int cancelCount = 0;
   QVariant lastPut;
+  QtedmChannelCallbacks activeCallbacks;
 };
 
 AdlNode missingPluginNode()
@@ -391,6 +394,8 @@ private slots:
   void configuredPluginDirectoryIsDiscovered();
   void pvThumbsPluginTracksZeroAndNonzeroValues();
   void providerSubscriptionsWritesArchivesAndShutdown();
+  void hostSubscriptionProviderSamplesTrackAccess();
+  void hostSubscriptionSoftPvSamplesTrackAccess();
   void observeOnlyBlocksPluginProviderWrites();
   void providerPutAuditOwnership_data();
   void providerPutAuditOwnership();
@@ -719,6 +724,118 @@ void TestPluginsPropertyRules::providerSubscriptionsWritesArchivesAndShutdown()
   QCOMPARE(plugin.cancelCount, 2);
   QVERIFY(QtedmPluginManager::instance().loadedPluginIds().isEmpty());
   QVERIFY(!ExtensionObjectRegistry::instance().descriptor(plugin.typeId_));
+}
+
+void TestPluginsPropertyRules::hostSubscriptionProviderSamplesTrackAccess()
+{
+  FakePlugin plugin;
+  auto &manager = QtedmPluginManager::instance();
+  QVERIFY(manager.registerPluginObject(&plugin));
+  QVector<QtedmChannelSample> connections;
+  QVector<QtedmChannelSample> values;
+  bool rightsDelivered = false;
+  bool initialConnectionBeforeRights = false;
+  QtedmChannelCallbacks callbacks;
+  callbacks.connection = [&](bool connected, const QtedmChannelSample &sample) {
+    QCOMPARE(sample.connected, connected);
+    if (connections.isEmpty()) {
+      initialConnectionBeforeRights = !rightsDelivered;
+    }
+    connections.append(sample);
+  };
+  callbacks.value = [&](const QtedmChannelSample &sample) {
+    values.append(sample);
+  };
+  callbacks.accessRights = [&](bool, bool) { rightsDelivered = true; };
+  auto subscription = manager.subscribe(QStringLiteral("fake://temperature"),
+      callbacks, QtedmChannelDelivery::kRealtime);
+  QVERIFY(subscription != nullptr);
+  QVERIFY(initialConnectionBeforeRights);
+  QCOMPARE(connections.size(), 1);
+  QCOMPARE(values.size(), 1);
+  QVERIFY(connections.last().canRead);
+  QVERIFY(connections.last().canWrite);
+  QVERIFY(values.last().canRead);
+  QVERIFY(values.last().canWrite);
+
+  QtedmChannelSample sample = values.last();
+  sample.canWrite = false;
+  plugin.activeCallbacks.accessRights(true, false);
+  plugin.activeCallbacks.value(sample);
+  QVERIFY(values.last().canRead);
+  QVERIFY(!values.last().canWrite);
+
+  sample.canRead = false;
+  plugin.activeCallbacks.accessRights(false, false);
+  plugin.activeCallbacks.connection(true, sample);
+  plugin.activeCallbacks.value(sample);
+  QVERIFY(!connections.last().canRead);
+  QVERIFY(!values.last().canRead);
+  QVERIFY(!values.last().canWrite);
+
+  /* A connection notification is authoritative even when the provider's
+   * accompanying value still belongs to the previous connection epoch. */
+  sample.canRead = sample.canWrite = true;
+  plugin.activeCallbacks.connection(false, sample);
+  QVERIFY(!connections.last().canRead);
+  QVERIFY(!connections.last().canWrite);
+  plugin.activeCallbacks.connection(true, sample);
+  QVERIFY(connections.last().canRead);
+  QVERIFY(connections.last().canWrite);
+
+  PvChannelManager::instance().setObserveOnly(true);
+  plugin.activeCallbacks.value(sample);
+  plugin.activeCallbacks.connection(true, sample);
+  QVERIFY(values.last().canRead);
+  QVERIFY(!values.last().canWrite);
+  QVERIFY(!connections.last().canWrite);
+  PvChannelManager::instance().setObserveOnly(false);
+  plugin.activeCallbacks.value(sample);
+  QVERIFY(values.last().canWrite);
+}
+
+void TestPluginsPropertyRules::hostSubscriptionSoftPvSamplesTrackAccess()
+{
+  const QString channel = QStringLiteral("qtedm:test:plugin-host-access");
+  auto &soft = SoftPvRegistry::instance();
+  soft.registerName(channel, true);
+  soft.setConnected(channel, true);
+  soft.publishValue(channel, 1.0);
+  const auto cleanup = qScopeGuard([&]() {
+    soft.setConnected(channel, false);
+    soft.unregisterName(channel, true);
+  });
+  QVector<QtedmChannelSample> connections;
+  QVector<QtedmChannelSample> values;
+  QtedmChannelCallbacks callbacks;
+  callbacks.connection = [&](bool, const QtedmChannelSample &sample) {
+    connections.append(sample);
+  };
+  callbacks.value = [&](const QtedmChannelSample &sample) {
+    values.append(sample);
+  };
+  auto subscription = QtedmPluginManager::instance().subscribe(channel,
+      callbacks, QtedmChannelDelivery::kRealtime);
+  QVERIFY(subscription != nullptr);
+  QCOMPARE(connections.size(), 1);
+  QCOMPARE(values.size(), 1);
+  QVERIFY(connections.last().canRead);
+  QVERIFY(connections.last().canWrite);
+  QVERIFY(values.last().canWrite);
+
+  soft.setConnected(channel, false);
+  QVERIFY(!connections.last().connected);
+  QVERIFY(!connections.last().canRead);
+  QVERIFY(!connections.last().canWrite);
+  soft.setConnected(channel, true);
+  QVERIFY(connections.last().canRead);
+  QVERIFY(connections.last().canWrite);
+
+  PvChannelManager::instance().setObserveOnly(true);
+  soft.publishValue(channel, 2.0);
+  QTRY_COMPARE(values.last().numericValue, 2.0);
+  QVERIFY(values.last().canRead);
+  QVERIFY(!values.last().canWrite);
 }
 
 void TestPluginsPropertyRules::observeOnlyBlocksPluginProviderWrites()

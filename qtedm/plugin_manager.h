@@ -111,8 +111,7 @@ private:
   bool loadPluginFile(const QString &path);
   bool validatePluginId(const QString &pluginId, QString *reason) const;
   void addDiagnostic(const QString &source, const QString &message);
-  static QtedmChannelSample sampleFromShared(const SharedChannelData &data,
-      bool canRead = true, bool canWrite = false);
+  static QtedmChannelSample sampleFromShared(const SharedChannelData &data);
 
   QHash<QString, QtedmLoadedDisplayObject> displayObjectsByKey_;
   QHash<QString, QString> displayTypeOwners_;

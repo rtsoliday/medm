@@ -32,6 +32,7 @@ private slots:
   void caInboxAppliesNewestLifecycleStateAfterOverflow();
   void caInboxReconnectClearsPreviousEpochAfterOverflow();
   void caInboxReconnectDeliversUnchangedFirstValue();
+  void caSamplesRetainAccessAndClearItOnDisconnect();
   void pluginDiagnosticsAreBoundedAndDeduplicated();
   void auditViewsAreBoundedAndReleaseOnHide();
   void imageReservationsFollowSharedFrameOwnership();
@@ -382,6 +383,64 @@ void TestMemoryGrowth::caInboxReconnectDeliversUnchangedFirstValue()
   QVERIFY(channel.cachedData.hasValue);
   QVERIFY(!channel.cachedData.hasControlInfo);
   QCOMPARE(observed, QVector<double>({42.0, 42.0}));
+  manager.instanceIdToChannel_.clear();
+}
+
+void TestMemoryGrowth::caSamplesRetainAccessAndClearItOnDisconnect()
+{
+  SharedChannelManager manager;
+  SharedChannelManager::SharedChannel channel;
+  channel.instanceId = 1;
+  channel.connected = true;
+  channel.cachedData.connected = true;
+  manager.instanceIdToChannel_.insert(1, &channel);
+  SharedChannelData observed;
+  bool subscriberWritable = false;
+  SharedChannelManager::Subscriber subscriber;
+  subscriber.connectionCallback = [&](bool connected,
+      const SharedChannelData &data) {
+    observed = data;
+    if (!connected) {
+      subscriberWritable = false;
+    }
+  };
+  subscriber.accessRightsCallback = [&](bool, bool canWrite) {
+    subscriberWritable = canWrite;
+  };
+  subscriber.valueCallback = [&](const SharedChannelData &data) {
+    observed = data;
+  };
+  channel.subscribers.insert(1, subscriber);
+
+  manager.handleAccessRights(&channel, true, true);
+  manager.dispatchConnectionCallbacks(&channel, true);
+  QVERIFY(observed.canRead);
+  QVERIFY(observed.canWrite);
+  manager.handleAccessRights(&channel, true, false);
+  manager.dispatchValueCallbacks(&channel, ChannelDeliveryMode::kPassive);
+  QVERIFY(observed.canRead);
+  QVERIFY(!observed.canWrite);
+
+  manager.handleAccessRights(&channel, true, true);
+  /* Null CA resource handles keep the disconnect entirely synthetic. */
+  manager.handleConnection(&channel, false);
+  QVERIFY(!observed.connected);
+  QVERIFY(!observed.canRead);
+  QVERIFY(!observed.canWrite);
+  QVERIFY(!channel.canRead);
+  QVERIFY(!channel.canWrite);
+  QVERIFY(!subscriberWritable);
+
+  /* No intervening denied-access callback is guaranteed after inbox
+   * coalescing. Restoring identical rights must re-enable the subscriber. */
+  manager.handleConnection(&channel, true);
+  QVERIFY(!subscriberWritable);
+  manager.handleAccessRights(&channel, true, true);
+  QVERIFY(subscriberWritable);
+  manager.dispatchValueCallbacks(&channel, ChannelDeliveryMode::kPassive);
+  QVERIFY(observed.connected);
+  QVERIFY(observed.canRead);
+  QVERIFY(observed.canWrite);
   manager.instanceIdToChannel_.clear();
 }
 

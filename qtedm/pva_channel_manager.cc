@@ -18,6 +18,8 @@ static SharedChannelData toSharedChannelData(const PvaBridgeData &bridgeData)
 {
   SharedChannelData data;
   data.connected = bridgeData.connected;
+  data.canRead = bridgeData.canRead;
+  data.canWrite = bridgeData.canWrite;
   data.nativeFieldType = static_cast<short>(bridgeData.nativeFieldType);
   data.nativeElementCount = bridgeData.nativeElementCount;
   data.numericValue = bridgeData.numericValue;

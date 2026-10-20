@@ -70,6 +70,9 @@ struct SharedChannelData
 {
   /* Connection state */
   bool connected = false;
+  /* Access state captured with this sample; false until rights are known. */
+  bool canRead = false;
+  bool canWrite = false;
 
   /* Native field type from the IOC */
   short nativeFieldType = -1;

@@ -129,6 +129,8 @@ SharedChannelData sharedDataFromPluginSample(
 {
   SharedChannelData data;
   data.connected = sample.connected;
+  data.canRead = sample.canRead;
+  data.canWrite = sample.canWrite;
   data.hasValue = sample.hasValue;
   data.isNumeric = sample.isNumeric;
   data.isString = sample.isString;
@@ -1058,12 +1060,13 @@ void QtedmPluginManager::addDiagnostic(const QString &source,
 }
 
 QtedmChannelSample QtedmPluginManager::sampleFromShared(
-    const SharedChannelData &data, bool canRead, bool canWrite)
+    const SharedChannelData &data)
 {
   QtedmChannelSample sample;
   sample.connected = data.connected;
-  sample.canRead = canRead;
-  sample.canWrite = canWrite;
+  sample.canRead = data.connected && data.canRead;
+  sample.canWrite = data.connected && data.canWrite
+      && !PvChannelManager::instance().isObserveOnly();
   sample.hasValue = data.hasValue;
   sample.isNumeric = data.isNumeric;
   sample.isString = data.isString;

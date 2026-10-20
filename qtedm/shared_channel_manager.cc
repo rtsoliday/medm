@@ -966,6 +966,13 @@ void SharedChannelManager::handleConnection(SharedChannel *channel, bool connect
       connectedChannelCount_ = std::max(0, connectedChannelCount_ - 1);
     }
 
+    /* Reset both rights caches for this connection epoch. The inbox may
+     * coalesce an intermediate denied-access event during an IOC outage;
+     * restoring the same rights must still notify control subscribers. */
+    channel->canRead = false;
+    channel->canWrite = false;
+    channel->cachedData.canRead = false;
+    channel->cachedData.canWrite = false;
     /* Clear cached value state on disconnect */
     channel->cachedData.hasValue = false;
     channel->cachedData.hasControlInfo = false;
@@ -1377,6 +1384,8 @@ void SharedChannelManager::handleAccessRights(SharedChannel *channel,
   bool changed = (channel->canRead != canRead) || (channel->canWrite != canWrite);
   channel->canRead = canRead;
   channel->canWrite = canWrite;
+  channel->cachedData.canRead = canRead;
+  channel->cachedData.canWrite = canWrite;
 
   if (changed) {
     /* Notify all subscribers of access rights change */

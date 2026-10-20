@@ -128,6 +128,13 @@ The provider reports value, connection, and access-right changes with
 `QtedmChannelCallbacks`. It must honor the requested passive or realtime
 delivery mode and keep callback work bounded.
 
+`QtedmChannelSample::canRead` and `canWrite` describe the access state captured
+with that sample. Providers must populate both fields on value and connection
+samples, including the initial connection notification, which may precede the
+separate access-right callback. Host subscriptions preserve these flags, report
+both as false while disconnected, and report `canWrite=false` in observe-only
+mode. Built-in channels report false until their access state is known.
+
 All plugin-provider puts pass through `PvChannelManager` before the provider's
 `put()` implementation. Consequently observe-only mode blocks them before the
 plugin sees a value, and both blocked and successful operations use the common

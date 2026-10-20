@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+#include <QPolygon>
 
 LineElement::LineElement(QWidget *parent)
   : GraphicShapeElement(parent)
@@ -47,12 +48,19 @@ void LineElement::setLineWidth(int width)
   if (lineWidth_ == clamped) {
     return;
   }
+  const QVector<QPoint> points = hasEndpoints_
+      ? absolutePoints() : QVector<QPoint>();
   lineWidth_ = clamped;
-  update();
+  if (!points.isEmpty()) {
+    setAbsolutePoints(points);
+  } else {
+    update();
+  }
 }
 
 void LineElement::setLocalEndpoints(const QPoint &start, const QPoint &end)
 {
+  hasEndpoints_ = true;
   const QSize currentSize = size();
   if (currentSize.isEmpty()) {
     startRatio_ = QPointF(0.0, 0.0);
@@ -67,6 +75,19 @@ void LineElement::setLocalEndpoints(const QPoint &start, const QPoint &end)
   startRatio_ = ratioForPoint(clampedStart, currentSize);
   endRatio_ = ratioForPoint(clampedEnd, currentSize);
   update();
+}
+
+void LineElement::setAbsolutePoints(const QVector<QPoint> &points)
+{
+  if (points.size() != 2) {
+    return;
+  }
+  const int halfWidth = lineWidth_ / 2;
+  const QRect bounds = QPolygon(points).boundingRect().adjusted(
+      -halfWidth, -halfWidth, halfWidth, halfWidth);
+  QWidget::setGeometry(bounds);
+  setLocalEndpoints(points.first() - bounds.topLeft(),
+      points.last() - bounds.topLeft());
 }
 
 QVector<QPoint> LineElement::absolutePoints() const

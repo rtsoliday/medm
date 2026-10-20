@@ -20854,12 +20854,18 @@ void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     const int newH = std::max(minHeight, static_cast<int>(
       std::lround(static_cast<double>(sourceRect.height())
       * static_cast<double>(scaleY))));
-    /* Preserve XDrawRectangle's inclusive far endpoints after scaling the
-     * original ADL geometry. This padding stays one pixel at any scale. */
+    /* Preserve XDrawRectangle/XDrawArc's inclusive far endpoints after
+     * scaling the ADL geometry. Padding stays one pixel at any scale. */
     const auto *rectangle = dynamic_cast<const RectangleElement *>(widget);
-    const int outlinePadding = rectangle
+    const auto *oval = dynamic_cast<const OvalElement *>(widget);
+    const auto *arc = dynamic_cast<const ArcElement *>(widget);
+    const int outlinePadding = (rectangle
         && rectangle->fill() == RectangleFill::kOutline
-        && rectangle->adlLineWidth() == 0 ? 1 : 0;
+        && rectangle->adlLineWidth() == 0)
+        || (oval && oval->fill() == RectangleFill::kOutline
+            && oval->lineWidth() == 0)
+        || (arc && arc->fill() == RectangleFill::kOutline
+            && arc->lineWidth() == 0) ? 1 : 0;
     widget->setGeometry(newX, newY,
         newW + outlinePadding, newH + outlinePadding);
   };
@@ -20964,7 +20970,14 @@ void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     scaleWidget(e);
   }
   for (LineElement *e : lineElements_) {
-    scaleWidget(e);
+    if (e) {
+      const auto points = originalPolylinePoints_.constFind(e);
+      if (points != originalPolylinePoints_.cend()) {
+        e->setAbsolutePoints(scalePolyPoints(points.value()));
+      } else {
+        scaleWidget(e);
+      }
+    }
   }
   for (PolylineElement *e : polylineElements_) {
     if (e) {
@@ -23131,7 +23144,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           serializedGeometry(rectangle));
       AdlWriter::writeBasicAttributeSection(stream, 1,
           displayColorIndex(rectangle->color()),
-          rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
+          rectangle->lineStyle(), rectangle->fill(), rectangle->adlLineWidth(),
           true, !rectangle->shouldSerializeLineWidth());
     const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(rectangle));
@@ -23496,7 +23509,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("oval {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(oval));
       AdlWriter::writeBasicAttributeSection(stream, 1, displayColorIndex(oval->color()),
-          oval->lineStyle(), oval->fill(), oval->lineWidth());
+          oval->lineStyle(), oval->fill(), oval->lineWidth(), true);
     const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
       AdlWriter::collectChannels(oval));
     // MEDM stores oval channels as chan, chanB, chanC, chanD.
@@ -23510,7 +23523,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("arc {"));
       AdlWriter::writeObjectSection(stream, 1, serializedGeometry(arc));
       AdlWriter::writeBasicAttributeSection(stream, 1, displayColorIndex(arc->color()),
-          arc->lineStyle(), arc->fill(), arc->lineWidth());
+          arc->lineStyle(), arc->fill(), arc->lineWidth(), true);
       const auto arcChannels = AdlWriter::channelsForMedmFourValues(
           AdlWriter::collectChannels(arc));
       // MEDM stores arc channels as chan, chanB, chanC, chanD.
@@ -24737,7 +24750,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     AdlWriter::writeObjectSection(stream, next, serialized);
     AdlWriter::writeBasicAttributeSection(stream, next,
         displayColorIndex(rectangle->color()),
-        rectangle->lineStyle(), rectangle->fill(), rectangle->lineWidth(),
+        rectangle->lineStyle(), rectangle->fill(), rectangle->adlLineWidth(),
         true);
     const auto rectangleChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(rectangle));
@@ -25103,7 +25116,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         serializedGeometry(oval));
     AdlWriter::writeBasicAttributeSection(stream, next,
         displayColorIndex(oval->color()), oval->lineStyle(),
-        oval->fill(), oval->lineWidth());
+        oval->fill(), oval->lineWidth(), true);
     const auto ovalChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(oval));
     AdlWriter::writeDynamicAttributeSection(stream, next,
@@ -25119,7 +25132,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         serializedGeometry(arc));
     AdlWriter::writeBasicAttributeSection(stream, next,
         displayColorIndex(arc->color()), arc->lineStyle(),
-        arc->fill(), arc->lineWidth());
+        arc->fill(), arc->lineWidth(), true);
     const auto arcChannels = AdlWriter::channelsForMedmFourValues(
         AdlWriter::collectChannels(arc));
     AdlWriter::writeDynamicAttributeSection(stream, next,
@@ -33824,12 +33837,9 @@ RectangleElement *DisplayWindow::loadRectangleElement(
 
     /* XDrawRectangle includes the far endpoint for cosmetic outlines.
      * Filled rectangles cover exactly the ADL width and height. */
-    if (adlWidth == 0 && element->fill() == RectangleFill::kOutline) {
-      QRect expandedGeometry = element->geometry();
-      expandedGeometry.setWidth(expandedGeometry.width() + 1);
-      expandedGeometry.setHeight(expandedGeometry.height() + 1);
-      element->setGeometryWithoutTracking(expandedGeometry);
-    }
+    const int padding = adlWidth == 0
+        && element->fill() == RectangleFill::kOutline ? 1 : 0;
+    element->setGeometryWithoutTracking(geometry.adjusted(0, 0, padding, padding));
   }
 
   if (const AdlNode *dyn = ::findChild(effectiveNode,
@@ -34038,8 +34048,8 @@ OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
         QStringLiteral("width"));
     if (!widthValue.isEmpty()) {
       int width = widthValue.toInt(&ok);
-      if (!ok || width <= 0) {
-        width = 1;
+      if (!ok || width < 0) {
+        width = 0;
       }
       element->setLineWidth(width);
     }
@@ -34083,6 +34093,10 @@ OvalElement *DisplayWindow::loadOvalElement(const AdlNode &ovalNode)
         element->setChannel(index, value);
       },
       0, 0);
+
+  const int padding = element->fill() == RectangleFill::kOutline
+      && element->lineWidth() == 0 ? 1 : 0;
+  element->setGeometry(geometry.adjusted(0, 0, padding, padding));
 
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);
@@ -34155,8 +34169,8 @@ ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
         QStringLiteral("width"));
     if (!widthValue.isEmpty()) {
       int width = widthValue.toInt(&ok);
-      if (!ok || width <= 0) {
-        width = 1;
+      if (!ok || width < 0) {
+        width = 0;
       }
       element->setLineWidth(width);
     }
@@ -34218,6 +34232,10 @@ ArcElement *DisplayWindow::loadArcElement(const AdlNode &arcNode)
   if (ok) {
    element->setPathAngle(pathAngle);
   }
+
+  const int padding = element->fill() == RectangleFill::kOutline
+      && element->lineWidth() == 0 ? 1 : 0;
+  element->setGeometry(geometry.adjusted(0, 0, padding, padding));
 
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);
@@ -34581,25 +34599,8 @@ PolylineElement *DisplayWindow::loadPolylineElement(
 
   applyChannelProperties(effectiveNode, channelSetter, 0, 0);
 
-  QPolygon polygon(points);
-  QRect geometry = polygon.boundingRect();
-
-  /* Expand geometry to accommodate line width, matching MEDM behavior */
-  const int halfWidth = lineWidth / 2;
-  geometry.adjust(-halfWidth, -halfWidth, halfWidth, halfWidth);
-
-  if (geometry.width() <= 0) {
-    geometry.setWidth(std::max(1, lineWidth));
-  }
-  if (geometry.height() <= 0) {
-    geometry.setHeight(std::max(1, lineWidth));
-  }
-
   if (points.size() == 2) {
     auto *element = new LineElement(parent);
-    const QRect initialGeometry = originalGeometry.isValid()
-        ? originalGeometry : geometry;
-    element->setGeometry(initialGeometry);
     element->setForegroundColor(color);
     element->setLineStyle(lineStyle);
     element->setLineWidth(lineWidth);
@@ -34614,9 +34615,7 @@ PolylineElement *DisplayWindow::loadPolylineElement(
     }
     recordWidgetOriginalGeometry(element, originalGeometry);
     originalPolylinePoints_.insert(element, points);
-    const QPoint localStart = points.first() - geometry.topLeft();
-    const QPoint localEnd = points.last() - geometry.topLeft();
-    element->setLocalEndpoints(localStart, localEnd);
+    element->setAbsolutePoints(points);
     if (hasDynamicAttribute) {
       markWidgetHasDynamicAttribute(element);
     }
@@ -34652,6 +34651,7 @@ PolylineElement *DisplayWindow::loadPolylineElement(
     }
   }
   recordWidgetOriginalGeometry(element, originalGeometry);
+  originalPolylinePoints_.insert(element, points);
   element->setAbsolutePoints(points);
   if (currentCompositeOwner_) {
     currentCompositeOwner_->adoptChild(element);

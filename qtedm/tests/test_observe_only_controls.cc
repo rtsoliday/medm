@@ -20,6 +20,7 @@
 #include <QMainWindow>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QPainter>
 #include <QProcess>
 #include <QPushButton>
 #include <QScreen>
@@ -146,6 +147,10 @@ private slots:
   void hiddenRelatedDisplayUnderGraphicComposite();
   void statusRectangleCoversHiddenRelatedDisplay_data();
   void statusRectangleCoversHiddenRelatedDisplay();
+  void graphicEdgesMatchMedmCoordinates_data();
+  void graphicEdgesMatchMedmCoordinates();
+  void cosmeticOutlineEditsKeepObjectBounds_data();
+  void cosmeticOutlineEditsKeepObjectBounds();
   void compositeShapePicking_data();
   void compositeShapePicking();
   void middleButtonTooltipRoutesThroughChildControls();
@@ -279,6 +284,229 @@ void TestObserveOnlyControls::statusRectangleCoversHiddenRelatedDisplay()
         window.rectangleElements_.last()),
         QRect(10, 10, 13, 13));
     window.leaveExecuteMode();
+  }
+}
+
+void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates_data()
+{
+  QTest::addColumn<QString>("shape");
+  QTest::addColumn<bool>("filled");
+  QTest::addColumn<int>("lineWidth");
+  QTest::addColumn<QSize>("extent");
+  QTest::addColumn<int>("arcSpan");
+  for (const QString &shape : {QStringLiteral("rectangle"),
+           QStringLiteral("oval"), QStringLiteral("arc")}) {
+    for (bool filled : {false, true}) {
+      for (int width : {-1, 0, 1, 2, 3, 5}) {
+        for (const QSize extent : {QSize(14, 10), QSize(15, 11)}) {
+          QTest::newRow(qPrintable(QStringLiteral("%1-%2-width%3-%4x%5")
+              .arg(shape).arg(filled ? "fill" : "outline").arg(width)
+              .arg(extent.width()).arg(extent.height())))
+              << shape << filled << width << extent << 360;
+        }
+      }
+    }
+  }
+  for (int span : {90, -90, 180}) {
+    for (bool filled : {false, true}) {
+      QTest::newRow(qPrintable(QStringLiteral("arc-%1-span%2")
+          .arg(filled ? "fill" : "outline").arg(span)))
+          << QStringLiteral("arc") << filled << 0 << QSize(14, 10) << span;
+    }
+  }
+  for (const QString &shape : {QStringLiteral("line"),
+           QStringLiteral("polyline"), QStringLiteral("polygon")}) {
+    for (int width : {1, 3}) {
+      QTest::newRow(qPrintable(QStringLiteral("%1-width%2").arg(shape).arg(width)))
+          << shape << false << width << QSize(14, 14) << 0;
+    }
+  }
+  QTest::newRow("polygon-fill")
+      << QStringLiteral("polygon") << true << 1 << QSize(14, 14) << 0;
+}
+
+void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates()
+{
+  QFETCH(QString, shape);
+  QFETCH(bool, filled);
+  QFETCH(int, lineWidth);
+  QFETCH(QSize, extent);
+  QFETCH(int, arcSpan);
+  const bool pointsShape = shape == QStringLiteral("line")
+      || shape == QStringLiteral("polyline") || shape == QStringLiteral("polygon");
+  const QString adlShape = shape == QStringLiteral("line")
+      ? QStringLiteral("polyline") : shape;
+  const QVector<QPoint> points = shape == QStringLiteral("line")
+      ? QVector<QPoint>{{10, 10}, {24, 10}}
+      : QVector<QPoint>{{10, 10}, {24, 10}, {24, 24}, {10, 24}};
+  QString pointsAdl;
+  if (pointsShape) {
+    pointsAdl = QStringLiteral("points {\n");
+    const int count = shape == QStringLiteral("polyline") ? 3 : points.size();
+    for (int i = 0; i < count; ++i) {
+      pointsAdl += QStringLiteral("(%1,%2)\n").arg(points[i].x()).arg(points[i].y());
+    }
+    pointsAdl += QStringLiteral("}\n");
+  }
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile fixture(directory.filePath(QStringLiteral("geometry.adl")));
+  QVERIFY(fixture.open(QIODevice::WriteOnly));
+  const QByteArray adl = QStringLiteral(
+      "file { name=\"geometry.adl\" version=030120 }\n"
+      "display { object { width=80 height=80 } clr=14 bclr=2 }\n"
+      "%1 { object { x=10 y=10 width=%2 height=%3 }\n"
+      "  \"basic attribute\" { clr=14 fill=\"%4\" %5 }\n"
+      "  begin=0 path=%6\n%7}\n")
+      .arg(adlShape).arg(extent.width()).arg(extent.height())
+      .arg(filled ? "solid" : "outline")
+      .arg(lineWidth < 0 ? QString()
+          : QStringLiteral("width=%1").arg(lineWidth))
+      .arg(arcSpan * 64).arg(pointsAdl).toUtf8();
+  QCOMPARE(fixture.write(adl), qint64(adl.size()));
+  fixture.close();
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture.fileName(), &error), qPrintable(error));
+  const QString savedPath = directory.filePath(QStringLiteral("roundtrip.adl"));
+  QVERIFY(window.saveToPath(savedPath));
+  QFile saved(savedPath);
+  QVERIFY(saved.open(QIODevice::ReadOnly));
+  const auto savedRoot = AdlParser::parse(QString::fromUtf8(saved.readAll()), &error);
+  QVERIFY2(savedRoot.has_value(), qPrintable(error));
+  const AdlNode *savedShape = ::findChild(*savedRoot, adlShape);
+  QVERIFY(savedShape);
+  const AdlNode *savedObject = ::findChild(*savedShape, QStringLiteral("object"));
+  QVERIFY(savedObject);
+  QCOMPARE(propertyValue(*savedObject, QStringLiteral("x")), QStringLiteral("10"));
+  QCOMPARE(propertyValue(*savedObject, QStringLiteral("y")), QStringLiteral("10"));
+  QCOMPARE(propertyValue(*savedObject, QStringLiteral("width")).toInt(), extent.width());
+  QCOMPARE(propertyValue(*savedObject, QStringLiteral("height")).toInt(), extent.height());
+  if (!pointsShape) {
+    const AdlNode *basic = ::findChild(*savedShape, QStringLiteral("basic attribute"));
+    QVERIFY(basic);
+    QCOMPARE(propertyValue(*basic, QStringLiteral("width"), QStringLiteral("0")).toInt(),
+        std::max(0, lineWidth));
+  }
+  window.show();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+  for (int scale : {1, 2}) {
+    window.scaleAllElements(80, 80, 80 * scale, 80 * scale);
+    const QImage actual = window.displayArea_->grab().toImage();
+    QImage expected(actual.size(), actual.format());
+    expected.fill(window.colorForIndex(2));
+    QPainter painter(&expected);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    QPen pen(Qt::black, std::max(1, lineWidth));
+    painter.setPen(filled ? QPen(Qt::NoPen) : pen);
+    painter.setBrush(filled ? QBrush(Qt::black) : QBrush(Qt::NoBrush));
+    /* MEDM's drawRectangle/drawOval/drawArc use ADL dimensions verbatim
+     * for fills and inset outlines by (attr.width+1)/2. Draw this oracle
+     * on the whole canvas, so widget clipping cannot hide missing pixels. */
+    const int inset = filled ? 0 : (lineWidth + 1) / 2;
+    const QRect bounds(10 * scale + inset, 10 * scale + inset,
+        extent.width() * scale - 2 * inset,
+        extent.height() * scale - 2 * inset);
+    if (shape == QStringLiteral("rectangle")) {
+      if (filled) {
+        painter.fillRect(bounds, Qt::black);
+      } else {
+        painter.drawRect(bounds);
+      }
+    } else if (shape == QStringLiteral("oval")) {
+      painter.drawEllipse(bounds);
+    } else if (shape == QStringLiteral("arc")) {
+      if (filled) {
+        painter.drawPie(bounds, 0, arcSpan * 16);
+      } else {
+        painter.drawArc(bounds, 0, arcSpan * 16);
+      }
+    } else {
+      QPolygon path;
+      const int count = shape == QStringLiteral("polyline") ? 3 : points.size();
+      for (int i = 0; i < count; ++i) {
+        path << points[i] * scale;
+      }
+      if (shape == QStringLiteral("polygon")) {
+        painter.drawPolygon(path);
+      } else {
+        painter.drawPolyline(path);
+      }
+    }
+    painter.end();
+    if (actual != expected) {
+      const QDir artifacts(QCoreApplication::applicationDirPath()
+          + QStringLiteral("/test-artifacts/graphic-geometry"));
+      QVERIFY(QDir().mkpath(artifacts.path()));
+      const QString stem = QString::fromLatin1(QTest::currentDataTag())
+          + QStringLiteral("-%1x").arg(scale);
+      actual.save(artifacts.filePath(stem + QStringLiteral("-actual.png")));
+      expected.save(artifacts.filePath(stem + QStringLiteral("-expected.png")));
+    }
+    QVERIFY2(actual == expected, qPrintable(QStringLiteral(
+        "Rendered edges differ from MEDM coordinates at %1x scale").arg(scale)));
+  }
+  if (shape == QStringLiteral("line")) {
+    const auto vertices = window.lineElements_.first()->absolutePoints();
+    window.lineElements_.first()->setLineWidth(lineWidth + 2);
+    QCOMPARE(window.lineElements_.first()->absolutePoints(), vertices);
+    window.lineElements_.first()->setLineWidth(lineWidth);
+    QCOMPARE(window.lineElements_.first()->absolutePoints(), vertices);
+  } else if (shape == QStringLiteral("polyline")) {
+    const auto vertices = window.polylineElements_.first()->absolutePoints();
+    window.polylineElements_.first()->setLineWidth(lineWidth + 2);
+    QCOMPARE(window.polylineElements_.first()->absolutePoints(), vertices);
+    window.polylineElements_.first()->setLineWidth(lineWidth);
+    QCOMPARE(window.polylineElements_.first()->absolutePoints(), vertices);
+  }
+}
+
+void TestObserveOnlyControls::cosmeticOutlineEditsKeepObjectBounds_data()
+{
+  QTest::addColumn<QString>("shape");
+  QTest::newRow("rectangle") << QStringLiteral("rectangle");
+  QTest::newRow("oval") << QStringLiteral("oval");
+  QTest::newRow("arc") << QStringLiteral("arc");
+}
+
+void TestObserveOnlyControls::cosmeticOutlineEditsKeepObjectBounds()
+{
+  QFETCH(QString, shape);
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  const QString adl = QStringLiteral(
+      "%1 { object { x=10 y=10 width=14 height=10 }\n"
+      "\"basic attribute\" { clr=14 fill=\"outline\" width=0 } }\n").arg(shape);
+  QString error;
+  const auto root = AdlParser::parse(adl, &error);
+  QVERIFY2(root.has_value(), qPrintable(error));
+  auto check = [&window](auto *element) {
+    QVERIFY(element);
+    QCOMPARE(element->size(), QSize(15, 11));
+    element->setFill(RectangleFill::kSolid);
+    QCOMPARE(element->size(), QSize(14, 10));
+    element->setFill(RectangleFill::kOutline);
+    QCOMPARE(element->size(), QSize(15, 11));
+    element->setLineWidth(1);
+    QCOMPARE(element->size(), QSize(14, 10));
+    element->setLineWidth(3);
+    QCOMPARE(element->size(), QSize(14, 10));
+    QCOMPARE(window.widgetGeometryForSerialization(element), QRect(10, 10, 14, 10));
+  };
+  if (shape == QStringLiteral("rectangle")) {
+    check(window.loadRectangleElement(root->children.first()));
+  } else if (shape == QStringLiteral("oval")) {
+    check(window.loadOvalElement(root->children.first()));
+  } else {
+    check(window.loadArcElement(root->children.first()));
   }
 }
 

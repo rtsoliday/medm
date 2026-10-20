@@ -18,7 +18,7 @@ OvalElement::OvalElement(QWidget *parent)
   setForegroundColor(palette().color(QPalette::WindowText));
   setFill(RectangleFill::kOutline);
   setLineStyle(RectangleLineStyle::kSolid);
-  setLineWidth(1);
+  setLineWidth(0);
   setColorMode(TextColorMode::kStatic);
   setVisibilityMode(TextVisibilityMode::kStatic);
   update();
@@ -34,7 +34,10 @@ void OvalElement::setFill(RectangleFill fill)
   if (fill_ == fill) {
     return;
   }
+  const bool wasCosmetic = fill_ == RectangleFill::kOutline && lineWidth_ == 0;
   fill_ = fill;
+  updateCosmeticOutlinePadding(wasCosmetic,
+      fill_ == RectangleFill::kOutline && lineWidth_ == 0);
   update();
 }
 
@@ -59,11 +62,14 @@ int OvalElement::lineWidth() const
 
 void OvalElement::setLineWidth(int width)
 {
-  const int clamped = std::max(1, width);
+  const int clamped = std::max(0, width);
   if (lineWidth_ == clamped) {
     return;
   }
+  const bool wasCosmetic = fill_ == RectangleFill::kOutline && lineWidth_ == 0;
   lineWidth_ = clamped;
+  updateCosmeticOutlinePadding(wasCosmetic,
+      fill_ == RectangleFill::kOutline && lineWidth_ == 0);
   update();
 }
 
@@ -73,7 +79,8 @@ bool OvalElement::containsGlobalPoint(const QPoint &point) const
     return false;
   }
 
-  const QRect drawRect = rect().adjusted(0, 0, -1, -1);
+  const QRect drawRect = fill_ == RectangleFill::kSolid
+      ? rect() : medmOutlineRect(rect(), lineWidth_);
   if (drawRect.width() <= 0 || drawRect.height() <= 0) {
     return false;
   }
@@ -91,9 +98,7 @@ bool OvalElement::containsGlobalPoint(const QPoint &point) const
     return ellipsePathForRect(drawRect).contains(localPoint);
   }
 
-  QRect outlineRect = drawRect;
-  const int offset = (lineWidth_ + 1) / 2;
-  outlineRect.adjust(offset, offset, -offset, -offset);
+  const QRect outlineRect = drawRect;
   if (outlineRect.width() <= 0 || outlineRect.height() <= 0) {
     return false;
   }
@@ -114,7 +119,8 @@ void OvalElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QColor effectiveColor = effectiveForegroundColor();
-  QRect drawRect = rect().adjusted(0, 0, -1, -1);
+  const QRect drawRect = fill_ == RectangleFill::kSolid
+      ? rect() : medmOutlineRect(rect(), lineWidth_);
 
   if (fill_ == RectangleFill::kSolid) {
     painter.setPen(Qt::NoPen);
@@ -127,11 +133,8 @@ void OvalElement::paintEvent(QPaintEvent *event)
     pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
                                                          : Qt::SolidLine);
     painter.setPen(pen);
-    QRect outlineRect = drawRect;
-    const int offset = (lineWidth_ + 1) / 2;
-    outlineRect.adjust(offset, offset, -offset, -offset);
-    if (outlineRect.width() > 0 && outlineRect.height() > 0) {
-      painter.drawEllipse(outlineRect);
+    if (drawRect.width() > 0 && drawRect.height() > 0) {
+      painter.drawEllipse(drawRect);
     }
   }
 

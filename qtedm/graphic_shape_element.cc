@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+#include <QVariant>
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
@@ -210,6 +211,18 @@ void GraphicShapeElement::updateExecuteState()
 {
   applyRuntimeVisibility();
   onExecuteStateApplied();
+}
+
+void GraphicShapeElement::updateCosmeticOutlinePadding(
+    bool wasCosmetic, bool isCosmetic)
+{
+  if (wasCosmetic == isCosmetic
+      || !property("_adlOriginalGeometry").isValid()) {
+    return;
+  }
+  const int delta = isCosmetic ? 1 : -1;
+  QWidget::resize(std::max(1, width() + delta),
+      std::max(1, height() + delta));
 }
 
 void GraphicShapeElement::drawSelectionOutline(QPainter &painter,

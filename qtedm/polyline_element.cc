@@ -7,7 +7,6 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
-#include <QVariant>
 
 PolylineElement::PolylineElement(QWidget *parent)
   : GraphicShapeElement(parent)
@@ -48,8 +47,13 @@ void PolylineElement::setLineWidth(int width)
   if (lineWidth_ == clamped) {
     return;
   }
+  const QVector<QPoint> points = absolutePoints();
   lineWidth_ = clamped;
-  update();
+  if (!points.isEmpty()) {
+    setAbsolutePoints(points);
+  } else {
+    update();
+  }
 }
 
 void PolylineElement::setAbsolutePoints(const QVector<QPoint> &points)
@@ -72,16 +76,9 @@ void PolylineElement::setAbsolutePoints(const QVector<QPoint> &points)
     bounding.setHeight(std::max(1, lineWidth_));
   }
 
-  QRect targetRect = bounding;
-  const QVariant original = property("_adlOriginalGeometry");
-  const bool geometryEdited = property("_adlGeometryEdited").toBool();
-  if (original.isValid() && original.canConvert<QRect>()
-      && !geometryEdited) {
-    targetRect = original.toRect();
-  }
-
-  const int widthSpan = std::max(1, targetRect.width());
-  const int heightSpan = std::max(1, targetRect.height());
+  const QRect targetRect = bounding;
+  const int widthSpan = std::max(1, targetRect.width() - 1);
+  const int heightSpan = std::max(1, targetRect.height() - 1);
   const double width = static_cast<double>(widthSpan);
   const double height = static_cast<double>(heightSpan);
 
@@ -112,8 +109,8 @@ QVector<QPoint> PolylineElement::absolutePoints() const
 
   points.reserve(normalizedPoints_.size());
   const QRect globalRect = geometry();
-  const int w = std::max(1, globalRect.width());
-  const int h = std::max(1, globalRect.height());
+  const int w = std::max(1, globalRect.width() - 1);
+  const int h = std::max(1, globalRect.height() - 1);
   for (const QPointF &norm : normalizedPoints_) {
     const double clampedX = std::clamp(norm.x(), 0.0, 1.0);
     const double clampedY = std::clamp(norm.y(), 0.0, 1.0);

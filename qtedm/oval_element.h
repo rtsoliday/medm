@@ -29,5 +29,5 @@ protected:
 private:
   RectangleFill fill_ = RectangleFill::kOutline;
   RectangleLineStyle lineStyle_ = RectangleLineStyle::kSolid;
-  int lineWidth_ = 1;
+  int lineWidth_ = 0;
 };

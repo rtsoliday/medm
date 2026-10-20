@@ -16,7 +16,7 @@ ArcElement::ArcElement(QWidget *parent)
   setForegroundColor(palette().color(QPalette::WindowText));
   setFill(RectangleFill::kOutline);
   setLineStyle(RectangleLineStyle::kSolid);
-  setLineWidth(1);
+  setLineWidth(0);
   setBeginAngle(0);
   setPathAngle(90 * 64);
   setColorMode(TextColorMode::kStatic);
@@ -34,7 +34,10 @@ void ArcElement::setFill(RectangleFill fill)
   if (fill_ == fill) {
     return;
   }
+  const bool wasCosmetic = fill_ == RectangleFill::kOutline && lineWidth_ == 0;
   fill_ = fill;
+  updateCosmeticOutlinePadding(wasCosmetic,
+      fill_ == RectangleFill::kOutline && lineWidth_ == 0);
   update();
 }
 
@@ -59,11 +62,14 @@ int ArcElement::lineWidth() const
 
 void ArcElement::setLineWidth(int width)
 {
-  const int clamped = std::max(1, width);
+  const int clamped = std::max(0, width);
   if (lineWidth_ == clamped) {
     return;
   }
+  const bool wasCosmetic = fill_ == RectangleFill::kOutline && lineWidth_ == 0;
   lineWidth_ = clamped;
+  updateCosmeticOutlinePadding(wasCosmetic,
+      fill_ == RectangleFill::kOutline && lineWidth_ == 0);
   update();
 }
 
@@ -103,7 +109,8 @@ void ArcElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QColor effectiveColor = effectiveForegroundColor();
-  QRect drawRect = rect().adjusted(0, 0, -1, -1);
+  const QRect drawRect = fill_ == RectangleFill::kSolid
+      ? rect() : medmOutlineRect(rect(), lineWidth_);
   const int startAngle = toQtAngle(beginAngle_);
   const int spanAngle = toQtAngle(pathAngle_);
 
@@ -118,13 +125,8 @@ void ArcElement::paintEvent(QPaintEvent *event)
     pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
                                                          : Qt::SolidLine);
     painter.setPen(pen);
-    QRect outlineRect = drawRect;
-    if (lineWidth_ > 1) {
-      const int offset = lineWidth_ / 2;
-      outlineRect.adjust(offset, offset, -offset, -offset);
-    }
-    if (outlineRect.width() > 0 && outlineRect.height() > 0) {
-      painter.drawArc(outlineRect, startAngle, spanAngle);
+    if (drawRect.width() > 0 && drawRect.height() > 0) {
+      painter.drawArc(drawRect, startAngle, spanAngle);
     }
   }
 

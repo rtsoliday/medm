@@ -32,7 +32,10 @@ void RectangleElement::setFill(RectangleFill fill)
   if (fill_ == fill) {
     return;
   }
+  const bool wasCosmetic = fill_ == RectangleFill::kOutline && adlLineWidth() == 0;
   fill_ = fill;
+  updateCosmeticOutlinePadding(wasCosmetic,
+      fill_ == RectangleFill::kOutline && adlLineWidth() == 0);
   update();
 }
 
@@ -57,14 +60,15 @@ int RectangleElement::lineWidth() const
 
 void RectangleElement::setLineWidth(int width)
 {
+  const bool wasCosmetic = fill_ == RectangleFill::kOutline && adlLineWidth() == 0;
   const int clamped = std::max(1, width);
-  if (!suppressLineWidthTracking_ && lineWidth_ != clamped) {
+  if (!suppressLineWidthTracking_
+      && (lineWidth_ != clamped || adlLineWidth_ != clamped)) {
     lineWidthEdited_ = true;
   }
-  if (lineWidth_ == clamped) {
-    return;
-  }
   lineWidth_ = clamped;
+  updateCosmeticOutlinePadding(wasCosmetic,
+      fill_ == RectangleFill::kOutline && adlLineWidth() == 0);
   update();
 }
 
@@ -79,7 +83,7 @@ void RectangleElement::setLineWidthFromAdl(int width)
 
 int RectangleElement::adlLineWidth() const
 {
-  return adlLineWidth_;
+  return lineWidthEdited_ ? lineWidth_ : std::max(0, adlLineWidth_);
 }
 
 void RectangleElement::setAdlLineWidth(int width, bool hasProperty)
@@ -141,40 +145,23 @@ void RectangleElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   const QColor currentColor = effectiveForegroundColor();
-  QRect deviceRect;
-  /* Zero-width X11 outlines include the far endpoints. Their widgets keep
-   * an extra pixel so those edges are not clipped or covered by a fill. */
-  if (fill_ == RectangleFill::kSolid) {
-    deviceRect = rect();
-  } else {
-    deviceRect = (adlLineWidth_ == 0) ? rect().adjusted(0, 0, -1, -1)
-                                    : rect().adjusted(1, 1, -1, -1);
-  }
+  const QRect deviceRect = fill_ == RectangleFill::kSolid
+      ? rect() : medmOutlineRect(rect(), adlLineWidth());
 
   if (fill_ == RectangleFill::kSolid) {
     // XFillRectangle covers the full width and height, including the last
     // row and column; leaving them transparent exposes graphics underneath.
     painter.fillRect(deviceRect, currentColor);
   } else {
-    // MEDM's X11 renderer extends outline mode one pixel past the widget
-    // bounds, so expand the Qt outline by a pixel on each side to match.
     painter.setBrush(Qt::NoBrush);
     QPen pen(currentColor);
     pen.setWidth(lineWidth_);
     pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
                                                          : Qt::SolidLine);
     painter.setPen(pen);
-    
-    const int halfWidth = (lineWidth_ + 1) / 2;
-    const int outlineInset = std::max(0, halfWidth - 1);
-    QRect outlineRect = deviceRect.adjusted(-1, -1, 1, 1);
-    outlineRect = outlineRect.adjusted(outlineInset, outlineInset,
-                                       -outlineInset, -outlineInset);
-    outlineRect = outlineRect.intersected(deviceRect);
-    if (outlineRect.width() <= 0 || outlineRect.height() <= 0) {
-      outlineRect = deviceRect;
+    if (deviceRect.width() > 0 && deviceRect.height() > 0) {
+      painter.drawRect(deviceRect);
     }
-    painter.drawRect(outlineRect);
   }
 
   if (isSelected()) {

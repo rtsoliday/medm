@@ -49,6 +49,7 @@ protected:
   void applyRuntimeVisibility();
   void updateExecuteState();
   void drawSelectionOutline(QPainter &painter, const QRect &rect) const;
+  void updateCosmeticOutlinePadding(bool wasCosmetic, bool isCosmetic);
 
   virtual void onRuntimeStateReset() {}
   virtual void onExecuteStateApplied();

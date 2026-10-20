@@ -24,6 +24,7 @@ public:
   void setLineWidth(int width);
 
   void setLocalEndpoints(const QPoint &start, const QPoint &end);
+  void setAbsolutePoints(const QVector<QPoint> &points);
   QVector<QPoint> absolutePoints() const;
 
 protected:
@@ -36,6 +37,7 @@ private:
 
   RectangleLineStyle lineStyle_ = RectangleLineStyle::kSolid;
   int lineWidth_ = 1;
+  bool hasEndpoints_ = false;
   QPointF startRatio_{0.0, 0.0};
   QPointF endRatio_{1.0, 1.0};
 };

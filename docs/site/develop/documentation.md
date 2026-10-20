@@ -57,4 +57,4 @@ Use `make docs DOCS_BASE=/` for a server's root. Build output is local; building
 
 Commit authored pages, the theme, scripts, package manifest, and lockfile. Generated pages, copied assets, `docs/html`, and `docs/site/dist` are ignored.
 
-`make docs-clean` removes generated documentation while preserving authored pages and dependencies. `make docs-distclean` also removes installed documentation dependencies. Run `make docs` to recreate the output.
+`make docs-clean` removes generated documentation while preserving authored pages and dependencies. `make clean` also performs this documentation cleanup. `make docs-distclean` also removes installed documentation dependencies. Run `make docs` to recreate the output.

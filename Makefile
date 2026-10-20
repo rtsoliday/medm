@@ -146,7 +146,7 @@ test tests test-qtedm test-qtedm-cli test-qtedm-unit test-qtedm-ioc test-qtedm-v
 	@exit 1
 endif
 
-clean:
+clean: docs-clean
 ifneq ($(OS), Windows)
 	$(MAKE) -C printUtils clean
 	$(MAKE) -C xc clean

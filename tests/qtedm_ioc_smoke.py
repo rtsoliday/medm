@@ -953,6 +953,9 @@ def main() -> int:
         elif ioc_process is not None:
           stop_ca_fixture("disconnected_case")
       if provider == "pva" and pva_process is None:
+        # The PVA IOC also serves CA; release the CA fixture's UDP port
+        # before starting it so unicast searches cannot reach the wrong IOC.
+        stop_ca_fixture("pva_phase")
         start_pva_fixture()
       if provider == "pva" and pva_process.poll() is not None:
         raise CaseFailure(

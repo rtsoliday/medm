@@ -1,104 +1,18 @@
-EPICS_SEARCH_PATHS := /usr/local/oag/base ../../epics-base ../../../../base \
-                      $(HOME)/epics/base $(HOME)/epics/base-7.0 \
-                      /cygdrive/*/epics/base /cygdrive/*/epics/base-7.0
-EPICS_BASE ?= $(firstword $(wildcard $(EPICS_SEARCH_PATHS)))
-ifeq ($(EPICS_BASE),)
-  $(error EPICS base not found. Run 'git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git' next to the medm repository)
-endif
-
-EPICS_BASE := $(abspath $(EPICS_BASE))
-
+QT_REQUIRED := 1
+QT_MODULES := Core Gui Widgets Network PrintSupport Svg
+EPICS_REQUIRED_LIBS := pvaClient nt pvAccessCA pvAccess pvData ca Com
+# Windows uses C++20, with the EPICS file exceptions declared below.
+WINDOWS_CXX_STD_FLAGS := /std:c++20
 include ../Makefile.rules
-
 .DEFAULT_GOAL := all
-
-PYTHON ?= python3
-
-# Detect if libCom.a was built with readline support by checking for an
-# unresolved readline symbol in the EPICS archive for the active platform.
-LIBCOM_PATH := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a
-ifneq ($(OS), Windows)
-  LIBCOM_NEEDS_READLINE := $(shell test -f "$(LIBCOM_PATH)" && \
-    nm "$(LIBCOM_PATH)" 2>/dev/null | grep -Eq "U _?readline$$" && echo 1)
-endif
-
+QT_CORE_PKG = Qt$(QT_VERSION)Core
+QT_TEST_PKG = Qt$(QT_VERSION)Test
+QT_WIDGETS_CFLAGS = $(QT_CFLAGS)
+RCC_OBJ_OUT = $(if $(filter Windows,$(OS)),/Fo,-o )
+QT_DIR_FWD = $(QT_DIR)
 PROD_LIBS :=
 
-ifeq ($(OS), Windows)
-  QT_VERSION ?= 6
-  ifeq ($(QT_VERSION),5)
-    QT_DIR ?= C:\\Qt\\5.15.2\\msvc2019_64
-  else ifeq ($(QT_VERSION),6)
-    QT_DIR ?= C:\\Qt\\6.8.2\\msvc2022_64
-  else
-    $(error Unsupported QT_VERSION=$(QT_VERSION). Use QT_VERSION=5 or QT_VERSION=6.)
-  endif
-  QT_CORE_PKG := Qt$(QT_VERSION)Core
-  QT_TEST_PKG := Qt$(QT_VERSION)Test
-  QT_DIR_FWD := $(subst \\,/,$(QT_DIR))
-  QT_MODULE_DEFINES := -DQT_NO_DEBUG -DQT_CORE_LIB -DQT_GUI_LIB \
-    -DQT_WIDGETS_LIB \
-    -DQT_PRINTSUPPORT_LIB -DQT_SVG_LIB -DQT_NETWORK_LIB
-  QT_WIDGETS_CFLAGS := $(QT_MODULE_DEFINES) -I"$(QT_DIR_FWD)/include" -I"$(QT_DIR_FWD)/include/QtCore" -I"$(QT_DIR_FWD)/include/QtGui" -I"$(QT_DIR_FWD)/include/QtWidgets" -I"$(QT_DIR_FWD)/include/QtPrintSupport" -I"$(QT_DIR_FWD)/include/QtSvg" -I"$(QT_DIR_FWD)/include/QtNetwork"
-  QT_TEST_CFLAGS := -I"$(QT_DIR_FWD)/include/QtTest"
-else
-  # Prefer Qt6 by default, but honor an explicitly selected Qt major.
-  QT6_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt6Core 2>/dev/null && echo 1)
-  QT5_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt5Core 2>/dev/null && echo 1)
-  QT_VERSION ?= $(if $(filter 1,$(QT6_AVAILABLE)),6,$(if $(filter 1,$(QT5_AVAILABLE)),5))
-  ifeq ($(strip $(QT_VERSION)),)
-    $(error Neither Qt6 nor Qt5 found. Please install Qt development packages.)
-  endif
-  ifeq ($(filter $(QT_VERSION),5 6),)
-    $(error Unsupported QT_VERSION=$(QT_VERSION). Use QT_VERSION=5 or QT_VERSION=6.)
-  endif
-  QT_WIDGETS_PKG := Qt$(QT_VERSION)Widgets
-  QT_PRINT_PKG := Qt$(QT_VERSION)PrintSupport
-  QT_SVG_PKG := Qt$(QT_VERSION)Svg
-  QT_CORE_PKG := Qt$(QT_VERSION)Core
-  QT_TEST_PKG := Qt$(QT_VERSION)Test
-  QT_NETWORK_PKG := Qt$(QT_VERSION)Network
-  QT_REQUIRED_PACKAGES := $(QT_CORE_PKG) $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) \
-                          $(QT_SVG_PKG) $(QT_NETWORK_PKG)
-  QT_SELECTED_AVAILABLE := $(shell $(PKG_CONFIG) --exists $(QT_REQUIRED_PACKAGES) 2>/dev/null && echo 1)
-  ifneq ($(QT_SELECTED_AVAILABLE),1)
-    $(error Qt$(QT_VERSION) development packages not found: $(QT_REQUIRED_PACKAGES). Check PKG_CONFIG and PKG_CONFIG_PATH.)
-  endif
-  QT_WIDGETS_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(QT_WIDGETS_PKG))
-endif
-
-ifeq ($(OS), Windows)
-  QT_RCC := "$(QT_DIR_FWD)/bin/rcc.exe"
-  RCC_OBJ_OUT := /Fo
-else
-  QT_RCC_DIRS := \
-    $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PKG) 2>/dev/null) \
-    $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null) \
-    $(shell $(PKG_CONFIG) --variable=bindir $(QT_CORE_PKG) 2>/dev/null)
-  QT_RCC := $(firstword $(wildcard $(addsuffix /rcc,$(QT_RCC_DIRS))))
-  ifeq ($(strip $(QT_RCC)),)
-    ifeq ($(OS), Darwin)
-      QT_RCC := $(firstword $(wildcard \
-              /opt/homebrew/bin/rcc \
-              /opt/homebrew/opt/qt@6/bin/rcc \
-              /opt/homebrew/opt/qt/bin/rcc \
-              /opt/local/libexec/qt6/libexec/rcc \
-              /opt/local/libexec/qt6/bin/rcc \
-              /opt/local/libexec/qt5/bin/rcc \
-              /usr/local/opt/qt@6/bin/rcc \
-              /usr/local/opt/qt/bin/rcc \
-              /usr/bin/rcc))
-      ifeq ($(strip $(QT_RCC)),)
-        QT_RCC := rcc
-      endif
-    else
-      QT_RCC := rcc
-    endif
-  endif
-  RCC_OBJ_OUT := -o 
-endif
-
-PROD = qtedm
+PROD = qtedm qtedm-convert
 QTEDM_PCH ?= 0
 QTEDM_PCH_ENABLED = 0
 QTEDM_PCH_SOURCE = qtedm_pch.h
@@ -240,7 +154,7 @@ qtedm_SRC = qtedm.cc \
             text_runtime_calc_bridge.c \
             update_coordinator.cc
 
-qtedm_OBJS = $(patsubst %.cc,$(OBJ_DIR)/%.$(OBJEXT),$(qtedm_SRC))
+qtedm_OBJS = $(addprefix $(OBJ_DIR)/,$(addsuffix .$(OBJEXT),$(basename $(qtedm_SRC))))
 QTEDM_PCH_FILE :=
 
 ifeq ($(OS), Linux)
@@ -250,162 +164,82 @@ ifeq ($(OS), Linux)
   # Probe the selected compiler because Clang on Linux does not accept this
   # GCC-specific option.
   QTEDM_HAS_NO_VAR_TRACKING_ASSIGNMENTS := $(shell \
-    $(CCC) -fno-var-tracking-assignments -E -x c++ /dev/null \
+    $(CXX) -fno-var-tracking-assignments -E -x c++ /dev/null \
       >/dev/null 2>&1 && echo 1)
   ifeq ($(QTEDM_HAS_NO_VAR_TRACKING_ASSIGNMENTS),1)
     $(OBJ_DIR)/resource_palette_dialog.$(OBJEXT): \
-      CCFLAGS += -fno-var-tracking-assignments
+      override CXXFLAGS += -fno-var-tracking-assignments
   endif
 endif
 
 CFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR)
-CCFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR)
+override CXXFLAGS += -I. -I$(EPICS_BASE)/include -I$(OBJ_DIR)
 ifeq ($(OS), Windows)
- CCFLAGS += /std:c++20 /Zc:__cplusplus /permissive- $(QT_WIDGETS_CFLAGS)
- LDFLAGS += /LIBPATH:"$(QT_DIR_FWD)/lib" Qt$(QT_VERSION)PrintSupport.lib Qt$(QT_VERSION)Svg.lib Qt$(QT_VERSION)Network.lib Qt$(QT_VERSION)Widgets.lib Qt$(QT_VERSION)Gui.lib Qt$(QT_VERSION)Core.lib
+ override CXXFLAGS += /Zc:__cplusplus /permissive- $(QT_CFLAGS)
+ LDFLAGS += $(QT_LIBS)
 else
- CCFLAGS += $(shell $(PKG_CONFIG) --cflags $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
- LDFLAGS += $(shell $(PKG_CONFIG) --libs $(QT_WIDGETS_PKG) $(QT_PRINT_PKG) $(QT_SVG_PKG) $(QT_NETWORK_PKG))
+ override CXXFLAGS += $(QT_CFLAGS)
+ LDFLAGS += $(QT_LIBS)
 endif
 
-ifeq ($(OS), Windows)
-  QT_TEST_LIBS := Qt$(QT_VERSION)Test.lib
-  QT_TEST_AVAILABLE := 1
-else
-  QT_TEST_AVAILABLE := $(shell $(PKG_CONFIG) --exists $(QT_TEST_PKG) 2>/dev/null && echo 1)
-  QT_TEST_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(QT_TEST_PKG))
-  QT_TEST_LIBS := $(shell $(PKG_CONFIG) --libs $(QT_TEST_PKG))
-endif
+QT_TEST_AVAILABLE := $(if $(filter Windows,$(OS)),1,$(shell $(PKG_CONFIG) --exists $(QT_TEST_PKG) 2>/dev/null && echo 1))
 
 
 ifeq ($(OS), Linux)
-  # Try to get MOC from pkg-config first, then fallback to known paths
-  MOC_DIR := $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null)
-  ifneq ($(MOC_DIR),)
-    MOC := $(MOC_DIR)/moc
-  else
-    MOC_DIR := $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
-    ifneq ($(MOC_DIR),)
-      MOC := $(MOC_DIR)/moc
-    else
-      ifeq ($(QT_VERSION),6)
-        MOC = $(firstword $(wildcard \
-                /usr/lib64/qt6/libexec/moc \
-                /usr/lib/qt6/libexec/moc \
-                /usr/lib/x86_64-linux-gnu/qt6/libexec/moc \
-                /usr/bin/moc-qt6 \
-                /usr/bin/moc))
-      else
-        MOC = $(firstword $(wildcard \
-                /usr/lib64/qt5/bin/moc \
-                /usr/lib/qt5/bin/moc \
-                /usr/lib/x86_64-linux-gnu/qt5/bin/moc \
-                /usr/bin/moc-qt5 \
-                /usr/bin/moc))
-      endif
-    endif
-  endif
-  ifeq ($(strip $(MOC)),)
-    $(error Qt moc tool not found. Please install Qt development packages: sudo apt-get install qt6-base-dev (Debian/Ubuntu) or sudo dnf install qt6-qtbase-devel (Fedora/RHEL))
-  endif
   CFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
-  CCFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
+  override CXXFLAGS += -I$(EPICS_BASE)/include/compiler/gcc -I$(EPICS_BASE)/include/os/$(OS)
   LDFLAGS := -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) $(LDFLAGS)
-  PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libnt.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccessCA.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccess.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvData.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
-    $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
-    $(Z_LIB) $(if $(LIBCOM_NEEDS_READLINE),-lreadline) $(PROD_SYS_LIBS)
+  PROD_SYS_LIBS := $(EPICS_LIBS) \
+    $(LZMA_LIB) $(GSL_LINK_LIBS) \
+    $(Z_LIB) $(EPICS_READLINE_LIBS) $(PROD_SYS_LIBS)
   PROD_SYS_LIBS += -lX11
 endif
 
 ifeq ($(OS), Darwin)
   CFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-deprecated-builtins
-  CCFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
+  override CXXFLAGS += -I$(EPICS_BASE)/include/compiler/clang -I$(EPICS_BASE)/include/os/$(OS) -Wno-overloaded-virtual -Wno-deprecated-builtins
   LDFLAGS := -L$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH) $(LDFLAGS)
-  PROD_SYS_LIBS := $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvaClient.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libnt.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccessCA.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvAccess.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libpvData.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libca.a \
-    $(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)/libCom.a \
-    $(LZMA_LIB) $(GSL_LIB) $(GSLCBLAS_LIB) \
-    $(Z_LIB) $(if $(LIBCOM_NEEDS_READLINE),-lreadline) $(PROD_SYS_LIBS)
-  # Try to get MOC from pkg-config first, then fallback to known paths
-  MOC_DIR := $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PKG) 2>/dev/null)
-  ifneq ($(MOC_DIR),)
-    MOC := $(MOC_DIR)/moc
-  else
-    MOC_DIR := $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PKG) 2>/dev/null)
-    ifneq ($(MOC_DIR),)
-      MOC := $(MOC_DIR)/moc
-    else
-      ifeq ($(QT_VERSION),6)
-        MOC = $(firstword $(wildcard \
-                /opt/homebrew/bin/moc \
-                /opt/homebrew/opt/qt@6/libexec/moc \
-                /opt/homebrew/opt/qt@6/bin/moc \
-                /opt/homebrew/opt/qt/libexec/moc \
-                /opt/homebrew/opt/qt/bin/moc \
-                /opt/local/libexec/qt6/bin/moc \
-                /usr/local/opt/qt@6/bin/moc \
-                /usr/local/opt/qt/bin/moc))
-      else
-        MOC = $(firstword $(wildcard \
-                /opt/homebrew/bin/moc \
-                /opt/homebrew/opt/qt@5/bin/moc \
-                /opt/local/libexec/qt5/bin/moc \
-                /usr/local/opt/qt@5/bin/moc))
-      endif
-    endif
-  endif
-  ifeq ($(strip $(MOC)),)
-    MOC = moc
-  endif
+  PROD_SYS_LIBS := $(EPICS_LIBS) \
+    $(LZMA_LIB) $(GSL_LINK_LIBS) \
+    $(Z_LIB) $(EPICS_READLINE_LIBS) $(PROD_SYS_LIBS)
+
 endif
 
 ifeq ($(OS), Windows)
   NO_DLL = 1
   CFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL -DNOMINMAX
-  CCFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL -DNOMINMAX
-  PROD_LIBS += gsl.lib gslcblas.lib ws2_32.lib \
-               pvaClient.lib nt.lib pvAccessCA.lib pvAccess.lib pvData.lib pvDatabase.lib ca.lib Com.lib
+  override CXXFLAGS += -wd4101 -wd4244 -wd4250 -wd4267 -wd4275 -w44355 -w44344 -w44251 -I$(EPICS_BASE)/include/compiler/msvc -I$(EPICS_BASE)/include/os/WIN32 -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING -DEPICS_CALL_DLL -DNOMINMAX
+  PROD_LIBS += $(GSL_LINK_LIBS)
+  PROD_SYS_LIBS += $(EPICS_LIBS) ws2_32.lib
   LIB_LINK_DIRS += -LIBPATH:$(EPICS_BASE)/lib/$(EPICS_HOST)-$(EPICS_ARCH)
-  MOC = "$(QT_DIR_FWD)/bin/moc.exe"
 
   PVA_CXX17_OBJS = $(OBJ_DIR)/pvaSDDS.$(OBJEXT) \
                    $(OBJ_DIR)/pva_bridge.$(OBJEXT)
 
-$(PVA_CXX17_OBJS): CCFLAGS := $(filter-out /std:c++20 /permissive-,$(CCFLAGS)) /std:c++17
+$(PVA_CXX17_OBJS): CXXFLAGS := $(filter-out /std:c++20 /permissive-,$(CXXFLAGS)) /std:c++17
 
-$(OBJ_DIR)/pva_ntndarray_source.$(OBJEXT): CCFLAGS := $(filter-out /std:c++20,$(CCFLAGS)) /std:c++17 /Zc:twoPhase-
+$(OBJ_DIR)/pva_ntndarray_source.$(OBJEXT): CXXFLAGS := $(filter-out /std:c++20,$(CXXFLAGS)) /std:c++17 /Zc:twoPhase-
 
-$(OBJ_DIR)/test_display_import_ndarray.$(OBJEXT): CCFLAGS := $(filter-out /std:c++20,$(CCFLAGS)) /std:c++17 /Zc:twoPhase-
+$(OBJ_DIR)/test_display_import_ndarray.$(OBJEXT): CXXFLAGS := $(filter-out /std:c++20,$(CXXFLAGS)) /std:c++17 /Zc:twoPhase-
 endif
 
 ifeq ($(QTEDM_PCH_ENABLED),1)
   QTEDM_PCH_WORK_HEADER = $(OBJ_DIR)/qtedm_pch.h
   QTEDM_PCH_FILE = $(QTEDM_PCH_WORK_HEADER).gch
   EXTRA_CXX_OBJ_DEPS += $(QTEDM_PCH_FILE)
-  CCFLAGS += -include $(QTEDM_PCH_WORK_HEADER)
+  override CXXFLAGS += -include $(QTEDM_PCH_WORK_HEADER)
 endif
 
 ifneq ($(QTEDM_PCH_FILE),)
-QTEDM_PCH_CCFLAGS = $(filter-out -include $(QTEDM_PCH_WORK_HEADER),$(CCFLAGS))
+QTEDM_PCH_CCFLAGS = $(filter-out -include $(QTEDM_PCH_WORK_HEADER),$(CXXFLAGS))
 
 $(QTEDM_PCH_WORK_HEADER): $(QTEDM_PCH_SOURCE) | $(OBJ_DIR)
 	cp -f $< $@
 
 $(QTEDM_PCH_FILE): $(QTEDM_PCH_WORK_HEADER) | $(OBJ_DIR)
-	$(CCC) $(QTEDM_PCH_CCFLAGS) -x c++-header $< -o $@
+	$(CXX) $(QTEDM_PCH_CCFLAGS) -x c++-header $< -o $@
 endif
 
-include ../Makefile.build
 
 qtedm_OBJS += $(OBJ_DIR)/icons_rcc.$(OBJEXT)
 qtedm_OBJS += $(OBJ_DIR)/help_rcc.$(OBJEXT)
@@ -420,21 +254,21 @@ all: $(OBJ_DIR)/qtedm-convert$(EXEEXT)
 
 $(OBJ_DIR)/icons_rcc.$(OBJEXT): resources/icons.qrc resources/icons/QtEDM.png \
                                  $(QTEDM_PCH_FILE) | $(OBJ_DIR)
-	$(QT_RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
-	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp $(RCC_OBJ_OUT)$@
+	$(RCC) -name icons resources/icons.qrc -o $(OBJ_DIR)/icons_rcc.cpp
+	$(CXX) $(CXXFLAGS) -c $(OBJ_DIR)/icons_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/help_rcc.$(OBJEXT): resources/help.qrc ../docs/QtEDM.html \
                                $(wildcard ../docs/images/qtedm-widgets/*.png) \
                                $(QTEDM_PCH_FILE) \
                                | $(OBJ_DIR)
-	$(QT_RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
-	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
+	$(RCC) -name help resources/help.qrc -o $(OBJ_DIR)/help_rcc.cpp
+	$(CXX) $(CXXFLAGS) -c $(OBJ_DIR)/help_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/demo_rcc.$(OBJEXT): resources/demo.qrc \
                                resources/demo/QtEDM_Demo.adl \
                                $(QTEDM_PCH_FILE) | $(OBJ_DIR)
-	$(QT_RCC) -name demo resources/demo.qrc -o $(OBJ_DIR)/demo_rcc.cpp
-	$(CCC) $(CCFLAGS) -c $(OBJ_DIR)/demo_rcc.cpp $(RCC_OBJ_OUT)$@
+	$(RCC) -name demo resources/demo.qrc -o $(OBJ_DIR)/demo_rcc.cpp
+	$(CXX) $(CXXFLAGS) -c $(OBJ_DIR)/demo_rcc.cpp $(RCC_OBJ_OUT)$@
 
 $(OBJ_DIR)/moc_cartesian_plot_element.cpp: cartesian_plot_element.h | $(OBJ_DIR)
 	$(MOC) $(QT_WIDGETS_CFLAGS) $< -o $@
@@ -458,19 +292,12 @@ $(OBJ_DIR)/memory_tracker.$(OBJEXT): $(OBJ_DIR)/moc_memory_tracker.cpp
 
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
 	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
-	cp -f $@ $(BIN_DIR)/
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
 
 $(OBJ_DIR)/qtedm-convert$(EXEEXT): $(qtedm_convert_OBJS)
 	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)
-	cp -f $@ $(BIN_DIR)/
 
 $(OBJ_DIR)/medm$(EXEEXT): $(medm_OBJS) $(PROD_DEPS)
 	$(LINKEXE) $(OUTPUTEXE) $(medm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
-	cp -f $@ $(BIN_DIR)/
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then echo cp -f $@ $(EPICS_BIN_DIR)/; fi
-	@if [ -n "$(EPICS_BIN_DIR)" ]; then cp -f $@ $(EPICS_BIN_DIR)/; fi
 
 QTEDM_UNIT_TEST_NAMES = test_command_line \
                         test_channel_protocols \
@@ -609,15 +436,15 @@ $(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
 
 $(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc \
                              $(QTEDM_PCH_FILE) | $(OBJ_DIR)
-	$(CCC) $(CCFLAGS) $(QT_TEST_CFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+	$(CXX) $(CXXFLAGS) $(QT_TEST_CFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
 $(OBJ_DIR)/qtedm_image_compare.$(OBJEXT): tests/qtedm_image_compare.cc \
                                           $(QTEDM_PCH_FILE) | $(OBJ_DIR)
-	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
 $(OBJ_DIR)/qtedm_shell_command_helper.$(OBJEXT): \
     tests/qtedm_shell_command_helper.cc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
-	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
 $(OBJ_DIR)/plugin_api_discovery_plugin.moc: \
     tests/plugin_api_discovery_plugin.cc | $(OBJ_DIR)
@@ -626,7 +453,7 @@ $(OBJ_DIR)/plugin_api_discovery_plugin.moc: \
 $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT): \
     tests/plugin_api_discovery_plugin.cc \
     $(OBJ_DIR)/plugin_api_discovery_plugin.moc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
-	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
 $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc: \
     tests/plugin_api_pv_thumbs_plugin.cc | $(OBJ_DIR)
@@ -635,7 +462,7 @@ $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc: \
 $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT): \
     tests/plugin_api_pv_thumbs_plugin.cc \
     $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc $(QTEDM_PCH_FILE) | $(OBJ_DIR)
-	$(CCC) $(CCFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< $(OUTPUT)
 
 $(PLUGIN_API_TEST_DIR):
 	mkdir -p $@
@@ -660,17 +487,17 @@ $(PLUGIN_API_THUMBS_LIBRARY): \
 else ifeq ($(OS), Darwin)
 $(PLUGIN_API_TEST_LIBRARY): \
     $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
-	$(CCC) -dynamiclib -o $@ $< $(LDFLAGS)
+	$(CXX) -dynamiclib -o $@ $< $(LDFLAGS)
 $(PLUGIN_API_THUMBS_LIBRARY): \
     $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
-	$(CCC) -dynamiclib -o $@ $< $(LDFLAGS)
+	$(CXX) -dynamiclib -o $@ $< $(LDFLAGS)
 else
 $(PLUGIN_API_TEST_LIBRARY): \
     $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
-	$(CCC) -shared -o $@ $< $(LDFLAGS)
+	$(CXX) -shared -o $@ $< $(LDFLAGS)
 $(PLUGIN_API_THUMBS_LIBRARY): \
     $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) | $(PLUGIN_API_TEST_DIR)
-	$(CCC) -shared -o $@ $< $(LDFLAGS)
+	$(CXX) -shared -o $@ $< $(LDFLAGS)
 endif
 
 QTEDM_UNIT_TEST_PLATFORM_LIBS =
@@ -798,8 +625,11 @@ clean-tests:
 
 .NOTPARALLEL: test
 
-.PHONY: install-converter
-all: install-converter
-install-converter: $(OBJ_DIR)/qtedm-convert$(EXEEXT) | $(BIN_DIR) $(EPICS_BIN_DIR)
-	cp -f $< $(BIN_DIR)/
-	$(if $(EPICS_BIN_DIR),cp -f $< $(EPICS_BIN_DIR)/)
+# Register generated sources, PCH and test objects before shared finalization.
+qtedm-convert_OBJS = $(qtedm_convert_OBJS)
+qtedm-convert_LIBS =
+BUILD_OBJECTS += $(QTEDM_PCH_FILE) $(foreach test,$(QTEDM_UNIT_TEST_NAMES),$($(test)_OBJS)) $(qtedm_image_compare_OBJS) $(OBJ_DIR)/qtedm_shell_command_helper.$(OBJEXT) $(OBJ_DIR)/plugin_api_discovery_plugin.$(OBJEXT) $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT)
+BUILD_GENERATED += $(QTEDM_UNIT_TEST_MOCS) $(addprefix $(OBJ_DIR)/,icons_rcc.cpp help_rcc.cpp demo_rcc.cpp moc_cartesian_plot_element.cpp moc_find_pv_dialog.cpp moc_shared_channel_manager.cpp moc_memory_tracker.cpp plugin_api_discovery_plugin.moc plugin_api_pv_thumbs_plugin.moc)
+BUILD_CONFIG_VARIABLES += QTEDM_PCH QTEDM_PCH_CCFLAGS
+CUSTOM_LINK_PRODUCTS += qtedm qtedm-convert
+include ../Makefile.build

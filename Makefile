@@ -28,6 +28,9 @@ endif
 
 export GSL_REPO
 
+QT_MODULES := Core Gui Widgets Network PrintSupport Svg
+# Discover Base here; individual components enforce their own requirements.
+EPICS_OPTIONAL_LIBS := ca Com
 include Makefile.rules
 export MOTIF
 export HAVE_MOTIF
@@ -144,14 +147,12 @@ test tests test-qtedm test-qtedm-cli test-qtedm-unit test-qtedm-ioc test-qtedm-v
 endif
 
 clean:
-ifeq ($(HAVE_MOTIF), 1)
+ifneq ($(OS), Windows)
 	$(MAKE) -C printUtils clean
 	$(MAKE) -C xc clean
 	$(MAKE) -C medm clean
 endif
-ifeq ($(HAVE_QT), 1)
 	$(MAKE) -C qtedm clean
-endif
 	
 distclean: clean
 	rm -rf bin/$(OS)-$(ARCH)

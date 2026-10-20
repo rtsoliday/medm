@@ -5,7 +5,7 @@
 QtEDM is the modern Qt implementation in this repository (`qtedm/`).
 It uses EPICS Channel Access / PVAccess and reads the same `.adl` display
 format used by MEDM. QtEDM runs natively on Linux, macOS, and Windows when the
-local Qt, EPICS Base, and SDDS build dependencies are available.
+local Qt and EPICS Base build dependencies are available.
 
 ### Prerequisites
 
@@ -22,7 +22,6 @@ local Qt, EPICS Base, and SDDS build dependencies are available.
 	- Qt6 preferred (`Qt6Core`, `Qt6Widgets`, `Qt6PrintSupport`, `Qt6Svg`)
 	- Qt5 fallback (`Qt5Core`, `Qt5Widgets`, `Qt5PrintSupport`, `Qt5Svg`)
 	- `moc` and `rcc` must be available
-- SDDS source tree (required for building shared support libraries used by QtEDM)
 
 Typical Debian/Ubuntu packages for a Linux build:
 
@@ -42,7 +41,6 @@ sudo apt-get install libmotif-dev libxmu-dev
 
 ```bash
 git clone --recursive -b 7.0 https://github.com/epics-base/epics-base.git
-git clone https://github.com/rtsoliday/SDDS.git
 ```
 
 2. Build EPICS Base (see EPICS Base docs for full options):
@@ -52,26 +50,18 @@ cd ../epics-base
 make -j4
 ```
 
-3. Build SDDS:
-
-```bash
-cd ../SDDS
-make -j4
-```
-
-If your SDDS checkout does not build out of the box on your platform, follow
-the SDDS README/build notes and then rerun `make`.
-
-4. From this repository root, build:
+3. From this repository root, build:
 
 ```bash
 make -j4
 ```
 
 Notes:
-- `qtedm` can be built without Motif. Full top-level builds and support
-	libraries may still require SDDS and/or prebuilt local libs. Building the
-	legacy `medm` executable requires Motif/X11 where available.
+- `qtedm` can be built without Motif. Building the legacy `medm` executable
+	requires Motif/X11 where available.
+- Linux and macOS builds do not require an SDDS checkout. Windows retains
+	the existing GSL source-tree setup; the legacy Windows `printUtils` and
+	`xc` builds also retain their SDDS source and library settings.
 - If Qt is missing, the top-level build exits with an error after dependency
 	checks.
 - On Linux, the build prefers `/usr/bin/pkg-config` so an active Conda
@@ -82,7 +72,7 @@ Notes:
 	Clean before switching between host and container builds or Qt installations:
 	run `make clean`, then `make -j4` in the selected shell.
 - On macOS and Windows, use the equivalent native compiler, Qt development
-	tools, EPICS Base, and SDDS setup for that platform. The repository uses the
+	tools and EPICS Base setup for that platform. The repository uses the
 	same `.adl` display files across platforms.
 
 The resulting programs are always copied to `bin/<OS>-<architecture>/`.

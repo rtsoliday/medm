@@ -192,7 +192,7 @@ visibility, text, color, enabled-state, and geometry behavior.
 
 
 ### 5.12 Native Desktop Platforms
-QtEDM runs natively on Linux, macOS, and Windows when the local Qt, EPICS Base, and SDDS dependencies are available. This gives sites a path away from X11/Motif constraints without giving up existing ADL files.
+QtEDM runs natively on Linux, macOS, and Windows when the local Qt and EPICS Base dependencies are available. This gives sites a path away from X11/Motif constraints without giving up existing ADL files.
 
 ## 6. Command Line Interface
 
@@ -279,7 +279,7 @@ The upstream MEDM source distribution is maintained at:
 
 Building QtEDM requires Qt5 or Qt6 development packages, matching `moc` and
 `rcc` tools, a C++17 compiler on Linux/macOS (an MSVC toolchain accepting
-`/std:c++20` on Windows), EPICS Base 7, and the SDDS source tree. From the
+`/std:c++20` on Windows), and EPICS Base 7. From the
 repository root, `make -j4` produces QtEDM and `qtedm-convert`; MEDM is also
 built when Motif/X11 development files are available. The executables are
 copied below `bin/<OS>-<architecture>/`.

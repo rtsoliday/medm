@@ -142,16 +142,18 @@ void RectangleElement::paintEvent(QPaintEvent *event)
 
   const QColor currentColor = effectiveForegroundColor();
   QRect deviceRect;
-  /* Mimic medm bug: outline rectangles are drawn at (+1,+1) with
-     dimensions reduced by 1 pixel */
+  /* Zero-width X11 outlines include the far endpoints. Their widgets keep
+   * an extra pixel so those edges are not clipped or covered by a fill. */
   if (fill_ == RectangleFill::kSolid) {
-    deviceRect = rect().adjusted(0, 0, -1, -1);
+    deviceRect = rect();
   } else {
-    deviceRect = (adlLineWidth_ == 0) ? rect().adjusted(0, 0, -1, -1) : rect().adjusted(1, 1, -1, -1);
+    deviceRect = (adlLineWidth_ == 0) ? rect().adjusted(0, 0, -1, -1)
+                                    : rect().adjusted(1, 1, -1, -1);
   }
 
   if (fill_ == RectangleFill::kSolid) {
-    // Draw solid fill with one less pixel on right and bottom
+    // XFillRectangle covers the full width and height, including the last
+    // row and column; leaving them transparent exposes graphics underneath.
     painter.fillRect(deviceRect, currentColor);
   } else {
     // MEDM's X11 renderer extends outline mode one pixel past the widget

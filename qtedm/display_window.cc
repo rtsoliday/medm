@@ -20854,7 +20854,14 @@ void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
     const int newH = std::max(minHeight, static_cast<int>(
       std::lround(static_cast<double>(sourceRect.height())
       * static_cast<double>(scaleY))));
-    widget->setGeometry(newX, newY, newW, newH);
+    /* Preserve XDrawRectangle's inclusive far endpoints after scaling the
+     * original ADL geometry. This padding stays one pixel at any scale. */
+    const auto *rectangle = dynamic_cast<const RectangleElement *>(widget);
+    const int outlinePadding = rectangle
+        && rectangle->fill() == RectangleFill::kOutline
+        && rectangle->adlLineWidth() == 0 ? 1 : 0;
+    widget->setGeometry(newX, newY,
+        newW + outlinePadding, newH + outlinePadding);
   };
 
   /* Helper lambda to scale polyline/polygon points */
@@ -33815,8 +33822,9 @@ RectangleElement *DisplayWindow::loadRectangleElement(
     element->setAdlLineWidth(adlWidth, widthProperty != nullptr);
     element->setLineWidthFromAdl(width);
 
-    /* Expand geometry by 1 pixel if adlLineWidth is 0 to prevent clipping */
-    if (adlWidth == 0) {
+    /* XDrawRectangle includes the far endpoint for cosmetic outlines.
+     * Filled rectangles cover exactly the ADL width and height. */
+    if (adlWidth == 0 && element->fill() == RectangleFill::kOutline) {
       QRect expandedGeometry = element->geometry();
       expandedGeometry.setWidth(expandedGeometry.width() + 1);
       expandedGeometry.setHeight(expandedGeometry.height() + 1);

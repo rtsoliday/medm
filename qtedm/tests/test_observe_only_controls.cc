@@ -47,6 +47,7 @@
 #include "main_window_controller.h"
 #include "message_button_element.h"
 #include "message_button_runtime.h"
+#include "medm_colors.h"
 #include "meter_element.h"
 #include "oval_element.h"
 #include "plugin_element.h"
@@ -143,6 +144,8 @@ private slots:
   void sliderTroughRespectsAccess();
   void executePickingFollowsVisibleStacking();
   void hiddenRelatedDisplayUnderGraphicComposite();
+  void statusRectangleCoversHiddenRelatedDisplay_data();
+  void statusRectangleCoversHiddenRelatedDisplay();
   void compositeShapePicking_data();
   void compositeShapePicking();
   void middleButtonTooltipRoutesThroughChildControls();
@@ -195,6 +198,86 @@ void TestObserveOnlyControls::hiddenRelatedDisplayUnderGraphicComposite()
     QTest::mouseClick(target, Qt::LeftButton, Qt::NoModifier,
         target->rect().center());
     QCOMPARE(activations, pass + 1);
+    window.leaveExecuteMode();
+  }
+}
+
+void TestObserveOnlyControls::statusRectangleCoversHiddenRelatedDisplay_data()
+{
+  QTest::addColumn<QString>("lineWidth");
+  QTest::newRow("default-width") << QString();
+  QTest::newRow("zero-width") << QStringLiteral("width=0");
+  QTest::newRow("one-pixel-width") << QStringLiteral("width=1");
+  QTest::newRow("thick-width") << QStringLiteral("width=3");
+}
+
+void TestObserveOnlyControls::statusRectangleCoversHiddenRelatedDisplay()
+{
+  QFETCH(QString, lineWidth);
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile fixture(directory.filePath(QStringLiteral("status.adl")));
+  QVERIFY(fixture.open(QIODevice::WriteOnly));
+  /* Match btsPSStatus.adl: a black 14x14 outline surrounds a dynamic
+   * 13x13 status square and its hidden related display. */
+  const QByteArray adl = QStringLiteral(
+      "file { name=\"status.adl\" version=030120 }\n"
+      "display { object { width=60 height=60 } clr=14 bclr=2 }\n"
+      "rectangle { object { x=9 y=9 width=14 height=14 }\n"
+      "  \"basic attribute\" { clr=14 fill=\"outline\" } }\n"
+      "rectangle { object { x=10 y=10 width=13 height=13 }\n"
+      "  \"basic attribute\" { clr=15 %1 }\n"
+      "  \"dynamic attribute\" { clr=\"alarm\" } }\n"
+      "\"related display\" { object { x=10 y=10 width=13 height=13 }\n"
+      "  display[0] { name=\"target.adl\" }\n"
+      "  clr=20 bclr=2 visual=\"invisible\" }\n").arg(lineWidth).toUtf8();
+  QCOMPARE(fixture.write(adl), qint64(adl.size()));
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture.fileName(), &error), qPrintable(error));
+  QCOMPARE(window.rectangleElements_.size(), 2);
+  QCOMPARE(window.rectangleElements_.last()->size(), QSize(13, 13));
+  QCOMPARE(window.relatedDisplayElements_.size(), 1);
+  window.show();
+  for (int pass = 0; pass < 2; ++pass) {
+    window.enterExecuteMode();
+    QCoreApplication::processEvents();
+    for (int scale : {1, 2}) {
+      window.scaleAllElements(60, 60, 60 * scale, 60 * scale);
+      const QImage image = window.displayArea_->grab().toImage();
+      const QColor green = MedmColors::alarmColorForSeverity(0);
+      /* XFillRectangle covers every interior pixel. XDrawRectangle's
+       * zero-width outline includes the far endpoint at (23,23). */
+      for (int y = 10 * scale; y < 23 * scale; ++y) {
+        for (int x = 10 * scale; x < 23 * scale; ++x) {
+          QCOMPARE(image.pixelColor(x, y), green);
+        }
+      }
+      for (int coordinate = 9 * scale; coordinate <= 23 * scale;
+           ++coordinate) {
+        QCOMPARE(image.pixelColor(coordinate, 9 * scale), QColor(Qt::black));
+        QCOMPARE(image.pixelColor(coordinate, 23 * scale), QColor(Qt::black));
+        QCOMPARE(image.pixelColor(9 * scale, coordinate), QColor(Qt::black));
+        QCOMPARE(image.pixelColor(23 * scale, coordinate), QColor(Qt::black));
+      }
+      QCOMPARE(image.pixelColor(23 * scale + 1, 16 * scale),
+          window.colorForIndex(2));
+      QCOMPARE(image.pixelColor(16 * scale, 23 * scale + 1),
+          window.colorForIndex(2));
+    }
+    QCOMPARE(window.widgetGeometryForSerialization(
+        window.rectangleElements_.first()), QRect(9, 9, 14, 14));
+    QCOMPARE(window.widgetGeometryForSerialization(
+        window.rectangleElements_.last()),
+        QRect(10, 10, 13, 13));
     window.leaveExecuteMode();
   }
 }

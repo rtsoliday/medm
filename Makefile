@@ -23,7 +23,7 @@ else
 endif
 
 ifneq ($(strip $(GSL_REPO)),)
-  GSL_REPO := $(abspath $(GSL_REPO))
+  override GSL_REPO := $(abspath $(GSL_REPO))
 endif
 
 export GSL_REPO

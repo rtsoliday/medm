@@ -3,6 +3,8 @@
 #include <QImage>
 #include <QPainter>
 #include <QFile>
+#include <QProcess>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 
 #include <limits>
@@ -39,6 +41,7 @@ private slots:
   void dynamicGraphicAppliesRuntimeVisibilityAndSeverity();
   void imageTracksRuntimeFrameSelection();
   void cartesianExportsCsvSddsAndFailures();
+  void cartesianExportReadsWithSdds();
   void rendersWidgetsToExplicitPathsAndReportsFailures();
 };
 
@@ -234,6 +237,50 @@ void TestPlotGraphicRuntimes::cartesianExportsCsvSddsAndFailures()
   QVERIFY(serializeCartesianPlotData(empty,
       PlotDataExportFormat::kCsv, &error).isEmpty());
   QVERIFY(error.contains(QStringLiteral("no connected traces")));
+}
+
+void TestPlotGraphicRuntimes::cartesianExportReadsWithSdds()
+{
+  const QString reader = qEnvironmentVariable("QTEDM_TEST_SDDS2STREAM");
+  if (reader.isEmpty()) {
+    QSKIP("Optional SDDS reader check: run make test-sdds-export.");
+  }
+
+  CartesianPlotElement plot;
+  plot.setTraceXChannel(0, QStringLiteral("plot:x"));
+  plot.setTraceYChannel(0, QStringLiteral("plot:y"));
+  plot.updateTraceRuntimeData(0, {QPointF(1.25, -10.5),
+      QPointF(3.75, std::numeric_limits<double>::quiet_NaN())});
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("plot.sdds"));
+  QString error;
+  QVERIFY2(writeCartesianPlotData(plot, path,
+      PlotDataExportFormat::kSdds, &error), qPrintable(error));
+
+  /* Exercise the independent reader and its numeric presentation. A newer
+   * toolkit's ENUM support must not change the meaning of numeric exports. */
+  QProcess process;
+  process.start(reader, {path,
+      QStringLiteral("-columns=Index,plot_x,plot_y"),
+      QStringLiteral("-ignoreFormats")});
+  QVERIFY2(process.waitForStarted(), qPrintable(process.errorString()));
+  QVERIFY2(process.waitForFinished(), qPrintable(process.errorString()));
+  const QByteArray diagnostic = process.readAllStandardError();
+  QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+  QVERIFY2(process.exitCode() == 0, diagnostic.constData());
+  const QStringList values = QString::fromUtf8(process.readAllStandardOutput())
+      .split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+  QCOMPARE(values.size(), 6);
+  const double expected[] = {0.0, 1.25, -10.5, 1.0, 3.75};
+  for (int index = 0; index < 5; ++index) {
+    bool ok = false;
+    const double value = values.at(index).toDouble(&ok);
+    QVERIFY2(ok, qPrintable(values.at(index)));
+    QCOMPARE(value, expected[index]);
+  }
+  QCOMPARE(values.at(5).toLower(), QStringLiteral("nan"));
 }
 
 void TestPlotGraphicRuntimes::

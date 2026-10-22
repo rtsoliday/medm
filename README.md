@@ -148,6 +148,16 @@ make test-qtedm-visual
 make test-qtedm
 ```
 
+To check a real Cartesian Plot export with an independently built SDDS toolkit
+(including SDDS6), run this optional integration test:
+
+```bash
+make -C qtedm test-sdds-export \
+  SDDS2STREAM=/absolute/path/to/SDDS/bin/Linux-x86_64/sdds2stream
+```
+
+The regular unit suite does not require SDDS and skips this integration test.
+
 Visual regression goldens live under `tests/golden/`. When an intentional
 rendering change needs new baselines, regenerate them with:
 

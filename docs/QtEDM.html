@@ -112,7 +112,6 @@ lossless interchange of every MEDM display.</p>
 <ul>
   <li><strong>Qt</strong> &ndash; Qt6 is preferred; Qt5 is supported as a fallback. Core, Widgets, Print Support, SVG, Network, and the matching <code>moc</code>/<code>rcc</code> development tools are required.</li>
   <li><strong>EPICS Base</strong> &ndash; Version 7.0 or later, with Channel Access support</li>
-  <li><strong>SDDS source tree</strong> &ndash; Required for the shared support libraries and SDDS plot export</li>
   <li><strong>C++ compiler</strong> &ndash; C++17 on Linux and macOS; an MSVC
     toolchain accepting <code>/std:c++20</code> on Windows. The compiler must
     also be supported by the selected Qt and EPICS builds.</li>
@@ -120,7 +119,9 @@ lossless interchange of every MEDM display.</p>
 </ul>
 
 <p>QtEDM builds natively on Linux, macOS, and Windows when the platform Qt,
-EPICS Base, SDDS, and compiler dependencies are installed. X11 is not required
+EPICS Base, and compiler dependencies are installed. SDDS plot export does not
+require the SDDS library. The legacy Windows support-library builds retain
+their SDDS source-tree requirement. X11 is not required
 for normal QtEDM operation; the <code>-attach</code> and <code>-cleanup</code>
 single-instance request options are available only when Qt uses the X11
 <code>xcb</code> platform.</p>
@@ -1588,6 +1589,10 @@ differences, current limitations, and additions:</p>
       <li><strong>Cartesian Plots:</strong> Right-clicking shows a dedicated menu with "Modify Axis Values..." (to access the axis configuration dialog) and "Export Data..." options. Exports include Index and X/Y value pairs for each active trace in SDDS or CSV format.</li>
       <li><strong>Waterfall Plots:</strong> Right-clicking adds "Save Image..." and "Save Data..." entries. Data exports include one row per buffered waveform sample along with relative time, epoch time, valid length, and waveform point columns in SDDS or CSV format.</li>
     </ul>
+    <p>SDDS exports use numeric SDDS1 ASCII columns and remain readable by the
+    SDDS6 toolkit. QtEDM does not import SDDS datasets. Plotted EPICS enum values
+    are exported as numeric samples without choice labels; native SDDS6
+    <code>ENUM</code> dictionaries are not retained by the plot buffers.</p>
   </li>
   <li><strong>Cartesian Plot Zoom/Pan</strong> &ndash; QtEDM adds interactive zoom and pan capabilities to Cartesian Plot widgets in EXECUTE mode:
     <ul>
@@ -1631,7 +1636,7 @@ build without <code>-j4</code>.</p>
   <li>Qt6 development packages (preferred) or Qt5 development packages, including Widgets, Print Support, SVG, and Network</li>
   <li>Matching Qt <code>moc</code> and <code>rcc</code> tools</li>
   <li>EPICS Base 7 headers and libraries</li>
-  <li>SDDS source tree and support libraries</li>
+  <li>For legacy Windows support-library builds, an SDDS source tree and support libraries</li>
   <li>A C++17 compiler on Linux/macOS, or an MSVC toolchain accepting
     <code>/std:c++20</code> on Windows</li>
   <li><code>pkg-config</code> for Qt detection on non-Windows platforms</li>

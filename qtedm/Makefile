@@ -544,6 +544,15 @@ QTEDM_TEST_ISOLATION = \
     QTEDM_ARCHIVER_URL QTEDM_ARCHIVER_PROVIDER QTEDM_PLUGIN_PATH \
     MEDM_EXEC_LIST
 
+# Optional interoperability check; keep SDDS out of the normal dependencies.
+SDDS2STREAM ?= sdds2stream
+test-sdds-export: $(OBJ_DIR)/test_plot_graphic_runtimes$(EXEEXT)
+	$(QTEDM_TEST_ISOLATION); \
+	QT_QPA_PLATFORM=offscreen QTEDM_NOLOG=1 \
+	  QTEDM_TEST_SDDS2STREAM="$(SDDS2STREAM)" \
+	  $(OBJ_DIR)/test_plot_graphic_runtimes$(EXEEXT) \
+	  cartesianExportReadsWithSdds
+
 test-help: $(OBJ_DIR)/test_help_dialogs$(EXEEXT)
 	@mkdir -p $(OBJ_DIR)/test-artifacts/help
 	$(QTEDM_TEST_ISOLATION); \
@@ -621,7 +630,7 @@ clean-tests:
 	  $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.$(OBJEXT) \
 	  $(OBJ_DIR)/plugin_api_pv_thumbs_plugin.moc
 
-.PHONY: tests test build-tests test-unit test-cli test-ioc test-visual test-help clean-tests check-qt-test
+.PHONY: tests test build-tests test-unit test-cli test-ioc test-visual test-help test-sdds-export clean-tests check-qt-test
 
 .NOTPARALLEL: test
 

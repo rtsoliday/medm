@@ -21440,6 +21440,9 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
 
   const QString previousLoadDirectory = currentLoadDirectory_;
   currentLoadDirectory_ = QFileInfo(filePath).absolutePath();
+  /* Composite files inherit the display's macros (as in MEDM), so they must
+     be set before the elements are loaded. */
+  macroDefinitions_ = macros;
 
   QTEDM_TIMING_MARK("loadFromFile: Loading element nodes");
   pendingBasicAttribute_ = std::nullopt;
@@ -21489,7 +21492,6 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   refreshStackingOrder();
 
   filePath_ = QFileInfo(filePath).absoluteFilePath();
-  macroDefinitions_ = macros;
   setWindowTitle(formatDisplayTitle(QFileInfo(filePath_).fileName(), macroDefinitions_));
 
   dirty_ = false;
@@ -34889,6 +34891,9 @@ CompositeElement *DisplayWindow::loadCompositeElement(
           /* Save current load directory for nested composites */
           const QString previousLoadDir = currentLoadDirectory_;
           currentLoadDirectory_ = QFileInfo(resolvedPath).absolutePath();
+          /* Nested composite files inherit this file's macros, as in MEDM */
+          const QHash<QString, QString> previousMacros = macroDefinitions_;
+          macroDefinitions_ = mergedMacros;
 
           /* Children in composite files have coordinates relative to the
              composite file's display origin. We need to load them at (0,0)
@@ -34906,8 +34911,9 @@ CompositeElement *DisplayWindow::loadCompositeElement(
             loadElementNode(child);
           }
 
-          /* Restore load directory */
+          /* Restore load directory and macros */
           currentLoadDirectory_ = previousLoadDir;
+          macroDefinitions_ = previousMacros;
 
           loadingLegacyAdl_ = previousLegacyMode;
         }

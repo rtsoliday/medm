@@ -69,6 +69,7 @@
 #include "tabbed_display_element.h"
 #include "text_element.h"
 #include "text_area_element.h"
+#include "text_monitor_element.h"
 #include "wave_table_element.h"
 #include "wave_table_runtime.h"
 #include "waterfall_plot_element.h"
@@ -162,6 +163,7 @@ private slots:
   void inlineColorMapsSurviveRenderingSaveAndUndo();
   void invalidInlineColorMapPreservesLoadedDisplay();
   void macroExpansionIsBoundedBeforeParsing();
+  void compositeFilesInheritDisplayMacros();
 
 private:
   QStringList registeredNames_;
@@ -3615,6 +3617,66 @@ void TestObserveOnlyControls::macroExpansionIsBoundedBeforeParsing()
   QVERIFY(error.contains(QStringLiteral("Macro expansion exceeds maximum size")));
   QCOMPARE(window.rectangleElements_.size(), 1);
   QVERIFY(window.textElements_.isEmpty());
+}
+
+void TestObserveOnlyControls::compositeFilesInheritDisplayMacros()
+{
+  /* ADEiger-style screens name their panels with "composite file" and no
+   * macros, relying on MEDM to resolve $(P)$(R) from the display's macros
+   * (epics-extensions/medm#11). Nested composites use the macros of the
+   * composite that contains them. */
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const auto writeAdl = [&directory](const QString &name,
+      const QByteArray &body) {
+    QFile file(directory.filePath(name));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      return false;
+    }
+    const QByteArray contents = "file { name=\"" + name.toUtf8()
+        + "\" version=030122 }\n"
+          "display { object { width=200 height=100 } }\n" + body;
+    return file.write(contents) == contents.size();
+  };
+  QVERIFY(writeAdl(QStringLiteral("inner.adl"),
+      "\"text update\" { object { x=0 y=0 width=100 height=20 }\n"
+      "  monitor { chan=\"$(P)$(R)Inner_RBV\" } }\n"));
+  QVERIFY(writeAdl(QStringLiteral("panel.adl"),
+      "\"text update\" { object { x=0 y=0 width=100 height=20 }\n"
+      "  monitor { chan=\"$(P)$(R)Model_RBV\" } }\n"
+      "composite { object { x=0 y=30 width=100 height=20 }\n"
+      "  \"composite name\"=\"\" \"composite file\"=\"inner.adl\" }\n"));
+  QVERIFY(writeAdl(QStringLiteral("parent.adl"),
+      "composite { object { x=0 y=0 width=100 height=50 }\n"
+      "  \"composite name\"=\"\" \"composite file\"=\"panel.adl\" }\n"
+      "composite { object { x=0 y=50 width=100 height=50 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  \"composite file\"=\"panel.adl;R=image1:\" }\n"));
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QHash<QString, QString> macros;
+  macros.insert(QStringLiteral("P"), QStringLiteral("13EIG1:"));
+  macros.insert(QStringLiteral("R"), QStringLiteral("cam1:"));
+  QString error;
+  QVERIFY2(window.loadFromFile(directory.filePath(QStringLiteral(
+      "parent.adl")), &error, macros), qPrintable(error));
+
+  QCOMPARE(window.compositeElements_.size(), 4);
+  QStringList channels;
+  for (TextMonitorElement *monitor : window.textMonitorElements_) {
+    channels.append(monitor->channel(0));
+  }
+  channels.sort();
+  QCOMPARE(channels, QStringList({
+      QStringLiteral("13EIG1:cam1:Inner_RBV"),
+      QStringLiteral("13EIG1:cam1:Model_RBV"),
+      QStringLiteral("13EIG1:image1:Inner_RBV"),
+      QStringLiteral("13EIG1:image1:Model_RBV")}));
+  QCOMPARE(window.macroDefinitions_, macros);
 }
 
 void TestObserveOnlyControls::relatedDisplayLabelPadding()

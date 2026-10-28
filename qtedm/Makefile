@@ -4,6 +4,10 @@ EPICS_REQUIRED_LIBS := pvaClient nt pvAccessCA pvAccess pvData ca Com
 # Windows uses C++20, with the EPICS file exceptions declared below.
 WINDOWS_CXX_STD_FLAGS := /std:c++20
 include ../Makefile.rules
+ifeq ($(OS),Linux)
+override CXXFLAGS += -fstack-protector-strong
+QTEDM_EXE_HARDEN_LDFLAGS := -pie -Wl,-z,relro,-z,now
+endif
 .DEFAULT_GOAL := all
 QT_CORE_PKG = Qt$(QT_VERSION)Core
 QT_TEST_PKG = Qt$(QT_VERSION)Test
@@ -291,7 +295,7 @@ $(OBJ_DIR)/moc_memory_tracker.cpp: memory_tracker.h | $(OBJ_DIR)
 $(OBJ_DIR)/memory_tracker.$(OBJEXT): $(OBJ_DIR)/moc_memory_tracker.cpp
 
 $(OBJ_DIR)/qtedm$(EXEEXT): $(qtedm_OBJS) $(PROD_DEPS)
-	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
+	$(LINKEXE) $(OUTPUTEXE) $(qtedm_OBJS) $(LDFLAGS) $(QTEDM_EXE_HARDEN_LDFLAGS) $(LIB_LINK_DIRS) $(PROD_LIBS) $(PROD_SYS_LIBS)
 
 $(OBJ_DIR)/qtedm-convert$(EXEEXT): $(qtedm_convert_OBJS)
 	$(LINKEXE) $(OUTPUTEXE) $^ $(LDFLAGS)

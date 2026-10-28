@@ -1,10 +1,12 @@
 #include "image_element.h"
+#include "image_memory_budget.h"
 
 #include <algorithm>
 
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QPainter>
 #include <QStringList>
 #include <QPalette>
@@ -12,6 +14,15 @@
 
 namespace {
 constexpr int kDefaultFrameIndex = 0;
+constexpr quint64 kMaximumCachedGifBytes = 64ULL * 1024 * 1024;
+constexpr quint64 kMaximumAllGifCacheBytes = 256ULL * 1024 * 1024;
+constexpr quint64 kEstimatedBytesPerPixel = 8;
+
+ImageMemoryBudget &gifCacheBudget()
+{
+  static ImageMemoryBudget budget(kMaximumAllGifCacheBytes);
+  return budget;
+}
 }
 
 ImageElement::ImageElement(QWidget *parent)
@@ -22,6 +33,11 @@ ImageElement::ImageElement(QWidget *parent)
   setAttribute(Qt::WA_NoSystemBackground, true);
   reloadImage();
   update();
+}
+
+ImageElement::~ImageElement()
+{
+  disposeMovie();
 }
 
 ImageType ImageElement::imageType() const
@@ -309,7 +325,25 @@ void ImageElement::reloadImage()
       delete movie;
       return false;
     }
-    movie->setCacheMode(QMovie::CacheAll);
+    /* Keep seeking behavior for modest animations, but reserve estimated
+     * decoded frame memory across all GIF widgets before enabling CacheAll. */
+    const QSize dimensions = QImageReader(path).size();
+    const int frames = movie->frameCount();
+    if (dimensions.isValid() && frames > 0) {
+      const quint64 pixels = quint64(dimensions.width())
+          * quint64(dimensions.height());
+      if (pixels > 0
+          && pixels <= kMaximumCachedGifBytes / kEstimatedBytesPerPixel
+          && quint64(frames) <= kMaximumCachedGifBytes
+              / (pixels * kEstimatedBytesPerPixel)) {
+        const quint64 estimate = quint64(frames) * pixels
+            * kEstimatedBytesPerPixel;
+        movieCacheReservation_ = gifCacheBudget().reserve(estimate);
+        if (movieCacheReservation_) {
+          movie->setCacheMode(QMovie::CacheAll);
+        }
+      }
+    }
     movie_ = movie;
     movie_->jumpToFrame(kDefaultFrameIndex);
     cachedFrameCount_ = movie_->frameCount();
@@ -395,12 +429,14 @@ void ImageElement::reloadImage()
 void ImageElement::disposeMovie()
 {
 	if (!movie_) {
+		movieCacheReservation_.reset();
 		return;
 	}
 	disconnect(movie_, nullptr, this, nullptr);
 	movie_->stop();
 	delete movie_;
 	movie_ = nullptr;
+	movieCacheReservation_.reset();
 }
 
 void ImageElement::updateCurrentPixmap()

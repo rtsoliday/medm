@@ -12,6 +12,8 @@ bin/Linux-x86_64/qtedm --session name
 
 Replace `name` with your saved session name. Session restore defaults to execute mode, validates the displays, reports omissions, and places windows on connected screens. Read [Named Sessions](../reference/adl#named-sessions) for the file format, stored fields, and restore behavior.
 
+Session files are limited to 4 MiB and 100 windows. Saving or restoring a larger layout is rejected.
+
 ## PV snapshots
 
 Read [PV Snapshots](../reference/adl#pv-snapshots) for the snapshot workflow and restore checks. Restoring channel values is separate from restoring display windows. Global read-only mode blocks snapshot writes.

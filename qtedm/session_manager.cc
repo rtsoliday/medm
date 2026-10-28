@@ -15,6 +15,9 @@
 
 namespace {
 
+constexpr qint64 kMaximumSessionBytes = 4LL * 1024 * 1024;
+constexpr int kMaximumSessionWindows = 100;
+
 QJsonObject macrosToJson(const QHash<QString, QString> &macros)
 {
   QJsonObject object;
@@ -149,6 +152,13 @@ bool SessionManager::save(const QtEdmSession &session, QString *error) const
     }
     return false;
   }
+  if (session.windows.size() > kMaximumSessionWindows) {
+    if (error) {
+      *error = QStringLiteral("Session exceeds the %1 window limit.")
+          .arg(kMaximumSessionWindows);
+    }
+    return false;
+  }
 
   QJsonArray windows;
   for (int index = 0; index < session.windows.size(); ++index) {
@@ -195,6 +205,14 @@ bool SessionManager::save(const QtEdmSession &session, QString *error) const
   }
   const QByteArray encoded =
       QJsonDocument(root).toJson(QJsonDocument::Indented);
+  if (encoded.size() > kMaximumSessionBytes) {
+    if (error) {
+      *error = QStringLiteral("Session exceeds the %1 byte limit.")
+          .arg(kMaximumSessionBytes);
+    }
+    file.cancelWriting();
+    return false;
+  }
   if (file.write(encoded) != encoded.size() || !file.commit()) {
     if (error) {
       *error = QStringLiteral("Failed to write session file: %1").arg(path);
@@ -220,9 +238,25 @@ QtEdmSessionLoadResult SessionManager::load(const QString &name) const
     result.error = QStringLiteral("Cannot open session: %1").arg(path);
     return result;
   }
+  if (file.size() > kMaximumSessionBytes) {
+    result.error = QStringLiteral("Session exceeds the %1 byte limit.")
+        .arg(kMaximumSessionBytes);
+    return result;
+  }
+  const QByteArray contents = file.read(kMaximumSessionBytes + 1);
+  if (contents.size() > kMaximumSessionBytes) {
+    result.error = QStringLiteral("Session exceeds the %1 byte limit.")
+        .arg(kMaximumSessionBytes);
+    return result;
+  }
+  if (file.error() != QFile::NoError) {
+    result.error = QStringLiteral("Cannot read session: %1")
+        .arg(file.errorString());
+    return result;
+  }
   QJsonParseError parseError;
   const QJsonDocument document =
-      QJsonDocument::fromJson(file.readAll(), &parseError);
+      QJsonDocument::fromJson(contents, &parseError);
   if (parseError.error != QJsonParseError::NoError
       || !document.isObject()) {
     result.error = QStringLiteral("Invalid session JSON: %1")
@@ -243,6 +277,11 @@ QtEdmSessionLoadResult SessionManager::load(const QString &name) const
   }
 
   const QJsonArray windows = windowsValue.toArray();
+  if (windows.size() > kMaximumSessionWindows) {
+    result.error = QStringLiteral("Session exceeds the %1 window limit.")
+        .arg(kMaximumSessionWindows);
+    return result;
+  }
   for (int index = 0; index < windows.size(); ++index) {
     if (!windows.at(index).isObject()) {
       result.warnings.append(QStringLiteral(

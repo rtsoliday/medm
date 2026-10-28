@@ -2,6 +2,7 @@
 
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QPointer>
 #include <QStackedWidget>
@@ -25,6 +26,7 @@ private slots:
   void tabbedDisplayRoutesEditModeMouseEventsToContainer();
   void sessionRoundTrip();
   void sessionRejectsUnsafeNamesAndSchemas();
+  void sessionBoundsFileAndWindowCount();
   void sessionInvalidWindowDataReportsWarnings();
   void sessionGeometryIsClamped();
 };
@@ -258,6 +260,46 @@ void TestTabbedDisplaysSessions::sessionRejectsUnsafeNamesAndSchemas()
   QVERIFY(!manager.save(invalidSession, &error));
   QVERIFY(error.contains(QStringLiteral("display path")));
   QVERIFY(!QFileInfo::exists(manager.sessionPath(invalidSession.name)));
+}
+
+void TestTabbedDisplaysSessions::sessionBoundsFileAndWindowCount()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  SessionManager manager(directory.path());
+
+  QtEdmSession session;
+  session.name = QStringLiteral("too-many");
+  QtEdmSessionWindow window;
+  window.displayPath = QStringLiteral("main.adl");
+  window.geometry = QRect(0, 0, 640, 480);
+  for (int index = 0; index < 101; ++index) session.windows.append(window);
+  QString error;
+  QVERIFY(!manager.save(session, &error));
+  QVERIFY(error.contains(QStringLiteral("100 window")));
+
+  QFile oversized(manager.sessionPath(QStringLiteral("oversized")));
+  QVERIFY(oversized.open(QIODevice::WriteOnly));
+  QVERIFY(oversized.resize(4LL * 1024 * 1024 + 1));
+  oversized.close();
+  const auto oversizedResult = manager.load(QStringLiteral("oversized"));
+  QVERIFY(!oversizedResult.ok());
+  QVERIFY(oversizedResult.error.contains(QStringLiteral("byte limit")));
+
+  QJsonArray windows;
+  for (int index = 0; index < 101; ++index) {
+    windows.append(QJsonObject{
+        {QStringLiteral("displayPath"), QStringLiteral("main.adl")}});
+  }
+  QFile many(manager.sessionPath(QStringLiteral("many")));
+  QVERIFY(many.open(QIODevice::WriteOnly));
+  QVERIFY(many.write(QJsonDocument(QJsonObject{
+      {QStringLiteral("schemaVersion"), 1},
+      {QStringLiteral("windows"), windows}}).toJson()) > 0);
+  many.close();
+  const auto manyResult = manager.load(QStringLiteral("many"));
+  QVERIFY(!manyResult.ok());
+  QVERIFY(manyResult.error.contains(QStringLiteral("100 window")));
 }
 
 void TestTabbedDisplaysSessions::sessionInvalidWindowDataReportsWarnings()

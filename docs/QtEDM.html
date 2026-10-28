@@ -153,7 +153,7 @@ single-instance request options are available only when Qt uses the X11
   </tr>
   <tr>
     <td><code>--read-only</code></td>
-    <td>Start in EXECUTE mode with global observe-only write inhibition. A persistent red indicator is shown and all CA, PVA, and soft-PV puts are blocked and audit logged.</td>
+    <td>Start in EXECUTE mode with global observe-only write inhibition. A persistent red indicator is shown; all CA, PVA, and soft-PV puts are blocked and audit logged, and Shell Command actions are disabled.</td>
   </tr>
   <tr>
     <td><code>--session name</code></td>
@@ -226,7 +226,9 @@ qtedm -x display.adl</pre>
 <p>The <code>-C</code> option compresses all data sent over the SSH connection, which reduces the bandwidth required for X11 protocol traffic. Without compression, high-frequency widget updates can overwhelm the connection and cause sluggish or jerky display behavior.</p>
 
 <p><code>-attach</code> and <code>-cleanup</code> use an X11 root-window request
-protocol and fall back to local mode on Wayland, macOS, and Windows.</p>
+protocol and fall back to local mode on Wayland, macOS, and Windows. Each
+remote display request, including its path, macros, and geometry, is limited
+to 64 KiB; oversized requests are rejected by the sender and receiver.</p>
 
 <h2><a name="Modes"></a>Modes of Operation</h2>
 
@@ -556,6 +558,7 @@ way.</p>
     <li><strong>Configure:</strong> Image file name, image type, optional dynamic visibility, and optional calculation support.</li>
     <li><strong>Use when:</strong> A raster image or animated GIF communicates state more effectively than basic shapes.</li>
     <li><strong>Practical note:</strong> Keep referenced image files on the display path or use an explicit file path so operators see the same asset everywhere.</li>
+    <li><strong>Memory:</strong> QtEDM caches GIF frames for seeking only when their estimated decoded size fits within 64 MiB per image and a 256 MiB process-wide GIF cache budget. Larger or unknown-size animations are played without full-frame caching.</li>
   </ul>
 </div>
 
@@ -1214,6 +1217,7 @@ complete extension list.</p>
     <li><strong>Configure:</strong> Button label plus one or more commands and arguments.</li>
     <li><strong>Use when:</strong> The operator workflow needs to hand off to an external program instead of writing a PV.</li>
     <li><strong>Operational note:</strong> Prefer explicit paths and predictable environment setup because commands run in the operator's local session context.</li>
+    <li><strong>Security:</strong> Shell actions are disabled by <code>--read-only</code>. Dynamic <code>&amp;A</code>, <code>&amp;T</code>, and <code>&amp;P</code> values are quoted on Unix; they are rejected after command substitution, backtick, or here-document syntax, where outer quoting is insufficient, and values containing control characters such as line breaks are rejected. Shell syntax in incoming macro values, or a macro word that starts with <code>-</code> other than a number, blocks command execution. Quoting protects one shell level only: do not pass dynamic values to a second shell, such as <code>sh -c</code>, <code>xterm -e</code>, or <code>ssh</code>. Author display files with shell commands only in trusted locations.</li>
   </ul>
 </div>
 
@@ -1448,6 +1452,9 @@ state in a versioned JSON file below
 <code>QStandardPaths::AppConfigLocation/sessions</code>. Restore is always
 explicit: use <em>File &rarr; Restore Session...</em> or
 <code>--session name</code>. QtEDM never silently restores a prior layout.</p>
+
+<p>Session files are limited to 4 MiB and 100 windows. Larger files and layouts
+are rejected before restoration.</p>
 
 <p>Restore opens valid displays in EXECUTE mode, reports missing or renamed
 files and invalid records, and moves off-screen or oversized windows onto an

@@ -20,6 +20,7 @@ QVector<QByteArray> chunkRemoteDisplayRequest(const QByteArray &encoded,
 class RemoteDisplayRequestDecoder
 {
 public:
+  static constexpr int kMaximumRequestBytes = 64 * 1024;
   QVector<RemoteDisplayRequest> consume(const QByteArray &chunk);
   void reset();
 
@@ -35,4 +36,5 @@ private:
   QByteArray filePath_;
   QByteArray macros_;
   QByteArray geometry_;
+  int requestBytes_ = 0;
 };

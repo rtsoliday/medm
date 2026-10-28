@@ -5,6 +5,10 @@
 QByteArray encodeRemoteDisplayRequest(const QString &filePath,
     const QString &macros, const QString &geometry)
 {
+  if (qint64(filePath.size()) + macros.size() + geometry.size() + 4
+      > RemoteDisplayRequestDecoder::kMaximumRequestBytes) {
+    return {};
+  }
   QByteArray encoded;
   encoded.reserve(filePath.size() + macros.size() + geometry.size() + 4);
   encoded.append('(');
@@ -14,6 +18,9 @@ QByteArray encodeRemoteDisplayRequest(const QString &filePath,
   encoded.append(';');
   encoded.append(geometry.toLocal8Bit());
   encoded.append(')');
+  if (encoded.size() > RemoteDisplayRequestDecoder::kMaximumRequestBytes) {
+    return {};
+  }
   return encoded;
 }
 
@@ -39,6 +46,7 @@ QVector<RemoteDisplayRequest> RemoteDisplayRequestDecoder::consume(
   for (char ch : chunk) {
     if (ch == '(') {
       collecting_ = true;
+      requestBytes_ = 1;
       field_ = Field::kFilePath;
       filePath_.clear();
       macros_.clear();
@@ -46,6 +54,10 @@ QVector<RemoteDisplayRequest> RemoteDisplayRequestDecoder::consume(
       continue;
     }
     if (!collecting_) {
+      continue;
+    }
+    if (++requestBytes_ > kMaximumRequestBytes) {
+      reset();
       continue;
     }
     if (ch == ';') {
@@ -59,6 +71,7 @@ QVector<RemoteDisplayRequest> RemoteDisplayRequestDecoder::consume(
           QString::fromLocal8Bit(geometry_)});
       collecting_ = false;
       field_ = Field::kFilePath;
+      requestBytes_ = 0;
       continue;
     }
     if (ch == '\0') {
@@ -86,4 +99,5 @@ void RemoteDisplayRequestDecoder::reset()
   filePath_.clear();
   macros_.clear();
   geometry_.clear();
+  requestBytes_ = 0;
 }

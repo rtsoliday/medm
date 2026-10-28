@@ -125,6 +125,7 @@ private slots:
   void waveformCountsTrackPayloadLength();
   void pvaSnapshotsCopySharedArrays();
   void shellCommandsDoNotBlockTheGuiThread();
+  void observeOnlyBlocksShellCommands();
   void auditLogCodecRoundTripsEscapedFields();
   void findPvIncludesEverySafetyControlFamily();
   void findPvIncludesRuleOnlyWidgets();
@@ -1409,6 +1410,16 @@ void TestObserveOnlyControls::shellCommandsDoNotBlockTheGuiThread()
       || process->waitForStarted(1000));
   process->kill();
   QVERIFY(process->waitForFinished(3000));
+}
+
+void TestObserveOnlyControls::observeOnlyBlocksShellCommands()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->observeOnly = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.runShellCommand(QStringLiteral("echo blocked"));
+  QVERIFY(window.findChildren<QProcess *>().isEmpty());
 }
 
 void TestObserveOnlyControls::auditLogCodecRoundTripsEscapedFields()

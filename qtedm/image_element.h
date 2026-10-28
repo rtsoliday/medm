@@ -5,6 +5,8 @@
 #include <QWidget>
 #include <QMovie>
 
+#include <memory>
+
 #include "graphic_properties.h"
 #include "graphic_shape_element.h"
 
@@ -12,6 +14,7 @@ class ImageElement : public GraphicShapeElement
 {
 public:
   explicit ImageElement(QWidget *parent = nullptr);
+  ~ImageElement() override;
 
   ImageType imageType() const;
   void setImageType(ImageType type);
@@ -54,6 +57,7 @@ private:
   QString baseDirectory_;
   QPixmap pixmap_;
   QMovie *movie_ = nullptr;
+  std::shared_ptr<void> movieCacheReservation_;
   int cachedFrameCount_ = 0;
   bool runtimeAnimate_ = false;
   bool runtimeFrameValid_ = true;

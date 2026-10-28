@@ -26240,6 +26240,17 @@ QStringList DisplayWindow::buildDisplaySearchPaths() const
 
 void DisplayWindow::runShellCommand(const QString &command)
 {
+  if (const auto state = state_.lock(); state && state->observeOnly) {
+    qWarning() << "Shell command blocked in observe-only mode";
+    return;
+  }
+  // ADL macros are expanded before parsing, so the shell command no longer
+  // records which words came from macros. Refuse shell syntax in any incoming
+  // macro value instead of executing an ambiguous expanded command.
+  if (!shellCommandMacrosAreSafe(macroDefinitions_)) {
+    qWarning() << "Shell command blocked: a macro value contains shell syntax or an option";
+    return;
+  }
   const QString trimmed = command.trimmed();
   if (trimmed.isEmpty()) {
     return;
@@ -30745,7 +30756,14 @@ bool DisplayWindow::buildShellCommandString(
       return false;
     }
   }
-  return expandShellCommandTokens(current, context, result);
+  QString expansionError;
+  if (expandShellCommandTokens(current, context, result, &expansionError)) {
+    return true;
+  }
+  if (!expansionError.isEmpty()) {
+    qWarning() << "Shell command token expansion failed:" << expansionError;
+  }
+  return false;
 }
 
 bool DisplayWindow::promptForShellCommandInput(

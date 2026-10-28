@@ -1,6 +1,7 @@
 #include <QtTest/QtTest>
 
 #include <QImage>
+#include <QMovie>
 #include <QPainter>
 #include <QFile>
 #include <QProcess>
@@ -187,6 +188,9 @@ void TestPlotGraphicRuntimes::imageTracksRuntimeFrameSelection()
   image.setImageType(ImageType::kGif);
   image.setImageName(QStringLiteral("../../tests/test.gif"));
   QVERIFY(image.frameCount() >= 1);
+  auto *movie = image.findChild<QMovie *>();
+  QVERIFY(movie);
+  QCOMPARE(movie->cacheMode(), QMovie::CacheAll);
   image.setRuntimeFrameValid(true);
   image.setRuntimeFrameIndex(1000);
   QVERIFY(image.runtimeFrameIndex() >= 0);

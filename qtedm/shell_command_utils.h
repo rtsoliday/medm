@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QStringList>
+#include <QHash>
 
 struct ShellCommandExpansionContext
 {
@@ -14,6 +15,8 @@ struct ShellCommandExpansionContext
 bool expandShellCommandTokens(const QString &command,
     const ShellCommandExpansionContext &context, QString *result,
     QString *errorMessage = nullptr);
+
+bool shellCommandMacrosAreSafe(const QHash<QString, QString> &macros);
 
 int executeShellCommand(const QString &command,
     QString *errorMessage = nullptr);

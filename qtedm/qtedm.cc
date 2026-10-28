@@ -56,10 +56,6 @@
 #include <memory>
 #include <optional>
 
-#if defined(Q_OS_UNIX)
-#include <sys/resource.h>  // For setrlimit to enable core dumps
-#endif
-
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
 #include <QAbstractNativeEventFilter>
 #include <X11/Xlib.h>
@@ -635,12 +631,12 @@ struct RemoteContext {
   bool propertyRegistered = false;
 };
 
-void sendRemoteRequestMessages(Display *display, Window targetWindow, Atom atom,
+bool sendRemoteRequestMessages(Display *display, Window targetWindow, Atom atom,
     const QString &fullPathName, const QString &macroString,
     const QString &geometryString)
 {
   if (!display || targetWindow == 0 || atom == 0) {
-    return;
+    return false;
   }
 
   XClientMessageEvent clientMessageEvent;
@@ -655,6 +651,9 @@ void sendRemoteRequestMessages(Display *display, Window targetWindow, Atom atom,
 
   const QByteArray encoded = encodeRemoteDisplayRequest(
       fullPathName, macroString, geometryString);
+  if (encoded.isEmpty()) {
+    return false;
+  }
   const QVector<QByteArray> chunks =
       chunkRemoteDisplayRequest(encoded, kMaxCharsInClientMessage);
   for (const QByteArray &chunk : chunks) {
@@ -664,6 +663,7 @@ void sendRemoteRequestMessages(Display *display, Window targetWindow, Atom atom,
         reinterpret_cast<XEvent *>(&clientMessageEvent));
   }
   XFlush(display);
+  return true;
 }
 
 class RemoteRequestFilter : public QAbstractNativeEventFilter {
@@ -728,14 +728,6 @@ class RemoteRequestFilter : public QAbstractNativeEventFilter {
 
 int main(int argc, char *argv[])
 {
-#if defined(Q_OS_UNIX)
-  // Enable core dumps for crash debugging
-  struct rlimit core_limit;
-  core_limit.rlim_cur = RLIM_INFINITY;
-  core_limit.rlim_max = RLIM_INFINITY;
-  setrlimit(RLIMIT_CORE, &core_limit);
-#endif
-
   /* Initialize timing diagnostics as early as possible */
   QTEDM_TIMING_MARK("Entering main()");
 
@@ -900,11 +892,14 @@ int main(int argc, char *argv[])
               return 0;
             }
             fprintf(stdout, "\nAttaching to existing QtEDM\n");
+            bool allDispatched = true;
             for (const QString &resolved : options.resolvedDisplayFiles) {
-              sendRemoteRequestMessages(remoteContext.display,
+              const bool dispatched = sendRemoteRequestMessages(remoteContext.display,
                   remoteContext.existingWindow, remoteContext.propertyAtom,
                   resolved, options.macroString, options.displayGeometry);
-              fprintf(stdout, "  Dispatched: %s\n",
+              if (!dispatched) allDispatched = false;
+              fprintf(dispatched ? stdout : stderr,
+                  dispatched ? "  Dispatched: %s\n" : "  Remote request too large or unavailable: %s\n",
                   resolved.toLocal8Bit().constData());
             }
             fprintf(stdout,
@@ -915,7 +910,7 @@ int main(int argc, char *argv[])
               XCloseDisplay(remoteContext.display);
               remoteContext.display = nullptr;
             }
-            return 0;
+            return allDispatched ? 0 : 1;
           }
         }
       }

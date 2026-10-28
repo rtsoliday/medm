@@ -10,6 +10,7 @@ private slots:
   void encodesAndDecodesAcrossFixedSizeMessages();
   void decoderIgnoresNoiseAndHandlesMultipleRequests();
   void rejectsInvalidChunkSizesAndResetsPartialState();
+  void boundsIncompleteRequests();
 };
 
 void TestRemoteRequestCodec::encodesAndDecodesAcrossFixedSizeMessages()
@@ -66,6 +67,23 @@ void TestRemoteRequestCodec::rejectsInvalidChunkSizesAndResetsPartialState()
   const QVector<RemoteDisplayRequest> decoded = decoder.consume(encoded);
   QCOMPARE(decoded.size(), 1);
   QCOMPARE(decoded.front().filePath, QStringLiteral("partial.adl"));
+}
+
+void TestRemoteRequestCodec::boundsIncompleteRequests()
+{
+  QVERIFY(encodeRemoteDisplayRequest(QStringLiteral("safe.adl"),
+      QString(RemoteDisplayRequestDecoder::kMaximumRequestBytes, 'x'),
+      QString()).isEmpty());
+  RemoteDisplayRequestDecoder decoder;
+  QVERIFY(decoder.consume(QByteArray("(")
+      + QByteArray(RemoteDisplayRequestDecoder::kMaximumRequestBytes, 'a'))
+      .isEmpty());
+  // Bytes after the limit must not complete the discarded request.
+  QVERIFY(decoder.consume(QByteArray(";A=1;)" )).isEmpty());
+  const auto requests = decoder.consume(encodeRemoteDisplayRequest(
+      QStringLiteral("safe.adl"), QString(), QString()));
+  QCOMPARE(requests.size(), 1);
+  QCOMPARE(requests.first().filePath, QStringLiteral("safe.adl"));
 }
 
 QTEST_MAIN(TestRemoteRequestCodec)

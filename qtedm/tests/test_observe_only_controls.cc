@@ -149,6 +149,7 @@ private slots:
   void hiddenRelatedDisplayUnderGraphicComposite();
   void statusRectangleCoversHiddenRelatedDisplay_data();
   void statusRectangleCoversHiddenRelatedDisplay();
+  void legacyAttributesApplyLikeMedm();
   void graphicEdgesMatchMedmCoordinates_data();
   void graphicEdgesMatchMedmCoordinates();
   void cosmeticOutlineEditsKeepObjectBounds_data();
@@ -288,6 +289,56 @@ void TestObserveOnlyControls::statusRectangleCoversHiddenRelatedDisplay()
         QRect(10, 10, 13, 13));
     window.leaveExecuteMode();
   }
+}
+
+void TestObserveOnlyControls::legacyAttributesApplyLikeMedm()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile fixture(directory.filePath(QStringLiteral("legacy.adl")));
+  QVERIFY(fixture.open(QIODevice::WriteOnly));
+  /* Pre-2.2 files (as in APSRunControlSingle.adl) put standalone attribute
+   * blocks before the graphic, with mod{} and param{} nested in attr{}.
+   * MEDM keeps the basic attribute for later graphics, while a dynamic
+   * attribute applies to the next graphic only. */
+  const QByteArray adl =
+      "file {\n\tname=\"legacy.adl\"\n}\n"
+      "display {\n\tobject {\n\t\twidth=60\n\t\theight=60\n\t}\n"
+      "\tclr=14\n\tbclr=4\n}\n"
+      "\"basic attribute\" {\n\tattr {\n\t\tclr=15\n\t\tfill=\"solid\"\n"
+      "\t}\n}\n"
+      "\"dynamic attribute\" {\n\tattr {\n\t\tmod {\n\t\t\tclr=\"alarm\"\n"
+      "\t\t\tvis=\"if not zero\"\n\t\t}\n\t\tparam {\n"
+      "\t\t\tchan=\"legacy:run\"\n\t\t}\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=10\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=30\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n";
+  QCOMPARE(fixture.write(adl), qint64(adl.size()));
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture.fileName(), &error), qPrintable(error));
+  QCOMPARE(window.ovalElements_.size(), 2);
+
+  OvalElement *dynamicOval = window.ovalElements_.first();
+  QCOMPARE(dynamicOval->channel(0), QStringLiteral("legacy:run"));
+  QCOMPARE(dynamicOval->colorMode(), TextColorMode::kAlarm);
+  QCOMPARE(dynamicOval->visibilityMode(), TextVisibilityMode::kIfNotZero);
+  QCOMPARE(dynamicOval->color(), window.colorForIndex(15));
+
+  OvalElement *staticOval = window.ovalElements_.last();
+  QVERIFY(staticOval->channel(0).isEmpty());
+  QCOMPARE(staticOval->colorMode(), TextColorMode::kStatic);
+  QCOMPARE(staticOval->visibilityMode(), TextVisibilityMode::kStatic);
+  QCOMPARE(staticOval->color(), window.colorForIndex(15));
 }
 
 void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates_data()

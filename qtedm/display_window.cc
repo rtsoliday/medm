@@ -21880,16 +21880,20 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
       break;
 
     case InDynamicAttrInner:
+      /* Old files nest the properties in mod{} (clr, vis, calc) and
+       * param{} (chan) sub-blocks.  Keep only the property lines so the
+       * injected block uses the modern flat layout the loaders expect. */
       if (trimmed.contains(QChar('{'))) {
         braceDepth++;
+        continue;
       }
       if (trimmed.contains(QChar('}'))) {
         braceDepth--;
         if (braceDepth == 0) {
           state = InDynamicAttr;
           braceDepth = 1;
-          continue;
         }
+        continue;
       }
       if (!trimmed.isEmpty() && braceDepth > 0) {
         pendingDynamicAttr.append(QStringLiteral("\t\t") + trimmed);
@@ -21911,10 +21915,11 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
       if (trimmed.contains(QChar('}'))) {
         widgetBraceDepth--;
         if (widgetBraceDepth == 0) {
-          /* Widget complete - output with attributes injected */
+          /* Widget complete - output with attributes injected.  As in
+           * MEDM, the basic attribute stays in effect for later graphics,
+           * while a dynamic attribute applies only to this one. */
           result.append(widgetBuffer);
           state = Normal;
-          pendingBasicAttr.clear();
           pendingDynamicAttr.clear();
         }
       }

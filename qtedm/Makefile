@@ -224,7 +224,8 @@ $(PVA_CXX17_OBJS): CXXFLAGS := $(filter-out /std:c++20 /permissive-,$(CXXFLAGS))
 
 $(OBJ_DIR)/pva_ntndarray_source.$(OBJEXT): CXXFLAGS := $(filter-out /std:c++20,$(CXXFLAGS)) /std:c++17 /Zc:twoPhase-
 
-$(OBJ_DIR)/test_display_import_ndarray.$(OBJEXT): CXXFLAGS := $(filter-out /std:c++20,$(CXXFLAGS)) /std:c++17 /Zc:twoPhase-
+# These tests include the same EPICS pvData templates as the array source.
+$(OBJ_DIR)/test_display_import_ndarray.$(OBJEXT) $(OBJ_DIR)/test_memory_growth.$(OBJEXT): CXXFLAGS := $(filter-out /std:c++20,$(CXXFLAGS)) /std:c++17 /Zc:twoPhase-
 endif
 
 ifeq ($(QTEDM_PCH_ENABLED),1)

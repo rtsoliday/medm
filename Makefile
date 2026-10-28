@@ -162,12 +162,13 @@ endif
 
 # Documentation can be built independently of the application binaries.
 DOCS_BASE ?= /
+PYTHON ?= $(if $(filter Windows Windows_NT,$(OS)),python,python3)
 .PHONY: docs docs-clean docs-distclean
 docs:
-	python3 scripts/build-docs.py --base "$(DOCS_BASE)"
+	$(PYTHON) scripts/build-docs.py --base "$(DOCS_BASE)"
 
 docs-clean:
-	python3 scripts/sync-docs.py --clean
+	$(PYTHON) scripts/sync-docs.py --clean
 
 docs-distclean:
-	python3 scripts/sync-docs.py --distclean
+	$(PYTHON) scripts/sync-docs.py --distclean

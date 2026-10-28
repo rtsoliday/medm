@@ -186,9 +186,10 @@ private:
   void scheduleConnectionCompletionReport();
   void reportConnectionCompletion();
 
-private Q_SLOTS:
-  /* Thread-safe slots for processing CA callbacks from the CA thread.
-   * These are invoked via QueuedConnection to marshal data to main thread. */
+private:
+  /* Process callbacks after the queued inbox drain reaches the main thread.
+   * These helpers are called directly or by typed lambdas, so they do not
+   * need Qt slot metadata. */
   void onConnectionChanged(quint64 channelInstanceId, bool connected,
                            short nativeType, long nativeCount);
   void onValueReceived(quint64 channelInstanceId, QByteArray eventData, int status,

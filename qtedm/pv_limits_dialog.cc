@@ -145,6 +145,13 @@ PvLimitsDialog::PvLimitsDialog(const QPalette &basePalette,
   loprEdit_ = createValueEdit(valueFont_);
   loprEdit_->setValidator(new QDoubleValidator(loprEdit_));
   loprEdit_->setEnabled(false);
+  loprLabel_->setBuddy(loprEdit_);
+  loprEdit_->setAccessibleName(QStringLiteral("Low Limit"));
+  loprEdit_->setAccessibleDescription(QStringLiteral("Low Limit"));
+  loprEdit_->setToolTip(QStringLiteral("Low Limit"));
+  loprSourceCombo_->setAccessibleName(QStringLiteral("Low Limit Source"));
+  loprSourceCombo_->setAccessibleDescription(QStringLiteral("Low Limit Source"));
+  loprSourceCombo_->setToolTip(QStringLiteral("Low Limit Source"));
   grid->addWidget(loprLabel_, 0, 0);
   grid->addWidget(loprSourceCombo_, 0, 1);
   grid->addWidget(loprEdit_, 0, 2);
@@ -155,6 +162,13 @@ PvLimitsDialog::PvLimitsDialog(const QPalette &basePalette,
   hoprEdit_ = createValueEdit(valueFont_);
   hoprEdit_->setValidator(new QDoubleValidator(hoprEdit_));
   hoprEdit_->setEnabled(false);
+  hoprLabel_->setBuddy(hoprEdit_);
+  hoprEdit_->setAccessibleName(QStringLiteral("High Limit"));
+  hoprEdit_->setAccessibleDescription(QStringLiteral("High Limit"));
+  hoprEdit_->setToolTip(QStringLiteral("High Limit"));
+  hoprSourceCombo_->setAccessibleName(QStringLiteral("High Limit Source"));
+  hoprSourceCombo_->setAccessibleDescription(QStringLiteral("High Limit Source"));
+  hoprSourceCombo_->setToolTip(QStringLiteral("High Limit Source"));
   grid->addWidget(hoprLabel_, 1, 0);
   grid->addWidget(hoprSourceCombo_, 1, 1);
   grid->addWidget(hoprEdit_, 1, 2);
@@ -164,6 +178,13 @@ PvLimitsDialog::PvLimitsDialog(const QPalette &basePalette,
   precisionSourceCombo_ = createSourceCombo(valueFont_);
   precisionEdit_ = createValueEdit(valueFont_);
   precisionEdit_->setValidator(new QIntValidator(0, 17, precisionEdit_));
+  precisionLabel_->setBuddy(precisionEdit_);
+  precisionEdit_->setAccessibleName(QStringLiteral("Precision"));
+  precisionEdit_->setAccessibleDescription(QStringLiteral("Precision"));
+  precisionEdit_->setToolTip(QStringLiteral("Precision"));
+  precisionSourceCombo_->setAccessibleName(QStringLiteral("Precision Source"));
+  precisionSourceCombo_->setAccessibleDescription(QStringLiteral("Precision Source"));
+  precisionSourceCombo_->setToolTip(QStringLiteral("Precision Source"));
   grid->addWidget(precisionLabel_, 2, 0);
   grid->addWidget(precisionSourceCombo_, 2, 1);
   grid->addWidget(precisionEdit_, 2, 2);
@@ -977,7 +998,7 @@ void PvLimitsDialog::updateMeterControls()
           value = activeValue;
         }
       }
-      loprEdit_->setText(QString::number(value, 'g', 6));
+      loprEdit_->setText(QString::number(value, 'g', 17));
       loprEdit_->setEnabled(limits.lowSource != PvLimitSource::kChannel);
     }
   }
@@ -995,7 +1016,7 @@ void PvLimitsDialog::updateMeterControls()
           value = activeValue;
         }
       }
-      hoprEdit_->setText(QString::number(value, 'g', 6));
+      hoprEdit_->setText(QString::number(value, 'g', 17));
       hoprEdit_->setEnabled(limits.highSource != PvLimitSource::kChannel);
     }
   }
@@ -1051,6 +1072,10 @@ void PvLimitsDialog::commitPrecisionValue()
     return;
   }
   value = std::clamp(value, 0, 17);
+  if (precisionDefaultGetter_ && value == precisionDefaultGetter_()) {
+    updatePrecisionControls();
+    return;
+  }
   updating_ = true;
   precisionDefaultSetter_(value);
   updating_ = false;
@@ -1138,6 +1163,10 @@ void PvLimitsDialog::commitLowValue()
     updateMeterControls();
     return;
   }
+  if (!std::isfinite(value) || value == limits.lowDefault) {
+    updateMeterControls();
+    return;
+  }
   updating_ = true;
   limits.lowDefault = value;
   meterLimitsSetter_(limits);
@@ -1173,6 +1202,10 @@ void PvLimitsDialog::commitHighValue()
   bool ok = false;
   double value = text.toDouble(&ok);
   if (!ok) {
+    updateMeterControls();
+    return;
+  }
+  if (!std::isfinite(value) || value == limits.highDefault) {
     updateMeterControls();
     return;
   }

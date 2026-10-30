@@ -75,7 +75,7 @@ text {
     x=25
     y=195
     width=470
-    height=25
+    height=14
   }
   "basic attribute" {
     clr=2
@@ -88,7 +88,7 @@ text {
     x=25
     y=230
     width=470
-    height=20
+    height=14
   }
   "basic attribute" {
     clr=2

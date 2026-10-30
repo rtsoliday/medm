@@ -803,10 +803,10 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
 
   const bool includeLowDefault = includeChannelDefaults
       && includeLowChannelDefault && !hasLow
-      && std::abs(limits.lowDefault - 0.0) > 1e-9;
+      && limits.lowDefault != 0.0;
   const bool includeHighDefault = includeChannelDefaults
       && includeHighChannelDefault && !hasHigh
-      && std::abs(limits.highDefault - 1.0) > 1e-9;
+      && limits.highDefault != 1.0;
   const bool includePrecisionDefault = includePrecisionDefaults && !hasPrecision
     && limits.precisionDefault != 0;
 
@@ -830,15 +830,15 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
     writeIndentedLine(stream, level + 1,
         QStringLiteral("loprSrc=\"%1\"")
             .arg(pvLimitSourceString(source)));
-    if (std::abs(limits.lowDefault - 0.0) > 1e-9) {
+    if (limits.lowDefault != 0.0) {
       writeIndentedLine(stream, level + 1,
           QStringLiteral("loprDefault=%1")
-              .arg(QString::number(limits.lowDefault, 'g', 6)));
+              .arg(QString::number(limits.lowDefault, 'g', 17)));
     }
   } else if (includeLowDefault) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("loprDefault=%1")
-            .arg(QString::number(limits.lowDefault, 'g', 6)));
+            .arg(QString::number(limits.lowDefault, 'g', 17)));
   }
   if (hasHigh) {
     const PvLimitSource source = !preserveUserSources
@@ -848,15 +848,15 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
     writeIndentedLine(stream, level + 1,
         QStringLiteral("hoprSrc=\"%1\"")
             .arg(pvLimitSourceString(source)));
-    if (std::abs(limits.highDefault - 1.0) > 1e-9) {
+    if (limits.highDefault != 1.0) {
       writeIndentedLine(stream, level + 1,
           QStringLiteral("hoprDefault=%1")
-              .arg(QString::number(limits.highDefault, 'g', 6)));
+              .arg(QString::number(limits.highDefault, 'g', 17)));
     }
   } else if (includeHighDefault) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("hoprDefault=%1")
-            .arg(QString::number(limits.highDefault, 'g', 6)));
+            .arg(QString::number(limits.highDefault, 'g', 17)));
   }
   if (hasPrecision) {
     const PvLimitSource source = !preserveUserSources
@@ -933,14 +933,10 @@ void writeCartesianAxisSection(QTextStream &stream, int level, int axisIndex,
     double minRange, double maxRange, CartesianPlotTimeFormat timeFormat,
     bool includeTimeFormat)
 {
-  auto nearlyEqual = [](double a, double b) {
-    return std::abs(a - b) < 1e-6;
-  };
-
   const bool defaultStyle = axisStyle == CartesianPlotAxisStyle::kLinear;
   const bool defaultRange = rangeStyle == CartesianPlotRangeStyle::kChannel;
-  const bool defaultMin = nearlyEqual(minRange, 0.0);
-  const bool defaultMax = nearlyEqual(maxRange, 1.0);
+  const bool defaultMin = (minRange == 0.0);
+  const bool defaultMax = (maxRange == 1.0);
   const bool defaultTime = !includeTimeFormat
       || timeFormat == CartesianPlotTimeFormat::kHhMmSs;
 
@@ -985,12 +981,12 @@ void writeCartesianAxisSection(QTextStream &stream, int level, int axisIndex,
   if (!defaultMin) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("minRange=%1")
-            .arg(QString::number(minRange, 'f', 6)));
+            .arg(QString::number(minRange, 'g', 17)));
   }
   if (!defaultMax) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("maxRange=%1")
-            .arg(QString::number(maxRange, 'f', 6)));
+            .arg(QString::number(maxRange, 'g', 17)));
   }
   if (includeTimeFormat && !defaultTime) {
     writeIndentedLine(stream, level + 1,

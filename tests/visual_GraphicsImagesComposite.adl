@@ -59,9 +59,9 @@ composite {
       "basic attribute" { clr=10 fill="solid" }
     }
     text {
-      object { x=490 y=225 width=230 height=40 }
-      "basic attribute" { clr=14 }
-      textix="Composite child above fill"
+      object { x=490 y=235 width=230 height=14 }
+      "basic attribute" { clr=0 }
+      textix="Composite above fill"
       align="horiz. centered"
     }
   }
@@ -71,8 +71,14 @@ rectangle {
   "basic attribute" { clr=55 fill="outline" width=3 }
 }
 text {
-  object { x=30 y=345 width=715 height=42 }
+  object { x=30 y=345 width=715 height=14 }
   "basic attribute" { clr=14 }
-  textix="Shapes remain visible, GIF frame selection is valid, and composite children retain their layer."
+  textix="Check visible shapes and GIF frame selection."
+  align="horiz. centered"
+}
+text {
+  object { x=30 y=370 width=715 height=14 }
+  "basic attribute" { clr=14 }
+  textix="Composite children should retain their layer."
   align="horiz. centered"
 }

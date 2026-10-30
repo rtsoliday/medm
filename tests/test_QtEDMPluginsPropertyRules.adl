@@ -110,12 +110,12 @@ text {
     x=20
     y=15
     width=620
-    height=30
+    height=22
   }
   "basic attribute" {
     clr=14
   }
-  textix="QtEDM Plugins and Declarative Property Rules"
+  textix="QtEDM Plugins and Property Rules"
   align="horiz. centered"
 }
 text {
@@ -123,12 +123,25 @@ text {
     x=30
     y=55
     width=600
-    height=22
+    height=14
   }
   "basic attribute" {
     clr=14
   }
-  textix="Missing plugin ADL stays recoverable. Rule input: led:test:binary_live."
+  textix="Missing plugins remain recoverable."
+  align="horiz. centered"
+}
+text {
+  object {
+    x=30
+    y=74
+    width=600
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Rule input: led:test:binary_live (0 = hidden, 1 = visible)."
   align="horiz. centered"
 }
 text {
@@ -136,12 +149,12 @@ text {
     x=30
     y=235
     width=600
-    height=22
+    height=16
   }
   "basic attribute" {
     clr=14
   }
-  textix="Value 1: RUNNING + visible. Value 0: STOPPED + hidden."
+  textix="1: RUNNING and visible. 0: STOPPED and hidden."
   align="horiz. centered"
 }
 text {
@@ -149,12 +162,12 @@ text {
     x=30
     y=265
     width=600
-    height=22
+    height=16
   }
   "basic attribute" {
     clr=14
   }
-  textix="Rules never write PVs. Save/reopen preserves the opaque plugin child."
+  textix="Rules never write PVs; save/reopen retains plugin data."
   align="horiz. centered"
 }
 qtedm_rules {

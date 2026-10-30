@@ -1,6 +1,7 @@
 #include "cartesian_axis_dialog.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include <QComboBox>
@@ -181,6 +182,10 @@ CartesianAxisDialog::CartesianAxisDialog(const QPalette &basePalette,
     axisCombo_->addItem(QStringLiteral("Y2 Axis"));
     axisCombo_->addItem(QStringLiteral("Y3 Axis"));
     axisCombo_->addItem(QStringLiteral("Y4 Axis"));
+    label->setBuddy(axisCombo_);
+    axisCombo_->setAccessibleName(QStringLiteral("Axis"));
+    axisCombo_->setAccessibleDescription(QStringLiteral("Axis"));
+    axisCombo_->setToolTip(QStringLiteral("Axis"));
     formLayout->addWidget(axisCombo_, row, 1);
     QObject::connect(axisCombo_,
         static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -199,6 +204,10 @@ CartesianAxisDialog::CartesianAxisDialog(const QPalette &basePalette,
     // Time will be added dynamically for X axis only in refreshForAxis()
     axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kLinear));
     axisStyleCombo_->addItem(styleDisplayName(CartesianPlotAxisStyle::kLog10));
+    label->setBuddy(axisStyleCombo_);
+    axisStyleCombo_->setAccessibleName(QStringLiteral("Axis Style"));
+    axisStyleCombo_->setAccessibleDescription(QStringLiteral("Axis Style"));
+    axisStyleCombo_->setToolTip(QStringLiteral("Axis Style"));
     formLayout->addWidget(axisStyleCombo_, row, 1);
     QObject::connect(axisStyleCombo_,
         static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -216,6 +225,10 @@ CartesianAxisDialog::CartesianAxisDialog(const QPalette &basePalette,
     rangeStyleCombo_->addItem(rangeDisplayName(CartesianPlotRangeStyle::kChannel));
     rangeStyleCombo_->addItem(rangeDisplayName(CartesianPlotRangeStyle::kUserSpecified));
     rangeStyleCombo_->addItem(rangeDisplayName(CartesianPlotRangeStyle::kAutoScale));
+    label->setBuddy(rangeStyleCombo_);
+    rangeStyleCombo_->setAccessibleName(QStringLiteral("Range Style"));
+    rangeStyleCombo_->setAccessibleDescription(QStringLiteral("Range Style"));
+    rangeStyleCombo_->setToolTip(QStringLiteral("Range Style"));
     formLayout->addWidget(rangeStyleCombo_, row, 1);
     QObject::connect(rangeStyleCombo_,
         static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -229,6 +242,10 @@ CartesianAxisDialog::CartesianAxisDialog(const QPalette &basePalette,
     formLayout->addWidget(label, row, 0);
     minEdit_ = configureLineEdit(new QLineEdit);
     minEdit_->setValidator(new QDoubleValidator(minEdit_));
+    label->setBuddy(minEdit_);
+    minEdit_->setAccessibleName(QStringLiteral("Minimum"));
+    minEdit_->setAccessibleDescription(QStringLiteral("Minimum"));
+    minEdit_->setToolTip(QStringLiteral("Minimum"));
     formLayout->addWidget(minEdit_, row, 1);
     QObject::connect(minEdit_, &QLineEdit::editingFinished,
         this, &CartesianAxisDialog::commitMinimum);
@@ -241,6 +258,10 @@ CartesianAxisDialog::CartesianAxisDialog(const QPalette &basePalette,
     formLayout->addWidget(label, row, 0);
     maxEdit_ = configureLineEdit(new QLineEdit);
     maxEdit_->setValidator(new QDoubleValidator(maxEdit_));
+    label->setBuddy(maxEdit_);
+    maxEdit_->setAccessibleName(QStringLiteral("Maximum"));
+    maxEdit_->setAccessibleDescription(QStringLiteral("Maximum"));
+    maxEdit_->setToolTip(QStringLiteral("Maximum"));
     formLayout->addWidget(maxEdit_, row, 1);
     QObject::connect(maxEdit_, &QLineEdit::editingFinished,
         this, &CartesianAxisDialog::commitMaximum);
@@ -257,6 +278,10 @@ CartesianAxisDialog::CartesianAxisDialog(const QPalette &basePalette,
       timeFormatCombo_->addItem(QString::fromLatin1(item.label));
     }
     formLayout->addWidget(label, row, 0);
+    label->setBuddy(timeFormatCombo_);
+    timeFormatCombo_->setAccessibleName(QStringLiteral("Time Format"));
+    timeFormatCombo_->setAccessibleDescription(QStringLiteral("Time Format"));
+    timeFormatCombo_->setToolTip(QStringLiteral("Time Format"));
     formLayout->addWidget(timeFormatCombo_, row, 1);
     timeFormatCombo_->setEnabled(false);
     QObject::connect(timeFormatCombo_,
@@ -464,26 +489,28 @@ void CartesianAxisDialog::commitMinimum()
   if (!minimumSetters_[axis]) {
     if (minimumGetters_[axis]) {
       const QSignalBlocker blocker(minEdit_);
-      minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 7));
+      minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 17));
     }
     return;
   }
   bool ok = false;
   double value = minEdit_->text().toDouble(&ok);
-  if (!ok) {
+  if (!ok || !std::isfinite(value)) {
     if (minimumGetters_[axis]) {
       const QSignalBlocker blocker(minEdit_);
-      minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 7));
+      minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 17));
     }
     return;
   }
-  minimumSetters_[axis](value);
-  if (changeNotifier_) {
-    changeNotifier_();
+  if (!minimumGetters_[axis] || value != minimumGetters_[axis]()) {
+    minimumSetters_[axis](value);
+    if (changeNotifier_) {
+      changeNotifier_();
+    }
   }
   if (minimumGetters_[axis]) {
     const QSignalBlocker blocker(minEdit_);
-    minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 7));
+    minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 17));
   }
 }
 
@@ -496,26 +523,28 @@ void CartesianAxisDialog::commitMaximum()
   if (!maximumSetters_[axis]) {
     if (maximumGetters_[axis]) {
       const QSignalBlocker blocker(maxEdit_);
-      maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 7));
+      maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 17));
     }
     return;
   }
   bool ok = false;
   double value = maxEdit_->text().toDouble(&ok);
-  if (!ok) {
+  if (!ok || !std::isfinite(value)) {
     if (maximumGetters_[axis]) {
       const QSignalBlocker blocker(maxEdit_);
-      maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 7));
+      maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 17));
     }
     return;
   }
-  maximumSetters_[axis](value);
-  if (changeNotifier_) {
-    changeNotifier_();
+  if (!maximumGetters_[axis] || value != maximumGetters_[axis]()) {
+    maximumSetters_[axis](value);
+    if (changeNotifier_) {
+      changeNotifier_();
+    }
   }
   if (maximumGetters_[axis]) {
     const QSignalBlocker blocker(maxEdit_);
-    maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 7));
+    maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 17));
   }
 }
 
@@ -574,7 +603,7 @@ void CartesianAxisDialog::refreshForAxis(int axisIndex)
 
   if (minimumGetters_[currentAxisIndex_]) {
     const QSignalBlocker blocker(minEdit_);
-    minEdit_->setText(QString::number(minimumGetters_[currentAxisIndex_](), 'g', 7));
+    minEdit_->setText(QString::number(minimumGetters_[currentAxisIndex_](), 'g', 17));
   } else {
     const QSignalBlocker blocker(minEdit_);
     minEdit_->clear();
@@ -582,7 +611,7 @@ void CartesianAxisDialog::refreshForAxis(int axisIndex)
 
   if (maximumGetters_[currentAxisIndex_]) {
     const QSignalBlocker blocker(maxEdit_);
-    maxEdit_->setText(QString::number(maximumGetters_[currentAxisIndex_](), 'g', 7));
+    maxEdit_->setText(QString::number(maximumGetters_[currentAxisIndex_](), 'g', 17));
   } else {
     const QSignalBlocker blocker(maxEdit_);
     maxEdit_->clear();

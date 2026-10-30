@@ -354,8 +354,9 @@ double StripChartElement::period() const
 
 void StripChartElement::setPeriod(double period)
 {
-  const double clamped = period > 0.0 ? period : kDefaultStripChartPeriod;
-  if (std::abs(period_ - clamped) < 1e-6) {
+  const double clamped = std::isfinite(period) && period > 0.0
+      ? period : kDefaultStripChartPeriod;
+  if (period_ == clamped) {
     return;
   }
   period_ = clamped;

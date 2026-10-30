@@ -192,10 +192,22 @@ text {
     x=30
     y=205
     width=575
-    height=20
+    height=14
   }
   "basic attribute" {
     clr=50
   }
-  textix="Verify symbol ranges, confirmed toggle writes, spin steps, alarms, disconnects, and read-only blocking."
+  textix="Check symbol ranges; confirm toggle changes; step Demand."
+}
+text {
+  object {
+    x=30
+    y=226
+    width=575
+    height=14
+  }
+  "basic attribute" {
+    clr=50
+  }
+  textix="Check alarms, disconnects, and read-only blocking."
 }

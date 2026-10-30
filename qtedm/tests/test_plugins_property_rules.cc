@@ -1,6 +1,13 @@
 #include <QtTest/QtTest>
 
 #include <QCoreApplication>
+#include <QDialogButtonBox>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTableWidget>
+#include <QTimer>
+#include "display_state.h"
 #include <QDir>
 #include <QFile>
 #include <QLabel>
@@ -389,6 +396,8 @@ private slots:
   void init();
   void cleanup();
   void exactCompatibilityAndDuplicateRegistration();
+  void propertyEditorPreservesInvalidEntriesAndSkipsUnchanged();
+  void paletteRestoresRejectedPluginEdits();
   void registrationMetadataExceptionsAreContained_data();
   void registrationMetadataExceptionsAreContained();
   void configuredPluginDirectoryIsDiscovered();
@@ -425,6 +434,149 @@ void TestPluginsPropertyRules::cleanup()
   QtedmPluginManager::instance().resetForTesting();
   AuditLogger::instance().shutdown();
   qunsetenv("QTEDM_AUDIT_DIR");
+}
+
+void TestPluginsPropertyRules::propertyEditorPreservesInvalidEntriesAndSkipsUnchanged()
+{
+  FakePlugin plugin;
+  QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(), QFont(), QFont(), state);
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("plugin.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write(QStringLiteral("file { version=030122 } display { object { width=500 height=300 } } "
+      "qtedm_plugin { pluginId=\"%1\" typeId=\"%2\" schemaVersion=1 "
+      "object { width=200 height=50 } }").arg(plugin.id_, plugin.typeId_).toUtf8());
+  file.close();
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  auto elements = window.findChildren<QWidget *>();
+  PluginElement *element = nullptr;
+  for (auto *widget : elements)
+    if (auto *candidate = dynamic_cast<PluginElement *>(widget)) element = candidate;
+  QVERIFY(element);
+  window.selectAndScrollToWidget(element);
+  auto *text = window.findChild<QLineEdit *>(QStringLiteral("qtedmResourceProperty_text"));
+  QVERIFY(text);
+  QTest::keyClick(text, Qt::Key_Return);
+  QVERIFY(!window.isDirty());
+  const QVariantMap original = element->properties();
+  for (int attempt = 0; attempt < 3; ++attempt) {
+    bool inspected = false;
+    QTimer::singleShot(0, &window, [&] {
+      auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+      QVERIFY(dialog);
+      const auto close = qScopeGuard([&] {
+      if (dialog->isVisible()) dialog->reject();
+    });
+      auto *table = dialog->findChild<QTableWidget *>();
+      auto *buttons = dialog->findChild<QDialogButtonBox *>();
+      QVERIFY(table && buttons);
+      if (attempt == 0) {
+        buttons->button(QDialogButtonBox::Ok)->click();
+      } else {
+        table->item(0, 2)->setText(QString());
+        table->item(1, 2)->setText(QStringLiteral("local:test:retained"));
+        buttons->button(QDialogButtonBox::Ok)->click();
+        QVERIFY(dialog->isVisible());
+        auto *message = dialog->findChild<QLabel *>(QStringLiteral("qtedmPluginPropertiesError"));
+        QVERIFY(message && message->isVisible());
+        QVERIFY(message->text().contains(QStringLiteral("Text")));
+        QCOMPARE(table->item(1, 2)->text(), QStringLiteral("local:test:retained"));
+        QCOMPARE(element->properties(), original);
+        QVERIFY(!window.isDirty());
+        if (attempt == 1) {
+          buttons->button(QDialogButtonBox::Cancel)->click();
+        } else {
+          // Leave a real delegate editor active when OK commits the correction.
+          table->setCurrentCell(0, 2);
+          table->editItem(table->item(0, 2));
+          auto *editor = table->findChild<QLineEdit *>();
+          QVERIFY(editor);
+          editor->setText(QStringLiteral("Corrected"));
+          buttons->button(QDialogButtonBox::Ok)->click();
+          QVERIFY(!dialog->isVisible());
+        }
+      }
+      inspected = true;
+    });
+    window.showPluginProperties(element);
+    QVERIFY(inspected);
+    if (attempt < 2) {
+      QCOMPARE(element->properties(), original);
+      QVERIFY(!window.isDirty());
+    }
+  }
+  QVERIFY(window.isDirty());
+  QCOMPARE(element->properties().value(QStringLiteral("text")).toString(), QStringLiteral("Corrected"));
+  QCOMPARE(element->properties().value(QStringLiteral("channel")).toString(), QStringLiteral("local:test:retained"));
+}
+
+void TestPluginsPropertyRules::paletteRestoresRejectedPluginEdits()
+{
+  FakePlugin plugin;
+  QVERIFY(QtedmPluginManager::instance().registerPluginObject(&plugin));
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QFont(), QFont(), state);
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("palette.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.write(QStringLiteral(
+      "file { version=030122 } display { object { width=500 height=300 } } "
+      "qtedm_plugin { pluginId=\"%1\" typeId=\"%2\" schemaVersion=1 "
+      "object { width=200 height=50 } }")
+      .arg(plugin.id_, plugin.typeId_).toUtf8());
+  file.close();
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  PluginElement *element = nullptr;
+  for (auto *widget : window.findChildren<QWidget *>()) {
+    if (auto *candidate = dynamic_cast<PluginElement *>(widget))
+      element = candidate;
+  }
+  QVERIFY(element);
+  window.selectAndScrollToWidget(element);
+  const QVariantMap original = element->properties();
+  const QString fieldName = QStringLiteral("qtedmResourceProperty_text");
+  plugin.rejectProperties_ = true;
+  // A rejected edit is reported, restored, and can be attempted again.
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    auto *field = window.findChild<QLineEdit *>(fieldName);
+    QVERIFY(field);
+    const QPointer<QLineEdit> oldField(field);
+    bool reported = false;
+    QTimer::singleShot(0, &window, [&] {
+      auto *message = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+      QVERIFY(message);
+      reported = message->text().contains(QStringLiteral("intentional property rejection"));
+      message->accept();
+    });
+    field->setText(QStringLiteral("Rejected"));
+    QMetaObject::invokeMethod(field, "editingFinished", Qt::DirectConnection);
+    QVERIFY(reported);
+    QTRY_VERIFY(oldField.isNull());
+    auto *restored = window.findChild<QLineEdit *>(fieldName);
+    QVERIFY(restored);
+    QCOMPARE(restored->text(), original.value(QStringLiteral("text")).toString());
+    QCOMPARE(element->properties(), original);
+    QVERIFY(!window.isDirty());
+    QMetaObject::invokeMethod(restored, "editingFinished", Qt::DirectConnection);
+    QVERIFY(!window.isDirty());
+  }
+  plugin.rejectProperties_ = false;
+  auto *field = window.findChild<QLineEdit *>(fieldName);
+  QVERIFY(field);
+  field->setText(QStringLiteral("Accepted"));
+  QMetaObject::invokeMethod(field, "editingFinished", Qt::DirectConnection);
+  QVERIFY(window.isDirty());
+  QCOMPARE(element->properties().value(QStringLiteral("text")).toString(),
+      QStringLiteral("Accepted"));
 }
 
 void TestPluginsPropertyRules::exactCompatibilityAndDuplicateRegistration()

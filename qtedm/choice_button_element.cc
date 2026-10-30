@@ -129,21 +129,30 @@ int indexForGridCell(int row, int column, int rows, int columns, int itemCount,
 
 QFont shrinkFontToFit(const QString &text, const QRect &bounds, QFont font)
 {
-  if (font.pointSizeF() <= 0.0) {
-    font.setPointSize(10);
+  // Legacy widget fonts use pixels. Preserve their size and family unless the
+  // label actually needs to shrink, including in tall, narrow enum cells.
+  if (font.pixelSize() <= 0 && font.pointSizeF() <= 0.0) {
+    font.setPixelSize(10);
   }
 
   if (bounds.width() <= 0 || bounds.height() <= 0) {
     return font;
   }
 
-  QFontMetrics metrics(font);
-  while (!text.isEmpty()
-      && (metrics.boundingRect(text).width() > bounds.width()
-          || metrics.height() > bounds.height())
-      && font.pointSize() > 4) {
-    font.setPointSize(font.pointSize() - 1);
-    metrics = QFontMetrics(font);
+  while (!text.isEmpty()) {
+    const QFontMetrics metrics(font);
+    if (std::max(metrics.horizontalAdvance(text), metrics.boundingRect(text).width())
+            <= bounds.width()
+        && metrics.height() <= bounds.height()) {
+      break;
+    }
+    if (font.pixelSize() > 1) {
+      font.setPixelSize(font.pixelSize() - 1);
+    } else if (font.pixelSize() < 0 && font.pointSizeF() > 1.0) {
+      font.setPointSizeF(std::max(1.0, font.pointSizeF() - 1.0));
+    } else {
+      break;
+    }
   }
 
   return font;
@@ -260,7 +269,8 @@ void paintChoiceButton(QPainter &painter, const QRect &bounds, bool checked,
     penColor = blendedColor(penColor, face, 0.5);
   }
   painter.setPen(penColor);
-  painter.drawText(textArea, Qt::AlignCenter | Qt::TextDontClip, text);
+  painter.setClipRect(textArea, Qt::IntersectClip);
+  painter.drawText(textArea, Qt::AlignCenter, text);
   painter.restore();
 }
 
@@ -714,8 +724,9 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
         QFont labelFont = medmChoiceButtonFont(height(), kSampleButtonCount,
             stacking_, std::max(1, textBounds.height()));
         if (labelFont.family().isEmpty()) {
-          labelFont = shrinkFontToFit(label, textBounds, font());
+          labelFont = font();
         }
+        labelFont = shrinkFontToFit(label, textBounds, labelFont);
         paintChoiceButton(painter, interior,
             sampleIndex == 0, true, foreground, background, label, labelFont);
 
@@ -993,8 +1004,9 @@ void ChoiceButtonElement::applyButtonFont(QAbstractButton *button,
   QFont buttonFont = medmChoiceButtonFont(height(), buttons_.size(),
       stacking_, std::max(1, textBounds.height()));
   if (buttonFont.family().isEmpty()) {
-    buttonFont = shrinkFontToFit(label, textBounds, font());
+    buttonFont = font();
   }
+  buttonFont = shrinkFontToFit(label, textBounds, buttonFont);
   button->setFont(buttonFont);
 }
 

@@ -108,7 +108,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="QtEDM-only widget: MEDM skips text_area blocks; compare QtEDM edit mode, execute mode, and saved ADL output."
 }
@@ -120,7 +120,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=50
+		clr=14
 	}
 	textix="Focus areas: multiline char-waveform display, wrapping, scroll bars, read-only state, commit modes, fallback PV types, and invalid-channel rendering."
 }
@@ -132,7 +132,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=2
+		clr=14
 	}
 	textix="Start tests/run_local_ioc.sh before execute-mode checks; it seeds ta:text:* char waveforms and scalar fallback PVs."
 }
@@ -169,7 +169,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="default wrap, Ctrl+Enter"
 	align="horiz. centered"
@@ -182,7 +182,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="read-only monitor"
 	align="horiz. centered"
@@ -195,7 +195,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="no wrap + horizontal scroll"
 	align="horiz. centered"
@@ -208,7 +208,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="fixed column width"
 	align="horiz. centered"
@@ -221,7 +221,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="alarm-color UDF probe"
 	align="horiz. centered"
@@ -312,7 +312,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="explicit commit"
 	align="horiz. centered"
@@ -325,7 +325,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="Enter commits"
 	align="horiz. centered"
@@ -338,7 +338,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="focus-lost commit"
 	align="horiz. centered"
@@ -351,7 +351,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="tiny"
 	align="horiz. centered"
@@ -364,7 +364,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="blank channel"
 	align="horiz. centered"
@@ -377,7 +377,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="DBR_STRING fallback"
 	align="horiz. centered"
@@ -479,7 +479,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="A/B baseline: same PV, only wordWrap differs"
 	align="horiz. centered"
@@ -492,7 +492,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="numeric fallback"
 	align="horiz. centered"
@@ -505,7 +505,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="tab inserts focus"
 	align="horiz. centered"
@@ -601,7 +601,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="1) ta:text:main: type multiple lines, confirm Enter inserts newline, Ctrl+Enter commits, and updates persist after focus changes."
 }
@@ -613,7 +613,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="2) ta:text:explicit: edit the text, right-click the editor, use Commit and Revert, and confirm local dirty text is protected from incoming updates."
 }
@@ -625,7 +625,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="3) ta:text:enter and ta:text:focus: compare commit timing; Shift+Enter should still insert a newline in Enter-commit mode."
 }
@@ -637,7 +637,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="4) ta:text:readonly and ta:text:alarm_probe: verify read-only interaction, alarm coloring, and hatch/invalid appearance for untouched UDF data."
 }
@@ -649,7 +649,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="5) ta:text:nowrap, ta:text:fixed, ta:text:small, and ta:text:baseline: resize or compare scroll bars, clipping, and wrap behavior."
 }
@@ -661,7 +661,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="6) ta:string:single should display and edit as a single-line DBR_STRING fallback; ta:number:fallback should format numeric input as text."
 }
@@ -673,7 +673,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="7) ta:text:tabs: press Tab and confirm focus traversal; the other text areas should insert spaces when Tab is typed inside the editor."
 }

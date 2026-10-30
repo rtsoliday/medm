@@ -108,7 +108,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="Static, alarm, and discrete LED monitor variants rendered in execute mode."
 	align="horiz. centered"
@@ -134,7 +134,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="static"
 	align="horiz. centered"
@@ -147,7 +147,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="alarm"
 	align="horiz. centered"
@@ -160,7 +160,7 @@ text {
 		height=16
 	}
 	"basic attribute" {
-		clr=55
+		clr=14
 	}
 	textix="discrete"
 	align="horiz. centered"
@@ -235,7 +235,7 @@ text {
 		height=14
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="Fixed blue foreground"
 	align="horiz. centered"
@@ -248,7 +248,7 @@ text {
 		height=14
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="No-alarm severity = green"
 	align="horiz. centered"
@@ -261,7 +261,7 @@ text {
 		height=14
 	}
 	"basic attribute" {
-		clr=30
+		clr=14
 	}
 	textix="State 2 = orange"
 	align="horiz. centered"

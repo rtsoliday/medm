@@ -333,7 +333,7 @@ double HeatmapElement::rangeMinimum() const
 
 void HeatmapElement::setRangeMinimum(double value)
 {
-  if (!std::isfinite(value) || qFuzzyCompare(rangeMinimum_, value)) {
+  if (!std::isfinite(value) || rangeMinimum_ == value) {
     return;
   }
   rangeMinimum_ = value;
@@ -347,7 +347,7 @@ double HeatmapElement::rangeMaximum() const
 
 void HeatmapElement::setRangeMaximum(double value)
 {
-  if (!std::isfinite(value) || qFuzzyCompare(rangeMaximum_, value)) {
+  if (!std::isfinite(value) || rangeMaximum_ == value) {
     return;
   }
   rangeMaximum_ = value;

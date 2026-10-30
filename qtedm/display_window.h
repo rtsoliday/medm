@@ -512,6 +512,8 @@ class DisplayWindow : public QMainWindow
 
   friend class DisplayStackingEventFilter;
   friend class TestObserveOnlyControls;
+  friend class TestExtensionResourcePalettes;
+  friend class TestPluginsPropertyRules;
   friend class FindPvDialog;
 public:
   class DisplayStackingEventFilter : public QObject
@@ -840,6 +842,7 @@ protected:
 
 private:
   bool writeAdlFile(const QString &filePath) const;
+  void applyLoadedDisplaySize();
   void clearAllElements();
   void applyExecuteResizeScale(int newWidth, int newHeight);
   void scaleAllElements(int oldWidth, int oldHeight, int newWidth, int newHeight);

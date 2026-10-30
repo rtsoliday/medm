@@ -1,5 +1,7 @@
 #include "expression_channel_element.h"
 
+#include <cmath>
+
 #include <QFontMetrics>
 #include <QPainter>
 #include <QPalette>
@@ -116,7 +118,7 @@ double ExpressionChannelElement::initialValue() const
 
 void ExpressionChannelElement::setInitialValue(double value)
 {
-  if (qFuzzyCompare(initialValue_ + 1.0, value + 1.0)) {
+  if (!std::isfinite(value) || initialValue_ == value) {
     return;
   }
   initialValue_ = value;

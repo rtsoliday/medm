@@ -489,7 +489,7 @@ void PropertyRules::writeAdl(QTextStream &stream, int targetIndex,
         disconnectName(rule.disconnectBehavior));
     AdlWriter::writeIndentedLine(stream, level + 2,
         QStringLiteral("rateHz=%1")
-            .arg(QString::number(rule.rateLimitHz, 'g', 15)));
+            .arg(QString::number(rule.rateLimitHz, 'g', 17)));
     if (!rule.dependsOn.isEmpty()) {
       writeString(QStringLiteral("dependsOn"),
           rule.dependsOn.join(QLatin1Char(',')));

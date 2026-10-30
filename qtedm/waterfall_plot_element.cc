@@ -449,7 +449,7 @@ double WaterfallPlotElement::intensityMin() const
 
 void WaterfallPlotElement::setIntensityMin(double value)
 {
-  if (qFuzzyCompare(intensityMin_, value)) {
+  if (!std::isfinite(value) || intensityMin_ == value) {
     return;
   }
   intensityMin_ = value;
@@ -463,7 +463,7 @@ double WaterfallPlotElement::intensityMax() const
 
 void WaterfallPlotElement::setIntensityMax(double value)
 {
-  if (qFuzzyCompare(intensityMax_, value)) {
+  if (!std::isfinite(value) || intensityMax_ == value) {
     return;
   }
   intensityMax_ = value;
@@ -505,8 +505,11 @@ double WaterfallPlotElement::samplePeriod() const
 
 void WaterfallPlotElement::setSamplePeriod(double period)
 {
+  if (!std::isfinite(period)) {
+    return;
+  }
   const double clamped = std::max(0.0, period);
-  if (qFuzzyCompare(samplePeriod_, clamped)) {
+  if (samplePeriod_ == clamped) {
     return;
   }
   samplePeriod_ = clamped;

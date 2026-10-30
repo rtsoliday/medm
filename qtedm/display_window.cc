@@ -33,6 +33,37 @@
 
 namespace {
 
+class PluginPropertyTable : public QTableWidget
+{
+public:
+  using QTableWidget::QTableWidget;
+
+  void commitCurrentEditor()
+  {
+    if (QWidget *editor = indexWidget(currentIndex())) {
+      commitData(editor);
+      closeEditor(editor, QAbstractItemDelegate::NoHint);
+    }
+  }
+};
+
+class SliderIncrementEdit : public QLineEdit
+{
+public:
+  using QLineEdit::QLineEdit;
+
+protected:
+  void keyPressEvent(QKeyEvent *event) override
+  {
+    QLineEdit::keyPressEvent(event);
+    /* The increment entry handles Return itself, including invalid input.
+     * Do not let it propagate to the dialog's default OK button. */
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+      event->accept();
+    }
+  }
+};
+
 class LoadAncestryGuard
 {
 public:
@@ -91,12 +122,12 @@ void writeNtNdArrayImageAdl(QTextStream &stream, int level,
   if (AdlWriter::isNonDefaultDouble(image->rangeMinimum(), 0.0)) {
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("rangeMin=%1").arg(
-            QString::number(image->rangeMinimum(), 'g', 15)));
+            QString::number(image->rangeMinimum(), 'g', 17)));
   }
   if (AdlWriter::isNonDefaultDouble(image->rangeMaximum(), 255.0)) {
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("rangeMax=%1").arg(
-            QString::number(image->rangeMaximum(), 'g', 15)));
+            QString::number(image->rangeMaximum(), 'g', 17)));
   }
   if (!image->preserveAspectRatio()) {
     AdlWriter::writeIndentedLine(stream, next,
@@ -6797,11 +6828,9 @@ void DisplayWindow::showResourcePaletteForSetpointControl(SetpointControlElement
     step.label = QStringLiteral("Step Size");
     step.description = QStringLiteral(
         "Amount added or subtracted by the spin-box buttons.");
-    step.type = ResourcePalettePropertyType::kDouble;
+    step.type = ResourcePalettePropertyType::kDoubleText;
     step.value = element->stepSize();
-    step.minimum = 1.0e-12;
-    step.maximum = 1.0e12;
-    step.decimals = 12;
+    step.minimum = std::numeric_limits<double>::denorm_min();
     step.setter = [this, element](const QVariant &value) {
       element->setStepSize(value.toDouble());
       markDirty();
@@ -8926,9 +8955,24 @@ void DisplayWindow::showResourcePaletteForPlugin(PluginElement *element)
           const QVariant &value) {
         QVariantMap updated = element->properties();
         updated.insert(name, value);
+        if (updated == element->properties()) {
+          return;
+        }
         if (element->setProperties(updated)) {
           markDirty();
+          return;
         }
+        const QPointer<PluginElement> guardedElement(element);
+        QMessageBox::warning(this, QStringLiteral("Plugin Property"),
+            element->diagnostic());
+        // Refresh after the field's editingFinished signal has returned.
+        // This also resets its cached value so a correction can be retried.
+        QTimer::singleShot(0, this, [this, guardedElement]() {
+          if (guardedElement
+              && currentSelectedWidget() == guardedElement.data()) {
+            showResourcePaletteForPlugin(guardedElement.data());
+          }
+        });
       };
       properties.append(property);
     }
@@ -9400,7 +9444,7 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
       ResourcePaletteProperty property;
       property.key = key;
       property.label = label;
-      property.type = ResourcePalettePropertyType::kDouble;
+      property.type = ResourcePalettePropertyType::kDoubleText;
       property.value = value;
       property.setter = [this, image, setter](const QVariant &updated) {
         (image->*setter)(updated.toDouble());
@@ -9470,22 +9514,20 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
       ResourcePaletteProperty property;
       property.key = key;
       property.label = label;
-      property.type = ResourcePalettePropertyType::kInteger;
-      property.value = static_cast<int>(bytes / (1024ULL * 1024ULL));
-      property.minimum = 1;
-      property.maximum = 4096;
+      property.type = ResourcePalettePropertyType::kUnsignedInteger64;
+      property.value = QVariant::fromValue(bytes);
+      property.minimum = QVariant::fromValue(quint64(1));
       property.setter = [this, image, setter](const QVariant &updated) {
-        (image->*setter)(static_cast<quint64>(updated.toInt())
-            * 1024ULL * 1024ULL);
+        (image->*setter)(updated.toULongLong());
         markDirty();
       };
       properties.append(property);
     };
-    appendMemoryLimit(QStringLiteral("maximum_input_mib"),
-        QStringLiteral("Maximum Input (MiB)"), image->maximumInputBytes(),
+    appendMemoryLimit(QStringLiteral("maximum_input_bytes"),
+        QStringLiteral("Maximum Input (bytes)"), image->maximumInputBytes(),
         &NtNdArrayImageElement::setMaximumInputBytes);
-    appendMemoryLimit(QStringLiteral("maximum_image_mib"),
-        QStringLiteral("Maximum Image (MiB)"), image->maximumOutputBytes(),
+    appendMemoryLimit(QStringLiteral("maximum_image_bytes"),
+        QStringLiteral("Maximum Image (bytes)"), image->maximumOutputBytes(),
         &NtNdArrayImageElement::setMaximumOutputBytes);
 
     ResourcePaletteProperty dimension;
@@ -9494,7 +9536,7 @@ void DisplayWindow::showResourcePaletteForHeatmap(HeatmapElement *element)
     dimension.type = ResourcePalettePropertyType::kInteger;
     dimension.value = image->maximumDimension();
     dimension.minimum = 1;
-    dimension.maximum = 65536;
+    dimension.maximum = std::numeric_limits<int>::max();
     dimension.setter = [this, image](const QVariant &value) {
       image->setMaximumDimension(value.toInt());
       markDirty();
@@ -19179,7 +19221,7 @@ bool DisplayWindow::showExecuteSliderDialogForRightClick(const QPoint &globalPos
   }
   incrementLayout->addLayout(presetLayout);
 
-  auto *incrementEdit = new QLineEdit(incrementGroup);
+  auto *incrementEdit = new SliderIncrementEdit(incrementGroup);
   incrementEdit->setFont(dialog.font());
   incrementEdit->setObjectName(QStringLiteral("sliderIncrementEdit"));
   incrementEdit->setText(QString::number(slider->increment(), 'g', 12));
@@ -19237,10 +19279,8 @@ bool DisplayWindow::showExecuteSliderDialogForRightClick(const QPoint &globalPos
     showQtEdmHelp(&dialog, QStringLiteral("WidgetSlider"));
   });
   QObject::connect(okButton, &QPushButton::clicked, &dialog,
-      [&dialog, valueEdit, incrementEdit, &incrementOnly]() {
-        /* Return from the increment field must never activate the dialog's
-         * default OK button and inadvertently write the value entry. */
-        if (incrementOnly || dialog.focusWidget() == incrementEdit) {
+      [&dialog, valueEdit, &incrementOnly]() {
+        if (incrementOnly) {
           return;
         }
         bool ok = false;
@@ -19631,21 +19671,23 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
         QStringLiteral("QtEDM NTNDArray Image Properties"));
     auto *probe = new QCheckBox(&dialog);
     probe->setChecked(image->showPixelProbe());
-    auto *inputMiB = new QSpinBox(&dialog);
-    inputMiB->setRange(1, 4096);
-    inputMiB->setValue(static_cast<int>(
-        image->maximumInputBytes() / (1024ULL * 1024ULL)));
-    auto *outputMiB = new QSpinBox(&dialog);
-    outputMiB->setRange(1, 4096);
-    outputMiB->setValue(static_cast<int>(
-        image->maximumOutputBytes() / (1024ULL * 1024ULL)));
+    auto *inputBytes = new QLineEdit(
+        QString::number(image->maximumInputBytes()), &dialog);
+    inputBytes->setObjectName(QStringLiteral("qtedmMaximumInputBytes"));
+    auto *outputBytes = new QLineEdit(
+        QString::number(image->maximumOutputBytes()), &dialog);
+    outputBytes->setObjectName(QStringLiteral("qtedmMaximumOutputBytes"));
     auto *dimension = new QSpinBox(&dialog);
-    dimension->setRange(1, 65536);
+    dimension->setRange(1, std::numeric_limits<int>::max());
     dimension->setValue(image->maximumDimension());
     form->addRow(QStringLiteral("Pixel probe"), probe);
-    form->addRow(QStringLiteral("Maximum input (MiB)"), inputMiB);
-    form->addRow(QStringLiteral("Maximum image (MiB)"), outputMiB);
+    form->addRow(QStringLiteral("Maximum input (bytes)"), inputBytes);
+    form->addRow(QStringLiteral("Maximum image (bytes)"), outputBytes);
     form->addRow(QStringLiteral("Maximum dimension"), dimension);
+    auto *error = new QLabel(QStringLiteral(
+        "Enter positive whole numbers of bytes."), &dialog);
+    error->hide();
+    layout->addWidget(error);
     auto *note = new QLabel(QStringLiteral(
         "Version 1 accepts uncompressed pva:// NTNDArray mono and RGB "
         "frames. The newest frame is retained when decoding falls behind."),
@@ -19655,16 +19697,32 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    quint64 inputLimit = image->maximumInputBytes();
+    quint64 outputLimit = image->maximumOutputBytes();
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
+      bool inputOk = false;
+      bool outputOk = false;
+      inputLimit = inputBytes->text().trimmed().toULongLong(&inputOk);
+      outputLimit = outputBytes->text().trimmed().toULongLong(&outputOk);
+      if (!inputOk || !outputOk || inputLimit == 0 || outputLimit == 0
+          || inputBytes->text().trimmed().startsWith(QLatin1Char('-'))
+          || outputBytes->text().trimmed().startsWith(QLatin1Char('-'))) {
+        error->show();
+        return;
+      }
+      dialog.accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    if (dialog.exec() == QDialog::Accepted) {
+    if (dialog.exec() == QDialog::Accepted
+        && (probe->isChecked() != image->showPixelProbe()
+            || inputLimit != image->maximumInputBytes()
+            || outputLimit != image->maximumOutputBytes()
+            || dimension->value() != image->maximumDimension())) {
       setNextUndoLabel(
           QStringLiteral("Edit QtEDM NTNDArray Image Properties"));
       image->setShowPixelProbe(probe->isChecked());
-      image->setMaximumInputBytes(
-          static_cast<quint64>(inputMiB->value()) * 1024ULL * 1024ULL);
-      image->setMaximumOutputBytes(
-          static_cast<quint64>(outputMiB->value()) * 1024ULL * 1024ULL);
+      image->setMaximumInputBytes(inputLimit);
+      image->setMaximumOutputBytes(outputLimit);
       image->setMaximumDimension(dimension->value());
       markDirty();
     }
@@ -19691,7 +19749,9 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
     layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    if (dialog.exec() == QDialog::Accepted) {
+    if (dialog.exec() == QDialog::Accepted
+        && (maximumPoints->value() != archive->archiveMaximumPoints()
+            || liveMerge->isChecked() != archive->archiveLiveMerge())) {
       setNextUndoLabel(QStringLiteral("Edit QtEDM Archive Plot Properties"));
       archive->setArchiveMaximumPoints(maximumPoints->value());
       archive->setArchiveLiveMerge(liveMerge->isChecked());
@@ -19703,19 +19763,33 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
   if (auto *spinbox = dynamic_cast<SetpointControlElement *>(widget);
       spinbox && spinbox->isQtedmSpinBox()) {
     dialog.setWindowTitle(QStringLiteral("QtEDM Spin Box Properties"));
-    auto *step = new QDoubleSpinBox(&dialog);
-    step->setDecimals(12);
-    step->setRange(1e-12, 1e12);
-    step->setValue(spinbox->stepSize());
+    auto *step = new QLineEdit(
+        QString::number(spinbox->stepSize(), 'g', 17), &dialog);
+    step->setObjectName(QStringLiteral("qtedmSpinBoxStepEdit"));
     form->addRow(QStringLiteral("Step size"), step);
+    auto *error = new QLabel(&dialog);
+    error->setText(QStringLiteral("Enter a finite step greater than zero."));
+    error->hide();
+    layout->addWidget(error);
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
+      bool ok = false;
+      const double value = step->text().trimmed().toDouble(&ok);
+      if (!ok || !std::isfinite(value) || value <= 0.0) {
+        error->show();
+        step->setFocus();
+        step->selectAll();
+        return;
+      }
+      dialog.accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    if (dialog.exec() == QDialog::Accepted) {
+    if (dialog.exec() == QDialog::Accepted
+        && step->text().trimmed().toDouble() != spinbox->stepSize()) {
       setNextUndoLabel(QStringLiteral("Edit QtEDM Spin Box Properties"));
-      spinbox->setStepSize(step->value());
+      spinbox->setStepSize(step->text().trimmed().toDouble());
       markDirty();
     }
     return;
@@ -19740,7 +19814,12 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
     layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    if (dialog.exec() == QDialog::Accepted) {
+    if (dialog.exec() == QDialog::Accepted
+        && (offValue->text() != toggle->offValue()
+            || onValue->text() != toggle->onValue()
+            || offLabel->text() != toggle->offLabel()
+            || onLabel->text() != toggle->onLabel()
+            || confirm->isChecked() != toggle->confirmationRequired())) {
       setNextUndoLabel(QStringLiteral("Edit QtEDM Toggle Properties"));
       toggle->setOffValue(offValue->text());
       toggle->setOnValue(onValue->text());
@@ -19768,53 +19847,107 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
   table->setHorizontalHeaderLabels({QStringLiteral("Minimum"),
       QStringLiteral("Maximum"), QStringLiteral("Label"),
       QStringLiteral("Image"), QStringLiteral("Color")});
-  table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+  table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   table->verticalHeader()->setVisible(false);
+  table->setWordWrap(false);
   for (int row = 0; row < originalStates.size(); ++row) {
     const auto &state = originalStates.at(row);
     table->setItem(row, 0, new QTableWidgetItem(
-        QString::number(state.minimum, 'g', 15)));
+        QString::number(state.minimum, 'g', 17)));
     table->setItem(row, 1, new QTableWidgetItem(
-        QString::number(state.maximum, 'g', 15)));
+        QString::number(state.maximum, 'g', 17)));
     table->setItem(row, 2, new QTableWidgetItem(state.label));
     table->setItem(row, 3, new QTableWidgetItem(state.imagePath));
     table->setItem(row, 4, new QTableWidgetItem(
-        state.color.isValid() ? state.color.name(QColor::HexRgb) : QString()));
+        state.color.isValid() ? state.color.name(QColor::HexArgb) : QString()));
   }
+  auto initializeEmptyRows = [table](int firstRow) {
+    for (int row = firstRow; row < table->rowCount(); ++row) {
+      table->setItem(row, 0, new QTableWidgetItem(QString::number(row)));
+      table->setItem(row, 1, new QTableWidgetItem(QString::number(row)));
+    }
+  };
+  initializeEmptyRows(originalStates.size());
   connect(count, qOverload<int>(&QSpinBox::valueChanged), table,
-      &QTableWidget::setRowCount);
+      [table, initializeEmptyRows](int rows) {
+        const int previousRows = table->rowCount();
+        table->setRowCount(rows);
+        initializeEmptyRows(previousRows);
+      });
   layout->addWidget(table);
+  table->resizeColumnsToContents();
+  table->setColumnWidth(2, std::max(150, table->columnWidth(2)));
+  table->setColumnWidth(3, std::max(330, table->columnWidth(3)));
+  dialog.resize(820, 420);
+  auto *validationError = new QLabel(&dialog);
+  validationError->setObjectName(QStringLiteral("qtedmSymbolValidationError"));
+  validationError->setWordWrap(true);
+  validationError->setStyleSheet(QStringLiteral("color: #a00000;"));
+  validationError->hide();
+  layout->addWidget(validationError);
   auto *buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
   layout->addWidget(buttons);
-  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  QVector<LedMonitorElement::SymbolState> states;
+  connect(buttons, &QDialogButtonBox::accepted, &dialog,
+      [&dialog, table, validationError, &states]() {
+        /* OK may not move focus on macOS. Copy the active delegate editor's
+         * value into the model before validating it. */
+        const QModelIndex currentIndex = table->currentIndex();
+        if (QWidget *editor = table->indexWidget(currentIndex)) {
+          table->itemDelegate()->setModelData(editor, table->model(), currentIndex);
+        }
+        table->setFocus(Qt::OtherFocusReason);
+        QVector<LedMonitorElement::SymbolState> candidateStates;
+        candidateStates.reserve(table->rowCount());
+        auto itemText = [table](int row, int column) {
+          const QTableWidgetItem *item = table->item(row, column);
+          return item ? item->text() : QString();
+        };
+        for (int row = 0; row < table->rowCount(); ++row) {
+          LedMonitorElement::SymbolState state;
+          for (int column = 0; column < 2; ++column) {
+            bool ok = false;
+            const double value = itemText(row, column).toDouble(&ok);
+            if (!ok || !std::isfinite(value)) {
+              validationError->setText(QStringLiteral(
+                  "State %1: %2 must be a finite number.")
+                      .arg(row + 1)
+                      .arg(column == 0 ? QStringLiteral("minimum")
+                                       : QStringLiteral("maximum")));
+              validationError->show();
+              table->setCurrentCell(row, column);
+              table->setFocus();
+              return;
+            }
+            if (column == 0) {
+              state.minimum = value;
+            } else {
+              state.maximum = value;
+            }
+          }
+          state.label = itemText(row, 2);
+          state.imagePath = itemText(row, 3);
+          state.color = QColor(itemText(row, 4));
+          candidateStates.append(state);
+        }
+        states = std::move(candidateStates);
+        dialog.accept();
+      });
   connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
   if (dialog.exec() != QDialog::Accepted) {
     return;
   }
-
-  QVector<LedMonitorElement::SymbolState> states;
-  states.reserve(table->rowCount());
-  auto itemText = [table](int row, int column) {
-    const QTableWidgetItem *item = table->item(row, column);
-    return item ? item->text() : QString();
-  };
-  for (int row = 0; row < table->rowCount(); ++row) {
-    LedMonitorElement::SymbolState state;
-    bool minimumOk = false;
-    bool maximumOk = false;
-    state.minimum = itemText(row, 0).toDouble(&minimumOk);
-    state.maximum = itemText(row, 1).toDouble(&maximumOk);
-    if (!minimumOk) {
-      state.minimum = static_cast<double>(row);
-    }
-    if (!maximumOk) {
-      state.maximum = state.minimum;
-    }
-    state.label = itemText(row, 2);
-    state.imagePath = itemText(row, 3);
-    state.color = QColor(itemText(row, 4));
-    states.append(state);
+  const bool unchanged = states.size() == originalStates.size()
+      && std::equal(states.cbegin(), states.cend(), originalStates.cbegin(),
+          [](const LedMonitorElement::SymbolState &a,
+              const LedMonitorElement::SymbolState &b) {
+            return a.minimum == b.minimum && a.maximum == b.maximum
+                && a.label == b.label && a.imagePath == b.imagePath
+                && a.color == b.color;
+          });
+  if (unchanged) {
+    return;
   }
   setNextUndoLabel(QStringLiteral("Edit QtEDM Symbol Properties"));
   symbol->setSymbolStates(states);
@@ -19845,7 +19978,7 @@ void DisplayWindow::showPluginProperties(PluginElement *element)
   dialog.setWindowTitle(registration->descriptor.displayName
       + QStringLiteral(" Properties"));
   auto *layout = new QVBoxLayout(&dialog);
-  auto *table = new QTableWidget(
+  auto *table = new PluginPropertyTable(
       registration->descriptor.properties.size(), 3, &dialog);
   table->setHorizontalHeaderLabels({QStringLiteral("Property"),
       QStringLiteral("Type"), QStringLiteral("Value")});
@@ -19877,7 +20010,7 @@ void DisplayWindow::showPluginProperties(PluginElement *element)
     case QtedmPluginPropertyType::kInteger:
       return QString::number(value.toLongLong());
     case QtedmPluginPropertyType::kDouble:
-      return QString::number(value.toDouble(), 'g', 15);
+      return QString::number(value.toDouble(), 'g', 17);
     case QtedmPluginPropertyType::kColor:
       return value.value<QColor>().name(QColor::HexArgb);
     case QtedmPluginPropertyType::kStringList: {
@@ -19915,86 +20048,97 @@ void DisplayWindow::showPluginProperties(PluginElement *element)
   auto *buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
   layout->addWidget(buttons);
-  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-  if (dialog.exec() != QDialog::Accepted) {
-    return;
-  }
-
-  QVariantMap updated = current;
-  QStringList errors;
-  for (int row = 0; row < registration->descriptor.properties.size(); ++row) {
-    const QtedmPluginPropertySchema &schema =
-        registration->descriptor.properties.at(row);
-    const QString text = table->item(row, 2)
-        ? table->item(row, 2)->text() : QString();
-    bool ok = true;
-    QVariant value;
-    switch (schema.type) {
-    case QtedmPluginPropertyType::kBoolean: {
-      const QString normalized = text.trimmed().toLower();
-      ok = normalized == QStringLiteral("true")
-          || normalized == QStringLiteral("false");
-      value = normalized == QStringLiteral("true");
-      break;
-    }
-    case QtedmPluginPropertyType::kInteger:
-      value = text.toLongLong(&ok);
-      break;
-    case QtedmPluginPropertyType::kDouble:
-      value = text.toDouble(&ok);
-      break;
-    case QtedmPluginPropertyType::kColor: {
-      const QColor color(text.trimmed());
-      ok = color.isValid();
-      value = color;
-      break;
-    }
-    case QtedmPluginPropertyType::kStringList: {
-      QJsonParseError parseError;
-      const QJsonDocument document =
-          QJsonDocument::fromJson(text.toUtf8(), &parseError);
-      ok = parseError.error == QJsonParseError::NoError
-          && document.isArray();
-      QStringList values;
-      if (ok) {
-        for (const QJsonValue &entry : document.array()) {
-          if (!entry.isString()) {
-            ok = false;
-            break;
-          }
-          values.append(entry.toString());
-        }
+  auto *error = new QLabel(&dialog);
+  error->setObjectName(QStringLiteral("qtedmPluginPropertiesError"));
+  error->setWordWrap(true);
+  error->hide();
+  layout->insertWidget(layout->count() - 1, error);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
+    // Commit any active table editor before reading the cells.
+    table->commitCurrentEditor();
+    QVariantMap updated = current;
+    QStringList errors;
+    for (int row = 0; row < registration->descriptor.properties.size(); ++row) {
+      const QtedmPluginPropertySchema &schema =
+          registration->descriptor.properties.at(row);
+      const QString text = table->item(row, 2)
+          ? table->item(row, 2)->text() : QString();
+      bool ok = true;
+      QVariant value;
+      switch (schema.type) {
+      case QtedmPluginPropertyType::kBoolean: {
+        const QString normalized = text.trimmed().toLower();
+        ok = normalized == QStringLiteral("true")
+            || normalized == QStringLiteral("false");
+        value = normalized == QStringLiteral("true");
+        break;
       }
-      value = values;
-      break;
+      case QtedmPluginPropertyType::kInteger:
+        value = text.toLongLong(&ok);
+        break;
+      case QtedmPluginPropertyType::kDouble:
+        value = text.toDouble(&ok);
+        break;
+      case QtedmPluginPropertyType::kColor: {
+        const QColor color(text.trimmed());
+        ok = color.isValid();
+        value = color;
+        break;
+      }
+      case QtedmPluginPropertyType::kStringList: {
+        QJsonParseError parseError;
+        const QJsonDocument document =
+            QJsonDocument::fromJson(text.toUtf8(), &parseError);
+        ok = parseError.error == QJsonParseError::NoError
+            && document.isArray();
+        QStringList values;
+        if (ok) {
+          for (const QJsonValue &entry : document.array()) {
+            if (!entry.isString()) {
+              ok = false;
+              break;
+            }
+            values.append(entry.toString());
+          }
+        }
+        value = values;
+        break;
+      }
+      case QtedmPluginPropertyType::kString:
+      default:
+        value = text;
+        break;
+      }
+      if (!ok || (schema.required && text.trimmed().isEmpty())) {
+        errors.append(schema.displayName.isEmpty()
+            ? schema.name : schema.displayName);
+      } else if (text != valueText(schema.type,
+          current.value(schema.name, schema.defaultValue))) {
+        updated.insert(schema.name, value);
+      }
     }
-    case QtedmPluginPropertyType::kString:
-    default:
-      value = text;
-      break;
+    if (!errors.isEmpty()) {
+      error->setText(QStringLiteral("Invalid values: %1").arg(errors.join(
+          QStringLiteral(", "))));
+      error->show();
+      return;
     }
-    if (!ok || (schema.required && text.trimmed().isEmpty())) {
-      errors.append(schema.displayName.isEmpty()
-          ? schema.name : schema.displayName);
-    } else {
-      updated.insert(schema.name, value);
-    }
-  }
-  if (!errors.isEmpty()) {
-    QMessageBox::warning(this, QStringLiteral("Plugin Properties"),
-        QStringLiteral("Invalid values: %1").arg(errors.join(
-            QStringLiteral(", "))));
-    return;
-  }
 
-  setNextUndoLabel(QStringLiteral("Edit Plugin Properties"));
-  if (element->setProperties(updated)) {
-    markDirty();
-  } else {
-    QMessageBox::warning(this, QStringLiteral("Plugin Properties"),
-        element->diagnostic());
-  }
+    if (updated == current) {
+      dialog.accept();
+      return;
+    }
+    setNextUndoLabel(QStringLiteral("Edit Plugin Properties"));
+    if (element->setProperties(updated)) {
+      markDirty();
+      dialog.accept();
+    } else {
+      error->setText(element->diagnostic());
+      error->show();
+    }
+  });
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  dialog.exec();
 }
 
 void DisplayWindow::showPropertyRuleEditor(QWidget *widget)
@@ -20006,8 +20150,12 @@ void DisplayWindow::showPropertyRuleEditor(QWidget *widget)
   if (dialog.exec() != QDialog::Accepted) {
     return;
   }
-  setNextUndoLabel(QStringLiteral("Edit Declarative Property Rules"));
   const QtedmRuleSet rules = dialog.ruleSet();
+  if (PropertyRules::toJson(rules)
+      == PropertyRules::toJson(propertyRuleSets_.value(widget))) {
+    return;
+  }
+  setNextUndoLabel(QStringLiteral("Edit Declarative Property Rules"));
   if (rules.isEmpty()) {
     propertyRuleSets_.remove(widget);
   } else {
@@ -20786,6 +20934,52 @@ void DisplayWindow::resizeEvent(QResizeEvent *event)
   }
 }
 
+void DisplayWindow::applyLoadedDisplaySize()
+{
+  if (!displayArea_) {
+    return;
+  }
+  const QSize desiredAreaSize(
+      std::max(originalDisplayWidth_, kMinimumDisplayWidth),
+      std::max(originalDisplayHeight_, kMinimumDisplayHeight));
+#if defined(Q_OS_MAC)
+  if (executeModeActive_
+      && QGuiApplication::platformName() == QStringLiteral("cocoa")) {
+    QScreen *screen = this->screen();
+    if (!screen) {
+      screen = QGuiApplication::primaryScreen();
+    }
+    const QSize availableSize =
+        screen ? screen->availableGeometry().size() : QSize();
+    if (availableSize.isValid()
+        && (desiredAreaSize.width() > availableSize.width()
+            || desiredAreaSize.height() > availableSize.height())) {
+      /* Both loading and related-display post-show callbacks must preserve
+       * the real execute-window fit. Restoring oversized ADL dimensions here
+       * separates Cocoa's painted geometry from child-widget hit regions. */
+      fitWindowToAvailableScreen(this, desiredAreaSize);
+      if (layout()) {
+        layout()->activate();
+      }
+      const QSize fittedAreaSize = displayArea_->size();
+      if (fittedAreaSize.isValid()
+          && originalDisplayWidth_ > 0 && originalDisplayHeight_ > 0) {
+        scaleAllElements(originalDisplayWidth_, originalDisplayHeight_,
+            fittedAreaSize.width(), fittedAreaSize.height());
+        pendingResizeAreaSize_ = fittedAreaSize;
+        lastScaledAreaSize_ = fittedAreaSize;
+        if (resizeDebounceTimer_->isActive()) {
+          resizeDebounceTimer_->stop();
+        }
+      }
+      return;
+    }
+  }
+#endif
+  const QSize extraSize = size() - displayArea_->size();
+  resize(desiredAreaSize + extraSize);
+}
+
 void DisplayWindow::applyExecuteResizeScale(int newWidth, int newHeight)
 {
   if (!displayArea_ || !resizeScalingEnabled_) {
@@ -21070,11 +21264,18 @@ bool DisplayWindow::saveAs(QWidget *dialogParent)
     initialPath = baseName;
   }
 
+#ifdef Q_OS_MACOS
+  // The Cocoa accessibility bridge can crash when enumerating the selected
+  // children of the widget-based file view. Use the native save panel on macOS.
+  const QString selected = QFileDialog::getSaveFileName(parent,
+      QStringLiteral("Save Display"), initialPath,
+      QStringLiteral("MEDM Display Files (*.adl)"));
+#else
   QFileDialog dialog(parent, QStringLiteral("Save Display"));
+  dialog.setOption(QFileDialog::DontUseNativeDialog, true);
   dialog.setAcceptMode(QFileDialog::AcceptSave);
   dialog.setFileMode(QFileDialog::AnyFile);
   dialog.setNameFilter(QStringLiteral("MEDM Display Files (*.adl)"));
-  dialog.setOption(QFileDialog::DontUseNativeDialog, true);
   dialog.setWindowFlag(Qt::WindowStaysOnTopHint, true);
   dialog.setModal(true);
   dialog.setWindowModality(Qt::ApplicationModal);
@@ -21091,6 +21292,7 @@ bool DisplayWindow::saveAs(QWidget *dialogParent)
   }
 
   const QString selected = dialog.selectedFiles().value(0);
+#endif
   if (selected.isEmpty()) {
     return false;
   }
@@ -21553,62 +21755,11 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
    * This is particularly noticeable for Related Display "Replace" when the
    * target display is smaller than the current window. */
   if (displayArea_) {
-    const QSize desiredAreaSize(
-        std::max(originalDisplayWidth_, kMinimumDisplayWidth),
-        std::max(originalDisplayHeight_, kMinimumDisplayHeight));
     QPointer<DisplayWindow> self(this);
-    auto applyLoadedSize = [self, desiredAreaSize]() {
-      DisplayWindow *window = self.data();
-      if (!window || !window->displayArea_) {
-        return;
+    auto applyLoadedSize = [self]() {
+      if (self) {
+        self->applyLoadedDisplaySize();
       }
-      if (desiredAreaSize.width() <= 0 || desiredAreaSize.height() <= 0) {
-        return;
-      }
-#if defined(Q_OS_MAC)
-      if (window->executeModeActive_
-          && QGuiApplication::platformName() == QStringLiteral("cocoa")) {
-        QScreen *screen = window->screen();
-        if (!screen) {
-          screen = QGuiApplication::primaryScreen();
-        }
-        const QSize availableSize =
-            screen ? screen->availableGeometry().size() : QSize();
-        if (availableSize.isValid()
-            && (desiredAreaSize.width() > availableSize.width()
-                || desiredAreaSize.height() > availableSize.height())) {
-          /*
-           * Do not let the deferred ADL-size restoration undo the real
-           * execute-window fit performed after Cocoa exposure.  Reapplying an
-           * oversized canvas here recreates the painted/input geometry split.
-           */
-          fitWindowToAvailableScreen(window, desiredAreaSize);
-          if (window->layout()) {
-            window->layout()->activate();
-          }
-          const QSize fittedAreaSize = window->displayArea_->size();
-          if (fittedAreaSize.isValid()
-              && window->originalDisplayWidth_ > 0
-              && window->originalDisplayHeight_ > 0) {
-            window->scaleAllElements(window->originalDisplayWidth_,
-                window->originalDisplayHeight_, fittedAreaSize.width(),
-                fittedAreaSize.height());
-            window->pendingResizeAreaSize_ = fittedAreaSize;
-            window->lastScaledAreaSize_ = fittedAreaSize;
-            if (window->resizeDebounceTimer_->isActive()) {
-              window->resizeDebounceTimer_->stop();
-            }
-          }
-          return;
-        }
-      }
-#endif
-      const QSize currentWindowSize = window->size();
-      const QSize currentAreaSize = window->displayArea_->size();
-      const int extraWidth = currentWindowSize.width() - currentAreaSize.width();
-      const int extraHeight = currentWindowSize.height() - currentAreaSize.height();
-      window->resize(desiredAreaSize.width() + extraWidth,
-          desiredAreaSize.height() + extraHeight);
     };
     QTimer::singleShot(0, this, applyLoadedSize);
     QTimer::singleShot(50, this, applyLoadedSize);
@@ -22293,7 +22444,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
                     setpoint->toleranceMode())));
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("tolerance=%1")
-                .arg(QString::number(setpoint->tolerance(), 'g', 15)));
+                .arg(QString::number(setpoint->tolerance(), 'g', 17)));
       }
       if (!setpoint->showReadback()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -22302,7 +22453,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (setpoint->isQtedmSpinBox()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("step=%1").arg(
-                QString::number(setpoint->stepSize(), 'g', 15)));
+                QString::number(setpoint->stepSize(), 'g', 17)));
       }
       AdlWriter::writeLimitsSection(stream, 1, setpoint->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
@@ -22408,10 +22559,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
             QStringLiteral("direction=\"%1\"")
                 .arg(AdlWriter::barDirectionString(slider->direction())));
       }
-      if (std::abs(slider->increment() - 1.0) > 1e-9) {
+      if (slider->increment() != 1.0) {
           AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("dPrecision=%1")
-              .arg(QString::number(slider->increment(), 'f', 6)));
+              .arg(QString::number(slider->increment(), 'g', 17)));
       }
         AdlWriter::writeLimitsSection(stream, 1, slider->limits(),
           slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock(),
@@ -22886,10 +23037,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("state {"));
           AdlWriter::writeIndentedLine(stream, 2,
               QStringLiteral("min=%1").arg(
-                  QString::number(state.minimum, 'g', 15)));
+                  QString::number(state.minimum, 'g', 17)));
           AdlWriter::writeIndentedLine(stream, 2,
               QStringLiteral("max=%1").arg(
-                  QString::number(state.maximum, 'g', 15)));
+                  QString::number(state.maximum, 'g', 17)));
           if (state.color.isValid()) {
             AdlWriter::writeIndentedLine(stream, 2,
                 QStringLiteral("color=%1").arg(
@@ -22937,7 +23088,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       }
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("initialValue=%1")
-              .arg(QString::number(expression->initialValue(), 'g', 15)));
+              .arg(QString::number(expression->initialValue(), 'g', 17)));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("eventSignal=\"%1\"")
               .arg(expressionChannelEventSignalModeString(
@@ -23012,10 +23163,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       displayColorIndex(stripBackground));
       const double period = strip->period();
       if (period > 0.0
-          && std::abs(period - kDefaultStripChartPeriod) > 1e-6) {
+          && period != kDefaultStripChartPeriod) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("period=%1")
-                .arg(QString::number(period, 'f', 6)));
+                .arg(QString::number(period, 'g', 17)));
       }
       if (strip->units() != TimeUnits::kSeconds) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -23295,12 +23446,12 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (AdlWriter::isNonDefaultDouble(heatmap->rangeMinimum(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("rangeMin=%1")
-                .arg(QString::number(heatmap->rangeMinimum(), 'g', 15)));
+                .arg(QString::number(heatmap->rangeMinimum(), 'g', 17)));
       }
       if (AdlWriter::isNonDefaultDouble(heatmap->rangeMaximum(), 1.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("rangeMax=%1")
-                .arg(QString::number(heatmap->rangeMaximum(), 'g', 15)));
+                .arg(QString::number(heatmap->rangeMaximum(), 'g', 17)));
       }
       if (!heatmap->invertGreyscale()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -23485,12 +23636,12 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (AdlWriter::isNonDefaultDouble(waterfall->intensityMin(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("intensityMin=%1")
-                .arg(QString::number(waterfall->intensityMin(), 'g', 15)));
+                .arg(QString::number(waterfall->intensityMin(), 'g', 17)));
       }
       if (AdlWriter::isNonDefaultDouble(waterfall->intensityMax(), 1.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("intensityMax=%1")
-                .arg(QString::number(waterfall->intensityMax(), 'g', 15)));
+                .arg(QString::number(waterfall->intensityMax(), 'g', 17)));
       }
       if (!waterfall->showLegend()) {
         AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showLegend=0"));
@@ -23501,7 +23652,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (AdlWriter::isNonDefaultDouble(waterfall->samplePeriod(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("samplePeriod=%1")
-                .arg(QString::number(waterfall->samplePeriod(), 'g', 15)));
+                .arg(QString::number(waterfall->samplePeriod(), 'g', 17)));
       }
       if (waterfall->units() != TimeUnits::kSeconds) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -23887,7 +24038,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
                   setpoint->toleranceMode())));
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("tolerance=%1")
-              .arg(QString::number(setpoint->tolerance(), 'g', 15)));
+              .arg(QString::number(setpoint->tolerance(), 'g', 17)));
     }
     if (!setpoint->showReadback()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -23896,7 +24047,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (setpoint->isQtedmSpinBox()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("step=%1").arg(
-              QString::number(setpoint->stepSize(), 'g', 15)));
+              QString::number(setpoint->stepSize(), 'g', 17)));
     }
     AdlWriter::writeLimitsSection(stream, next, setpoint->limits());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
@@ -24003,10 +24154,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
           QStringLiteral("direction=\"%1\"")
               .arg(AdlWriter::barDirectionString(slider->direction())));
     }
-    if (std::abs(slider->increment() - 1.0) > 1e-9) {
+    if (slider->increment() != 1.0) {
       AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("dPrecision=%1")
-          .arg(QString::number(slider->increment(), 'f', 6)));
+          .arg(QString::number(slider->increment(), 'g', 17)));
     }
     AdlWriter::writeLimitsSection(stream, next, slider->limits(),
       slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock(),
@@ -24490,10 +24641,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         AdlWriter::writeIndentedLine(stream, next, QStringLiteral("state {"));
         AdlWriter::writeIndentedLine(stream, next + 1,
             QStringLiteral("min=%1").arg(
-                QString::number(state.minimum, 'g', 15)));
+                QString::number(state.minimum, 'g', 17)));
         AdlWriter::writeIndentedLine(stream, next + 1,
             QStringLiteral("max=%1").arg(
-                QString::number(state.maximum, 'g', 15)));
+                QString::number(state.maximum, 'g', 17)));
         if (state.color.isValid()) {
           AdlWriter::writeIndentedLine(stream, next + 1,
               QStringLiteral("color=%1").arg(
@@ -24542,7 +24693,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     }
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("initialValue=%1")
-            .arg(QString::number(expression->initialValue(), 'g', 15)));
+            .arg(QString::number(expression->initialValue(), 'g', 17)));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("eventSignal=\"%1\"")
             .arg(expressionChannelEventSignalModeString(
@@ -24617,10 +24768,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         yLabels, displayColorIndex(stripForeground),
         displayColorIndex(stripBackground));
     const double period = strip->period();
-    if (period > 0.0 && std::abs(period - kDefaultStripChartPeriod) > 1e-6) {
+    if (period > 0.0 && period != kDefaultStripChartPeriod) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("period=%1")
-              .arg(QString::number(period, 'f', 6)));
+              .arg(QString::number(period, 'g', 17)));
     }
     if (strip->units() != TimeUnits::kSeconds) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -24903,12 +25054,12 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (AdlWriter::isNonDefaultDouble(heatmap->rangeMinimum(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("rangeMin=%1")
-              .arg(QString::number(heatmap->rangeMinimum(), 'g', 15)));
+              .arg(QString::number(heatmap->rangeMinimum(), 'g', 17)));
     }
     if (AdlWriter::isNonDefaultDouble(heatmap->rangeMaximum(), 1.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("rangeMax=%1")
-              .arg(QString::number(heatmap->rangeMaximum(), 'g', 15)));
+              .arg(QString::number(heatmap->rangeMaximum(), 'g', 17)));
     }
     if (!heatmap->invertGreyscale()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -25088,12 +25239,12 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (AdlWriter::isNonDefaultDouble(waterfall->intensityMin(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("intensityMin=%1")
-              .arg(QString::number(waterfall->intensityMin(), 'g', 15)));
+              .arg(QString::number(waterfall->intensityMin(), 'g', 17)));
     }
     if (AdlWriter::isNonDefaultDouble(waterfall->intensityMax(), 1.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("intensityMax=%1")
-              .arg(QString::number(waterfall->intensityMax(), 'g', 15)));
+              .arg(QString::number(waterfall->intensityMax(), 'g', 17)));
     }
     if (!waterfall->showLegend()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -25106,7 +25257,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (AdlWriter::isNonDefaultDouble(waterfall->samplePeriod(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("samplePeriod=%1")
-              .arg(QString::number(waterfall->samplePeriod(), 'g', 15)));
+              .arg(QString::number(waterfall->samplePeriod(), 'g', 17)));
     }
     if (waterfall->units() != TimeUnits::kSeconds) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -31142,24 +31293,7 @@ void DisplayWindow::handleRelatedDisplayActivation(
 
   auto applyPostShowGeometry = [positioned]() {
     if (DisplayWindow *window = positioned.data()) {
-      QWidget *area = window->centralWidget();
-      if (!area) {
-        return;
-      }
-
-      const QSize targetAreaSize(
-          std::max(window->originalDisplayWidth_, kMinimumDisplayWidth),
-          std::max(window->originalDisplayHeight_, kMinimumDisplayHeight));
-      if (targetAreaSize.width() <= 0 || targetAreaSize.height() <= 0) {
-        return;
-      }
-
-      const QSize currentWindowSize = window->size();
-      const QSize currentAreaSize = area->size();
-      const int extraWidth = currentWindowSize.width() - currentAreaSize.width();
-      const int extraHeight = currentWindowSize.height() - currentAreaSize.height();
-      window->resize(targetAreaSize.width() + extraWidth,
-          targetAreaSize.height() + extraHeight);
+      window->applyLoadedDisplaySize();
     }
   };
 
@@ -35477,12 +35611,15 @@ void DisplayWindow::enterExecuteMode()
    * use the same coordinate system.
    */
   if (QGuiApplication::platformName() == QStringLiteral("cocoa")) {
-    fitWindowToAvailableScreen(this,
+    const bool fitted = fitWindowToAvailableScreen(this,
         displayArea_ ? displayArea_->size() : QSize());
     if (displayArea_ && originalDisplayWidth_ > 0
         && originalDisplayHeight_ > 0) {
       const QSize executeAreaSize = displayArea_->size();
-      if (executeAreaSize.isValid()
+      /* Before first exposure Cocoa can report a transient 1-pixel window.
+       * Only a real screen fit warrants scaling here; the pending load-size
+       * callback will settle an ordinary window at its ADL dimensions. */
+      if (fitted && executeAreaSize.isValid()
           && executeAreaSize != QSize(originalDisplayWidth_,
                                       originalDisplayHeight_)) {
         scaleAllElements(originalDisplayWidth_, originalDisplayHeight_,

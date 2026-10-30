@@ -25,6 +25,8 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIntValidator>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
@@ -37,11 +39,25 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScreen>
+#include <QResizeEvent>
+#include <QScopedValueRollback>
+#include <QSet>
 #include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+
+namespace {
+// Configuration callbacks also record undo/dirty state. Skip unchanged values.
+template<typename Getter, typename Setter, typename Value>
+void applyIfChanged(const Getter &getter, const Setter &setter, const Value &value)
+{
+  if (!getter || getter() != value) {
+    setter(value);
+  }
+}
+}  // namespace
 
 ResourcePaletteDialog::ResourcePaletteDialog(const QPalette &basePalette, const QFont &labelFont,
     const QFont &valueFont, QWidget *parent)
@@ -101,7 +117,7 @@ ResourcePaletteDialog::ResourcePaletteDialog(const QPalette &basePalette, const 
   scrollArea_ = new QScrollArea;
   scrollArea_->setWidgetResizable(true);
   scrollArea_->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
-  scrollArea_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scrollArea_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   scrollArea_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   scrollArea_->setFrameShape(QFrame::NoFrame);
   scrollArea_->setAutoFillBackground(true);
@@ -203,7 +219,8 @@ ResourcePaletteDialog::ResourcePaletteDialog(const QPalette &basePalette, const 
   QObject::connect(rectangleForegroundButton_, &QPushButton::clicked, this,
       [this]() {
         openColorPalette(rectangleForegroundButton_,
-            QStringLiteral("Rectangle Color"), rectangleForegroundSetter_);
+            elementLabel_->text() + QStringLiteral(" Color"),
+            rectangleForegroundSetter_);
       });
 
   rectangleFillCombo_ = new QComboBox;
@@ -668,8 +685,8 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
   heatmapInvertGreyscaleCombo_ = new QComboBox;
   heatmapInvertGreyscaleCombo_->setFont(valueFont_);
   heatmapInvertGreyscaleCombo_->setAutoFillBackground(true);
-  heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("False"));
-  heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("True"));
+  heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("false"));
+  heatmapInvertGreyscaleCombo_->addItem(QStringLiteral("true"));
   QObject::connect(heatmapInvertGreyscaleCombo_,
     static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
     this, [this](int index) {
@@ -711,8 +728,8 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
   heatmapPreserveAspectRatioCombo_ = new QComboBox;
   heatmapPreserveAspectRatioCombo_->setFont(valueFont_);
   heatmapPreserveAspectRatioCombo_->setAutoFillBackground(true);
-  heatmapPreserveAspectRatioCombo_->addItem(QStringLiteral("False"));
-  heatmapPreserveAspectRatioCombo_->addItem(QStringLiteral("True"));
+  heatmapPreserveAspectRatioCombo_->addItem(QStringLiteral("false"));
+  heatmapPreserveAspectRatioCombo_->addItem(QStringLiteral("true"));
   QObject::connect(heatmapPreserveAspectRatioCombo_,
     static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
     this, [this](int index) {
@@ -724,8 +741,8 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
   heatmapShowTopProfileCombo_ = new QComboBox;
   heatmapShowTopProfileCombo_->setFont(valueFont_);
   heatmapShowTopProfileCombo_->setAutoFillBackground(true);
-  heatmapShowTopProfileCombo_->addItem(QStringLiteral("No"));
-  heatmapShowTopProfileCombo_->addItem(QStringLiteral("Yes"));
+  heatmapShowTopProfileCombo_->addItem(QStringLiteral("false"));
+  heatmapShowTopProfileCombo_->addItem(QStringLiteral("true"));
   QObject::connect(heatmapShowTopProfileCombo_,
     static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
     this, [this](int index) {
@@ -737,8 +754,8 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
   heatmapShowRightProfileCombo_ = new QComboBox;
   heatmapShowRightProfileCombo_->setFont(valueFont_);
   heatmapShowRightProfileCombo_->setAutoFillBackground(true);
-  heatmapShowRightProfileCombo_->addItem(QStringLiteral("No"));
-  heatmapShowRightProfileCombo_->addItem(QStringLiteral("Yes"));
+  heatmapShowRightProfileCombo_->addItem(QStringLiteral("false"));
+  heatmapShowRightProfileCombo_->addItem(QStringLiteral("true"));
   QObject::connect(heatmapShowRightProfileCombo_,
     static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
     this, [this](int index) {
@@ -785,8 +802,8 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
   heatmapFlipHorizontalCombo_ = new QComboBox;
   heatmapFlipHorizontalCombo_->setFont(valueFont_);
   heatmapFlipHorizontalCombo_->setAutoFillBackground(true);
-  heatmapFlipHorizontalCombo_->addItem(QStringLiteral("False"));
-  heatmapFlipHorizontalCombo_->addItem(QStringLiteral("True"));
+  heatmapFlipHorizontalCombo_->addItem(QStringLiteral("false"));
+  heatmapFlipHorizontalCombo_->addItem(QStringLiteral("true"));
   QObject::connect(heatmapFlipHorizontalCombo_,
                    QOverload<int>::of(&QComboBox::currentIndexChanged),
                    [this](int index) {
@@ -800,8 +817,8 @@ addRow(imageLayout, imageRow++, QStringLiteral("Image Calc"), imageCalcEdit_);
   heatmapFlipVerticalCombo_ = new QComboBox;
   heatmapFlipVerticalCombo_->setFont(valueFont_);
   heatmapFlipVerticalCombo_->setAutoFillBackground(true);
-  heatmapFlipVerticalCombo_->addItem(QStringLiteral("False"));
-  heatmapFlipVerticalCombo_->addItem(QStringLiteral("True"));
+  heatmapFlipVerticalCombo_->addItem(QStringLiteral("false"));
+  heatmapFlipVerticalCombo_->addItem(QStringLiteral("true"));
   QObject::connect(heatmapFlipVerticalCombo_,
                    QOverload<int>::of(&QComboBox::currentIndexChanged),
                    [this](int index) {
@@ -1449,6 +1466,8 @@ textMonitorLayout->setRowStretch(7, 1);
     pvTableRowsLayout->addWidget(rowLabel, i + 1, 0);
 
     pvTableRowLabelEdits_[i] = createLineEdit();
+    pvTableRowLabelEdits_[i]->setAccessibleName(
+        QStringLiteral("PV Table Row %1 Label").arg(i + 1));
     committedTexts_.insert(pvTableRowLabelEdits_[i], pvTableRowLabelEdits_[i]->text());
     pvTableRowLabelEdits_[i]->installEventFilter(this);
     QObject::connect(pvTableRowLabelEdits_[i], &QLineEdit::returnPressed, this,
@@ -1458,6 +1477,8 @@ textMonitorLayout->setRowStretch(7, 1);
     pvTableRowsLayout->addWidget(pvTableRowLabelEdits_[i], i + 1, 1);
 
     pvTableRowChannelEdits_[i] = createLineEdit();
+    pvTableRowChannelEdits_[i]->setAccessibleName(
+        QStringLiteral("PV Table Row %1 Channel").arg(i + 1));
     committedTexts_.insert(pvTableRowChannelEdits_[i], pvTableRowChannelEdits_[i]->text());
     pvTableRowChannelEdits_[i]->installEventFilter(this);
     QObject::connect(pvTableRowChannelEdits_[i], &QLineEdit::returnPressed, this,
@@ -1837,7 +1858,7 @@ textMonitorLayout->setRowStretch(7, 1);
 
   setpointControlToleranceEdit_ = createLineEdit();
   setpointControlToleranceEdit_->setValidator(new QDoubleValidator(
-      0.0, std::numeric_limits<double>::max(), 12,
+      0.0, std::numeric_limits<double>::max(), 17,
       setpointControlToleranceEdit_));
   committedTexts_.insert(setpointControlToleranceEdit_,
       setpointControlToleranceEdit_->text());
@@ -2167,7 +2188,7 @@ textMonitorLayout->setRowStretch(7, 1);
   sliderIncrementEdit_ = createLineEdit();
   sliderIncrementEdit_->setValidator(new QDoubleValidator(
       std::numeric_limits<double>::lowest(),
-      std::numeric_limits<double>::max(), 6, sliderIncrementEdit_));
+      std::numeric_limits<double>::max(), 17, sliderIncrementEdit_));
   committedTexts_.insert(sliderIncrementEdit_, sliderIncrementEdit_->text());
   sliderIncrementEdit_->installEventFilter(this);
   QObject::connect(sliderIncrementEdit_, &QLineEdit::returnPressed, this,
@@ -2241,7 +2262,7 @@ textMonitorLayout->setRowStretch(7, 1);
   wheelSwitchPrecisionEdit_ = createLineEdit();
   wheelSwitchPrecisionEdit_->setValidator(new QDoubleValidator(
       std::numeric_limits<double>::lowest(),
-      std::numeric_limits<double>::max(), 6, wheelSwitchPrecisionEdit_));
+      std::numeric_limits<double>::max(), 17, wheelSwitchPrecisionEdit_));
   committedTexts_.insert(wheelSwitchPrecisionEdit_, wheelSwitchPrecisionEdit_->text());
   wheelSwitchPrecisionEdit_->installEventFilter(this);
   QObject::connect(wheelSwitchPrecisionEdit_, &QLineEdit::returnPressed, this,
@@ -2560,9 +2581,10 @@ textMonitorLayout->setRowStretch(7, 1);
     commandEntriesLayout->addWidget(rowLabel, i + 1, 0);
 
     shellCommandEntryLabelEdits_[i] = createLineEdit();
+    shellCommandEntryLabelEdits_[i]->setAccessibleName(
+        QStringLiteral("Command %1 Label").arg(i + 1));
     committedTexts_.insert(shellCommandEntryLabelEdits_[i],
         shellCommandEntryLabelEdits_[i]->text());
-    shellCommandEntryLabelEdits_[i]->setMaximumWidth(160);
     shellCommandEntryLabelEdits_[i]->installEventFilter(this);
     QObject::connect(shellCommandEntryLabelEdits_[i], &QLineEdit::returnPressed,
         this, [this, i]() { commitShellCommandEntryLabel(i); });
@@ -2571,9 +2593,10 @@ textMonitorLayout->setRowStretch(7, 1);
     commandEntriesLayout->addWidget(shellCommandEntryLabelEdits_[i], i + 1, 1);
 
     shellCommandEntryCommandEdits_[i] = createLineEdit();
+    shellCommandEntryCommandEdits_[i]->setAccessibleName(
+        QStringLiteral("Command %1 Command").arg(i + 1));
     committedTexts_.insert(shellCommandEntryCommandEdits_[i],
         shellCommandEntryCommandEdits_[i]->text());
-    shellCommandEntryCommandEdits_[i]->setMaximumWidth(200);
     shellCommandEntryCommandEdits_[i]->installEventFilter(this);
     QObject::connect(shellCommandEntryCommandEdits_[i], &QLineEdit::returnPressed,
         this, [this, i]() { commitShellCommandEntryCommand(i); });
@@ -2582,9 +2605,10 @@ textMonitorLayout->setRowStretch(7, 1);
     commandEntriesLayout->addWidget(shellCommandEntryCommandEdits_[i], i + 1, 2);
 
     shellCommandEntryArgsEdits_[i] = createLineEdit();
+    shellCommandEntryArgsEdits_[i]->setAccessibleName(
+        QStringLiteral("Command %1 Arguments").arg(i + 1));
     committedTexts_.insert(shellCommandEntryArgsEdits_[i],
         shellCommandEntryArgsEdits_[i]->text());
-    shellCommandEntryArgsEdits_[i]->setMaximumWidth(200);
     shellCommandEntryArgsEdits_[i]->installEventFilter(this);
     QObject::connect(shellCommandEntryArgsEdits_[i], &QLineEdit::returnPressed,
         this, [this, i]() { commitShellCommandEntryArgs(i); });
@@ -2695,9 +2719,10 @@ textMonitorLayout->setRowStretch(7, 1);
     relatedEntriesLayout->addWidget(rowLabel, i + 1, 0);
 
     relatedDisplayEntryLabelEdits_[i] = createLineEdit();
+    relatedDisplayEntryLabelEdits_[i]->setAccessibleName(
+        QStringLiteral("Display %1 Label").arg(i + 1));
     committedTexts_.insert(relatedDisplayEntryLabelEdits_[i],
         relatedDisplayEntryLabelEdits_[i]->text());
-    relatedDisplayEntryLabelEdits_[i]->setMaximumWidth(160);
     relatedDisplayEntryLabelEdits_[i]->installEventFilter(this);
     QObject::connect(relatedDisplayEntryLabelEdits_[i], &QLineEdit::returnPressed,
         this, [this, i]() { commitRelatedDisplayEntryLabel(i); });
@@ -2706,9 +2731,10 @@ textMonitorLayout->setRowStretch(7, 1);
     relatedEntriesLayout->addWidget(relatedDisplayEntryLabelEdits_[i], i + 1, 1);
 
     relatedDisplayEntryNameEdits_[i] = createLineEdit();
+    relatedDisplayEntryNameEdits_[i]->setAccessibleName(
+        QStringLiteral("Display %1 Name").arg(i + 1));
     committedTexts_.insert(relatedDisplayEntryNameEdits_[i],
         relatedDisplayEntryNameEdits_[i]->text());
-    relatedDisplayEntryNameEdits_[i]->setMaximumWidth(160);
     relatedDisplayEntryNameEdits_[i]->installEventFilter(this);
     QObject::connect(relatedDisplayEntryNameEdits_[i], &QLineEdit::returnPressed,
         this, [this, i]() { commitRelatedDisplayEntryName(i); });
@@ -2717,9 +2743,10 @@ textMonitorLayout->setRowStretch(7, 1);
     relatedEntriesLayout->addWidget(relatedDisplayEntryNameEdits_[i], i + 1, 2);
 
     relatedDisplayEntryArgsEdits_[i] = createLineEdit();
+    relatedDisplayEntryArgsEdits_[i]->setAccessibleName(
+        QStringLiteral("Display %1 Arguments").arg(i + 1));
     committedTexts_.insert(relatedDisplayEntryArgsEdits_[i],
         relatedDisplayEntryArgsEdits_[i]->text());
-    relatedDisplayEntryArgsEdits_[i]->setMaximumWidth(160);
     relatedDisplayEntryArgsEdits_[i]->installEventFilter(this);
     QObject::connect(relatedDisplayEntryArgsEdits_[i], &QLineEdit::returnPressed,
         this, [this, i]() { commitRelatedDisplayEntryArgs(i); });
@@ -2728,6 +2755,10 @@ textMonitorLayout->setRowStretch(7, 1);
     relatedEntriesLayout->addWidget(relatedDisplayEntryArgsEdits_[i], i + 1, 3);
 
     relatedDisplayEntryModeCombos_[i] = new QComboBox;
+    const QString policyRole = QStringLiteral("Display %1 Policy").arg(i + 1);
+    relatedDisplayEntryModeCombos_[i]->setAccessibleName(policyRole);
+    relatedDisplayEntryModeCombos_[i]->setAccessibleDescription(policyRole);
+    relatedDisplayEntryModeCombos_[i]->setToolTip(policyRole);
     relatedDisplayEntryModeCombos_[i]->setFont(valueFont_);
     relatedDisplayEntryModeCombos_[i]->setAutoFillBackground(true);
     relatedDisplayEntryModeCombos_[i]->addItem(
@@ -3273,7 +3304,7 @@ textMonitorLayout->setRowStretch(7, 1);
 
   stripPeriodEdit_ = createLineEdit();
   stripPeriodEdit_->setValidator(
-      new QDoubleValidator(0.001, 1.0e9, 3, stripPeriodEdit_));
+      new QDoubleValidator(0.001, 1.0e9, 17, stripPeriodEdit_));
   committedTexts_.insert(stripPeriodEdit_, stripPeriodEdit_->text());
   stripPeriodEdit_->installEventFilter(this);
   QObject::connect(stripPeriodEdit_, &QLineEdit::returnPressed, this,
@@ -3304,6 +3335,10 @@ textMonitorLayout->setRowStretch(7, 1);
 
     stripPenColorButtons_[i] = createColorButton(
         basePalette.color(QPalette::WindowText));
+    const QString colorRole = QStringLiteral("Pen %1 Color").arg(i + 1);
+    stripPenColorButtons_[i]->setProperty("qtedmColorRole", colorRole);
+    stripPenColorButtons_[i]->setAccessibleName(colorRole
+        + QStringLiteral(": ") + stripPenColorButtons_[i]->text());
     QObject::connect(stripPenColorButtons_[i], &QPushButton::clicked, this,
         [this, i]() {
           openColorPalette(stripPenColorButtons_[i],
@@ -3313,6 +3348,8 @@ textMonitorLayout->setRowStretch(7, 1);
     penLayout->addWidget(stripPenColorButtons_[i], i, 1);
 
     stripPenChannelEdits_[i] = createLineEdit();
+    stripPenChannelEdits_[i]->setAccessibleName(
+        QStringLiteral("Pen %1 Channel").arg(i + 1));
     committedTexts_.insert(stripPenChannelEdits_[i],
         stripPenChannelEdits_[i]->text());
     stripPenChannelEdits_[i]->installEventFilter(this);
@@ -3324,6 +3361,10 @@ textMonitorLayout->setRowStretch(7, 1);
 
     stripPenLimitsButtons_[i] = createActionButton(
         QStringLiteral("Limits..."));
+    const QString limitsRole = QStringLiteral("Pen %1 Limits").arg(i + 1);
+    stripPenLimitsButtons_[i]->setAccessibleName(limitsRole);
+    stripPenLimitsButtons_[i]->setAccessibleDescription(limitsRole);
+    stripPenLimitsButtons_[i]->setToolTip(limitsRole);
     stripPenLimitsButtons_[i]->setEnabled(false);
     QObject::connect(stripPenLimitsButtons_[i], &QPushButton::clicked, this,
         [this, i]() { openStripChartLimitsDialog(i); });
@@ -3478,19 +3519,33 @@ textMonitorLayout->setRowStretch(7, 1);
   cartesianTraceLayout->setHorizontalSpacing(8);
   cartesianTraceLayout->setVerticalSpacing(4);
 
+  const QStringList traceHeaders{QStringLiteral("Trace"),
+      QStringLiteral("Color"), QStringLiteral("X PV"), QStringLiteral("Y PV"),
+      QStringLiteral("Y Axis"), QStringLiteral("Side")};
+  for (int column = 0; column < traceHeaders.size(); ++column) {
+    auto *header = new QLabel(traceHeaders.at(column));
+    header->setFont(labelFont_);
+    cartesianTraceLayout->addWidget(header, 0, column);
+  }
+
   for (int i = 0; i < kCartesianPlotTraceCount; ++i) {
     auto *traceLabel = new QLabel(QStringLiteral("Trace %1").arg(i + 1));
     traceLabel->setFont(labelFont_);
-    cartesianTraceLayout->addWidget(traceLabel, i, 0);
+    cartesianTraceLayout->addWidget(traceLabel, i + 1, 0);
 
     cartesianTraceColorButtons_[i] = createColorButton(
         palette().color(QPalette::WindowText));
+    const QString colorRole = QStringLiteral("Trace %1 Color").arg(i + 1);
+    cartesianTraceColorButtons_[i]->setProperty("qtedmColorRole", colorRole);
+    cartesianTraceColorButtons_[i]->setAccessibleName(colorRole
+        + QStringLiteral(": ") + cartesianTraceColorButtons_[i]->text());
     QObject::connect(cartesianTraceColorButtons_[i], &QPushButton::clicked, this,
         [this, i]() {
           openColorPalette(cartesianTraceColorButtons_[i],
-              QStringLiteral("Trace Color"), cartesianTraceColorSetters_[i]);
+              QStringLiteral("Trace %1 Color").arg(i + 1),
+              cartesianTraceColorSetters_[i]);
         });
-    cartesianTraceLayout->addWidget(cartesianTraceColorButtons_[i], i, 1);
+    cartesianTraceLayout->addWidget(cartesianTraceColorButtons_[i], i + 1, 1);
 
     cartesianTraceXEdits_[i] = createLineEdit();
     committedTexts_.insert(cartesianTraceXEdits_[i],
@@ -3500,7 +3555,10 @@ textMonitorLayout->setRowStretch(7, 1);
         [this, i]() { commitCartesianTraceXChannel(i); });
     QObject::connect(cartesianTraceXEdits_[i], &QLineEdit::editingFinished, this,
         [this, i]() { commitCartesianTraceXChannel(i); });
-    cartesianTraceLayout->addWidget(cartesianTraceXEdits_[i], i, 2);
+    cartesianTraceXEdits_[i]->setAccessibleName(
+        QStringLiteral("Trace %1 X PV").arg(i + 1));
+    cartesianTraceXEdits_[i]->setToolTip(QStringLiteral("X-axis PV"));
+    cartesianTraceLayout->addWidget(cartesianTraceXEdits_[i], i + 1, 2);
 
     cartesianTraceYEdits_[i] = createLineEdit();
     committedTexts_.insert(cartesianTraceYEdits_[i],
@@ -3510,9 +3568,16 @@ textMonitorLayout->setRowStretch(7, 1);
         [this, i]() { commitCartesianTraceYChannel(i); });
     QObject::connect(cartesianTraceYEdits_[i], &QLineEdit::editingFinished, this,
         [this, i]() { commitCartesianTraceYChannel(i); });
-    cartesianTraceLayout->addWidget(cartesianTraceYEdits_[i], i, 3);
+    cartesianTraceYEdits_[i]->setAccessibleName(
+        QStringLiteral("Trace %1 Y PV").arg(i + 1));
+    cartesianTraceYEdits_[i]->setToolTip(QStringLiteral("Y-axis PV"));
+    cartesianTraceLayout->addWidget(cartesianTraceYEdits_[i], i + 1, 3);
 
     cartesianTraceAxisCombos_[i] = new QComboBox;
+    const QString axisRole = QStringLiteral("Trace %1 Y Axis").arg(i + 1);
+    cartesianTraceAxisCombos_[i]->setAccessibleName(axisRole);
+    cartesianTraceAxisCombos_[i]->setAccessibleDescription(axisRole);
+    cartesianTraceAxisCombos_[i]->setToolTip(axisRole);
     cartesianTraceAxisCombos_[i]->setFont(valueFont_);
     cartesianTraceAxisCombos_[i]->setAutoFillBackground(true);
     cartesianTraceAxisCombos_[i]->addItem(QStringLiteral("Y1"));
@@ -3522,9 +3587,13 @@ textMonitorLayout->setRowStretch(7, 1);
     QObject::connect(cartesianTraceAxisCombos_[i],
         static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
         this, [this, i](int index) { handleCartesianTraceAxisChanged(i, index); });
-    cartesianTraceLayout->addWidget(cartesianTraceAxisCombos_[i], i, 4);
+    cartesianTraceLayout->addWidget(cartesianTraceAxisCombos_[i], i + 1, 4);
 
     cartesianTraceSideCombos_[i] = new QComboBox;
+    const QString sideRole = QStringLiteral("Trace %1 Side").arg(i + 1);
+    cartesianTraceSideCombos_[i]->setAccessibleName(sideRole);
+    cartesianTraceSideCombos_[i]->setAccessibleDescription(sideRole);
+    cartesianTraceSideCombos_[i]->setToolTip(sideRole);
     cartesianTraceSideCombos_[i]->setFont(valueFont_);
     cartesianTraceSideCombos_[i]->setAutoFillBackground(true);
     cartesianTraceSideCombos_[i]->addItem(QStringLiteral("Left"));
@@ -3532,7 +3601,7 @@ textMonitorLayout->setRowStretch(7, 1);
     QObject::connect(cartesianTraceSideCombos_[i],
         static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
         this, [this, i](int index) { handleCartesianTraceSideChanged(i, index); });
-    cartesianTraceLayout->addWidget(cartesianTraceSideCombos_[i], i, 5);
+    cartesianTraceLayout->addWidget(cartesianTraceSideCombos_[i], i + 1, 5);
   }
 
   addRow(cartesianLayout, 0, QStringLiteral("Title"), cartesianTitleEdit_);
@@ -3776,7 +3845,10 @@ textMonitorLayout->setRowStretch(7, 1);
   for (int i = 0; i < kLedStateCount; ++i) {
     auto *button = createColorButton(basePalette.color(QPalette::WindowText));
     button->setFixedSize(88, 24);
-    button->setToolTip(QStringLiteral("State %1").arg(i));
+    const QString role = QStringLiteral("State %1 Color").arg(i);
+    button->setProperty("qtedmColorRole", role);
+    button->setAccessibleName(role + QStringLiteral(": ") + button->text());
+    button->setToolTip(role);
     ledStateColorButtons_[static_cast<std::size_t>(i)] = button;
     QObject::connect(button, &QPushButton::clicked, this,
         [this, i]() {
@@ -3923,35 +3995,24 @@ textMonitorLayout->setRowStretch(7, 1);
         [this, i]() { commitExpressionChannelChannel(i); });
   }
 
-  expressionChannelInitialValueSpin_ = new QDoubleSpinBox;
-  expressionChannelInitialValueSpin_->setFont(valueFont_);
-  expressionChannelInitialValueSpin_->setAutoFillBackground(true);
-  QPalette expressionSpinPalette = palette();
-  expressionSpinPalette.setColor(QPalette::Base, Qt::white);
-  expressionSpinPalette.setColor(QPalette::Text, Qt::black);
-  expressionChannelInitialValueSpin_->setPalette(expressionSpinPalette);
-  expressionChannelInitialValueSpin_->setRange(-1.0e12, 1.0e12);
-  expressionChannelInitialValueSpin_->setDecimals(6);
-  expressionChannelInitialValueSpin_->setSingleStep(0.1);
-  expressionChannelInitialValueSpin_->setAccelerated(true);
-  QObject::connect(expressionChannelInitialValueSpin_,
-      static_cast<void (QDoubleSpinBox::*)(double)>(
-          &QDoubleSpinBox::valueChanged),
-      this, [this](double value) {
-        if (!expressionChannelInitialValueSetter_) {
-          if (expressionChannelInitialValueGetter_) {
-            const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
-            expressionChannelInitialValueSpin_->setValue(
-                expressionChannelInitialValueGetter_());
-          }
-          return;
+  expressionChannelInitialValueEdit_ = createLineEdit();
+  expressionChannelInitialValueEdit_->setObjectName(
+      QStringLiteral("qtedmExpressionInitialValue"));
+  QObject::connect(expressionChannelInitialValueEdit_,
+      &QLineEdit::editingFinished, this, [this]() {
+        bool ok = false;
+        const double value = expressionChannelInitialValueEdit_->text()
+            .trimmed().toDouble(&ok);
+        if (ok && std::isfinite(value)
+            && expressionChannelInitialValueSetter_
+            && (!expressionChannelInitialValueGetter_
+                || value != expressionChannelInitialValueGetter_())) {
+          expressionChannelInitialValueSetter_(value);
         }
-        expressionChannelInitialValueSetter_(value);
-        if (expressionChannelInitialValueGetter_) {
-          const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
-          expressionChannelInitialValueSpin_->setValue(
-              expressionChannelInitialValueGetter_());
-        }
+        const double current = expressionChannelInitialValueGetter_
+            ? expressionChannelInitialValueGetter_() : 0.0;
+        expressionChannelInitialValueEdit_->setText(
+            QString::number(current, 'g', 17));
       });
 
   expressionChannelEventSignalCombo_ = new QComboBox;
@@ -3992,7 +4053,8 @@ textMonitorLayout->setRowStretch(7, 1);
   expressionChannelPrecisionSpin_ = new QSpinBox;
   expressionChannelPrecisionSpin_->setFont(valueFont_);
   expressionChannelPrecisionSpin_->setAutoFillBackground(true);
-  expressionChannelPrecisionSpin_->setPalette(expressionSpinPalette);
+  expressionChannelPrecisionSpin_->setPalette(
+      expressionChannelInitialValueEdit_->palette());
   expressionChannelPrecisionSpin_->setRange(0, 17);
   expressionChannelPrecisionSpin_->setAccelerated(true);
   QObject::connect(expressionChannelPrecisionSpin_,
@@ -4032,7 +4094,7 @@ textMonitorLayout->setRowStretch(7, 1);
   addRow(expressionChannelLayout, expressionChannelRow++,
       QStringLiteral("Channel D"), expressionChannelChannelEdits_[3]);
   addRow(expressionChannelLayout, expressionChannelRow++,
-      QStringLiteral("Initial Value"), expressionChannelInitialValueSpin_);
+      QStringLiteral("Initial Value"), expressionChannelInitialValueEdit_);
   addRow(expressionChannelLayout, expressionChannelRow++,
       QStringLiteral("Event Signal"), expressionChannelEventSignalCombo_);
   addRow(expressionChannelLayout, expressionChannelRow++,
@@ -4798,7 +4860,7 @@ void ResourcePaletteDialog::showForSetpointControl(std::function<QRect()> geomet
         ? setpointControlToleranceGetter_() : 0.0;
     const QSignalBlocker blocker(setpointControlToleranceEdit_);
     setpointControlToleranceEdit_->setText(
-        QString::number(tolerance, 'g', 12));
+        QString::number(tolerance, 'g', 17));
     committedTexts_[setpointControlToleranceEdit_] =
         setpointControlToleranceEdit_->text();
   }
@@ -7701,15 +7763,7 @@ void ResourcePaletteDialog::showForStripChart(std::function<QRect()> geometryGet
     if (value <= 0.0) {
       value = kDefaultStripChartPeriod;
     }
-    QString text = QString::number(value, 'f', 3);
-    if (text.contains(QLatin1Char('.'))) {
-      while (text.endsWith(QLatin1Char('0'))) {
-        text.chop(1);
-      }
-      if (text.endsWith(QLatin1Char('.'))) {
-        text.chop(1);
-      }
-    }
+    const QString text = QString::number(value, 'g', 17);
     const QSignalBlocker blocker(stripPeriodEdit_);
     stripPeriodEdit_->setText(text);
     stripPeriodEdit_->setEnabled(static_cast<bool>(stripPeriodSetter_));
@@ -8614,13 +8668,12 @@ void ResourcePaletteDialog::showForExpressionChannel(std::function<QRect()> geom
     committedTexts_[expressionChannelChannelEdits_[i]] = value;
   }
 
-  if (expressionChannelInitialValueSpin_) {
-    const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
-    expressionChannelInitialValueSpin_->setValue(
+  if (expressionChannelInitialValueEdit_) {
+    const QSignalBlocker blocker(expressionChannelInitialValueEdit_);
+    expressionChannelInitialValueEdit_->setText(QString::number(
         expressionChannelInitialValueGetter_
-            ? expressionChannelInitialValueGetter_()
-            : 0.0);
-    expressionChannelInitialValueSpin_->setEnabled(
+            ? expressionChannelInitialValueGetter_() : 0.0, 'g', 17));
+    expressionChannelInitialValueEdit_->setEnabled(
         static_cast<bool>(expressionChannelInitialValueSetter_));
   }
 
@@ -9387,13 +9440,13 @@ void ResourcePaletteDialog::showForHeatmap(std::function<QRect()> geometryGetter
   if (heatmapRangeMinEdit_) {
     const double value = heatmapRangeMinGetter_ ? heatmapRangeMinGetter_() : 0.0;
     const QSignalBlocker blocker(heatmapRangeMinEdit_);
-    heatmapRangeMinEdit_->setText(QString::number(value, 'g', 7));
+    heatmapRangeMinEdit_->setText(QString::number(value, 'g', 17));
     committedTexts_[heatmapRangeMinEdit_] = heatmapRangeMinEdit_->text();
   }
   if (heatmapRangeMaxEdit_) {
     const double value = heatmapRangeMaxGetter_ ? heatmapRangeMaxGetter_() : 1.0;
     const QSignalBlocker blocker(heatmapRangeMaxEdit_);
-    heatmapRangeMaxEdit_->setText(QString::number(value, 'g', 7));
+    heatmapRangeMaxEdit_->setText(QString::number(value, 'g', 17));
     committedTexts_[heatmapRangeMaxEdit_] = heatmapRangeMaxEdit_->text();
   }
   if (heatmapPreserveAspectRatioCombo_) {
@@ -9582,7 +9635,7 @@ void ResourcePaletteDialog::showForWaterfall(std::function<QRect()> geometryGett
   };
 
   auto formatNumber = [](double value) {
-    QString text = QString::number(value, 'g', 15);
+    QString text = QString::number(value, 'g', 17);
     if (text == QStringLiteral("-0")) {
       text = QStringLiteral("0");
     }
@@ -9969,6 +10022,9 @@ void ResourcePaletteDialog::clearExtensionProperties()
       ++it;
     }
   }
+  for (int row = 0; row < extensionPropertiesLayout_->rowCount(); ++row) {
+    extensionPropertiesLayout_->setRowStretch(row, 0);
+  }
   while (QLayoutItem *item = extensionPropertiesLayout_->takeAt(0)) {
     delete item->widget();
     delete item;
@@ -10058,9 +10114,36 @@ void ResourcePaletteDialog::populateExtensionProperties(
               edit->setText(QString::number(committedValue));
               return;
             }
-            committedValue = value;
             edit->setText(QString::number(value));
-            setter(QVariant::fromValue(value));
+            if (value != committedValue) {
+              committedValue = value;
+              setter(QVariant::fromValue(value));
+            }
+          });
+      field = edit;
+      break;
+    }
+    case ResourcePalettePropertyType::kUnsignedInteger64: {
+      auto *edit = createLineEdit();
+      qulonglong committedValue = property.value.toULongLong();
+      edit->setText(QString::number(committedValue));
+      edit->setEnabled(static_cast<bool>(property.setter));
+      QObject::connect(edit, &QLineEdit::editingFinished, this,
+          [edit, setter = property.setter, committedValue,
+              minimum = property.minimum]() mutable {
+            bool ok = false;
+            const QString text = edit->text().trimmed();
+            const qulonglong value = text.toULongLong(&ok);
+            if (!ok || text.startsWith(QLatin1Char('-'))
+                || (minimum.isValid() && value < minimum.toULongLong())) {
+              edit->setText(QString::number(committedValue));
+              return;
+            }
+            edit->setText(QString::number(value));
+            if (setter && value != committedValue) {
+              committedValue = value;
+              setter(QVariant::fromValue(value));
+            }
           });
       field = edit;
       break;
@@ -10096,19 +10179,25 @@ void ResourcePaletteDialog::populateExtensionProperties(
       edit->setText(QString::number(committedValue, 'g', 17));
       edit->setEnabled(static_cast<bool>(property.setter));
       QObject::connect(edit, &QLineEdit::editingFinished, this,
-          [edit, setter = property.setter, committedValue]() mutable {
+          [edit, setter = property.setter, committedValue,
+              minimum = property.minimum,
+              maximum = property.maximum]() mutable {
             if (!setter) {
               return;
             }
             bool ok = false;
             const double value = edit->text().trimmed().toDouble(&ok);
-            if (!ok || !std::isfinite(value)) {
+            if (!ok || !std::isfinite(value)
+                || (minimum.isValid() && value < minimum.toDouble())
+                || (maximum.isValid() && value > maximum.toDouble())) {
               edit->setText(QString::number(committedValue, 'g', 17));
               return;
             }
-            committedValue = value;
             edit->setText(QString::number(value, 'g', 17));
-            setter(value);
+            if (value != committedValue) {
+              committedValue = value;
+              setter(value);
+            }
           });
       field = edit;
       break;
@@ -10180,25 +10269,46 @@ void ResourcePaletteDialog::populateExtensionProperties(
       auto *edit = createLineEdit();
       const bool stringList =
           property.type == ResourcePalettePropertyType::kStringList;
-      edit->setText(stringList
-          ? property.value.toStringList().join(QStringLiteral("; "))
-          : property.value.toString());
+      auto listText = [](const QStringList &values) {
+        return QString::fromUtf8(QJsonDocument(
+            QJsonArray::fromStringList(values)).toJson(QJsonDocument::Compact));
+      };
+      QVariant committedValue = stringList
+          ? QVariant(property.value.toStringList())
+          : QVariant(property.value.toString());
+      edit->setText(stringList ? listText(committedValue.toStringList())
+                               : committedValue.toString());
+      if (stringList) {
+        edit->setPlaceholderText(QStringLiteral("[\"first\", \"second\"]"));
+      }
       edit->setEnabled(static_cast<bool>(property.setter));
       QObject::connect(edit, &QLineEdit::editingFinished, this,
-          [edit, setter = property.setter, stringList]() {
+          [edit, setter = property.setter, stringList, committedValue,
+              listText]() mutable {
             if (!setter) {
               return;
             }
-            if (!stringList) {
-              setter(edit->text());
-              return;
+            QVariant value = edit->text();
+            if (stringList) {
+              const QJsonDocument document =
+                  QJsonDocument::fromJson(edit->text().toUtf8());
+              bool valid = document.isArray();
+              QStringList values;
+              for (const QJsonValue &entry : document.array()) {
+                valid = valid && entry.isString();
+                values.append(entry.toString());
+              }
+              if (!valid) {
+                edit->setText(listText(committedValue.toStringList()));
+                return;
+              }
+              value = values;
+              edit->setText(listText(values));
             }
-            QStringList values = edit->text().split(QLatin1Char(';'),
-                Qt::SkipEmptyParts);
-            for (QString &value : values) {
-              value = value.trimmed();
+            if (value != committedValue) {
+              committedValue = value;
+              setter(value);
             }
-            setter(values);
           });
       field = edit;
       break;
@@ -10209,10 +10319,16 @@ void ResourcePaletteDialog::populateExtensionProperties(
       continue;
     }
     field->setObjectName(objectNameForKey(property.key));
-    field->setToolTip(property.description);
+    QString description = property.description;
+    if (property.type == ResourcePalettePropertyType::kStringList) {
+      if (!description.isEmpty()) description += QLatin1Char('\n');
+      description += QStringLiteral(
+          "Enter a JSON array of strings, for example [\"first\", \"second\"].");
+    }
+    field->setToolTip(description);
     addRow(extensionPropertiesLayout_, row++, property.label, field);
     if (QLabel *label = fieldLabels_.value(field, nullptr)) {
-      label->setToolTip(property.description);
+      label->setToolTip(description);
     }
   }
   extensionPropertiesLayout_->setRowStretch(row, 1);
@@ -11030,8 +11146,8 @@ void ResourcePaletteDialog::clearSelectionState()
       edit->setEnabled(false);
     }
   }
-  if (expressionChannelInitialValueSpin_) {
-    expressionChannelInitialValueSpin_->setEnabled(false);
+  if (expressionChannelInitialValueEdit_) {
+    expressionChannelInitialValueEdit_->setEnabled(false);
   }
   if (expressionChannelEventSignalCombo_) {
     expressionChannelEventSignalCombo_->setEnabled(false);
@@ -11407,9 +11523,9 @@ void ResourcePaletteDialog::clearSelectionState()
     const QSignalBlocker blocker(barFillCombo_);
     barFillCombo_->setCurrentIndex(barFillToIndex(BarFill::kFromEdge));
   }
-  if (expressionChannelInitialValueSpin_) {
-    const QSignalBlocker blocker(expressionChannelInitialValueSpin_);
-    expressionChannelInitialValueSpin_->setValue(0.0);
+  if (expressionChannelInitialValueEdit_) {
+    const QSignalBlocker blocker(expressionChannelInitialValueEdit_);
+    expressionChannelInitialValueEdit_->setText(QStringLiteral("0"));
   }
   if (expressionChannelEventSignalCombo_) {
     const QSignalBlocker blocker(expressionChannelEventSignalCombo_);
@@ -11826,7 +11942,6 @@ QLineEdit *ResourcePaletteDialog::createLineEdit()
   editPalette.setColor(QPalette::Base, Qt::white);
   editPalette.setColor(QPalette::Text, Qt::black);
   edit->setPalette(editPalette);
-  edit->setMaximumWidth(160);
   return edit;
 }
 
@@ -11839,7 +11954,7 @@ QPushButton *ResourcePaletteDialog::createColorButton(const QColor &color)
   button->setAutoDefault(false);
   button->setDefault(false);
   button->setFixedSize(120, 24);
-  button->setFocusPolicy(Qt::NoFocus);
+  button->setFocusPolicy(Qt::StrongFocus);
   setColorButtonColor(button, color);
   return button;
 }
@@ -11853,7 +11968,7 @@ QPushButton *ResourcePaletteDialog::createActionButton(const QString &text)
   button->setAutoDefault(false);
   button->setDefault(false);
   button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-  button->setFocusPolicy(Qt::NoFocus);
+  button->setFocusPolicy(Qt::StrongFocus);
   return button;
 }
 
@@ -11897,6 +12012,15 @@ void ResourcePaletteDialog::addRow(QGridLayout *layout, int row, const QString &
   labelWidget->setAutoFillBackground(false);
   layout->addWidget(labelWidget, row, 0);
   layout->addWidget(field, row, 1);
+  labelWidget->setBuddy(field);
+  if (field->property("qtedmColorValue").isValid()) {
+    field->setProperty("qtedmColorRole", label);
+    field->setAccessibleName(label + QStringLiteral(": ")
+        + field->property("qtedmColorValue").toString());
+  } else if (field->accessibleName().isEmpty()) {
+    field->setAccessibleName(label);
+  }
+  layout->setColumnStretch(1, 1);
   fieldLabels_.insert(field, labelWidget);
 }
 
@@ -12013,7 +12137,13 @@ void ResourcePaletteDialog::setColorButtonColor(QPushButton *button, const QColo
   buttonPalette.setColor(QPalette::ButtonText,
       color.lightness() < 128 ? Qt::white : Qt::black);
   button->setPalette(buttonPalette);
-  button->setText(color.name(QColor::HexRgb).toUpper());
+  const QString value = color.name(QColor::HexRgb).toUpper();
+  button->setText(value);
+  button->setProperty("qtedmColorValue", value);
+  const QString role = button->property("qtedmColorRole").toString();
+  button->setAccessibleName((role.isEmpty() ? QStringLiteral("Color") : role)
+      + QStringLiteral(": ") + value);
+  button->setAccessibleDescription(QStringLiteral("Current color: %1").arg(value));
 
   /* Set stylesheet to prevent gradient rendering */
   QString colorName = color.name(QColor::HexRgb);
@@ -12047,6 +12177,9 @@ void ResourcePaletteDialog::resetColorButton(QPushButton *button)
   QPalette buttonPalette = palette();
   button->setPalette(buttonPalette);
   button->setText(QString());
+  button->setProperty("qtedmColorValue", QVariant());
+  button->setAccessibleName(button->property("qtedmColorRole").toString());
+  button->setAccessibleDescription(QString());
   button->setStyleSheet(QString());
 }
 
@@ -12258,7 +12391,7 @@ void ResourcePaletteDialog::commitTextString()
     return;
   }
   const QString value = textStringEdit_->text();
-  textSetter_(value);
+  applyIfChanged(textGetter_, textSetter_, value);
   committedTextString_ = value;
 }
 
@@ -12288,7 +12421,7 @@ void ResourcePaletteDialog::commitTextVisibilityCalc()
     return;
   }
   const QString value = textVisibilityCalcEdit_->text();
-  textVisibilityCalcSetter_(value);
+  applyIfChanged(textVisibilityCalcGetter_, textVisibilityCalcSetter_, value);
   committedTexts_[textVisibilityCalcEdit_] = value;
 }
 
@@ -12308,7 +12441,7 @@ void ResourcePaletteDialog::commitTextChannel(int index)
     return;
   }
   const QString value = edit->text();
-  textChannelSetters_[index](value);
+  applyIfChanged(textChannelGetters_[index], textChannelSetters_[index], value);
   committedTexts_[edit] = value;
   if (index == kTextChannelAIndex) {
     updateTextChannelDependentControls();
@@ -12692,7 +12825,7 @@ void ResourcePaletteDialog::commitTextEntryChannel()
     return;
   }
   const QString value = textEntryChannelEdit_->text();
-  textEntryChannelSetter_(value);
+  applyIfChanged(textEntryChannelGetter_, textEntryChannelSetter_, value);
   committedTexts_[textEntryChannelEdit_] = value;
 }
 
@@ -12708,7 +12841,7 @@ void ResourcePaletteDialog::commitSetpointControlLabel()
     return;
   }
   const QString value = setpointControlLabelEdit_->text();
-  setpointControlLabelSetter_(value);
+  applyIfChanged(setpointControlLabelGetter_, setpointControlLabelSetter_, value);
   committedTexts_[setpointControlLabelEdit_] = value;
 }
 
@@ -12724,7 +12857,7 @@ void ResourcePaletteDialog::commitSetpointControlSetpoint()
     return;
   }
   const QString value = setpointControlSetpointEdit_->text();
-  setpointControlSetpointSetter_(value);
+  applyIfChanged(setpointControlSetpointGetter_, setpointControlSetpointSetter_, value);
   committedTexts_[setpointControlSetpointEdit_] = value;
   updateSetpointControlLimitsFromDialog();
 }
@@ -12741,7 +12874,7 @@ void ResourcePaletteDialog::commitSetpointControlReadback()
     return;
   }
   const QString value = setpointControlReadbackEdit_->text();
-  setpointControlReadbackSetter_(value);
+  applyIfChanged(setpointControlReadbackGetter_, setpointControlReadbackSetter_, value);
   committedTexts_[setpointControlReadbackEdit_] = value;
 }
 
@@ -12762,8 +12895,13 @@ void ResourcePaletteDialog::commitSetpointControlTolerance()
     revertLineEdit(setpointControlToleranceEdit_);
     return;
   }
-  setpointControlToleranceSetter_(value);
-  const QString text = QString::number(value, 'g', 12);
+  if (!setpointControlToleranceGetter_
+      || value != setpointControlToleranceGetter_()) {
+    setpointControlToleranceSetter_(value);
+  }
+  const double effective = setpointControlToleranceGetter_
+      ? setpointControlToleranceGetter_() : value;
+  const QString text = QString::number(effective, 'g', 17);
   setpointControlToleranceEdit_->setText(text);
   committedTexts_[setpointControlToleranceEdit_] = text;
 }
@@ -12780,7 +12918,7 @@ void ResourcePaletteDialog::commitTextAreaChannel()
     return;
   }
   const QString value = textAreaChannelEdit_->text();
-  textAreaChannelSetter_(value);
+  applyIfChanged(textAreaChannelGetter_, textAreaChannelSetter_, value);
   committedTexts_[textAreaChannelEdit_] = value;
   updateTextAreaLimitsFromDialog();
 }
@@ -12803,7 +12941,7 @@ void ResourcePaletteDialog::commitTextAreaWrapColumnWidth()
     return;
   }
   value = std::max(1, value);
-  textAreaWrapColumnWidthSetter_(value);
+  applyIfChanged(textAreaWrapColumnWidthGetter_, textAreaWrapColumnWidthSetter_, value);
   const int effectiveValue = textAreaWrapColumnWidthGetter_
       ? std::max(1, textAreaWrapColumnWidthGetter_())
       : value;
@@ -12831,7 +12969,7 @@ void ResourcePaletteDialog::commitTextAreaTabWidth()
     return;
   }
   value = std::max(1, value);
-  textAreaTabWidthSetter_(value);
+  applyIfChanged(textAreaTabWidthGetter_, textAreaTabWidthSetter_, value);
   const int effectiveValue = textAreaTabWidthGetter_
       ? std::max(1, textAreaTabWidthGetter_())
       : value;
@@ -12852,7 +12990,7 @@ void ResourcePaletteDialog::commitTextAreaFontFamily()
     return;
   }
   const QString value = textAreaFontFamilyEdit_->text();
-  textAreaFontFamilySetter_(value);
+  applyIfChanged(textAreaFontFamilyGetter_, textAreaFontFamilySetter_, value);
   committedTexts_[textAreaFontFamilyEdit_] = value;
 }
 
@@ -12873,7 +13011,9 @@ void ResourcePaletteDialog::commitSliderIncrement()
     revertLineEdit(sliderIncrementEdit_);
     return;
   }
-  sliderIncrementSetter_(value);
+  if (!sliderIncrementGetter_ || value != sliderIncrementGetter_()) {
+    sliderIncrementSetter_(value);
+  }
   committedTexts_[sliderIncrementEdit_] = sliderIncrementEdit_->text();
   updateSliderLimitsFromDialog();
 }
@@ -12890,7 +13030,7 @@ void ResourcePaletteDialog::commitSliderChannel()
     return;
   }
   const QString value = sliderChannelEdit_->text();
-  sliderChannelSetter_(value);
+  applyIfChanged(sliderChannelGetter_, sliderChannelSetter_, value);
   committedTexts_[sliderChannelEdit_] = value;
   updateSliderLimitsFromDialog();
 }
@@ -12912,7 +13052,9 @@ void ResourcePaletteDialog::commitWheelSwitchPrecision()
     revertLineEdit(wheelSwitchPrecisionEdit_);
     return;
   }
-  wheelSwitchPrecisionSetter_(value);
+  if (!wheelSwitchPrecisionGetter_ || value != wheelSwitchPrecisionGetter_()) {
+    wheelSwitchPrecisionSetter_(value);
+  }
   committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
   updateWheelSwitchLimitsFromDialog();
 }
@@ -12929,7 +13071,7 @@ void ResourcePaletteDialog::commitWheelSwitchFormat()
     return;
   }
   const QString value = wheelSwitchFormatEdit_->text();
-  wheelSwitchFormatSetter_(value);
+  applyIfChanged(wheelSwitchFormatGetter_, wheelSwitchFormatSetter_, value);
   committedTexts_[wheelSwitchFormatEdit_] = value;
 }
 
@@ -12945,7 +13087,7 @@ void ResourcePaletteDialog::commitWheelSwitchChannel()
     return;
   }
   const QString value = wheelSwitchChannelEdit_->text();
-  wheelSwitchChannelSetter_(value);
+  applyIfChanged(wheelSwitchChannelGetter_, wheelSwitchChannelSetter_, value);
   committedTexts_[wheelSwitchChannelEdit_] = value;
   updateWheelSwitchLimitsFromDialog();
 }
@@ -12962,7 +13104,7 @@ void ResourcePaletteDialog::commitChoiceButtonChannel()
     return;
   }
   const QString value = choiceButtonChannelEdit_->text();
-  choiceButtonChannelSetter_(value);
+  applyIfChanged(choiceButtonChannelGetter_, choiceButtonChannelSetter_, value);
   committedTexts_[choiceButtonChannelEdit_] = value;
 }
 
@@ -12978,7 +13120,7 @@ void ResourcePaletteDialog::commitMenuChannel()
     return;
   }
   const QString value = menuChannelEdit_->text();
-  menuChannelSetter_(value);
+  applyIfChanged(menuChannelGetter_, menuChannelSetter_, value);
   committedTexts_[menuChannelEdit_] = value;
 }
 
@@ -12994,7 +13136,7 @@ void ResourcePaletteDialog::commitMessageButtonLabel()
     return;
   }
   const QString value = messageButtonLabelEdit_->text();
-  messageButtonLabelSetter_(value);
+  applyIfChanged(messageButtonLabelGetter_, messageButtonLabelSetter_, value);
   committedTexts_[messageButtonLabelEdit_] = value;
 }
 
@@ -13010,7 +13152,7 @@ void ResourcePaletteDialog::commitMessageButtonPressMessage()
     return;
   }
   const QString value = messageButtonPressEdit_->text();
-  messageButtonPressSetter_(value);
+  applyIfChanged(messageButtonPressGetter_, messageButtonPressSetter_, value);
   committedTexts_[messageButtonPressEdit_] = value;
 }
 
@@ -13026,7 +13168,7 @@ void ResourcePaletteDialog::commitMessageButtonReleaseMessage()
     return;
   }
   const QString value = messageButtonReleaseEdit_->text();
-  messageButtonReleaseSetter_(value);
+  applyIfChanged(messageButtonReleaseGetter_, messageButtonReleaseSetter_, value);
   committedTexts_[messageButtonReleaseEdit_] = value;
 }
 
@@ -13042,7 +13184,7 @@ void ResourcePaletteDialog::commitMessageButtonChannel()
     return;
   }
   const QString value = messageButtonChannelEdit_->text();
-  messageButtonChannelSetter_(value);
+  applyIfChanged(messageButtonChannelGetter_, messageButtonChannelSetter_, value);
   committedTexts_[messageButtonChannelEdit_] = value;
 }
 
@@ -13058,7 +13200,9 @@ void ResourcePaletteDialog::commitShellCommandLabel()
     return;
   }
   const QString value = shellCommandLabelEdit_->text();
-  shellCommandLabelSetter_(value);
+  if (!shellCommandLabelGetter_ || value != shellCommandLabelGetter_()) {
+    shellCommandLabelSetter_(value);
+  }
   committedTexts_[shellCommandLabelEdit_] = value;
 }
 
@@ -13078,7 +13222,10 @@ void ResourcePaletteDialog::commitShellCommandEntryLabel(int index)
     return;
   }
   const QString value = edit->text();
-  shellCommandEntryLabelSetters_[index](value);
+  if (!shellCommandEntryLabelGetters_[index]
+      || value != shellCommandEntryLabelGetters_[index]()) {
+    shellCommandEntryLabelSetters_[index](value);
+  }
   committedTexts_[edit] = value;
 }
 
@@ -13098,7 +13245,10 @@ void ResourcePaletteDialog::commitShellCommandEntryCommand(int index)
     return;
   }
   const QString value = edit->text();
-  shellCommandEntryCommandSetters_[index](value);
+  if (!shellCommandEntryCommandGetters_[index]
+      || value != shellCommandEntryCommandGetters_[index]()) {
+    shellCommandEntryCommandSetters_[index](value);
+  }
   committedTexts_[edit] = value;
 }
 
@@ -13118,7 +13268,10 @@ void ResourcePaletteDialog::commitShellCommandEntryArgs(int index)
     return;
   }
   const QString value = edit->text();
-  shellCommandEntryArgsSetters_[index](value);
+  if (!shellCommandEntryArgsGetters_[index]
+      || value != shellCommandEntryArgsGetters_[index]()) {
+    shellCommandEntryArgsSetters_[index](value);
+  }
   committedTexts_[edit] = value;
 }
 
@@ -13134,7 +13287,9 @@ void ResourcePaletteDialog::commitRelatedDisplayLabel()
     return;
   }
   const QString value = relatedDisplayLabelEdit_->text();
-  relatedDisplayLabelSetter_(value);
+  if (!relatedDisplayLabelGetter_ || value != relatedDisplayLabelGetter_()) {
+    relatedDisplayLabelSetter_(value);
+  }
   committedTexts_[relatedDisplayLabelEdit_] = value;
 }
 
@@ -13154,7 +13309,10 @@ void ResourcePaletteDialog::commitRelatedDisplayEntryLabel(int index)
     return;
   }
   const QString value = edit->text();
-  relatedDisplayEntryLabelSetters_[index](value);
+  if (!relatedDisplayEntryLabelGetters_[index]
+      || value != relatedDisplayEntryLabelGetters_[index]()) {
+    relatedDisplayEntryLabelSetters_[index](value);
+  }
   committedTexts_[edit] = value;
 }
 
@@ -13174,7 +13332,10 @@ void ResourcePaletteDialog::commitRelatedDisplayEntryName(int index)
     return;
   }
   const QString value = edit->text();
-  relatedDisplayEntryNameSetters_[index](value);
+  if (!relatedDisplayEntryNameGetters_[index]
+      || value != relatedDisplayEntryNameGetters_[index]()) {
+    relatedDisplayEntryNameSetters_[index](value);
+  }
   committedTexts_[edit] = value;
 }
 
@@ -13194,7 +13355,10 @@ void ResourcePaletteDialog::commitRelatedDisplayEntryArgs(int index)
     return;
   }
   const QString value = edit->text();
-  relatedDisplayEntryArgsSetters_[index](value);
+  if (!relatedDisplayEntryArgsGetters_[index]
+      || value != relatedDisplayEntryArgsGetters_[index]()) {
+    relatedDisplayEntryArgsSetters_[index](value);
+  }
   committedTexts_[edit] = value;
 }
 
@@ -13210,7 +13374,7 @@ void ResourcePaletteDialog::commitPvTableColumns()
     return;
   }
   const QString value = pvTableColumnsEdit_->text();
-  pvTableColumnsSetter_(value);
+  applyIfChanged(pvTableColumnsGetter_, pvTableColumnsSetter_, value);
   committedTexts_[pvTableColumnsEdit_] = value;
 }
 
@@ -13248,7 +13412,10 @@ void ResourcePaletteDialog::commitPvTableRowLabel(int index)
     return;
   }
   const QString value = pvTableRowLabelEdits_[index]->text();
-  pvTableRowLabelSetters_[index](value);
+  if (!pvTableRowLabelGetters_[index]
+      || value != pvTableRowLabelGetters_[index]()) {
+    pvTableRowLabelSetters_[index](value);
+  }
   committedTexts_[pvTableRowLabelEdits_[index]] = value;
 }
 
@@ -13264,7 +13431,10 @@ void ResourcePaletteDialog::commitPvTableRowChannel(int index)
     return;
   }
   const QString value = pvTableRowChannelEdits_[index]->text();
-  pvTableRowChannelSetters_[index](value);
+  if (!pvTableRowChannelGetters_[index]
+      || value != pvTableRowChannelGetters_[index]()) {
+    pvTableRowChannelSetters_[index](value);
+  }
   committedTexts_[pvTableRowChannelEdits_[index]] = value;
 }
 
@@ -13302,7 +13472,7 @@ void ResourcePaletteDialog::commitWaveTableChannel()
     return;
   }
   const QString value = waveTableChannelEdit_->text();
-  waveTableChannelSetter_(value);
+  applyIfChanged(waveTableChannelGetter_, waveTableChannelSetter_, value);
   const QString effective =
       waveTableChannelGetter_ ? waveTableChannelGetter_() : value;
   const QSignalBlocker blocker(waveTableChannelEdit_);
@@ -13327,7 +13497,7 @@ void ResourcePaletteDialog::commitWaveTableColumns()
     revertLineEdit(waveTableColumnsEdit_);
     return;
   }
-  waveTableColumnsSetter_(value);
+  applyIfChanged(waveTableColumnsGetter_, waveTableColumnsSetter_, value);
   const int effective =
       waveTableColumnsGetter_ ? std::max(1, waveTableColumnsGetter_())
                               : value;
@@ -13354,7 +13524,7 @@ void ResourcePaletteDialog::commitWaveTableMaxElements()
     revertLineEdit(waveTableMaxElementsEdit_);
     return;
   }
-  waveTableMaxElementsSetter_(value);
+  applyIfChanged(waveTableMaxElementsGetter_, waveTableMaxElementsSetter_, value);
   const int effective =
       waveTableMaxElementsGetter_
           ? std::max(0, waveTableMaxElementsGetter_())
@@ -13377,7 +13547,7 @@ void ResourcePaletteDialog::commitTextMonitorChannel()
     return;
   }
   const QString value = textMonitorChannelEdit_->text();
-  textMonitorChannelSetter_(value);
+  applyIfChanged(textMonitorChannelGetter_, textMonitorChannelSetter_, value);
   committedTexts_[textMonitorChannelEdit_] = value;
 }
 
@@ -13393,7 +13563,7 @@ void ResourcePaletteDialog::commitMeterChannel()
     return;
   }
   const QString value = meterChannelEdit_->text();
-  meterChannelSetter_(value);
+  applyIfChanged(meterChannelGetter_, meterChannelSetter_, value);
   committedTexts_[meterChannelEdit_] = value;
   updateMeterLimitsFromDialog();
 }
@@ -13410,7 +13580,7 @@ void ResourcePaletteDialog::commitBarChannel()
     return;
   }
   const QString value = barChannelEdit_->text();
-  barChannelSetter_(value);
+  applyIfChanged(barChannelGetter_, barChannelSetter_, value);
   committedTexts_[barChannelEdit_] = value;
   updateBarLimitsFromDialog();
 }
@@ -13427,7 +13597,7 @@ void ResourcePaletteDialog::commitThermometerChannel()
     return;
   }
   const QString value = thermometerChannelEdit_->text();
-  thermometerChannelSetter_(value);
+  applyIfChanged(thermometerChannelGetter_, thermometerChannelSetter_, value);
   committedTexts_[thermometerChannelEdit_] = value;
   updateThermometerChannelDependentControls();
   updateThermometerLimitsFromDialog();
@@ -13445,7 +13615,7 @@ void ResourcePaletteDialog::commitThermometerVisibilityCalc()
     return;
   }
   const QString value = thermometerVisibilityCalcEdit_->text();
-  thermometerVisibilityCalcSetter_(value);
+  applyIfChanged(thermometerVisibilityCalcGetter_, thermometerVisibilityCalcSetter_, value);
   committedTexts_[thermometerVisibilityCalcEdit_] = value;
 }
 
@@ -13466,7 +13636,7 @@ void ResourcePaletteDialog::commitThermometerVisibilityChannel(int index)
     return;
   }
   const QString value = edit->text();
-  thermometerVisibilityChannelSetters_[index](value);
+  applyIfChanged(thermometerVisibilityChannelGetters_[index], thermometerVisibilityChannelSetters_[index], value);
   committedTexts_[edit] = value;
   if (index == 0) {
     updateThermometerChannelDependentControls();
@@ -13485,7 +13655,7 @@ void ResourcePaletteDialog::commitScaleChannel()
     return;
   }
   const QString value = scaleChannelEdit_->text();
-  scaleChannelSetter_(value);
+  applyIfChanged(scaleChannelGetter_, scaleChannelSetter_, value);
   committedTexts_[scaleChannelEdit_] = value;
   updateScaleLimitsFromDialog();
 }
@@ -13502,7 +13672,7 @@ void ResourcePaletteDialog::commitStripChartTitle()
     return;
   }
   const QString value = stripTitleEdit_->text();
-  stripTitleSetter_(value);
+  applyIfChanged(stripTitleGetter_, stripTitleSetter_, value);
   committedTexts_[stripTitleEdit_] = value;
 }
 
@@ -13518,7 +13688,7 @@ void ResourcePaletteDialog::commitStripChartXLabel()
     return;
   }
   const QString value = stripXLabelEdit_->text();
-  stripXLabelSetter_(value);
+  applyIfChanged(stripXLabelGetter_, stripXLabelSetter_, value);
   committedTexts_[stripXLabelEdit_] = value;
 }
 
@@ -13534,7 +13704,7 @@ void ResourcePaletteDialog::commitStripChartYLabel()
     return;
   }
   const QString value = stripYLabelEdit_->text();
-  stripYLabelSetter_(value);
+  applyIfChanged(stripYLabelGetter_, stripYLabelSetter_, value);
   committedTexts_[stripYLabelEdit_] = value;
 }
 
@@ -13552,25 +13722,19 @@ void ResourcePaletteDialog::commitStripChartPeriod()
 
   bool ok = false;
   double value = stripPeriodEdit_->text().toDouble(&ok);
-  if (!ok || value <= 0.0) {
+  if (!ok || !std::isfinite(value) || value <= 0.0) {
     revertLineEdit(stripPeriodEdit_);
     return;
   }
 
-  stripPeriodSetter_(value);
+  if (!stripPeriodGetter_ || value != stripPeriodGetter_()) {
+    stripPeriodSetter_(value);
+  }
   double effective = stripPeriodGetter_ ? stripPeriodGetter_() : value;
   if (effective <= 0.0) {
     effective = kDefaultStripChartPeriod;
   }
-  QString text = QString::number(effective, 'f', 3);
-  if (text.contains(QLatin1Char('.'))) {
-    while (text.endsWith(QLatin1Char('0'))) {
-      text.chop(1);
-    }
-    if (text.endsWith(QLatin1Char('.'))) {
-      text.chop(1);
-    }
-  }
+  const QString text = QString::number(effective, 'g', 17);
   const QSignalBlocker blocker(stripPeriodEdit_);
   stripPeriodEdit_->setText(text);
   committedTexts_[stripPeriodEdit_] = stripPeriodEdit_->text();
@@ -13592,7 +13756,7 @@ void ResourcePaletteDialog::commitStripChartChannel(int index)
     return;
   }
   const QString value = edit->text();
-  stripPenChannelSetters_[index](value);
+  applyIfChanged(stripPenChannelGetters_[index], stripPenChannelSetters_[index], value);
   committedTexts_[edit] = value;
   updateStripChartPenLimitsFromDialog(index);
 }
@@ -13609,7 +13773,7 @@ void ResourcePaletteDialog::commitCartesianTitle()
     return;
   }
   const QString value = cartesianTitleEdit_->text();
-  cartesianTitleSetter_(value);
+  applyIfChanged(cartesianTitleGetter_, cartesianTitleSetter_, value);
   committedTexts_[cartesianTitleEdit_] = value;
 }
 
@@ -13625,7 +13789,7 @@ void ResourcePaletteDialog::commitCartesianXLabel()
     return;
   }
   const QString value = cartesianXLabelEdit_->text();
-  cartesianXLabelSetter_(value);
+  applyIfChanged(cartesianXLabelGetter_, cartesianXLabelSetter_, value);
   committedTexts_[cartesianXLabelEdit_] = value;
 }
 
@@ -13645,7 +13809,7 @@ void ResourcePaletteDialog::commitCartesianYLabel(int index)
     return;
   }
   const QString value = edit->text();
-  cartesianYLabelSetters_[index](value);
+  applyIfChanged(cartesianYLabelGetters_[index], cartesianYLabelSetters_[index], value);
   committedTexts_[edit] = value;
 }
 
@@ -13666,7 +13830,7 @@ void ResourcePaletteDialog::commitCartesianCount()
     revertLineEdit(cartesianCountEdit_);
     return;
   }
-  cartesianCountSetter_(value);
+  applyIfChanged(cartesianCountGetter_, cartesianCountSetter_, value);
   const int effectiveCount = cartesianCountGetter_ ? cartesianCountGetter_()
                                                    : value;
   const QSignalBlocker blocker(cartesianCountEdit_);
@@ -13687,7 +13851,7 @@ void ResourcePaletteDialog::commitCartesianTrigger()
     return;
   }
   const QString value = cartesianTriggerEdit_->text();
-  cartesianTriggerSetter_(value);
+  applyIfChanged(cartesianTriggerGetter_, cartesianTriggerSetter_, value);
   committedTexts_[cartesianTriggerEdit_] = value;
 }
 
@@ -13703,7 +13867,7 @@ void ResourcePaletteDialog::commitCartesianErase()
     return;
   }
   const QString value = cartesianEraseEdit_->text();
-  cartesianEraseSetter_(value);
+  applyIfChanged(cartesianEraseGetter_, cartesianEraseSetter_, value);
   committedTexts_[cartesianEraseEdit_] = value;
 }
 
@@ -13719,7 +13883,7 @@ void ResourcePaletteDialog::commitCartesianCountPv()
     return;
   }
   const QString value = cartesianCountPvEdit_->text();
-  cartesianCountPvSetter_(value);
+  applyIfChanged(cartesianCountPvGetter_, cartesianCountPvSetter_, value);
   committedTexts_[cartesianCountPvEdit_] = value;
 }
 
@@ -13739,7 +13903,7 @@ void ResourcePaletteDialog::commitCartesianTraceXChannel(int index)
     return;
   }
   const QString value = edit->text();
-  cartesianTraceXSetters_[index](value);
+  applyIfChanged(cartesianTraceXGetters_[index], cartesianTraceXSetters_[index], value);
   committedTexts_[edit] = value;
 }
 
@@ -13759,7 +13923,7 @@ void ResourcePaletteDialog::commitCartesianTraceYChannel(int index)
     return;
   }
   const QString value = edit->text();
-  cartesianTraceYSetters_[index](value);
+  applyIfChanged(cartesianTraceYGetters_[index], cartesianTraceYSetters_[index], value);
   committedTexts_[edit] = value;
 }
 
@@ -13775,7 +13939,7 @@ void ResourcePaletteDialog::commitByteChannel()
     return;
   }
   const QString value = byteChannelEdit_->text();
-  byteChannelSetter_(value);
+  applyIfChanged(byteChannelGetter_, byteChannelSetter_, value);
   committedTexts_[byteChannelEdit_] = value;
 }
 
@@ -13791,7 +13955,7 @@ void ResourcePaletteDialog::commitLedChannel()
     return;
   }
   const QString value = ledChannelEdit_->text();
-  ledChannelSetter_(value);
+  applyIfChanged(ledChannelGetter_, ledChannelSetter_, value);
   committedTexts_[ledChannelEdit_] = value;
   updateLedMonitorChannelDependentControls();
 }
@@ -13808,7 +13972,7 @@ void ResourcePaletteDialog::commitLedVisibilityCalc()
     return;
   }
   const QString value = ledVisibilityCalcEdit_->text();
-  ledVisibilityCalcSetter_(value);
+  applyIfChanged(ledVisibilityCalcGetter_, ledVisibilityCalcSetter_, value);
   committedTexts_[ledVisibilityCalcEdit_] = value;
 }
 
@@ -13829,7 +13993,8 @@ void ResourcePaletteDialog::commitLedVisibilityChannel(int index)
     return;
   }
   const QString value = edit->text();
-  ledVisibilityChannelSetters_[static_cast<std::size_t>(index)](value);
+  applyIfChanged(ledVisibilityChannelGetters_[static_cast<std::size_t>(index)],
+      ledVisibilityChannelSetters_[static_cast<std::size_t>(index)], value);
   committedTexts_[edit] = value;
   if (index == 0) {
     updateLedMonitorChannelDependentControls();
@@ -13853,7 +14018,7 @@ void ResourcePaletteDialog::commitLedStateCount(int value)
     return;
   }
   value = std::clamp(value, 1, kLedStateCount);
-  ledStateCountSetter_(value);
+  applyIfChanged(ledStateCountGetter_, ledStateCountSetter_, value);
   if (ledStateCountGetter_) {
     const QSignalBlocker blocker(ledStateCountSpin_);
     ledStateCountSpin_->setValue(std::clamp(ledStateCountGetter_(), 1,
@@ -13874,7 +14039,7 @@ void ResourcePaletteDialog::commitExpressionChannelVariable()
     return;
   }
   const QString value = expressionChannelVariableEdit_->text();
-  expressionChannelVariableSetter_(value);
+  applyIfChanged(expressionChannelVariableGetter_, expressionChannelVariableSetter_, value);
   committedTexts_[expressionChannelVariableEdit_] = value;
 }
 
@@ -13890,7 +14055,7 @@ void ResourcePaletteDialog::commitExpressionChannelCalc()
     return;
   }
   const QString value = expressionChannelCalcEdit_->text();
-  expressionChannelCalcSetter_(value);
+  applyIfChanged(expressionChannelCalcGetter_, expressionChannelCalcSetter_, value);
   committedTexts_[expressionChannelCalcEdit_] = value;
 }
 
@@ -13911,7 +14076,7 @@ void ResourcePaletteDialog::commitExpressionChannelChannel(int index)
     return;
   }
   const QString value = edit->text();
-  expressionChannelChannelSetters_[index](value);
+  applyIfChanged(expressionChannelChannelGetters_[index], expressionChannelChannelSetters_[index], value);
   committedTexts_[edit] = value;
 }
 
@@ -13977,7 +14142,7 @@ void ResourcePaletteDialog::handleCartesianEraseOldestChanged(int index)
     return;
   }
   const bool value = (index != 0);
-  cartesianEraseOldestSetter_(value);
+  applyIfChanged(cartesianEraseOldestGetter_, cartesianEraseOldestSetter_, value);
   if (cartesianEraseOldestGetter_) {
     const QSignalBlocker blocker(cartesianEraseOldestCombo_);
     cartesianEraseOldestCombo_->setCurrentIndex(
@@ -14147,7 +14312,7 @@ void ResourcePaletteDialog::commitByteStartBit(int value)
     return;
   }
   value = std::clamp(value, 0, 31);
-  byteStartBitSetter_(value);
+  applyIfChanged(byteStartBitGetter_, byteStartBitSetter_, value);
   if (byteStartBitGetter_) {
     const QSignalBlocker blocker(byteStartBitSpin_);
     int current = std::clamp(byteStartBitGetter_(), 0, 31);
@@ -14171,7 +14336,7 @@ void ResourcePaletteDialog::commitByteEndBit(int value)
     return;
   }
   value = std::clamp(value, 0, 31);
-  byteEndBitSetter_(value);
+  applyIfChanged(byteEndBitGetter_, byteEndBitSetter_, value);
   if (byteEndBitGetter_) {
     const QSignalBlocker blocker(byteEndBitSpin_);
     int current = std::clamp(byteEndBitGetter_(), 0, 31);
@@ -14191,7 +14356,7 @@ void ResourcePaletteDialog::updateSliderIncrementEdit()
     sliderIncrementEdit_->clear();
   } else {
     const double increment = sliderIncrementGetter_();
-    sliderIncrementEdit_->setText(QString::number(increment, 'g', 6));
+    sliderIncrementEdit_->setText(QString::number(increment, 'g', 17));
   }
   committedTexts_[sliderIncrementEdit_] = sliderIncrementEdit_->text();
 }
@@ -14208,7 +14373,7 @@ void ResourcePaletteDialog::updateWheelSwitchPrecisionEdit()
     wheelSwitchPrecisionEdit_->clear();
   } else {
     const double precision = wheelSwitchPrecisionGetter_();
-    wheelSwitchPrecisionEdit_->setText(QString::number(precision, 'g', 6));
+    wheelSwitchPrecisionEdit_->setText(QString::number(precision, 'g', 17));
   }
   committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
 }
@@ -14454,7 +14619,9 @@ void ResourcePaletteDialog::commitRectangleLineWidth()
     return;
   }
   value = std::max(1, value);
-  rectangleLineWidthSetter_(value);
+  if (!rectangleLineWidthGetter_ || value != std::max(1, rectangleLineWidthGetter_())) {
+    rectangleLineWidthSetter_(value);
+  }
   const int effectiveWidth = rectangleLineWidthGetter_
       ? rectangleLineWidthGetter_()
       : value;
@@ -14476,7 +14643,7 @@ void ResourcePaletteDialog::commitRectangleVisibilityCalc()
     return;
   }
   const QString value = rectangleVisibilityCalcEdit_->text();
-  rectangleVisibilityCalcSetter_(value);
+  applyIfChanged(rectangleVisibilityCalcGetter_, rectangleVisibilityCalcSetter_, value);
   committedTexts_[rectangleVisibilityCalcEdit_] = value;
 }
 
@@ -14496,7 +14663,7 @@ void ResourcePaletteDialog::commitRectangleChannel(int index)
     return;
   }
   const QString value = edit->text();
-  rectangleChannelSetters_[index](value);
+  applyIfChanged(rectangleChannelGetters_[index], rectangleChannelSetters_[index], value);
   committedTexts_[edit] = value;
   if (index == 0) {
     updateRectangleChannelDependentControls();
@@ -14515,7 +14682,7 @@ void ResourcePaletteDialog::commitCompositeFile()
     return;
   }
   const QString value = compositeFileEdit_->text();
-  compositeFileSetter_(value);
+  applyIfChanged(compositeFileGetter_, compositeFileSetter_, value);
   committedTexts_[compositeFileEdit_] = value;
 }
 
@@ -14531,7 +14698,7 @@ void ResourcePaletteDialog::commitCompositeVisibilityCalc()
     return;
   }
   const QString value = compositeVisibilityCalcEdit_->text();
-  compositeVisibilityCalcSetter_(value);
+  applyIfChanged(compositeVisibilityCalcGetter_, compositeVisibilityCalcSetter_, value);
   committedTexts_[compositeVisibilityCalcEdit_] = value;
 }
 
@@ -14551,7 +14718,7 @@ void ResourcePaletteDialog::commitCompositeChannel(int index)
     return;
   }
   const QString value = edit->text();
-  compositeChannelSetters_[index](value);
+  applyIfChanged(compositeChannelGetters_[index], compositeChannelSetters_[index], value);
   committedTexts_[edit] = value;
   if (index == 0) {
     updateCompositeChannelDependentControls();
@@ -14570,7 +14737,7 @@ void ResourcePaletteDialog::commitImageName()
     return;
   }
   const QString value = imageNameEdit_->text();
-  imageNameSetter_(value);
+  applyIfChanged(imageNameGetter_, imageNameSetter_, value);
   committedTexts_[imageNameEdit_] = value;
 }
 
@@ -14586,7 +14753,7 @@ void ResourcePaletteDialog::commitImageCalc()
     return;
   }
   const QString value = imageCalcEdit_->text();
-  imageCalcSetter_(value);
+  applyIfChanged(imageCalcGetter_, imageCalcSetter_, value);
   committedTexts_[imageCalcEdit_] = value;
 }
 
@@ -14602,7 +14769,7 @@ void ResourcePaletteDialog::commitImageVisibilityCalc()
     return;
   }
   const QString value = imageVisibilityCalcEdit_->text();
-  imageVisibilityCalcSetter_(value);
+  applyIfChanged(imageVisibilityCalcGetter_, imageVisibilityCalcSetter_, value);
   committedTexts_[imageVisibilityCalcEdit_] = value;
 }
 
@@ -14618,7 +14785,7 @@ void ResourcePaletteDialog::commitHeatmapDataChannel()
     return;
   }
   const QString value = heatmapDataChannelEdit_->text();
-  heatmapDataChannelSetter_(value);
+  applyIfChanged(heatmapDataChannelGetter_, heatmapDataChannelSetter_, value);
   committedTexts_[heatmapDataChannelEdit_] = value;
 }
 
@@ -14634,7 +14801,7 @@ void ResourcePaletteDialog::commitHeatmapTitle()
     return;
   }
   const QString value = heatmapTitleEdit_->text();
-  heatmapTitleSetter_(value);
+  applyIfChanged(heatmapTitleGetter_, heatmapTitleSetter_, value);
   committedTexts_[heatmapTitleEdit_] = value;
 }
 
@@ -14655,7 +14822,7 @@ void ResourcePaletteDialog::commitHeatmapXDimension()
     revertLineEdit(heatmapXDimEdit_);
     return;
   }
-  heatmapXDimensionSetter_(value);
+  applyIfChanged(heatmapXDimensionGetter_, heatmapXDimensionSetter_, value);
   committedTexts_[heatmapXDimEdit_] = heatmapXDimEdit_->text();
 }
 
@@ -14676,7 +14843,7 @@ void ResourcePaletteDialog::commitHeatmapYDimension()
     revertLineEdit(heatmapYDimEdit_);
     return;
   }
-  heatmapYDimensionSetter_(value);
+  applyIfChanged(heatmapYDimensionGetter_, heatmapYDimensionSetter_, value);
   committedTexts_[heatmapYDimEdit_] = heatmapYDimEdit_->text();
 }
 
@@ -14692,7 +14859,7 @@ void ResourcePaletteDialog::commitHeatmapXDimensionChannel()
     return;
   }
   const QString value = heatmapXDimChannelEdit_->text();
-  heatmapXDimChannelSetter_(value);
+  applyIfChanged(heatmapXDimChannelGetter_, heatmapXDimChannelSetter_, value);
   committedTexts_[heatmapXDimChannelEdit_] = value;
 }
 
@@ -14708,7 +14875,7 @@ void ResourcePaletteDialog::commitHeatmapYDimensionChannel()
     return;
   }
   const QString value = heatmapYDimChannelEdit_->text();
-  heatmapYDimChannelSetter_(value);
+  applyIfChanged(heatmapYDimChannelGetter_, heatmapYDimChannelSetter_, value);
   committedTexts_[heatmapYDimChannelEdit_] = value;
 }
 
@@ -14729,7 +14896,9 @@ void ResourcePaletteDialog::commitHeatmapRangeMinimum()
     revertLineEdit(heatmapRangeMinEdit_);
     return;
   }
-  heatmapRangeMinSetter_(value);
+  if (!heatmapRangeMinGetter_ || value != heatmapRangeMinGetter_()) {
+    heatmapRangeMinSetter_(value);
+  }
   committedTexts_[heatmapRangeMinEdit_] = heatmapRangeMinEdit_->text();
 }
 
@@ -14750,7 +14919,9 @@ void ResourcePaletteDialog::commitHeatmapRangeMaximum()
     revertLineEdit(heatmapRangeMaxEdit_);
     return;
   }
-  heatmapRangeMaxSetter_(value);
+  if (!heatmapRangeMaxGetter_ || value != heatmapRangeMaxGetter_()) {
+    heatmapRangeMaxSetter_(value);
+  }
   committedTexts_[heatmapRangeMaxEdit_] = heatmapRangeMaxEdit_->text();
 }
 
@@ -14766,7 +14937,7 @@ void ResourcePaletteDialog::commitWaterfallTitle()
     return;
   }
   const QString value = waterfallTitleEdit_->text();
-  waterfallTitleSetter_(value);
+  applyIfChanged(waterfallTitleGetter_, waterfallTitleSetter_, value);
   committedTexts_[waterfallTitleEdit_] = value;
 }
 
@@ -14782,7 +14953,7 @@ void ResourcePaletteDialog::commitWaterfallXLabel()
     return;
   }
   const QString value = waterfallXLabelEdit_->text();
-  waterfallXLabelSetter_(value);
+  applyIfChanged(waterfallXLabelGetter_, waterfallXLabelSetter_, value);
   committedTexts_[waterfallXLabelEdit_] = value;
 }
 
@@ -14798,7 +14969,7 @@ void ResourcePaletteDialog::commitWaterfallYLabel()
     return;
   }
   const QString value = waterfallYLabelEdit_->text();
-  waterfallYLabelSetter_(value);
+  applyIfChanged(waterfallYLabelGetter_, waterfallYLabelSetter_, value);
   committedTexts_[waterfallYLabelEdit_] = value;
 }
 
@@ -14814,7 +14985,7 @@ void ResourcePaletteDialog::commitWaterfallDataChannel()
     return;
   }
   const QString value = waterfallDataChannelEdit_->text();
-  waterfallDataChannelSetter_(value);
+  applyIfChanged(waterfallDataChannelGetter_, waterfallDataChannelSetter_, value);
   committedTexts_[waterfallDataChannelEdit_] = value;
 }
 
@@ -14830,7 +15001,7 @@ void ResourcePaletteDialog::commitWaterfallCountChannel()
     return;
   }
   const QString value = waterfallCountChannelEdit_->text();
-  waterfallCountChannelSetter_(value);
+  applyIfChanged(waterfallCountChannelGetter_, waterfallCountChannelSetter_, value);
   committedTexts_[waterfallCountChannelEdit_] = value;
 }
 
@@ -14846,7 +15017,7 @@ void ResourcePaletteDialog::commitWaterfallTriggerChannel()
     return;
   }
   const QString value = waterfallTriggerChannelEdit_->text();
-  waterfallTriggerChannelSetter_(value);
+  applyIfChanged(waterfallTriggerChannelGetter_, waterfallTriggerChannelSetter_, value);
   committedTexts_[waterfallTriggerChannelEdit_] = value;
 }
 
@@ -14862,7 +15033,7 @@ void ResourcePaletteDialog::commitWaterfallEraseChannel()
     return;
   }
   const QString value = waterfallEraseChannelEdit_->text();
-  waterfallEraseChannelSetter_(value);
+  applyIfChanged(waterfallEraseChannelGetter_, waterfallEraseChannelSetter_, value);
   committedTexts_[waterfallEraseChannelEdit_] = value;
   updateWaterfallDependentControls();
 }
@@ -14884,7 +15055,7 @@ void ResourcePaletteDialog::commitWaterfallHistoryCount()
     revertLineEdit(waterfallHistoryEdit_);
     return;
   }
-  waterfallHistoryCountSetter_(value);
+  applyIfChanged(waterfallHistoryCountGetter_, waterfallHistoryCountSetter_, value);
   const int effective = waterfallHistoryCountGetter_
       ? std::clamp(waterfallHistoryCountGetter_(), 1, kWaterfallMaxHistory)
       : value;
@@ -14910,7 +15081,12 @@ void ResourcePaletteDialog::commitWaterfallIntensityMinimum()
     revertLineEdit(waterfallIntensityMinEdit_);
     return;
   }
-  waterfallIntensityMinSetter_(value);
+  if (!waterfallIntensityMinGetter_ || value != waterfallIntensityMinGetter_()) {
+    waterfallIntensityMinSetter_(value);
+  }
+  const double effective = waterfallIntensityMinGetter_
+      ? waterfallIntensityMinGetter_() : value;
+  waterfallIntensityMinEdit_->setText(QString::number(effective, 'g', 17));
   committedTexts_[waterfallIntensityMinEdit_] =
       waterfallIntensityMinEdit_->text();
 }
@@ -14932,7 +15108,12 @@ void ResourcePaletteDialog::commitWaterfallIntensityMaximum()
     revertLineEdit(waterfallIntensityMaxEdit_);
     return;
   }
-  waterfallIntensityMaxSetter_(value);
+  if (!waterfallIntensityMaxGetter_ || value != waterfallIntensityMaxGetter_()) {
+    waterfallIntensityMaxSetter_(value);
+  }
+  const double effective = waterfallIntensityMaxGetter_
+      ? waterfallIntensityMaxGetter_() : value;
+  waterfallIntensityMaxEdit_->setText(QString::number(effective, 'g', 17));
   committedTexts_[waterfallIntensityMaxEdit_] =
       waterfallIntensityMaxEdit_->text();
 }
@@ -14954,7 +15135,12 @@ void ResourcePaletteDialog::commitWaterfallSamplePeriod()
     revertLineEdit(waterfallSamplePeriodEdit_);
     return;
   }
-  waterfallSamplePeriodSetter_(value);
+  if (!waterfallSamplePeriodGetter_ || value != waterfallSamplePeriodGetter_()) {
+    waterfallSamplePeriodSetter_(value);
+  }
+  const double effective = waterfallSamplePeriodGetter_
+      ? waterfallSamplePeriodGetter_() : value;
+  waterfallSamplePeriodEdit_->setText(QString::number(effective, 'g', 17));
   committedTexts_[waterfallSamplePeriodEdit_] =
       waterfallSamplePeriodEdit_->text();
 }
@@ -14975,7 +15161,7 @@ void ResourcePaletteDialog::commitImageChannel(int index)
     return;
   }
   const QString value = edit->text();
-  imageChannelSetters_[index](value);
+  applyIfChanged(imageChannelGetters_[index], imageChannelSetters_[index], value);
   committedTexts_[edit] = value;
   if (index == 0) {
     updateImageChannelDependentControls();
@@ -15000,7 +15186,9 @@ void ResourcePaletteDialog::commitLineLineWidth()
     return;
   }
   value = std::max(1, value);
-  lineLineWidthSetter_(value);
+  if (!lineLineWidthGetter_ || value != std::max(1, lineLineWidthGetter_())) {
+    lineLineWidthSetter_(value);
+  }
   const int effectiveWidth = lineLineWidthGetter_ ? lineLineWidthGetter_()
                                                   : value;
   const int clampedWidth = std::max(1, effectiveWidth);
@@ -15021,7 +15209,7 @@ void ResourcePaletteDialog::commitLineVisibilityCalc()
     return;
   }
   const QString value = lineVisibilityCalcEdit_->text();
-  lineVisibilityCalcSetter_(value);
+  applyIfChanged(lineVisibilityCalcGetter_, lineVisibilityCalcSetter_, value);
   committedTexts_[lineVisibilityCalcEdit_] = value;
 }
 
@@ -15041,7 +15229,7 @@ void ResourcePaletteDialog::commitLineChannel(int index)
     return;
   }
   const QString value = edit->text();
-  lineChannelSetters_[index](value);
+  applyIfChanged(lineChannelGetters_[index], lineChannelSetters_[index], value);
   committedTexts_[edit] = value;
   if (index == 0) {
     updateLineChannelDependentControls();
@@ -16045,6 +16233,23 @@ void ResourcePaletteDialog::moveToTopRight(const QRect &area, const QSize &dialo
 
 void ResourcePaletteDialog::resizeToFitContents(const QRect &available)
 {
+  /* All visible sections share one label column, including geometry and
+   * extension properties. Hidden sections must not dictate its width. */
+  QSet<QGridLayout *> grids;
+  int labelWidth = 0;
+  for (QLabel *label : fieldLabels_) {
+    auto *grid = qobject_cast<QGridLayout *>(label->parentWidget()->layout());
+    if (grid) {
+      grids.insert(grid);
+      grid->setColumnMinimumWidth(0, 0);
+    }
+    if (label->isVisibleTo(entriesWidget_)) {
+      labelWidth = std::max(labelWidth, label->sizeHint().width());
+    }
+  }
+  for (QGridLayout *grid : grids) {
+    grid->setColumnMinimumWidth(0, labelWidth);
+  }
   if (entriesWidget_) {
     entriesWidget_->adjustSize();
     if (QLayout *entriesLayout = entriesWidget_->layout()) {
@@ -16059,24 +16264,41 @@ void ResourcePaletteDialog::resizeToFitContents(const QRect &available)
   if (scrollArea_ && entriesWidget_) {
     const QSize contentHint = entriesWidget_->sizeHint();
     const QSize scrollHint = scrollArea_->sizeHint();
-    const int widthDelta = std::max(0, contentHint.width() - scrollHint.width());
-    const int heightDelta = std::max(0, contentHint.height() - scrollHint.height());
+    const int widthDelta = contentHint.width() - scrollHint.width();
+    const int heightDelta = contentHint.height() - scrollHint.height();
     target.rwidth() += widthDelta;
     target.rheight() += heightDelta;
   }
   target.rwidth() += 48;
   target.rheight() += 48;
+  if (userPaletteSize_.isValid()) {
+    target = target.expandedTo(userPaletteSize_);
+  }
   if (!available.isNull()) {
-    target.setWidth(std::min(target.width(), available.width()));
-    target.setHeight(std::min(target.height(), available.height()));
+    // The screen bounds include the native window frame. Requesting that full
+    // size for the client area lets the window manager clamp it afterward,
+    // which would otherwise look like a deliberate user resize.
+    const QSize frameSize = frameGeometry().size() - size();
+    target.setWidth(std::min(target.width(),
+        std::max(1, available.width() - frameSize.width())));
+    target.setHeight(std::min(target.height(),
+        std::max(1, available.height() - frameSize.height())));
   }
 
-  QSize newSize = size();
-  newSize.setWidth(std::max(newSize.width(), target.width()));
-  newSize.setHeight(std::max(newSize.height(), target.height()));
-  resize(newSize);
+  automaticPaletteSize_ = target;
+  const QScopedValueRollback<bool> fitting(fittingPalette_, true);
+  resize(target);
 }
 
+
+void ResourcePaletteDialog::resizeEvent(QResizeEvent *event)
+{
+  QDialog::resizeEvent(event);
+  if (isVisible() && !fittingPalette_ && automaticPaletteSize_.isValid()
+      && event->size() != automaticPaletteSize_) {
+    userPaletteSize_ = event->size();
+  }
+}
 
 
 void ResourcePaletteDialog::scheduleDeferredResize(QWidget *reference)
@@ -16153,7 +16375,8 @@ void ResourcePaletteDialog::commitGeometryField(GeometryField field)
     return;
   }
 
-  QRect geometry = geometryGetter_ ? geometryGetter_() : lastCommittedGeometry_;
+  const QRect currentGeometry = geometryGetter_ ? geometryGetter_() : lastCommittedGeometry_;
+  QRect geometry = currentGeometry;
   switch (field) {
   case GeometryField::kX:
     geometry.moveLeft(value);
@@ -16174,7 +16397,9 @@ void ResourcePaletteDialog::commitGeometryField(GeometryField field)
     return;
   }
 
-  geometrySetter_(geometry);
+  if (geometry != currentGeometry) {
+    geometrySetter_(geometry);
+  }
   const QRect effectiveGeometry = geometryGetter_ ? geometryGetter_() : geometry;
   lastCommittedGeometry_ = effectiveGeometry;
   updateGeometryEdits(effectiveGeometry);
@@ -16530,7 +16755,7 @@ void ResourcePaletteDialog::commitGridSpacing()
   }
 
   value = std::max(kMinimumGridSpacing, value);
-  gridSpacingSetter_(value);
+  applyIfChanged(gridSpacingGetter_, gridSpacingSetter_, value);
 
   const int effectiveSpacing = gridSpacingGetter_ ? gridSpacingGetter_()
                                                  : value;

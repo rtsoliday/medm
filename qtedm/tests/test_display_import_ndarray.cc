@@ -4,8 +4,10 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFontMetrics>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPainter>
 #include <QTemporaryDir>
 #include <QSemaphore>
 #include <QRunnable>
@@ -133,6 +135,8 @@ private slots:
   void decoderRejectsUnsafeOrMalformedFrames();
   void decoderMapsTransformedPixelCoordinates();
   void imageElementTracksDisconnectsAndDimensionChanges();
+  void imageStatusRendersCompleteText_data();
+  void imageStatusRendersCompleteText();
   void asynchronousDecodePublishesAFrame();
   void newestFrameQueueDropsObsoletePendingFrames();
   void rejectedFramesDoNotRetainPixels();
@@ -716,6 +720,58 @@ void TestDisplayImportNdArray::imageElementTracksDisconnectsAndDimensionChanges(
     }
   }
   QVERIFY(sawDisconnectIndicator);
+}
+
+void TestDisplayImportNdArray::imageStatusRendersCompleteText_data()
+{
+  QTest::addColumn<int>("pixelSize");
+  QTest::newRow("small") << 16;
+  QTest::newRow("medium") << 26;
+  QTest::newRow("large") << 40;
+}
+
+void TestDisplayImportNdArray::imageStatusRendersCompleteText()
+{
+  QFETCH(int, pixelSize);
+  NtNdArrayImageElement element;
+  element.resize(680, 350);
+  QFont font = element.font();
+  font.setPixelSize(pixelSize);
+  element.setFont(font);
+  element.setStreamStatus(false, 0, QString());
+
+  QImage actual(element.size(), QImage::Format_ARGB32);
+  actual.fill(Qt::black);
+  element.render(&actual);
+  QImage reference(actual.size(), actual.format());
+  reference.fill(Qt::black);
+  QPainter painter(&reference);
+  painter.setFont(font);
+  painter.setPen(Qt::white);
+  painter.drawText(QPoint(20, 20 + QFontMetrics(font).ascent()),
+      QStringLiteral("DISCONNECTED"));
+  painter.end();
+
+  int actualPixels = 0;
+  int referencePixels = 0;
+  int firstTextRow = actual.height();
+  for (int y = 0; y < actual.height(); ++y) {
+    for (int x = 0; x < actual.width(); ++x) {
+      if (actual.pixelColor(x, y) == QColor(Qt::white)) {
+        ++actualPixels;
+        firstTextRow = std::min(firstTextRow, y);
+      }
+      if (reference.pixelColor(x, y) == QColor(Qt::white)) {
+        ++referencePixels;
+      }
+    }
+  }
+  QVERIFY(referencePixels > 0);
+  QVERIFY2(firstTextRow >= 5, "Status glyphs must stay below the image's top inset");
+  /* Rect-aligned text may use a fractional baseline; allow antialiasing
+   * differences while rejecting the lost glyph rows from top clipping. */
+  QVERIFY2(actualPixels * 100 >= referencePixels * 95,
+      "Status text must retain the complete glyphs");
 }
 
 void TestDisplayImportNdArray::asynchronousDecodePublishesAFrame()

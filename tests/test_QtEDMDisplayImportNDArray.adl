@@ -91,12 +91,12 @@ text {
     x=20
     y=10
     width=680
-    height=30
+    height=20
   }
   "basic attribute" {
     clr=14
   }
-  textix="QtEDM Display Import and Raw PVA NTNDArray"
+  textix="QtEDM Display Import and PVA NTNDArray"
   align="horiz. centered"
 }
 qtedm_ndarray_image {
@@ -124,11 +124,34 @@ text {
     x=20
     y=410
     width=680
-    height=45
+    height=14
   }
   "basic attribute" {
     clr=14
   }
-  textix="Expected: explicit disconnect state. With an areaDetector PVA source, verify newest-frame decoding, zoom/pan, ID/timestamp, and dropped-frame counter."
-  align="horiz. centered"
+  textix="Expected: a clear disconnect state."
+}
+text {
+  object {
+    x=20
+    y=430
+    width=680
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="With a PVA source, check newest-frame decoding and zoom/pan."
+}
+text {
+  object {
+    x=20
+    y=450
+    width=680
+    height=14
+  }
+  "basic attribute" {
+    clr=14
+  }
+  textix="Verify frame ID, timestamp, and the dropped-frame counter."
 }

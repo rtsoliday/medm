@@ -254,9 +254,10 @@ void NtNdArrayImageElement::paintEvent(QPaintEvent *event)
   const QFontMetrics metrics(font());
   const QString statusText = status.join(QStringLiteral("  "));
   if (!statusText.isEmpty()) {
-    const QRect textRect = metrics.boundingRect(statusText)
-        .adjusted(-kOverlayMargin, -2, kOverlayMargin, 2)
-        .translated(5, 5);
+    QRect textRect = metrics.boundingRect(statusText)
+        .adjusted(-kOverlayMargin, -2, kOverlayMargin, 2);
+    /* Font bounds extend above the baseline; anchor the padded rectangle. */
+    textRect.moveTopLeft(QPoint(kOverlayMargin, kOverlayMargin));
     painter.fillRect(textRect, QColor(0, 0, 0, 170));
     painter.setPen(Qt::white);
     painter.drawText(textRect.adjusted(kOverlayMargin, 0,

@@ -92,6 +92,7 @@ public:
   void setReadbackSeverity(short severity);
   void setReadbackValue(double value, const QString &text);
   void setRuntimeNotice(const QString &notice);
+  void rejectWrite(const QString &notice);
   void acceptAppliedValue(double value, const QString &text);
   void clearRuntimeState();
 

@@ -517,6 +517,9 @@ set_scale_monitor_test_pvs() {
 # tests/fixtures/visual/led-monitor.adl uses only the process-local expression
 # channels led:one and led:two; it needs no IOC PV initialization or additions.
 set_led_monitor_test_pvs() {
+  # Plugin-example caption sizing leaves led:test:binary_live unchanged.
+  # The visual LED fixture changes caption contrast only; its local expression
+  # channels and LED state colors need no IOC initialization changes.
   local prefix="$1"
   local -a led_init_values=(
     # pv value lopr hopr prec
@@ -1740,6 +1743,7 @@ set_text_fonts_test_pvs() {
 }
 
 set_text_area_test_pvs() {
+  # Caption contrast changes in test_TextArea.adl leave all PVs unchanged.
   local prefix="$1"
   local main_text=""
   local readonly_text=""
@@ -2091,6 +2095,7 @@ set_qtedm_safety_controls_test_pvs() {
   # initialized by set_led_monitor_test_pvs and
   # set_setpoint_control_test_pvs.  Keeping one producer setup avoids the two
   # harnesses racing to assign different limits or initial values.
+  # The two-line safety checklist is a layout change; its PVs are unchanged.
   echo "QtEDM safety-control PVs initialized by the LED and setpoint harnesses."
 }
 
@@ -2111,6 +2116,7 @@ set_qtedm_archive_snapshot_test_pvs() {
 }
 
 set_qtedm_ndarray_test_pvs() {
+  # Heading/instruction layout changes leave the disconnected endpoint unchanged.
   local _prefix="$1"
 
   # The fixture intentionally uses a disconnected structured PVA endpoint.
@@ -2125,10 +2131,12 @@ set_qtedm_plugins_rules_test_pvs() {
   # tests/test_QtEDMPluginsPropertyRules.adl reuses the deterministic
   # led:test:binary_live channel initialized by set_led_monitor_test_pvs.
   # The rule runtime is monitor-only and must never issue a write.
+  # The compact headings and instructions do not add any fixture channels.
   echo "QtEDM property-rule input initialized by the LED monitor harness."
 }
 
 set_qtedm_visual_coverage_test_pvs() {
+  # Graphics/composite caption layout changes leave all fixture PVs unchanged.
   local _prefix="$1"
 
   # The focused visual fixtures intentionally reuse values initialized by the

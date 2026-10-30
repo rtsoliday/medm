@@ -476,7 +476,6 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   // Search from largest to smallest font, return first that fits
   const int fontLimit = messageButtonPixelLimit(height());
   const QFont labelFont = medmMessageButtonFont(fontLimit);
-  painter.setFont(labelFont);
 
   QRect inner = content.adjusted(2, 2, -2, -2);
 
@@ -516,6 +515,9 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     }
   }
   if (!labelText.isEmpty()) {
+    painter.setFont(medmTextMonitorFontWithWidthCheck(labelFont, labelText,
+        textRect.width()));
+    painter.setClipRect(textRect, Qt::IntersectClip);
     painter.setPen(fg);
     Qt::Alignment align = Qt::AlignCenter;
     if (visual_ == RelatedDisplayVisual::kMenu && activeLabels > 1) {
@@ -557,7 +559,6 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   // Search from largest to smallest font, return first that fits
   const int fontLimit = relatedDisplayPixelLimit(visual_, height(), displayCount);
   const QFont labelFont = medmMessageButtonFont(fontLimit);
-  painter.setFont(labelFont);
 
   int index = 0;
   for (int row = 0; row < rows; ++row) {
@@ -608,8 +609,17 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
         text = QStringLiteral("Display %1").arg(index + 1);
       }
 
+      /* Keep the height-selected legacy font when it fits, and shrink long
+       * labels to the actual cell width. Clip even the smallest fallback font
+       * to this cell so it cannot paint across a neighbor's border. */
+      const int iconWidth = singleButton && showIcon
+          ? std::min({interior.height(), interior.width(), 24}) : 0;
+      painter.setFont(medmTextMonitorFontWithWidthCheck(labelFont, text,
+          interior.width() - iconWidth));
+      painter.save();
+      painter.setClipRect(interior, Qt::IntersectClip);
       if (singleButton && showIcon) {
-        const int iconSize = std::min({interior.height(), interior.width(), 24});
+        const int iconSize = iconWidth;
         const QFontMetrics metrics(painter.font());
         const int textWidth = metrics.horizontalAdvance(text);
         const int totalWidth = std::min(interior.width(), iconSize + textWidth);
@@ -632,6 +642,7 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
         painter.drawText(interior,
             Qt::AlignCenter | Qt::TextIncludeTrailingSpaces, text);
       }
+      painter.restore();
       ++index;
     }
   }

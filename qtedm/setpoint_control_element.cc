@@ -15,6 +15,7 @@
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QToolButton>
+#include <QToolTip>
 
 #include "cursor_utils.h"
 #include "pv_name_utils.h"
@@ -147,6 +148,7 @@ SetpointControlElement::SetpointControlElement(QWidget *parent)
         dirty_ = true;
         pending_ = false;
         runtimeNotice_.clear();
+        QToolTip::hideText();
         updateStatusText();
       });
 
@@ -398,7 +400,7 @@ void SetpointControlElement::setTolerance(double tolerance)
   const double sanitized = std::isfinite(tolerance)
       ? std::max(0.0, tolerance)
       : 0.0;
-  if (std::abs(tolerance_ - sanitized) < 1e-12) {
+  if (tolerance_ == sanitized) {
     return;
   }
   tolerance_ = sanitized;
@@ -625,6 +627,21 @@ void SetpointControlElement::setRuntimeNotice(const QString &notice)
   updateStatusText();
 }
 
+void SetpointControlElement::rejectWrite(const QString &notice)
+{
+  /* A rejected edit must not remain displayed as an applied setpoint. Keep
+   * the last confirmed PV value visible and the rejection available until
+   * the operator starts another edit or successfully applies a value. */
+  dirty_ = false;
+  pending_ = false;
+  applyRuntimeSetpointToEditor();
+  setRuntimeNotice(QStringLiteral("%1. Value not written.").arg(notice));
+  if (setpointEdit_ && setpointEdit_->hasFocus() && isVisible()) {
+    QToolTip::showText(setpointEdit_->mapToGlobal(
+        QPoint(0, setpointEdit_->height())), statusText_, setpointEdit_);
+  }
+}
+
 void SetpointControlElement::acceptAppliedValue(double value,
     const QString &text)
 {
@@ -633,6 +650,7 @@ void SetpointControlElement::acceptAppliedValue(double value,
   hasAppliedTarget_ = true;
   appliedTarget_ = value;
   runtimeNotice_.clear();
+  QToolTip::hideText();
   if (setpointEdit_) {
     const QSignalBlocker blocker(setpointEdit_);
     setpointEdit_->setText(text);
@@ -840,9 +858,12 @@ void SetpointControlElement::applyPaletteColors()
 
   if (setpointEdit_) {
     QPalette editPal = setpointEdit_->palette();
-    editPal.setColor(QPalette::Base, bg.lighter(112));
-    editPal.setColor(QPalette::Text, fg);
-    editPal.setColor(QPalette::WindowText, fg);
+    const bool hasNotice = executeMode_ && !runtimeNotice_.isEmpty();
+    const QColor editBg = hasNotice ? QColor(255, 230, 230) : bg.lighter(112);
+    const QColor editFg = hasNotice ? QColor(160, 0, 0) : fg;
+    editPal.setColor(QPalette::Base, editBg);
+    editPal.setColor(QPalette::Text, editFg);
+    editPal.setColor(QPalette::WindowText, editFg);
     setpointEdit_->setPalette(editPal);
   }
   applyReadbackStyle();
@@ -949,7 +970,11 @@ void SetpointControlElement::updateStatusText()
     return;
   }
   statusText_ = newStatus;
-  applyReadbackStyle();
+  if (setpointEdit_) {
+    setpointEdit_->setToolTip(statusText_);
+    setpointEdit_->setAccessibleDescription(statusText_);
+  }
+  applyPaletteColors();
   update();
 }
 

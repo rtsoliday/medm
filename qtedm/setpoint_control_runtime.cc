@@ -301,7 +301,7 @@ void SetpointControlRuntime::handleActivation(const QString &text)
   double value = 0.0;
   if (!parseNumericInput(text, value)) {
     invokeOnElement([](SetpointControlElement *element) {
-      element->setRuntimeNotice(QStringLiteral("Invalid numeric input"));
+      element->rejectWrite(QStringLiteral("Invalid numeric input"));
     });
     return;
   }
@@ -309,14 +309,14 @@ void SetpointControlRuntime::handleActivation(const QString &text)
   QString message;
   if (!validateAgainstLimits(value, message)) {
     invokeOnElement([message](SetpointControlElement *element) {
-      element->setRuntimeNotice(message);
+      element->rejectWrite(message);
     });
     return;
   }
 
   if (!PvChannelManager::instance().putValue(setpointChannel_, value, false)) {
     invokeOnElement([](SetpointControlElement *element) {
-      element->setRuntimeNotice(QStringLiteral("Write failed"));
+      element->rejectWrite(QStringLiteral("Write failed"));
     });
     return;
   }

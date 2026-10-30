@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include <QApplication>
+#include <QAbstractItemDelegate>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -461,7 +462,9 @@ void TabbedDisplayElement::showPageEditor()
   table->setHorizontalHeaderLabels({QStringLiteral("Stable ID"),
       QStringLiteral("Label"), QStringLiteral("Display path"),
       QStringLiteral("Macros"), QStringLiteral("keepAlive")});
-  table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+  table->setObjectName(QStringLiteral("qtedmTabPagesTable"));
+  table->setWordWrap(false);
+  table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   for (int row = 0; row < pages_.size(); ++row) {
     const TabbedDisplayPage &page = pages_.at(row);
     table->setItem(row, 0, new QTableWidgetItem(page.id));
@@ -473,6 +476,11 @@ void TabbedDisplayElement::showPageEditor()
     keepItem->setCheckState(page.keepAlive ? Qt::Checked : Qt::Unchecked);
     table->setItem(row, 4, keepItem);
   }
+  table->resizeColumnsToContents();
+  for (int column = 0; column < table->columnCount(); ++column) {
+    table->setColumnWidth(column, std::max(100, table->columnWidth(column)));
+  }
+  table->resizeRowsToContents();
   outer->addWidget(table, 1);
 
   auto *rowButtons = new QHBoxLayout;
@@ -507,7 +515,15 @@ void TabbedDisplayElement::showPageEditor()
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
   outer->addWidget(buttons);
   QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog,
-      &QDialog::accept);
+      [&dialog, table]() {
+        // OK need not move focus out of the active cell editor on macOS.
+        const QModelIndex currentIndex = table->currentIndex();
+        if (QWidget *editor = table->indexWidget(currentIndex)) {
+          table->itemDelegate()->setModelData(editor, table->model(),
+              currentIndex);
+        }
+        dialog.accept();
+      });
   QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog,
       &QDialog::reject);
 
@@ -518,14 +534,27 @@ void TabbedDisplayElement::showPageEditor()
   for (int row = 0; row < table->rowCount(); ++row) {
     auto textAt = [table, row](int column) {
       QTableWidgetItem *item = table->item(row, column);
-      return item ? item->text().trimmed() : QString();
+      return item ? item->text() : QString();
     };
     QTableWidgetItem *keepItem = table->item(row, 4);
     updated.append({textAt(0), textAt(1), textAt(2), textAt(3),
         keepItem && keepItem->checkState() == Qt::Checked});
   }
+  updated = normalizedPages(updated);
+  const bool pagesUnchanged = updated.size() == pages_.size()
+      && std::equal(updated.cbegin(), updated.cend(), pages_.cbegin(),
+          [](const TabbedDisplayPage &a, const TabbedDisplayPage &b) {
+            return a.id == b.id && a.label == b.label
+                && a.displayPath == b.displayPath && a.macros == b.macros
+                && a.keepAlive == b.keepAlive;
+          });
+  if (pagesUnchanged && hiddenCheck->isChecked() == hiddenTabs_) {
+    return;
+  }
   setHiddenTabs(hiddenCheck->isChecked());
-  setPages(updated);
+  if (!pagesUnchanged) {
+    setPages(updated);
+  }
   if (changedCallback_) {
     changedCallback_();
   }

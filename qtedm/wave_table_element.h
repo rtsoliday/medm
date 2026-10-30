@@ -11,6 +11,7 @@
 #include "wave_table_properties.h"
 #include "wave_table_model.h"
 
+class QLabel;
 class QTimer;
 
 class WaveTableElement : public QTableView
@@ -99,6 +100,7 @@ public:
 protected:
   void mousePressEvent(QMouseEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
+  void scrollContentsBy(int dx, int dy) override;
 
 private:
   bool forwardMouseEventToParent(QMouseEvent *event) const;
@@ -107,6 +109,7 @@ private:
   void updateHeaderVisibility();
   void updateModelConfiguration();
   void updateRuntimeStatus();
+  void updateEmptyStatus();
   void applyFontSize();
   void flushPendingValues();
   void cancelPendingValues();
@@ -114,6 +117,7 @@ private:
   QColor defaultBackgroundColor() const;
 
   WaveTableModel *model_ = nullptr;
+  QLabel *emptyStatus_ = nullptr;
   bool selected_ = false;
   QColor foregroundColor_;
   QColor backgroundColor_;

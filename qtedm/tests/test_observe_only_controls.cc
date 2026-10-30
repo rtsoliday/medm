@@ -8,9 +8,11 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDir>
+#include <QDialogButtonBox>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QGroupBox>
 #include <QImage>
 #include <QLabel>
@@ -24,9 +26,13 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QScreen>
+#include <QScrollBar>
+#include <QStyleOptionComboBox>
+#include <QSpinBox>
 #include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTextEdit>
+#include <QTableWidget>
 #include <QTimer>
 #include <QToolButton>
 #include <QWindow>
@@ -36,6 +42,7 @@
 #include "composite_element.h"
 #include "cartesian_plot_runtime.h"
 #include "cartesian_plot_element.h"
+#include "choice_button_element.h"
 #include "display_state.h"
 #include "display_window.h"
 #include "expression_channel_element.h"
@@ -50,6 +57,7 @@
 #include "message_button_runtime.h"
 #include "medm_colors.h"
 #include "meter_element.h"
+#include "menu_element.h"
 #include "oval_element.h"
 #include "plugin_element.h"
 #include "polyline_element.h"
@@ -101,7 +109,13 @@ class TestObserveOnlyControls : public QObject
   Q_OBJECT
 
 private slots:
+  void choiceButtonLabelsFitCells_data();
+  void choiceButtonLabelsFitCells();
   void relatedDisplayLabelPadding();
+  void relatedDisplayLabelsFitCells_data();
+  void relatedDisplayLabelsFitCells();
+  void oversizedRelatedDisplayStaysFitted_data();
+  void oversizedRelatedDisplayStaysFitted();
   void init();
   void cleanup();
   void registryContainsSafetyControlObjects();
@@ -110,6 +124,10 @@ private slots:
   void observeOnlyBlocksEverySoftPvWriteKind();
   void setpointRejectsNumericArrays_data();
   void setpointRejectsNumericArrays();
+  void rejectedSetpointShowsError_data();
+  void rejectedSetpointShowsError();
+  void menuLabelsFitAvailableWidth_data();
+  void menuLabelsFitAvailableWidth();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
@@ -123,6 +141,8 @@ private slots:
   void stripChartPreservesSourceTimestamps();
   void waveformCopiesAreBounded();
   void waveformCountsTrackPayloadLength();
+  void emptyWaveformStatusFitsViewport_data();
+  void emptyWaveformStatusFitsViewport();
   void pvaSnapshotsCopySharedArrays();
   void shellCommandsDoNotBlockTheGuiThread();
   void observeOnlyBlocksShellCommands();
@@ -162,6 +182,10 @@ private slots:
   void testActionsRejectInvalidAndAmbiguousSelectors();
   void reopenedExecuteDisplayDeliversMessageButtonReleaseBeforeMove();
   void extensionWidgetPropertiesRoundTripInMemory();
+  void symbolMappingRejectsInvalidRanges_data();
+  void symbolMappingRejectsInvalidRanges();
+  void spinBoxPropertiesPreserveExtremeSteps();
+  void symbolMappingLayoutAndDefaults();
   void inlineColorMapsSurviveRenderingSaveAndUndo();
   void invalidInlineColorMapPreservesLoadedDisplay();
   void macroExpansionIsBoundedBeforeParsing();
@@ -194,10 +218,17 @@ void TestObserveOnlyControls::hiddenRelatedDisplayUnderGraphicComposite()
     QCOMPARE(index, 0);
     ++activations;
   });
+  const QSize buttonSize = related->size();
+  const QPoint buttonPosition = related->mapTo(window.displayArea_,
+      QPoint(0, 0));
   window.show();
   for (int pass = 0; pass < 2; ++pass) {
     window.enterExecuteMode();
     QCoreApplication::processEvents();
+    QTRY_COMPARE(window.displayArea_->size(), QSize(200, 320));
+    QCOMPARE(related->size(), buttonSize);
+    QCOMPARE(related->mapTo(window.displayArea_, QPoint(0, 0)),
+        buttonPosition);
     const QPoint position = related->mapTo(window.displayArea_,
         related->rect().center());
     /* Resolve the actual Qt mouse target, rather than sending directly to
@@ -564,6 +595,63 @@ void TestObserveOnlyControls::cosmeticOutlineEditsKeepObjectBounds()
   }
 }
 
+void TestObserveOnlyControls::choiceButtonLabelsFitCells_data()
+{
+  QTest::addColumn<QSize>("size");
+  QTest::addColumn<int>("stacking");
+  QTest::newRow("medium-horizontal") << QSize(280, 56)
+      << int(ChoiceButtonStacking::kColumn);
+  QTest::newRow("tall-narrow-cells") << QSize(300, 160)
+      << int(ChoiceButtonStacking::kColumn);
+  QTest::newRow("tiny-horizontal") << QSize(280, 24)
+      << int(ChoiceButtonStacking::kColumn);
+  QTest::newRow("vertical") << QSize(100, 160)
+      << int(ChoiceButtonStacking::kRow);
+  QTest::newRow("grid") << QSize(280, 56)
+      << int(ChoiceButtonStacking::kRowColumn);
+}
+
+void TestObserveOnlyControls::choiceButtonLabelsFitCells()
+{
+  QFETCH(QSize, size);
+  QFETCH(int, stacking);
+  ChoiceButtonElement element;
+  element.resize(size);
+  element.setStacking(static_cast<ChoiceButtonStacking>(stacking));
+  element.setExecuteMode(true);
+  element.setRuntimeLabels({QStringLiteral("OFF"), QStringLiteral("ON"),
+      QStringLiteral("AUTO"), QStringLiteral("ERROR")});
+  element.setRuntimeConnected(true);
+  element.setRuntimeWriteAccess(true);
+  element.show();
+  QCoreApplication::processEvents();
+
+  const auto checkLabels = [&element]() {
+    const auto buttons = element.findChildren<QAbstractButton *>();
+    QCOMPARE(buttons.size(), 4);
+    for (const auto *button : buttons) {
+      const QRect textBounds = button->rect().adjusted(3, 2, -3, -2);
+      const QFontMetrics metrics(button->font());
+      QVERIFY2(metrics.horizontalAdvance(button->text()) <= textBounds.width(),
+          qPrintable(button->text()));
+      QVERIFY(metrics.boundingRect(button->text()).width() <= textBounds.width());
+      QVERIFY(metrics.height() <= textBounds.height());
+    }
+  };
+  checkLabels();
+  // Refit after both geometry changes and a runtime enum-label refresh.
+  element.resize(size.width() * 3 / 4, size.height());
+  element.setRuntimeLabels({QStringLiteral("OFF"), QStringLiteral("ON"),
+      QStringLiteral("AUTOMATIC"), QStringLiteral("ERROR")});
+  QCoreApplication::processEvents();
+  checkLabels();
+  int activated = -1;
+  element.setActivationCallback([&activated](int value) { activated = value; });
+  const auto buttons = element.findChildren<QAbstractButton *>();
+  QTest::mouseClick(buttons.last(), Qt::LeftButton);
+  QCOMPARE(activated, 3);
+}
+
 void TestObserveOnlyControls::init()
 {
   PvChannelManager::instance().setObserveOnly(false);
@@ -833,6 +921,115 @@ void TestObserveOnlyControls::setpointRejectsNumericArrays()
   QVERIFY(soft.infoSnapshot(setpointName, snapshot));
   QVERIFY(!snapshot.isArray);
   QCOMPARE(snapshot.value, 2.0);
+}
+
+void TestObserveOnlyControls::rejectedSetpointShowsError_data()
+{
+  QTest::addColumn<QString>("input");
+  QTest::addColumn<QString>("message");
+  QTest::newRow("above-limit") << QStringLiteral("95")
+      << QStringLiteral("Above high limit");
+  QTest::newRow("below-limit") << QStringLiteral("5")
+      << QStringLiteral("Below low limit");
+  QTest::newRow("invalid-number") << QStringLiteral("invalid")
+      << QStringLiteral("Invalid numeric input");
+}
+
+void TestObserveOnlyControls::rejectedSetpointShowsError()
+{
+  QFETCH(QString, input);
+  QFETCH(QString, message);
+  const QString name = QStringLiteral("__test:setpoint_rejection");
+  auto &soft = SoftPvRegistry::instance();
+  soft.registerName(name, true);
+  registeredNames_.append(name);
+  soft.setConnected(name, true);
+  soft.setControlInfo(name, 10.0, 90.0, 1);
+  soft.publishValue(name, 75.0);
+
+  SetpointControlElement element;
+  element.resize(400, 40);
+  element.setSetpointChannel(name);
+  element.setShowReadback(false);
+  element.setExecuteMode(true);
+  SetpointControlRuntime runtime(&element);
+  runtime.start();
+  element.show();
+  auto *edit = element.findChild<QLineEdit *>();
+  QVERIFY(edit);
+  QTRY_VERIFY(!edit->isReadOnly());
+  const QString confirmedText = edit->text();
+  const QColor normalBase = edit->palette().color(QPalette::Base);
+  edit->selectAll();
+  QTest::keyClicks(edit, input);
+  QTest::keyClick(edit, Qt::Key_Return);
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 75.0);
+  QCOMPARE(edit->text(), confirmedText);
+  QVERIFY(edit->toolTip().contains(message));
+  QVERIFY(edit->accessibleDescription().contains(message));
+  QVERIFY(edit->palette().color(QPalette::Base) != normalBase);
+  QVERIFY(!element.isDirty());
+
+  edit->selectAll();
+  QTest::keyClicks(edit, QStringLiteral("80"));
+  QTest::keyClick(edit, Qt::Key_Return);
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 80.0);
+  QTRY_COMPARE(element.runtimeSetpointValue(), 80.0);
+  QCOMPARE(edit->palette().color(QPalette::Base), normalBase);
+  QVERIFY(!edit->toolTip().contains(message));
+  QVERIFY(!edit->accessibleDescription().contains(message));
+}
+
+void TestObserveOnlyControls::menuLabelsFitAvailableWidth_data()
+{
+  QTest::addColumn<QSize>("size");
+  QTest::newRow("narrow-tall") << QSize(150, 80);
+  QTest::newRow("narrower-tall") << QSize(100, 80);
+  QTest::newRow("wide") << QSize(260, 40);
+}
+
+void TestObserveOnlyControls::menuLabelsFitAvailableWidth()
+{
+  QFETCH(QSize, size);
+  MenuElement element;
+  element.resize(size);
+  element.setChannel(QStringLiteral("__test:menu_fitting"));
+  element.setExecuteMode(true);
+  element.setRuntimeLabels({QStringLiteral("OFF"), QStringLiteral("ON"),
+      QStringLiteral("AUTO"), QStringLiteral("ERROR")});
+  element.setRuntimeConnected(true);
+  element.setRuntimeReadAccess(true);
+  element.setRuntimeWriteAccess(true);
+  element.setRuntimeValue(3);
+  element.show();
+  QCoreApplication::processEvents();
+  auto *combo = element.findChild<QComboBox *>();
+  QVERIFY(combo);
+  const auto checkLabels = [combo]() {
+    QStyleOptionComboBox option;
+    option.initFrom(combo);
+    option.currentText = combo->currentText();
+    const QRect textRect = combo->style()->subControlRect(QStyle::CC_ComboBox,
+        &option, QStyle::SC_ComboBoxEditField, combo);
+    const QFontMetrics metrics(combo->font());
+    for (int i = 0; i < combo->count(); ++i) {
+      QVERIFY2(metrics.horizontalAdvance(combo->itemText(i)) <= textRect.width(),
+          qPrintable(combo->itemText(i)));
+    }
+  };
+  checkLabels();
+  element.resize(size.width() * 3 / 4, size.height());
+  element.setRuntimeLabels({QStringLiteral("OFF"), QStringLiteral("ON"),
+      QStringLiteral("AUTOMATIC"), QStringLiteral("ERROR")});
+  QCoreApplication::processEvents();
+  checkLabels();
+  int activated = -1;
+  element.setActivationCallback([&activated](int index) { activated = index; });
+  QTest::keyClick(combo, Qt::Key_Up);
+  QCOMPARE(activated, 2);
 }
 
 void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()
@@ -1407,6 +1604,74 @@ void TestObserveOnlyControls::waveformCountsTrackPayloadLength()
   runtime.handleChannelData(data);
   QCOMPARE(table.receivedElementCount(), 0L);
   QTRY_COMPARE(table.displayedElementCount(), 0);
+}
+
+void TestObserveOnlyControls::emptyWaveformStatusFitsViewport_data()
+{
+  QTest::addColumn<int>("layout");
+  QTest::addColumn<int>("width");
+  QTest::newRow("wide-grid") << int(WaveTableLayout::kGrid) << 820;
+  QTest::newRow("narrow-grid") << int(WaveTableLayout::kGrid) << 330;
+  QTest::newRow("column") << int(WaveTableLayout::kColumn) << 330;
+  QTest::newRow("row") << int(WaveTableLayout::kRow) << 370;
+}
+
+void TestObserveOnlyControls::emptyWaveformStatusFitsViewport()
+{
+  QFETCH(int, layout);
+  QFETCH(int, width);
+  WaveTableElement table;
+  table.setLayoutMode(static_cast<WaveTableLayout>(layout));
+  table.setFontSize(10);
+  table.setForegroundColor(Qt::black);
+  table.setBackgroundColor(Qt::black);
+  table.resize(width, 140);
+  table.setExecuteMode(true);
+  table.show();
+  QCoreApplication::processEvents();
+
+  auto *status = table.findChild<QLabel *>(
+      QStringLiteral("qtedmWaveTableStatus"));
+  QVERIFY2(status, "Empty waveform status needs the viewport width, not one cell");
+  QVERIFY(status->isVisible());
+  QCOMPARE(status->text(), table.runtimeStatusText());
+  QVERIFY(status->text().contains(QStringLiteral("Disconnected")));
+  QCOMPARE(status->geometry(), table.viewport()->rect());
+  QVERIFY(status->wordWrap());
+  QVERIFY(status->heightForWidth(status->width()) <= status->height());
+  QCOMPARE(status->palette().color(status->foregroundRole()),
+      table.model()->index(0, 0).data(Qt::ForegroundRole).value<QColor>());
+
+  table.horizontalScrollBar()->setValue(table.horizontalScrollBar()->maximum());
+  QCoreApplication::processEvents();
+  QCOMPARE(status->geometry(), table.viewport()->rect());
+  table.setShowHeaders(false);
+  QCoreApplication::processEvents();
+  QCOMPARE(status->geometry(), table.viewport()->rect());
+
+  table.resize(260, 140);
+  QCoreApplication::processEvents();
+  QCOMPARE(status->geometry(), table.viewport()->rect());
+  QVERIFY(status->heightForWidth(status->width()) <= status->height());
+
+  table.setConnected(true);
+  table.setMetadata(6, 64, QStringLiteral("V"), 2);
+  table.setSeverity(0);
+  QCOMPARE(status->text(), table.runtimeStatusText());
+  QVERIFY(status->text().contains(QStringLiteral("native=64")));
+  table.setValues({QStringLiteral("1.25"), QStringLiteral("2.5")}, 2);
+  QTRY_COMPARE(table.displayedElementCount(), 2);
+  QVERIFY(!status->isVisible());
+  QCOMPARE(table.cellText(0, layout == int(WaveTableLayout::kColumn) ? 1 : 0),
+      QStringLiteral("1.25"));
+
+  table.clearRuntimeState();
+  QVERIFY(status->isVisible());
+  QCOMPARE(status->text(), table.runtimeStatusText());
+  table.setColorMode(TextColorMode::kStatic);
+  table.setForegroundColor(Qt::white);
+  QCOMPARE(status->palette().color(QPalette::WindowText), QColor(Qt::white));
+  QCOMPARE(status->palette().color(QPalette::Window), QColor(Qt::black));
 }
 
 void TestObserveOnlyControls::pvaSnapshotsCopySharedArrays()
@@ -2279,6 +2544,12 @@ void TestObserveOnlyControls::sliderIncrementDialogActions_data()
       << QString("preset") << QString("0.25") << 0.1 << 0.01 << 1.25;
   QTest::newRow("custom-enter-closes-without-write")
       << QString("increment-enter") << QString("0.25") << 0.1 << 0.25 << 1.25;
+  QTest::newRow("keypad-enter-closes-without-write")
+      << QString("increment-keypad-enter") << QString("0.25")
+      << 0.1 << 0.25 << 1.25;
+  QTest::newRow("invalid-keypad-enter-keeps-dialog-open")
+      << QString("invalid-keypad-enter") << QString("0")
+      << 0.1 << 0.1 << 1.25;
   QTest::newRow("small-increment-change")
       << QString("increment-enter") << QString("1e-10")
       << 1e-9 << 1e-10 << 1.25;
@@ -2286,6 +2557,8 @@ void TestObserveOnlyControls::sliderIncrementDialogActions_data()
       << QString("cancel") << QString("0.25") << 0.1 << 0.1 << 1.25;
   QTest::newRow("ok-writes-value-only")
       << QString("ok") << QString("0.25") << 0.1 << 0.1 << 3.75;
+  QTest::newRow("ok-discards-invalid-increment")
+      << QString("ok") << QString("nan") << 0.1 << 0.1 << 3.75;
   QTest::newRow("value-enter-writes-value-only")
       << QString("value-enter") << QString("0.25") << 0.1 << 0.1 << 3.75;
   QTest::newRow("help-keeps-dialog-open")
@@ -2357,9 +2630,12 @@ void TestObserveOnlyControls::sliderIncrementDialogActions()
     incrementEdit->selectAll();
     QTest::keyClicks(incrementEdit, typedIncrement);
     if (action == QStringLiteral("increment-enter")
-        || action == QStringLiteral("invalid-enter")) {
-      QTest::keyClick(incrementEdit, Qt::Key_Return);
-      if (action == QStringLiteral("invalid-enter")) {
+        || action == QStringLiteral("invalid-enter")
+        || action == QStringLiteral("increment-keypad-enter")
+        || action == QStringLiteral("invalid-keypad-enter")) {
+      QTest::keyClick(incrementEdit, action.contains(QStringLiteral("keypad"))
+          ? Qt::Key_Enter : Qt::Key_Return);
+      if (action.startsWith(QStringLiteral("invalid-"))) {
         QVERIFY(dialog->isVisible());
         QCOMPARE(incrementEdit->text(), QStringLiteral("0.1"));
       } else {
@@ -3383,6 +3659,176 @@ void TestObserveOnlyControls::
   exerciseOpenDisplay();
 }
 
+void TestObserveOnlyControls::symbolMappingRejectsInvalidRanges_data()
+{
+  QTest::addColumn<int>("column");
+  QTest::addColumn<QString>("invalidText");
+  QTest::newRow("minimum-text") << 0 << QStringLiteral("not-a-number");
+  QTest::newRow("maximum-text") << 1 << QStringLiteral("bad");
+  QTest::newRow("empty-minimum") << 0 << QString();
+  QTest::newRow("empty-maximum") << 1 << QString();
+  QTest::newRow("nan") << 0 << QStringLiteral("nan");
+  QTest::newRow("infinity") << 1 << QStringLiteral("inf");
+  QTest::newRow("overflow") << 0 << QStringLiteral("1e309");
+}
+
+void TestObserveOnlyControls::symbolMappingRejectsInvalidRanges()
+{
+  QFETCH(int, column);
+  QFETCH(QString, invalidText);
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  const QString fixture = QDir(QCoreApplication::applicationDirPath())
+      .absoluteFilePath(QStringLiteral("../../tests/test_QtEDMSafetyControls.adl"));
+  QVERIFY2(window.loadFromFile(fixture, &error), qPrintable(error));
+  auto *symbol = window.ledMonitorElements_.first();
+  QVERIFY(symbol->isQtedmSymbol());
+  const int undoIndex = window.undoStack()->index();
+  bool checked = false;
+  QTimer::singleShot(0, &window, [&]() {
+    auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+    QVERIFY(dialog);
+    const auto closeDialog = qScopeGuard([dialog]() {
+      if (dialog->isVisible()) {
+        dialog->reject();
+      }
+    });
+    auto *table = dialog->findChild<QTableWidget *>();
+    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+    QVERIFY(table);
+    QVERIFY(buttons);
+    table->setCurrentCell(2, column);
+    table->editItem(table->item(2, column));
+    auto *editor = table->findChild<QLineEdit *>();
+    QVERIFY(editor);
+    editor->setText(invalidText);
+    buttons->button(QDialogButtonBox::Ok)->click();
+    QVERIFY2(dialog->isVisible(), "Invalid endpoints must not close the editor");
+    auto *notice = dialog->findChild<QLabel *>(
+        QStringLiteral("qtedmSymbolValidationError"));
+    QVERIFY(notice);
+    QVERIFY(notice->isVisible());
+    QVERIFY(notice->text().contains(QStringLiteral("State 3")));
+    QVERIFY(notice->text().contains(column == 0 ? QStringLiteral("minimum")
+                                              : QStringLiteral("maximum")));
+    QCOMPARE(symbol->symbolStates().at(2).minimum, 3.0);
+    QCOMPARE(symbol->symbolStates().at(2).maximum, 10.0);
+    QVERIFY(!window.isDirty());
+    QCOMPARE(window.undoStack()->index(), undoIndex);
+    editor = qobject_cast<QLineEdit *>(table->indexWidget(table->currentIndex()));
+    if (!editor) {
+      table->editItem(table->item(2, column));
+      editor = qobject_cast<QLineEdit *>(table->indexWidget(table->currentIndex()));
+    }
+    QVERIFY(editor);
+    editor->setFocus();
+    editor->setText(column == 0 ? QStringLiteral("4.5")
+                               : QStringLiteral("12.5"));
+    buttons->button(QDialogButtonBox::Ok)->click();
+    QCOMPARE(dialog->result(), int(QDialog::Accepted));
+    checked = true;
+  });
+  window.showQtedmExtensionProperties(symbol);
+  QVERIFY(checked);
+  QVERIFY(window.isDirty());
+  QCOMPARE(symbol->symbolStates().at(2).minimum, column == 0 ? 4.5 : 3.0);
+  QCOMPARE(symbol->symbolStates().at(2).maximum, column == 1 ? 12.5 : 10.0);
+  window.triggerUndo();
+  QVERIFY(!window.isDirty());
+  QCOMPARE(window.ledMonitorElements_.first()->symbolStates().at(2).minimum, 3.0);
+}
+
+void TestObserveOnlyControls::spinBoxPropertiesPreserveExtremeSteps()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QFont(), QFont(), state);
+  auto *spin = new SetpointControlElement(window.centralWidget());
+  spin->setQtedmSpinBox(true);
+  for (double step : {1e-15, 2e12, 1e100}) {
+    spin->setStepSize(step);
+    bool checked = false;
+    QTimer::singleShot(0, &window, [&]() {
+      auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+      QVERIFY(dialog);
+      const auto close = qScopeGuard([&]() { dialog->reject(); });
+      auto *edit = dialog->findChild<QLineEdit *>(
+          QStringLiteral("qtedmSpinBoxStepEdit"));
+      auto *buttons = dialog->findChild<QDialogButtonBox *>();
+      QVERIFY(edit);
+      QVERIFY(buttons);
+      QVERIFY(edit->text().toDouble() == step);
+      edit->setText(QStringLiteral("0"));
+      buttons->button(QDialogButtonBox::Ok)->click();
+      QVERIFY(dialog->isVisible());
+      edit->setText(QString::number(step, 'g', 17));
+      buttons->button(QDialogButtonBox::Ok)->click();
+      checked = true;
+    });
+    window.showQtedmExtensionProperties(spin);
+    QVERIFY(checked);
+    QVERIFY(spin->stepSize() == step);
+  }
+}
+
+void TestObserveOnlyControls::symbolMappingLayoutAndDefaults()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  const QString fixture = QDir(QCoreApplication::applicationDirPath())
+      .absoluteFilePath(QStringLiteral("../../tests/test_QtEDMSafetyControls.adl"));
+  QVERIFY2(window.loadFromFile(fixture, &error), qPrintable(error));
+  auto *symbol = window.ledMonitorElements_.first();
+  bool checked = false;
+  QTimer::singleShot(0, &window, [&]() {
+    auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+    QVERIFY(dialog);
+    const auto closeDialog = qScopeGuard([dialog]() {
+      if (dialog->isVisible()) {
+        dialog->reject();
+      }
+    });
+    auto *table = dialog->findChild<QTableWidget *>();
+    auto *count = dialog->findChild<QSpinBox *>();
+    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+    QVERIFY(table);
+    QVERIFY(count);
+    QVERIFY(buttons);
+    const QFontMetrics metrics(table->font());
+    QVERIFY(table->columnWidth(2) >= metrics.horizontalAdvance("Starting") + 12);
+    QVERIFY(table->columnWidth(3)
+        >= metrics.horizontalAdvance("optional-running.png") + 12);
+    count->setValue(4);
+    QVERIFY(table->item(3, 0));
+    QVERIFY(table->item(3, 1));
+    QCOMPARE(table->item(3, 0)->text(), QStringLiteral("3"));
+    QCOMPARE(table->item(3, 1)->text(), QStringLiteral("3"));
+    /* Reversed endpoints remain supported by the symbol renderer. */
+    table->item(2, 0)->setText(QStringLiteral("12"));
+    table->item(2, 1)->setText(QStringLiteral("3"));
+    buttons->button(QDialogButtonBox::Ok)->click();
+    QCOMPARE(dialog->result(), int(QDialog::Accepted));
+    checked = true;
+  });
+  window.showQtedmExtensionProperties(symbol);
+  QVERIFY(checked);
+  QCOMPARE(symbol->symbolStates().size(), 4);
+  QCOMPARE(symbol->symbolStates().at(2).minimum, 12.0);
+  QCOMPARE(symbol->symbolStates().at(2).maximum, 3.0);
+  window.triggerUndo();
+  QVERIFY(!window.isDirty());
+  QCOMPARE(window.ledMonitorElements_.first()->symbolStates().size(), 3);
+}
+
 void TestObserveOnlyControls::extensionWidgetPropertiesRoundTripInMemory()
 {
   LedMonitorElement symbol;
@@ -3739,6 +4185,153 @@ void TestObserveOnlyControls::compositeFilesInheritDisplayMacros()
       QStringLiteral("13EIG1:image1:Inner_RBV"),
       QStringLiteral("13EIG1:image1:Model_RBV")}));
   QCOMPARE(window.macroDefinitions_, macros);
+}
+
+void TestObserveOnlyControls::oversizedRelatedDisplayStaysFitted_data()
+{
+  QTest::addColumn<bool>("replace");
+  QTest::newRow("add") << false;
+  QTest::newRow("replace") << true;
+}
+
+void TestObserveOnlyControls::oversizedRelatedDisplayStaysFitted()
+{
+#if !defined(Q_OS_MAC)
+  QSKIP("Cocoa oversized-window compositor behavior is macOS-specific");
+#else
+  if (QGuiApplication::platformName() != QStringLiteral("cocoa")) {
+    QSKIP("Requires Qt's native Cocoa platform");
+  }
+  QFETCH(bool, replace);
+  QScreen *screen = QGuiApplication::primaryScreen();
+  QVERIFY(screen);
+  const QSize available = screen->availableGeometry().size();
+  const QSize oversized(available.width() + 400, available.height() + 300);
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile childFile(directory.filePath(QStringLiteral("child.adl")));
+  QVERIFY(childFile.open(QIODevice::WriteOnly));
+  childFile.write(QStringLiteral(
+      "file { version=030122 }\n"
+      "display { object { width=%1 height=%2 } }\n"
+      "rectangle { object { x=%3 y=%4 width=60 height=60 } }\n")
+      .arg(oversized.width()).arg(oversized.height())
+      .arg(oversized.width() - 100).arg(oversized.height() - 100).toUtf8());
+  childFile.close();
+  QFile launcherFile(directory.filePath(QStringLiteral("launcher.adl")));
+  QVERIFY(launcherFile.open(QIODevice::WriteOnly));
+  launcherFile.write("file { version=030122 }\n"
+      "display { object { width=300 height=120 } }\n"
+      "\"related display\" { object { width=200 height=40 }\n"
+      "display[0] { label=\"Open\" name=\"child.adl\" } }\n");
+  launcherFile.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  DisplayWindow launcher(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  launcher.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(launcher.loadFromFile(launcherFile.fileName(), &error),
+      qPrintable(error));
+  launcher.show();
+  launcher.enterExecuteMode();
+  QTest::qWait(150);
+  auto *related = launcher.relatedDisplayElements_.first();
+  related->setEntryMode(0, replace ? RelatedDisplayMode::kReplace
+                                  : RelatedDisplayMode::kAdd);
+  launcher.handleRelatedDisplayActivation(related, 0, Qt::NoModifier);
+  DisplayWindow *child = replace ? &launcher : state->displays.last().data();
+  QVERIFY(child);
+  const auto cleanup = qScopeGuard([&]() {
+    if (!replace) {
+      delete child;
+    }
+  });
+  QTest::qWait(200); // Include both deferred post-show geometry callbacks.
+  QVERIFY(child->executeModeActive_);
+  QVERIFY(child->width() <= available.width());
+  QVERIFY(child->height() <= available.height());
+  QCOMPARE(child->rectangleElements_.size(), 1);
+  QVERIFY(child->displayArea_->rect().contains(
+      child->rectangleElements_.first()->geometry()));
+  const qreal originalAspect = qreal(oversized.width()) / oversized.height();
+  const qreal fittedAspect = qreal(child->displayArea_->width())
+      / child->displayArea_->height();
+  QVERIFY(std::abs(originalAspect - fittedAspect) < 0.02);
+#endif
+}
+
+void TestObserveOnlyControls::relatedDisplayLabelsFitCells_data()
+{
+  QTest::addColumn<QSize>("size");
+  QTest::addColumn<int>("count");
+  QTest::addColumn<bool>("vertical");
+  QTest::newRow("medium-row") << QSize(280, 38) << 3 << false;
+  QTest::newRow("large-row") << QSize(360, 52) << 4 << false;
+  QTest::newRow("column") << QSize(160, 128) << 3 << true;
+}
+
+void TestObserveOnlyControls::relatedDisplayLabelsFitCells()
+{
+  QFETCH(QSize, size);
+  QFETCH(int, count);
+  QFETCH(bool, vertical);
+  RelatedDisplayElement element;
+  element.setVisual(vertical ? RelatedDisplayVisual::kColumnOfButtons
+                             : RelatedDisplayVisual::kRowOfButtons);
+  element.resize(size);
+  element.setForegroundColor(Qt::black);
+  element.setBackgroundColor(Qt::white);
+  element.setExecuteMode(true);
+  for (int i = 0; i < count; ++i) {
+    element.setEntryLabel(i, QStringLiteral("L L L L L L L L"));
+    element.setEntryName(i, QStringLiteral("child.adl"));
+  }
+  QImage image(element.size(), QImage::Format_ARGB32);
+  image.fill(Qt::white);
+  element.render(&image);
+  const QString visualDir = qEnvironmentVariable("QTEDM_RELATED_VISUAL_DIR");
+  if (!visualDir.isEmpty()) {
+    image.save(QDir(visualDir).filePath(
+        QString::fromLatin1(QTest::currentDataTag()) + QStringLiteral(".png")));
+  }
+  const QSize cellSize(vertical ? size.width() : size.width() / count,
+      vertical ? size.height() / count : size.height());
+  for (int i = 0; i < count; ++i) {
+    const QRect cell(vertical ? 0 : i * cellSize.width(),
+        vertical ? i * cellSize.height() : 0,
+        cellSize.width(), cellSize.height());
+    int glyphs = 0;
+    bool previousInk = false;
+    for (int x = cell.left() + 2; x <= cell.right() - 2; ++x) {
+      bool ink = false;
+      for (int y = cell.top() + 2; y <= cell.bottom() - 2; ++y) {
+        /* Include antialiased strokes so a small letter is not split into
+         * multiple dark fragments by the platform's font rasterizer. */
+        if (qGray(image.pixel(x, y)) < 200) {
+          ink = true;
+          break;
+        }
+      }
+      if (ink && !previousInk) {
+        ++glyphs;
+      }
+      previousInk = ink;
+    }
+    QCOMPARE(glyphs, 8); // Every letter must survive fitting and clipping.
+  }
+  int activated = -1;
+  element.setActivationCallback([&](int index, Qt::KeyboardModifiers) {
+    activated = index;
+  });
+  const QPoint lastCellCenter(vertical ? cellSize.width() / 2
+                                      : (count - 1) * cellSize.width()
+                                          + cellSize.width() / 2,
+      vertical ? (count - 1) * cellSize.height() + cellSize.height() / 2
+               : cellSize.height() / 2);
+  QTest::mouseClick(&element, Qt::LeftButton, Qt::NoModifier, lastCellCenter);
+  QCOMPARE(activated, count - 1);
 }
 
 void TestObserveOnlyControls::relatedDisplayLabelPadding()

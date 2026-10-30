@@ -34,6 +34,8 @@ private slots:
   void preservesSmallNonDefaultDoubles();
   void writesDynamicAttributeSection();
   void writesLimitsSection();
+  void preciseRangesRoundTrip_data();
+  void preciseRangesRoundTrip();
   void writesTextAreaEnumStrings();
   void writesHeatmapProfileModeEnumStrings();
   void writesHeatmapRangeModeEnumStrings();
@@ -111,6 +113,52 @@ void TestAdlWriter::writesDynamicAttributeSection()
   const QString expected =
       readFixture(QStringLiteral("tests/data/expected/dynamic_attribute.adlfrag"));
   QCOMPARE(output, expected);
+}
+
+void TestAdlWriter::preciseRangesRoundTrip_data()
+{
+  QTest::addColumn<double>("low");
+  QTest::addColumn<double>("high");
+  QTest::addColumn<int>("source");
+  for (int source = 0; source < 3; ++source) {
+    QTest::newRow(qPrintable(QStringLiteral("small-%1").arg(source)))
+        << 1e-10 << 1.2345678901234567 << source;
+    QTest::newRow(qPrintable(QStringLiteral("near-default-%1").arg(source)))
+        << 1e-13 << 1.0000000000000002 << source;
+    QTest::newRow(qPrintable(QStringLiteral("large-%1").arg(source)))
+        << -1.2345678901234567e100 << 2.3456789012345678e100 << source;
+  }
+}
+
+void TestAdlWriter::preciseRangesRoundTrip()
+{
+  QFETCH(double, low);
+  QFETCH(double, high);
+  QFETCH(int, source);
+  PvLimits limits;
+  const auto selected = source == 0 ? PvLimitSource::kChannel
+      : source == 1 ? PvLimitSource::kDefault : PvLimitSource::kUser;
+  limits.lowSource = selected;
+  limits.highSource = selected;
+  limits.lowDefault = low;
+  limits.highDefault = high;
+  QString output;
+  QTextStream stream(&output);
+  AdlWriter::writeLimitsSection(stream, 0, limits, true, false, true, true, true, true);
+  AdlWriter::writeCartesianAxisSection(stream, 0, 0,
+      CartesianPlotAxisStyle::kLinear, CartesianPlotRangeStyle::kUserSpecified,
+      low, high, CartesianPlotTimeFormat::kHhMmSs, true);
+  QString error;
+  const auto parsed = AdlParser::parse(output, &error);
+  QVERIFY2(parsed.has_value(), qPrintable(error));
+  const AdlNode *saved = ::findChild(*parsed, QStringLiteral("limits"));
+  QVERIFY(saved);
+  QVERIFY(propertyValue(*saved, QStringLiteral("loprDefault")).toDouble() == low);
+  QVERIFY(propertyValue(*saved, QStringLiteral("hoprDefault")).toDouble() == high);
+  const AdlNode *axis = ::findChild(*parsed, QStringLiteral("x_axis"));
+  QVERIFY(axis);
+  QVERIFY(propertyValue(*axis, QStringLiteral("minRange")).toDouble() == low);
+  QVERIFY(propertyValue(*axis, QStringLiteral("maxRange")).toDouble() == high);
 }
 
 void TestAdlWriter::writesLimitsSection()

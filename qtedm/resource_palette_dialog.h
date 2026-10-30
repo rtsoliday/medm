@@ -43,6 +43,7 @@ class QLineEdit;
 class QObject;
 class QPushButton;
 class QScrollArea;
+class QResizeEvent;
 class QScreen;
 class QSpinBox;
 class QWidget;
@@ -51,6 +52,7 @@ enum class ResourcePalettePropertyType {
   kBoolean,
   kInteger,
   kInteger64,
+  kUnsignedInteger64,
   kDouble,
   kDoubleText,
   kString,
@@ -839,6 +841,7 @@ public:
 
 protected:
   void closeEvent(QCloseEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 
 private:
@@ -1860,7 +1863,7 @@ private:
   QLineEdit *expressionChannelVariableEdit_ = nullptr;
   QLineEdit *expressionChannelCalcEdit_ = nullptr;
   std::array<QLineEdit *, 4> expressionChannelChannelEdits_{};
-  QDoubleSpinBox *expressionChannelInitialValueSpin_ = nullptr;
+  QLineEdit *expressionChannelInitialValueEdit_ = nullptr;
   QComboBox *expressionChannelEventSignalCombo_ = nullptr;
   QSpinBox *expressionChannelPrecisionSpin_ = nullptr;
   QWidget *extensionPropertiesSection_ = nullptr;
@@ -1905,6 +1908,9 @@ private:
   QLabel *elementLabel_ = nullptr;
   QScrollArea *scrollArea_ = nullptr;
   QWidget *entriesWidget_ = nullptr;
+  QSize automaticPaletteSize_;
+  QSize userPaletteSize_;
+  bool fittingPalette_ = false;
   SelectionKind selectionKind_ = SelectionKind::kNone;
   bool rectangleIsArc_ = false;
   enum class GeometryField { kX, kY, kWidth, kHeight };

@@ -1,6 +1,14 @@
 #include <QtTest/QtTest>
 
 #include <QFile>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QCheckBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QScopeGuard>
+#include <QTableWidget>
+#include <QTimer>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -19,6 +27,7 @@ class TestTabbedDisplaysSessions : public QObject
 
 private slots:
   void registryContainsTabbedDisplay();
+  void pageEditorPreservesValuesAndSkipsUnchanged();
   void tabbedDisplayLoadsLazily();
   void tabbedDisplayRebuildsSelectedPage();
   void tabbedDisplayReportsDiagnostics();
@@ -38,6 +47,61 @@ void TestTabbedDisplaysSessions::registryContainsTabbedDisplay()
   QVERIFY(descriptor);
   QCOMPARE(descriptor->createTool, CreateTool::kQtedmTabbedDisplay);
   QCOMPARE(descriptor->category, QStringLiteral("Containers"));
+}
+
+void TestTabbedDisplaysSessions::pageEditorPreservesValuesAndSkipsUnchanged()
+{
+  TabbedDisplayElement element;
+  const QList<TabbedDisplayPage> original = {
+      {QStringLiteral("one"), QStringLiteral("  Padded  "),
+          QStringLiteral("  child.adl  "), QStringLiteral("  A=1  "), true},
+      {QStringLiteral("two"), QStringLiteral("Second"), {}, {}, false},
+  };
+  element.setPages(original);
+  element.setActivePageId(QStringLiteral("two"));
+  int changes = 0;
+  element.setChangedCallback([&] { ++changes; });
+  for (int attempt = 0; attempt < 4; ++attempt) {
+    bool inspected = false;
+    QTimer::singleShot(0, &element, [&] {
+      auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+      QVERIFY(dialog);
+      const auto close = qScopeGuard([&] {
+        if (dialog->isVisible()) dialog->reject();
+      });
+      auto *table = dialog->findChild<QTableWidget *>();
+      auto *buttons = dialog->findChild<QDialogButtonBox *>();
+      QVERIFY(table && buttons);
+      QCOMPARE(table->item(0, 1)->text(), original.first().label);
+      QCOMPARE(table->item(0, 2)->text(), original.first().displayPath);
+      QCOMPARE(table->item(0, 3)->text(), original.first().macros);
+      if (attempt == 1 || attempt == 2) {
+        table->setCurrentCell(1, 1);
+        table->editItem(table->item(1, 1));
+        auto *editor = table->findChild<QLineEdit *>();
+        QVERIFY(editor);
+        editor->setText(QStringLiteral("  Edited  "));
+      }
+      if (attempt == 3) {
+        dialog->findChild<QCheckBox *>()->setChecked(true);
+      }
+      buttons->button(attempt == 1 ? QDialogButtonBox::Cancel
+                                  : QDialogButtonBox::Ok)->click();
+      inspected = true;
+    });
+    element.showPageEditor();
+    QVERIFY(inspected);
+    QCOMPARE(changes, attempt < 2 ? 0 : attempt - 1);
+    const auto pages = element.pages();
+    QCOMPARE(pages.first().label, original.first().label);
+    QCOMPARE(pages.first().displayPath, original.first().displayPath);
+    QCOMPARE(pages.first().macros, original.first().macros);
+    QCOMPARE(pages.first().keepAlive, original.first().keepAlive);
+    QCOMPARE(pages.last().label, attempt < 2 ? original.last().label
+                                          : QStringLiteral("  Edited  "));
+    QCOMPARE(element.activePageId(), QStringLiteral("two"));
+  }
+  QVERIFY(element.hiddenTabs());
 }
 
 void TestTabbedDisplaysSessions::tabbedDisplayLoadsLazily()

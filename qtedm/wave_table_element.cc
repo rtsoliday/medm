@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QFontMetrics>
 #include <QHeaderView>
+#include <QLabel>
 #include <QPalette>
 #include <QResizeEvent>
 #include <QTimer>
@@ -62,8 +63,17 @@ QString severityText(short severity, bool connected)
 WaveTableElement::WaveTableElement(QWidget *parent)
   : QTableView(parent)
   , model_(new WaveTableModel(this))
+  , emptyStatus_(new QLabel(viewport()))
   , valueUpdateTimer_(new QTimer(this))
 {
+  /* Empty-state text belongs to the viewport, not an 80-pixel data cell. */
+  emptyStatus_->setObjectName(QStringLiteral("qtedmWaveTableStatus"));
+  emptyStatus_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+  emptyStatus_->setWordWrap(true);
+  emptyStatus_->setMargin(4);
+  emptyStatus_->setAutoFillBackground(true);
+  emptyStatus_->setAttribute(Qt::WA_TransparentForMouseEvents);
+
   valueUpdateTimer_->setSingleShot(true);
   valueUpdateTimer_->setInterval(200);
   valueUpdateTimer_->setTimerType(Qt::CoarseTimer);
@@ -542,6 +552,13 @@ void WaveTableElement::mousePressEvent(QMouseEvent *event)
 void WaveTableElement::resizeEvent(QResizeEvent *event)
 {
   QTableView::resizeEvent(event);
+  emptyStatus_->setGeometry(viewport()->rect());
+}
+
+void WaveTableElement::scrollContentsBy(int dx, int dy)
+{
+  QTableView::scrollContentsBy(dx, dy);
+  emptyStatus_->setGeometry(viewport()->rect());
 }
 
 bool WaveTableElement::forwardMouseEventToParent(QMouseEvent *event) const
@@ -596,6 +613,7 @@ void WaveTableElement::applyModelColors()
   model_->setForegroundColor(foregroundColor_);
   model_->setBackgroundColor(backgroundColor_);
   model_->setColorMode(colorMode_);
+  updateEmptyStatus();
   viewport()->update();
 }
 
@@ -619,6 +637,20 @@ void WaveTableElement::updateRuntimeStatus()
   viewport()->setToolTip(QString());
   setStatusTip(text);
   setAccessibleDescription(text);
+  updateEmptyStatus();
+}
+
+void WaveTableElement::updateEmptyStatus()
+{
+  emptyStatus_->setText(runtimeStatusText());
+  QPalette pal = palette();
+  const QColor foreground =
+      model_->index(0, 0).data(Qt::ForegroundRole).value<QColor>();
+  pal.setColor(QPalette::WindowText, foreground);
+  pal.setColor(QPalette::Text, foreground);
+  emptyStatus_->setPalette(pal);
+  emptyStatus_->setGeometry(viewport()->rect());
+  emptyStatus_->setVisible(displayedElementCount() == 0);
 }
 
 void WaveTableElement::applyFontSize()

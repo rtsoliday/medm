@@ -1,5 +1,7 @@
 #include "cartesian_axis_dialog.h"
 
+#include "adl_writer.h"
+
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -489,7 +491,7 @@ void CartesianAxisDialog::commitMinimum()
   if (!minimumSetters_[axis]) {
     if (minimumGetters_[axis]) {
       const QSignalBlocker blocker(minEdit_);
-      minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 17));
+      minEdit_->setText(AdlWriter::formatDouble(minimumGetters_[axis]()));
     }
     return;
   }
@@ -498,7 +500,7 @@ void CartesianAxisDialog::commitMinimum()
   if (!ok || !std::isfinite(value)) {
     if (minimumGetters_[axis]) {
       const QSignalBlocker blocker(minEdit_);
-      minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 17));
+      minEdit_->setText(AdlWriter::formatDouble(minimumGetters_[axis]()));
     }
     return;
   }
@@ -510,7 +512,7 @@ void CartesianAxisDialog::commitMinimum()
   }
   if (minimumGetters_[axis]) {
     const QSignalBlocker blocker(minEdit_);
-    minEdit_->setText(QString::number(minimumGetters_[axis](), 'g', 17));
+    minEdit_->setText(AdlWriter::formatDouble(minimumGetters_[axis]()));
   }
 }
 
@@ -523,7 +525,7 @@ void CartesianAxisDialog::commitMaximum()
   if (!maximumSetters_[axis]) {
     if (maximumGetters_[axis]) {
       const QSignalBlocker blocker(maxEdit_);
-      maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 17));
+      maxEdit_->setText(AdlWriter::formatDouble(maximumGetters_[axis]()));
     }
     return;
   }
@@ -532,7 +534,7 @@ void CartesianAxisDialog::commitMaximum()
   if (!ok || !std::isfinite(value)) {
     if (maximumGetters_[axis]) {
       const QSignalBlocker blocker(maxEdit_);
-      maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 17));
+      maxEdit_->setText(AdlWriter::formatDouble(maximumGetters_[axis]()));
     }
     return;
   }
@@ -544,7 +546,7 @@ void CartesianAxisDialog::commitMaximum()
   }
   if (maximumGetters_[axis]) {
     const QSignalBlocker blocker(maxEdit_);
-    maxEdit_->setText(QString::number(maximumGetters_[axis](), 'g', 17));
+    maxEdit_->setText(AdlWriter::formatDouble(maximumGetters_[axis]()));
   }
 }
 
@@ -603,7 +605,7 @@ void CartesianAxisDialog::refreshForAxis(int axisIndex)
 
   if (minimumGetters_[currentAxisIndex_]) {
     const QSignalBlocker blocker(minEdit_);
-    minEdit_->setText(QString::number(minimumGetters_[currentAxisIndex_](), 'g', 17));
+    minEdit_->setText(AdlWriter::formatDouble(minimumGetters_[currentAxisIndex_]()));
   } else {
     const QSignalBlocker blocker(minEdit_);
     minEdit_->clear();
@@ -611,7 +613,7 @@ void CartesianAxisDialog::refreshForAxis(int axisIndex)
 
   if (maximumGetters_[currentAxisIndex_]) {
     const QSignalBlocker blocker(maxEdit_);
-    maxEdit_->setText(QString::number(maximumGetters_[currentAxisIndex_](), 'g', 17));
+    maxEdit_->setText(AdlWriter::formatDouble(maximumGetters_[currentAxisIndex_]()));
   } else {
     const QSignalBlocker blocker(maxEdit_);
     maxEdit_->clear();

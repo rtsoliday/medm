@@ -1,5 +1,7 @@
 #include "pv_limits_dialog.h"
 
+#include "adl_writer.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -998,7 +1000,7 @@ void PvLimitsDialog::updateMeterControls()
           value = activeValue;
         }
       }
-      loprEdit_->setText(QString::number(value, 'g', 17));
+      loprEdit_->setText(AdlWriter::formatDouble(value));
       loprEdit_->setEnabled(limits.lowSource != PvLimitSource::kChannel);
     }
   }
@@ -1016,7 +1018,7 @@ void PvLimitsDialog::updateMeterControls()
           value = activeValue;
         }
       }
-      hoprEdit_->setText(QString::number(value, 'g', 17));
+      hoprEdit_->setText(AdlWriter::formatDouble(value));
       hoprEdit_->setEnabled(limits.highSource != PvLimitSource::kChannel);
     }
   }

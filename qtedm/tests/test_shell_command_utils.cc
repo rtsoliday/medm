@@ -87,18 +87,41 @@ void TestShellCommandUtils::preservesTokenValuesWithoutRecursiveExpansion()
 
 void TestShellCommandUtils::quotesDynamicValuesAndRejectsUnsafeMacros()
 {
+  const auto usedIn = [](const QString &value) {
+    return QStringList{QStringLiteral("tool ") + value};
+  };
   QVERIFY(shellCommandMacrosAreSafe({
-      {QStringLiteral("P"), QStringLiteral("../safe path:1")}}));
+      {QStringLiteral("P"), QStringLiteral("../safe path:1")}},
+      usedIn(QStringLiteral("../safe path:1"))));
   QVERIFY(!shellCommandMacrosAreSafe({
-      {QStringLiteral("P"), QStringLiteral("safe; unexpected")}}));
+      {QStringLiteral("P"), QStringLiteral("safe; unexpected")}},
+      usedIn(QStringLiteral("safe; unexpected"))));
   QVERIFY(!shellCommandMacrosAreSafe({
-      {QStringLiteral("P"), QStringLiteral("safe\nunexpected")}}));
+      {QStringLiteral("P"), QStringLiteral("safe\nunexpected")}},
+      usedIn(QStringLiteral("safe\nunexpected"))));
   QVERIFY(!shellCommandMacrosAreSafe({
-      {QStringLiteral("T"), QStringLiteral("x -e touch /tmp/x")}}));
+      {QStringLiteral("T"), QStringLiteral("x -e touch /tmp/x")}},
+      usedIn(QStringLiteral("x -e touch /tmp/x"))));
   QVERIFY(!shellCommandMacrosAreSafe({
-      {QStringLiteral("T"), QStringLiteral("--output=/tmp/x")}}));
+      {QStringLiteral("T"), QStringLiteral("--output=/tmp/x")}},
+      usedIn(QStringLiteral("--output=/tmp/x"))));
   QVERIFY(shellCommandMacrosAreSafe({
-      {QStringLiteral("OFFSET"), QStringLiteral("-5 -0.25 1-2 a-b")}}));
+      {QStringLiteral("OFFSET"), QStringLiteral("-5 -0.25 1-2 a-b")}},
+      usedIn(QStringLiteral("-5 -0.25 1-2 a-b"))));
+
+  // Macros the command does not contain never block it.
+  const QHash<QString, QString> mixed{
+      {QStringLiteral("DESC"), QStringLiteral("Pump (upstream) #1")},
+      {QStringLiteral("BPM"), QStringLiteral("SR:C01-BI{BPM:1}")},
+      {QStringLiteral("P"), QStringLiteral("S35:")}};
+  QString unsafeMacro;
+  QVERIFY(shellCommandMacrosAreSafe(mixed,
+      {QStringLiteral("probe S35:current &")}, &unsafeMacro));
+  QVERIFY(unsafeMacro.isEmpty());
+  QVERIFY(!shellCommandMacrosAreSafe(mixed,
+      {QStringLiteral("probe S35:current &"),
+       QStringLiteral("probe SR:C01-BI{BPM:1} &")}, &unsafeMacro));
+  QCOMPARE(unsafeMacro, QStringLiteral("BPM"));
 
   ShellCommandExpansionContext controls;
   controls.displayPath = QStringLiteral("x\necho injected #");
@@ -127,7 +150,21 @@ void TestShellCommandUtils::quotesDynamicValuesAndRejectsUnsafeMacros()
   QVERIFY(expandShellCommandTokens(QStringLiteral("open &A \"&T\" &P"),
       context, &output));
   QCOMPARE(output, QStringLiteral(
-      "open 'a'\\'';touch x' \"a\\\";touch x\" 'pv;touch x'"));
+      "open 'a'\\'';touch' 'x' \"a\\\";touch x\" 'pv;touch' 'x'"));
+  // Unquoted values split into words as in MEDM, but each word is literal.
+  context.displayTitle = QStringLiteral("Beam  Current (mA)");
+  QVERIFY(expandShellCommandTokens(QStringLiteral("xmessage &T '&T'"),
+      context, &output));
+  QCOMPARE(output, QStringLiteral(
+      "xmessage 'Beam' 'Current' '(mA)' 'Beam  Current (mA)'"));
+  // Nested-syntax characters that the outer shell treats literally do not
+  // block later tokens.
+  context.displayPath = QStringLiteral("/displays/main.adl");
+  QVERIFY(expandShellCommandTokens(
+      QStringLiteral("awk '{print $(NF) \"`\"}' \"<<\" \\` &A"), context,
+      &output, &error));
+  QCOMPARE(output, QStringLiteral(
+      "awk '{print $(NF) \"`\"}' \"<<\" \\` '/displays/main.adl'"));
   context.displayTitle = QStringLiteral("x$(id)`whoami`");
   QVERIFY(expandShellCommandTokens(QStringLiteral("open \"&T\""),
       context, &output));

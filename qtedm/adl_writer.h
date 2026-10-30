@@ -31,6 +31,12 @@ QString indentString(int level);
 void writeIndentedLine(QTextStream &stream, int level, const QString &text);
 QString escapeAdlString(const QString &value);
 bool isNonDefaultDouble(double value, double defaultValue);
+/* Shortest text that reads back as exactly the same double. */
+QString formatDouble(double value);
+/* MEDM's printf("%f") and printf("%g") text when it reads back exactly, so
+ * saved MEDM files keep their numbers; otherwise formatDouble(). */
+QString formatMedmFixed(double value);
+QString formatMedmGeneral(double value);
 QString colorModeString(TextColorMode mode);
 QString visibilityModeString(TextVisibilityMode mode);
 QString lineStyleString(RectangleLineStyle style);

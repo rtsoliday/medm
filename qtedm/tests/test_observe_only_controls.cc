@@ -109,11 +109,11 @@ class TestObserveOnlyControls : public QObject
   Q_OBJECT
 
 private slots:
-  void choiceButtonLabelsFitCells_data();
-  void choiceButtonLabelsFitCells();
+  void choiceButtonLabelsUseMedmFont_data();
+  void choiceButtonLabelsUseMedmFont();
   void relatedDisplayLabelPadding();
-  void relatedDisplayLabelsFitCells_data();
-  void relatedDisplayLabelsFitCells();
+  void relatedDisplayLabelsClipToCells_data();
+  void relatedDisplayLabelsClipToCells();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -126,8 +126,8 @@ private slots:
   void setpointRejectsNumericArrays();
   void rejectedSetpointShowsError_data();
   void rejectedSetpointShowsError();
-  void menuLabelsFitAvailableWidth_data();
-  void menuLabelsFitAvailableWidth();
+  void menuLabelsUseMedmFont_data();
+  void menuLabelsUseMedmFont();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
@@ -170,6 +170,7 @@ private slots:
   void statusRectangleCoversHiddenRelatedDisplay_data();
   void statusRectangleCoversHiddenRelatedDisplay();
   void legacyAttributesApplyLikeMedm();
+  void legacyAttributesKeepQuotedBraces();
   void graphicEdgesMatchMedmCoordinates_data();
   void graphicEdgesMatchMedmCoordinates();
   void cosmeticOutlineEditsKeepObjectBounds_data();
@@ -370,6 +371,43 @@ void TestObserveOnlyControls::legacyAttributesApplyLikeMedm()
   QCOMPARE(staticOval->colorMode(), TextColorMode::kStatic);
   QCOMPARE(staticOval->visibilityMode(), TextVisibilityMode::kStatic);
   QCOMPARE(staticOval->color(), window.colorForIndex(15));
+}
+
+void TestObserveOnlyControls::legacyAttributesKeepQuotedBraces()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile fixture(directory.filePath(QStringLiteral("legacy-braces.adl")));
+  QVERIFY(fixture.open(QIODevice::WriteOnly));
+  /* Braces inside a quoted value are text, not block syntax. */
+  const QByteArray adl =
+      "file {\n\tname=\"legacy-braces.adl\"\n}\n"
+      "display {\n\tobject {\n\t\twidth=60\n\t\theight=60\n\t}\n"
+      "\tclr=14\n\tbclr=4\n}\n"
+      "\"dynamic attribute\" {\n\tattr {\n\t\tmod {\n"
+      "\t\t\tclr=\"alarm\"\n\t\t}\n\t\tparam {\n"
+      "\t\t\tchan=\"SR:C01{BPM}\"\n\t\t}\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=10\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=30\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n";
+  QCOMPARE(fixture.write(adl), qint64(adl.size()));
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture.fileName(), &error), qPrintable(error));
+  QCOMPARE(window.ovalElements_.size(), 2);
+  QCOMPARE(window.ovalElements_.first()->channel(0),
+      QStringLiteral("SR:C01{BPM}"));
+  QCOMPARE(window.ovalElements_.first()->colorMode(), TextColorMode::kAlarm);
+  QVERIFY(window.ovalElements_.last()->channel(0).isEmpty());
 }
 
 void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates_data()
@@ -595,7 +633,7 @@ void TestObserveOnlyControls::cosmeticOutlineEditsKeepObjectBounds()
   }
 }
 
-void TestObserveOnlyControls::choiceButtonLabelsFitCells_data()
+void TestObserveOnlyControls::choiceButtonLabelsUseMedmFont_data()
 {
   QTest::addColumn<QSize>("size");
   QTest::addColumn<int>("stacking");
@@ -611,7 +649,7 @@ void TestObserveOnlyControls::choiceButtonLabelsFitCells_data()
       << int(ChoiceButtonStacking::kRowColumn);
 }
 
-void TestObserveOnlyControls::choiceButtonLabelsFitCells()
+void TestObserveOnlyControls::choiceButtonLabelsUseMedmFont()
 {
   QFETCH(QSize, size);
   QFETCH(int, stacking);
@@ -626,25 +664,25 @@ void TestObserveOnlyControls::choiceButtonLabelsFitCells()
   element.show();
   QCoreApplication::processEvents();
 
-  const auto checkLabels = [&element]() {
-    const auto buttons = element.findChildren<QAbstractButton *>();
-    QCOMPARE(buttons.size(), 4);
-    for (const auto *button : buttons) {
-      const QRect textBounds = button->rect().adjusted(3, 2, -3, -2);
-      const QFontMetrics metrics(button->font());
-      QVERIFY2(metrics.horizontalAdvance(button->text()) <= textBounds.width(),
-          qPrintable(button->text()));
-      QVERIFY(metrics.boundingRect(button->text()).width() <= textBounds.width());
-      QVERIFY(metrics.height() <= textBounds.height());
+  /* MEDM chooses one font from the button height and clips labels that are
+   * too wide, so neither label length nor width changes the font. */
+  const auto buttonFonts = [&element]() {
+    QList<QFont> fonts;
+    for (const auto *button : element.findChildren<QAbstractButton *>()) {
+      fonts.append(button->font());
     }
+    return fonts;
   };
-  checkLabels();
-  // Refit after both geometry changes and a runtime enum-label refresh.
+  const QList<QFont> initial = buttonFonts();
+  QCOMPARE(initial.size(), 4);
+  for (const QFont &font : initial) {
+    QCOMPARE(font, initial.first());
+  }
   element.resize(size.width() * 3 / 4, size.height());
   element.setRuntimeLabels({QStringLiteral("OFF"), QStringLiteral("ON"),
       QStringLiteral("AUTOMATIC"), QStringLiteral("ERROR")});
   QCoreApplication::processEvents();
-  checkLabels();
+  QCOMPARE(buttonFonts(), initial);
   int activated = -1;
   element.setActivationCallback([&activated](int value) { activated = value; });
   const auto buttons = element.findChildren<QAbstractButton *>();
@@ -983,7 +1021,7 @@ void TestObserveOnlyControls::rejectedSetpointShowsError()
   QVERIFY(!edit->accessibleDescription().contains(message));
 }
 
-void TestObserveOnlyControls::menuLabelsFitAvailableWidth_data()
+void TestObserveOnlyControls::menuLabelsUseMedmFont_data()
 {
   QTest::addColumn<QSize>("size");
   QTest::newRow("narrow-tall") << QSize(150, 80);
@@ -991,7 +1029,7 @@ void TestObserveOnlyControls::menuLabelsFitAvailableWidth_data()
   QTest::newRow("wide") << QSize(260, 40);
 }
 
-void TestObserveOnlyControls::menuLabelsFitAvailableWidth()
+void TestObserveOnlyControls::menuLabelsUseMedmFont()
 {
   QFETCH(QSize, size);
   MenuElement element;
@@ -1008,26 +1046,18 @@ void TestObserveOnlyControls::menuLabelsFitAvailableWidth()
   QCoreApplication::processEvents();
   auto *combo = element.findChild<QComboBox *>();
   QVERIFY(combo);
-  const auto checkLabels = [combo]() {
-    QStyleOptionComboBox option;
-    option.initFrom(combo);
-    option.currentText = combo->currentText();
-    const QRect textRect = combo->style()->subControlRect(QStyle::CC_ComboBox,
-        &option, QStyle::SC_ComboBoxEditField, combo);
-    const QFontMetrics metrics(combo->font());
-    for (int i = 0; i < combo->count(); ++i) {
-      QVERIFY2(metrics.horizontalAdvance(combo->itemText(i)) <= textRect.width(),
-          qPrintable(combo->itemText(i)));
-    }
-  };
-  checkLabels();
+  /* As in MEDM, the font depends on the menu height only. */
+  const QFont initial = combo->font();
   element.resize(size.width() * 3 / 4, size.height());
   element.setRuntimeLabels({QStringLiteral("OFF"), QStringLiteral("ON"),
       QStringLiteral("AUTOMATIC"), QStringLiteral("ERROR")});
+  element.setRuntimeValue(2);
   QCoreApplication::processEvents();
-  checkLabels();
+  QCOMPARE(combo->font(), initial);
   int activated = -1;
   element.setActivationCallback([&activated](int index) { activated = index; });
+  element.setRuntimeValue(3);
+  QCoreApplication::processEvents();
   QTest::keyClick(combo, Qt::Key_Up);
   QCOMPARE(activated, 2);
 }
@@ -4262,7 +4292,7 @@ void TestObserveOnlyControls::oversizedRelatedDisplayStaysFitted()
 #endif
 }
 
-void TestObserveOnlyControls::relatedDisplayLabelsFitCells_data()
+void TestObserveOnlyControls::relatedDisplayLabelsClipToCells_data()
 {
   QTest::addColumn<QSize>("size");
   QTest::addColumn<int>("count");
@@ -4272,7 +4302,7 @@ void TestObserveOnlyControls::relatedDisplayLabelsFitCells_data()
   QTest::newRow("column") << QSize(160, 128) << 3 << true;
 }
 
-void TestObserveOnlyControls::relatedDisplayLabelsFitCells()
+void TestObserveOnlyControls::relatedDisplayLabelsClipToCells()
 {
   QFETCH(QSize, size);
   QFETCH(int, count);
@@ -4296,30 +4326,27 @@ void TestObserveOnlyControls::relatedDisplayLabelsFitCells()
     image.save(QDir(visualDir).filePath(
         QString::fromLatin1(QTest::currentDataTag()) + QStringLiteral(".png")));
   }
+  /* As in MEDM, every button uses the height-selected font and a label too
+   * wide for its button is clipped there. Identical labels then render
+   * identically in every cell; a label spilling into a neighbor would not. */
   const QSize cellSize(vertical ? size.width() : size.width() / count,
       vertical ? size.height() / count : size.height());
-  for (int i = 0; i < count; ++i) {
+  const auto interior = [&](int i) {
     const QRect cell(vertical ? 0 : i * cellSize.width(),
         vertical ? i * cellSize.height() : 0,
         cellSize.width(), cellSize.height());
-    int glyphs = 0;
-    bool previousInk = false;
-    for (int x = cell.left() + 2; x <= cell.right() - 2; ++x) {
-      bool ink = false;
-      for (int y = cell.top() + 2; y <= cell.bottom() - 2; ++y) {
-        /* Include antialiased strokes so a small letter is not split into
-         * multiple dark fragments by the platform's font rasterizer. */
-        if (qGray(image.pixel(x, y)) < 200) {
-          ink = true;
-          break;
-        }
-      }
-      if (ink && !previousInk) {
-        ++glyphs;
-      }
-      previousInk = ink;
+    return image.copy(cell.adjusted(2, 2, -2, -2));
+  };
+  const QImage first = interior(0);
+  bool hasInk = false;
+  for (int y = 0; y < first.height() && !hasInk; ++y) {
+    for (int x = 0; x < first.width() && !hasInk; ++x) {
+      hasInk = qGray(first.pixel(x, y)) < 200;
     }
-    QCOMPARE(glyphs, 8); // Every letter must survive fitting and clipping.
+  }
+  QVERIFY(hasInk);
+  for (int i = 1; i < count; ++i) {
+    QVERIFY2(interior(i) == first, qPrintable(QString::number(i)));
   }
   int activated = -1;
   element.setActivationCallback([&](int index, Qt::KeyboardModifiers) {

@@ -10,6 +10,10 @@
 #include "graphic_properties.h"
 #include "graphic_shape_element.h"
 
+/* Shows frame index of movie. Without QMovie::CacheAll a GIF reader can only
+ * rewind or advance one frame, so this steps through the frames instead. */
+bool seekMovieFrame(QMovie *movie, int index);
+
 class ImageElement : public GraphicShapeElement
 {
 public:

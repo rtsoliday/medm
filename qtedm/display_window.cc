@@ -122,12 +122,12 @@ void writeNtNdArrayImageAdl(QTextStream &stream, int level,
   if (AdlWriter::isNonDefaultDouble(image->rangeMinimum(), 0.0)) {
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("rangeMin=%1").arg(
-            QString::number(image->rangeMinimum(), 'g', 17)));
+            AdlWriter::formatDouble(image->rangeMinimum())));
   }
   if (AdlWriter::isNonDefaultDouble(image->rangeMaximum(), 255.0)) {
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("rangeMax=%1").arg(
-            QString::number(image->rangeMaximum(), 'g', 17)));
+            AdlWriter::formatDouble(image->rangeMaximum())));
   }
   if (!image->preserveAspectRatio()) {
     AdlWriter::writeIndentedLine(stream, next,
@@ -19764,7 +19764,7 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
       spinbox && spinbox->isQtedmSpinBox()) {
     dialog.setWindowTitle(QStringLiteral("QtEDM Spin Box Properties"));
     auto *step = new QLineEdit(
-        QString::number(spinbox->stepSize(), 'g', 17), &dialog);
+        AdlWriter::formatDouble(spinbox->stepSize()), &dialog);
     step->setObjectName(QStringLiteral("qtedmSpinBoxStepEdit"));
     form->addRow(QStringLiteral("Step size"), step);
     auto *error = new QLabel(&dialog);
@@ -19853,9 +19853,9 @@ void DisplayWindow::showQtedmExtensionProperties(QWidget *widget)
   for (int row = 0; row < originalStates.size(); ++row) {
     const auto &state = originalStates.at(row);
     table->setItem(row, 0, new QTableWidgetItem(
-        QString::number(state.minimum, 'g', 17)));
+        AdlWriter::formatDouble(state.minimum)));
     table->setItem(row, 1, new QTableWidgetItem(
-        QString::number(state.maximum, 'g', 17)));
+        AdlWriter::formatDouble(state.maximum)));
     table->setItem(row, 2, new QTableWidgetItem(state.label));
     table->setItem(row, 3, new QTableWidgetItem(state.imagePath));
     table->setItem(row, 4, new QTableWidgetItem(
@@ -20010,7 +20010,7 @@ void DisplayWindow::showPluginProperties(PluginElement *element)
     case QtedmPluginPropertyType::kInteger:
       return QString::number(value.toLongLong());
     case QtedmPluginPropertyType::kDouble:
-      return QString::number(value.toDouble(), 'g', 17);
+      return AdlWriter::formatDouble(value.toDouble());
     case QtedmPluginPropertyType::kColor:
       return value.value<QColor>().name(QColor::HexArgb);
     case QtedmPluginPropertyType::kStringList: {
@@ -21889,6 +21889,26 @@ bool DisplayWindow::applyMacroSubstitutions(const QString &input,
   return true;
 }
 
+/* True when ch occurs in an ADL line outside quoted strings, so a brace in
+ * a value such as chan="SR:C01{BPM}" is not taken for block syntax. */
+static bool containsUnquotedAdl(const QString &line, QChar ch)
+{
+  bool quoted = false;
+  bool escaped = false;
+  for (const QChar c : line) {
+    if (escaped) {
+      escaped = false;
+    } else if (quoted && c == QLatin1Char('\\')) {
+      escaped = true;
+    } else if (c == QLatin1Char('"')) {
+      quoted = !quoted;
+    } else if (!quoted && c == ch) {
+      return true;
+    }
+  }
+  return false;
+}
+
 QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
     int fileVersion) const
 {
@@ -21937,7 +21957,7 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
         state = InBasicAttr;
         braceDepth = 0;
         pendingBasicAttr.clear();
-        if (trimmed.contains(QChar('{'))) {
+        if (containsUnquotedAdl(trimmed, QChar('{'))) {
           braceDepth++;
         }
         continue;
@@ -21947,7 +21967,7 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
         state = InDynamicAttr;
         braceDepth = 0;
         pendingDynamicAttr.clear();
-        if (trimmed.contains(QChar('{'))) {
+        if (containsUnquotedAdl(trimmed, QChar('{'))) {
           braceDepth++;
         }
         continue;
@@ -21975,17 +21995,17 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
       break;
 
     case InBasicAttr:
-      if (trimmed.startsWith(QStringLiteral("attr")) && trimmed.contains(QChar('{'))) {
+      if (trimmed.startsWith(QStringLiteral("attr")) && containsUnquotedAdl(trimmed, QChar('{'))) {
         /* Enter attr{} block */
         state = InBasicAttrInner;
         braceDepth = 1;  /* Reset to count attr{} braces */
         continue;
       }
       /* Track other braces in basic attribute block */
-      if (trimmed.contains(QChar('{'))) {
+      if (containsUnquotedAdl(trimmed, QChar('{'))) {
         braceDepth++;
       }
-      if (trimmed.contains(QChar('}'))) {
+      if (containsUnquotedAdl(trimmed, QChar('}'))) {
         braceDepth--;
         if (braceDepth == 0) {
           state = Normal;
@@ -21995,10 +22015,10 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
 
     case InBasicAttrInner:
       /* Count braces to detect end of attr{} */
-      if (trimmed.contains(QChar('{'))) {
+      if (containsUnquotedAdl(trimmed, QChar('{'))) {
         braceDepth++;
       }
-      if (trimmed.contains(QChar('}'))) {
+      if (containsUnquotedAdl(trimmed, QChar('}'))) {
         braceDepth--;
         if (braceDepth == 0) {
           /* End of attr{} - back to basic attribute level */
@@ -22014,15 +22034,15 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
       break;
 
     case InDynamicAttr:
-      if (trimmed.startsWith(QStringLiteral("attr")) && trimmed.contains(QChar('{'))) {
+      if (trimmed.startsWith(QStringLiteral("attr")) && containsUnquotedAdl(trimmed, QChar('{'))) {
         state = InDynamicAttrInner;
         braceDepth = 1;
         continue;
       }
-      if (trimmed.contains(QChar('{'))) {
+      if (containsUnquotedAdl(trimmed, QChar('{'))) {
         braceDepth++;
       }
-      if (trimmed.contains(QChar('}'))) {
+      if (containsUnquotedAdl(trimmed, QChar('}'))) {
         braceDepth--;
         if (braceDepth == 0) {
           state = Normal;
@@ -22034,11 +22054,11 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
       /* Old files nest the properties in mod{} (clr, vis, calc) and
        * param{} (chan) sub-blocks.  Keep only the property lines so the
        * injected block uses the modern flat layout the loaders expect. */
-      if (trimmed.contains(QChar('{'))) {
+      if (containsUnquotedAdl(trimmed, QChar('{'))) {
         braceDepth++;
         continue;
       }
-      if (trimmed.contains(QChar('}'))) {
+      if (containsUnquotedAdl(trimmed, QChar('}'))) {
         braceDepth--;
         if (braceDepth == 0) {
           state = InDynamicAttr;
@@ -22054,16 +22074,16 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
     case InWidget:
       widgetBuffer.append(line);
       /* Detect object{} sub-block */
-      if (trimmed.startsWith(QStringLiteral("object")) && trimmed.contains(QChar('{'))) {
+      if (trimmed.startsWith(QStringLiteral("object")) && containsUnquotedAdl(trimmed, QChar('{'))) {
         state = InWidgetObject;
         objectBraceDepth = 1;
         continue;
       }
       /* Track widget braces */
-      if (trimmed.contains(QChar('{'))) {
+      if (containsUnquotedAdl(trimmed, QChar('{'))) {
         widgetBraceDepth++;
       }
-      if (trimmed.contains(QChar('}'))) {
+      if (containsUnquotedAdl(trimmed, QChar('}'))) {
         widgetBraceDepth--;
         if (widgetBraceDepth == 0) {
           /* Widget complete - output with attributes injected.  As in
@@ -22078,10 +22098,10 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
 
     case InWidgetObject:
       widgetBuffer.append(line);
-      if (trimmed.contains(QChar('{'))) {
+      if (containsUnquotedAdl(trimmed, QChar('{'))) {
         objectBraceDepth++;
       }
-      if (trimmed.contains(QChar('}'))) {
+      if (containsUnquotedAdl(trimmed, QChar('}'))) {
         objectBraceDepth--;
         if (objectBraceDepth == 0) {
           /* object{} closed - inject attributes now */
@@ -22444,7 +22464,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
                     setpoint->toleranceMode())));
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("tolerance=%1")
-                .arg(QString::number(setpoint->tolerance(), 'g', 17)));
+                .arg(AdlWriter::formatDouble(setpoint->tolerance())));
       }
       if (!setpoint->showReadback()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -22453,7 +22473,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (setpoint->isQtedmSpinBox()) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("step=%1").arg(
-                QString::number(setpoint->stepSize(), 'g', 17)));
+                AdlWriter::formatDouble(setpoint->stepSize())));
       }
       AdlWriter::writeLimitsSection(stream, 1, setpoint->limits());
       AdlWriter::writeIndentedLine(stream, 0, QStringLiteral("}"));
@@ -22562,7 +22582,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (slider->increment() != 1.0) {
           AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("dPrecision=%1")
-              .arg(QString::number(slider->increment(), 'g', 17)));
+              .arg(AdlWriter::formatMedmFixed(slider->increment())));
       }
         AdlWriter::writeLimitsSection(stream, 1, slider->limits(),
           slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock(),
@@ -23037,10 +23057,10 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("state {"));
           AdlWriter::writeIndentedLine(stream, 2,
               QStringLiteral("min=%1").arg(
-                  QString::number(state.minimum, 'g', 17)));
+                  AdlWriter::formatDouble(state.minimum)));
           AdlWriter::writeIndentedLine(stream, 2,
               QStringLiteral("max=%1").arg(
-                  QString::number(state.maximum, 'g', 17)));
+                  AdlWriter::formatDouble(state.maximum)));
           if (state.color.isValid()) {
             AdlWriter::writeIndentedLine(stream, 2,
                 QStringLiteral("color=%1").arg(
@@ -23088,7 +23108,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       }
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("initialValue=%1")
-              .arg(QString::number(expression->initialValue(), 'g', 17)));
+              .arg(AdlWriter::formatDouble(expression->initialValue())));
       AdlWriter::writeIndentedLine(stream, 1,
           QStringLiteral("eventSignal=\"%1\"")
               .arg(expressionChannelEventSignalModeString(
@@ -23166,7 +23186,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           && period != kDefaultStripChartPeriod) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("period=%1")
-                .arg(QString::number(period, 'g', 17)));
+                .arg(AdlWriter::formatMedmFixed(period)));
       }
       if (strip->units() != TimeUnits::kSeconds) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -23446,12 +23466,12 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (AdlWriter::isNonDefaultDouble(heatmap->rangeMinimum(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("rangeMin=%1")
-                .arg(QString::number(heatmap->rangeMinimum(), 'g', 17)));
+                .arg(AdlWriter::formatDouble(heatmap->rangeMinimum())));
       }
       if (AdlWriter::isNonDefaultDouble(heatmap->rangeMaximum(), 1.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("rangeMax=%1")
-                .arg(QString::number(heatmap->rangeMaximum(), 'g', 17)));
+                .arg(AdlWriter::formatDouble(heatmap->rangeMaximum())));
       }
       if (!heatmap->invertGreyscale()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -23636,12 +23656,12 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (AdlWriter::isNonDefaultDouble(waterfall->intensityMin(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("intensityMin=%1")
-                .arg(QString::number(waterfall->intensityMin(), 'g', 17)));
+                .arg(AdlWriter::formatDouble(waterfall->intensityMin())));
       }
       if (AdlWriter::isNonDefaultDouble(waterfall->intensityMax(), 1.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("intensityMax=%1")
-                .arg(QString::number(waterfall->intensityMax(), 'g', 17)));
+                .arg(AdlWriter::formatDouble(waterfall->intensityMax())));
       }
       if (!waterfall->showLegend()) {
         AdlWriter::writeIndentedLine(stream, 1, QStringLiteral("showLegend=0"));
@@ -23652,7 +23672,7 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
       if (AdlWriter::isNonDefaultDouble(waterfall->samplePeriod(), 0.0)) {
         AdlWriter::writeIndentedLine(stream, 1,
             QStringLiteral("samplePeriod=%1")
-                .arg(QString::number(waterfall->samplePeriod(), 'g', 17)));
+                .arg(AdlWriter::formatDouble(waterfall->samplePeriod())));
       }
       if (waterfall->units() != TimeUnits::kSeconds) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -24038,7 +24058,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
                   setpoint->toleranceMode())));
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("tolerance=%1")
-              .arg(QString::number(setpoint->tolerance(), 'g', 17)));
+              .arg(AdlWriter::formatDouble(setpoint->tolerance())));
     }
     if (!setpoint->showReadback()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -24047,7 +24067,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (setpoint->isQtedmSpinBox()) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("step=%1").arg(
-              QString::number(setpoint->stepSize(), 'g', 17)));
+              AdlWriter::formatDouble(setpoint->stepSize())));
     }
     AdlWriter::writeLimitsSection(stream, next, setpoint->limits());
     AdlWriter::writeIndentedLine(stream, level, QStringLiteral("}"));
@@ -24157,7 +24177,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (slider->increment() != 1.0) {
       AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("dPrecision=%1")
-          .arg(QString::number(slider->increment(), 'g', 17)));
+          .arg(AdlWriter::formatMedmFixed(slider->increment())));
     }
     AdlWriter::writeLimitsSection(stream, next, slider->limits(),
       slider->hasExplicitLimitsData(), slider->hasExplicitLimitsBlock(),
@@ -24641,10 +24661,10 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         AdlWriter::writeIndentedLine(stream, next, QStringLiteral("state {"));
         AdlWriter::writeIndentedLine(stream, next + 1,
             QStringLiteral("min=%1").arg(
-                QString::number(state.minimum, 'g', 17)));
+                AdlWriter::formatDouble(state.minimum)));
         AdlWriter::writeIndentedLine(stream, next + 1,
             QStringLiteral("max=%1").arg(
-                QString::number(state.maximum, 'g', 17)));
+                AdlWriter::formatDouble(state.maximum)));
         if (state.color.isValid()) {
           AdlWriter::writeIndentedLine(stream, next + 1,
               QStringLiteral("color=%1").arg(
@@ -24693,7 +24713,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     }
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("initialValue=%1")
-            .arg(QString::number(expression->initialValue(), 'g', 17)));
+            .arg(AdlWriter::formatDouble(expression->initialValue())));
     AdlWriter::writeIndentedLine(stream, next,
         QStringLiteral("eventSignal=\"%1\"")
             .arg(expressionChannelEventSignalModeString(
@@ -24771,7 +24791,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (period > 0.0 && period != kDefaultStripChartPeriod) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("period=%1")
-              .arg(QString::number(period, 'g', 17)));
+              .arg(AdlWriter::formatMedmFixed(period)));
     }
     if (strip->units() != TimeUnits::kSeconds) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -25054,12 +25074,12 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (AdlWriter::isNonDefaultDouble(heatmap->rangeMinimum(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("rangeMin=%1")
-              .arg(QString::number(heatmap->rangeMinimum(), 'g', 17)));
+              .arg(AdlWriter::formatDouble(heatmap->rangeMinimum())));
     }
     if (AdlWriter::isNonDefaultDouble(heatmap->rangeMaximum(), 1.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("rangeMax=%1")
-              .arg(QString::number(heatmap->rangeMaximum(), 'g', 17)));
+              .arg(AdlWriter::formatDouble(heatmap->rangeMaximum())));
     }
     if (!heatmap->invertGreyscale()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -25239,12 +25259,12 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (AdlWriter::isNonDefaultDouble(waterfall->intensityMin(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("intensityMin=%1")
-              .arg(QString::number(waterfall->intensityMin(), 'g', 17)));
+              .arg(AdlWriter::formatDouble(waterfall->intensityMin())));
     }
     if (AdlWriter::isNonDefaultDouble(waterfall->intensityMax(), 1.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("intensityMax=%1")
-              .arg(QString::number(waterfall->intensityMax(), 'g', 17)));
+              .arg(AdlWriter::formatDouble(waterfall->intensityMax())));
     }
     if (!waterfall->showLegend()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -25257,7 +25277,7 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
     if (AdlWriter::isNonDefaultDouble(waterfall->samplePeriod(), 0.0)) {
       AdlWriter::writeIndentedLine(stream, next,
           QStringLiteral("samplePeriod=%1")
-              .arg(QString::number(waterfall->samplePeriod(), 'g', 17)));
+              .arg(AdlWriter::formatDouble(waterfall->samplePeriod())));
     }
     if (waterfall->units() != TimeUnits::kSeconds) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -26398,13 +26418,6 @@ void DisplayWindow::runShellCommand(const QString &command)
 {
   if (const auto state = state_.lock(); state && state->observeOnly) {
     qWarning() << "Shell command blocked in observe-only mode";
-    return;
-  }
-  // ADL macros are expanded before parsing, so the shell command no longer
-  // records which words came from macros. Refuse shell syntax in any incoming
-  // macro value instead of executing an ambiguous expanded command.
-  if (!shellCommandMacrosAreSafe(macroDefinitions_)) {
-    qWarning() << "Shell command blocked: a macro value contains shell syntax or an option";
     return;
   }
   const QString trimmed = command.trimmed();
@@ -30854,6 +30867,17 @@ void DisplayWindow::handleShellCommandActivation(
     qWarning() << "Shell command macro expansion failed:" << expansionError;
     return;
   }
+  // ADL macros are expanded before parsing, so the command no longer records
+  // which words came from macros. Refuse it when a macro value it contains
+  // has shell syntax or an option; macros it does not use never block it.
+  QString unsafeMacro;
+  if (!shellCommandMacrosAreSafe(macroDefinitions_,
+          {commandTemplate, expandedCommand}, &unsafeMacro)) {
+    reportShellCommandBlocked(QStringLiteral(
+        "The value of macro %1 contains shell syntax or a command-line "
+        "option, so the command was not run.").arg(unsafeMacro));
+    return;
+  }
   commandTemplate = std::move(expandedCommand);
 
   QString resolved;
@@ -30917,9 +30941,21 @@ bool DisplayWindow::buildShellCommandString(
     return true;
   }
   if (!expansionError.isEmpty()) {
-    qWarning() << "Shell command token expansion failed:" << expansionError;
+    reportShellCommandBlocked(expansionError
+        + QStringLiteral(" The command was not run."));
   }
   return false;
+}
+
+void DisplayWindow::reportShellCommandBlocked(const QString &reason)
+{
+  qWarning() << "Shell command blocked:" << reason;
+  // Non-modal, so a refused command never stalls the display's updates.
+  auto *box = new QMessageBox(QMessageBox::Warning,
+      QStringLiteral("Shell Command"), reason, QMessageBox::Ok, this);
+  box->setAttribute(Qt::WA_DeleteOnClose);
+  box->setObjectName(QStringLiteral("qtedmShellCommandBlocked"));
+  box->open();
 }
 
 bool DisplayWindow::promptForShellCommandInput(

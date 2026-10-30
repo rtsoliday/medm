@@ -4,11 +4,13 @@
 
 namespace {
 
-bool safeMacroValue(const QString &value)
+bool safeMacroValue(const QString &value,
+    const QString &extraAllowed = QString())
 {
   for (const QChar ch : value) {
     if (ch.isLetterOrNumber() || ch == QLatin1Char(' ')
-        || QStringLiteral("_./:@+=,-").contains(ch)) {
+        || QStringLiteral("_./:@+=,-").contains(ch)
+        || extraAllowed.contains(ch)) {
       continue;
     }
 #ifdef Q_OS_WIN
@@ -50,6 +52,29 @@ bool hasControlCharacter(const QString &value)
 #ifndef Q_OS_WIN
 enum class ShellQuote { kNone, kSingle, kDouble };
 
+// Follows the outer shell's quoting one character at a time.
+struct ShellQuoteTracker
+{
+  ShellQuote quote = ShellQuote::kNone;
+  bool escaped = false;
+
+  void advance(QChar ch)
+  {
+    if (quote == ShellQuote::kSingle) {
+      if (ch == QLatin1Char('\'')) quote = ShellQuote::kNone;
+    } else if (escaped) {
+      escaped = false;
+    } else if (ch == QLatin1Char('\\')) {
+      escaped = true;
+    } else if (ch == QLatin1Char('"')) {
+      quote = quote == ShellQuote::kDouble
+          ? ShellQuote::kNone : ShellQuote::kDouble;
+    } else if (ch == QLatin1Char('\'') && quote == ShellQuote::kNone) {
+      quote = ShellQuote::kSingle;
+    }
+  }
+};
+
 QString quotedValue(const QString &value, ShellQuote quote)
 {
   if (quote == ShellQuote::kDouble) {
@@ -60,32 +85,64 @@ QString quotedValue(const QString &value, ShellQuote quote)
     escaped.replace(QLatin1Char('`'), QStringLiteral("\\`"));
     return escaped;
   }
-  QString escaped = value;
-  escaped.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
-  return quote == ShellQuote::kSingle ? escaped
-      : QLatin1Char('\'') + escaped + QLatin1Char('\'');
+  if (quote == ShellQuote::kSingle) {
+    QString escaped = value;
+    escaped.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
+    return escaped;
+  }
+  // Unquoted, MEDM's shell splits the value into words. Quote each word so
+  // the value still splits there but is not otherwise interpreted.
+  QStringList words;
+  for (const QString &word :
+      value.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+    words.append(QLatin1Char('\'') + quotedValue(word, ShellQuote::kSingle)
+        + QLatin1Char('\''));
+  }
+  return words.join(QLatin1Char(' '));
 }
 
+// Command substitution and here-documents start nested shell text with its
+// own quoting rules. Single-quoted text is literal to the outer shell, and
+// only $( and ` stay active inside double quotes.
 int firstNestedShellSyntax(const QString &command)
 {
-  int first = -1;
-  const auto consider = [&first](int position) {
-    if (position >= 0 && (first < 0 || position < first)) first = position;
-  };
-  consider(command.indexOf(QStringLiteral("$(")));
-  consider(command.indexOf(QLatin1Char('`')));
-  consider(command.indexOf(QStringLiteral("<<")));
-  return first;
+  ShellQuoteTracker tracker;
+  for (int index = 0; index < command.size(); ++index) {
+    const QChar ch = command.at(index);
+    const QChar next = index + 1 < command.size()
+        ? command.at(index + 1) : QChar();
+    if (tracker.quote != ShellQuote::kSingle && !tracker.escaped) {
+      if (ch == QLatin1Char('`')
+          || (ch == QLatin1Char('$') && next == QLatin1Char('('))) {
+        return index;
+      }
+      if (tracker.quote == ShellQuote::kNone && ch == QLatin1Char('<')
+          && next == QLatin1Char('<')) {
+        return index;
+      }
+    }
+    tracker.advance(ch);
+  }
+  return -1;
 }
 #endif
 
 } // namespace
 
-bool shellCommandMacrosAreSafe(const QHash<QString, QString> &macros)
+bool shellCommandMacrosAreSafe(const QHash<QString, QString> &macros,
+    const QStringList &commandTexts, QString *unsafeMacro)
 {
   for (auto it = macros.cbegin(); it != macros.cend(); ++it) {
-    if (!safeMacroValue(it.value()) || hasOptionWord(it.value())) {
-      return false;
+    const QString &value = it.value();
+    if (value.isEmpty()
+        || (safeMacroValue(value) && !hasOptionWord(value))) {
+      continue;
+    }
+    for (const QString &text : commandTexts) {
+      if (text.contains(value)) {
+        if (unsafeMacro) *unsafeMacro = it.key();
+        return false;
+      }
     }
   }
   return true;
@@ -110,7 +167,9 @@ bool expandShellCommandTokens(const QString &command,
       return true;
     }
 #ifdef Q_OS_WIN
-    if (!safeMacroValue(value)) {
+    // cmd.exe treats parentheses literally outside command blocks, and
+    // paths such as C:\Program Files (x86) contain them.
+    if (!safeMacroValue(value, QStringLiteral("()"))) {
       if (errorMessage) *errorMessage = QStringLiteral(
           "A dynamic shell value contains characters cmd.exe could interpret.");
       return true;
@@ -119,10 +178,9 @@ bool expandShellCommandTokens(const QString &command,
     return false;
   };
 #ifndef Q_OS_WIN
-  ShellQuote quote = ShellQuote::kNone;
-  bool escaped = false;
   // This quote tracker describes the outer command only. Command
   // substitutions and here-documents have their own shell quoting rules.
+  ShellQuoteTracker tracker;
   const int nestedSyntax = firstNestedShellSyntax(command);
 #endif
   for (int index = 0; index < command.size(); ++index) {
@@ -134,18 +192,7 @@ bool expandShellCommandTokens(const QString &command,
             && command.at(index + 1) != QLatin1Char('X'))) {
       output.append(ch);
 #ifndef Q_OS_WIN
-      if (quote == ShellQuote::kSingle) {
-        if (ch == QLatin1Char('\'')) quote = ShellQuote::kNone;
-      } else if (escaped) {
-        escaped = false;
-      } else if (ch == QLatin1Char('\\')) {
-        escaped = true;
-      } else if (ch == QLatin1Char('"')) {
-        quote = quote == ShellQuote::kDouble
-            ? ShellQuote::kNone : ShellQuote::kDouble;
-      } else if (ch == QLatin1Char('\'') && quote == ShellQuote::kNone) {
-        quote = ShellQuote::kSingle;
-      }
+      tracker.advance(ch);
 #endif
       continue;
     }
@@ -157,7 +204,7 @@ bool expandShellCommandTokens(const QString &command,
           "Dynamic shell tokens are not supported after nested shell syntax.");
       return false;
     }
-    if (escaped) {
+    if (tracker.escaped) {
       if (errorMessage) *errorMessage = QStringLiteral(
           "A shell token cannot follow a backslash.");
       return false;
@@ -179,7 +226,7 @@ bool expandShellCommandTokens(const QString &command,
 #else
       QStringList names;
       for (const QString &name : context.pvNames) {
-        names.append(quotedValue(name, quote));
+        names.append(quotedValue(name, tracker.quote));
       }
       output.append(names.join(QLatin1Char(' ')));
 #endif
@@ -189,7 +236,7 @@ bool expandShellCommandTokens(const QString &command,
 #ifdef Q_OS_WIN
       output.append(context.displayPath);
 #else
-      output.append(quotedValue(context.displayPath, quote));
+      output.append(quotedValue(context.displayPath, tracker.quote));
 #endif
       ++index;
     } else if (token == QLatin1Char('T')) {
@@ -197,7 +244,7 @@ bool expandShellCommandTokens(const QString &command,
 #ifdef Q_OS_WIN
       output.append(context.displayTitle);
 #else
-      output.append(quotedValue(context.displayTitle, quote));
+      output.append(quotedValue(context.displayTitle, tracker.quote));
 #endif
       ++index;
     } else if (token == QLatin1Char('X')) {

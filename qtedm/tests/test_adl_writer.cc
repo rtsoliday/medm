@@ -36,6 +36,7 @@ private slots:
   void writesLimitsSection();
   void preciseRangesRoundTrip_data();
   void preciseRangesRoundTrip();
+  void writesMedmNumberFormats();
   void writesTextAreaEnumStrings();
   void writesHeatmapProfileModeEnumStrings();
   void writesHeatmapRangeModeEnumStrings();
@@ -159,6 +160,43 @@ void TestAdlWriter::preciseRangesRoundTrip()
   QVERIFY(axis);
   QVERIFY(propertyValue(*axis, QStringLiteral("minRange")).toDouble() == low);
   QVERIFY(propertyValue(*axis, QStringLiteral("maxRange")).toDouble() == high);
+}
+
+void TestAdlWriter::writesMedmNumberFormats()
+{
+  /* MEDM writes limits with %g and axis ranges with %f. Keep its text when
+   * that reads back exactly; otherwise use the shortest exact text. */
+  QCOMPARE(AdlWriter::formatMedmGeneral(0.1), QStringLiteral("0.1"));
+  QCOMPARE(AdlWriter::formatMedmGeneral(1.2345678901234567),
+      QStringLiteral("1.2345678901234567"));
+  QCOMPARE(AdlWriter::formatMedmFixed(0.1), QStringLiteral("0.100000"));
+  QCOMPARE(AdlWriter::formatMedmFixed(-2.5), QStringLiteral("-2.500000"));
+  QCOMPARE(AdlWriter::formatMedmFixed(1e-10), QStringLiteral("1e-10"));
+  QCOMPARE(AdlWriter::formatDouble(0.1), QStringLiteral("0.1"));
+  QCOMPARE(AdlWriter::formatDouble(0.3), QStringLiteral("0.3"));
+
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.1;
+  limits.highDefault = 2.5;
+  QString output;
+  QTextStream stream(&output);
+  AdlWriter::writeLimitsSection(stream, 0, limits, true, false, true, true,
+      true, true);
+  AdlWriter::writeCartesianAxisSection(stream, 0, 0,
+      CartesianPlotAxisStyle::kLinear, CartesianPlotRangeStyle::kUserSpecified,
+      0.1, 2.5, CartesianPlotTimeFormat::kHhMmSs, true);
+  stream.flush();
+  QStringList lines = output.split(QLatin1Char('\n'));
+  for (QString &line : lines) {
+    line = line.trimmed();
+  }
+  QVERIFY2(lines.contains(QStringLiteral("loprDefault=0.1")),
+      qPrintable(output));
+  QVERIFY(lines.contains(QStringLiteral("hoprDefault=2.5")));
+  QVERIFY(lines.contains(QStringLiteral("minRange=0.100000")));
+  QVERIFY(lines.contains(QStringLiteral("maxRange=2.500000")));
 }
 
 void TestAdlWriter::writesLimitsSection()

@@ -558,7 +558,7 @@ way.</p>
     <li><strong>Configure:</strong> Image file name, image type, optional dynamic visibility, and optional calculation support.</li>
     <li><strong>Use when:</strong> A raster image or animated GIF communicates state more effectively than basic shapes.</li>
     <li><strong>Practical note:</strong> Keep referenced image files on the display path or use an explicit file path so operators see the same asset everywhere.</li>
-    <li><strong>Memory:</strong> QtEDM caches GIF frames for seeking only when their estimated decoded size fits within 64 MiB per image and a 256 MiB process-wide GIF cache budget. Larger or unknown-size animations are played without full-frame caching.</li>
+    <li><strong>Memory:</strong> QtEDM caches decoded GIF frames only when their estimated size fits within 64 MiB per image and a 256 MiB process-wide GIF cache budget. Larger or unknown-size animations are played without full-frame caching; Image Calc frame selection still works, but reaching an earlier frame decodes the animation again from its start.</li>
   </ul>
 </div>
 
@@ -1217,7 +1217,7 @@ complete extension list.</p>
     <li><strong>Configure:</strong> Button label plus one or more commands and arguments.</li>
     <li><strong>Use when:</strong> The operator workflow needs to hand off to an external program instead of writing a PV.</li>
     <li><strong>Operational note:</strong> Prefer explicit paths and predictable environment setup because commands run in the operator's local session context.</li>
-    <li><strong>Security:</strong> Shell actions are disabled by <code>--read-only</code>. Dynamic <code>&amp;A</code>, <code>&amp;T</code>, and <code>&amp;P</code> values are quoted on Unix; they are rejected after command substitution, backtick, or here-document syntax, where outer quoting is insufficient, and values containing control characters such as line breaks are rejected. Shell syntax in incoming macro values, or a macro word that starts with <code>-</code> other than a number, blocks command execution. Quoting protects one shell level only: do not pass dynamic values to a second shell, such as <code>sh -c</code>, <code>xterm -e</code>, or <code>ssh</code>. Author display files with shell commands only in trusted locations.</li>
+    <li><strong>Security:</strong> Shell actions are disabled by <code>--read-only</code>. On Unix, unquoted dynamic <code>&amp;A</code>, <code>&amp;T</code>, and <code>&amp;P</code> values split into words as in MEDM, and each word is quoted so it is not otherwise interpreted. These tokens are rejected inside or after command substitution, backtick, or here-document syntax, where outer quoting is insufficient; such syntax inside single quotes does not count. Values containing control characters such as line breaks are rejected. A Shell Command is refused when a macro value it contains has shell syntax, or a word that starts with <code>-</code> other than a number; macros the command does not use never block it, and Execute menu commands from <code>MEDM_EXEC_LIST</code> are not checked. A refused command shows a message explaining why. Quoting protects one shell level only: do not pass dynamic values to a second shell, such as <code>sh -c</code>, <code>xterm -e</code>, or <code>ssh</code>. Author display files with shell commands only in trusted locations.</li>
   </ul>
 </div>
 

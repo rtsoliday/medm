@@ -129,8 +129,7 @@ int indexForGridCell(int row, int column, int rows, int columns, int itemCount,
 
 QFont shrinkFontToFit(const QString &text, const QRect &bounds, QFont font)
 {
-  // Legacy widget fonts use pixels. Preserve their size and family unless the
-  // label actually needs to shrink, including in tall, narrow enum cells.
+  // The fallback widget font may be sized in pixels or points.
   if (font.pixelSize() <= 0 && font.pointSizeF() <= 0.0) {
     font.setPixelSize(10);
   }
@@ -724,9 +723,8 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
         QFont labelFont = medmChoiceButtonFont(height(), kSampleButtonCount,
             stacking_, std::max(1, textBounds.height()));
         if (labelFont.family().isEmpty()) {
-          labelFont = font();
+          labelFont = shrinkFontToFit(label, textBounds, font());
         }
-        labelFont = shrinkFontToFit(label, textBounds, labelFont);
         paintChoiceButton(painter, interior,
             sampleIndex == 0, true, foreground, background, label, labelFont);
 
@@ -1003,10 +1001,12 @@ void ChoiceButtonElement::applyButtonFont(QAbstractButton *button,
   const QRect textBounds = bounds.adjusted(3, 2, -3, -2);
   QFont buttonFont = medmChoiceButtonFont(height(), buttons_.size(),
       stacking_, std::max(1, textBounds.height()));
+  /* As in MEDM, the legacy font depends on the button height only, and a
+   * label too wide for its button is clipped. Only the fallback font used
+   * when no legacy font is available shrinks to fit. */
   if (buttonFont.family().isEmpty()) {
-    buttonFont = font();
+    buttonFont = shrinkFontToFit(label, textBounds, font());
   }
-  buttonFont = shrinkFontToFit(label, textBounds, buttonFont);
   button->setFont(buttonFont);
 }
 

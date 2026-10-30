@@ -1,5 +1,6 @@
 #include "adl_writer.h"
 
+#include <QLocale>
 #include <QTextStream>
 
 #include <algorithm>
@@ -64,6 +65,32 @@ QString escapeAdlString(const QString &value)
 bool isNonDefaultDouble(double value, double defaultValue)
 {
   return value != defaultValue;
+}
+
+QString formatDouble(double value)
+{
+  return QString::number(value, 'g', QLocale::FloatingPointShortest);
+}
+
+namespace {
+
+QString formatIfExact(double value, char format, int precision)
+{
+  const QString text = QString::number(value, format, precision);
+  bool ok = false;
+  return text.toDouble(&ok) == value && ok ? text : formatDouble(value);
+}
+
+} // namespace
+
+QString formatMedmFixed(double value)
+{
+  return formatIfExact(value, 'f', 6);
+}
+
+QString formatMedmGeneral(double value)
+{
+  return formatIfExact(value, 'g', 6);
 }
 
 QString colorModeString(TextColorMode mode)
@@ -833,12 +860,12 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
     if (limits.lowDefault != 0.0) {
       writeIndentedLine(stream, level + 1,
           QStringLiteral("loprDefault=%1")
-              .arg(QString::number(limits.lowDefault, 'g', 17)));
+              .arg(formatMedmGeneral(limits.lowDefault)));
     }
   } else if (includeLowDefault) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("loprDefault=%1")
-            .arg(QString::number(limits.lowDefault, 'g', 17)));
+            .arg(formatMedmGeneral(limits.lowDefault)));
   }
   if (hasHigh) {
     const PvLimitSource source = !preserveUserSources
@@ -851,12 +878,12 @@ void writeLimitsSection(QTextStream &stream, int level, const PvLimits &limits,
     if (limits.highDefault != 1.0) {
       writeIndentedLine(stream, level + 1,
           QStringLiteral("hoprDefault=%1")
-              .arg(QString::number(limits.highDefault, 'g', 17)));
+              .arg(formatMedmGeneral(limits.highDefault)));
     }
   } else if (includeHighDefault) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("hoprDefault=%1")
-            .arg(QString::number(limits.highDefault, 'g', 17)));
+            .arg(formatMedmGeneral(limits.highDefault)));
   }
   if (hasPrecision) {
     const PvLimitSource source = !preserveUserSources
@@ -981,12 +1008,12 @@ void writeCartesianAxisSection(QTextStream &stream, int level, int axisIndex,
   if (!defaultMin) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("minRange=%1")
-            .arg(QString::number(minRange, 'g', 17)));
+            .arg(formatMedmFixed(minRange)));
   }
   if (!defaultMax) {
     writeIndentedLine(stream, level + 1,
         QStringLiteral("maxRange=%1")
-            .arg(QString::number(maxRange, 'g', 17)));
+            .arg(formatMedmFixed(maxRange)));
   }
   if (includeTimeFormat && !defaultTime) {
     writeIndentedLine(stream, level + 1,

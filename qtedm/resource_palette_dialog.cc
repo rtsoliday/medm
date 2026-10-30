@@ -5,6 +5,7 @@
 #include <limits>
 #include <utility>
 
+#include "adl_writer.h"
 #include "cartesian_axis_dialog.h"
 #include "cartesian_plot_element.h"
 #include "color_palette_dialog.h"
@@ -4012,7 +4013,7 @@ textMonitorLayout->setRowStretch(7, 1);
         const double current = expressionChannelInitialValueGetter_
             ? expressionChannelInitialValueGetter_() : 0.0;
         expressionChannelInitialValueEdit_->setText(
-            QString::number(current, 'g', 17));
+            AdlWriter::formatDouble(current));
       });
 
   expressionChannelEventSignalCombo_ = new QComboBox;
@@ -4860,7 +4861,7 @@ void ResourcePaletteDialog::showForSetpointControl(std::function<QRect()> geomet
         ? setpointControlToleranceGetter_() : 0.0;
     const QSignalBlocker blocker(setpointControlToleranceEdit_);
     setpointControlToleranceEdit_->setText(
-        QString::number(tolerance, 'g', 17));
+        AdlWriter::formatDouble(tolerance));
     committedTexts_[setpointControlToleranceEdit_] =
         setpointControlToleranceEdit_->text();
   }
@@ -7763,7 +7764,7 @@ void ResourcePaletteDialog::showForStripChart(std::function<QRect()> geometryGet
     if (value <= 0.0) {
       value = kDefaultStripChartPeriod;
     }
-    const QString text = QString::number(value, 'g', 17);
+    const QString text = AdlWriter::formatDouble(value);
     const QSignalBlocker blocker(stripPeriodEdit_);
     stripPeriodEdit_->setText(text);
     stripPeriodEdit_->setEnabled(static_cast<bool>(stripPeriodSetter_));
@@ -8670,9 +8671,9 @@ void ResourcePaletteDialog::showForExpressionChannel(std::function<QRect()> geom
 
   if (expressionChannelInitialValueEdit_) {
     const QSignalBlocker blocker(expressionChannelInitialValueEdit_);
-    expressionChannelInitialValueEdit_->setText(QString::number(
+    expressionChannelInitialValueEdit_->setText(AdlWriter::formatDouble(
         expressionChannelInitialValueGetter_
-            ? expressionChannelInitialValueGetter_() : 0.0, 'g', 17));
+            ? expressionChannelInitialValueGetter_() : 0.0));
     expressionChannelInitialValueEdit_->setEnabled(
         static_cast<bool>(expressionChannelInitialValueSetter_));
   }
@@ -9440,13 +9441,13 @@ void ResourcePaletteDialog::showForHeatmap(std::function<QRect()> geometryGetter
   if (heatmapRangeMinEdit_) {
     const double value = heatmapRangeMinGetter_ ? heatmapRangeMinGetter_() : 0.0;
     const QSignalBlocker blocker(heatmapRangeMinEdit_);
-    heatmapRangeMinEdit_->setText(QString::number(value, 'g', 17));
+    heatmapRangeMinEdit_->setText(AdlWriter::formatDouble(value));
     committedTexts_[heatmapRangeMinEdit_] = heatmapRangeMinEdit_->text();
   }
   if (heatmapRangeMaxEdit_) {
     const double value = heatmapRangeMaxGetter_ ? heatmapRangeMaxGetter_() : 1.0;
     const QSignalBlocker blocker(heatmapRangeMaxEdit_);
-    heatmapRangeMaxEdit_->setText(QString::number(value, 'g', 17));
+    heatmapRangeMaxEdit_->setText(AdlWriter::formatDouble(value));
     committedTexts_[heatmapRangeMaxEdit_] = heatmapRangeMaxEdit_->text();
   }
   if (heatmapPreserveAspectRatioCombo_) {
@@ -9635,7 +9636,7 @@ void ResourcePaletteDialog::showForWaterfall(std::function<QRect()> geometryGett
   };
 
   auto formatNumber = [](double value) {
-    QString text = QString::number(value, 'g', 17);
+    QString text = AdlWriter::formatDouble(value);
     if (text == QStringLiteral("-0")) {
       text = QStringLiteral("0");
     }
@@ -10176,7 +10177,7 @@ void ResourcePaletteDialog::populateExtensionProperties(
     case ResourcePalettePropertyType::kDoubleText: {
       auto *edit = createLineEdit();
       double committedValue = property.value.toDouble();
-      edit->setText(QString::number(committedValue, 'g', 17));
+      edit->setText(AdlWriter::formatDouble(committedValue));
       edit->setEnabled(static_cast<bool>(property.setter));
       QObject::connect(edit, &QLineEdit::editingFinished, this,
           [edit, setter = property.setter, committedValue,
@@ -10190,10 +10191,10 @@ void ResourcePaletteDialog::populateExtensionProperties(
             if (!ok || !std::isfinite(value)
                 || (minimum.isValid() && value < minimum.toDouble())
                 || (maximum.isValid() && value > maximum.toDouble())) {
-              edit->setText(QString::number(committedValue, 'g', 17));
+              edit->setText(AdlWriter::formatDouble(committedValue));
               return;
             }
-            edit->setText(QString::number(value, 'g', 17));
+            edit->setText(AdlWriter::formatDouble(value));
             if (value != committedValue) {
               committedValue = value;
               setter(value);
@@ -12901,7 +12902,7 @@ void ResourcePaletteDialog::commitSetpointControlTolerance()
   }
   const double effective = setpointControlToleranceGetter_
       ? setpointControlToleranceGetter_() : value;
-  const QString text = QString::number(effective, 'g', 17);
+  const QString text = AdlWriter::formatDouble(effective);
   setpointControlToleranceEdit_->setText(text);
   committedTexts_[setpointControlToleranceEdit_] = text;
 }
@@ -13734,7 +13735,7 @@ void ResourcePaletteDialog::commitStripChartPeriod()
   if (effective <= 0.0) {
     effective = kDefaultStripChartPeriod;
   }
-  const QString text = QString::number(effective, 'g', 17);
+  const QString text = AdlWriter::formatDouble(effective);
   const QSignalBlocker blocker(stripPeriodEdit_);
   stripPeriodEdit_->setText(text);
   committedTexts_[stripPeriodEdit_] = stripPeriodEdit_->text();
@@ -14356,7 +14357,7 @@ void ResourcePaletteDialog::updateSliderIncrementEdit()
     sliderIncrementEdit_->clear();
   } else {
     const double increment = sliderIncrementGetter_();
-    sliderIncrementEdit_->setText(QString::number(increment, 'g', 17));
+    sliderIncrementEdit_->setText(AdlWriter::formatDouble(increment));
   }
   committedTexts_[sliderIncrementEdit_] = sliderIncrementEdit_->text();
 }
@@ -14373,7 +14374,7 @@ void ResourcePaletteDialog::updateWheelSwitchPrecisionEdit()
     wheelSwitchPrecisionEdit_->clear();
   } else {
     const double precision = wheelSwitchPrecisionGetter_();
-    wheelSwitchPrecisionEdit_->setText(QString::number(precision, 'g', 17));
+    wheelSwitchPrecisionEdit_->setText(AdlWriter::formatDouble(precision));
   }
   committedTexts_[wheelSwitchPrecisionEdit_] = wheelSwitchPrecisionEdit_->text();
 }
@@ -15086,7 +15087,7 @@ void ResourcePaletteDialog::commitWaterfallIntensityMinimum()
   }
   const double effective = waterfallIntensityMinGetter_
       ? waterfallIntensityMinGetter_() : value;
-  waterfallIntensityMinEdit_->setText(QString::number(effective, 'g', 17));
+  waterfallIntensityMinEdit_->setText(AdlWriter::formatDouble(effective));
   committedTexts_[waterfallIntensityMinEdit_] =
       waterfallIntensityMinEdit_->text();
 }
@@ -15113,7 +15114,7 @@ void ResourcePaletteDialog::commitWaterfallIntensityMaximum()
   }
   const double effective = waterfallIntensityMaxGetter_
       ? waterfallIntensityMaxGetter_() : value;
-  waterfallIntensityMaxEdit_->setText(QString::number(effective, 'g', 17));
+  waterfallIntensityMaxEdit_->setText(AdlWriter::formatDouble(effective));
   committedTexts_[waterfallIntensityMaxEdit_] =
       waterfallIntensityMaxEdit_->text();
 }
@@ -15140,7 +15141,7 @@ void ResourcePaletteDialog::commitWaterfallSamplePeriod()
   }
   const double effective = waterfallSamplePeriodGetter_
       ? waterfallSamplePeriodGetter_() : value;
-  waterfallSamplePeriodEdit_->setText(QString::number(effective, 'g', 17));
+  waterfallSamplePeriodEdit_->setText(AdlWriter::formatDouble(effective));
   committedTexts_[waterfallSamplePeriodEdit_] =
       waterfallSamplePeriodEdit_->text();
 }

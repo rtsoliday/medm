@@ -515,8 +515,9 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
     }
   }
   if (!labelText.isEmpty()) {
-    painter.setFont(medmTextMonitorFontWithWidthCheck(labelFont, labelText,
-        textRect.width()));
+    /* As in MEDM, the font depends on the height only and a label too
+     * wide for the button is clipped. */
+    painter.setFont(labelFont);
     painter.setClipRect(textRect, Qt::IntersectClip);
     painter.setPen(fg);
     Qt::Alignment align = Qt::AlignCenter;
@@ -609,17 +610,13 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
         text = QStringLiteral("Display %1").arg(index + 1);
       }
 
-      /* Keep the height-selected legacy font when it fits, and shrink long
-       * labels to the actual cell width. Clip even the smallest fallback font
-       * to this cell so it cannot paint across a neighbor's border. */
-      const int iconWidth = singleButton && showIcon
-          ? std::min({interior.height(), interior.width(), 24}) : 0;
-      painter.setFont(medmTextMonitorFontWithWidthCheck(labelFont, text,
-          interior.width() - iconWidth));
+      /* As in MEDM, every button uses the height-selected font, and a label
+       * too wide for its button is clipped to that button. */
+      painter.setFont(labelFont);
       painter.save();
       painter.setClipRect(interior, Qt::IntersectClip);
       if (singleButton && showIcon) {
-        const int iconSize = iconWidth;
+        const int iconSize = std::min({interior.height(), interior.width(), 24});
         const QFontMetrics metrics(painter.font());
         const int textWidth = metrics.horizontalAdvance(text);
         const int totalWidth = std::min(interior.width(), iconSize + textWidth);

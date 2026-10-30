@@ -42,14 +42,6 @@ public:
     update();
   }
 
-  QRect labelRect() const
-  {
-    QStyleOptionComboBox option;
-    initStyleOption(&option);
-    return style()->subControlRect(QStyle::CC_ComboBox, &option,
-        QStyle::SC_ComboBoxEditField, this);
-  }
-
 protected:
   void paintEvent(QPaintEvent *event) override
   {
@@ -556,7 +548,6 @@ void MenuElement::updateDisplayedRuntimeValue()
   }
 
   comboBox_->update();
-  updateComboBoxFont();
   updateToolTip();
 }
 
@@ -590,31 +581,13 @@ void MenuElement::updateComboBoxFont()
   if (!comboBox_) {
     return;
   }
-  QFont font = medmMenuFontForHeight(height());
+  /* As in MEDM, the font depends on the menu height only. */
+  const QFont font = medmMenuFontForHeight(height());
   if (font.family().isEmpty()) {
     return;
   }
-  /* Reserve the style's arrow and padding, and fit every enum label so
-   * switching states does not change the font or truncate a longer value. */
-  for (;;) {
-    if (comboBox_->font() != font) {
-      comboBox_->setFont(font);
-    }
-    /* Some styles change the arrow/padding size with the font. Measure the
-     * actual edit field again after each font change. */
-    const int textWidth = comboBox_->labelRect().width();
-    const QFontMetrics metrics(font);
-    bool fits = !runtimeValueOutOfRange_
-        || metrics.horizontalAdvance(invalidRuntimeValueText()) <= textWidth;
-    for (int index = 0; index < comboBox_->count() && fits; ++index) {
-      fits = metrics.horizontalAdvance(comboBox_->itemText(index)) <= textWidth;
-    }
-    const int pixelSize = font.pixelSize() > 0
-        ? font.pixelSize() : metrics.height();
-    if (fits || textWidth <= 0 || pixelSize <= 1) {
-      break;
-    }
-    font.setPixelSize(pixelSize - 1);
+  if (comboBox_->font() != font) {
+    comboBox_->setFont(font);
   }
   if (QAbstractItemView *view = comboBox_->view()) {
     if (view->font() != font) {

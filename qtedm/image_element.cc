@@ -16,13 +16,40 @@ namespace {
 constexpr int kDefaultFrameIndex = 0;
 constexpr quint64 kMaximumCachedGifBytes = 64ULL * 1024 * 1024;
 constexpr quint64 kMaximumAllGifCacheBytes = 256ULL * 1024 * 1024;
-constexpr quint64 kEstimatedBytesPerPixel = 8;
+// QMovie caches each frame as a 32-bit QPixmap.
+constexpr quint64 kEstimatedBytesPerPixel = 4;
 
 ImageMemoryBudget &gifCacheBudget()
 {
   static ImageMemoryBudget budget(kMaximumAllGifCacheBytes);
   return budget;
 }
+}
+
+bool seekMovieFrame(QMovie *movie, int index)
+{
+  if (!movie || index < 0) {
+    return false;
+  }
+  if (movie->currentFrameNumber() == index) {
+    return true;
+  }
+  if (movie->cacheMode() == QMovie::CacheAll) {
+    return movie->jumpToFrame(index);
+  }
+  if (movie->currentFrameNumber() > index
+      && !movie->jumpToFrame(kDefaultFrameIndex)) {
+    return false;
+  }
+  while (movie->currentFrameNumber() < index) {
+    const int current = movie->currentFrameNumber();
+    /* Stop if the reader ends or wraps instead of advancing. */
+    if (!movie->jumpToFrame(current + 1)
+        || movie->currentFrameNumber() != current + 1) {
+      return false;
+    }
+  }
+  return movie->currentFrameNumber() == index;
 }
 
 ImageElement::ImageElement(QWidget *parent)
@@ -130,7 +157,7 @@ void ImageElement::setRuntimeAnimate(bool animate)
 			movie_->start();
 		}
 		movie_->setPaused(true);
-		movie_->jumpToFrame(runtimeFrameIndex_);
+		seekMovieFrame(movie_, runtimeFrameIndex_);
 		updateCurrentPixmap();
 	}
 	update();
@@ -158,7 +185,7 @@ void ImageElement::setRuntimeFrameIndex(int index)
 				movie_->start();
 			}
 			movie_->setPaused(true);
-			movie_->jumpToFrame(runtimeFrameIndex_);
+			seekMovieFrame(movie_, runtimeFrameIndex_);
 			updateCurrentPixmap();
 		}
 	}
@@ -198,7 +225,7 @@ void ImageElement::onRuntimeStateReset()
       movie_->start();
     }
     movie_->setPaused(true);
-    movie_->jumpToFrame(runtimeFrameIndex_);
+    seekMovieFrame(movie_, runtimeFrameIndex_);
     updateCurrentPixmap();
   }
 }
@@ -345,7 +372,7 @@ void ImageElement::reloadImage()
       }
     }
     movie_ = movie;
-    movie_->jumpToFrame(kDefaultFrameIndex);
+    seekMovieFrame(movie_, kDefaultFrameIndex);
     cachedFrameCount_ = movie_->frameCount();
     if (cachedFrameCount_ <= 0) {
       cachedFrameCount_ = 1;

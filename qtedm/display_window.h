@@ -998,6 +998,7 @@ private:
   QString shellCommandDisplayPath() const;
   QString shellCommandDisplayTitle() const;
   void runShellCommand(const QString &command);
+  void reportShellCommandBlocked(const QString &reason);
   void connectRelatedDisplayElement(RelatedDisplayElement *element);
   void handleRelatedDisplayActivation(RelatedDisplayElement *element,
       int entryIndex, Qt::KeyboardModifiers modifiers);

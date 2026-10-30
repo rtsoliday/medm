@@ -1,5 +1,6 @@
 #include <QtTest/QtTest>
 
+#include <QDir>
 #include <QImage>
 #include <QMovie>
 #include <QPainter>
@@ -41,6 +42,7 @@ private slots:
   void heatmapBoundsSyntheticPreviewForLargeConfiguredGrids();
   void dynamicGraphicAppliesRuntimeVisibilityAndSeverity();
   void imageTracksRuntimeFrameSelection();
+  void uncachedGifSeeksAnyFrame();
   void cartesianExportsCsvSddsAndFailures();
   void cartesianExportReadsWithSdds();
   void rendersWidgetsToExplicitPathsAndReportsFailures();
@@ -201,6 +203,28 @@ void TestPlotGraphicRuntimes::imageTracksRuntimeFrameSelection()
   image.setRuntimeFrameValid(false);
   QVERIFY(!image.runtimeFrameValid());
   QVERIFY(!image.runtimeAnimating());
+}
+
+void TestPlotGraphicRuntimes::uncachedGifSeeksAnyFrame()
+{
+  /* GIFs too large for the frame cache play without CacheAll. Image calc
+   * frame selection must still reach any frame, including earlier ones. */
+  QMovie movie(QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("../../tests/test_frames.gif")));
+  QVERIFY(movie.isValid());
+  movie.setCacheMode(QMovie::CacheNone);
+  QCOMPARE(movie.frameCount(), 5);
+  movie.start();
+  movie.setPaused(true);
+  const QList<QColor> colors{QColor(Qt::red), QColor(Qt::green),
+      QColor(Qt::blue), QColor(Qt::yellow), QColor(Qt::cyan)};
+  for (const int frame : {3, 1, 4, 0, 2}) {
+    QVERIFY2(seekMovieFrame(&movie, frame), qPrintable(QString::number(frame)));
+    QCOMPARE(movie.currentFrameNumber(), frame);
+    QCOMPARE(movie.currentPixmap().toImage().pixelColor(0, 0),
+        colors.at(frame));
+  }
+  QVERIFY(!seekMovieFrame(&movie, colors.size()));
 }
 
 void TestPlotGraphicRuntimes::cartesianExportsCsvSddsAndFailures()

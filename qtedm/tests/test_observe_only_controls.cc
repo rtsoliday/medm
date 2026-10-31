@@ -310,6 +310,8 @@ void TestObserveOnlyControls::compositeChildrenAreNotClipped()
       "  children {\n"
       "    rectangle { object { x=110 y=11 width=55 height=8 }\n"
       "      \"basic attribute\" { clr=1 } }\n"
+      "    rectangle { object { x=180 y=11 width=20 height=8 }\n"
+      "      \"basic attribute\" { clr=1 } }\n"
       "  }\n"
       "  \"dynamic attribute\" { vis=\"if not zero\""
       " chan=\"composite:door\" }\n"
@@ -326,7 +328,7 @@ void TestObserveOnlyControls::compositeChildrenAreNotClipped()
       &error), qPrintable(error));
   QCOMPARE(window.compositeElements_.size(), 4);
   QCOMPARE(window.relatedDisplayElements_.size(), 2);
-  QCOMPARE(window.rectangleElements_.size(), 2);
+  QCOMPARE(window.rectangleElements_.size(), 3);
   window.show();
   window.enterExecuteMode();
   QCoreApplication::processEvents();
@@ -396,6 +398,13 @@ void TestObserveOnlyControls::compositeChildrenAreNotClipped()
      * must not shrink the composite to its smaller child. */
     QVERIFY(displayRect(statusComposite).contains(
         QRect(100 * factor, 10 * factor, 76 * factor, 10 * factor)));
+    /* It fills only the object, not the area grown for a child beyond it. */
+    const QImage image = statusComposite->grab().toImage();
+    const QPoint origin = displayRect(statusComposite).topLeft();
+    QCOMPARE(image.pixelColor(QPoint(105, 14) * factor - origin),
+        QColor(Qt::white));
+    QVERIFY(image.pixelColor(QPoint(190, 14) * factor - origin)
+        != QColor(Qt::white));
   }
 }
 

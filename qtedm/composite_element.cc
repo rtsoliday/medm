@@ -287,7 +287,7 @@ void CompositeElement::expandToFitChildren(bool keepCurrentBounds)
   int maxX = INT_MIN;
   int maxY = INT_MIN;
   if (keepCurrentBounds) {
-    /* MEDM paints a disconnected composite's whole object white. */
+    /* Keep the object, which MEDM paints white while disconnected. */
     minX = 0;
     minY = 0;
     maxX = width();
@@ -338,6 +338,12 @@ void CompositeElement::expandToFitChildren(bool keepCurrentBounds)
   int newWidth = maxX - minX;
   int newHeight = maxY - minY;
 
+  /* Children outside the object are hidden while disconnected, and only
+   * the object itself is painted white, as in MEDM. */
+  objectRect_ = keepCurrentBounds
+      ? QRect(-minX, -minY, currentGeom.width(), currentGeom.height())
+      : QRect();
+
   /* Update composite geometry */
   setGeometry(newX, newY, newWidth, newHeight);
 
@@ -377,6 +383,8 @@ void CompositeElement::setExecuteMode(bool execute)
     designModeVisible_ = QWidget::isVisible();
   } else {
     QWidget::setVisible(designModeVisible_);
+    /* Editing can change the composite; the next fit records it again. */
+    objectRect_ = QRect();
   }
 
   executeMode_ = execute;
@@ -466,7 +474,8 @@ void CompositeElement::paintEvent(QPaintEvent *event)
 
   /* In execute mode with a channel defined but not connected, fill with white */
   if (executeMode_ && hasActiveChannel() && !channelConnected_) {
-    painter.fillRect(rect(), Qt::white);
+    painter.fillRect(objectRect_.isValid() ? objectRect_ : rect(),
+        Qt::white);
     if (selected_) {
       QPen pen(Qt::black);
       pen.setStyle(Qt::DashLine);

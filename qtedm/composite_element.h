@@ -56,7 +56,8 @@ public:
   void setRuntimeVisible(bool visible);
   
   /* keepCurrentBounds grows the composite around its children without
-   * shrinking it below its current rectangle. */
+   * shrinking it below its current rectangle, which stays the area painted
+   * white while the channel is disconnected. */
   void expandToFitChildren(bool keepCurrentBounds = false);
 
 protected:
@@ -95,4 +96,6 @@ private:
   bool childStackingRefreshPending_ = false;
   bool childStackingOrderInternallyUpdating_ = false;
   bool hasExplicitCompositeName_ = false;
+  /* The ADL object within the composite after a growing fit, or null. */
+  QRect objectRect_;
 };

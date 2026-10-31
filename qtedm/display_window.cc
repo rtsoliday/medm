@@ -21602,16 +21602,11 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   const bool previousLegacyMode = loadingLegacyAdl_;
   loadingLegacyAdl_ = (fileVersion < 20200);
 
-  QTEDM_TIMING_MARK("loadFromFile: Applying macro substitutions");
-  QString processedContents;
-  if (!applyMacroSubstitutions(adlContent, macros, &processedContents,
-          errorMessage)) {
-    loadingLegacyAdl_ = previousLegacyMode;
-    return false;
-  }
-
+  /* The parser substitutes macros per token, as MEDM does, so a value is
+   * used literally and cannot change the file's structure. */
   QTEDM_TIMING_MARK("loadFromFile: Parsing ADL");
-  std::optional<AdlNode> document = AdlParser::parse(processedContents, errorMessage);
+  std::optional<AdlNode> document = AdlParser::parse(adlContent, errorMessage,
+      macros);
   if (!document) {
     loadingLegacyAdl_ = previousLegacyMode;
     return false;
@@ -21653,6 +21648,8 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
   bool elementLoaded = false;
   int elementCount = 0;
   QList<AdlNode> propertyRuleNodes;
+  const bool previousElementsFromAdlFile = elementsFromAdlFile_;
+  elementsFromAdlFile_ = true;
   for (const auto &child : document->children) {
     const QString childName = normalizedAdlName(child.name);
     if (childName == QStringLiteral("display")) {
@@ -21682,6 +21679,7 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
       continue;
     }
   }
+  elementsFromAdlFile_ = previousElementsFromAdlFile;
   loadPropertyRuleNodes(propertyRuleNodes);
   QTEDM_TIMING_MARK_COUNT("loadFromFile: Total elements loaded", elementCount);
   pendingBasicAttribute_ = std::nullopt;
@@ -21793,100 +21791,7 @@ bool DisplayWindow::applyMacroSubstitutions(const QString &input,
     const QHash<QString, QString> &macros, QString *output,
     QString *errorMessage)
 {
-  if (!output) {
-    if (errorMessage) {
-      *errorMessage = QStringLiteral("Macro expansion requires an output string");
-    }
-    return false;
-  }
-  output->clear();
-  auto sizeError = [errorMessage]() {
-    if (errorMessage) {
-      *errorMessage = QStringLiteral(
-          "Macro expansion exceeds maximum size of %1 bytes or %2 characters")
-          .arg(kMaximumAdlInputBytes).arg(kMaximumAdlInputCharacters);
-    }
-    return false;
-  };
-  if (input.size() > kMaximumAdlInputCharacters) {
-    return sizeError();
-  }
-  if (macros.isEmpty()) {
-    *output = input;
-    return true;
-  }
-
-  static constexpr int kMaxIterations = 10;
-  QRegularExpression pattern(QStringLiteral(R"(\$\(([^)]+)\))"));
-  QString current = input;
-  for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
-    QString result;
-    result.reserve(current.size());
-    qint64 utf8Bytes = 0;
-    auto appendBounded = [&result, &utf8Bytes](const QString &value,
-        qsizetype start, qsizetype length) {
-      if (length > kMaximumAdlInputCharacters - result.size()) {
-        return false;
-      }
-      /* Count UTF-8 bytes without allocating a potentially oversized copy.
-       * Macro/literal boundaries cannot split a valid surrogate pair. */
-      qint64 bytes = 0;
-      for (qsizetype index = start; index < start + length; ++index) {
-        const ushort ch = value.at(index).unicode();
-        if (ch < 0x80) {
-          ++bytes;
-        } else if (ch < 0x800) {
-          bytes += 2;
-        } else if (QChar::isHighSurrogate(ch) && index + 1 < start + length
-            && value.at(index + 1).isLowSurrogate()) {
-          bytes += 4;
-          ++index;
-        } else {
-          bytes += 3;
-        }
-        if (bytes > kMaximumAdlInputBytes - utf8Bytes) {
-          return false;
-        }
-      }
-      result.append(value.constData() + start, length);
-      utf8Bytes += bytes;
-      return true;
-    };
-    int lastIndex = 0;
-    QRegularExpressionMatchIterator it = pattern.globalMatch(current);
-    bool replaced = false;
-    while (it.hasNext()) {
-      const QRegularExpressionMatch match = it.next();
-      if (!appendBounded(current, lastIndex,
-              match.capturedStart() - lastIndex)) {
-        return sizeError();
-      }
-      const QString name = match.captured(1);
-      const auto macroIt = macros.constFind(name);
-      if (macroIt != macros.constEnd()) {
-        if (!appendBounded(*macroIt, 0, macroIt->size())) {
-          return sizeError();
-        }
-        replaced = true;
-      } else {
-        if (!appendBounded(current, match.capturedStart(),
-                match.capturedLength())) {
-          return sizeError();
-        }
-      }
-      lastIndex = match.capturedEnd();
-    }
-    if (!appendBounded(current, lastIndex, current.size() - lastIndex)) {
-      return sizeError();
-    }
-    if (!replaced) {
-      *output = current;
-      return true;
-    }
-    current = result;
-  }
-  *output = current;
-  return true;
+  return expandMacros(input, macros, output, errorMessage);
 }
 
 /* True when ch occurs in an ADL line outside quoted strings, so a brace in
@@ -30800,13 +30705,16 @@ ShellCommandElement *DisplayWindow::loadShellCommandElement(
             QStringLiteral("label"))) {
       entry.label = entryLabel->value;
     }
+    entry.macroUsesKnown = elementsFromAdlFile_;
     if (const AdlProperty *entryCommand = findProperty(child,
             QStringLiteral("name"))) {
       entry.command = entryCommand->value;
+      entry.commandMacroUses = entryCommand->macroUses;
     }
     if (const AdlProperty *entryArgs = findProperty(child,
             QStringLiteral("args"))) {
       entry.args = entryArgs->value;
+      entry.argsMacroUses = entryArgs->macroUses;
     }
     element->setEntry(entryIndex, entry);
   }
@@ -30853,26 +30761,40 @@ void DisplayWindow::handleShellCommandActivation(
   if (commandTemplate.isEmpty()) {
     return;
   }
+  QList<AdlMacroUse> macroUses = entry.commandMacroUses;
 
   const QString args = entry.args;
   if (!args.isEmpty()) {
     commandTemplate.append(QLatin1Char(' '));
+    const qsizetype argsStart = commandTemplate.size();
     commandTemplate.append(args);
+    for (AdlMacroUse use : entry.argsMacroUses) {
+      use.position += argsStart;
+      macroUses.append(use);
+    }
+  }
+  const bool macroUsesKnown = entry.macroUsesKnown
+      && macroUsesMatch(commandTemplate, macroUses);
+  if (!macroUsesKnown) {
+    macroUses.clear();
   }
 
   QString expandedCommand;
   QString expansionError;
-  if (!applyMacroSubstitutions(commandTemplate, macroDefinitions_,
-          &expandedCommand, &expansionError)) {
+  if (!substituteMacroReferences(commandTemplate, macroDefinitions_,
+          &expandedCommand, &macroUses, &expansionError)) {
     qWarning() << "Shell command macro expansion failed:" << expansionError;
     return;
   }
-  // ADL macros are expanded before parsing, so the command no longer records
-  // which words came from macros. Refuse it when a macro value it contains
-  // has shell syntax or an option; macros it does not use never block it.
+  // Refuse the command when a macro value could change what the shell
+  // runs. The display recorded where it substituted macros when it read the
+  // file, so each value is checked in its own quoting context and macros the
+  // command does not use never block it. A command edited since then has no
+  // such record, so any macro value it contains is checked instead.
   QString unsafeMacro;
-  if (!shellCommandMacrosAreSafe(macroDefinitions_,
-          {commandTemplate, expandedCommand}, &unsafeMacro)) {
+  if (!shellCommandMacroUsesAreSafe(expandedCommand, macroUses, &unsafeMacro)
+      || (!macroUsesKnown && !shellCommandMacrosAreSafe(macroDefinitions_,
+          {commandTemplate, expandedCommand}, &unsafeMacro))) {
     reportShellCommandBlocked(QStringLiteral(
         "The value of macro %1 contains shell syntax or a command-line "
         "option, so the command was not run.").arg(unsafeMacro));
@@ -35068,14 +34990,9 @@ CompositeElement *DisplayWindow::loadCompositeElement(
         const bool previousLegacyMode = loadingLegacyAdl_;
         loadingLegacyAdl_ = (fileVersion < 20200);
 
-        /* Apply macro substitutions */
         QString errorMessage;
-        QString processedContents;
-        std::optional<AdlNode> document;
-        if (applyMacroSubstitutions(adlContent, mergedMacros,
-                &processedContents, &errorMessage)) {
-          document = AdlParser::parse(processedContents, &errorMessage);
-        }
+        std::optional<AdlNode> document = AdlParser::parse(adlContent,
+            &errorMessage, mergedMacros);
         if (!document) {
           loadingLegacyAdl_ = previousLegacyMode;
           qWarning() << "CompositeElement: Failed to parse composite file:"
@@ -35093,6 +35010,8 @@ CompositeElement *DisplayWindow::loadCompositeElement(
              offset, then the composite will be repositioned to fit contents. */
           ElementLoadContextGuard guard(*this, composite, QPoint(-2, -4), true,
               composite);
+          const bool previousElementsFromAdlFile = elementsFromAdlFile_;
+          elementsFromAdlFile_ = true;
           for (const auto &child : document->children) {
             /* Skip file, display, and color map blocks */
             const QString childName = normalizedAdlName(child.name);
@@ -35103,6 +35022,7 @@ CompositeElement *DisplayWindow::loadCompositeElement(
             }
             loadElementNode(child);
           }
+          elementsFromAdlFile_ = previousElementsFromAdlFile;
 
           /* Restore load directory and macros */
           currentLoadDirectory_ = previousLoadDir;

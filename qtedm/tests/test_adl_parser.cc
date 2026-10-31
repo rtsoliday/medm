@@ -27,6 +27,9 @@ private slots:
   void rejectsTopLevelUnterminatedString();
   void rejectsOversizedInput();
   void rejectsExcessiveNesting();
+  void substitutesMacrosLiterally();
+  void boundsMacroExpansion();
+  void substitutesReferencesAroundRecordedUses();
 };
 
 void TestAdlParser::parsesMinimalFixture()
@@ -552,6 +555,113 @@ void TestAdlParser::rejectsExcessiveNesting()
 
   QVERIFY(!root.has_value());
   QVERIFY(errorMessage.contains(QStringLiteral("nesting depth")));
+}
+
+void TestAdlParser::substitutesMacrosLiterally()
+{
+  /* As in MEDM, a macro value is used as written: its escapes are not
+   * decoded, and its quotes or braces cannot end the string or token. */
+  const QHash<QString, QString> macros{
+      {QStringLiteral("CMD"), QStringLiteral("a\\;touch x\\x3b \"}")},
+      {QStringLiteral("DIR"), QStringLiteral("C:\\temp")},
+      {QStringLiteral("X"), QStringLiteral("10 } text { textix=\"injected\"")},
+      {QStringLiteral("OUTER"), QStringLiteral("[$(DIR)]")}};
+  QString error;
+  const auto root = AdlParser::parse(QStringLiteral(
+      "\"shell command\" {\n"
+      "  command[0] { name=\"echo $(CMD) in $(DIR)\" args=\"$(OUTER)\" }\n"
+      "  object { x=$(X) y=0 }\n"
+      "}\n"
+      "text { textix=\"$(UNDEFINED) \\x24(DIR) $$(DIR)\" }\n"),
+      &error, macros);
+  QVERIFY2(root.has_value(), qPrintable(error));
+  QCOMPARE(root->children.size(), 2);
+
+  const AdlNode *shell = ::findChild(*root, QStringLiteral("shell command"));
+  QVERIFY(shell);
+  const AdlNode *command = ::findChild(*shell, QStringLiteral("command[0]"));
+  QVERIFY(command);
+  const AdlProperty *name = findProperty(*command, QStringLiteral("name"));
+  QVERIFY(name);
+  QCOMPARE(name->value, QStringLiteral("echo ") + macros[QStringLiteral("CMD")]
+      + QStringLiteral(" in C:\\temp"));
+  QCOMPARE(name->macroUses.size(), 2);
+  QCOMPARE(name->macroUses[0].position, qsizetype(5));
+  QCOMPARE(name->macroUses[0].name, QStringLiteral("CMD"));
+  QCOMPARE(name->macroUses[0].value, macros[QStringLiteral("CMD")]);
+  QCOMPARE(name->macroUses[1].position,
+      qsizetype(9 + macros[QStringLiteral("CMD")].size()));
+  QCOMPARE(name->macroUses[1].value, QStringLiteral("C:\\temp"));
+  QVERIFY(macroUsesMatch(name->value, name->macroUses));
+
+  /* Nested references are expanded; the use records the outer macro. */
+  const AdlProperty *args = findProperty(*command, QStringLiteral("args"));
+  QVERIFY(args);
+  QCOMPARE(args->value, QStringLiteral("[C:\\temp]"));
+  QCOMPARE(args->macroUses.size(), 1);
+  QCOMPARE(args->macroUses[0].name, QStringLiteral("OUTER"));
+
+  const AdlNode *object = ::findChild(*shell, QStringLiteral("object"));
+  QVERIFY(object);
+  QCOMPARE(object->properties.size(), 2);
+  QCOMPARE(propertyValue(*object, QStringLiteral("x")),
+      macros[QStringLiteral("X")]);
+  QCOMPARE(propertyValue(*object, QStringLiteral("y")), QStringLiteral("0"));
+
+  /* Undefined and escaped references stay literal. */
+  const AdlNode *text = ::findChild(*root, QStringLiteral("text"));
+  QVERIFY(text);
+  QCOMPARE(propertyValue(*text, QStringLiteral("textix")),
+      QStringLiteral("$(UNDEFINED) $(DIR) $C:\\temp"));
+}
+
+void TestAdlParser::boundsMacroExpansion()
+{
+  const QHash<QString, QString> macros{{QStringLiteral("M"),
+      QString(kMaximumAdlInputCharacters / 3 + 1, QLatin1Char('x'))}};
+  QString error;
+  QVERIFY(!AdlParser::parse(QStringLiteral(
+      "a=\"$(M)\" b=\"$(M)\" c=$(M)"), &error, macros).has_value());
+  QVERIFY(error.contains(QStringLiteral("Macro expansion exceeds maximum size")));
+
+  error.clear();
+  const QHash<QString, QString> recursive{
+      {QStringLiteral("R"), QString(64 * 1024, QLatin1Char('x'))
+          + QStringLiteral("$(R)$(R)")}};
+  QVERIFY(!AdlParser::parse(QStringLiteral("a=\"$(R)\""), &error,
+      recursive).has_value());
+  QVERIFY(error.contains(QStringLiteral("Macro expansion exceeds maximum size")));
+}
+
+void TestAdlParser::substitutesReferencesAroundRecordedUses()
+{
+  /* A recorded use is copied unchanged even when its value looks like a
+   * reference; references elsewhere are expanded once and recorded. */
+  QList<AdlMacroUse> uses{
+      {4, QStringLiteral("LOADED"), QStringLiteral("$(A)")}};
+  const QString text = QStringLiteral("run $(A) and $(B) $(C)");
+  QVERIFY(macroUsesMatch(text, uses));
+  const QHash<QString, QString> macros{
+      {QStringLiteral("A"), QStringLiteral("x")},
+      {QStringLiteral("B"), QStringLiteral("b-$(A)")}};
+  QString output;
+  QString error;
+  QVERIFY2(substituteMacroReferences(text, macros, &output, &uses, &error),
+      qPrintable(error));
+  QCOMPARE(output, QStringLiteral("run $(A) and b-x $(C)"));
+  QCOMPARE(uses.size(), 2);
+  QCOMPARE(uses[0].position, qsizetype(4));
+  QCOMPARE(uses[0].name, QStringLiteral("LOADED"));
+  QCOMPARE(uses[1].position, qsizetype(13));
+  QCOMPARE(uses[1].name, QStringLiteral("B"));
+  QCOMPARE(uses[1].value, QStringLiteral("b-x"));
+  QVERIFY(macroUsesMatch(output, uses));
+
+  QVERIFY(!macroUsesMatch(output,
+      {{0, QStringLiteral("B"), QStringLiteral("b-x")}}));
+  QVERIFY(!macroUsesMatch(output,
+      {{13, QStringLiteral("B"), QStringLiteral("b-x")},
+       {14, QStringLiteral("B"), QStringLiteral("-x")}}));
 }
 
 QTEST_APPLESS_MAIN(TestAdlParser)

@@ -24,13 +24,14 @@ bool safeMacroValue(const QString &value,
 }
 
 // A macro word starting with '-' can add an option to the program it is
-// passed to, such as xterm -e. Plain numbers like -5 remain allowed.
+// passed to, such as xterm -e. Plain numbers like -5 and a lone '-', which
+// conventionally names standard input or output, remain allowed.
 bool hasOptionWord(const QString &value)
 {
   for (const QString &word : value.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
     bool numeric = false;
     word.toDouble(&numeric);
-    if (word.startsWith(QLatin1Char('-')) && !numeric) {
+    if (word.startsWith(QLatin1Char('-')) && word.size() > 1 && !numeric) {
       return true;
     }
   }
@@ -50,6 +51,31 @@ bool hasControlCharacter(const QString &value)
 }
 
 #ifndef Q_OS_WIN
+// No POSIX shell gives these characters a meaning in an unquoted word.
+// Bash expands braces only around a comma or a ".." sequence, so PV names
+// such as SR:C01-BI{BPM:1} stay literal.
+bool unquotedShellValueIsSafe(const QString &value)
+{
+  const bool literalBraces = !value.contains(QLatin1Char(','))
+      && !value.contains(QStringLiteral(".."));
+  return safeMacroValue(value,
+      literalBraces ? QStringLiteral("%~{}") : QStringLiteral("%~"));
+}
+
+// Quoted text is literal to the shell QtEDM starts. These characters could
+// end the quotes or, if a program passes the text to another shell, start
+// another command or a redirection.
+bool quotedShellValueIsSafe(const QString &value)
+{
+  for (const QChar ch : value) {
+    if (ch.category() == QChar::Other_Control
+        || QStringLiteral("'\"\\$`;&|<>").contains(ch)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 enum class ShellQuote { kNone, kSingle, kDouble };
 
 // Follows the outer shell's quoting one character at a time.
@@ -128,6 +154,39 @@ int firstNestedShellSyntax(const QString &command)
 #endif
 
 } // namespace
+
+bool shellCommandMacroUsesAreSafe(const QString &command,
+    const QList<AdlMacroUse> &uses, QString *unsafeMacro)
+{
+#ifndef Q_OS_WIN
+  // Text after command substitution or a here-document is parsed again
+  // with its own quoting, so outer quotes do not protect it.
+  const int nestedSyntax = firstNestedShellSyntax(command);
+  ShellQuoteTracker tracker;
+  qsizetype scanned = 0;
+#endif
+  for (const AdlMacroUse &use : uses) {
+    const QString &value = use.value;
+    bool safe = !hasOptionWord(value);
+#ifdef Q_OS_WIN
+    safe = safe && safeMacroValue(value);
+#else
+    while (scanned < use.position && scanned < command.size()) {
+      tracker.advance(command.at(scanned++));
+    }
+    const bool quoted = tracker.quote != ShellQuote::kNone
+        && !tracker.escaped
+        && (nestedSyntax < 0 || use.position < nestedSyntax);
+    safe = safe && (quoted ? quotedShellValueIsSafe(value)
+        : unquotedShellValueIsSafe(value));
+#endif
+    if (!safe) {
+      if (unsafeMacro) *unsafeMacro = use.name;
+      return false;
+    }
+  }
+  return true;
+}
 
 bool shellCommandMacrosAreSafe(const QHash<QString, QString> &macros,
     const QStringList &commandTexts, QString *unsafeMacro)

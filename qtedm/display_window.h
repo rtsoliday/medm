@@ -1041,6 +1041,10 @@ private:
   QString filePath_;
   QString currentLoadDirectory_;
   bool loadingLegacyAdl_ = false;
+  /* True while elements are read from a display or composite file parsed
+   * with its macros, so their recorded macro uses are complete. Undo and
+   * paste rebuild elements from text whose macros were already applied. */
+  bool elementsFromAdlFile_ = false;
   QUndoStack *undoStack_ = nullptr;
   QByteArray lastCommittedState_;
   QString pendingUndoLabel_;

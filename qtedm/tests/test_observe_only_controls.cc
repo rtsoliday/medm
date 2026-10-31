@@ -146,6 +146,7 @@ private slots:
   void pvaSnapshotsCopySharedArrays();
   void shellCommandsDoNotBlockTheGuiThread();
   void observeOnlyBlocksShellCommands();
+  void shellCommandMacroChecksUseSubstitutionSites();
   void auditLogCodecRoundTripsEscapedFields();
   void findPvIncludesEverySafetyControlFamily();
   void findPvIncludesRuleOnlyWidgets();
@@ -1766,6 +1767,102 @@ void TestObserveOnlyControls::observeOnlyBlocksShellCommands()
       QApplication::font(), QApplication::font(), state);
   window.runShellCommand(QStringLiteral("echo blocked"));
   QVERIFY(window.findChildren<QProcess *>().isEmpty());
+}
+
+void TestObserveOnlyControls::shellCommandMacroChecksUseSubstitutionSites()
+{
+  /* Observe-only mode stops an accepted command in runShellCommand, so no
+   * command runs. A command the macro check refuses shows a message. */
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("shell.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray contents =
+      "file { name=\"shell.adl\" version=030122 }\n"
+      "display { object { width=200 height=100 } }\n"
+      "\"shell command\" { object { x=0 y=0 width=60 height=20 }\n"
+      "  command[0] { label=\"$(L)\" name=\"echo $(M)\" }\n"
+      "  command[1] { name=\"date +%T\" }\n"
+      "  command[2] { name=\"caget '$(P)Pos:X-I'\" args=\"$(P)Pos:Y-I\" }\n"
+      "  clr=14 bclr=4 }\n";
+  QCOMPARE(file.write(contents), qint64(contents.size()));
+  file.close();
+
+  enum Outcome { kLoadFailed, kStarted, kAccepted, kRefused };
+  const auto activate = [&path](const QHash<QString, QString> &macros,
+      int index, ShellCommandEntry *loaded = nullptr,
+      const QString &editedCommand = QString()) {
+    auto state = std::make_shared<DisplayState>();
+    state->observeOnly = true;
+    DisplayWindow window(QApplication::palette(), QApplication::palette(),
+        QApplication::font(), QApplication::font(), state);
+    window.setAttribute(Qt::WA_DeleteOnClose, false);
+    QString error;
+    if (!window.loadFromFile(path, &error, macros)
+        || window.shellCommandElements_.size() != 1) {
+      return kLoadFailed;
+    }
+    ShellCommandElement *element = window.shellCommandElements_.first();
+    if (!editedCommand.isNull()) {
+      element->setEntryCommand(index, editedCommand);
+    }
+    if (loaded) {
+      *loaded = element->entry(index);
+    }
+    window.enterExecuteMode();
+    window.handleShellCommandActivation(element, index, Qt::NoModifier);
+    if (!window.findChildren<QProcess *>().isEmpty()) {
+      return kStarted;
+    }
+    return window.findChild<QMessageBox *>(
+        QStringLiteral("qtedmShellCommandBlocked")) ? kRefused : kAccepted;
+  };
+
+  /* Escapes in a macro value are not decoded, so shell syntax hidden in
+   * them reaches the check unchanged (F-001). */
+  ShellCommandEntry entry;
+  for (const QString &value : {QStringLiteral("a\\;touch x"),
+           QStringLiteral("a\\x3btouch x"), QStringLiteral("a$(id)"),
+           QStringLiteral("a\";touch x")}) {
+    QCOMPARE(activate({{QStringLiteral("M"), value}}, 0, &entry), kRefused);
+    QCOMPARE(entry.command, QStringLiteral("echo ") + value);
+  }
+  QVERIFY(activate({{QStringLiteral("M"), QStringLiteral("C:\\temp")}}, 0,
+      &entry) != kLoadFailed);
+  QCOMPARE(entry.command, QStringLiteral("echo C:\\temp"));
+  QCOMPARE(activate({{QStringLiteral("M"), QStringLiteral("S35:current")}}, 0),
+      kAccepted);
+
+  /* A quote in a macro value cannot add elements to the display. */
+  const QString injectedLabel = QStringLiteral(
+      "x\" } command[3] { name=\"touch injected");
+  QCOMPARE(activate({{QStringLiteral("L"), injectedLabel},
+      {QStringLiteral("M"), QStringLiteral("ok")}}, 3, &entry), kAccepted);
+  QVERIFY(entry.command.isEmpty());
+  QCOMPARE(activate({{QStringLiteral("L"), injectedLabel}}, 0, &entry),
+      kAccepted);
+  QCOMPARE(entry.label, injectedLabel);
+
+  /* Macros the command does not use never block it, and quoted values may
+   * contain characters such as braces (F-002). */
+  QCOMPARE(activate({{QStringLiteral("EGU"), QStringLiteral("%")},
+      {QStringLiteral("OPT"), QStringLiteral("-e")}}, 1), kAccepted);
+#ifndef Q_OS_WIN
+  QCOMPARE(activate({{QStringLiteral("P"),
+      QStringLiteral("SR:C01-BI{BPM:1}")}}, 2), kAccepted);
+#endif
+  QCOMPARE(activate({{QStringLiteral("P"), QStringLiteral("SR{a,-rf}")}}, 2),
+      kRefused);
+
+  /* An edited command no longer records where macros went, so every macro
+   * value it contains is checked. */
+  QCOMPARE(activate({{QStringLiteral("M"), QStringLiteral("ok")},
+      {QStringLiteral("EGU"), QStringLiteral("%")}}, 0, &entry,
+      QStringLiteral("date +%T")), kRefused);
+  QVERIFY(!entry.macroUsesKnown);
+  QCOMPARE(activate({{QStringLiteral("M"), QStringLiteral("ok")}}, 0, &entry,
+      QStringLiteral("echo ok")), kAccepted);
 }
 
 void TestObserveOnlyControls::auditLogCodecRoundTripsEscapedFields()

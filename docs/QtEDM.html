@@ -1217,7 +1217,7 @@ complete extension list.</p>
     <li><strong>Configure:</strong> Button label plus one or more commands and arguments.</li>
     <li><strong>Use when:</strong> The operator workflow needs to hand off to an external program instead of writing a PV.</li>
     <li><strong>Operational note:</strong> Prefer explicit paths and predictable environment setup because commands run in the operator's local session context.</li>
-    <li><strong>Security:</strong> Shell actions are disabled by <code>--read-only</code>. On Unix, unquoted dynamic <code>&amp;A</code>, <code>&amp;T</code>, and <code>&amp;P</code> values split into words as in MEDM, and each word is quoted so it is not otherwise interpreted. These tokens are rejected inside or after command substitution, backtick, or here-document syntax, where outer quoting is insufficient; such syntax inside single quotes does not count. Values containing control characters such as line breaks are rejected. A Shell Command is refused when a macro value it contains has shell syntax, or a word that starts with <code>-</code> other than a number; macros the command does not use never block it, and Execute menu commands from <code>MEDM_EXEC_LIST</code> are not checked. A refused command shows a message explaining why. Quoting protects one shell level only: do not pass dynamic values to a second shell, such as <code>sh -c</code>, <code>xterm -e</code>, or <code>ssh</code>. Author display files with shell commands only in trusted locations.</li>
+    <li><strong>Security:</strong> Shell actions are disabled by <code>--read-only</code>. On Unix, unquoted dynamic <code>&amp;A</code>, <code>&amp;T</code>, and <code>&amp;P</code> values split into words as in MEDM, and each word is quoted so it is not otherwise interpreted. These tokens are rejected inside or after command substitution, backtick, or here-document syntax, where outer quoting is insufficient; such syntax inside single quotes does not count. Values containing control characters such as line breaks are rejected. QtEDM records where it substitutes display macros into a Shell Command and refuses the command when a macro value could change what the shell runs. On Unix, a value inside single or double quotes may contain any character except quotes, a backslash, <code>$</code>, a backquote, <code>;</code>, <code>&amp;</code>, <code>|</code>, <code>&lt;</code>, <code>&gt;</code>, or a control character. An unquoted value, or one inside command substitution or a here-document, may contain only letters, digits, spaces, and <code>_ . / : @ + = , - % ~</code>, plus braces when it has no comma or <code>..</code>, so a PV name such as <code>SR:C01-BI{BPM:1}</code> needs no quotes. On Windows, macro values may contain only letters, digits, spaces, and <code>_ . / : @ + = , - \ '</code>. A word that starts with <code>-</code>, other than a number or a lone <code>-</code>, is always refused. Macros the command does not use never block it. A command edited in the display editor no longer records where macros were substituted, so any macro value it contains must use only letters, digits, spaces, and <code>_ . / : @ + = , -</code>. Execute menu commands from <code>MEDM_EXEC_LIST</code> are not checked. A refused command shows a message explaining why. Quoting protects one shell level only: do not pass dynamic values to a second shell, such as <code>sh -c</code>, <code>xterm -e</code>, or <code>ssh</code>. Author display files with shell commands only in trusted locations.</li>
   </ul>
 </div>
 
@@ -1322,9 +1322,9 @@ in the MEDM Reference Manual. Keep an original copy and review a saved display
 before replacing an existing operational screen.</p>
 
 <p>Input files are limited to 16 MiB and parser nesting to 256 levels.
-Macro expansion is checked before parsing and stops with an error if a
-substituted result exceeds 16 MiB of UTF-8 text or 16 Mi characters, including
-intermediate results of recursive substitutions.</p>
+Loading stops with an error if the display text with its macros substituted
+would exceed 16 MiB of UTF-8 text or 16 Mi characters, including intermediate
+results of recursive substitutions.</p>
 
 <p>ADL files retain their legacy Latin-1 encoding. QtEDM saves characters
 outside Latin-1 as <code>\uXXXX</code> escapes with exactly four hexadecimal
@@ -1524,6 +1524,13 @@ contents and storage permissions before using them to change live equipment.</p>
 <h3>Macro Substitution</h3>
 
 <p>PV names can include macro references like <code>$(P)</code> that are replaced at runtime. This allows creating reusable displays that work with different devices.</p>
+
+<p>As in MEDM, each macro value is inserted where its reference appears in a
+name, key, or value and is used literally. Backslash escapes in a value are not
+decoded, so <code>C:\temp</code> stays as written, and quotes, braces, or
+spaces in a value cannot end a quoted string or add display elements. A value
+may refer to other macros, which are expanded up to ten levels deep. References
+to undefined macros are left unchanged.</p>
 
 <h3>Local Plugins and Property Rules</h3>
 

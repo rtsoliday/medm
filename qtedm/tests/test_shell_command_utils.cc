@@ -8,6 +8,19 @@
 
 #include "shell_command_utils.h"
 
+namespace {
+
+/* Whether value M is accepted where a display substituted it, between
+ * before and after. */
+bool macroUseIsSafe(const QString &before, const QString &value,
+    const QString &after = QString())
+{
+  return shellCommandMacroUsesAreSafe(before + value + after,
+      {{before.size(), QStringLiteral("M"), value}});
+}
+
+} // namespace
+
 class TestShellCommandUtils : public QObject
 {
   Q_OBJECT
@@ -16,6 +29,7 @@ private slots:
   void expandsMedmTokensAndPreservesUnknownTokens();
   void preservesTokenValuesWithoutRecursiveExpansion();
   void quotesDynamicValuesAndRejectsUnsafeMacros();
+  void checksMacroUsesInTheirQuotingContext();
   void rejectsMissingPvSelectionAndEmptyCommands();
   void invokesCheckedInHelperAndReportsFailures();
 };
@@ -186,6 +200,64 @@ void TestShellCommandUtils::quotesDynamicValuesAndRejectsUnsafeMacros()
       QStringLiteral("echo `basename &A`"), context,
       &output, &error));
   QVERIFY(error.contains(QStringLiteral("nested shell syntax")));
+#endif
+}
+
+void TestShellCommandUtils::checksMacroUsesInTheirQuotingContext()
+{
+  QVERIFY(shellCommandMacroUsesAreSafe(QStringLiteral("date +%T"), {}));
+  QVERIFY(macroUseIsSafe(QStringLiteral("caget "),
+      QStringLiteral("S35:current")));
+  QVERIFY(macroUseIsSafe(QStringLiteral("cat "), QStringLiteral("-")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("caget "),
+      QStringLiteral("x; touch y")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("xterm -T '"),
+      QStringLiteral("-e touch y"), QStringLiteral("'")));
+
+  const QList<AdlMacroUse> twoUses{
+      {6, QStringLiteral("A"), QStringLiteral("ok")},
+      {9, QStringLiteral("B"), QStringLiteral("a&b")}};
+  QString unsafeMacro;
+  QVERIFY(!shellCommandMacroUsesAreSafe(QStringLiteral("probe ok a&b"),
+      twoUses, &unsafeMacro));
+  QCOMPARE(unsafeMacro, QStringLiteral("B"));
+
+#ifndef Q_OS_WIN
+  // Braces stay literal unless bash could expand them.
+  QVERIFY(macroUseIsSafe(QStringLiteral("caget "),
+      QStringLiteral("SR:C01-BI{BPM:1}"), QStringLiteral("Pos:X-I")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("ls "), QStringLiteral("{a,-rf}")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("ls "), QStringLiteral("{1..3}")));
+  QVERIFY(macroUseIsSafe(QStringLiteral("tool "), QStringLiteral("~/bin 50%")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("tool "),
+      QStringLiteral("Pump (upstream)")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("ls "), QStringLiteral("*")));
+
+  // Quoted values may contain more, but nothing that ends the quotes or
+  // starts another command if the text reaches a second shell.
+  QVERIFY(macroUseIsSafe(QStringLiteral("caget '"),
+      QStringLiteral("SR:C01-BI{BPM:1}"), QStringLiteral("Pos:X-I'")));
+  QVERIFY(macroUseIsSafe(QStringLiteral("xterm -T \""),
+      QStringLiteral("Pump (upstream) #1 [a,b] *"), QStringLiteral("\"")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("echo '"),
+      QStringLiteral("a'; touch y; '"), QStringLiteral("'")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("echo \""),
+      QStringLiteral("$(id)"), QStringLiteral("\"")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("sh -c 'caget "),
+      QStringLiteral("x; touch y"), QStringLiteral("'")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("echo \""),
+      QStringLiteral("a\\"), QStringLiteral("\"")));
+
+  // Outer quotes do not protect a value after a backslash or inside nested
+  // shell syntax, which is parsed again.
+  QVERIFY(macroUseIsSafe(QStringLiteral("echo \""), QStringLiteral("(x)"),
+      QStringLiteral("\"")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("echo \"\\"), QStringLiteral("(x)"),
+      QStringLiteral("\"")));
+  QVERIFY(!macroUseIsSafe(QStringLiteral("echo \"$(cat '"),
+      QStringLiteral("(x)"), QStringLiteral("')\"")));
+  QVERIFY(macroUseIsSafe(QStringLiteral("echo '$(not nested) "),
+      QStringLiteral("(x)"), QStringLiteral("'")));
 #endif
 }
 

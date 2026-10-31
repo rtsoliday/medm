@@ -38,6 +38,14 @@ QString entryDisplayLabel(const ShellCommandEntry &entry)
   return entry.label;
 }
 
+/* An edited command no longer matches where macros were substituted. */
+void forgetMacroUses(ShellCommandEntry &entry)
+{
+  entry.macroUsesKnown = false;
+  entry.commandMacroUses.clear();
+  entry.argsMacroUses.clear();
+}
+
 int messageButtonPixelLimit(int height)
 {
   if (height <= 0) {
@@ -176,6 +184,7 @@ void ShellCommandElement::setEntryCommand(int index, const QString &command)
     return;
   }
   entries_[index].command = command;
+  forgetMacroUses(entries_[index]);
   update();
 }
 
@@ -196,6 +205,7 @@ void ShellCommandElement::setEntryArgs(int index, const QString &args)
     return;
   }
   entries_[index].args = args;
+  forgetMacroUses(entries_[index]);
   update();
 }
 

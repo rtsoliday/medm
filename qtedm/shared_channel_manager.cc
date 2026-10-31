@@ -55,20 +55,6 @@ quint64 channelInstanceIdFromUserData(const void *userData)
   return static_cast<quint64>(reinterpret_cast<quintptr>(userData));
 }
 
-bool isNumericMonitorType(chtype requestedType)
-{
-  switch (requestedType) {
-  case DBR_TIME_DOUBLE:
-  case DBR_TIME_FLOAT:
-  case DBR_TIME_LONG:
-  case DBR_TIME_SHORT:
-  case DBR_TIME_CHAR:
-  case DBR_TIME_ENUM:
-    return true;
-  default:
-    return false;
-  }
-}
 } // namespace
 
 /* SharedChannelManager implementation */
@@ -1433,78 +1419,12 @@ bool SharedChannelManager::putValue(const QString &pvName, double value)
     return putStatus == ECA_NORMAL;
   }
 
+  /* Monitors show the value only when the IOC reports it. The IOC can
+   * clamp, reject or override a write without posting a monitor, so the
+   * requested value is never shown as the PV's current value. */
   int status = ca_put(DBR_DOUBLE, putChannel, &value);
   ca_flush_io();
-  if (status == ECA_NORMAL) {
-    QList<quint64> channelInstanceIds;
-    for (auto *channel : channels_) {
-      if (!channel || !channel->connected) {
-        continue;
-      }
-      if (channel->key.pvName != trimmed) {
-        continue;
-      }
-      if (!isNumericMonitorType(channel->key.requestedType)) {
-        continue;
-      }
-      channelInstanceIds.append(channel->instanceId);
-    }
-
-    /* Subscriber callbacks can unsubscribe the last listener on a channel,
-     * which may destroy that channel. Snapshot instance ids first so we
-     * never mutate channels_ while iterating it. */
-    for (quint64 channelInstanceId : channelInstanceIds) {
-      SharedChannel *channel = findChannelByInstanceId(channelInstanceId);
-      if (!channel || !channel->connected) {
-        continue;
-      }
-      notifySubscribersForLocalNumericPut(channel, value);
-    }
-  }
   return status == ECA_NORMAL;
-}
-
-void SharedChannelManager::notifySubscribersForLocalNumericPut(
-    SharedChannel *channel, double value)
-{
-  if (!channel || !std::isfinite(value)) {
-    return;
-  }
-
-  SharedChannelData &data = channel->cachedData;
-  data.connected = channel->connected;
-  data.hasValue = true;
-  data.isNumeric = true;
-  data.numericValue = value;
-
-  bool valueChanged = false;
-  if (channel->lastNotifiedSeverity < 0) {
-    valueChanged = true;
-  } else if (value != channel->lastNotifiedValue) {
-    valueChanged = true;
-  }
-  if (!valueChanged) {
-    return;
-  }
-
-  const qint64 nowMs = deliveryTimer_.elapsed();
-  channel->realtimeDelivery.lastNotifyTimeMs = nowMs;
-  channel->realtimeDelivery.notifyPending = false;
-  channel->passiveDelivery.lastNotifyTimeMs = nowMs;
-  channel->passiveDelivery.notifyPending = false;
-  channel->lastNotifiedValue = value;
-  channel->lastNotifiedSeverity = data.severity;
-  channel->lastNotifiedString = data.stringValue;
-  channel->lastNotifiedEnum = data.enumValue;
-  ++channel->updateCount;
-
-  ++channel->dispatchDepth;
-  dispatchValueCallbacks(channel, ChannelDeliveryMode::kRealtime);
-  dispatchValueCallbacks(channel, ChannelDeliveryMode::kPassive);
-  --channel->dispatchDepth;
-  if (channel->dispatchDepth == 0 && channel->destroyPending) {
-    destroyChannelIfUnused(channel);
-  }
 }
 
 bool SharedChannelManager::putValue(const QString &pvName, const QString &value)

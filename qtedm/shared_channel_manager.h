@@ -145,7 +145,6 @@ private:
   void handleValue(SharedChannel *channel, const event_handler_args &args);
   void handleControlInfo(SharedChannel *channel, const event_handler_args &args);
   void handleAccessRights(SharedChannel *channel, bool canRead, bool canWrite);
-  void notifySubscribersForLocalNumericPut(SharedChannel *channel, double value);
   void scheduleInitialDelivery(quint64 subscriptionId);
   void deliverInitialState(quint64 subscriptionId);
   Subscriber *findSubscriber(SharedChannel *channel, quint64 subscriptionId);

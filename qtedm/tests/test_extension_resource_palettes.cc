@@ -1409,8 +1409,12 @@ void TestExtensionResourcePalettes::palettePreservesUserSize()
   QCoreApplication::processEvents();
   auto *palette = window.findChild<QWidget *>(QStringLiteral("qtedmResourcePalette"));
   QVERIFY(palette);
+  /* The palette keeps its window frame on screen, so a user size can be at
+   * most the available area less the frame. */
   const QSize available = QGuiApplication::primaryScreen()->availableGeometry().size();
-  const QSize preferred = (palette->size() + QSize(150, 40)).boundedTo(available);
+  const QSize frame = palette->frameGeometry().size() - palette->size();
+  const QSize preferred =
+      (palette->size() + QSize(150, 40)).boundedTo(available - frame);
   palette->resize(preferred);
   QCoreApplication::processEvents();
   window.selectAndScrollToWidget(second);
@@ -1457,7 +1461,7 @@ void TestExtensionResourcePalettes::paletteColumnsAlignAndShrinkWithSelection()
   auto *palette = window.findChild<QWidget *>(
       QStringLiteral("qtedmResourcePalette"));
   QVERIFY(palette);
-  const int plotHeight = palette->height();
+  const QSize plotSize = palette->size();
   QLineEdit *xPv = nullptr;
   QLineEdit *yPv = nullptr;
   for (auto *edit : palette->findChildren<QLineEdit *>()) {
@@ -1489,7 +1493,12 @@ void TestExtensionResourcePalettes::paletteColumnsAlignAndShrinkWithSelection()
   text->setText(QStringLiteral("Simple"));
   window.selectAndScrollToWidget(text);
   QCoreApplication::processEvents();
-  QVERIFY(palette->height() < plotHeight);
+  /* A screen shorter than both palettes clamps their heights alike (the
+   * 800x600 offscreen screen does), so require the palette to shrink in at
+   * least one dimension and grow in neither. */
+  QVERIFY(palette->width() <= plotSize.width());
+  QVERIFY(palette->height() <= plotSize.height());
+  QVERIFY(palette->size() != plotSize);
 }
 
 void TestExtensionResourcePalettes::paletteButtonsSupportKeyboardActivation()

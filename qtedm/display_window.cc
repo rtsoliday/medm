@@ -21218,6 +21218,25 @@ void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
   for (PluginElement *e : pluginElements_) {
     scaleWidget(e);
   }
+
+  /* scaleWidget() restores each composite to its ADL object, which can be
+   * smaller than its children.  MEDM does not clip composite children, so
+   * grow nested composites before their parents to contain them. */
+  QSet<CompositeElement *> fittedComposites;
+  std::function<void(CompositeElement *)> fitComposite =
+      [&fittedComposites, &fitComposite](CompositeElement *composite) {
+        if (!composite || fittedComposites.contains(composite)) {
+          return;
+        }
+        fittedComposites.insert(composite);
+        for (QWidget *child : composite->childWidgets()) {
+          fitComposite(dynamic_cast<CompositeElement *>(child));
+        }
+        composite->expandToFitChildren(true);
+      };
+  for (CompositeElement *e : compositeElements_) {
+    fitComposite(e);
+  }
 }
 
 bool DisplayWindow::save(QWidget *dialogParent)
@@ -35006,9 +35025,27 @@ CompositeElement *DisplayWindow::loadCompositeElement(
           macroDefinitions_ = mergedMacros;
 
           /* Children in composite files have coordinates relative to the
-             composite file's display origin. We need to load them at (0,0)
-             offset, then the composite will be repositioned to fit contents. */
-          ElementLoadContextGuard guard(*this, composite, QPoint(-2, -4), true,
+             composite file's display origin.  As in MEDM's
+             compositeFileParse(), move them so that the bounding box of
+             their objects starts at the composite's x and y. */
+          int minX = std::numeric_limits<int>::max();
+          int minY = std::numeric_limits<int>::max();
+          for (const auto &child : document->children) {
+            const QString childName = normalizedAdlName(child.name);
+            if (childName == QStringLiteral("file")
+                || childName == QStringLiteral("display")
+                || childName == QStringLiteral("color map")
+                || !::findChild(child, QStringLiteral("object"))) {
+              continue;
+            }
+            const QRect childRect = parseObjectGeometry(child);
+            minX = std::min(minX, childRect.x());
+            minY = std::min(minY, childRect.y());
+          }
+          const QPoint fileOrigin =
+              minX == std::numeric_limits<int>::max()
+              ? QPoint() : QPoint(minX, minY);
+          ElementLoadContextGuard guard(*this, composite, -fileOrigin, true,
               composite);
           const bool previousElementsFromAdlFile = elementsFromAdlFile_;
           elementsFromAdlFile_ = true;

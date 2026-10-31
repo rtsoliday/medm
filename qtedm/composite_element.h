@@ -55,7 +55,9 @@ public:
   bool isChannelConnected() const;
   void setRuntimeVisible(bool visible);
   
-  void expandToFitChildren();
+  /* keepCurrentBounds grows the composite around its children without
+   * shrinking it below its current rectangle. */
+  void expandToFitChildren(bool keepCurrentBounds = false);
 
 protected:
   void paintEvent(QPaintEvent *event) override;

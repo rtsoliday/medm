@@ -168,6 +168,8 @@ private slots:
   void sliderTroughRespectsAccess();
   void executePickingFollowsVisibleStacking();
   void hiddenRelatedDisplayUnderGraphicComposite();
+  void compositeChildrenAreNotClipped_data();
+  void compositeChildrenAreNotClipped();
   void statusRectangleCoversHiddenRelatedDisplay_data();
   void statusRectangleCoversHiddenRelatedDisplay();
   void legacyAttributesApplyLikeMedm();
@@ -241,6 +243,159 @@ void TestObserveOnlyControls::hiddenRelatedDisplayUnderGraphicComposite()
         target->rect().center());
     QCOMPARE(activations, pass + 1);
     window.leaveExecuteMode();
+  }
+}
+
+void TestObserveOnlyControls::compositeChildrenAreNotClipped_data()
+{
+  QTest::addColumn<int>("scale");
+  QTest::newRow("loaded") << 0;
+  QTest::newRow("unscaled-resize") << 1;
+  QTest::newRow("doubled-resize") << 2;
+}
+
+void TestObserveOnlyControls::compositeChildrenAreNotClipped()
+{
+  QFETCH(int, scale);
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  auto writeFile = [&directory](const QString &name,
+                       const QString &contents) {
+    QFile file(directory.filePath(name));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      return false;
+    }
+    const QByteArray bytes = contents.toLatin1();
+    return file.write(bytes) == static_cast<qint64>(bytes.size());
+  };
+  /* Like the IOC Status button in mbaMain.adl, the related display
+   * extends below both of its stale composite objects.  Like
+   * summary_item.adl in linacps.adl, the composite file's objects start
+   * at (8,9) and are wider than the composite that includes them. */
+  QVERIFY(writeFile(QStringLiteral("item.adl"), QStringLiteral(
+      "file { name=\"item.adl\" version=030120 }\n"
+      "display { object { x=500 y=500 width=235 height=45 }"
+      " clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=2 colors { ffffff, 000000, } }\n"
+      "\"related display\" { object { x=8 y=9 width=20 height=20 }\n"
+      "  display[0] { label=\"file\" name=\"file.adl\" }\n"
+      "  clr=1 bclr=0 }\n"
+      "rectangle { object { x=58 y=9 width=120 height=20 }\n"
+      "  \"basic attribute\" { clr=1 } }\n")));
+  QVERIFY(writeFile(QStringLiteral("main.adl"), QStringLiteral(
+      "file { name=\"main.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=240 height=120 }"
+      " clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=2 colors { ffffff, 000000, } }\n"
+      "composite { object { x=20 y=10 width=64 height=32 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    composite { object { x=20 y=10 width=64 height=32 }\n"
+      "      \"composite name\"=\"\"\n"
+      "      children {\n"
+      "        \"related display\" {\n"
+      "          object { x=20 y=32 width=64 height=16 }\n"
+      "          display[0] { label=\"inline\" name=\"inline.adl\" }\n"
+      "          clr=1 bclr=0 label=\" Status\" }\n"
+      "      }\n"
+      "    }\n"
+      "  }\n"
+      "}\n"
+      "composite { object { x=11 y=60 width=150 height=20 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  \"composite file\"=\"item.adl\"\n"
+      "}\n"
+      "composite { object { x=100 y=10 width=76 height=10 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    rectangle { object { x=110 y=11 width=55 height=8 }\n"
+      "      \"basic attribute\" { clr=1 } }\n"
+      "  }\n"
+      "  \"dynamic attribute\" { vis=\"if not zero\""
+      " chan=\"composite:door\" }\n"
+      "}\n")));
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(directory.filePath(QStringLiteral("main.adl")),
+      &error), qPrintable(error));
+  QCOMPARE(window.compositeElements_.size(), 4);
+  QCOMPARE(window.relatedDisplayElements_.size(), 2);
+  QCOMPARE(window.rectangleElements_.size(), 2);
+  window.show();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+  QTRY_COMPARE(window.displayArea_->size(), QSize(240, 120));
+  const int factor = std::max(scale, 1);
+  if (scale > 0) {
+    /* An execute-mode resize scales from the recorded ADL geometry. */
+    window.scaleAllElements(240, 120, 240 * factor, 120 * factor);
+  }
+
+  auto displayRect = [&window](QWidget *widget) {
+    return QRect(widget->mapTo(window.displayArea_, QPoint(0, 0)),
+        widget->size());
+  };
+  /* Qt clips a child to every enclosing composite. */
+  auto unclipped = [&window](QWidget *widget) {
+    QRect rect = widget->geometry();
+    for (QWidget *parent = widget->parentWidget();
+         parent && parent != window.displayArea_;
+         parent = parent->parentWidget()) {
+      if (!parent->rect().contains(rect)) {
+        return false;
+      }
+      rect.translate(parent->pos());
+    }
+    return true;
+  };
+  RelatedDisplayElement *inlineButton = nullptr;
+  RelatedDisplayElement *fileButton = nullptr;
+  for (RelatedDisplayElement *button : window.relatedDisplayElements_) {
+    if (button->entryName(0) == QStringLiteral("inline.adl")) {
+      inlineButton = button;
+    } else if (button->entryName(0) == QStringLiteral("file.adl")) {
+      fileButton = button;
+    }
+  }
+  QVERIFY(inlineButton);
+  QVERIFY(fileButton);
+  RectangleElement *fileRectangle = nullptr;
+  for (RectangleElement *rectangle : window.rectangleElements_) {
+    if (rectangle->width() == 120 * factor) {
+      fileRectangle = rectangle;
+    }
+  }
+  QVERIFY(fileRectangle);
+  CompositeElement *statusComposite = nullptr;
+  for (CompositeElement *composite : window.compositeElements_) {
+    if (composite->channel(0) == QStringLiteral("composite:door")) {
+      statusComposite = composite;
+    }
+  }
+  QVERIFY(statusComposite);
+
+  QCOMPARE(displayRect(inlineButton),
+      QRect(20 * factor, 32 * factor, 64 * factor, 16 * factor));
+  QVERIFY2(unclipped(inlineButton),
+      "Composites must not clip a related display below their object");
+  QCOMPARE(displayRect(fileButton),
+      QRect(11 * factor, 60 * factor, 20 * factor, 20 * factor));
+  QVERIFY(unclipped(fileButton));
+  QCOMPARE(displayRect(fileRectangle),
+      QRect(61 * factor, 60 * factor, 120 * factor, 20 * factor));
+  QVERIFY2(unclipped(fileRectangle),
+      "Composite file contents must not be clipped to a stale width");
+  if (scale > 0) {
+    /* MEDM fills a disconnected composite's object white, so a resize
+     * must not shrink the composite to its smaller child. */
+    QVERIFY(displayRect(statusComposite).contains(
+        QRect(100 * factor, 10 * factor, 76 * factor, 10 * factor)));
   }
 }
 

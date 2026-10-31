@@ -272,7 +272,7 @@ void CompositeElement::adoptChild(QWidget *child)
   refreshChildStackingOrder();
 }
 
-void CompositeElement::expandToFitChildren()
+void CompositeElement::expandToFitChildren(bool keepCurrentBounds)
 {
   if (childWidgets_.isEmpty()) {
     return;
@@ -286,6 +286,13 @@ void CompositeElement::expandToFitChildren()
   int minY = INT_MAX;
   int maxX = INT_MIN;
   int maxY = INT_MIN;
+  if (keepCurrentBounds) {
+    /* MEDM paints a disconnected composite's whole object white. */
+    minX = 0;
+    minY = 0;
+    maxX = width();
+    maxY = height();
+  }
 
   for (const auto &pointer : childWidgets_) {
     QWidget *child = pointer.data();

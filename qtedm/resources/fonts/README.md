@@ -54,7 +54,28 @@ To regenerate an embedded font:
        /usr/share/fonts/X11/misc/5x8-ISO8859-1.pcf.gz misc-fixed-8.otb
    ```
 
-2. Create the matching header that exposes a `k<FontName>FontData` array:
+2. For the Sony fonts (`8x16.pcf.gz` and `12x24.pcf.gz`), map the space. Their
+   sources name the space glyph `C040`, which FontForge leaves without a
+   character, so Qt would draw spaces with a wider fallback font. With
+   fontTools, add the mapping and keep every other table unchanged:
+
+   ```sh
+   python3 - sony-fixed-8x16.otb <<'EOF'
+   import sys
+   from fontTools.ttLib import TTFont
+   font = TTFont(sys.argv[1], recalcBBoxes=False, recalcTimestamp=False)
+   for table in font["cmap"].tables:
+       table.cmap[32] = "C040"
+   font.tables.pop("post", None)  # keep the original glyph-name bytes
+   font.save(sys.argv[1])
+   EOF
+   ```
+
+   The Latin-1 glyphs above U+00A0 stay unmapped: their source names are
+   unreliable (the 12x24 font repeats `C252` to `C263`), so Qt draws those
+   characters from a fallback font.
+
+3. Create the matching header that exposes a `k<FontName>FontData` array:
 
    ```sh
    python3 generate_font_header.py \

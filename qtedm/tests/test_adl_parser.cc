@@ -23,6 +23,7 @@ private slots:
   void parsesPvTableBlock();
   void parsesWaveTableBlock();
   void preservesBlocksNamedProperty();
+  void ignoresStrayTopLevelCloseBrace();
   void rejectsMalformedInput();
   void rejectsTopLevelUnterminatedString();
   void rejectsOversizedInput();
@@ -497,6 +498,26 @@ void TestAdlParser::preservesBlocksNamedProperty()
       QStringLiteral("title"));
   QCOMPARE(propertyValue(*property, QStringLiteral("value")),
       QStringLiteral("Operator view"));
+}
+
+void TestAdlParser::ignoresStrayTopLevelCloseBrace()
+{
+  /* Like iocstatus.adl, an extra } follows an object.  MEDM's display list
+   * parser skips it and loads the objects after it. */
+  QString errorMessage;
+  const std::optional<AdlNode> root = AdlParser::parse(QStringLiteral(
+      "file { name=\"iocstatus.adl\" version=030120 }\n"
+      "text { textix=\"Free CPU %\" }\n"
+      "}\n"
+      "text { textix=\"* = missing information\" }\n"
+      "}\n"), &errorMessage);
+
+  QVERIFY2(root.has_value(), qPrintable(errorMessage));
+  QCOMPARE(root->children.size(), 3);
+  const auto texts = ::findChildren(*root, QStringLiteral("text"));
+  QCOMPARE(texts.size(), 2);
+  QCOMPARE(propertyValue(*texts[1], QStringLiteral("textix")),
+      QStringLiteral("* = missing information"));
 }
 
 void TestAdlParser::rejectsMalformedInput()

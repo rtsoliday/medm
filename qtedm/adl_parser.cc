@@ -171,6 +171,19 @@ public:
 
     while (!atEnd()) {
 
+      /* As MEDM's display list parser does, skip a closing brace that
+       * matches no block, such as a stray one between two objects. */
+
+      if (peek() == QChar('}')) {
+
+        ++index_;
+
+        skipWhitespace();
+
+        continue;
+
+      }
+
       std::optional<AdlNode> child = parseNode(0);
 
       if (!child) {

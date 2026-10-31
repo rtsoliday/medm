@@ -63,7 +63,8 @@ void TestHelpDialogs::guideNavigationSearchAndReuse()
   QVERIFY(guideText.contains(QStringLiteral(
       "synthetic preview grid of at most 32 by 24 cells")));
   QVERIFY(guideText.contains(QStringLiteral(
-      "Macro expansion is checked before parsing")));
+      "Loading stops with an error if the display text with its macros "
+      "substituted")));
   QVERIFY(guideText.contains(QStringLiteral(
       "A failed audit write or flush emits a warning")));
   QVERIFY(guideText.contains(QStringLiteral(

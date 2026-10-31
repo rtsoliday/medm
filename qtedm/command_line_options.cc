@@ -12,7 +12,7 @@
 /* Report the EPICS Base this binary was built against, as the About dialog
  * does, rather than a hard-coded release. */
 const char kQtEdmVersionString[] =
-    "QtEDM Version 1.0.0  (" EPICS_VERSION_STRING ")";
+    "QtEDM Version 1.1.0  (" EPICS_VERSION_STRING ")";
 
 QString programName(const QStringList &args)
 {

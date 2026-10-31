@@ -50,6 +50,7 @@ export default defineConfig({
         { text: 'Maintain these docs', link: '/develop/documentation' }
       ]},
       { text: 'PROJECT', collapsed: true, items: [
+        { text: 'Release notes', link: '/project/release-notes' },
         { text: 'Authors', link: '/project/authors' },
         { text: 'Technical support', link: '/project/support' },
         { text: 'Copyright', link: '/project/copyright' },

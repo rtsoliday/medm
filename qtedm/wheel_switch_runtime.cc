@@ -99,6 +99,7 @@ void WheelSwitchRuntime::resetRuntimeState()
   connected_ = false;
   lastValue_ = 0.0;
   hasLastValue_ = false;
+  showNextValue_ = false;
   lastSeverity_ = kInvalidSeverity;
   lastWriteAccess_ = false;
   initialUpdateTracked_ = false;
@@ -120,6 +121,8 @@ void WheelSwitchRuntime::handleChannelConnection(bool connected)
     if (!wasConnected) {
       stats.registerChannelConnected();
     }
+    /* A reconnect starts a new value epoch, as for the slider. */
+    hasLastValue_ = false;
     lastSeverity_ = kInvalidSeverity;
     invokeOnElement([](WheelSwitchElement *element) {
       element->setRuntimeConnected(true);
@@ -179,7 +182,9 @@ void WheelSwitchRuntime::handleChannelData(const SharedChannelData &data)
     return;
   }
 
-  if (!hasLastValue_ || std::abs(numericValue - lastValue_) > 1e-12) {
+  if (showNextValue_ || !hasLastValue_
+      || std::abs(numericValue - lastValue_) > 1e-12) {
+    showNextValue_ = false;
     lastValue_ = numericValue;
     hasLastValue_ = true;
     if (!initialUpdateTracked_) {
@@ -230,6 +235,7 @@ void WheelSwitchRuntime::handleActivation(double value)
                << channelName_;
     return;
   }
+  showNextValue_ = true;
   AuditLogger::instance().logPut(channelName_, value,
       QStringLiteral("WheelSwitch"));
 }

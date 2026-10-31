@@ -44,6 +44,9 @@ private:
   bool connected_ = false;
   double lastValue_ = 0.0;
   bool hasLastValue_ = false;
+  /* After a write the element shows the requested value, so the next value
+   * from the IOC must reach it even when it equals lastValue_. */
+  bool showNextValue_ = false;
   short lastSeverity_ = 0;
   bool hasControlInfo_ = false;
   double lastControlLow_ = 0.0;

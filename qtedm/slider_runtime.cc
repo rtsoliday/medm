@@ -102,6 +102,7 @@ void SliderRuntime::resetRuntimeState()
   connected_ = false;
   lastValue_ = 0.0;
   hasLastValue_ = false;
+  showNextValue_ = false;
   lastSeverity_ = 0;
   hasControlInfo_ = false;
   lastWriteAccess_ = false;
@@ -205,7 +206,9 @@ void SliderRuntime::handleChannelData(const SharedChannelData &data)
     return;
   }
 
-  if (!hasLastValue_ || std::abs(numericValue - lastValue_) > 1e-12) {
+  if (showNextValue_ || !hasLastValue_
+      || std::abs(numericValue - lastValue_) > 1e-12) {
+    showNextValue_ = false;
     lastValue_ = numericValue;
     hasLastValue_ = true;
     if (!initialUpdateTracked_) {
@@ -257,6 +260,7 @@ void SliderRuntime::handleActivation(double value)
                << channelName_;
     return;
   }
+  showNextValue_ = true;
   AuditLogger::instance().logPut(channelName_, value,
       QStringLiteral("Slider"));
 }

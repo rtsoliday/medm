@@ -4,6 +4,7 @@
 #include <QDateTimeEdit>
 #include <QFile>
 #include <QLineEdit>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTextEdit>
 
@@ -32,6 +33,7 @@ private slots:
   void caInboxAppliesNewestLifecycleStateAfterOverflow();
   void caInboxReconnectClearsPreviousEpochAfterOverflow();
   void caInboxReconnectDeliversUnchangedFirstValue();
+  void caPutDeliversUnchangedNextValue();
   void caSamplesRetainAccessAndClearItOnDisconnect();
   void pluginDiagnosticsAreBoundedAndDeduplicated();
   void auditViewsAreBoundedAndReleaseOnHide();
@@ -384,6 +386,67 @@ void TestMemoryGrowth::caInboxReconnectDeliversUnchangedFirstValue()
   QVERIFY(!channel.cachedData.hasControlInfo);
   QCOMPARE(observed, QVector<double>({42.0, 42.0}));
   manager.instanceIdToChannel_.clear();
+}
+
+void TestMemoryGrowth::caPutDeliversUnchangedNextValue()
+{
+  /* A control shows the value it writes. When the IOC clamps or rejects the
+   * write it may post the value it already held; that monitor must still
+   * reach the control so it returns to the IOC's value. */
+  SharedChannelManager manager;
+  SharedChannelManager::SharedChannel channel;
+  channel.instanceId = 1;
+  channel.connected = true;
+  channel.cachedData.connected = true;
+  channel.cachedData.nativeElementCount = 1;
+  channel.cachedData.nativeFieldType = DBF_DOUBLE;
+  channel.key.pvName = QStringLiteral("audit:clamped");
+  channel.key.requestedType = DBR_TIME_DOUBLE;
+  manager.channels_.insert(channel.key, &channel);
+  manager.instanceIdToChannel_.insert(1, &channel);
+  manager.callbackChannels_.insert(1);
+  /* The channel lives on the stack; detach it even when a check fails. */
+  const auto detach = qScopeGuard([&manager]() {
+    manager.removeCallbackChannel(1);
+    manager.channels_.clear();
+    manager.instanceIdToChannel_.clear();
+  });
+  QVector<double> observed;
+  SharedChannelManager::Subscriber subscriber;
+  subscriber.deliveryMode = ChannelDeliveryMode::kRealtime;
+  subscriber.valueCallback = [&observed](const SharedChannelData &data) {
+    observed.append(data.numericValue);
+  };
+  channel.subscribers.insert(1, subscriber);
+  const auto enqueueValue = [&manager]() {
+    dbr_time_double value{};
+    value.value = 10.0;
+    event_handler_args args{};
+    args.usr = reinterpret_cast<void *>(quintptr(1));
+    args.dbr = &value;
+    args.type = DBR_TIME_DOUBLE;
+    args.count = 1;
+    args.status = ECA_NORMAL;
+    manager.valueCallback(args);
+  };
+  enqueueValue();
+  QTRY_VERIFY(manager.callbackEvents_.empty());
+  QCOMPARE(observed, QVector<double>({10.0}));
+
+  /* Without a write, an unchanged monitor is not delivered again. */
+  enqueueValue();
+  QTRY_VERIFY(manager.callbackEvents_.empty());
+  QCOMPARE(observed, QVector<double>({10.0}));
+
+  /* After a write, the next monitor is delivered even though it is
+   * unchanged, and only that one. */
+  manager.deliverNextValueAfterPut(QStringLiteral("audit:clamped"));
+  enqueueValue();
+  QTRY_VERIFY(manager.callbackEvents_.empty());
+  QCOMPARE(observed, QVector<double>({10.0, 10.0}));
+  enqueueValue();
+  QTRY_VERIFY(manager.callbackEvents_.empty());
+  QCOMPARE(observed, QVector<double>({10.0, 10.0}));
 }
 
 void TestMemoryGrowth::caSamplesRetainAccessAndClearItOnDisconnect()

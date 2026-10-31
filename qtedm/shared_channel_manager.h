@@ -158,6 +158,7 @@ private:
   SharedChannel *findChannelByInstanceId(quint64 channelInstanceId) const;
   SharedChannel *findOrCreateChannel(const SharedChannelKey &key);
   void destroyChannelIfUnused(SharedChannel *channel);
+  void deliverNextValueAfterPut(const QString &pvName);
   void subscribeToChannel(SharedChannel *channel);
   void requestControlInfo(SharedChannel *channel);
   void shutdown();

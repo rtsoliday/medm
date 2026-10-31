@@ -15,7 +15,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 
 ### Behavior changes
 
-- **Writes are shown when the IOC reports them.** After a Channel Access write, monitors of the PV no longer show the requested value before the IOC confirms it. If the IOC clamps, rejects, or overrides the write, the display keeps showing the IOC's value and alarm state. The control making the write still shows the value you set, as in MEDM.
+- **Writes are shown when the IOC reports them.** After a Channel Access write, monitors of the PV no longer show the requested value before the IOC confirms it. If the IOC clamps, rejects, or overrides the write, the display keeps showing the IOC's value and alarm state. The control making the write shows the value you set until the IOC reports a value, then shows the IOC's value, as in MEDM, even when that value has not changed. If the IOC reports no value, the control keeps showing the value you set.
 - **Composite files inherit display macros.** A composite file without its own macros now resolves `$(P)` and similar references from the display's macros, as MEDM does. Macros given with the composite file name are added to the display's macros and take precedence. MEDM instead uses only the composite's own macros when it has any.
 - **Choice buttons clip long labels** to the button instead of drawing past its edge.
 - **Resource Palette** sizes itself to the screen, keeps the size you choose, and aligns its columns.

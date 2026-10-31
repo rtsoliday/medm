@@ -1424,7 +1424,24 @@ bool SharedChannelManager::putValue(const QString &pvName, double value)
    * requested value is never shown as the PV's current value. */
   int status = ca_put(DBR_DOUBLE, putChannel, &value);
   ca_flush_io();
+  if (status == ECA_NORMAL) {
+    deliverNextValueAfterPut(trimmed);
+  }
   return status == ECA_NORMAL;
+}
+
+/* The control making a write shows the requested value until the IOC
+ * reports one. When the IOC clamps or rejects the write it may post the
+ * value it already held, which change detection would drop, leaving the
+ * control showing a value the IOC never accepted. Start a new value epoch,
+ * as a reconnect does, so the next value from the IOC is delivered. */
+void SharedChannelManager::deliverNextValueAfterPut(const QString &pvName)
+{
+  for (auto *channel : channels_) {
+    if (channel && channel->connected && channel->key.pvName == pvName) {
+      channel->lastNotifiedSeverity = -1;
+    }
+  }
 }
 
 bool SharedChannelManager::putValue(const QString &pvName, const QString &value)
@@ -1474,6 +1491,9 @@ bool SharedChannelManager::putValue(const QString &pvName, const QString &value)
 
   int status = ca_put(DBR_STRING, putChannel, strValue);
   ca_flush_io();
+  if (status == ECA_NORMAL) {
+    deliverNextValueAfterPut(trimmed);
+  }
   return status == ECA_NORMAL;
 }
 
@@ -1517,6 +1537,9 @@ bool SharedChannelManager::putValue(const QString &pvName, dbr_enum_t value)
 
   int status = ca_put(DBR_ENUM, putChannel, &value);
   ca_flush_io();
+  if (status == ECA_NORMAL) {
+    deliverNextValueAfterPut(trimmed);
+  }
   return status == ECA_NORMAL;
 }
 

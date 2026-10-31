@@ -31,6 +31,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - Legacy (pre-2.2) ADL files whose quoted values contain braces, such as `chan="SR:C01{BPM}"`, load correctly.
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
 - Menus, related display buttons, and wave tables fit their labels and empty-state text to the widget.
+- Composites no longer cut off their contents in execute mode. A button, outline, or label that extends past its composite's stored size is drawn in full, as in MEDM, and a composite file's contents start at the composite's position instead of a few pixels away.
 - `make clean` works on Windows, and QtEDM compiles without warnings.
 
 ### Known issues

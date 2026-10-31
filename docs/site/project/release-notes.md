@@ -21,7 +21,9 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - **Resource Palette** sizes itself to the screen, keeps the size you choose, and aligns its columns.
 - **Saved numbers** use the shortest exact form where fixed notation would lose precision.
 - **Symbol state colors** can be edited with an alpha channel in the editor. Saving stores the nearest palette color.
-- **Build variables.** `CC`, `CXX`, `CPPFLAGS`, `CXXFLAGS`, and `LDLIBS` set in the environment no longer change the build. Pass them on the `make` command line instead.
+- **Plugin string-list properties** are entered in the Resource Palette as a JSON array, such as `["first", "second"]`, instead of semicolon-separated text. Invalid input restores the previous value.
+- **NTNDArray image limits.** Maximum Input and Maximum Image are entered in bytes instead of MiB and are no longer capped at 4096 MiB. Maximum Dimension is no longer capped at 65536.
+- **Build variables.** `CC`, `CXX`, `CPPFLAGS`, `CXXFLAGS`, and `LDLIBS` set in the environment no longer change the build. Pass them on the `make` command line instead. `LDFLAGS` set in the environment is still added to the link on Linux and Windows.
 - **SDDS** is no longer required to build QtEDM. A build check confirms SDDS6 export where SDDS is available.
 
 ### Fixes

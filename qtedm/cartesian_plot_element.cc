@@ -1633,8 +1633,10 @@ bool CartesianPlotElement::usesXrtMargins() const
  * 250 pixels wide or less), the widget shadow takes 2 pixels and the font
  * heights are those of the X fonts MEDM uses. Half of the last X axis
  * number sticks out to the right, half of the top Y axis number above the
- * plot. An old display's plot starts 3.5% of the width further right and is
- * 3.2% of the width narrower. X truncates the edges to whole pixels. */
+ * plot. On an old display a plot over 250 pixels wide starts 3.5% of the
+ * width further right and is 3.2% of the width narrower, and the title of
+ * any plot starts 3.5% of the width further right. X truncates the edges to
+ * whole pixels. */
 CartesianPlotElement::PlotLayout CartesianPlotElement::plotLayout() const
 {
   PlotLayout layout;
@@ -1731,7 +1733,8 @@ CartesianPlotElement::PlotLayout CartesianPlotElement::plotLayout() const
   layout.xLabelBaseline = std::floor(y + plotHeight + yMargin
       + axisNumberSize + labelHeight / 2.0 - axisBounds.descent);
   layout.titleOrigin = QPointF(std::floor(xMargin
-      + (usesXrtMargins() ? kXrtLeftMarginFraction * width() : 0.0)),
+      + (medmFileVersion_ <= kLastXrtMarginFileVersion
+          ? kXrtLeftMarginFraction * width() : 0.0)),
       height() - yMargin);
   return layout;
 }

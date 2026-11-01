@@ -731,6 +731,14 @@ int main(int argc, char *argv[])
   /* Initialize timing diagnostics as early as possible */
   QTEDM_TIMING_MARK("Entering main()");
 
+  /* A Qt built with journald support sends warnings to the system journal
+   * whenever stderr is not a terminal, so a QtEDM started from a script or
+   * a menu showed none of them. Write them to stderr, as MEDM does its
+   * messages, unless the environment chooses otherwise. */
+  if (!qEnvironmentVariableIsSet("QT_FORCE_STDERR_LOGGING")) {
+    qputenv("QT_FORCE_STDERR_LOGGING", "1");
+  }
+
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
   // High-DPI is on by default in Qt6
 #else

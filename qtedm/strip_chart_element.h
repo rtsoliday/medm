@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <deque>
+#include <vector>
 
 #include <QColor>
 #include <QFont>
@@ -128,14 +129,31 @@ private:
   struct Layout
   {
     QRect innerRect;
-    QRect chartRect;
-    QRect titleRect;
-    QRect xLabelRect;
-    QRect yLabelRect;
+    QRect chartRect;  // the graph border; the data area is inside it
     QString titleText;
     QString xLabelText;
     QString yLabelText;
+    QPoint titlePos;  // text baselines
+    QPoint xLabelPos;
+    QPoint yLabelPos;
     int yAxisLabelOffset = 0;  // Extra offset for Y-axis labels when avoiding overlap
+    int yAxisLabelTextWidth = 0;
+    int numYAxisLabel = 1;
+    int axisFontHeight = 0;
+    int margin = 0;
+    int markerHeight = 0;
+    bool squeezed = false;
+  };
+
+  struct YAxisRange
+  {
+    double low = 0.0;
+    double high = 0.0;
+    int penMask = 0;
+    int numDot = 0;
+    char format = 'f';
+    int decimal = 1;
+    int width = 3;
   };
 
   struct Pen
@@ -169,20 +187,21 @@ private:
   QFont titleFont() const;
   QRect chartRect() const;
   Layout calculateLayout(const QFontMetrics &metrics) const;
-  int calculateYAxisLabelWidth(const QFontMetrics &metrics) const;
-  int calculateYAxisLabelHeightExtension(const QFontMetrics &metrics) const;
-  int calculateXAxisTickCount(int chartWidth, const QFontMetrics &metrics) const;
-  int calculateYAxisTickCount(int chartHeight, const QFontMetrics &metrics) const;
+  std::vector<YAxisRange> yAxisRanges(bool zoomed) const;
+  static YAxisRange makeYAxisRange(double low, double high, int penMask);
+  static int limitDivisions(int nDiv);
+  int xAxisDivisions(int dataWidth, const QFontMetrics &metrics) const;
+  int yAxisDivisions(const Layout &layout, int dataHeight) const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRect &content) const;
-  void paintTickMarks(QPainter &painter, const QRect &chartRect) const;
-  void paintAxisScales(QPainter &painter, const QRect &chartRect,
-      const QFontMetrics &metrics, int yAxisLabelOffset = 0) const;
+  void paintTickMarks(QPainter &painter, const Layout &layout,
+      const QFontMetrics &metrics) const;
+  void paintAxisScales(QPainter &painter, const Layout &layout,
+      const QFontMetrics &metrics) const;
   void paintPens(QPainter &painter, const QRect &content) const;
   void paintDesignPens(QPainter &painter, const QRect &content) const;
   void paintRuntimePens(QPainter &painter, const QRect &content) const;
-  void paintLabels(QPainter &painter, const Layout &layout,
-      const QFontMetrics &metrics) const;
+  void paintLabels(QPainter &painter, const Layout &layout) const;
   void paintSelectionOverlay(QPainter &painter) const;
   double periodMilliseconds() const;
   double effectivePenLow(int index) const;

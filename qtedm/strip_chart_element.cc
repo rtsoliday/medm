@@ -20,15 +20,14 @@
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
+#include "text_font_utils.h"
 #include "window_utils.h"
 
 namespace {
 
 constexpr int kShadowThickness = 3;
-constexpr int kOuterMargin = 3;
-constexpr int kInnerMargin = 6;
-constexpr int kGridLines = 5;
-constexpr int kMaxTickMarks = 10;
+/* Space per pen color bar beside stacked y-axis labels (sccd.lineSpace). */
+constexpr int kAxisLineSpace = 3;
 constexpr double kPenSampleCount = 24.0;
 constexpr int kDefaultRefreshIntervalMs = 100;
 constexpr int kMaxRefreshIntervalMs = 1000;
@@ -104,6 +103,26 @@ int calculateTitleFontSize(int widgetWidth, int widgetHeight)
   return 8;
 }
 
+// Calculate the spacing between chart parts (mimics MEDM's calcMargin)
+int calculateMargin(int widgetWidth, int widgetHeight)
+{
+  const int minDimension = std::min(widgetWidth, widgetHeight);
+  if (minDimension > 1000) {
+    return 6;
+  } else if (minDimension > 800) {
+    return 5;
+  } else if (minDimension > 600) {
+    return 4;
+  } else if (minDimension > 400) {
+    return 3;
+  } else if (minDimension > 300) {
+    return 2;
+  } else if (minDimension > 200) {
+    return 1;
+  }
+  return 0;
+}
+
 int calculateMarkerHeight(int widgetWidth, int widgetHeight)
 {
   const int minDimension = std::min(widgetWidth, widgetHeight);
@@ -132,38 +151,6 @@ QColor defaultPenColor(int index)
     return palette.back();
   }
   return QColor(Qt::black);
-}
-
-void drawRaisedBevel(QPainter &painter, const QRect &rect,
-    const QColor &baseColor, int depth)
-{
-  if (!rect.isValid() || depth <= 0) {
-    return;
-  }
-
-  const QColor lightShade = baseColor.lighter(150);
-  const QColor darkShade = baseColor.darker(150);
-
-  painter.save();
-  painter.setRenderHint(QPainter::Antialiasing, false);
-
-  for (int i = 0; i < depth; ++i) {
-    const int offset = i;
-    const int x = rect.x() + offset;
-    const int y = rect.y() + offset;
-    const int w = rect.width() - 1 - 2 * offset;
-    const int h = rect.height() - 1 - 2 * offset;
-
-    painter.setPen(lightShade);
-    painter.drawLine(QPoint(x, y), QPoint(x + w, y));
-    painter.drawLine(QPoint(x, y), QPoint(x, y + h));
-
-    painter.setPen(darkShade);
-    painter.drawLine(QPoint(x, y + h), QPoint(x + w, y + h));
-    painter.drawLine(QPoint(x + w, y), QPoint(x + w, y + h));
-  }
-
-  painter.restore();
 }
 
 struct NumberFormat
@@ -1011,8 +998,8 @@ void StripChartElement::paintEvent(QPaintEvent *event)
 
     if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
       painter.fillRect(layout.chartRect, effectiveBackground());
-      paintTickMarks(painter, layout.chartRect);
-      paintAxisScales(painter, layout.chartRect, metrics, layout.yAxisLabelOffset);
+      paintTickMarks(painter, layout, metrics);
+      paintAxisScales(painter, layout, metrics);
       if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
         paintGrid(painter, layout.chartRect);
         const QRect plotArea = layout.chartRect.adjusted(1, 1, -1, -1);
@@ -1020,7 +1007,7 @@ void StripChartElement::paintEvent(QPaintEvent *event)
       }
     }
 
-    paintLabels(painter, layout, metrics);
+    paintLabels(painter, layout);
   }
 
   if (selected_) {
@@ -1048,407 +1035,230 @@ void StripChartElement::changeEvent(QEvent *event)
   invalidatePenCache();
 }
 
+/* Layout from MEDM's stripChartConfig() in medmStripChart.c: margins sized
+ * by the y-axis labels, a title row, room below for the x-axis numbers and
+ * unit label, and a second pass that squeezes a small graph by dropping
+ * rows for absent title and axis labels. */
 StripChartElement::Layout StripChartElement::calculateLayout(
     const QFontMetrics &metrics) const
 {
   Layout layout;
-  layout.innerRect = rect().adjusted(kOuterMargin, kOuterMargin,
-      -kOuterMargin, -kOuterMargin);
+  /* Inside the frame's shadow. */
+  layout.innerRect = rect().adjusted(kShadowThickness - 1,
+      kShadowThickness - 1, 1 - kShadowThickness, 1 - kShadowThickness);
   layout.titleText = title_.trimmed();
   layout.yLabelText = yLabel_.trimmed();
-  
-  // X-axis label: auto-generate based on time units if empty (like MEDM)
-  layout.xLabelText = xLabel_.trimmed();
-  if (layout.xLabelText.isEmpty()) {
-    switch (units_) {
-      case TimeUnits::kMilliseconds:
-        layout.xLabelText = "time (ms)";
-        break;
-      case TimeUnits::kSeconds:
-        layout.xLabelText = "time (sec)";
-        break;
-      case TimeUnits::kMinutes:
-        layout.xLabelText = "time (min)";
-        break;
-      default:
-        layout.xLabelText = "time (sec)";
-        break;
+
+  const int w = width();
+  const int h = height();
+  const int shadow = kShadowThickness;
+  layout.margin = calculateMargin(w, h);
+  layout.markerHeight = calculateMarkerHeight(w, h);
+  layout.axisFontHeight = metrics.ascent() + metrics.descent();
+  const int margin = layout.margin;
+  const int markerHeight = layout.markerHeight;
+  const int fontHeight = layout.axisFontHeight;
+
+  const std::vector<YAxisRange> ranges = yAxisRanges(false);
+  layout.numYAxisLabel = static_cast<int>(ranges.size());
+  int maxWidth = 0;
+  int maxDot = 0;
+  for (const YAxisRange &range : ranges) {
+    maxWidth = std::max(maxWidth, metrics.horizontalAdvance(
+        QStringLiteral("-8.8888888888").left(range.width)));
+    maxDot = std::max(maxDot, range.numDot);
+  }
+  layout.yAxisLabelTextWidth = maxWidth;
+  const int yAxisLabelWidth = maxWidth + maxDot * kAxisLineSpace;
+
+  /* Use the width of the y-axis labels to set all margins. */
+  int dataX0 = shadow + yAxisLabelWidth + margin * 2 + markerHeight + 1;
+  int dataY0 = dataX0;
+  int dataX1 = w - dataX0 - 1;
+  int dataY1 = h - dataY0 - 1;
+
+  /* Set the top margin, shrinking the right and bottom if applicable. */
+  const QFontMetrics titleMetrics(titleFont());
+  const int titleFontHeight = titleMetrics.ascent() + titleMetrics.descent();
+  dataY0 = shadow + titleFontHeight + fontHeight + margin * 3 + 1;
+  if (dataY0 < dataX0) {
+    dataX1 = w - dataY0 - 1;
+    dataY1 = h - dataY0;
+  }
+
+  /* The bottom margin expands if necessary. */
+  const int bottomHeight = shadow + fontHeight * 2 + margin * 3
+      + markerHeight + 2;
+  if (h - dataY1 - 1 < bottomHeight) {
+    dataY1 = h - bottomHeight - 1;
+  }
+  if (w - dataX1 - 1 < bottomHeight) {
+    dataX1 = w - bottomHeight - 1;
+  }
+
+  /* The stacked y-axis labels must fit beside the graph. */
+  const int heightExt = (fontHeight * layout.numYAxisLabel + 1) / 2;
+  if (heightExt + shadow > dataY0) {
+    dataY0 = heightExt + shadow;
+  }
+  if (heightExt + shadow > h - dataY1) {
+    dataY1 = h - heightExt - shadow - 1;
+  }
+
+  /* Keep the x-axis and y-axis labels from overlapping. */
+  const NumberFormat xFormat = calculateNumberFormat(period_);
+  const int widthExt = (metrics.horizontalAdvance(
+      QStringLiteral("-0.0000000").left(xFormat.width + 1)) + 1) / 2;
+  if (widthExt > margin + markerHeight
+      && bottomHeight > margin + markerHeight) {
+    layout.yAxisLabelOffset = widthExt - margin - markerHeight;
+    dataX0 += layout.yAxisLabelOffset;
+  }
+  if (widthExt + shadow > w - dataX1 - 1) {
+    dataX1 = w - widthExt - shadow - 1;
+  }
+
+  /* Second pass: a small graph gets the rows of absent labels. */
+  bool dropXLabel = false;
+  if (dataY1 - dataY0 + 1 < h / 2) {
+    layout.squeezed = true;
+    if (layout.titleText.isEmpty()) {
+      dataY0 -= titleFontHeight;
+      if (w - dataX1 - 1 > dataY0) {
+        dataX1 = w - dataY0 - 1;
+      }
+    }
+    if (xLabel_.trimmed().isEmpty()) {
+      dropXLabel = true;
+      dataY1 += fontHeight;
+      if (w - dataX1 - 1 > h - dataY1 - 1) {
+        dataX1 = w - (h - dataY1 - 1) - 1;
+      }
+    }
+    if (layout.yLabelText.isEmpty()) {
+      dataY0 -= fontHeight;
+      if (w - dataX1 - 1 > dataY0) {
+        dataX1 = w - dataY0 - 1;
+      }
+    }
+    if (heightExt + shadow > dataY0) {
+      dataY0 = heightExt + shadow;
+    }
+    if (heightExt + shadow > h - dataY1) {
+      dataY1 = h - heightExt - shadow - 1;
+    }
+    if (widthExt + shadow > w - dataX1 - 1) {
+      dataX1 = w - widthExt - shadow - 1;
     }
   }
-
-  if (!layout.innerRect.isValid() || layout.innerRect.isEmpty()) {
-    return layout;
+  if (dataX1 <= dataX0) {
+    dataX1 = dataX0 + 1;
   }
-
-  int left = layout.innerRect.left();
-  const int right = layout.innerRect.right();
-  int top = layout.innerRect.top();
-  int bottom = layout.innerRect.bottom();
-
-  if (!layout.titleText.isEmpty()) {
-    // Use title font metrics for title (like MEDM)
-    const QFontMetrics titleMetrics(titleFont());
-    const int height = titleMetrics.height();
-    layout.titleRect = QRect(left, top, layout.innerRect.width(), height);
-    top += height + 2;  // Reduced margin between title and Y-axis label
+  if (dataY1 <= dataY0) {
+    dataY1 = dataY0 + 1;
   }
+  const int dataWidth = dataX1 - dataX0 + 1;
+  const int dataHeight = dataY1 - dataY0 + 1;
 
-  // Reserve space for Y-axis label (horizontal, like medm) if present
-  int yLabelTop = -1;  // Track where to place y-label
-  if (!layout.yLabelText.isEmpty()) {
-    const int height = metrics.height();
-    yLabelTop = top;
-    top += height + 2;  // Reduced margin between Y-axis label and chart
-  }
+  /* The data area is inside the one-pixel graph border. */
+  layout.chartRect = QRect(dataX0 - 1, dataY0 - 1, dataWidth + 2,
+      dataHeight + 2);
 
-  if (!layout.xLabelText.isEmpty()) {
-    const int height = metrics.height();
-    layout.xLabelRect = QRect(left, bottom - height + 1,
-        layout.innerRect.width(), height);
-    bottom -= height + 0;  // Reduced margin between X-axis label and X-axis tick labels
-  }
-
-  // Calculate space needed for Y-axis labels and tick marks
-  const int markerHeight = calculateMarkerHeight(width(), height());
-  const int yAxisLabelWidth = calculateYAxisLabelWidth(metrics);
-  const int yAxisSpace = yAxisLabelWidth + markerHeight + 2 + kInnerMargin;
-  left += yAxisSpace;
-
-  // Use symmetric margins (like medm): right margin mirrors left margin
-  // This creates visual balance in the widget
-  int rightMargin = yAxisSpace;
-  
-  // Calculate space needed for X-axis labels and tick marks
-  const int xAxisSpace = metrics.height() + markerHeight + 2 + kInnerMargin;
-  bottom -= xAxisSpace;
-
-  // Calculate Y-axis label height extension (like MEDM's heightExt).
-  // Y-axis labels are stacked vertically and centered on each tick mark.
-  // The topmost tick's labels extend above the chart; ensure we have room.
-  const int yAxisHeightExt = calculateYAxisLabelHeightExtension(metrics);
-  const int minTopMargin = yAxisHeightExt + kShadowThickness;
-  const int currentTopMargin = top - layout.innerRect.top();
-  if (currentTopMargin < minTopMargin) {
-    // Increase top margin to accommodate Y-axis labels extending above the chart
-    top = layout.innerRect.top() + minTopMargin;
-  }
-  
-  // Apply symmetric right margin, but use the smaller of left or top margin
-  // if the top margin is less (for visual consistency)
-  const int topMargin = top - layout.innerRect.top();
-  if (topMargin < yAxisSpace) {
-    // Shrink right margin to match top margin for better proportions
-    rightMargin = topMargin;
-  }
-  
-  // Also ensure right margin is at least as large as bottom margin
-  const int bottomMargin = layout.innerRect.bottom() - bottom;
-  if (bottomMargin > rightMargin) {
-    rightMargin = bottomMargin;
-  }
-  
-  // Apply the calculated right margin
-  const int adjustedRight = right - rightMargin;
-
-  if (adjustedRight >= left && bottom >= top) {
-    layout.chartRect = QRect(left, top, adjustedRight - left + 1,
-        bottom - top + 1);
-  }
-
-  // Check for overlap between leftmost X-axis label and Y-axis labels (like MEDM)
-  // This prevents the X-axis and Y-axis labels from overlapping
-  if (layout.chartRect.isValid()) {
-    const int nDivX = calculateXAxisTickCount(layout.chartRect.width(), metrics);
-    const double periodValue = period_;
-    const NumberFormat xFmt = calculateNumberFormat(periodValue);
-    const double xStep = periodValue / std::max(nDivX, 1);
-    const double leftmostValue = -xStep * nDivX;  // Leftmost X tick value
-    const QString leftmostText = formatNumber(leftmostValue, xFmt.format, xFmt.decimal);
-    const int leftmostTextWidth = metrics.horizontalAdvance(leftmostText);
-    
-    // The leftmost X-axis label is centered on chartRect.left()
-    // So it extends from (chartRect.left() - leftmostTextWidth/2) to (chartRect.left() + leftmostTextWidth/2)
-    const int xLabelLeftEdge = layout.chartRect.left() - leftmostTextWidth / 2;
-    
-    // The Y-axis labels extend from the left edge to (chartRect.left() - 2 - markerHeight - 1)
-    const int yLabelRightEdge = layout.chartRect.left() - 2 - markerHeight - 1;
-    
-    // Check if they overlap (with a small gap for safety)
-    const int overlapAmount = yLabelRightEdge - xLabelLeftEdge + 3;  // +3 for small gap
-    
-    if (overlapAmount > 0) {
-      // Store the offset and shrink the chart from the left (like MEDM)
-      // This moves Y-axis labels left by the offset amount
-      layout.yAxisLabelOffset = overlapAmount;
-      left += overlapAmount;
-      if (left < adjustedRight) {
-        layout.chartRect = QRect(left, top, adjustedRight - left + 1,
-            bottom - top + 1);
+  if (!dropXLabel) {
+    layout.xLabelText = xLabel_.trimmed();
+    if (layout.xLabelText.isEmpty()) {
+      switch (units_) {
+        case TimeUnits::kMilliseconds:
+          layout.xLabelText = QStringLiteral("time (ms)");
+          break;
+        case TimeUnits::kMinutes:
+          layout.xLabelText = QStringLiteral("time (min)");
+          break;
+        case TimeUnits::kSeconds:
+        default:
+          layout.xLabelText = QStringLiteral("time (sec)");
+          break;
       }
     }
   }
-
-  // Position Y-axis label at the left edge of the chart area (like medm)
-  if (yLabelTop >= 0 && !layout.yLabelText.isEmpty()) {
-    const int yLabelWidth = layout.chartRect.isValid() ? layout.chartRect.width() : 0;
-    const int yLabelHeight = metrics.height();
-    const int yLabelLeft = layout.chartRect.isValid() ? layout.chartRect.left() : left;
-    layout.yLabelRect = QRect(yLabelLeft, yLabelTop, yLabelWidth, yLabelHeight);
-  }
-
+  layout.titlePos = QPoint(
+      (w - titleMetrics.horizontalAdvance(layout.titleText)) / 2,
+      shadow + margin + titleMetrics.ascent());
+  layout.yLabelPos = QPoint(dataX0,
+      shadow + margin * 2 + titleFontHeight + metrics.ascent());
+  layout.xLabelPos = QPoint(
+      dataX0 + (dataWidth - metrics.horizontalAdvance(layout.xLabelText)) / 2,
+      dataY1 + 1 + fontHeight + margin * 2 + markerHeight + metrics.ascent()
+          + 1);
   return layout;
 }
 
-int StripChartElement::calculateYAxisLabelWidth(const QFontMetrics &metrics) const
+/* The distinct pen ranges, each labeled on the y axis, as in MEDM's
+ * calcYAxisLabelWidth(). Without pens a 0 to 100 range is shown. */
+std::vector<StripChartElement::YAxisRange> StripChartElement::yAxisRanges(
+    bool zoomed) const
 {
-  // Build list of unique ranges (like medm's calcYAxisLabelWidth)
-  struct YAxisRange {
-    double low;
-    double high;
-    int numPens;
-  };
   std::vector<YAxisRange> ranges;
-  
   for (int p = 0; p < penCount(); ++p) {
     if (pens_[p].channel.trimmed().isEmpty()) {
       continue;
     }
-    
-    const double low = effectivePenLow(p);
-    const double high = effectivePenHigh(p);
-    
+    const double low = zoomed ? zoomedPenLow(p) : effectivePenLow(p);
+    const double high = zoomed ? zoomedPenHigh(p) : effectivePenHigh(p);
     if (!std::isfinite(low) || !std::isfinite(high)) {
       continue;
     }
-    
-    // Check if this range already exists
     bool found = false;
-    for (auto &range : ranges) {
-      if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
-        range.numPens++;
+    for (YAxisRange &range : ranges) {
+      if (range.high == high && range.low == low) {
+        range.penMask |= (1 << p);
+        ++range.numDot;
         found = true;
         break;
       }
     }
-    
     if (!found) {
-      YAxisRange newRange;
-      newRange.low = low;
-      newRange.high = high;
-      newRange.numPens = 1;
-      ranges.push_back(newRange);
+      ranges.push_back(makeYAxisRange(low, high, 1 << p));
     }
   }
-  
-  // If no ranges found, use default
   if (ranges.empty()) {
-    YAxisRange defaultRange;
-    defaultRange.low = 0.0;
-    defaultRange.high = 100.0;
-    defaultRange.numPens = 0;
-    ranges.push_back(defaultRange);
-  }
-  
-  // Find the maximum text width needed for all ranges
-  int maxWidth = 0;
-  int maxDots = 0;
-  
-  for (const auto &yRange : ranges) {
-    const NumberFormat fmt = calculateNumberFormat(
-        std::max(std::abs(yRange.high), std::abs(yRange.low)));
-    
-    // Check width for both high and low values
-    const QString highText = formatNumber(yRange.high, fmt.format, fmt.decimal);
-    const QString lowText = formatNumber(yRange.low, fmt.format, fmt.decimal);
-    
-    const int highWidth = metrics.horizontalAdvance(highText);
-    const int lowWidth = metrics.horizontalAdvance(lowText);
-    
-    maxWidth = std::max(maxWidth, std::max(highWidth, lowWidth));
-    
-    // Count color indicators (only if multiple ranges)
-    if (ranges.size() > 1) {
-      maxDots = std::max(maxDots, yRange.numPens);
+    double low = 0.0;
+    double high = 100.0;
+    if (zoomed) {
+      applyZoomToRange(low, high);
     }
+    YAxisRange range = makeYAxisRange(low, high, 0);
+    range.numDot = 0;
+    ranges.push_back(range);
   }
-  
-  // Total width = text width + space for color indicators
-  constexpr int kLineSpace = 3;
-  return maxWidth + (maxDots * kLineSpace);
+  if (ranges.size() == 1) {
+    ranges.front().numDot = 0;
+  }
+  return ranges;
 }
 
-int StripChartElement::calculateYAxisLabelHeightExtension(
-    const QFontMetrics &metrics) const
+StripChartElement::YAxisRange StripChartElement::makeYAxisRange(double low,
+    double high, int penMask)
 {
-  // Count the number of unique Y-axis ranges (like MEDM's calcYAxisLabelHeight).
-  // Y-axis labels are vertically stacked at each tick mark, centered on the tick.
-  // This function returns how much the labels extend above (or below) the tick,
-  // which determines the minimum top/bottom margin needed to avoid clipping.
-  int numRanges = 0;
-
-  struct YAxisRange {
-    double low;
-    double high;
-  };
-  std::vector<YAxisRange> ranges;
-
-  for (int p = 0; p < penCount(); ++p) {
-    if (pens_[p].channel.trimmed().isEmpty()) {
-      continue;
-    }
-
-    const double low = effectivePenLow(p);
-    const double high = effectivePenHigh(p);
-
-    if (!std::isfinite(low) || !std::isfinite(high)) {
-      continue;
-    }
-
-    // Check if this range already exists
-    bool found = false;
-    for (const auto &range : ranges) {
-      if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      YAxisRange newRange;
-      newRange.low = low;
-      newRange.high = high;
-      ranges.push_back(newRange);
-    }
-  }
-
-  numRanges = ranges.empty() ? 1 : static_cast<int>(ranges.size());
-
-  // The total height of stacked labels at each tick is numRanges * fontHeight.
-  // Labels are centered on the tick, so they extend (totalHeight / 2) above.
-  const int labelHeight = metrics.height();
-  const int totalLabelsHeight = numRanges * labelHeight;
-  return (totalLabelsHeight + 1) / 2;  // Half extends above the tick mark
+  YAxisRange range;
+  range.low = low;
+  range.high = high;
+  range.penMask = penMask;
+  range.numDot = 1;
+  const NumberFormat hiFormat = calculateNumberFormat(high);
+  const NumberFormat loFormat = calculateNumberFormat(low);
+  range.format = (hiFormat.format == 'e' || loFormat.format == 'e')
+      ? 'e' : 'f';
+  range.decimal = std::max(hiFormat.decimal, loFormat.decimal);
+  range.width = std::max(hiFormat.width + (high < 0.0 ? 1 : 0),
+      loFormat.width + (low < 0.0 ? 1 : 0));
+  return range;
 }
 
-// Calculate the optimal number of X-axis tick divisions based on available width.
-// This function ensures tick labels don't overlap by reducing the number of ticks
-// when space is constrained. The algorithm:
-// 1. Finds the widest label that would appear for any tick count
-// 2. Calculates minimum spacing (label width + small gap)
-// 3. Tests divisor counts from max down to 2, returning the first that fits
-// 4. Guarantees at least 2 ticks (min and max) are always shown
-int StripChartElement::calculateXAxisTickCount(int chartWidth,
-    const QFontMetrics &metrics) const
+/* MEDM's division counts: as many as the labels allow, at most 10, and
+ * never 9 or 7. */
+int StripChartElement::limitDivisions(int nDiv)
 {
-  if (chartWidth <= 0) {
-    return kGridLines;
-  }
-
-  // Start with the maximum tick count
-  int maxTicks = std::min(kMaxTickMarks, kGridLines);
-  
-  // Calculate the number format for our period value
-  const double periodValue = period_;
-  const NumberFormat fmt = calculateNumberFormat(periodValue);
-  
-  // Find the widest label we'll display by checking all potential tick values
-  int maxLabelWidth = 0;
-  for (int nDiv = 2; nDiv <= maxTicks; ++nDiv) {
-    const double step = periodValue / nDiv;
-    for (int i = 0; i <= nDiv; ++i) {
-      const double value = -step * i;
-      const QString text = formatNumber(value, fmt.format, fmt.decimal);
-      const int textWidth = metrics.horizontalAdvance(text);
-      maxLabelWidth = std::max(maxLabelWidth, textWidth);
-    }
-  }
-  
-  // Add small spacing between labels (2-3 pixels minimum gap)
-  constexpr int kMinLabelGap = 3;
-  const int minLabelSpacing = maxLabelWidth + kMinLabelGap;
-  
-  // Calculate how many divisions we can fit
-  // Each division takes up (chartWidth / nDiv) pixels
-  // We need that to be >= minLabelSpacing
-  for (int nDiv = maxTicks; nDiv >= 2; --nDiv) {
-    const int spacingPerLabel = chartWidth / nDiv;
-    if (spacingPerLabel >= minLabelSpacing) {
-      return nDiv;
-    }
-  }
-  
-  // Minimum is 2 (show min and max only)
-  return 2;
-}
-
-// Calculate the optimal number of Y-axis tick divisions based on available height.
-// This function mimics MEDM's behavior: it calculates how many sets of stacked
-// labels (one per unique Y-axis range) can fit vertically without overlapping.
-// The algorithm:
-// 1. Counts the number of unique Y-axis ranges (numRanges)
-// 2. Calculates the height needed for one row of stacked labels plus spacing
-// 3. Divides the available chart height by this to get the number of divisions
-// 4. Caps at reasonable values (max 10, skip 7 and 9 like MEDM)
-// 5. Guarantees at least 1 division (min and max always shown)
-int StripChartElement::calculateYAxisTickCount(int chartHeight,
-    const QFontMetrics &metrics) const
-{
-  if (chartHeight <= 0) {
-    return kGridLines;
-  }
-
-  // Count the number of unique Y-axis ranges (like MEDM's sccd.numYAxisLabel)
-  int numRanges = 0;
-  struct YAxisRange {
-    double low;
-    double high;
-  };
-  std::vector<YAxisRange> ranges;
-
-  for (int p = 0; p < penCount(); ++p) {
-    if (pens_[p].channel.trimmed().isEmpty()) {
-      continue;
-    }
-
-    const double low = effectivePenLow(p);
-    const double high = effectivePenHigh(p);
-
-    if (!std::isfinite(low) || !std::isfinite(high)) {
-      continue;
-    }
-
-    // Check if this range already exists
-    bool found = false;
-    for (const auto &range : ranges) {
-      if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      YAxisRange newRange;
-      newRange.low = low;
-      newRange.high = high;
-      ranges.push_back(newRange);
-    }
-  }
-
-  numRanges = ranges.empty() ? 1 : static_cast<int>(ranges.size());
-
-  // Calculate the height needed for one set of stacked labels plus vertical spacing.
-  // MEDM uses: labelHeight = (numYAxisLabel + verticalSpacing) * axisLabelFontHeight
-  // where verticalSpacing is typically 2.0
-  constexpr double kVerticalSpacing = 2.0;
-  const int fontHeight = metrics.height();
-  const int labelHeight = static_cast<int>((static_cast<double>(numRanges) + kVerticalSpacing) 
-                                           * static_cast<double>(fontHeight));
-
-  // Calculate number of divisions that can fit
-  // MEDM uses: nDiv = (dataHeight - 1) / labelHeight
-  int nDiv = (chartHeight - 1) / labelHeight;
-
-  // Cap at reasonable values like MEDM does
   if (nDiv > 10) {
     nDiv = 10;
   } else if (nDiv == 9) {
@@ -1456,13 +1266,25 @@ int StripChartElement::calculateYAxisTickCount(int chartHeight,
   } else if (nDiv == 7) {
     nDiv = 6;
   }
+  return std::max(nDiv, 1);
+}
 
-  // Ensure at least 1 division (shows min and max)
-  if (nDiv < 1) {
-    nDiv = 1;
-  }
+int StripChartElement::xAxisDivisions(int dataWidth,
+    const QFontMetrics &metrics) const
+{
+  const NumberFormat format = calculateNumberFormat(period_);
+  const int textWidth = std::max(1, metrics.horizontalAdvance(
+      QStringLiteral("-0.000000").left(format.width + 1)));
+  return limitDivisions((dataWidth - 1) / textWidth);
+}
 
-  return nDiv;
+int StripChartElement::yAxisDivisions(const Layout &layout,
+    int dataHeight) const
+{
+  const double verticalSpacing = layout.squeezed ? 1.0 : 2.0;
+  const int labelHeight = std::max(1, static_cast<int>(
+      (layout.numYAxisLabel + verticalSpacing) * layout.axisFontHeight));
+  return limitDivisions((dataHeight - 1) / labelHeight);
 }
 
 QColor StripChartElement::effectiveForeground() const
@@ -1521,33 +1343,47 @@ QRect StripChartElement::chartRect() const
   return layout.chartRect;
 }
 
+/* MEDM's calcLabelFontSize() and calcTitleFontSize() pick the largest
+ * font whose ascent plus descent fits the height for the chart size. */
 QFont StripChartElement::labelFont() const
 {
-  // Calculate font size based on widget dimensions (like MEDM)
-  // MEDM uses pixel height, not point size
-  const int pixelHeight = calculateLabelFontSize(width(), height());
-  QFont adjusted = font();
-  adjusted.setPixelSize(pixelHeight);
-  return adjusted;
+  const QFont font = medmMessageButtonFont(
+      calculateLabelFontSize(width(), height()));
+  return font.family().isEmpty() ? this->font() : font;
 }
 
 QFont StripChartElement::titleFont() const
 {
-  // Calculate title font size based on widget dimensions (like MEDM)
-  // MEDM uses pixel height, not point size
-  const int pixelHeight = calculateTitleFontSize(width(), height());
-  QFont adjusted = font();
-  adjusted.setPixelSize(pixelHeight);
-  return adjusted;
+  const QFont font = medmMessageButtonFont(
+      calculateTitleFontSize(width(), height()));
+  return font.family().isEmpty() ? this->font() : font;
 }
 
+/* MEDM draws the strip chart's Motif drawing-area shadow, two pixels deep
+ * (shadowThickness - 1), in the shadow colors of the background. */
 void StripChartElement::paintFrame(QPainter &painter) const
 {
   const QColor bgColor = effectiveBackground();
   painter.fillRect(rect(), bgColor);
-  drawRaisedBevel(painter, rect(), bgColor, kShadowThickness);
+  QColor topShadow;
+  QColor bottomShadow;
+  MedmColors::computeShadowColors(bgColor, topShadow, bottomShadow);
+  const int right = width() - 1;
+  const int bottom = height() - 1;
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, false);
+  for (int j = 0; j < kShadowThickness - 1; ++j) {
+    painter.setPen(topShadow);
+    painter.drawLine(j, j, right - j, j);
+    painter.drawLine(j, j, j, bottom - j);
+    painter.setPen(bottomShadow);
+    painter.drawLine(j, bottom - j, right - j, bottom - j);
+    painter.drawLine(right - j, j, right - j, bottom - j);
+  }
+  painter.restore();
 }
 
+/* The graph border: XDrawRectangle around the data area. */
 void StripChartElement::paintGrid(QPainter &painter, const QRect &content) const
 {
   if (content.width() <= 0 || content.height() <= 0) {
@@ -1556,237 +1392,128 @@ void StripChartElement::paintGrid(QPainter &painter, const QRect &content) const
 
   painter.save();
   painter.setRenderHint(QPainter::Antialiasing, false);
-  
-  // Draw solid rectangle border around the chart area (like medm)
-  QPen pen(effectiveForeground());
-  pen.setWidth(1);
-  pen.setStyle(Qt::SolidLine);
-  painter.setPen(pen);
+  painter.setPen(QPen(effectiveForeground(), 1));
   painter.setBrush(Qt::NoBrush);
-  
-  // Draw the border at the edge of the content area
-  // medm draws: XDrawRectangle at (dataX0-1, dataY0-1, dataWidth+1, dataHeight+1)
-  // which creates a border just outside the data area
-  const QRect borderRect = content.adjusted(-1, -1, 1, 1);
-  painter.drawRect(borderRect);
-
+  painter.drawRect(content.adjusted(0, 0, -1, -1));
   painter.restore();
 }
 
-void StripChartElement::paintTickMarks(QPainter &painter, const QRect &chartRect) const
+void StripChartElement::paintTickMarks(QPainter &painter,
+    const Layout &layout, const QFontMetrics &metrics) const
 {
-  if (chartRect.width() <= 0 || chartRect.height() <= 0) {
-    return;
-  }
-
-  const int markerHeight = calculateMarkerHeight(width(), height());
-  if (markerHeight <= 0) {
+  const QRect data = layout.chartRect.adjusted(1, 1, -1, -1);
+  if (data.width() <= 0 || data.height() <= 0 || layout.markerHeight <= 0) {
     return;
   }
 
   painter.save();
   painter.setRenderHint(QPainter::Antialiasing, false);
-  QPen pen(effectiveForeground());
-  pen.setWidth(1);
-  pen.setStyle(Qt::SolidLine);
-  painter.setPen(pen);
+  painter.setPen(QPen(effectiveForeground(), 1));
 
-  // Calculate number of divisions (limit to reasonable range)
-  const QFontMetrics labelMetrics(labelFont());
-  const int nDivX = calculateXAxisTickCount(chartRect.width(), labelMetrics);
-  const int nDivY = calculateYAxisTickCount(chartRect.height(), labelMetrics);
-
-  // Data is drawn in plotArea = chartRect.adjusted(1, 1, -1, -1)
-  // Data Y formula: plotArea.top() + (plotArea.height() - 1) * (1.0 - normalized)
-  // Tick marks should align with where data at each division would be drawn
-  const int plotTop = chartRect.top() + 1;
-  const int plotHeight = chartRect.height() - 2;
-
-  // Draw Y-axis tick marks (left side of chart)
+  const int nDivY = yAxisDivisions(layout, data.height());
+  const double interval = static_cast<double>(data.height() - 1) / nDivY;
+  double nextTick = 0.0;
   for (int i = 0; i <= nDivY; ++i) {
-    // Match the data coordinate formula: plotTop + (plotHeight - 1) * (i / nDivY)
-    const int tickY = plotTop + i * (plotHeight - 1) / nDivY;
-    const int x1 = chartRect.left() - 2 - (markerHeight - 1);
-    const int x2 = chartRect.left() - 2;
-    painter.drawLine(x1, tickY, x2, tickY);
+    const int tickY = data.top() + static_cast<int>(nextTick);
+    painter.drawLine(data.left() - 2 - (layout.markerHeight - 1), tickY,
+        data.left() - 2, tickY);
+    nextTick += interval;
   }
 
-  // Draw X-axis tick marks (bottom of chart)
+  const int nDivX = xAxisDivisions(data.width(), metrics);
   for (int i = 0; i <= nDivX; ++i) {
-    const int tickX = chartRect.right() - i * chartRect.width() / nDivX;
-    const int y1 = chartRect.bottom() + 2;
-    const int y2 = chartRect.bottom() + 2 + markerHeight;
-    painter.drawLine(tickX, y1, tickX, y2);
+    const int tickX = data.right() - static_cast<int>(
+        static_cast<double>(data.width() - 1) * i / nDivX);
+    painter.drawLine(tickX, data.bottom() + 2, tickX,
+        data.bottom() + 2 + layout.markerHeight);
   }
 
   painter.restore();
 }
 
-void StripChartElement::paintAxisScales(QPainter &painter, const QRect &chartRect,
-    const QFontMetrics &metrics, int yAxisLabelOffset) const
+/* The axis numbers where MEDM's stripChartConfig() draws them: the x axis
+ * counts back from 0 under its ticks, and each distinct pen range is
+ * stacked at every y tick, with pen color bars when there are several. */
+void StripChartElement::paintAxisScales(QPainter &painter,
+    const Layout &layout, const QFontMetrics &metrics) const
 {
-  if (chartRect.width() <= 0 || chartRect.height() <= 0) {
+  const QRect data = layout.chartRect.adjusted(1, 1, -1, -1);
+  if (data.width() <= 0 || data.height() <= 0) {
     return;
   }
 
-  const int markerHeight = calculateMarkerHeight(width(), height());
   painter.save();
   painter.setRenderHint(QPainter::Antialiasing, false);
-  QPen pen(effectiveForeground());
-  pen.setWidth(1);
-  pen.setStyle(Qt::SolidLine);
-  painter.setPen(pen);
+  painter.setPen(QPen(effectiveForeground(), 1));
 
-  const int nDivX = calculateXAxisTickCount(chartRect.width(), metrics);
-  const int nDivY = calculateYAxisTickCount(chartRect.height(), metrics);
-
-  // Draw X-axis scale numbers (bottom, counting backward from 0)
   {
-    const double periodValue = period_;
-    const NumberFormat fmt = calculateNumberFormat(periodValue);
-    const double step = periodValue / nDivX;
-
-    const int textY = chartRect.bottom() + 2 + markerHeight + metrics.ascent() + 1;
-
+    const NumberFormat format = calculateNumberFormat(period_);
+    const int nDivX = xAxisDivisions(data.width(), metrics);
+    const double step = period_ / nDivX;
+    const int textY = data.bottom() + 1 + layout.axisFontHeight
+        + layout.margin + layout.markerHeight + 1;
+    double value = 0.0;
     for (int i = 0; i <= nDivX; ++i) {
-      const double value = -step * i;  // Count backward from 0
-      const QString text = formatNumber(value, fmt.format, fmt.decimal);
+      const double nextTick = static_cast<double>(data.width() - 1) * i
+          / nDivX;
+      const QString text = formatNumber(value, format.format, format.decimal);
       const int textWidth = metrics.horizontalAdvance(text);
-      
-      const int tickX = chartRect.right() - i * chartRect.width() / nDivX;
-      const int textX = tickX - textWidth / 2;
-      
-      painter.drawText(textX, textY, text);
+      painter.drawText(data.right()
+              - static_cast<int>(nextTick + textWidth / 2.0),
+          textY, text);
+      value -= step;
     }
   }
 
-  // Draw Y-axis scale numbers (left side) - mimicking medm's multi-range approach
   {
-    // Build list of unique ranges (like medm's range array)
-    struct YAxisRange {
-      double low;
-      double high;
-      int penMask;  // Bitmask of which pens use this range
-      int numPens;
-    };
-    std::vector<YAxisRange> ranges;
-    
-    for (int p = 0; p < penCount(); ++p) {
-      if (pens_[p].channel.trimmed().isEmpty()) {
-        continue;
-      }
-      
-      // Use zoomed range for axis labels when zoomed
-      const double low = zoomedPenLow(p);
-      const double high = zoomedPenHigh(p);
-      
-      if (!std::isfinite(low) || !std::isfinite(high)) {
-        continue;
-      }
-      
-      // Check if this range already exists
-      bool found = false;
-      for (auto &range : ranges) {
-        if (std::abs(range.low - low) < 1e-9 && std::abs(range.high - high) < 1e-9) {
-          range.penMask |= (1 << p);
-          range.numPens++;
-          found = true;
-          break;
+    std::vector<YAxisRange> ranges = yAxisRanges(true);
+    const int nDivY = yAxisDivisions(layout, data.height());
+    const double verticalSpacing = layout.squeezed ? 1.0 : 2.0;
+    const int labelHeight = static_cast<int>(
+        (layout.numYAxisLabel + verticalSpacing) * layout.axisFontHeight);
+    const double interval = static_cast<double>(data.height() - 1) / nDivY;
+    std::vector<double> steps;
+    std::vector<double> values;
+    for (const YAxisRange &range : ranges) {
+      steps.push_back((range.high - range.low) / nDivY);
+      values.push_back(range.high);
+    }
+    double nextTick = 0.0;
+    for (int i = 0; i <= nDivY; ++i) {
+      for (std::size_t j = 0; j < ranges.size(); ++j) {
+        const YAxisRange &range = ranges[j];
+        if (i == nDivY) {
+          values[j] = range.low;
         }
-      }
-      
-      if (!found) {
-        YAxisRange newRange;
-        newRange.low = low;
-        newRange.high = high;
-        newRange.penMask = (1 << p);
-        newRange.numPens = 1;
-        ranges.push_back(newRange);
-      }
-    }
-    
-    // If no ranges found, use default (apply zoom to default as well)
-    if (ranges.empty()) {
-      YAxisRange defaultRange;
-      defaultRange.low = 0.0;
-      defaultRange.high = 100.0;
-      applyZoomToRange(defaultRange.low, defaultRange.high);
-      defaultRange.penMask = 0;
-      defaultRange.numPens = 0;
-      ranges.push_back(defaultRange);
-    }
-    
-    // If only one range, don't show pen color indicators (like medm)
-    const bool showPenIndicators = ranges.size() > 1;
-    
-    // Draw scale for each range
-    constexpr int kLineSpace = 3;  // Space for pen color indicators
-    const int indicatorWidth = 2;  // Width of color indicator rectangle
-    
-    // Find maximum text width for left-aligning indicators (like MEDM)
-    int maxTextWidth = 0;
-    for (std::size_t rangeIdx = 0; rangeIdx < ranges.size(); ++rangeIdx) {
-      const YAxisRange &yRange = ranges[rangeIdx];
-      const double range = yRange.high - yRange.low;
-      const double step = range / nDivY;
-      const NumberFormat fmt = calculateNumberFormat(std::max(std::abs(yRange.high), std::abs(yRange.low)));
-      
-      for (int i = 0; i <= nDivY; ++i) {
-        const double value = yRange.high - step * i;
-        const QString text = formatNumber(value, fmt.format, fmt.decimal);
+        const QString text = range.format == 'e'
+            ? QString::asprintf("%.1e", values[j])
+            : QString::asprintf("%.*f", range.decimal, values[j]);
         const int textWidth = metrics.horizontalAdvance(text);
-        maxTextWidth = std::max(maxTextWidth, textWidth);
-      }
-    }
-    
-    for (std::size_t rangeIdx = 0; rangeIdx < ranges.size(); ++rangeIdx) {
-      const YAxisRange &yRange = ranges[rangeIdx];
-      const double range = yRange.high - yRange.low;
-      const double step = range / nDivY;
-      const NumberFormat fmt = calculateNumberFormat(std::max(std::abs(yRange.high), std::abs(yRange.low)));
-      
-      for (int i = 0; i <= nDivY; ++i) {
-        const double value = yRange.high - step * i;  // Count down from high to low
-        const QString text = formatNumber(value, fmt.format, fmt.decimal);
-        const int textWidth = metrics.horizontalAdvance(text);
-        
-        // Match tick mark and data coordinate system:
-        // Data is drawn in plotArea = chartRect.adjusted(1, 1, -1, -1)
-        const int plotTop = chartRect.top() + 1;
-        const int plotHeight = chartRect.height() - 2;
-        const int tickY = plotTop + i * (plotHeight - 1) / nDivY;
-        
-        // Calculate vertical offset for this range label
-        const int labelHeight = metrics.height();
-        const int totalLabelsHeight = static_cast<int>(ranges.size()) * labelHeight;
-        const int startOffset = -totalLabelsHeight / 2;
-        const int labelY = tickY + startOffset + static_cast<int>(rangeIdx) * labelHeight 
-                         + metrics.ascent();
-        
-        // Draw text (right-aligned - each text uses its own width)
+        const int textX = data.left() - 1 - layout.markerHeight
+            - layout.yAxisLabelOffset - layout.margin - textWidth;
+        const double yOffset = nextTick - labelHeight / 2.0
+            + (j + verticalSpacing / 2.0) * layout.axisFontHeight
+            + metrics.ascent();
+        const int textY = data.top() + static_cast<int>(yOffset);
         painter.setPen(effectiveForeground());
-        const int textX = chartRect.left() - 2 - markerHeight - 1 - yAxisLabelOffset - textWidth;
-        painter.drawText(textX, labelY, text);
-        
-        // Draw pen color indicators if multiple ranges
-        if (showPenIndicators) {
-          // Indicators are left-aligned using maxTextWidth (like MEDM)
-          const int indicatorBaseX = chartRect.left() - 2 - markerHeight - 1 - yAxisLabelOffset - maxTextWidth;
-          
-          int indicatorCount = 0;
-          for (int p = penCount() - 1; p >= 0; --p) {
-            if (yRange.penMask & (1 << p)) {
-              const QColor penColor = effectivePenColor(p);
-              const int indicatorX = indicatorBaseX - (indicatorCount + 1) * kLineSpace;
-              const int indicatorY = labelY - metrics.ascent();
-              const int indicatorHeight = metrics.ascent();
-              
-              painter.fillRect(indicatorX, indicatorY, indicatorWidth, indicatorHeight, penColor);
-              indicatorCount++;
+        painter.drawText(textX, textY, text);
+        values[j] -= steps[j];
+
+        if (range.numDot > 0) {
+          const int barX = data.left() - layout.yAxisLabelTextWidth
+              - layout.markerHeight - layout.margin - layout.yAxisLabelOffset;
+          int count = 0;
+          for (int k = penCount() - 1; k >= 0; --k) {
+            if (range.penMask & (1 << k)) {
+              painter.fillRect(barX - (count + 1) * kAxisLineSpace,
+                  textY - metrics.ascent(), 2, metrics.ascent(),
+                  effectivePenColor(k));
+              ++count;
             }
           }
         }
       }
+      nextTick += interval;
     }
   }
 
@@ -1926,36 +1653,22 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
   }
 }
 
-void StripChartElement::paintLabels(QPainter &painter, const Layout &layout,
-    const QFontMetrics &metrics) const
+void StripChartElement::paintLabels(QPainter &painter,
+    const Layout &layout) const
 {
   painter.save();
   painter.setPen(effectiveForeground());
-
-  if (!layout.titleText.isEmpty() && layout.titleRect.isValid()
-      && !layout.titleRect.isEmpty()) {
-    // Use larger title font (like MEDM)
+  if (!layout.titleText.isEmpty()) {
     painter.setFont(titleFont());
-    painter.drawText(layout.titleRect, Qt::AlignHCenter | Qt::AlignTop,
-        layout.titleText);
-    // Restore to label font
-    painter.setFont(labelFont());
+    painter.drawText(layout.titlePos, layout.titleText);
   }
-
-  if (!layout.xLabelText.isEmpty() && layout.xLabelRect.isValid()
-      && !layout.xLabelRect.isEmpty()) {
-    painter.drawText(layout.xLabelRect, Qt::AlignHCenter | Qt::AlignBottom,
-        layout.xLabelText);
+  painter.setFont(labelFont());
+  if (!layout.yLabelText.isEmpty()) {
+    painter.drawText(layout.yLabelPos, layout.yLabelText);
   }
-
-  if (!layout.yLabelText.isEmpty() && layout.yLabelRect.isValid()
-      && !layout.yLabelRect.isEmpty()) {
-    // Draw Y-axis label horizontally (like medm), aligned to the left
-    // Position it at the left edge of the chart area
-    painter.drawText(layout.yLabelRect, Qt::AlignLeft | Qt::AlignTop,
-        layout.yLabelText);
+  if (!layout.xLabelText.isEmpty()) {
+    painter.drawText(layout.xLabelPos, layout.xLabelText);
   }
-
   painter.restore();
 }
 
@@ -2441,15 +2154,14 @@ void StripChartElement::ensureStaticCache(const QFont &labelsFont,
 
   if (cachedLayout_.chartRect.width() > 0 && cachedLayout_.chartRect.height() > 0) {
     cachePainter.fillRect(cachedLayout_.chartRect, effectiveBackground());
-    paintTickMarks(cachePainter, cachedLayout_.chartRect);
-    paintAxisScales(cachePainter, cachedLayout_.chartRect, metrics,
-        cachedLayout_.yAxisLabelOffset);
+    paintTickMarks(cachePainter, cachedLayout_, metrics);
+    paintAxisScales(cachePainter, cachedLayout_, metrics);
     if (cachedLayout_.chartRect.width() > 2 && cachedLayout_.chartRect.height() > 2) {
       paintGrid(cachePainter, cachedLayout_.chartRect);
     }
   }
 
-  paintLabels(cachePainter, cachedLayout_, metrics);
+  paintLabels(cachePainter, cachedLayout_);
 
   cachePainter.end();
   staticCacheDirty_ = false;
@@ -2466,14 +2178,14 @@ void StripChartElement::paintStaticContent(QPainter &painter,
 
   if (layout.chartRect.width() > 0 && layout.chartRect.height() > 0) {
     painter.fillRect(layout.chartRect, effectiveBackground());
-    paintTickMarks(painter, layout.chartRect);
-    paintAxisScales(painter, layout.chartRect, metrics, layout.yAxisLabelOffset);
+    paintTickMarks(painter, layout, metrics);
+    paintAxisScales(painter, layout, metrics);
     if (layout.chartRect.width() > 2 && layout.chartRect.height() > 2) {
       paintGrid(painter, layout.chartRect);
     }
   }
 
-  paintLabels(painter, layout, metrics);
+  paintLabels(painter, layout);
 }
 
 void StripChartElement::invalidatePenCache()

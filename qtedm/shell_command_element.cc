@@ -235,7 +235,8 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   QColor topShadow, bottomShadow;
   MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
 
-  QRect bevelOuter = canvas.adjusted(0, 0, -1, -1);
+  /* The shadows end on the widget's last row and column, as in MEDM. */
+  QRect bevelOuter = canvas;
   painter.setPen(QPen(topShadow, 1));
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
   painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());

@@ -12,6 +12,7 @@
 #include <QDebug>
 #include <QEvent>
 #include <QFontDatabase>
+#include <QHash>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -23,7 +24,6 @@
 #include <QWheelEvent>
 
 #include "medm_colors.h"
-#include "text_font_utils.h"
 #include "window_utils.h"
 
 namespace {
@@ -49,11 +49,11 @@ constexpr qreal kAxisTickLabelGap = 2.0;
 constexpr qreal kAxisLabelGap = 4.0;
 constexpr qreal kAxisInterAxisGap = 2.0;
 
-// Font size constants matching medm's SciPlot defaults
-// (XtNlabelFont = XtFONT_TIMES | 18, XtNaxisFont = XtFONT_TIMES | 10)
-constexpr int kLabelFontHeight = 18;    // For axis labels (X, Y1, Y2, Y3, Y4)
-constexpr int kAxisNumberFontHeight = 10;  // For axis tick numbers
+/* MEDM sizes the Helvetica title font and the shared axis-number and
+ * axis-label font from the smaller plot dimension (TITLE_SCALE_FACTOR and
+ * AXES_SCALE_FACTOR in medmCartesianPlot.h). */
 constexpr int kTitleScaleFactor = 20;
+constexpr int kAxesScaleFactor = 27;
 constexpr int kMinimumTitleFontHeight = 8;
 
 // Adaptive refresh timer constants (matching StripChart behavior)
@@ -128,14 +128,16 @@ QColor defaultTraceColor(int index)
   return QColor(Qt::black);
 }
 
-int cartesianPlotTitlePixelHeight(const QSize &widgetSize)
+/* MEDM's pixel height for a Helvetica plot font, snapped to the sizes that
+ * look normal at the APS (medmSciPlot.c). */
+int cartesianPlotFontPixelHeight(const QSize &widgetSize, int scaleFactor)
 {
   if (widgetSize.isEmpty()) {
     return kMinimumTitleFontHeight;
   }
 
   int preferredHeight = std::min(widgetSize.width(), widgetSize.height())
-      / kTitleScaleFactor;
+      / scaleFactor;
   switch (preferredHeight) {
   case 9:
     preferredHeight = 10;
@@ -172,9 +174,8 @@ int cartesianPlotTitlePixelHeight(const QSize &widgetSize)
   return std::max(preferredHeight, kMinimumTitleFontHeight);
 }
 
-QFont cartesianPlotTitleFont(const QSize &widgetSize)
+QFont cartesianPlotFontForHeight(int targetHeight)
 {
-  const int targetHeight = cartesianPlotTitlePixelHeight(widgetSize);
   const QFont::StyleStrategy strategy = static_cast<QFont::StyleStrategy>(
       QFont::PreferAntialias | QFont::PreferOutline | QFont::PreferQuality);
 
@@ -222,6 +223,30 @@ QFont cartesianPlotTitleFont(const QSize &widgetSize)
   }
 
   return best;
+}
+
+QFont cartesianPlotFont(const QSize &widgetSize, int scaleFactor)
+{
+  /* Plots look these fonts up several times for each paint. */
+  static QHash<int, QFont> fonts;
+  const int targetHeight = cartesianPlotFontPixelHeight(widgetSize,
+      scaleFactor);
+  auto it = fonts.constFind(targetHeight);
+  if (it == fonts.constEnd()) {
+    it = fonts.insert(targetHeight, cartesianPlotFontForHeight(targetHeight));
+  }
+  return it.value();
+}
+
+QFont cartesianPlotTitleFont(const QSize &widgetSize)
+{
+  return cartesianPlotFont(widgetSize, kTitleScaleFactor);
+}
+
+/* MEDM uses one font for the axis numbers and the axis labels. */
+QFont cartesianPlotAxisFont(const QSize &widgetSize)
+{
+  return cartesianPlotFont(widgetSize, kAxesScaleFactor);
 }
 
 enum class MedmMarkerStyle {
@@ -1532,8 +1557,8 @@ QRectF CartesianPlotElement::chartRect() const
   }
 
   const QFont titleFont = cartesianPlotTitleFont(this->rect().size());
-  const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
-  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFont labelFont = cartesianPlotAxisFont(this->rect().size());
+  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
   
   const QFontMetrics titleMetrics(titleFont);
   const QFontMetrics labelMetrics(labelFont);
@@ -1582,9 +1607,9 @@ CartesianPlotElement::calculateYAxisPositions(const QRectF &widgetBounds) const
 {
   YAxisPositions positions;
   
-  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
   const QFontMetrics axisMetrics(axisFont);
-  const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
+  const QFont labelFont = cartesianPlotAxisFont(this->rect().size());
   const QFontMetrics labelMetrics(labelFont);
 
   qreal leftBoundary = widgetBounds.left();
@@ -1721,7 +1746,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   painter.setPen(pen);
   painter.setBrush(Qt::NoBrush);
 
-  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
   const QFontMetrics axisMetrics(axisFont);
   const bool useCachedRanges = executeMode_ && cachedAxisRangesValid_;
   
@@ -1877,7 +1902,7 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   int yAxisIndex, qreal axisX, bool onLeft,
   const AxisRange *precomputedRange) const
 {
-  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
   const QFontMetrics metrics(axisFont);
   painter.setFont(axisFont);
 
@@ -2023,8 +2048,8 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   painter.setPen(effectiveForeground());
   
   const QFont titleFont = cartesianPlotTitleFont(this->rect().size());
-  const QFont labelFont = medmTextFieldFont(kLabelFontHeight);
-  const QFont axisFont = medmTextFieldFont(kAxisNumberFontHeight);
+  const QFont labelFont = cartesianPlotAxisFont(this->rect().size());
+  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
   const QFontMetrics titleMetrics(titleFont);
   const QFontMetrics labelMetrics(labelFont);
   const QFontMetrics axisMetrics(axisFont);

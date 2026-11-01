@@ -32,6 +32,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - ADL files with an extra `}` between objects open as they do in MEDM instead of failing with "Expected section or key".
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
 - Menus, related display buttons, and wave tables fit their labels and empty-state text to the widget.
+- Related display and shell command buttons show their icon and label as MEDM does: together, centered on a button with one item and at the left of a menu button, with the label's leading spaces kept. On a small button the label no longer covers the icon.
 - Text 16 to 19 or 21 to 25 pixels high is no longer wider than in MEDM. The fonts for those heights had no space character, so spaces were drawn from a wider font and long labels could be cut off.
 - Composites no longer cut off their contents in execute mode. A button, outline, or label that extends past its composite's stored size is drawn in full, as in MEDM, and a composite file's contents start at the composite's position instead of a few pixels away.
 - `make clean` works on Windows, and QtEDM compiles without warnings.

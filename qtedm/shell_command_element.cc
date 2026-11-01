@@ -1,12 +1,10 @@
 #include "shell_command_element.h"
 
 #include <algorithm>
-#include <cmath>
 
 #include <QCoreApplication>
 #include <QFont>
 #include <QFontInfo>
-#include <QFontMetricsF>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -16,22 +14,12 @@
 #include <QStyle>
 #include <QStyleOptionButton>
 
+#include "medm_button_pixmap.h"
 #include "medm_colors.h"
 #include "text_font_utils.h"
 #include "window_utils.h"
 
 namespace {
-
-QString sanitizedLabel(const QString &value, bool &showIcon)
-{
-  showIcon = true;
-  QString label = value;
-  if (label.startsWith(QLatin1Char('-'))) {
-    showIcon = false;
-    label.remove(0, 1);
-  }
-  return label;
-}
 
 QString entryDisplayLabel(const ShellCommandEntry &entry)
 {
@@ -263,47 +251,15 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
-  QRect content = bevelInner.adjusted(2, 2, -1, -1);
-  bool showIcon = true;
-  QString text = displayLabel(showIcon);
-  
-  // Prepend "! " when icon would be shown
-  if (showIcon) {
-    text = QStringLiteral("!") + text;
-  }
-
-  const bool singleEntry = labeledEntryCount() <= 1;
-
   // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
   // Search from largest to smallest font, return first that fits
   const int fontLimit = messageButtonPixelLimit(height());
   const QFont labelFont = medmMessageButtonFont(fontLimit);
-  painter.setFont(labelFont);
-  QFontMetricsF labelMetrics(labelFont);
-  const int textWidth = std::max(0, static_cast<int>(std::ceil(labelMetrics.horizontalAdvance(text))));
 
-  QRect textRect = content;
-
-  if (singleEntry) {
-    int layoutLeft = content.left();
-    int extra = content.width() - textWidth;
-    if (extra > 0) {
-      layoutLeft += extra / 2;
-    }
-    textRect.setLeft(layoutLeft);
-    textRect.setRight(layoutLeft + textWidth);
-    if (textRect.width() < 0) {
-      textRect.setRight(textRect.left());
-    }
-    textRect.setTop(content.top());
-    textRect.setBottom(content.bottom());
-  } else {
-    textRect.setLeft(content.left() + 4);
-    textRect = textRect.adjusted(0, 0, -2, 0);
-  }
-
-  painter.setPen(fg);
-  painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+  /* Several commands make a menu bar; one makes a push button. */
+  paintMedmButtonPixmap(painter, canvas, label_,
+      MedmButtonIcon::kShellCommand, labelFont, fg, bg,
+      labeledEntryCount() > 1);
 
   if (selected_) {
     paintSelectionOverlay(painter);
@@ -320,12 +276,6 @@ QColor ShellCommandElement::effectiveBackground() const
 {
   return backgroundColor_.isValid() ? backgroundColor_
                                     : palette().color(QPalette::Window);
-}
-
-QString ShellCommandElement::displayLabel(bool &showIcon) const
-{
-  QString base = sanitizedLabel(label_, showIcon);
-  return base;
 }
 
 int ShellCommandElement::labeledEntryCount() const
@@ -381,41 +331,6 @@ int ShellCommandElement::firstSingleActionEntry() const
     }
   }
   return -1;
-}
-
-void ShellCommandElement::paintIcon(QPainter &painter, const QRect &rect) const
-{
-  if (rect.width() <= 0 || rect.height() <= 0) {
-    return;
-  }
-
-  painter.save();
-  painter.setRenderHint(QPainter::Antialiasing, false);
-
-  const int size = std::min(rect.width(), rect.height());
-  QRect square(rect.left(), rect.top(), size, size);
-  square.moveTop(rect.top() + (rect.height() - size) / 2);
-
-  painter.setPen(Qt::NoPen);
-  painter.setBrush(effectiveForeground());
-
-  const auto scaled = [size](double value) {
-    return static_cast<int>(std::round(value * size));
-  };
-
-  const int rectX = square.left() + scaled(12.0 / 25.0);
-  const int rectY = square.top() + scaled(4.0 / 25.0);
-  const int rectW = std::max(1, scaled(3.0 / 25.0));
-  const int rectH = std::max(1, scaled(14.0 / 25.0));
-  painter.drawRect(rectX, rectY, rectW, rectH);
-
-  const int dotX = square.left() + scaled(12.0 / 25.0);
-  const int dotY = square.top() + scaled(20.0 / 25.0);
-  const int dotW = std::max(1, scaled(3.0 / 25.0));
-  const int dotH = std::max(1, scaled(3.0 / 25.0));
-  painter.drawEllipse(QRect(dotX, dotY, dotW, dotH));
-
-  painter.restore();
 }
 
 void ShellCommandElement::paintSelectionOverlay(QPainter &painter) const

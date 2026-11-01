@@ -6,7 +6,6 @@
 #include <QCoreApplication>
 #include <QFont>
 #include <QFontInfo>
-#include <QFontMetrics>
 #include <QFontMetricsF>
 #include <QMenu>
 #include <QMouseEvent>
@@ -17,22 +16,12 @@
 #include <QPixmap>
 #include <QHash>
 
+#include "medm_button_pixmap.h"
 #include "medm_colors.h"
 #include "text_font_utils.h"
 #include "window_utils.h"
 
 namespace {
-
-QString sanitizedLabel(const QString &value, bool &showIcon)
-{
-  showIcon = true;
-  QString trimmed = value;
-  if (trimmed.startsWith(QLatin1Char('-'))) {
-    showIcon = false;
-    trimmed.remove(0, 1);
-  }
-  return trimmed.trimmed();
-}
 
 int messageButtonPixelLimit(int height)
 {
@@ -68,59 +57,6 @@ int relatedDisplayPixelLimit(RelatedDisplayVisual visual, int height,
   }
 
   return messageButtonPixelLimit(height);
-}
-
-QPixmap createRelatedDisplayIcon(const QSize &size, const QColor &color)
-{
-  if (size.width() <= 0 || size.height() <= 0) {
-    return QPixmap();
-  }
-  
-  /* Create icon at exact size with layered rectangles using single-pixel lines */
-  QPixmap pixmap(size);
-  pixmap.fill(Qt::transparent);
-  
-  QPainter painter(&pixmap);
-  painter.setRenderHint(QPainter::Antialiasing, false);
-  painter.setPen(QPen(color, 1));
-  painter.setBrush(Qt::NoBrush);
-  
-  /* Calculate rectangle positions proportional to the icon size.
-   * Draw second rectangle as line segments to show it's partially hidden.
-   */
-  
-  const int w = size.width();
-  const int h = size.height();
-  
-  /* First rectangle - back layer (complete outline) */
-  const int x1 = w * 3 / 25;
-  const int y1 = h * 3 / 25;
-  const int w1 = w * 14 / 25;
-  const int h1 = h * 12 / 25;
-  painter.drawRect(x1, y1, w1, h1);
-  
-  /* Second rectangle - front layer (visible segments only)
-   * Draw as 4 line segments instead of a complete rectangle to show
-   * it's partially obscured by the first rectangle */
-  const int x2 = w * 8 / 25;
-  const int y2 = h * 7 / 25;
-  const int w2 = w * 14 / 25;
-  const int h2 = h * 13 / 25;
-  
-  /* Top edge of second rectangle */
-  painter.drawLine(x2 + (w2 - (x2 - x1)), y2, x2 + w2, y2);
-  
-  /* Right edge of second rectangle */
-  painter.drawLine(x2 + w2, y2, x2 + w2, y2 + h2);
-  
-  /* Bottom edge of second rectangle */
-  painter.drawLine(x2 + w2, y2 + h2, x2, y2 + h2);
-  
-  /* Left edge of second rectangle */
-  painter.drawLine(x2, y2 + h2, x2, y2 + (h2 - (y2 - y1)));
-  
-  painter.end();
-  return pixmap;
 }
 
 QPixmap createHiddenStippleTile(const QColor &foreground)
@@ -363,28 +299,17 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
   }
 
   painter.fillRect(canvas, effectiveBackground());
-  QRect content;
-  switch (visual_) {
-  case RelatedDisplayVisual::kRowOfButtons:
-  case RelatedDisplayVisual::kColumnOfButtons:
+  /* MEDM makes a push button of any visual with at most one labeled
+   * entry, so only several entries appear as buttons. */
+  const bool buttons = activeEntryCount() > 1
+      && (visual_ == RelatedDisplayVisual::kRowOfButtons
+          || visual_ == RelatedDisplayVisual::kColumnOfButtons);
+  if (buttons) {
     /* Match MEDM sizing for button visuals. */
-    content = canvas;
-    break;
-  default:
-    content = canvas.adjusted(1, 1, -1, -1);
-    break;
-  }
-  switch (visual_) {
-  case RelatedDisplayVisual::kRowOfButtons:
-    paintButtonVisual(painter, content, false);
-    break;
-  case RelatedDisplayVisual::kColumnOfButtons:
-    paintButtonVisual(painter, content, true);
-    break;
-  case RelatedDisplayVisual::kMenu:
-  default:
-    paintMenuVisual(painter, content);
-    break;
+    paintButtonVisual(painter, canvas,
+        visual_ == RelatedDisplayVisual::kColumnOfButtons);
+  } else {
+    paintMenuVisual(painter, canvas.adjusted(1, 1, -1, -1));
   }
 
   if (selected_) {
@@ -402,11 +327,6 @@ QColor RelatedDisplayElement::effectiveBackground() const
 {
   return backgroundColor_.isValid() ? backgroundColor_
                                     : palette().color(QPalette::Window);
-}
-
-QString RelatedDisplayElement::displayLabel(bool &showIcon) const
-{
-  return sanitizedLabel(label_, showIcon);
 }
 
 QVector<int> RelatedDisplayElement::buttonEntryIndices() const
@@ -469,63 +389,15 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
-  bool showIcon = true;
-  QString labelText = displayLabel(showIcon);
-
   // Calculate constraint using (0.90 * height) - 4, matching MEDM's messageButtonFontListIndex
   // Search from largest to smallest font, return first that fits
   const int fontLimit = messageButtonPixelLimit(height());
   const QFont labelFont = medmMessageButtonFont(fontLimit);
 
-  QRect inner = content.adjusted(2, 2, -2, -2);
-
-  QRect iconRect = inner;
-  if (showIcon) {
-    int iconSize = std::min({inner.height(), inner.width(), 24});
-    iconRect.setWidth(iconSize - 2);
-    iconRect.setHeight(iconSize);
-    iconRect.moveTop(inner.top() + (inner.height() - iconSize) / 2);
-    //iconRect.moveLeft(inner.left() + 0);
-
-    QRect iconCanvas = iconRect.adjusted(0, 0, 0, 0);
-    painter.fillRect(iconCanvas, bg);
-
-    /* Create icon at exact size needed - no scaling required */
-    const QPixmap iconPixmap = createRelatedDisplayIcon(iconCanvas.size(), fg);
-    if (!iconPixmap.isNull()) {
-      QPoint topLeft(iconCanvas.left()
-              + (iconCanvas.width() - iconPixmap.width()) / 2,
-          iconCanvas.top()
-              + (iconCanvas.height() - iconPixmap.height()) / 2);
-      painter.drawPixmap(topLeft, iconPixmap);
-    } else {
-      const int barHeight = std::max(2, iconCanvas.height() / 3);
-      QRect fallbackRect(iconCanvas.left(), iconCanvas.top(),
-          iconCanvas.width(), barHeight);
-      painter.fillRect(fallbackRect, fg);
-    }
-  }
-
-  const int activeLabels = activeEntryCount();
-  QRect textRect = inner.adjusted(4, 0, 0, 0);
-  if (showIcon && iconRect.width() > 0) {
-    int textLeft = iconRect.right() + 3;
-    if (textLeft < textRect.right()) {
-      textRect.setLeft(textLeft);
-    }
-  }
-  if (!labelText.isEmpty()) {
-    /* As in MEDM, the font depends on the height only and a label too
-     * wide for the button is clipped. */
-    painter.setFont(labelFont);
-    painter.setClipRect(textRect, Qt::IntersectClip);
-    painter.setPen(fg);
-    Qt::Alignment align = Qt::AlignCenter;
-    if (visual_ == RelatedDisplayVisual::kMenu && activeLabels > 1) {
-      align = Qt::AlignVCenter | Qt::AlignLeft;
-    }
-    painter.drawText(textRect, align, labelText);
-  }
+  /* Several entries make a menu bar; one makes a push button. */
+  paintMedmButtonPixmap(painter, rect(), label_,
+      MedmButtonIcon::kRelatedDisplay, labelFont, fg, bg,
+      activeEntryCount() > 1);
 
   painter.restore();
 }
@@ -547,9 +419,7 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
   painter.drawRect(content);
 
   const QVector<int> buttonIndices = buttonEntryIndices();
-  const int activeCount = buttonIndices.size();
-  const int displayCount = activeCount > 0 ? activeCount : 2;
-  const bool singleButton = (displayCount == 1);
+  const int displayCount = buttonIndices.size();
   const int columns = vertical ? 1 : std::max(1, displayCount);
   const int rows = vertical ? std::max(1, displayCount) : 1;
 
@@ -597,48 +467,16 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
 
       /* Draw text */
       painter.setPen(fg);
-      QString text;
-      bool showIcon = false;
-      if (singleButton) {
-        showIcon = true;
-        text = displayLabel(showIcon);
-      } else if (index < activeCount) {
-        /* MEDM centers the complete entry label, including padding. */
-        text = entries_[buttonIndices[index]].label;
-      }
-      if (!singleButton && text.isEmpty()) {
-        text = QStringLiteral("Display %1").arg(index + 1);
-      }
+      /* MEDM centers the complete entry label, including padding. */
+      const QString text = entries_[buttonIndices[index]].label;
 
       /* As in MEDM, every button uses the height-selected font, and a label
        * too wide for its button is clipped to that button. */
       painter.setFont(labelFont);
       painter.save();
       painter.setClipRect(interior, Qt::IntersectClip);
-      if (singleButton && showIcon) {
-        const int iconSize = std::min({interior.height(), interior.width(), 24});
-        const QFontMetrics metrics(painter.font());
-        const int textWidth = metrics.horizontalAdvance(text);
-        const int totalWidth = std::min(interior.width(), iconSize + textWidth);
-        const int startX = interior.left() + std::max(0,
-            (interior.width() - totalWidth) / 2);
-
-        QRect iconRect(startX,
-            interior.top() + (interior.height() - iconSize) / 2,
-            iconSize, iconSize);
-
-        const QPixmap iconPixmap = createRelatedDisplayIcon(iconRect.size(), fg);
-        if (!iconPixmap.isNull()) {
-          painter.drawPixmap(iconRect.topLeft(), iconPixmap);
-        }
-
-        QRect textRect(iconRect.right() + 1, interior.top(),
-            interior.right() - iconRect.right() - 1, interior.height());
-        painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
-      } else {
-        painter.drawText(interior,
-            Qt::AlignCenter | Qt::TextIncludeTrailingSpaces, text);
-      }
+      painter.drawText(interior,
+          Qt::AlignCenter | Qt::TextIncludeTrailingSpaces, text);
       painter.restore();
       ++index;
     }

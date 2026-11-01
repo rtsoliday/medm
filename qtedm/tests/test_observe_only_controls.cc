@@ -170,6 +170,8 @@ private slots:
   void hiddenRelatedDisplayUnderGraphicComposite();
   void compositeChildrenAreNotClipped_data();
   void compositeChildrenAreNotClipped();
+  void buttonPixmapsMatchMedm_data();
+  void buttonPixmapsMatchMedm();
   void statusRectangleCoversHiddenRelatedDisplay_data();
   void statusRectangleCoversHiddenRelatedDisplay();
   void legacyAttributesApplyLikeMedm();
@@ -406,6 +408,120 @@ void TestObserveOnlyControls::compositeChildrenAreNotClipped()
     QVERIFY(image.pixelColor(QPoint(190, 14) * factor - origin)
         != QColor(Qt::white));
   }
+}
+
+void TestObserveOnlyControls::buttonPixmapsMatchMedm_data()
+{
+  QTest::addColumn<bool>("shellCommand");
+  QTest::addColumn<int>("entries");
+  QTest::addColumn<QString>("label");
+  QTest::addColumn<QSize>("size");
+  QTest::addColumn<QRect>("ink");
+  QTest::addColumn<QString>("visual");
+
+  /* Ink bounds measured in MEDM 3.1.20 on Linux.  One entry makes a push
+   * button that centers the icon and label as one image; several make a
+   * menu bar that starts the image after both shadows and clips it. */
+  QTest::newRow("related-push") << false << 1 << QStringLiteral("Info")
+      << QSize(120, 20) << QRect(QPoint(41, 5), QPoint(78, 14)) << QString();
+  QTest::newRow("related-menu") << false << 2 << QStringLiteral("Info")
+      << QSize(120, 20) << QRect(QPoint(5, 5), QPoint(42, 14)) << QString();
+  QTest::newRow("related-leading-space") << false << 1
+      << QStringLiteral(" Status") << QSize(64, 16)
+      << QRect(QPoint(8, 4), QPoint(55, 11)) << QString();
+  QTest::newRow("related-tiny-push") << false << 1 << QStringLiteral("B")
+      << QSize(18, 18) << QRect(QPoint(2, 5), QPoint(15, 12)) << QString();
+  QTest::newRow("related-tiny-menu") << false << 2 << QStringLiteral("B")
+      << QSize(18, 18) << QRect(QPoint(5, 5), QPoint(12, 12)) << QString();
+  QTest::newRow("related-overflow") << false << 1
+      << QStringLiteral("Beam Quality Reporting") << QSize(90, 18)
+      << QRect(QPoint(2, 5), QPoint(87, 13)) << QString();
+  /* pw-plc-control.adl: one pixel too wide for the margins, so Motif's
+   * centering truncates toward zero. */
+  QTest::newRow("related-margin-overflow") << false << 1
+      << QStringLiteral("SEC. 05+06") << QSize(75, 16)
+      << QRect(QPoint(5, 4), QPoint(70, 11)) << QString();
+  QTest::newRow("related-no-icon") << false << 2 << QStringLiteral("-Tools")
+      << QSize(60, 16) << QRect(QPoint(4, 4), QPoint(32, 10)) << QString();
+  QTest::newRow("shell-push") << true << 1 << QStringLiteral("Info")
+      << QSize(120, 20) << QRect(QPoint(45, 5), QPoint(78, 14)) << QString();
+  QTest::newRow("shell-tiny-menu") << true << 2 << QStringLiteral("B")
+      << QSize(18, 18) << QRect(QPoint(8, 5), QPoint(8, 12)) << QString();
+  QTest::newRow("shell-leading-space") << true << 1 << QStringLiteral(" MISC")
+      << QSize(51, 16) << QRect(QPoint(9, 4), QPoint(42, 10)) << QString();
+  /* MEDM draws any visual with one labeled entry as the push button. */
+  QTest::newRow("related-row-single") << false << 1 << QStringLiteral("Info")
+      << QSize(120, 20) << QRect(QPoint(41, 5), QPoint(78, 14))
+      << QStringLiteral("row of buttons");
+}
+
+void TestObserveOnlyControls::buttonPixmapsMatchMedm()
+{
+  QFETCH(bool, shellCommand);
+  QFETCH(int, entries);
+  QFETCH(QString, label);
+  QFETCH(QSize, size);
+  QFETCH(QRect, ink);
+  QFETCH(QString, visual);
+
+  QString items;
+  for (int i = 0; i < entries; ++i) {
+    items += shellCommand
+        ? QStringLiteral("  command[%1] { label=\"c%1\" name=\"true\" }\n")
+              .arg(i)
+        : QStringLiteral("  display[%1] { label=\"e%1\" name=\"e%1.adl\" }\n")
+              .arg(i);
+  }
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("button.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray adl = QStringLiteral(
+      "file { name=\"button.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=200 height=60 } clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=3 colors { ffffff, 000000, 73dfff, } }\n"
+      "\"%1\" { object { x=10 y=10 width=%2 height=%3 }\n"
+      "%4  clr=1 bclr=2 label=\"%5\"%6 }\n")
+      .arg(shellCommand ? QStringLiteral("shell command")
+                        : QStringLiteral("related display"))
+      .arg(size.width()).arg(size.height())
+      .arg(items, label, visual.isEmpty() ? QString()
+          : QStringLiteral(" visual=\"%1\"").arg(visual))
+      .toLatin1();
+  QCOMPARE(file.write(adl), qint64(adl.size()));
+  file.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  QWidget *button = nullptr;
+  if (shellCommand) {
+    QCOMPARE(window.shellCommandElements_.size(), 1);
+    button = window.shellCommandElements_.first();
+  } else {
+    QCOMPARE(window.relatedDisplayElements_.size(), 1);
+    QCOMPARE(window.relatedDisplayElements_.first()->label(), label);
+    button = window.relatedDisplayElements_.first();
+  }
+  QCOMPARE(button->size(), size);
+
+  const QImage image = button->grab().toImage();
+  QRect bounds;
+  for (int y = 0; y < image.height(); ++y) {
+    for (int x = 0; x < image.width(); ++x) {
+      const QColor pixel = image.pixelColor(x, y);
+      if (pixel.red() + pixel.green() + pixel.blue() < 120) {
+        bounds |= QRect(x, y, 1, 1);
+      }
+    }
+  }
+  QCOMPARE(bounds, ink);
 }
 
 void TestObserveOnlyControls::statusRectangleCoversHiddenRelatedDisplay_data()

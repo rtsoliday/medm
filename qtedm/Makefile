@@ -72,6 +72,7 @@ qtedm_SRC = qtedm.cc \
             menu_element.cc \
             menu_runtime.cc \
             related_display_element.cc \
+            medm_button_pixmap.cc \
             text_monitor_element.cc \
             text_monitor_runtime.cc \
             byte_monitor_element.cc \

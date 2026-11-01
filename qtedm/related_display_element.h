@@ -64,7 +64,6 @@ protected:
 private:
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
-  QString displayLabel(bool &showIcon) const;
   QVector<int> buttonEntryIndices() const;
   int activeEntryCount() const;
   bool entryVisibleInMenu(int index) const;

@@ -31076,11 +31076,11 @@ RelatedDisplayElement *DisplayWindow::loadRelatedDisplayElement(
     element->setBackgroundColor(colorForIndex(bclrIndex));
   }
 
+  /* Keep the label as written: MEDM draws its leading spaces. */
   const QString labelValue = propertyValue(relatedNode,
       QStringLiteral("label"));
-  const QString trimmedLabel = labelValue.trimmed();
-  if (!trimmedLabel.isEmpty()) {
-    element->setLabel(trimmedLabel);
+  if (!labelValue.isEmpty()) {
+    element->setLabel(labelValue);
   }
 
   const QString visualValue = propertyValue(relatedNode,

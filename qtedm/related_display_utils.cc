@@ -71,7 +71,10 @@ bool parseMacroArguments(const QString &arguments,
       }
       return false;
     }
-    macros->insert(name, trimmed.mid(equals + 1).trimmed());
+    /* MEDM's lookupNameValue returns the first definition of a name. */
+    if (!macros->contains(name)) {
+      macros->insert(name, trimmed.mid(equals + 1).trimmed());
+    }
   }
   return true;
 }

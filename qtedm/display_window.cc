@@ -26411,7 +26411,10 @@ QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
     if (name.isEmpty()) {
       continue;
     }
-    macros.insert(name, value);
+    /* MEDM's lookupNameValue returns the first definition of a name. */
+    if (!macros.contains(name)) {
+      macros.insert(name, value);
+    }
   }
   return macros;
 }

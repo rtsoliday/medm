@@ -162,8 +162,9 @@ void TestCommandLine::parsesPlatformSpecificDisplaySearchPaths()
 void TestCommandLine::parsesMacrosAndGeometry()
 {
   const MacroMap macros = parseMacroDefinitionString(
-      QStringLiteral("A=1, broken, B = two , =oops, C=3"));
+      QStringLiteral("A=1, broken, B = two , =oops, C=3, A=4"));
 
+  /* As in MEDM, the first definition of a name wins. */
   QCOMPARE(macros.value(QStringLiteral("A")), QStringLiteral("1"));
   QCOMPARE(macros.value(QStringLiteral("B")), QStringLiteral("two"));
   QCOMPARE(macros.value(QStringLiteral("C")), QStringLiteral("3"));

@@ -272,7 +272,10 @@ MacroMap parseMacroDefinitionString(const QString &macroString)
           trimmedEntry.toLocal8Bit().constData());
       continue;
     }
-    macros.insert(name, value);
+    /* MEDM's lookupNameValue returns the first definition of a name. */
+    if (!macros.contains(name)) {
+      macros.insert(name, value);
+    }
   }
   return macros;
 }

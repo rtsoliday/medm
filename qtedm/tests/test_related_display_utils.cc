@@ -15,7 +15,8 @@ void TestRelatedDisplayUtils::expandsMacrosAndSelectsLaunchMode()
 {
   RelatedDisplayEntry entry;
   entry.name = QStringLiteral(" child.adl ");
-  entry.args = QStringLiteral("P=$(PREFIX),DESC=$(LABEL),NESTED=$(NESTED)");
+  entry.args = QStringLiteral(
+      "P=$(PREFIX),DESC=$(LABEL),NESTED=$(NESTED),P=other:");
   entry.mode = RelatedDisplayMode::kAdd;
   const QHash<QString, QString> inherited{
       {QStringLiteral("PREFIX"), QStringLiteral("ioc:")},
@@ -28,6 +29,7 @@ void TestRelatedDisplayUtils::expandsMacrosAndSelectsLaunchMode()
       inherited, &result, &error), qPrintable(error));
   QCOMPARE(result.fileName, QStringLiteral("child.adl"));
   QVERIFY(!result.replace);
+  /* As in MEDM, the first definition of a name wins. */
   QCOMPARE(result.macros.value(QStringLiteral("P")),
       QStringLiteral("ioc:"));
   QCOMPARE(result.macros.value(QStringLiteral("DESC")),

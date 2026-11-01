@@ -44,6 +44,7 @@ public:
   bool isExecuteMode() const;
 
   void setRuntimeConnected(bool connected);
+  void setRuntimeNotEnum(bool notEnum);
   void setRuntimeSeverity(short severity);
   void setRuntimeReadAccessKnown(bool known);
   void setRuntimeReadAccess(bool readAccess);
@@ -80,6 +81,7 @@ private:
   QString channel_;
   bool executeMode_ = false;
   bool runtimeConnected_ = false;
+  bool runtimeNotEnum_ = false;
   bool runtimeReadAccessKnown_ = false;
   bool runtimeReadAccess_ = false;
   bool runtimeWriteAccess_ = false;

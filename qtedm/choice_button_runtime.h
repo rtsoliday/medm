@@ -46,6 +46,7 @@ private:
   bool lastReadAccess_ = false;
   bool lastWriteAccess_ = false;
   bool lastValueOutOfRange_ = false;
+  bool notEnum_ = false;
   QStringList enumStrings_;
 };
 

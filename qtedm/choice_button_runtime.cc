@@ -97,10 +97,12 @@ void ChoiceButtonRuntime::resetRuntimeState()
   lastReadAccess_ = false;
   lastWriteAccess_ = false;
   lastValueOutOfRange_ = false;
+  notEnum_ = false;
   enumStrings_.clear();
 
   if (element_) {
     invokeOnElement([](ChoiceButtonElement *element) {
+      element->setRuntimeNotEnum(false);
       element->setRuntimeConnected(false);
       element->setRuntimeReadAccessKnown(false);
       element->setRuntimeReadAccess(false);
@@ -125,6 +127,7 @@ void ChoiceButtonRuntime::handleChannelConnection(bool connected)
     enumStrings_.clear();
     lastValue_ = -1;
     lastValueOutOfRange_ = false;
+    notEnum_ = false;
     if (element_) {
       const bool readAccessKnown = lastReadAccessKnown_;
       const bool readAccess = lastReadAccess_;
@@ -147,8 +150,10 @@ void ChoiceButtonRuntime::handleChannelConnection(bool connected)
     lastReadAccess_ = false;
     lastWriteAccess_ = false;
     lastValueOutOfRange_ = false;
+    notEnum_ = false;
     if (element_) {
       invokeOnElement([](ChoiceButtonElement *element) {
+        element->setRuntimeNotEnum(false);
         element->setRuntimeConnected(false);
         element->setRuntimeReadAccessKnown(false);
         element->setRuntimeReadAccess(false);
@@ -166,7 +171,21 @@ void ChoiceButtonRuntime::handleChannelData(const SharedChannelData &data)
     return;
   }
 
-  if (!data.isEnum) {
+  /* As MEDM does, create no buttons for a channel whose native type is not
+   * an enum; Channel Access converts its value to the requested enum. */
+  const bool notEnum = data.nativeFieldType >= 0
+      && data.nativeFieldType != DBF_ENUM;
+  if (data.hasValue && notEnum != notEnum_) {
+    notEnum_ = notEnum;
+    if (notEnum_) {
+      qWarning() << "Choice Button PV" << channelName_
+                 << "is not an ENUM type; cannot create Choice Button";
+    }
+    invokeOnElement([notEnum](ChoiceButtonElement *element) {
+      element->setRuntimeNotEnum(notEnum);
+    });
+  }
+  if (notEnum || !data.isEnum) {
     return;
   }
 

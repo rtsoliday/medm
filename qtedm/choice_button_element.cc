@@ -481,6 +481,18 @@ void ChoiceButtonElement::setRuntimeConnected(bool connected)
   update();
 }
 
+/* MEDM creates no widget for a channel that is not an enum, so nothing is
+ * drawn over the display there. */
+void ChoiceButtonElement::setRuntimeNotEnum(bool notEnum)
+{
+  if (runtimeNotEnum_ == notEnum) {
+    return;
+  }
+  runtimeNotEnum_ = notEnum;
+  setAttribute(Qt::WA_OpaquePaintEvent, !runtimeNotEnum_);
+  update();
+}
+
 void ChoiceButtonElement::setRuntimeReadAccessKnown(bool known)
 {
   if (runtimeReadAccessKnown_ == known) {
@@ -638,6 +650,10 @@ void ChoiceButtonElement::paintSelectionOverlay(QPainter &painter) const
 void ChoiceButtonElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
+
+  if (executeMode_ && runtimeNotEnum_) {
+    return;
+  }
 
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);

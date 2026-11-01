@@ -474,8 +474,12 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
 
   if (connected) {
     state->connected = true;
-    state->readAccessKnown = false;
-    state->canRead = false;
+    /* Channel Access reports access rights before the connection, so read
+     * access the shared channel already has is known now; otherwise the
+     * first value or access rights event supplies it.  A string channel
+     * that delivers no DBR_TIME_DOUBLE value relies on this. */
+    state->readAccessKnown = data.canRead;
+    state->canRead = data.canRead;
     state->hasControlInfo = false;
     state->precisionValid = false;
     state->runtimeLimitsValid = false;
@@ -983,6 +987,12 @@ bool CartesianPlotRuntime::channelReadyForDisplay(const ChannelState &state) con
 {
   if (!state.connected || !state.readAccessKnown || !state.canRead) {
     return false;
+  }
+  /* No control information is requested for a string channel, such as a
+   * record's .SDIS link field; MEDM gives it precision 0 and plots it as 0,
+   * so it must not keep the other traces from being drawn. */
+  if (state.fieldType == DBR_STRING) {
+    return true;
   }
   return state.hasControlInfo && state.precisionValid;
 }

@@ -1432,6 +1432,7 @@ void CartesianPlotElement::applyZoomToRange(AxisRange &range, int axisIndex) con
   }
   range.minimum = zoomMinimums_[axisIndex];
   range.maximum = zoomMaximums_[axisIndex];
+  range.numMajor = 0;
 }
 
 bool CartesianPlotElement::event(QEvent *event)
@@ -1791,7 +1792,9 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   // X-axis ticks and numbers - only within chart area
   if (xAxisIsLog10 && xAxisMin > 0.0 && xAxisMax > 0.0) {
     // Logarithmic X-axis tick marks
-    const NiceAxisRange nice = computeNiceAxisRange(xAxisMin, xAxisMax, true, true);
+    const NiceAxisRange nice = (xRange && xRange->valid)
+        ? axisTicks(*xRange, true)
+        : computeNiceAxisRange(xAxisMin, xAxisMax, true, true);
     
     double majorValue = nice.drawMin;
     for (int i = 0; i <= nice.numMajor; ++i) {
@@ -1834,9 +1837,10 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
     }
   } else {
     /* Linear X-axis ticks at SciPlot's "nice" major increment, as for the
-     * Y axes; the range itself was already rounded to it. */
-    const NiceAxisRange nice = computeNiceAxisRange(xAxisMin, xAxisMax,
-        false, true);
+     * Y axes; a cached range was already rounded to it. */
+    const NiceAxisRange nice = (xRange && xRange->valid)
+        ? axisTicks(*xRange, true)
+        : computeNiceAxisRange(xAxisMin, xAxisMax, false, true);
     const double span = nice.drawMax - nice.drawMin;
     for (int i = 0; i <= nice.numMajor && span > 0.0; ++i) {
       const double value = nice.drawMin + i * nice.majorInc;
@@ -1881,8 +1885,6 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   const int arrayIndex = yAxisIndex + 1;
 
   const AxisRange axisRange = resolvedAxisRange(arrayIndex, precomputedRange);
-  const double axisMin = axisRange.minimum;
-  const double axisMax = axisRange.maximum;
   const CartesianPlotAxisStyle axisStyle = axisRange.style;
   
   // Draw the vertical axis line
@@ -1892,8 +1894,8 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   // Check if this is a Log10 axis
   const bool isLog10 = (axisStyle == CartesianPlotAxisStyle::kLog10);
   
-  // Compute "nice" axis range matching MEDM's behavior
-  const NiceAxisRange nice = computeNiceAxisRange(axisMin, axisMax, isLog10);
+  // The "nice" ticks used when the range was rounded, as in MEDM
+  const NiceAxisRange nice = axisTicks(axisRange, false);
 
   // Draw ticks and numbers
   if (isLog10 && nice.drawMin > 0 && nice.drawMax > 0) {
@@ -2502,8 +2504,25 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
   
   range.minimum = nice.drawMin;
   range.maximum = nice.drawMax;
+  range.majorInc = nice.majorInc;
+  range.numMajor = nice.numMajor;
+  range.numMinor = nice.numMinor;
   range.valid = true;
   return range;
+}
+
+/* The ticks SciPlot chose while rounding the range. Rounding an already
+ * rounded range again can widen it, which moves the tick labels away from
+ * the data plotted on the range. */
+CartesianPlotElement::NiceAxisRange CartesianPlotElement::axisTicks(
+    const AxisRange &range, bool isXAxis)
+{
+  if (range.numMajor > 0) {
+    return NiceAxisRange{range.minimum, range.maximum, range.majorInc,
+        range.numMajor, range.numMinor};
+  }
+  return computeNiceAxisRange(range.minimum, range.maximum,
+      range.style == CartesianPlotAxisStyle::kLog10, isXAxis);
 }
 
 CartesianPlotElement::AxisRange CartesianPlotElement::resolvedAxisRange(
@@ -2544,8 +2563,7 @@ qreal CartesianPlotElement::yAxisMaximumTickLabelWidth(int yAxisIndex,
   }
 
   const bool isLog10 = (axisRange.style == CartesianPlotAxisStyle::kLog10);
-  const NiceAxisRange nice = computeNiceAxisRange(axisRange.minimum,
-      axisRange.maximum, isLog10);
+  const NiceAxisRange nice = axisTicks(axisRange, false);
 
   qreal maxWidth = 0.0;
   auto measureLabel = [&](double value) {

@@ -168,6 +168,10 @@ private:
     double maximum = 1.0;
     bool valid = false;
     CartesianPlotAxisStyle style = CartesianPlotAxisStyle::kLinear;
+    /* SciPlot's ticks for the rounded range; numMajor is 0 when unknown. */
+    double majorInc = 0.0;
+    int numMajor = 0;
+    int numMinor = 0;
   };
 
   QColor effectiveForeground() const;
@@ -247,6 +251,7 @@ private:
   };
   static NiceAxisRange computeNiceAxisRange(double min, double max, bool isLog,
       bool isXAxis = false);
+  static NiceAxisRange axisTicks(const AxisRange &range, bool isXAxis);
 
   bool selected_ = false;
   QColor foregroundColor_;

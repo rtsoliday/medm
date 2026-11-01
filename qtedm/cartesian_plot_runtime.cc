@@ -496,6 +496,20 @@ void CartesianPlotRuntime::handleConnection(const ChannelContext &context,
       invokeOnElement([index = context.traceIndex, traceConn](CartesianPlotElement *element) {
         element->setTraceRuntimeConnected(index, traceConn);
       });
+      /* A string channel delivers no DBR_TIME_DOUBLE value. MEDM keeps its
+       * record value at 0 and plots it there, which also gives an
+       * autoscaled axis a range. */
+      if (state->fieldType == DBR_STRING && state->canRead) {
+        SharedChannelData zero;
+        zero.connected = true;
+        zero.canRead = true;
+        zero.hasValue = true;
+        zero.isNumeric = true;
+        zero.nativeFieldType = DBR_STRING;
+        zero.nativeElementCount = 1;
+        handleTraceValue(context.traceIndex,
+            context.kind == ChannelKind::kTraceX, zero);
+      }
     }
   } else {
     state->connected = false;

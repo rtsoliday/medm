@@ -21620,6 +21620,7 @@ bool DisplayWindow::loadFromFile(const QString &filePath,
 
   const bool previousLegacyMode = loadingLegacyAdl_;
   loadingLegacyAdl_ = (fileVersion < 20200);
+  displayFileVersion_ = fileVersion;
 
   /* The parser substitutes macros per token, as MEDM does, so a value is
    * used literally and cannot change the file's structure. */
@@ -23154,9 +23155,9 @@ void DisplayWindow::writeAdlToStream(QTextStream &stream, const QString &fileNam
           cartesian->xLabel(), yLabels,
           displayColorIndex(cartesianForeground),
           displayColorIndex(cartesianBackground));
-      if (!cartesian->drawMajorGrid()) {
+      if (cartesian->drawMajorGrid()) {
         AdlWriter::writeIndentedLine(stream, 1,
-            QStringLiteral("drawMajor=0"));
+            QStringLiteral("drawMajor=1"));
       }
       if (cartesian->drawMinorGrid()) {
         AdlWriter::writeIndentedLine(stream, 1,
@@ -24759,9 +24760,9 @@ void DisplayWindow::writeWidgetAdl(QTextStream &stream, QWidget *widget,
         cartesian->xLabel(), yLabels,
         displayColorIndex(cartesianForeground),
         displayColorIndex(cartesianBackground));
-    if (!cartesian->drawMajorGrid()) {
+    if (cartesian->drawMajorGrid()) {
       AdlWriter::writeIndentedLine(stream, next,
-          QStringLiteral("drawMajor=0"));
+          QStringLiteral("drawMajor=1"));
     }
     if (cartesian->drawMinorGrid()) {
       AdlWriter::writeIndentedLine(stream, next,
@@ -32608,7 +32609,10 @@ CartesianPlotElement *DisplayWindow::loadCartesianPlotElement(
     return false;
   };
 
-  bool drawMajor = true;
+  element->setMedmFileVersion(displayFileVersion_);
+
+  /* MEDM never draws a grid, so a plot has one only when asked. */
+  bool drawMajor = false;
   if (parseBooleanProperty(propertyValue(cartesianNode,
           QStringLiteral("drawMajor")), &drawMajor)) {
     element->setDrawMajorGrid(drawMajor);

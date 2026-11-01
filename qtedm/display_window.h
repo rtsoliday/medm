@@ -1041,6 +1041,9 @@ private:
   QString filePath_;
   QString currentLoadDirectory_;
   bool loadingLegacyAdl_ = false;
+  /* Version of the display file, which SciPlot uses for the margins of
+   * cartesian plots in old displays (SciPlotSetFileVersion). */
+  int displayFileVersion_ = 40000;
   /* True while elements are read from a display or composite file parsed
    * with its macros, so their recorded macro uses are complete. Undo and
    * paste rebuild elements from text whose macros were already applied. */

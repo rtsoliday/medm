@@ -109,6 +109,8 @@ public:
 
   bool drawMajorGrid() const;
   void setDrawMajorGrid(bool draw);
+  /* The display file's version; old displays keep SciPlot's XRT margins. */
+  void setMedmFileVersion(int version);
 
   bool drawMinorGrid() const;
   void setDrawMinorGrid(bool draw);
@@ -171,6 +173,8 @@ private:
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QColor effectiveTraceColor(int index) const;
+  bool usesXrtMargins() const;
+  QRectF plotFrame() const;
   QRectF chartRect() const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRectF &rect) const;
@@ -208,9 +212,9 @@ private:
   bool isYAxisOnRight(int yAxisIndex) const;
   bool isYAxisVisible(int yAxisIndex) const;
   bool shouldPaintYAxisCue(int yAxisIndex) const;
-    std::optional<QColor> axisCueColor(int yAxisIndex) const;
-    void paintAxisColorCue(QPainter &painter, const QRectF &labelBounds,
-      const QColor &color) const;
+  void paintAxisColorCue(QPainter &painter, int yAxisIndex,
+      const QRectF &labelBounds, bool labelShown,
+      const QRectF &plotRect) const;
   void ensureRuntimeArraySizes();
   
   // Static content caching
@@ -264,7 +268,8 @@ private:
   std::array<double, kCartesianAxisCount> axisMinimums_{};
   std::array<double, kCartesianAxisCount> axisMaximums_{};
   std::array<CartesianPlotTimeFormat, kCartesianAxisCount> axisTimeFormats_{};
-  bool drawMajorGrid_ = true;
+  bool drawMajorGrid_ = false;
+  int medmFileVersion_ = 40000;
   bool drawMinorGrid_ = false;
   bool executeMode_ = false;
   int runtimeCount_ = 0;

@@ -8112,7 +8112,7 @@ void ResourcePaletteDialog::showForCartesianPlot(std::function<QRect()> geometry
     const QSignalBlocker blocker(cartesianDrawMajorCombo_);
     const bool drawMajor = cartesianDrawMajorGetter_
             ? cartesianDrawMajorGetter_()
-            : true;
+            : false;
     cartesianDrawMajorCombo_->setCurrentIndex(drawMajor ? 1 : 0);
     cartesianDrawMajorCombo_->setEnabled(static_cast<bool>(cartesianDrawMajorSetter_));
   }

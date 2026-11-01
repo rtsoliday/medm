@@ -339,11 +339,12 @@ void ScaleMonitorElement::setRuntimeValue(double value)
   if (!executeMode_ || !std::isfinite(value)) {
     return;
   }
-  const double clamped = clampToLimits(value);
+  /* Keep the channel's value; sampleValue() limits it when drawn. Clamping
+   * here kept a value that arrived before the limits at the default range. */
   const bool firstValue = !hasRuntimeValue_;
   const bool changed = firstValue
-      || std::abs(clamped - runtimeValue_) > valueEpsilon();
-  runtimeValue_ = clamped;
+      || std::abs(value - runtimeValue_) > valueEpsilon();
+  runtimeValue_ = value;
   hasRuntimeValue_ = true;
   if (runtimeConnected_ && changed) {
     update();
@@ -362,7 +363,6 @@ void ScaleMonitorElement::setRuntimeLimits(double low, double high)
   runtimeHigh_ = high;
   runtimeLimitsValid_ = true;
   if (executeMode_) {
-    runtimeValue_ = clampToLimits(runtimeValue_);
     update();
   }
 }

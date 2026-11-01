@@ -73,7 +73,6 @@ private:
   int effectivePrecision() const;
   double currentValue() const;
   double defaultSampleValue() const;
-  double clampToLimits(double value) const;
   double meterEpsilon() const;
   QString formatValue(double value) const;
   void paintSelectionOverlay(QPainter &painter);

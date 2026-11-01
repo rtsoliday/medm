@@ -412,10 +412,12 @@ void MeterElement::setRuntimeValue(double value)
   if (!std::isfinite(value)) {
     return;
   }
-  double clamped = clampToLimits(value);
+  /* Keep the channel's value, as Xc's Meter does; the needle is limited
+   * when drawn. Clamping here kept a value that arrived before the limits
+   * at the default range. */
   bool firstValue = !hasRuntimeValue_;
-  bool changed = firstValue || std::abs(clamped - runtimeValue_) > meterEpsilon();
-  runtimeValue_ = clamped;
+  bool changed = firstValue || std::abs(value - runtimeValue_) > meterEpsilon();
+  runtimeValue_ = value;
   hasRuntimeValue_ = true;
   if (executeMode_ && runtimeConnected_ && changed) {
     UpdateCoordinator::instance().requestUpdate(this, dynamicRegion());
@@ -434,7 +436,6 @@ void MeterElement::setRuntimeLimits(double low, double high)
   runtimeHigh_ = high;
   runtimeLimitsValid_ = true;
   if (executeMode_) {
-    runtimeValue_ = clampToLimits(runtimeValue_);
     invalidateStaticCache();
     update();
   }
@@ -679,25 +680,6 @@ double MeterElement::defaultSampleValue() const
   }
   const double clamped = std::clamp(kSampleNormalizedValue, 0.0, 1.0);
   return low + span * clamped;
-}
-
-double MeterElement::clampToLimits(double value) const
-{
-  double low = effectiveLowLimit();
-  double high = effectiveHighLimit();
-  if (!std::isfinite(low) || !std::isfinite(high)) {
-    return value;
-  }
-  if (low > high) {
-    std::swap(low, high);
-  }
-  if (value < low) {
-    return low;
-  }
-  if (value > high) {
-    return high;
-  }
-  return value;
 }
 
 double MeterElement::meterEpsilon() const

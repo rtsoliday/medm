@@ -671,10 +671,12 @@ void WheelSwitchElement::setRuntimeValue(double value)
   if (!std::isfinite(value)) {
     return;
   }
-  double clamped = clampToLimits(value);
+  /* Keep the channel's value as MEDM's wheel switch does: a value outside
+   * the limits shows as overflow, and one that arrives before the limits
+   * must not be clamped to the default range. */
   bool firstValue = !hasRuntimeValue_;
-  bool changed = firstValue || std::abs(clamped - runtimeValue_) > valueEpsilon();
-  runtimeValue_ = clamped;
+  bool changed = firstValue || std::abs(value - runtimeValue_) > valueEpsilon();
+  runtimeValue_ = value;
   hasRuntimeValue_ = true;
   if (changed) {
     const QRegion region = layoutCacheValid_

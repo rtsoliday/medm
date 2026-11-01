@@ -185,6 +185,7 @@ private slots:
   void disconnectedWidgetsStackInDisplayOrder();
   void disconnectedCompositeChildrenStackInOrder();
   void hiddenRelatedDisplayUnderGraphicComposite();
+  void compositeStaticGraphicsStackInDisplayOrder();
   void compositeChildrenAreNotClipped_data();
   void compositeChildrenAreNotClipped();
   void buttonPixmapsMatchMedm_data();
@@ -262,6 +263,64 @@ void TestObserveOnlyControls::hiddenRelatedDisplayUnderGraphicComposite()
         target->rect().center());
     QCOMPARE(activations, pass + 1);
     window.leaveExecuteMode();
+  }
+}
+
+/* MEDM draws static graphics on the display's background in display order,
+ * those of a composite with a dynamic graphic too, and dynamic graphics over
+ * them. The pink polygon covers the composite's static oval, not the dot. */
+void TestObserveOnlyControls::compositeStaticGraphicsStackInDisplayOrder()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("stack.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write(
+      "file { name=\"stack.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=200 height=120 } clr=1 bclr=4 }\n"
+      "\"color map\" { ncolors=5 colors { ffffff, 000000, b79d5c, ffb0ff,"
+      " bbbbbb, } }\n"
+      "composite { object { x=20 y=10 width=100 height=100 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    oval { object { x=20 y=10 width=100 height=100 }\n"
+      "      \"basic attribute\" { clr=2 } }\n"
+      "    oval { object { x=60 y=20 width=20 height=20 }\n"
+      "      \"basic attribute\" { clr=1 }\n"
+      "      \"dynamic attribute\" { vis=\"if not zero\""
+      " chan=\"stack:dot\" } }\n"
+      "  }\n"
+      "}\n"
+      "polygon { object { x=0 y=24 width=130 height=12 }\n"
+      "  \"basic attribute\" { clr=3 }\n"
+      "  points { (0,24) (130,24) (130,36) (0,36) (0,24) } }\n");
+  file.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  QCOMPARE(window.compositeElements_.size(), 1);
+  QCOMPARE(window.ovalElements_.size(), 2);
+  CompositeElement *composite = window.compositeElements_.first();
+  OvalElement *body = window.ovalElements_.first()->width() == 100
+      ? window.ovalElements_.first() : window.ovalElements_.last();
+  window.show();
+  for (int pass = 0; pass < 2; ++pass) {
+    window.enterExecuteMode();
+    QCoreApplication::processEvents();
+    const QImage image = window.displayArea_->grab().toImage();
+    const QColor pink(0xff, 0xb0, 0xff);
+    QCOMPARE(image.pixelColor(40, 30), pink);
+    QVERIFY(image.pixelColor(70, 30) != pink);
+    QCOMPARE(image.pixelColor(70, 80), QColor(0xb7, 0x9d, 0x5c));
+    window.leaveExecuteMode();
+    QCOMPARE(body->parentWidget(), static_cast<QWidget *>(composite));
   }
 }
 

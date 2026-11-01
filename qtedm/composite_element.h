@@ -14,6 +14,7 @@ class CompositeElement : public QWidget
 {
 public:
   explicit CompositeElement(QWidget *parent = nullptr);
+  ~CompositeElement() override;
 
   void setSelected(bool selected);
   bool isSelected() const;
@@ -61,8 +62,19 @@ public:
    * white while the channel is disconnected. */
   void expandToFitChildren(bool keepCurrentBounds = false);
 
+  /* MEDM draws the static graphics of a composite on the display's
+   * background with the other static graphics, in display order, and its
+   * dynamic graphics over them. These move the given children to a sibling
+   * that keeps the composite's geometry, for the display to stack with its
+   * static graphics, and back. */
+  QWidget *splitStaticChildren(const QList<QWidget *> &children);
+  void mergeStaticChildren();
+  QWidget *staticChildLayer() const;
+
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void moveEvent(QMoveEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -102,4 +114,5 @@ private:
   bool hasExplicitCompositeName_ = false;
   /* The ADL object within the composite after a growing fit, or null. */
   QRect objectRect_;
+  QPointer<QWidget> staticChildLayer_;
 };

@@ -120,6 +120,12 @@ CompositeElement::CompositeElement(QWidget *parent)
   backgroundColor_ = defaultBackgroundColor();
 }
 
+CompositeElement::~CompositeElement()
+{
+  /* The layer owns the moved children, which belong to the composite. */
+  delete staticChildLayer_.data();
+}
+
 void CompositeElement::setSelected(bool selected)
 {
   if (selected_ == selected) {
@@ -459,6 +465,76 @@ void CompositeElement::setVisible(bool visible)
     visible = false;
   }
   QWidget::setVisible(visible);
+  if (staticChildLayer_) {
+    staticChildLayer_->setVisible(visible);
+  }
+}
+
+QWidget *CompositeElement::splitStaticChildren(
+    const QList<QWidget *> &children)
+{
+  if (staticChildLayer_ || children.isEmpty() || !parentWidget()) {
+    return staticChildLayer_.data();
+  }
+  auto *layer = new QWidget(parentWidget());
+  layer->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+  layer->setAttribute(Qt::WA_NoSystemBackground, true);
+  layer->setAutoFillBackground(false);
+  layer->setGeometry(geometry());
+  staticChildLayer_ = layer;
+  /* Keep the children's display order; setParent() hides a widget. */
+  for (const auto &pointer : childWidgets_) {
+    QWidget *child = pointer.data();
+    if (!child || !children.contains(child)) {
+      continue;
+    }
+    const bool hidden = child->isHidden();
+    child->setParent(layer);
+    child->setVisible(!hidden);
+  }
+  layer->setVisible(!isHidden());
+  return layer;
+}
+
+void CompositeElement::mergeStaticChildren()
+{
+  if (!staticChildLayer_) {
+    return;
+  }
+  QWidget *layer = staticChildLayer_.data();
+  staticChildLayer_.clear();
+  for (const auto &pointer : childWidgets_) {
+    QWidget *child = pointer.data();
+    if (!child || child->parentWidget() != layer) {
+      continue;
+    }
+    const bool hidden = child->isHidden();
+    child->setParent(this);
+    child->setVisible(!hidden);
+  }
+  delete layer;
+  refreshChildStackingOrder();
+}
+
+QWidget *CompositeElement::staticChildLayer() const
+{
+  return staticChildLayer_.data();
+}
+
+void CompositeElement::moveEvent(QMoveEvent *event)
+{
+  QWidget::moveEvent(event);
+  if (staticChildLayer_) {
+    staticChildLayer_->setGeometry(geometry());
+  }
+}
+
+void CompositeElement::resizeEvent(QResizeEvent *event)
+{
+  QWidget::resizeEvent(event);
+  if (staticChildLayer_) {
+    staticChildLayer_->setGeometry(geometry());
+  }
 }
 
 void CompositeElement::setRuntimeVisible(bool visible)

@@ -963,6 +963,8 @@ private:
   bool isMedmWidgetBackedWidget(const QWidget *widget) const;
   bool needsGraphicDynamicLayer(const QWidget *widget) const;
   bool isStaticGraphicWidget(const QWidget *widget) const;
+  void splitCompositeStaticChildren();
+  void mergeCompositeStaticChildren();
   QColor colorForIndex(int index) const;
   int displayColorIndex(const QColor &color) const;
   bool readInlineColorMap(const AdlNode &document, QVector<QColor> *colors,

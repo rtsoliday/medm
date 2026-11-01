@@ -28808,6 +28808,70 @@ bool DisplayWindow::isStaticGraphicWidget(const QWidget *widget) const
     || dynamic_cast<const TextElement *>(widget);
 }
 
+namespace {
+
+bool containsRelatedDisplay(const QWidget *widget)
+{
+  if (dynamic_cast<const RelatedDisplayElement *>(widget)) {
+    return true;
+  }
+  if (const auto *composite = dynamic_cast<const CompositeElement *>(widget)) {
+    for (QWidget *child : composite->childWidgets()) {
+      if (child && containsRelatedDisplay(child)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+} // namespace
+
+/* MEDM draws static graphics on the display's background in display order,
+ * those of composites too, and dynamic graphics over all of them. A
+ * composite with dynamic graphics stacks above the static graphics, so its
+ * static graphics move to a layer stacked with them in its place. A hidden
+ * related display, also drawn on the background, must stay clickable in the
+ * composite, so a composite with a related display stays whole. */
+void DisplayWindow::splitCompositeStaticChildren()
+{
+  for (CompositeElement *composite : compositeElements_) {
+    if (!composite || composite->parentWidget() != displayArea_
+        || composite->staticChildLayer()
+        || composite->visibilityMode() != TextVisibilityMode::kStatic
+        || composite->colorMode() != TextColorMode::kStatic
+        || isStaticGraphicWidget(composite)
+        || containsRelatedDisplay(composite)) {
+      continue;
+    }
+    bool hasChannel = false;
+    for (const QString &channel : composite->channels()) {
+      hasChannel = hasChannel || !channel.trimmed().isEmpty();
+    }
+    if (hasChannel) {
+      continue;
+    }
+    QList<QWidget *> staticChildren;
+    for (QWidget *child : composite->childWidgets()) {
+      if (child && isStaticGraphicWidget(child)
+          && !needsGraphicDynamicLayer(child)
+          && !propertyRuleSets_.contains(child)) {
+        staticChildren.append(child);
+      }
+    }
+    composite->splitStaticChildren(staticChildren);
+  }
+}
+
+void DisplayWindow::mergeCompositeStaticChildren()
+{
+  for (CompositeElement *composite : compositeElements_) {
+    if (composite) {
+      composite->mergeStaticChildren();
+    }
+  }
+}
+
 void DisplayWindow::refreshStackingOrder()
 {
   stackingOrderInternallyUpdating_ = true;
@@ -28829,6 +28893,11 @@ void DisplayWindow::refreshStackingOrder()
       continue;
     }
     liveElementStackSet.insert(widget);
+    if (const auto *composite = dynamic_cast<const CompositeElement *>(widget)) {
+      if (QWidget *layer = composite->staticChildLayer()) {
+        staticWidgets.append(layer);
+      }
+    }
     if (executeModeActive_) {
       if (const auto *related =
               dynamic_cast<const RelatedDisplayElement *>(widget)) {
@@ -36420,6 +36489,7 @@ void DisplayWindow::enterExecuteMode()
   }
 
   QTEDM_TIMING_MARK("enterExecuteMode: Adjusting widget layering");
+  splitCompositeStaticChildren();
   refreshStackingOrder();
   if (displayArea_) {
     if (suspendDisplayUpdates) {
@@ -36439,6 +36509,7 @@ void DisplayWindow::leaveExecuteMode()
   }
   QTEDM_TIMING_MARK("leaveExecuteMode: Starting");
   executeModeActive_ = false;
+  mergeCompositeStaticChildren();
   destroyHiddenButtonMarkers();
   if (displayArea_) {
     displayArea_->setExecuteMode(false);

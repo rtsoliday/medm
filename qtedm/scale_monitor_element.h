@@ -5,10 +5,13 @@
 #include <QWidget>
 #include <QRectF>
 
+#include "medm_minimum_size.h"
 #include "monitor_properties.h"
 #include "text_properties.h"
 
-class QFontMetricsF;
+class QFontMetrics;
+class QPainter;
+class QResizeEvent;
 
 class ScaleMonitorElement : public QWidget
 {
@@ -64,25 +67,16 @@ public:
 
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 private:
-  struct Layout;
-
-  Layout calculateLayout(
-      const QRectF &bounds, const QFontMetricsF &metrics) const;
-  void paintScale(QPainter &painter, const QRectF &chartRect) const;
-  void paintAxis(QPainter &painter, const Layout &layout) const;
-  void paintInternalTicks(QPainter &painter, const QRectF &chartRect) const;
-  void paintPointer(QPainter &painter, const Layout &layout) const;
-  void paintLabels(QPainter &painter, const Layout &layout) const;
+  void paintXcIndicator(QPainter &painter, const QFontMetrics &metrics) const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QColor defaultForeground() const;
   QColor defaultBackground() const;
   bool isVertical() const;
-  bool isDirectionInverted() const;
   void paintSelectionOverlay(QPainter &painter) const;
-  double normalizedSampleValue() const;
   double sampleValue() const;
   QString formattedSampleValue() const;
   double effectiveLowLimit() const;
@@ -109,6 +103,7 @@ private:
   bool hasExplicitPrecisionData_ = false;
   QString channel_;
   bool executeMode_ = false;
+  MedmMinimumSize medmMinimumSize_;
   bool runtimeConnected_ = false;
   bool runtimeLimitsValid_ = false;
   bool hasRuntimeValue_ = false;

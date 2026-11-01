@@ -5,52 +5,55 @@
 
 #include <QApplication>
 #include <QFont>
-#include <QFontMetricsF>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPalette>
 #include <QPen>
-#include <QPolygonF>
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
 
 namespace {
 
-constexpr int kTickCount = 10;
 constexpr double kSampleNormalizedValue = 0.65;
-constexpr qreal kAxisSpacing = 4.0;
-constexpr qreal kMinimumChartExtent = 16.0;
-constexpr qreal kMinimumAxisExtent = 14.0;
-constexpr qreal kMinimumVerticalAxisWidth = 6.0;
-constexpr qreal kMinimumVerticalTickLength = 3.0;
-constexpr qreal kMaximumAxisTickLength = 10.0;
-constexpr qreal kOutlineMargin = 4.0;
-constexpr qreal kLabelTextPadding = 2.0;
-constexpr qreal kBevelWidth = 2.0;
-constexpr qreal kLayoutPadding = 3.0;
 constexpr short kInvalidSeverity = 3;
 constexpr short kDisconnectedSeverity = kInvalidSeverity + 1;
+/* Xc Control's default XcNshadeDepth. */
+constexpr int kXcShadeDepth = 2;
+/* INDICATOR_OKAY_SIZE in medmWidget.h: larger indicators get 11 scale
+ * segments instead of 5. */
+constexpr int kIndicatorOkaySize = 80;
+
+/* Rect3d from xc/Control.c: shadow lines inside the rectangle, light at
+ * the top and left when raised and swapped when depressed, then the
+ * interior filled with the control background. */
+void drawXcRect3d(QPainter &painter, int x, int y, int width, int height,
+    bool raised, const QColor &shade1, const QColor &shade2,
+    const QColor &background)
+{
+  if (height > 0) {
+    --height;
+  }
+  if (width > 0) {
+    --width;
+  }
+  for (int j = 0; j < kXcShadeDepth; ++j) {
+    painter.setPen(raised ? shade1 : shade2);
+    painter.drawLine(x + j, y + j, x + j, y + height - j);
+    painter.drawLine(x + j, y + j, x + width - j, y + j);
+    painter.setPen(raised ? shade2 : shade1);
+    painter.drawLine(x + j, y + height - j, x + width - j, y + height - j);
+    painter.drawLine(x + width - j, y + j, x + width - j, y + height - j);
+  }
+  if (width > 2 * kXcShadeDepth && height > 2 * kXcShadeDepth) {
+    painter.fillRect(x + kXcShadeDepth, y + kXcShadeDepth,
+        width - 2 * kXcShadeDepth, height - 2 * kXcShadeDepth, background);
+  }
+}
 
 } // namespace
 
-struct ScaleMonitorElement::Layout
-{
-  QRectF chartRect;
-  QRectF axisRect;
-  QRectF readbackRect;
-  QRectF channelRect;
-  QString lowLabel;
-  QString highLabel;
-  QString readbackText;
-  QString channelText;
-  qreal lineHeight = 0.0;
-  bool showAxis = false;
-  bool showLimits = false;
-  bool showReadback = false;
-  bool showChannel = false;
-  bool vertical = true;
-};
 
 ScaleMonitorElement::ScaleMonitorElement(QWidget *parent)
   : QWidget(parent)
@@ -276,12 +279,21 @@ void ScaleMonitorElement::setExecuteMode(bool execute)
     return;
   }
   executeMode_ = execute;
+  medmMinimumSize_.apply(*this, executeMode_);
   clearRuntimeState();
 }
 
 bool ScaleMonitorElement::isExecuteMode() const
 {
   return executeMode_;
+}
+
+/* MEDM's Xc Indicator is at least 20x20 whatever its label. */
+void ScaleMonitorElement::resizeEvent(QResizeEvent *event)
+{
+  QWidget::resizeEvent(event);
+  medmMinimumSize_.noteResize(*this);
+  medmMinimumSize_.apply(*this, executeMode_);
 }
 
 void ScaleMonitorElement::setRuntimeConnected(bool connected)
@@ -393,37 +405,8 @@ void ScaleMonitorElement::paintEvent(QPaintEvent *event)
 
   painter.fillRect(rect(), effectiveBackground());
 
-  // Paint 2-pixel raised bevel around outer edge (matching MEDM appearance)
-  const QColor bg = effectiveBackground();
-  QRect bevelOuter = rect().adjusted(0, 0, -1, -1);
-  painter.setPen(QPen(bg.lighter(135), 1));
-  painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
-  painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
-  painter.setPen(QPen(bg.darker(145), 1));
-  painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
-  painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
-
-  QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
-  painter.setPen(QPen(bg.lighter(150), 1));
-  painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
-  painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
-  painter.setPen(QPen(bg.darker(170), 1));
-  painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
-  painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
-
   if (executeMode_ && !runtimeConnected_) {
     painter.fillRect(rect(), Qt::white);
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
-
-  const qreal padding = (label_ == MeterLabel::kNoDecorations) 
-      ? 0.0 
-      : (kLayoutPadding + kBevelWidth);
-  const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
-  if (!contentRect.isValid() || contentRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);
     }
@@ -440,7 +423,7 @@ void ScaleMonitorElement::paintEvent(QPaintEvent *event)
     4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34
   };
   static constexpr int kNumFonts = sizeof(kFontSizeTable) / sizeof(kFontSizeTable[0]);
-  
+
   const qreal widgetHeight = rect().height();
   constexpr qreal kIndicatorFontDivisor = 8.0;
   const int preferredPixelHeight = static_cast<int>(
@@ -451,7 +434,7 @@ void ScaleMonitorElement::paintEvent(QPaintEvent *event)
   int lower = 0;
   int i = kNumFonts / 2;
   int count = 0;
-  
+
   while ((i > 0) && (i < kNumFonts) && ((upper - lower) > 2) && (count < kNumFonts / 2)) {
     count++;
     if (kFontSizeTable[i] > preferredPixelHeight) {
@@ -464,680 +447,206 @@ void ScaleMonitorElement::paintEvent(QPaintEvent *event)
       break;  // exact match
     }
   }
-  
+
   if (i < 0) i = 0;
   if (i >= kNumFonts) i = kNumFonts - 1;
-  
+
   const int chosenPixelSize = kFontSizeTable[i];
 
   QFont labelFont = baseFont;
   labelFont.setPixelSize(chosenPixelSize);
   painter.setFont(labelFont);
-  const QFontMetricsF metrics(labelFont);
 
-  const Layout layout = calculateLayout(contentRect, metrics);
-  if (!layout.chartRect.isValid() || layout.chartRect.isEmpty()) {
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
-
-  paintScale(painter, layout.chartRect);
-  if (layout.showAxis) {
-    paintAxis(painter, layout);
-  } else {
-    paintInternalTicks(painter, layout.chartRect);
-  }
-  paintPointer(painter, layout);
-  paintLabels(painter, layout);
+  paintXcIndicator(painter, QFontMetrics(labelFont));
 
   if (selected_) {
     paintSelectionOverlay(painter);
   }
 }
 
-ScaleMonitorElement::Layout ScaleMonitorElement::calculateLayout(
-    const QRectF &bounds, const QFontMetricsF &metrics) const
+/* Draw the Xc Indicator widget that MEDM uses for a scale monitor, following
+ * the Resize, Redisplay and Draw_display methods in xc/Indicator.c.  MEDM
+ * draws direction "down" as "up" and "left" as "right". */
+void ScaleMonitorElement::paintXcIndicator(QPainter &painter,
+    const QFontMetrics &metrics) const
 {
-  Layout layout;
-  layout.vertical = isVertical();
-
-  if (!bounds.isValid() || bounds.isEmpty()) {
-    return layout;
-  }
-
-  layout.lineHeight = std::max<qreal>(metrics.height(), 8.0);
-  const qreal spacing = std::max<qreal>(layout.lineHeight * 0.25, kAxisSpacing);
-  
-  layout.showAxis = (label_ == MeterLabel::kOutline
-      || label_ == MeterLabel::kLimits || label_ == MeterLabel::kChannel);
-  layout.showLimits = (label_ == MeterLabel::kLimits
-      || label_ == MeterLabel::kChannel
-      || label_ == MeterLabel::kOutline);
-  layout.showReadback = (label_ == MeterLabel::kLimits
-      || label_ == MeterLabel::kChannel);
-  if (layout.showLimits) {
-    layout.lowLabel = axisLabelText(effectiveLowLimit());
-    layout.highLabel = axisLabelText(effectiveHighLimit());
-  }
-  if (layout.showReadback) {
-    layout.readbackText = formattedSampleValue();
-  }
-  if (label_ == MeterLabel::kChannel) {
-    layout.channelText = channel_.trimmed();
-    layout.showChannel = !layout.channelText.isEmpty();
-  }
-
-  qreal left = bounds.left();
-  const qreal right = bounds.right();
-  qreal top = bounds.top();
-  qreal bottom = bounds.bottom();
-
-  if (layout.vertical) {
-    if (layout.showChannel) {
-      layout.channelRect = QRectF(left, top, bounds.width(), layout.lineHeight);
-      top += layout.lineHeight + spacing;
-    }
-
-    // When showing limits (Outline or Limits mode), reserve space for upper limit text
-    // The text is centered at the top position, so it extends lineHeight*0.5 above
-    if (layout.showLimits && !layout.showChannel) {
-      top += layout.lineHeight * 0.25;
-    }
-
-    if (layout.showReadback) {
-      const qreal readbackTop = bottom - layout.lineHeight;
-      if (readbackTop > top) {
-        layout.readbackRect = QRectF(left, readbackTop, bounds.width(),
-            layout.lineHeight);
-        // Reserve space for readback plus half line height for lower limit text to sit above
-        bottom = readbackTop - spacing - (layout.lineHeight * 0.25);
-      } else {
-        layout.showReadback = false;
-        layout.readbackRect = QRectF();
-      }
-    } else if (layout.showLimits) {
-      // When showing limits without readback (Outline mode), reserve space for lower limit text
-      // The text is centered at the bottom position, so it extends lineHeight*0.5 below
-      bottom -= layout.lineHeight * 0.25;
-    }
-
-    if (bottom <= top) {
-      return layout;
-    }
-
-    const qreal chartHeight = bottom - top;
-    if (chartHeight < 4.0) {
-      layout.chartRect = QRectF();
-      layout.axisRect = QRectF();
-      layout.showAxis = false;
-      return layout;
-    }
-
-    if (layout.showAxis) {
-      qreal axisWidth = std::max<qreal>(kMinimumAxisExtent, layout.lineHeight);
-      if (layout.showLimits) {
-        axisWidth = std::max(axisWidth,
-            metrics.horizontalAdvance(layout.lowLabel) + 6.0);
-        axisWidth = std::max(axisWidth,
-            metrics.horizontalAdvance(layout.highLabel) + 6.0);
-      }
-      /* Keep axis layout active while narrow by shrinking axis width first.
-       * This reduces tick size down to a 3 px minimum before switching
-       * to the internal-tick layout. */
-      const qreal totalWidth = right - left;
-      qreal minimumAxisWidthForLayout = kMinimumVerticalAxisWidth;
-      if (layout.showLimits) {
-        QFont minimumLimitFont = qApp ? qApp->font() : QFont();
-        minimumLimitFont.setPixelSize(4);
-        const QFontMetricsF minimumLimitMetrics(minimumLimitFont);
-        const qreal minimumLabelWidth = std::max(
-            minimumLimitMetrics.horizontalAdvance(layout.lowLabel),
-            minimumLimitMetrics.horizontalAdvance(layout.highLabel))
-            + 2.0 * kLabelTextPadding;
-        minimumAxisWidthForLayout = std::max(minimumAxisWidthForLayout,
-            kMinimumVerticalTickLength + 2.0 + minimumLabelWidth);
-      }
-      const qreal maxAxisWidth = totalWidth - spacing - kMinimumChartExtent;
-      if (maxAxisWidth < minimumAxisWidthForLayout) {
-        layout.showAxis = false;
-        layout.axisRect = QRectF();
-        layout.chartRect = QRectF(left, top, right - left, chartHeight);
-      } else {
-        axisWidth = std::min(axisWidth, maxAxisWidth);
-        axisWidth = std::max(axisWidth, minimumAxisWidthForLayout);
-        const qreal chartWidth = totalWidth - axisWidth - spacing;
-        layout.axisRect = QRectF(left, top, axisWidth, chartHeight);
-        const qreal chartLeft = layout.axisRect.right() + spacing;
-        layout.chartRect = QRectF(chartLeft, top, chartWidth, chartHeight);
-      }
-    } else {
-      layout.chartRect = QRectF(left, top, right - left, chartHeight);
-    }
-  } else {
-    if (layout.showChannel) {
-      layout.channelRect = QRectF(left, top, bounds.width(), layout.lineHeight);
-      top += layout.lineHeight + spacing;
-    }
-
-    if (layout.showReadback) {
-      const qreal readbackTop = bottom - layout.lineHeight;
-      if (readbackTop > top) {
-        layout.readbackRect = QRectF(left, readbackTop, bounds.width(),
-            layout.lineHeight);
-        bottom = readbackTop - spacing;
-      } else {
-        layout.showReadback = false;
-        layout.readbackRect = QRectF();
-      }
-    }
-
-    if (bottom <= top) {
-      return layout;
-    }
-
-    qreal availableHeight = bottom - top;
-    if (layout.showAxis) {
-      qreal axisHeight = std::max<qreal>(kMinimumAxisExtent,
-          layout.lineHeight + 4.0);
-      const qreal minimumTotal = kMinimumAxisExtent + spacing
-          + kMinimumChartExtent;
-      if (availableHeight < minimumTotal) {
-        const qreal reducedSpacing = std::min<qreal>(spacing, 2.0);
-        const qreal reducedAxisHeight = std::max<qreal>(8.0, axisHeight * 0.6);
-        const qreal reducedChartHeight = std::max<qreal>(8.0,
-            availableHeight - reducedAxisHeight - reducedSpacing);
-        if (reducedAxisHeight + reducedSpacing + reducedChartHeight
-            <= availableHeight) {
-          layout.axisRect = QRectF(left, top, bounds.width(),
-              reducedAxisHeight);
-          top += reducedAxisHeight + reducedSpacing;
-          availableHeight = bottom - top;
-        } else {
-          layout.showAxis = false;
-          layout.axisRect = QRectF();
-        }
-      } else {
-        layout.axisRect = QRectF(left, top, bounds.width(), axisHeight);
-        top += axisHeight + spacing;
-        availableHeight = bottom - top;
-      }
-    }
-
-    if (availableHeight < 4.0) {
-      layout.chartRect = QRectF();
-      return layout;
-    }
-
-    layout.chartRect = QRectF(left, top, bounds.width(), availableHeight);
-  }
-
-  return layout;
-}
-
-void ScaleMonitorElement::paintScale(
-    QPainter &painter, const QRectF &chartRect) const
-{
-  if (!chartRect.isValid() || chartRect.isEmpty()) {
-    return;
-  }
-
-  painter.save();
-  painter.setPen(Qt::NoPen);
-  
-  // Fill the chart area with a slightly lighter background
-  QColor fillColor = effectiveBackground().lighter(108);
-  painter.setBrush(fillColor);
-  painter.drawRect(chartRect);
-
-  if (label_ != MeterLabel::kNoDecorations) {
-    // Paint 2-pixel sunken bevel around chart using absolute colors for visibility on dark backgrounds
-    QRectF bevelOuter = chartRect.adjusted(0.5, 0.5, -0.5, -0.5);
-    
-    // Outer bevel - dark on top/left for sunken effect
-    painter.setPen(QPen(QColor(0, 0, 0, 180), 1));  // Semi-transparent black
-    painter.drawLine(bevelOuter.topLeft(), bevelOuter.topRight());
-    painter.drawLine(bevelOuter.topLeft(), bevelOuter.bottomLeft());
-    painter.setPen(QPen(QColor(255, 255, 255, 120), 1));  // Semi-transparent white
-    painter.drawLine(bevelOuter.bottomLeft(), bevelOuter.bottomRight());
-    painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
-    
-    // Inner bevel - slightly less contrast
-    QRectF bevelInner = bevelOuter.adjusted(1.0, 1.0, -1.0, -1.0);
-    painter.setPen(QPen(QColor(0, 0, 0, 120), 1));  // Lighter black
-    painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
-    painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
-    painter.setPen(QPen(QColor(255, 255, 255, 80), 1));  // More transparent white
-    painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
-    painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
-  }
-  painter.restore();
-}
-
-void ScaleMonitorElement::paintAxis(QPainter &painter,
-    const Layout &layout) const
-{
-  if (!layout.showAxis || !layout.axisRect.isValid()
-      || layout.axisRect.isEmpty()) {
-    return;
-  }
-
-  painter.save();
-  const QColor axisColor(Qt::black);
-  QPen axisPen(axisColor);
-  axisPen.setWidth(1);
-  painter.setPen(axisPen);
-  painter.setBrush(Qt::NoBrush);
-
-  if (layout.vertical) {
-    const qreal axisX = layout.axisRect.right();
-    const qreal axisHeight = layout.axisRect.height();
-    qreal tickLength = std::min<qreal>(layout.axisRect.width(),
-        kMaximumAxisTickLength);
-    if (layout.showLimits) {
-      QFont minimumLimitFont = qApp ? qApp->font() : QFont();
-      minimumLimitFont.setPixelSize(4);
-      const QFontMetricsF minimumLimitMetrics(minimumLimitFont);
-      const qreal minimumLabelWidth = std::max(
-          minimumLimitMetrics.horizontalAdvance(layout.lowLabel),
-          minimumLimitMetrics.horizontalAdvance(layout.highLabel))
-          + 2.0 * kLabelTextPadding;
-      const qreal maxTickForLabels = layout.axisRect.width() - 2.0
-          - minimumLabelWidth;
-      tickLength = std::min(tickLength, maxTickForLabels);
-      tickLength = std::clamp(tickLength, kMinimumVerticalTickLength,
-          kMaximumAxisTickLength);
-    } else if (layout.axisRect.width() < (kMaximumAxisTickLength
-                   + kMinimumVerticalTickLength)) {
-      tickLength = std::clamp(layout.axisRect.width() - kMinimumVerticalTickLength,
-          kMinimumVerticalTickLength, kMaximumAxisTickLength);
-    }
-
-    painter.drawLine(QPointF(axisX, layout.axisRect.top()),
-        QPointF(axisX, layout.axisRect.bottom()));
-
-    auto positionForNormalized = [&](double normalized) {
-      if (direction_ == BarDirection::kUp) {
-        return layout.axisRect.bottom() - normalized * axisHeight;
-      }
-      return layout.axisRect.top() + normalized * axisHeight;
-    };
-
-    for (int i = 0; i <= kTickCount; ++i) {
-      const double normalized = static_cast<double>(i) / kTickCount;
-      const qreal y = positionForNormalized(normalized);
-      painter.drawLine(QPointF(axisX, y), QPointF(axisX - tickLength, y));
-    }
-
-    if (layout.showLimits) {
-      QFont limitFont = painter.font();
-      QFontMetricsF metrics(limitFont);
-      const qreal textRight = axisX - tickLength - 2.0;
-      const qreal maxWidth = std::max<qreal>(
-          textRight - layout.axisRect.left(), 0.0);
-      
-      // Check if labels need to be resized to fit
-      if (!layout.lowLabel.isEmpty() && !layout.highLabel.isEmpty()) {
-        const qreal yLow = positionForNormalized(0.0);
-        const qreal yHigh = positionForNormalized(1.0);
-        const qreal lowWidth = metrics.horizontalAdvance(layout.lowLabel);
-        const qreal highWidth = metrics.horizontalAdvance(layout.highLabel);
-        const qreal maxLabelWidth = std::max(lowWidth, highWidth);
-        
-        // Check overlap and boundary constraints
-        const qreal verticalGap = std::abs(yHigh - yLow);
-        const qreal minVerticalSpace = layout.lineHeight;
-        const bool wouldOverlap = verticalGap < minVerticalSpace;
-        const bool exceedsBounds = maxLabelWidth > maxWidth;
-        
-        if (wouldOverlap || exceedsBounds) {
-          // Reduce font size to fit
-          qreal scaleFactor = 1.0;
-          if (exceedsBounds) {
-            scaleFactor = std::min(scaleFactor, maxWidth / maxLabelWidth);
-          }
-          if (wouldOverlap) {
-            scaleFactor = std::min(scaleFactor, verticalGap / minVerticalSpace);
-          }
-          const int newSize = std::max(4, static_cast<int>(
-              limitFont.pixelSize() * scaleFactor * 0.95));
-          limitFont.setPixelSize(newSize);
-          painter.setFont(limitFont);
-          metrics = QFontMetricsF(limitFont);
-        }
-      }
-      
-      auto labelRectForWidth = [&](const QString &label, qreal centerY) {
-        const qreal textWidth = metrics.horizontalAdvance(label);
-        const qreal paddedWidth = std::clamp(
-            textWidth + 2.0 * kLabelTextPadding,
-            std::max(metrics.averageCharWidth(), 1.0),
-            std::max(maxWidth, metrics.averageCharWidth()));
-        const qreal rectWidth = std::min(paddedWidth, maxWidth);
-        const qreal left = textRight - rectWidth;
-        return QRectF(left, centerY - metrics.height() * 0.5,
-            rectWidth, metrics.height());
-      };
-
-      if (!layout.lowLabel.isEmpty()) {
-        const qreal yLow = positionForNormalized(0.0);
-        const QRectF lowRect = labelRectForWidth(layout.lowLabel, yLow);
-        painter.drawText(lowRect, Qt::AlignRight | Qt::AlignVCenter,
-            layout.lowLabel);
-      }
-
-      if (!layout.highLabel.isEmpty()) {
-        const qreal yHigh = positionForNormalized(1.0);
-        const QRectF highRect = labelRectForWidth(layout.highLabel, yHigh);
-        painter.drawText(highRect, Qt::AlignRight | Qt::AlignVCenter,
-            layout.highLabel);
-      }
-      
-      // Restore original font
-      painter.setFont(painter.font());
-    }
-  } else {
-    const qreal axisY = layout.axisRect.bottom();
-    const qreal axisWidth = layout.axisRect.width();
-    const qreal tickLength = (height() < 50) ? 2.0 
-        : std::min<qreal>(layout.axisRect.height(), 10.0);
-
-    painter.drawLine(QPointF(layout.axisRect.left(), axisY),
-        QPointF(layout.axisRect.right(), axisY));
-
-    auto positionForNormalized = [&](double normalized) {
-      if (direction_ == BarDirection::kRight) {
-        return layout.axisRect.left() + normalized * axisWidth;
-      }
-      return layout.axisRect.right() - normalized * axisWidth;
-    };
-
-    for (int i = 0; i <= kTickCount; ++i) {
-      const double normalized = static_cast<double>(i) / kTickCount;
-      const qreal x = positionForNormalized(normalized);
-      painter.drawLine(QPointF(x, axisY), QPointF(x, axisY - tickLength));
-    }
-
-    if (layout.showLimits) {
-      QFont limitFont = painter.font();
-      QFontMetricsF metrics(limitFont);
-      const qreal textHeight = std::max<qreal>(
-          layout.axisRect.height() - tickLength - 2.0, metrics.height());
-      const qreal textTop = axisY - tickLength - textHeight;
-      
-      // Check if labels need to be resized to fit
-      if (!layout.lowLabel.isEmpty() && !layout.highLabel.isEmpty()) {
-        const qreal xLow = positionForNormalized(0.0);
-        const qreal xHigh = positionForNormalized(1.0);
-        const qreal lowWidth = metrics.horizontalAdvance(layout.lowLabel) + 6.0;
-        const qreal highWidth = metrics.horizontalAdvance(layout.highLabel) + 6.0;
-        
-        // Check overlap
-        qreal lowLeft, lowRight, highLeft, highRight;
-        if (direction_ == BarDirection::kRight) {
-          lowLeft = xLow;
-          lowRight = lowLeft + lowWidth;
-          highLeft = xHigh - highWidth;
-          highRight = xHigh;
-        } else {
-          lowLeft = xLow - lowWidth;
-          lowRight = xLow;
-          highLeft = xHigh;
-          highRight = highLeft + highWidth;
-        }
-        
-        const bool wouldOverlap = (lowRight > highLeft);
-        const bool lowExceedsBounds = lowLeft < layout.axisRect.left() 
-            || lowRight > layout.axisRect.right();
-        const bool highExceedsBounds = highLeft < layout.axisRect.left() 
-            || highRight > layout.axisRect.right();
-        
-        if (wouldOverlap || lowExceedsBounds || highExceedsBounds) {
-          // Calculate scale factor needed
-          qreal scaleFactor = 1.0;
-          
-          if (wouldOverlap) {
-            const qreal availableWidth = std::abs(xHigh - xLow);
-            const qreal neededWidth = lowWidth + highWidth;
-            scaleFactor = std::min(scaleFactor, availableWidth / neededWidth);
-          }
-          
-          if (lowExceedsBounds || highExceedsBounds) {
-            const qreal maxLabelWidth = std::max(lowWidth, highWidth);
-            const qreal availWidth = layout.axisRect.width() * 0.45;
-            scaleFactor = std::min(scaleFactor, availWidth / maxLabelWidth);
-          }
-          
-          const int newSize = std::max(4, static_cast<int>(
-              limitFont.pixelSize() * scaleFactor * 0.95));
-          limitFont.setPixelSize(newSize);
-          painter.setFont(limitFont);
-          metrics = QFontMetricsF(limitFont);
-        }
-      }
-
-      if (!layout.lowLabel.isEmpty()) {
-        const qreal width = metrics.horizontalAdvance(layout.lowLabel) + 6.0;
-        QRectF lowRect((direction_ == BarDirection::kRight)
-                ? layout.axisRect.left()
-                : layout.axisRect.right() - width,
-            textTop, width, textHeight);
-        Qt::Alignment align = (direction_ == BarDirection::kRight)
-            ? Qt::AlignLeft : Qt::AlignRight;
-        painter.drawText(lowRect, align | Qt::AlignBottom, layout.lowLabel);
-      }
-
-      if (!layout.highLabel.isEmpty()) {
-        const qreal width = metrics.horizontalAdvance(layout.highLabel) + 6.0;
-        QRectF highRect((direction_ == BarDirection::kRight)
-                ? layout.axisRect.right() - width
-                : layout.axisRect.left(),
-            textTop, width, textHeight);
-        Qt::Alignment align = (direction_ == BarDirection::kRight)
-            ? Qt::AlignRight : Qt::AlignLeft;
-        painter.drawText(highRect, align | Qt::AlignBottom, layout.highLabel);
-      }
-    }
-  }
-
-  painter.restore();
-}
-
-void ScaleMonitorElement::paintInternalTicks(
-    QPainter &painter, const QRectF &chartRect) const
-{
-  if (!chartRect.isValid() || chartRect.isEmpty()) {
-    return;
-  }
-
-  const QColor tickColor(Qt::black);
-  QPen tickPen(tickColor);
-  tickPen.setWidth(1);
-  painter.setPen(tickPen);
-
+  const int width = this->width();
+  const int height = this->height();
+  const int d = kXcShadeDepth;
   const bool vertical = isVertical();
-  qreal tickLength;
-  if (!vertical && height() < 50) {
-    tickLength = 2.0;
+  const bool decorated = label_ != MeterLabel::kNone
+      && label_ != MeterLabel::kNoDecorations;
+  const int segments = !decorated ? 0
+      : ((vertical ? width : height) > kIndicatorOkaySize ? 11 : 5);
+  const bool valueVisible = label_ == MeterLabel::kLimits
+      || label_ == MeterLabel::kChannel;
+  const QString label = label_ == MeterLabel::kChannel
+      ? channel_.trimmed() : QString();
+  const int ascent = metrics.ascent();
+  const int descent = metrics.descent();
+  /* For numbers Xc ignores the descent to save space. */
+  const int fontHeight = ascent;
+
+  const QRect face(d, d, width - 2 * d, height - 2 * d);
+  const QString upperText = formatValue(effectiveHighLimit());
+  const QString lowerText = formatValue(effectiveLowLimit());
+  const int maxValWidth = metrics.horizontalAdvance(upperText);
+  const int minValWidth = metrics.horizontalAdvance(lowerText);
+  int maxWidth = std::max(minValWidth, maxValWidth) + 2 * d;
+  if (segments == 0) {
+    maxWidth = face.width() - 2 * d;
+  }
+
+  QRect valueBox(0, height - 2 * d, 0, 0);
+  if (valueVisible) {
+    valueBox = QRect(width / 2 - maxWidth / 2,
+        height - fontHeight - (vertical ? 3 * d : 2 * d + 2),
+        maxWidth, fontHeight);
+  }
+
+  QPoint labelPos(face.x(), face.y());
+  if (!label.isEmpty()) {
+    labelPos = QPoint(width / 2 - metrics.horizontalAdvance(label) / 2,
+        face.y() + ascent + 1);
+  }
+
+  int barX = 0;
+  int barY = 0;
+  int barWidth = 0;
+  int barHeight = 0;
+  if (vertical) {
+    barX = face.x()
+        + (segments > 0 ? maxWidth + face.width() / 32 : 0) + 2 * d;
+    barY = labelPos.y() + descent + 2 * d;
+    barWidth = std::max(0, face.width() - barX - d);
+    barHeight = std::max(0, valueBox.y() - barY
+        - (valueVisible ? fontHeight - descent : 2 * d));
   } else {
-    const qreal majorLength = vertical ? chartRect.width() * 0.45
-                                       : chartRect.height() * 0.45;
-    tickLength = std::min<qreal>(majorLength, 10.0);
+    barX = face.x() + face.width() / 16 + d;
+    barY = labelPos.y()
+        + (segments > 0 ? fontHeight / 2 + face.height() / 8 + 1 : 0)
+        + 2 * d;
+    barWidth = std::max(0, (9 * face.width()) / 10 - 2 * d);
+    barHeight = std::max(1, valueBox.y() - barY
+        - (valueVisible ? fontHeight : 0) - d);
   }
 
-  for (int i = 0; i <= kTickCount; ++i) {
-    const double ratio = static_cast<double>(i) / kTickCount;
-    if (vertical) {
-      const qreal y = chartRect.bottom() - ratio * chartRect.height();
-      painter.drawLine(QPointF(chartRect.left(), y),
-          QPointF(chartRect.left() + tickLength, y));
-      painter.drawLine(QPointF(chartRect.right(), y),
-          QPointF(chartRect.right() - tickLength, y));
-    } else {
-      const qreal x = chartRect.left() + ratio * chartRect.width();
-      painter.drawLine(QPointF(x, chartRect.top()),
-          QPointF(x, chartRect.top() + tickLength));
-      painter.drawLine(QPointF(x, chartRect.bottom()),
-          QPointF(x, chartRect.bottom() - tickLength));
+  int x1 = 0;
+  int y1 = 0;
+  int x2 = 0;
+  int y2 = 0;
+  if (vertical) {
+    x1 = barX - d - face.width() / 32;
+    y1 = barY;
+    x2 = x1;
+    y2 = barY + barHeight;
+  } else {
+    x1 = barX;
+    y1 = barY - d - face.height() / 32;
+    x2 = barX + barWidth;
+    y2 = y1;
+  }
+  const int segLength = vertical ? face.width() / 16 : face.height() / 16;
+
+  QColor shade1;
+  QColor shade2;
+  const QColor bg = effectiveBackground();
+  MedmColors::computeShadowColors(bg, shade1, shade2);
+
+  drawXcRect3d(painter, 0, 0, width, height, true, shade1, shade2, bg);
+
+  /* Xc draws the label, scale and bar border clipped to the face. */
+  painter.save();
+  painter.setClipRect(face);
+  painter.setPen(Qt::black);
+  if (!label.isEmpty()) {
+    painter.drawText(labelPos, label);
+  }
+  if (segments > 0) {
+    painter.drawLine(x1, y1, x2, y2);
+    if (!vertical) {
+      painter.drawLine(x1, y1 - segLength, x1, y1);
+      painter.drawLine(x2, y2 - segLength, x2, y2);
     }
-  }
-}
+    const int spacing = (vertical ? barHeight : barWidth) / (segments + 1);
+    for (int j = 0; j < segments; ++j) {
+      if (vertical) {
+        const int y = y1 + (j + 1) * spacing;
+        painter.drawLine(x1 - segLength, y, x1, y);
+      } else {
+        const int x = x1 + (j + 1) * spacing;
+        painter.drawLine(x, y1 - segLength, x, y1);
+      }
+    }
 
-void ScaleMonitorElement::paintPointer(QPainter &painter,
-    const Layout &layout) const
-{
-  if (!layout.chartRect.isValid() || layout.chartRect.isEmpty()) {
-    return;
+    QPoint maxPos;
+    QPoint minPos;
+    if (vertical) {
+      const int fontCenter = (ascent + descent) / 2 - descent;
+      maxPos = QPoint(std::max(d, x2 - maxValWidth), y1 + fontCenter);
+      minPos = QPoint(std::max(d, x2 - minValWidth), y2 + fontCenter);
+    } else {
+      const int textY = y1 - segLength - 1;
+      maxPos = QPoint(std::min(face.width() + d - maxValWidth,
+                          x2 - maxValWidth / 2),
+          textY);
+      minPos = QPoint(std::max(d, x1 - minValWidth / 2), textY);
+    }
+    painter.drawText(maxPos, upperText);
+    painter.drawText(minPos, lowerText);
   }
+  drawXcRect3d(painter, barX - d, barY - d, barWidth + 2 * d,
+      barHeight + 2 * d, false, shade1, shade2, bg);
+  painter.restore();
 
-  if (executeMode_ && !runtimeConnected_) {
-    return;
+  /* Draw_display: the bar background, then the diamond at the value. */
+  const QRect bar(barX, barY, barWidth, barHeight);
+  painter.fillRect(bar, bg);
+  const double low = effectiveLowLimit();
+  const double span = effectiveHighLimit() - low;
+  double dim = 0.0;
+  if (span != 0.0 && std::isfinite(span)) {
+    const double percent = std::clamp(
+        (sampleValue() - low) * 100.0 / span, 0.0, 100.0);
+    dim = (vertical ? barHeight : barWidth) * (percent / 100.0);
   }
-
-  const bool vertical = layout.vertical;
-  double ratio = normalizedSampleValue();
-  if (isDirectionInverted()) {
-    ratio = 1.0 - ratio;
+  const int position = std::max(1, static_cast<int>(dim));
+  const int indicatorSize = std::max(5, (vertical ? barHeight : barWidth) / 10);
+  QPoint points[4];
+  if (vertical) {
+    points[0] = QPoint(barX, barY + barHeight - position);
+    points[1] = QPoint(points[0].x() + barWidth / 2,
+        points[0].y() - indicatorSize / 2);
+  } else {
+    points[0] = QPoint(barX + position - indicatorSize / 2 - 1,
+        barY + barHeight / 2);
+    points[1] = QPoint(points[0].x() + indicatorSize / 2,
+        points[0].y() - barHeight / 2);
   }
-  ratio = std::clamp(ratio, 0.0, 1.0);
-
+  points[2] = QPoint(points[1].x() + (points[1].x() - points[0].x()),
+      points[0].y());
+  points[3] = QPoint(points[1].x(),
+      points[0].y() + (points[0].y() - points[1].y()));
+  painter.save();
+  painter.setClipRect(bar);
   painter.setPen(Qt::NoPen);
   painter.setBrush(effectiveForeground());
-
-  // Inset for bevel (2 pixels when decorations are on)
-  const qreal bevelInset = (label_ != MeterLabel::kNoDecorations) ? 2.0 : 0.0;
-  
-  // Calculate indicator_size (diamond size) based on chart dimensions
-  const qreal indicator_size = vertical
-    ? std::min<qreal>(layout.chartRect.width() * 0.8, 16.0)
-    : std::min<qreal>(layout.chartRect.height() * 0.8, 16.0);
-
-  // Set clipping to the chart rect inset by bevel to prevent diamond from extending into bevel
-  painter.save();
-  const QRectF clipRect = layout.chartRect.adjusted(bevelInset, bevelInset, 
-      -bevelInset, -bevelInset);
-  painter.setClipRect(clipRect);
-
-  if (vertical) {
-    const qreal y = layout.chartRect.bottom() - ratio * layout.chartRect.height();
-    
-    // Draw horizontal line across chart (inset from bevel edges)
-    QPen linePen(effectiveForeground());
-    linePen.setWidth(2);
-    painter.setPen(linePen);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawLine(QPointF(layout.chartRect.left() + bevelInset, y),
-        QPointF(layout.chartRect.right() - bevelInset, y));
-
-    // Draw filled diamond marker (like MEDM Indicator widget)
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(effectiveForeground());
-    
-    // Diamond with 4 points: left, top, right, bottom (inset from bevel)
-    const qreal chartCenterX = layout.chartRect.left() + layout.chartRect.width() / 2.0;
-    QPolygonF diamond;
-    diamond << QPointF(layout.chartRect.left() + bevelInset, y)  // left corner at value
-            << QPointF(chartCenterX, y - indicator_size / 2.0)    // top corner
-            << QPointF(layout.chartRect.right() - bevelInset, y)  // right corner
-            << QPointF(chartCenterX, y + indicator_size / 2.0);   // bottom corner
-    painter.drawPolygon(diamond);
-  } else {
-    const qreal x = layout.chartRect.left() + ratio * layout.chartRect.width();
-    
-    // Draw vertical line across chart (inset from bevel edges)
-    QPen linePen(effectiveForeground());
-    linePen.setWidth(2);
-    painter.setPen(linePen);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawLine(QPointF(x, layout.chartRect.top() + bevelInset),
-        QPointF(x, layout.chartRect.bottom() - bevelInset));
-
-    // Draw filled diamond marker (like MEDM Indicator widget)
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(effectiveForeground());
-    
-    // Diamond with 4 points: top, right, bottom, left (inset from bevel)
-    const qreal chartCenterY = layout.chartRect.top() + layout.chartRect.height() / 2.0;
-    QPolygonF diamond;
-    diamond << QPointF(x - indicator_size / 2.0, chartCenterY)           // left corner
-            << QPointF(x, layout.chartRect.top() + bevelInset)           // top corner
-            << QPointF(x + indicator_size / 2.0, chartCenterY)           // right corner
-            << QPointF(x, layout.chartRect.bottom() - bevelInset);       // bottom corner
-    painter.drawPolygon(diamond);
-  }
-  
+  painter.drawPolygon(points, 4);
   painter.restore();
-}
 
-void ScaleMonitorElement::paintLabels(
-    QPainter &painter, const Layout &layout) const
-{
-  if (label_ == MeterLabel::kNone || label_ == MeterLabel::kNoDecorations) {
-    return;
-  }
-
-  painter.save();
-  const QColor fg(Qt::black);
-  painter.setPen(fg);
-  painter.setBrush(Qt::NoBrush);
-
-  if (label_ == MeterLabel::kOutline && layout.chartRect.isValid()
-      && !layout.chartRect.isEmpty()) {
-    QPen outlinePen(fg.darker(160));
-    outlinePen.setStyle(Qt::DotLine);
-    outlinePen.setWidth(1);
-    painter.setPen(outlinePen);
-    painter.drawRect(layout.chartRect.adjusted(-kOutlineMargin, -kOutlineMargin,
-        kOutlineMargin, kOutlineMargin));
+  if (valueVisible) {
+    painter.fillRect(valueBox, Qt::white);
+    const QString text = formattedSampleValue();
+    painter.save();
+    painter.setClipRect(valueBox);
+    painter.setPen(Qt::black);
+    painter.drawText(QPoint(valueBox.x() + valueBox.width() / 2
+            - metrics.horizontalAdvance(text) / 2,
+        valueBox.y() + (valueBox.height() - (ascent + descent)) / 2
+            + ascent + 1),
+        text);
     painter.restore();
-    return;
   }
-
-  if (layout.showChannel && layout.channelRect.isValid()
-      && !layout.channelRect.isEmpty()) {
-    const QFont originalFont = painter.font();
-    QFont channelFont = originalFont;
-    QFontMetricsF metrics(channelFont);
-    const qreal textWidth = metrics.horizontalAdvance(layout.channelText);
-    const qreal availableWidth = layout.channelRect.width();
-    
-    // Check if text needs to be resized to fit
-    if (textWidth > availableWidth) {
-      const qreal scaleFactor = availableWidth / textWidth;
-      const int newSize = std::max(4, static_cast<int>(
-          channelFont.pixelSize() * scaleFactor * 0.95));
-      channelFont.setPixelSize(newSize);
-      painter.setFont(channelFont);
-    }
-    
-    painter.drawText(layout.channelRect, Qt::AlignCenter | Qt::AlignVCenter,
-        layout.channelText);
-    
-    // Restore original font
-    painter.setFont(originalFont);
-  }
-
-  if (layout.showReadback && layout.readbackRect.isValid()
-      && !layout.readbackRect.isEmpty()) {
-    QFontMetricsF fm(painter.font());
-    const qreal textWidth = fm.boundingRect(layout.readbackText).width();
-    const qreal padding = 4.0;  // 2 pixels on each side
-    const qreal bgWidth = textWidth + padding;
-    
-    // Center the white background around the text
-    const qreal centerX = layout.readbackRect.center().x();
-    const qreal bgLeft = centerX - bgWidth * 0.5;
-    QRectF bgRect(bgLeft, layout.readbackRect.top(), 
-        bgWidth, layout.readbackRect.height());
-    
-    // Paint white background for readback text
-    painter.fillRect(bgRect, Qt::white);
-    painter.drawText(layout.readbackRect, Qt::AlignCenter | Qt::AlignVCenter,
-        layout.readbackText);
-  }
-
-  painter.restore();
 }
 
 double ScaleMonitorElement::sampleValue() const
@@ -1187,10 +696,6 @@ bool ScaleMonitorElement::isVertical() const
   return direction_ == BarDirection::kUp || direction_ == BarDirection::kDown;
 }
 
-bool ScaleMonitorElement::isDirectionInverted() const
-{
-  return direction_ == BarDirection::kDown || direction_ == BarDirection::kLeft;
-}
 
 void ScaleMonitorElement::paintSelectionOverlay(QPainter &painter) const
 {
@@ -1202,21 +707,6 @@ void ScaleMonitorElement::paintSelectionOverlay(QPainter &painter) const
   painter.drawRect(rect().adjusted(0, 0, -1, -1));
 }
 
-double ScaleMonitorElement::normalizedSampleValue() const
-{
-  const double low = effectiveLowLimit();
-  const double high = effectiveHighLimit();
-  const double value = sampleValue();
-  if (!std::isfinite(low) || !std::isfinite(high) || !std::isfinite(value)) {
-    return std::clamp(kSampleNormalizedValue, 0.0, 1.0);
-  }
-  const double span = high - low;
-  if (std::abs(span) < 1e-12) {
-    return 0.0;
-  }
-  double normalized = (value - low) / span;
-  return std::clamp(normalized, 0.0, 1.0);
-}
 
 QColor ScaleMonitorElement::defaultForeground() const
 {

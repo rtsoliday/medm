@@ -415,11 +415,10 @@ void TestArchivesSnapshots::archiveHistoryRendersConnectedLine()
   chart.setArchivePlot(true);
   chart.setExecuteMode(true);
   chart.setChannel(0, QStringLiteral("TEST:PV"));
-  /* Range the pen over the channel limits set below, as a display does. */
-  PvLimits limits = chart.penLimits(0);
-  limits.lowSource = PvLimitSource::kChannel;
-  limits.highSource = PvLimitSource::kChannel;
-  chart.setPenLimits(0, limits);
+  /* As in MEDM, a pen ranges over the channel limits set below. */
+  const PvLimits limits = chart.penLimits(0);
+  QCOMPARE(limits.lowSource, PvLimitSource::kChannel);
+  QCOMPARE(limits.highSource, PvLimitSource::kChannel);
   chart.setRuntimeConnected(0, true);
   chart.setRuntimeReadAccessKnown(0, true);
   chart.setRuntimeReadAccess(0, true);

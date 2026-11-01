@@ -229,8 +229,10 @@ StripChartElement::StripChartElement(QWidget *parent)
   xLabel_ = QString();
   yLabel_ = QString();
   for (int i = 0; i < static_cast<int>(pens_.size()); ++i) {
-    pens_[i].limits.lowSource = PvLimitSource::kDefault;
-    pens_[i].limits.highSource = PvLimitSource::kDefault;
+    /* MEDM's penAttributeInit ranges a pen over its channel's limits; a
+     * pen without a limits block keeps that source. */
+    pens_[i].limits.lowSource = PvLimitSource::kChannel;
+    pens_[i].limits.highSource = PvLimitSource::kChannel;
     pens_[i].limits.lowDefault = 0.0;
     pens_[i].limits.highDefault = 1.0;  /* MEDM's HOPR_DEFAULT */
     pens_[i].limits.precisionSource = PvLimitSource::kChannel;

@@ -17,9 +17,7 @@ after the existing rendering and fixture changes: Slider, Thermometer,
 StripChart, LedMonitor, ChoiceButton, ScaleMonitor, WheelSwitch, and Layering.
 These cover the MEDM slider/chart/indicator layouts, Motif bevels, clipped
 choice labels, updated LED fixture text colors, and the initialized wheel
-switch alarm probe. The original comparison images and test logs are retained
-locally under `tmp/test-all-20261101/` and the visual runner's preserved
-artifact directory recorded there. Other references and tolerances were kept.
+switch alarm probe. Other references and tolerances were kept.
 
 The canonical fixture PV prefix is `qtedm_visual:`. Visible channel labels are
 part of the reference images, so a different prefix changes the comparison

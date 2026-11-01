@@ -27,15 +27,17 @@ public:
    * requested size. */
   void apply(QWidget &widget, bool enforce)
   {
-    if (!requestedSize_.isValid()) {
+    /* Hidden widgets defer resizeEvent(). A display can therefore assign
+     * its geometry and call a state setter before noteResize() runs. */
+    if (!requestedSize_.isValid() || widget.size() != appliedSize_) {
       requestedSize_ = widget.size();
     }
     QSize target = requestedSize_;
     if (enforce) {
       target = target.expandedTo(QSize(kXcMinimumExtent, kXcMinimumExtent));
     }
+    appliedSize_ = target;
     if (target != widget.size()) {
-      appliedSize_ = target;
       widget.resize(target);
     }
   }

@@ -11,6 +11,12 @@ make test-qtedm-visual
 
 Run all suites with `make test-qtedm`. The targets build QtEDM first; Qt development libraries are required. IOC and visual suites have their own EPICS and rendering requirements.
 
+The exact MEDM button-pixmap ink bounds use Linux bitmap fonts. Their twelve
+data rows explicitly skip on macOS and Windows, where QtEDM uses native outline
+fonts. Font-cell consistency and related-display label clipping still run on
+those platforms. Cocoa window tests skip in the offscreen suite and need a
+separate run with `QT_QPA_PLATFORM=cocoa` on macOS.
+
 The CLI suite opens round-trip cases sequentially. On monitored hosts, add a
 delay between QtEDM launches with
 `make test-qtedm-cli QTEDM_CLI_TEST_ARGS='--launch-delay-seconds 5'`.

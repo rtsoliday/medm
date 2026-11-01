@@ -12,6 +12,15 @@ Thermometer fixture. This records approval of the Qt6 appearance; it does not
 establish that every test passes or qualify Qt5 rendering. Qt5 font/style
 differences require separate review and, if appropriate, a separate variant.
 
+On 2026-11-01, the Qt6 6.11.2 test audit reviewed and refreshed eight references
+after the existing rendering and fixture changes: Slider, Thermometer,
+StripChart, LedMonitor, ChoiceButton, ScaleMonitor, WheelSwitch, and Layering.
+These cover the MEDM slider/chart/indicator layouts, Motif bevels, clipped
+choice labels, updated LED fixture text colors, and the initialized wheel
+switch alarm probe. The original comparison images and test logs are retained
+locally under `tmp/test-all-20261101/` and the visual runner's preserved
+artifact directory recorded there. Other references and tolerances were kept.
+
 The canonical fixture PV prefix is `qtedm_visual:`. Visible channel labels are
 part of the reference images, so a different prefix changes the comparison
 input. The visual runner isolates its IOC with a private CA server port on

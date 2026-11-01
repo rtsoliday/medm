@@ -1,8 +1,11 @@
 # Legacy MEDM Bitmap Fonts
 
 This directory packages the X11 bitmap fonts that reproduce the original MEDM
-appearance in QtEDM.  Each font is embedded directly into the executable so the
-same glyphs are available on Linux, macOS, and Windows.
+appearance in QtEDM on Linux. The bitmap fonts are embedded directly into the
+executable there. macOS and Windows use native outline fonts for these aliases
+because their font backends do not support the X11 bitmap containers. Native
+character-cell widths can differ from the X11 widths and can be fractional.
+The scalable Charter font is embedded on all three platforms.
 
 ## Font inventory
 

@@ -129,6 +129,8 @@ private slots:
   void relatedDisplayLabelPadding();
   void relatedDisplayLabelsClipToCells_data();
   void relatedDisplayLabelsClipToCells();
+  void monitorGeometrySurvivesDeferredResize_data();
+  void monitorGeometrySurvivesDeferredResize();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -533,6 +535,9 @@ void TestObserveOnlyControls::buttonPixmapsMatchMedm_data()
 
 void TestObserveOnlyControls::buttonPixmapsMatchMedm()
 {
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+  QSKIP("MEDM's Linux bitmap-font ink bounds do not apply to native outline fonts");
+#endif
   QFETCH(bool, shellCommand);
   QFETCH(int, entries);
   QFETCH(QString, label);
@@ -4886,6 +4891,42 @@ void TestObserveOnlyControls::oversizedRelatedDisplayStaysFitted()
       / child->displayArea_->height();
   QVERIFY(std::abs(originalAspect - fittedAspect) < 0.02);
 #endif
+}
+
+void TestObserveOnlyControls::monitorGeometrySurvivesDeferredResize_data()
+{
+  QTest::addColumn<bool>("scaleMonitor");
+  QTest::addColumn<QSize>("requested");
+  QTest::newRow("bar-large") << false << QSize(96, 144);
+  QTest::newRow("bar-small") << false << QSize(12, 14);
+  QTest::newRow("scale-large") << true << QSize(96, 144);
+  QTest::newRow("scale-small") << true << QSize(12, 14);
+}
+
+void TestObserveOnlyControls::monitorGeometrySurvivesDeferredResize()
+{
+  QFETCH(bool, scaleMonitor);
+  QFETCH(QSize, requested);
+  QWidget parent;
+  const auto check = [&requested](auto &element) {
+    QVERIFY(!element.isVisible());
+    element.resize(requested);
+    element.setExecuteMode(true);
+    QCOMPARE(element.size(), requested);
+    element.setRuntimeConnected(true);
+    QCOMPARE(element.size(), requested.expandedTo(QSize(20, 20)));
+    element.setRuntimeConnected(false);
+    QCOMPARE(element.size(), requested);
+    element.setExecuteMode(false);
+    QCOMPARE(element.size(), requested);
+  };
+  if (scaleMonitor) {
+    ScaleMonitorElement element(&parent);
+    check(element);
+  } else {
+    BarMonitorElement element(&parent);
+    check(element);
+  }
 }
 
 void TestObserveOnlyControls::relatedDisplayLabelsClipToCells_data()

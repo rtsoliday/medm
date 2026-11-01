@@ -2,6 +2,7 @@
 
 #include <QFontInfo>
 #include <QFontMetrics>
+#include <QFontMetricsF>
 
 #include "legacy_fonts.h"
 
@@ -91,9 +92,28 @@ void TestLegacyFonts::fixedFontsKeepCellWidths()
    * spaces included, advances one cell.  A space missing from the font is
    * drawn with a wider fallback font and long labels no longer fit. */
   LegacyFonts::setWidgetDMAliasMode(LegacyFonts::WidgetDMAliasMode::kFixed);
-  const QFontMetrics metrics(LegacyFonts::font(key));
+  const QFont font = LegacyFonts::font(key);
+  const QFontMetrics metrics(font);
   const QString text = QStringLiteral("The RF water load is used 0123456789");
-  QCOMPARE(metrics.horizontalAdvance(text), cellWidth * text.size());
+  int expectedWidth = cellWidth * text.size();
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+  /* These platforms use native outline fonts instead of the X11 bitmaps.
+   * Their cells can have fractional widths, but spaces and other glyphs
+   * must still use the same advance without a proportional fallback. */
+  const QFontMetricsF preciseMetrics(font);
+  const qreal nativeCellWidth = preciseMetrics.horizontalAdvance(
+      QStringLiteral("M"));
+  QVERIFY(nativeCellWidth > 0);
+  for (const QChar character : text) {
+    QVERIFY2(qAbs(preciseMetrics.horizontalAdvance(QString(character))
+        - nativeCellWidth) < 0.01,
+        qPrintable(QStringLiteral("%1: inconsistent advance for U+%2")
+            .arg(key).arg(static_cast<uint>(character.unicode()),
+                4, 16, QLatin1Char('0'))));
+  }
+  expectedWidth = qRound(nativeCellWidth * text.size());
+#endif
+  QCOMPARE(metrics.horizontalAdvance(text), expectedWidth);
 }
 
 QTEST_MAIN(TestLegacyFonts)

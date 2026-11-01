@@ -474,8 +474,12 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
        * too wide for its button is clipped to that button. */
       painter.setFont(labelFont);
       painter.save();
-      painter.setClipRect(interior, Qt::IntersectClip);
-      painter.drawText(interior,
+      /* Keep native outline-font layout identical in every cell, including
+       * the first glyph's fractional position. */
+      painter.translate(interior.topLeft());
+      const QRect localInterior(QPoint(0, 0), interior.size());
+      painter.setClipRect(localInterior, Qt::IntersectClip);
+      painter.drawText(localInterior,
           Qt::AlignCenter | Qt::TextIncludeTrailingSpaces, text);
       painter.restore();
       ++index;

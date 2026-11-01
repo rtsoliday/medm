@@ -855,18 +855,8 @@ void CartesianPlotRuntime::updateRuntimePaintState()
     }
   }
 
-  if (ready && !triggerChannel_.name.isEmpty()
-      && !channelReadyForDisplay(triggerChannel_)) {
-    ready = false;
-  }
-  if (ready && !eraseChannel_.name.isEmpty()
-      && !channelReadyForDisplay(eraseChannel_)) {
-    ready = false;
-  }
-  if (ready && !countChannel_.name.isEmpty()
-      && !channelReadyForDisplay(countChannel_)) {
-    ready = false;
-  }
+  /* MEDM checks only the trace channels: a trigger, erase, or count channel
+   * that never connects does not blank the plot. */
 
   invokeOnElement([hasConfiguredTrace, ready](CartesianPlotElement *element) {
     element->setRuntimePaintReady(hasConfiguredTrace, ready);

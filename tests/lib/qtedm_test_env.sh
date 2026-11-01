@@ -32,6 +32,7 @@ qtedm_test_setup_sdds_tools() {
   local host_arch=""
   local sdds_epics_root=""
   local sdds_epics_bin=""
+  local sdds_bin=""
 
   case "$(uname -s)" in
     CYGWIN*)
@@ -42,8 +43,18 @@ qtedm_test_setup_sdds_tools() {
       host_arch="$(uname -s)-$(uname -m)"
       ;;
   esac
-  sdds_epics_root="${SDDS_EPICS_ROOT:-${QTEDM_TEST_REPO_ROOT}/../SDDS-EPICS}"
+  sdds_epics_root="$(qtedm_test_posix_path \
+      "${SDDS_EPICS_ROOT:-${QTEDM_TEST_REPO_ROOT}/../SDDS-EPICS}")"
   sdds_epics_bin="${sdds_epics_root}/bin/${host_arch}"
+  if [[ "${executable_suffix}" == ".exe" ]]; then
+    # Use the SDDS runtime built beside these tools. An older installed
+    # SDDS1.dll can have an incompatible dataset layout and crash the IOC.
+    sdds_bin="$(qtedm_test_posix_path \
+        "${SDDS_BIN_DIR:-${sdds_epics_root}/../SDDS/bin/${host_arch}}")"
+    if [[ -d "${sdds_bin}" ]]; then
+      export PATH="${sdds_bin}:${PATH}"
+    fi
+  fi
   if [[ -z "${SDDS_SOFT_IOC_REAL_BIN:-}" \
       && -x "${sdds_epics_bin}/sddsSoftIOC${executable_suffix}" ]]; then
     export SDDS_SOFT_IOC_REAL_BIN="${sdds_epics_bin}/sddsSoftIOC${executable_suffix}"
@@ -64,6 +75,13 @@ qtedm_test_setup_env() {
   export QTEDM_TEST_TMP_DIR
   export QTEDM_TEST_REPO_ROOT
   export QT_QPA_PLATFORM=offscreen
+  # The Windows offscreen plugin uses FreeType instead of the native font
+  # database. Qt no longer ships its default lib/fonts directory.
+  case "$(uname -s)" in
+    CYGWIN*|MINGW*|MSYS*)
+      export QT_QPA_FONTDIR="${QT_QPA_FONTDIR:-${WINDIR:-C:/Windows}/Fonts}"
+      ;;
+  esac
   export QTEDM_NOLOG=1
   export LC_ALL=C.UTF-8
   export TZ=UTC

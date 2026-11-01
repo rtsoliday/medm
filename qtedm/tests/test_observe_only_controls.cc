@@ -2189,11 +2189,20 @@ void TestObserveOnlyControls::shellCommandMacroChecksUseSubstitutionSites()
    * them reaches the check unchanged (F-001). */
   ShellCommandEntry entry;
   for (const QString &value : {QStringLiteral("a\\;touch x"),
-           QStringLiteral("a\\x3btouch x"), QStringLiteral("a$(id)"),
+           QStringLiteral("a$(id)"),
            QStringLiteral("a\";touch x")}) {
     QCOMPARE(activate({{QStringLiteral("M"), value}}, 0, &entry), kRefused);
     QCOMPARE(entry.command, QStringLiteral("echo ") + value);
   }
+  const QString hexEscape = QStringLiteral("a\\x3btouch x");
+#ifdef Q_OS_WIN
+  /* cmd.exe preserves this literal path-like sequence; it does not decode
+   * a backslash-x escape into a semicolon. */
+  QCOMPARE(activate({{QStringLiteral("M"), hexEscape}}, 0, &entry), kAccepted);
+#else
+  QCOMPARE(activate({{QStringLiteral("M"), hexEscape}}, 0, &entry), kRefused);
+#endif
+  QCOMPARE(entry.command, QStringLiteral("echo ") + hexEscape);
   QVERIFY(activate({{QStringLiteral("M"), QStringLiteral("C:\\temp")}}, 0,
       &entry) != kLoadFailed);
   QCOMPARE(entry.command, QStringLiteral("echo C:\\temp"));

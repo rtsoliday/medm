@@ -16,6 +16,31 @@ QString steeringFixturePath()
       QStringLiteral("../tests/data/layering/steering_label.adl"));
 }
 
+bool matchingTextImages(const QImage &actual, const QImage &reference)
+{
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+  if (actual.size() != reference.size()) {
+    return false;
+  }
+  /* Native outline-font antialiasing can round a channel one level
+   * differently at another screen position. A missing stroke still fails. */
+  for (int y = 0; y < actual.height(); ++y) {
+    for (int x = 0; x < actual.width(); ++x) {
+      const QColor a = actual.pixelColor(x, y);
+      const QColor b = reference.pixelColor(x, y);
+      if (qAbs(a.red() - b.red()) > 1
+          || qAbs(a.green() - b.green()) > 1
+          || qAbs(a.blue() - b.blue()) > 1 || a.alpha() != b.alpha()) {
+        return false;
+      }
+    }
+  }
+  return true;
+#else
+  return actual == reference;
+#endif
+}
+
 } // namespace
 
 class TestLayering : public QObject
@@ -48,6 +73,8 @@ void TestLayering::steeringLabelSurvivesArrowText()
   QCOMPARE(propertyValue(*texts[3], QStringLiteral("textix")),
       QStringLiteral("|"));
   QCOMPARE(propertyValue(*texts[4], QStringLiteral("textix")),
+      QStringLiteral("\\/"));
+  QCOMPARE(propertyValue(*texts[5], QStringLiteral("textix")),
       QStringLiteral("\\/"));
   const auto *object = ::findChild(*texts[2], QStringLiteral("object"));
   QVERIFY(object);
@@ -114,8 +141,8 @@ void TestLayering::steeringLabelRendersLikeMedmReference()
    * platform font goldens, and reject an empty reference before comparing. */
   /* Compare the MEDM literal arrowhead with an escaped-backslash reference.
    * The full arrow retains the original display's relative coordinates. */
-  QVERIFY2(screenshot.copy(QRect(49, 99, 34, 14))
-          == screenshot.copy(QRect(149, 99, 34, 14)),
+  QVERIFY2(matchingTextImages(screenshot.copy(QRect(49, 99, 34, 14)),
+          screenshot.copy(QRect(149, 99, 34, 14))),
       "The downward arrowhead must retain both strokes");
 
   const QImage reference = screenshot.copy(QRect(760, 59, 70, 20));
@@ -130,7 +157,7 @@ void TestLayering::steeringLabelRendersLikeMedmReference()
     }
   }
   QVERIFY2(darkPixels > 20, "Reference label must contain visible text");
-  QVERIFY2(actual == reference,
+  QVERIFY2(matchingTextImages(actual, reference),
       "L2:SC3 after the arrow must render like the unaffected MEDM reference");
 }
 

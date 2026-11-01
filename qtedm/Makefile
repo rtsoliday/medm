@@ -571,35 +571,35 @@ tests: test
 test: test-cli test-unit test-ioc test-visual
 
 QTEDM_TEST_MANAGE_REPEATER ?= 0
-ifeq ($(QTEDM_TEST_MANAGE_REPEATER),1)
 test-unit: SHELL := /bin/bash
-endif
 
 test-unit: build-tests
 	@$(PYTHON) ../tests/testADL_SaveFiles.py --self-test
 	@$(PYTHON) ../tests/validate_qtedm_coverage.py
 	@set -e; \
-	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/qtedm-unit.XXXXXX"); \
-	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
-	export QT_QPA_PLATFORM=offscreen; \
-	export QTEDM_NOLOG=1; \
-	export LC_ALL=C.UTF-8; \
-	export TZ=UTC; \
-	export HOME="$$tmp_dir/home"; \
-	$(QTEDM_TEST_ISOLATION); \
-	mkdir -p "$$HOME"; \
-	if [ "$(QTEDM_TEST_MANAGE_REPEATER)" = "1" ]; then \
-	  export QTEDM_TEST_MANAGE_REPEATER=1; \
-	  QTEDM_TEST_TMP_DIR="$$tmp_dir"; \
-	  . ../tests/lib/qtedm_test_env.sh; \
-	  trap 'qtedm_test_cleanup $$?' EXIT HUP INT TERM; \
-	  qtedm_test_setup_env; \
-	  qtedm_test_start_repeater; \
-	fi; \
+	. ../tests/lib/qtedm_test_env.sh; \
+	trap 'qtedm_test_cleanup $$?' EXIT HUP INT TERM; \
+	qtedm_test_setup_env; \
+	export QTEDM_TEST_MANAGE_REPEATER=$(QTEDM_TEST_MANAGE_REPEATER); \
+	qtedm_test_start_repeater; \
+	status=0; \
 	for test_bin in $(QTEDM_UNIT_TEST_BINARIES); do \
 	  echo "Running $$test_bin"; \
-	  "$$test_bin"; \
-	done
+	  report="$$QTEDM_TEST_TMP_DIR/$$(basename "$$test_bin").txt"; \
+	  native_report=$$(qtedm_test_native_path "$$report"); \
+	  if "$$test_bin" -o "$$native_report,txt"; then \
+	    test_status=0; \
+	  else \
+	    test_status=$$?; status=1; \
+	  fi; \
+	  if [ -s "$$report" ]; then \
+	    cat "$$report"; \
+	  else \
+	    echo "ERROR: $$test_bin did not produce a QtTest report"; status=1; \
+	  fi; \
+	  echo "Exit $$test_status: $$test_bin"; \
+	done; \
+	exit "$$status"
 
 QTEDM_TEST_APP_BIN ?= $(CURDIR)/$(OBJ_DIR)/qtedm$(EXEEXT)
 QTEDM_CLI_TEST_ARGS ?=

@@ -152,7 +152,18 @@ echo "Logging to ${LOG_FILE}"
 ioc_pid=""
 waterfall_driver_pid=""
 
+require_local_ioc() {
+  if [[ -n "${ioc_pid}" ]] \
+      && ! kill -0 "${ioc_pid}" >/dev/null 2>&1; then
+    local status=0
+    wait "${ioc_pid}" || status=$?
+    echo "Error: local IOC PID ${ioc_pid} exited during initialization (status ${status}); see ${LOG_FILE}" >&2
+    exit 1
+  fi
+}
+
 set_local_ca_env() {
+  require_local_ioc
   # The IOC, cavput, and caput must stay on loopback. Bind the test servers
   # there too, so a direct run of this script is not reachable from the
   # facility network.
@@ -2214,6 +2225,7 @@ else
   echo "Slider-only IOC initialization profile complete."
 fi
 if [[ -n "${READY_FILE}" ]]; then
+  require_local_ioc
   printf 'ready\n' > "${READY_FILE}"
   echo "Wrote IOC ready file: ${READY_FILE}"
 fi

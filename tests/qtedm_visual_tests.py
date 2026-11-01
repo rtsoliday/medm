@@ -313,7 +313,13 @@ def main() -> int:
   needs_ioc = any(case.get("use_ioc") for case in cases)
   capture_count = sum(max(1, int(case.get("deterministic_repeats", 1)))
                       for case in cases)
-  ioc_execution_seconds = 240 + math.ceil(args.launch_delay_seconds * capture_count)
+  capture_runtime_ms = sum(
+      int(case.get("exit_after_ms", 1500))
+      * max(1, int(case.get("deterministic_repeats", 1))) for case in cases)
+  # Include initialization, font loading, and image comparisons as well as
+  # every repeat. A fixed four-minute IOC can expire during the last cases.
+  ioc_execution_seconds = max(240, math.ceil(capture_runtime_ms / 1000) + 180)
+  ioc_execution_seconds += math.ceil(args.launch_delay_seconds * capture_count)
 
   # Visual goldens can render channel labels, so keep the IOC prefix stable.
   prefix = os.environ.get("QTEDM_VISUAL_PV_PREFIX", "qtedm_visual:")
@@ -336,6 +342,7 @@ def main() -> int:
         "EPICS_CA_ADDR_LIST": f"127.0.0.1:{server_port}",
         "EPICS_CA_AUTO_ADDR_LIST": "NO",
         "EPICS_CA_SERVER_PORT": str(server_port),
+        "EPICS_CAS_SERVER_PORT": str(server_port),
         "EPICS_CAS_INTF_ADDR_LIST": "127.0.0.1",
     })
 
@@ -364,8 +371,12 @@ def main() -> int:
 
     for case in cases:
       try:
+        if case.get("use_ioc") and ioc_process.poll() is not None:
+          raise CaseFailure("Local IOC exited before the visual case")
         run_case(case, repo_root, qtedm_bin, compare_tool, prefix, temp_dir,
             args.update_goldens, process_env, args.launch_delay_seconds)
+        if case.get("use_ioc") and ioc_process.poll() is not None:
+          raise CaseFailure("Local IOC exited during the visual case")
       except Exception as exc:
         failed_cases.append(str(case.get("name", "<unnamed>")))
         if not args.keep_going:

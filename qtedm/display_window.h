@@ -949,6 +949,9 @@ private:
   void updateUnmanagedStackingWidgets(
       const QVector<QPair<QWidget *, bool>> &stackLayers);
   void handleMedmWidgetUnmanagedChange(QWidget *widget);
+  static QVector<QObject *> stackingChildrenSnapshot(
+      const QList<QWidget *> &stackingOrder);
+  bool restackChangedElements(const QList<QWidget *> &stackingOrder);
   void markWidgetHasDynamicAttribute(QWidget *widget) const;
   bool widgetHasDynamicAttribute(const QWidget *widget) const;
   void recordWidgetOriginalGeometry(QWidget *widget,
@@ -1284,6 +1287,9 @@ private:
    * dynamic graphic. */
   QSet<QWidget *> unmanagedStackingWidgets_;
   quint64 unmanagedStackingFingerprint_ = 0;
+  /* The order the last restack applied and the child lists it left. */
+  QList<QWidget *> appliedStackingOrder_;
+  QVector<QObject *> appliedStackingChildren_;
   QHash<const QWidget *, QRect> originalAdlGeometries_;
   QHash<const QWidget *, QVector<QPoint>> originalPolylinePoints_;
   bool stackingRefreshPending_ = false;

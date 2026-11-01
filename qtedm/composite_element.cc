@@ -946,6 +946,19 @@ void CompositeElement::refreshChildStackingOrder()
   }
 
   /*
+   * Raising a child repaints it, and children ask for a restack each time
+   * they show or hide as channels connect. Restacking again from the order
+   * the last restack left changes nothing, so skip it.
+   */
+  const QList<QWidget *> stackingOrder =
+      staticWidgets + dynamicWidgets + medmWidgetBackedWidgets;
+  if (stackingOrder == appliedChildStackingOrder_
+      && children() == appliedChildStackingChildren_) {
+    childStackingOrderInternallyUpdating_ = false;
+    return;
+  }
+
+  /*
    * Apply stacking order by raising widgets in category order.
    * Qt's raise() moves a widget to the top of its siblings' stack.
    * By raising in order (static, dynamic graphics, MEDM widget-backed), we
@@ -972,6 +985,8 @@ void CompositeElement::refreshChildStackingOrder()
       widget->raise();
     }
   }
+  appliedChildStackingOrder_ = stackingOrder;
+  appliedChildStackingChildren_ = children();
 
   childStackingOrderInternallyUpdating_ = false;
 }

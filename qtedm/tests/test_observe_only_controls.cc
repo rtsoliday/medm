@@ -101,6 +101,21 @@ QString pickPvInfoText(DisplayWindow *window, QWidget *target)
   return text ? text->toPlainText() : QString();
 }
 
+class ZOrderChangeCounter : public QObject
+{
+public:
+  int count = 0;
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override
+  {
+    if (event->type() == QEvent::ZOrderChange) {
+      ++count;
+    }
+    return QObject::eventFilter(watched, event);
+  }
+};
+
 } // namespace
 
 
@@ -3274,6 +3289,30 @@ void TestObserveOnlyControls::disconnectedWidgetsStackInDisplayOrder()
   onPlot->setRuntimeConnected(true);
   QCoreApplication::processEvents();
   QVERIFY(stackIndex(onPlot) > stackIndex(plot));
+
+  /* Moving only the changed elements gives the order a full restack does. */
+  clear->setRuntimeConnected(true);
+  slider->setRuntimeConnected(true);
+  window.refreshStackingOrder();
+  const QObjectList moved = window.displayArea_->children();
+  window.appliedStackingOrder_.clear();
+  window.refreshStackingOrder();
+  QCOMPARE(window.displayArea_->children(), moved);
+
+  /* Restacks that change nothing move nothing, so they repaint nothing. */
+  ZOrderChangeCounter counter;
+  for (QWidget *widget : {static_cast<QWidget *>(frame),
+           static_cast<QWidget *>(slider), static_cast<QWidget *>(cover),
+           static_cast<QWidget *>(plot), static_cast<QWidget *>(onPlot),
+           static_cast<QWidget *>(clear)}) {
+    widget->installEventFilter(&counter);
+  }
+  window.refreshStackingOrder();
+  cover->hide();
+  cover->show();
+  QCoreApplication::processEvents();
+  QCOMPARE(counter.count, 0);
+  QCOMPARE(window.displayArea_->children(), moved);
 }
 
 void TestObserveOnlyControls::disconnectedCompositeChildrenStackInOrder()

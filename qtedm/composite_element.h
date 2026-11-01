@@ -96,6 +96,9 @@ private:
   bool designModeVisible_ = true;
   bool childStackingRefreshPending_ = false;
   bool childStackingOrderInternallyUpdating_ = false;
+  /* The order the last restack applied and the child list it left. */
+  QList<QWidget *> appliedChildStackingOrder_;
+  QObjectList appliedChildStackingChildren_;
   bool hasExplicitCompositeName_ = false;
   /* The ADL object within the composite after a growing fit, or null. */
   QRect objectRect_;

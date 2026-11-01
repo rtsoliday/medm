@@ -28857,6 +28857,27 @@ void DisplayWindow::refreshStackingOrder()
     }
   }
 
+  /* Raising an element repaints it, so raising them all repaints the whole
+   * display. Elements show and hide, and widgets change layer, as their
+   * channels connect, asking for a restack each time, which kept a display
+   * of thousands of elements repainting for tens of seconds. When nothing
+   * else has moved since the last restack, skip one that changes nothing
+   * and move only the changed elements otherwise. */
+  const QList<QWidget *> stackingOrder =
+      staticWidgets + dynamicWidgets + medmWidgetBackedWidgets;
+  if (stackingChildrenSnapshot(stackingOrder) == appliedStackingChildren_) {
+    if (stackingOrder == appliedStackingOrder_) {
+      stackingOrderInternallyUpdating_ = false;
+      return;
+    }
+    if (restackChangedElements(stackingOrder)) {
+      appliedStackingOrder_ = stackingOrder;
+      appliedStackingChildren_ = stackingChildrenSnapshot(stackingOrder);
+      stackingOrderInternallyUpdating_ = false;
+      return;
+    }
+  }
+
   /* Raise static widgets first so that interactive controls can sit on top
    * just like MEDM draws static graphics onto the background pixmap. */
   for (QWidget *widget : staticWidgets) {
@@ -28870,7 +28891,109 @@ void DisplayWindow::refreshStackingOrder()
   for (QWidget *widget : medmWidgetBackedWidgets) {
     widget->raise();
   }
+  appliedStackingOrder_ = stackingOrder;
+  appliedStackingChildren_ = stackingChildrenSnapshot(stackingOrder);
   stackingOrderInternallyUpdating_ = false;
+}
+
+/* Moves the elements whose place in the stacking order changed since the
+ * last restack, each below the element now above it, leaving the rest where
+ * that restack put them. The elements that keep their relative order are
+ * the longest increasing run of their new positions taken in their old
+ * order. A moved text element raises its overflow label above everything,
+ * so that and any other change of the elements take a full restack. */
+bool DisplayWindow::restackChangedElements(
+    const QList<QWidget *> &stackingOrder)
+{
+  const int count = stackingOrder.size();
+  if (count == 0 || count != appliedStackingOrder_.size()) {
+    return false;
+  }
+  QWidget *parent = stackingOrder.first()->parentWidget();
+  QHash<QWidget *, int> position;
+  position.reserve(count);
+  for (int i = 0; i < count; ++i) {
+    if (stackingOrder.at(i)->parentWidget() != parent) {
+      return false;
+    }
+    position.insert(stackingOrder.at(i), i);
+  }
+  QVector<int> sequence;
+  sequence.reserve(count);
+  for (QWidget *widget : appliedStackingOrder_) {
+    const auto it = position.constFind(widget);
+    if (it == position.constEnd()) {
+      return false;
+    }
+    sequence.append(it.value());
+  }
+
+  QVector<int> runEnds;
+  QVector<int> previous(count, -1);
+  for (int i = 0; i < count; ++i) {
+    int low = 0;
+    int high = runEnds.size();
+    while (low < high) {
+      const int middle = (low + high) / 2;
+      if (sequence.at(runEnds.at(middle)) < sequence.at(i)) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    if (low > 0) {
+      previous[i] = runEnds.at(low - 1);
+    }
+    if (low == runEnds.size()) {
+      runEnds.append(i);
+    } else {
+      runEnds[low] = i;
+    }
+  }
+  QVector<bool> keep(count, false);
+  for (int i = runEnds.isEmpty() ? -1 : runEnds.last(); i >= 0;
+       i = previous.at(i)) {
+    keep[sequence.at(i)] = true;
+  }
+  for (int i = 0; i < count; ++i) {
+    if (!keep.at(i) && dynamic_cast<TextElement *>(stackingOrder.at(i))) {
+      return false;
+    }
+  }
+  for (int i = count - 1; i >= 0; --i) {
+    if (keep.at(i)) {
+      continue;
+    }
+    if (i + 1 < count) {
+      stackingOrder.at(i)->stackUnder(stackingOrder.at(i + 1));
+    } else {
+      stackingOrder.at(i)->raise();
+    }
+  }
+  return true;
+}
+
+/* The child lists of the elements' parents, in stacking order: what a
+ * restack produced, so that one with nothing changed since can be skipped. */
+QVector<QObject *> DisplayWindow::stackingChildrenSnapshot(
+    const QList<QWidget *> &stackingOrder)
+{
+  QVector<QObject *> snapshot;
+  QVector<QWidget *> parents;
+  for (QWidget *widget : stackingOrder) {
+    QWidget *parent = widget->parentWidget();
+    if (!parent || parents.contains(parent)) {
+      continue;
+    }
+    parents.append(parent);
+    const QObjectList &children = parent->children();
+    snapshot.reserve(snapshot.size() + children.size() + 1);
+    snapshot.append(parent);
+    for (QObject *child : children) {
+      snapshot.append(child);
+    }
+  }
+  return snapshot;
 }
 
 /* Records the widget-backed elements whose stacking shows when their channel

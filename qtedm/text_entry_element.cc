@@ -488,6 +488,12 @@ void TextEntryElement::applyPaletteColors()
   /* Create lowered bevel: darker top/left, lighter bottom/right (opposite of raised) */
   QString topColor = bg.darker(145).name(QColor::HexRgb);
   QString bottomColor = bg.lighter(135).name(QColor::HexRgb);
+  if (executeMode_ && !runtimeConnected_) {
+    /* MEDM unmanages a disconnected text entry and paints its whole
+     * object white, with no bevel. */
+    topColor = bgName;
+    bottomColor = bgName;
+  }
   QString stylesheet = QStringLiteral(
       "QLineEdit { background-color: %1; color: %2; "
       "border-width: 2px; border-style: solid; "

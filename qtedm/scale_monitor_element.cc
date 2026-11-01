@@ -279,7 +279,7 @@ void ScaleMonitorElement::setExecuteMode(bool execute)
     return;
   }
   executeMode_ = execute;
-  medmMinimumSize_.apply(*this, executeMode_);
+  applyMedmMinimumSize();
   clearRuntimeState();
 }
 
@@ -288,12 +288,19 @@ bool ScaleMonitorElement::isExecuteMode() const
   return executeMode_;
 }
 
-/* MEDM's Xc Indicator is at least 20x20 whatever its label. */
 void ScaleMonitorElement::resizeEvent(QResizeEvent *event)
 {
   QWidget::resizeEvent(event);
   medmMinimumSize_.noteResize(*this);
-  medmMinimumSize_.apply(*this, executeMode_);
+  applyMedmMinimumSize();
+}
+
+/* MEDM's Xc Indicator is at least 20x20 whatever its label. While the
+ * channel is disconnected MEDM unmanages it and paints only the object
+ * white, so the indicator keeps the object size then. */
+void ScaleMonitorElement::applyMedmMinimumSize()
+{
+  medmMinimumSize_.apply(*this, executeMode_ && runtimeConnected_);
 }
 
 void ScaleMonitorElement::setRuntimeConnected(bool connected)
@@ -314,6 +321,7 @@ void ScaleMonitorElement::setRuntimeConnected(bool connected)
     runtimeHigh_ = limits_.highDefault;
     runtimeValue_ = defaultSampleValue();
   }
+  applyMedmMinimumSize();
   update();
 }
 
@@ -389,6 +397,7 @@ void ScaleMonitorElement::clearRuntimeState()
   runtimePrecision_ = -1;
   runtimeValue_ = defaultSampleValue();
   runtimeSeverity_ = kInvalidSeverity;
+  applyMedmMinimumSize();
   if (executeMode_) {
     update();
   } else {

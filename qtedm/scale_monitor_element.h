@@ -70,6 +70,7 @@ protected:
   void resizeEvent(QResizeEvent *event) override;
 
 private:
+  void applyMedmMinimumSize();
   void paintXcIndicator(QPainter &painter, const QFontMetrics &metrics) const;
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;

@@ -297,11 +297,13 @@ void BarMonitorElement::resizeEvent(QResizeEvent *event)
 }
 
 /* MEDM's bar with decorations is at least 20x20, leaving room for its
- * trough and fill; without decorations it keeps the object size. */
+ * trough and fill; without decorations it keeps the object size. While the
+ * channel is disconnected MEDM unmanages the bar and paints only the object
+ * white, so the bar keeps the object size then. */
 void BarMonitorElement::applyMedmMinimumSize()
 {
-  medmMinimumSize_.apply(*this,
-      executeMode_ && label_ != MeterLabel::kNoDecorations);
+  medmMinimumSize_.apply(*this, executeMode_ && runtimeConnected_
+      && label_ != MeterLabel::kNoDecorations);
 }
 
 void BarMonitorElement::setRuntimeConnected(bool connected)
@@ -314,6 +316,7 @@ void BarMonitorElement::setRuntimeConnected(bool connected)
     runtimeSeverity_ = kInvalidSeverity;
     hasRuntimeValue_ = false;
   }
+  applyMedmMinimumSize();
   if (executeMode_) {
     update();
   }
@@ -384,6 +387,7 @@ void BarMonitorElement::clearRuntimeState()
   runtimePrecision_ = -1;
   runtimeValue_ = defaultSampleValue();
   runtimeSeverity_ = kInvalidSeverity;
+  applyMedmMinimumSize();
   if (executeMode_) {
     update();
   } else {

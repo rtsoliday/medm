@@ -2574,14 +2574,15 @@ void TestObserveOnlyControls::sliderTroughClicks_data()
   QTest::addColumn<double>("delta");
 
   /* liRf.adl's K4 slider and its live display limits. Its remaining
-   * trough near 8.4 lies beyond the thumb center's travel rectangle. */
+   * trough near 8.4 lies beyond the thumb center's travel rectangle. As in
+   * MEDM, the trough is the bottom half of a horizontal limits slider. */
   QTest::newRow("K4-phase-above-8")
       << int(BarDirection::kRight) << int(MeterLabel::kLimits)
-      << QSize(160, 24) << QPoint(156, 5)
+      << QSize(160, 24) << QPoint(156, 18)
       << -1.5 << 10.0 << 8.4 << 0.05 << 0.05;
   QTest::newRow("K5-phase")
       << int(BarDirection::kRight) << int(MeterLabel::kLimits)
-      << QSize(165, 25) << QPoint(161, 5)
+      << QSize(165, 25) << QPoint(161, 18)
       << -200.0 << 200.0 << 160.0 << 0.2 << 0.2;
 
   for (auto direction : {BarDirection::kRight, BarDirection::kLeft,
@@ -2604,8 +2605,10 @@ void TestObserveOnlyControls::sliderTroughClicks_data()
           const int nearEnd = vertical && label == MeterLabel::kChannel
               ? 31 : 3;
           const int end = farEnd ? length - 4 : nearEnd;
+          /* Horizontal labeled sliders keep MEDM's scale in the bottom
+           * half (limits) or third (channel) below their labels. */
           const int y = label == MeterLabel::kNone ? 30
-              : label == MeterLabel::kLimits ? 17 : 32;
+              : label == MeterLabel::kLimits ? 45 : 50;
           const QPoint point = vertical ? QPoint(57, end) : QPoint(end, y);
           const QByteArray name = QStringLiteral("dir-%1-label-%2-size-%3-%4")
               .arg(int(direction)).arg(int(label)).arg(length)

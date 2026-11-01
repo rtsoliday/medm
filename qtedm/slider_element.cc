@@ -13,6 +13,7 @@
 #include <QPalette>
 #include <QMouseEvent>
 #include <QCursor>
+#include <QFontMetrics>
 #include <QFontMetricsF>
 #include <QKeyEvent>
 #include <QPointF>
@@ -29,7 +30,6 @@ constexpr double kSampleValue = 0.6;
 constexpr int kTickCount = 11;
 constexpr short kInvalidSeverity = 3;
 constexpr double kValueEpsilonFactor = 1e-6;
-constexpr double kHorizontalLabelSpacing = 4.0;
 constexpr qreal kMinimumTrackTravel = 1.0;
 constexpr qreal kPreferredMinimumThumbExtent = 30.0;
 
@@ -108,83 +108,6 @@ QFont shrinkFontToFit(const QFont &baseFont, const QStringList &texts,
         continue;
       }
       if (metrics.horizontalAdvance(text) > availableWidth + 0.1) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  constexpr double kMinSize = 6.0;
-  applySize(size);
-  int iterations = 0;
-  while (!fits() && size > kMinSize && iterations < 64) {
-    size -= 1.0;
-    if (size < kMinSize) {
-      size = kMinSize;
-    }
-    applySize(size);
-    ++iterations;
-  }
-
-  return font;
-}
-
-QFont shrinkFontToFitHorizontal(const QFont &baseFont, const QString &leftText,
-    const QString &centerText, const QString &rightText, const QSizeF &targetSize,
-    bool showCenter)
-{
-  if (targetSize.width() <= 0.0 || targetSize.height() <= 0.0) {
-    return baseFont;
-  }
-
-  QFont font(baseFont);
-  int pixelSize = font.pixelSize();
-  double size = pixelSize > 0 ? static_cast<double>(pixelSize)
-      : font.pointSizeF();
-  if (size <= 0.0) {
-    const int pointSize = font.pointSize();
-    size = pointSize > 0 ? static_cast<double>(pointSize) : 12.0;
-    font.setPointSizeF(size);
-    pixelSize = font.pixelSize();
-  }
-
-  auto applySize = [&](double newSize) {
-    const double clamped = std::max(1.0, newSize);
-    if (pixelSize > 0) {
-      font.setPixelSize(std::max(1, static_cast<int>(std::round(clamped))));
-    } else {
-      font.setPointSizeF(clamped);
-    }
-  };
-
-  auto fits = [&]() {
-    const QFontMetricsF metrics(font);
-    double lineHeight = metrics.height();
-    if (lineHeight <= 0.0) {
-      lineHeight = metrics.ascent() + metrics.descent();
-    }
-    if (lineHeight > targetSize.height() + 0.1) {
-      return false;
-    }
-    const double availableWidth = targetSize.width();
-    const double leftWidth = leftText.isEmpty()
-        ? 0.0 : metrics.horizontalAdvance(leftText);
-    const double rightWidth = rightText.isEmpty()
-        ? 0.0 : metrics.horizontalAdvance(rightText);
-    const double centerWidth = showCenter && !centerText.isEmpty()
-        ? metrics.horizontalAdvance(centerText) : 0.0;
-    if (leftWidth > availableWidth + 0.1
-        || rightWidth > availableWidth + 0.1
-        || centerWidth > availableWidth + 0.1) {
-      return false;
-    }
-    const double spacing = kHorizontalLabelSpacing;
-    if (leftWidth + rightWidth > availableWidth - (showCenter ? spacing : 0.0)) {
-      return false;
-    }
-    if (showCenter) {
-      const double remaining = availableWidth - leftWidth - rightWidth;
-      if (remaining < centerWidth + spacing) {
         return false;
       }
     }
@@ -817,40 +740,32 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
         }
       }
     }
-  } else {
+  } else if (showLimits) {
+    /* As in MEDM, the XmScale fills the bottom height/divisor rows and the
+     * channel title, limits and value are drawn in the rows above it. The
+     * trough sits inside the scale's one-pixel highlight border. */
+    const qreal heightDivisor = label_ == MeterLabel::kChannel ? 3.0 : 2.0;
+    const qreal scaleHeight = std::max<qreal>(3.0,
+        std::floor(contentRect.height() / heightDivisor));
+    const qreal scaleTop = contentRect.bottom() - scaleHeight;
     if (showChannel) {
-      const qreal maxLabelHeight = std::min<qreal>(30.0,
-          workingRect.height() * 0.35);
-      if (maxLabelHeight > 6.0) {
-        channelRect = QRectF(widgetLeft, workingRect.top(),
-            widgetRight - widgetLeft, maxLabelHeight);
-        const qreal desiredFinalGap = 2.0;
-        const qreal preAdjustGap = std::max<qreal>(0.0, desiredFinalGap - 1.0);
-        const qreal availablePreGap = std::max<qreal>(0.0,
-            workingRect.bottom() - channelRect.bottom());
-        const qreal clampedPreGap = std::min(preAdjustGap, availablePreGap);
-        workingRect.setTop(channelRect.bottom() + clampedPreGap);
-        if (workingRect.top() > workingRect.bottom()) {
-          workingRect.setTop(workingRect.bottom());
-        }
-      }
+      channelRect = QRectF(widgetLeft, contentRect.top(),
+          widgetRight - widgetLeft, scaleTop - contentRect.top());
     }
-    if (showLimits) {
-      const qreal maxLabelHeight = std::min<qreal>(30.0,
-          workingRect.height() * 0.35);
-      if (maxLabelHeight > 6.0) {
-        limitRect = QRectF(workingRect.left(),
-            workingRect.bottom() - maxLabelHeight, workingRect.width(),
-            maxLabelHeight);
-        workingRect.setBottom(limitRect.top() - 4.0);
-        if (limitRect.isValid()) {
-          limitRect.setTop(workingRect.bottom());
-          const qreal expandedBottom = std::min(limitRect.bottom() + 2.0,
-              contentRect.bottom());
-          limitRect.setBottom(expandedBottom);
-        }
-      }
+    limitRect = QRectF(contentRect.left(), contentRect.top(),
+        contentRect.width(), scaleTop - contentRect.top());
+    const QRectF trough(contentRect.left() + 1.0, scaleTop + 1.0,
+        contentRect.width() - 2.0, scaleHeight - 2.0);
+    const qreal computedThumbExtent = boundedThumbExtent(trough.width());
+    if (computedThumbExtent <= 0.0) {
+      return QRectF();
     }
+    if (thumbExtent) {
+      *thumbExtent = computedThumbExtent;
+    }
+    /* troughRectForTrack() adds this back at both ends. */
+    const qreal endPadding = computedThumbExtent / 2.0 + 2.0;
+    return trough.adjusted(endPadding, 0.0, -endPadding, 0.0);
   }
 
   //workingRect = workingRect.adjusted(4.0, 4.0, -4.0, -4.0);
@@ -1156,19 +1071,17 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
   painter.setPen(penColor);
   painter.setBrush(Qt::NoBrush);
 
-  if (label_ == MeterLabel::kOutline) {
-    QPen pen(penColor.darker(150));
-    pen.setStyle(Qt::DotLine);
-    painter.setPen(pen);
-    painter.drawRect(trackRect.adjusted(3.0, 3.0, -3.0, -3.0));
-    painter.setPen(penColor);
-  }
-
   QFont labelFont = medmSliderLabelFont(label_, direction_, size());
   if (labelFont.family().isEmpty()) {
     labelFont = painter.font();
   }
   painter.setFont(labelFont);
+
+  if (!isVertical()) {
+    paintHorizontalLabels(painter, limitRect);
+    painter.restore();
+    return;
+  }
 
   if (label_ == MeterLabel::kChannel) {
     const QString text = channel_.trimmed();
@@ -1205,107 +1118,79 @@ void SliderElement::paintLabels(QPainter &painter, const QRectF &trackRect,
         valueText = QStringLiteral("--");
       }
     }
-    QRectF bounds = limitRect.adjusted(2.0,
-        isVertical() ? 2.0 : -2.0, -2.0, -2.0);
-    if (isVertical()) {
-      bounds.setRight(std::min(bounds.right(), trackRect.left() - 1.0));
-      if (bounds.right() < bounds.left()) {
-        bounds.setRight(bounds.left());
-      }
-    } else {
-      const qreal availableShift = std::max<qreal>(0.0,
-          limitRect.bottom() - bounds.bottom());
-      const qreal shift = std::min<qreal>(2.0, availableShift);
-      bounds.translate(0.0, shift);
+    QRectF bounds = limitRect.adjusted(2.0, 2.0, -2.0, -2.0);
+    bounds.setRight(std::min(bounds.right(), trackRect.left() - 1.0));
+    if (bounds.right() < bounds.left()) {
+      bounds.setRight(bounds.left());
     }
-    //painter.save();
-    //QPen highlightPen(Qt::red);
-    //highlightPen.setWidth(1);
-    //painter.setPen(highlightPen);
-    //painter.drawRect(limitRect.adjusted(1.0, 1.0, -1.0, -1.0));
-    //painter.restore();
-    if (isVertical()) {
-      QStringList limitSamples;
-      limitSamples << highText << lowText;
-      if (showValue) {
-        limitSamples << valueText;
-      }
+    QStringList limitSamples;
+    limitSamples << highText << lowText;
+    if (showValue) {
+      limitSamples << valueText;
+    }
+    painter.save();
+    const QFont fitted = shrinkFontToFit(painter.font(), limitSamples,
+        bounds.size());
+    painter.setFont(fitted);
+    painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, lowText);
+    if (showValue) {
       painter.save();
-      const QFont fitted = shrinkFontToFit(painter.font(), limitSamples,
-          bounds.size());
-      painter.setFont(fitted);
-      painter.drawText(bounds, Qt::AlignRight | Qt::AlignBottom, lowText);
-      if (showValue) {
-        painter.save();
-        painter.setPen(effectiveForegroundForValueText());
-        painter.drawText(bounds, Qt::AlignRight | Qt::AlignVCenter, valueText);
-        painter.restore();
-      }
-      painter.drawText(bounds, Qt::AlignRight | Qt::AlignTop, highText);
-      painter.restore();
-    } else {
-      painter.save();
-      const QFont fitted = shrinkFontToFitHorizontal(painter.font(), lowText,
-          valueText, highText, bounds.size(), showValue);
-      painter.setFont(fitted);
-
-      const QFontMetricsF metrics(painter.font());
-      qreal leftWidth = lowText.isEmpty()
-          ? 0.0 : metrics.horizontalAdvance(lowText);
-      qreal rightWidth = highText.isEmpty()
-          ? 0.0 : metrics.horizontalAdvance(highText);
-      const qreal availableWidth = bounds.width();
-      leftWidth = std::min(leftWidth, availableWidth);
-      rightWidth = std::min(rightWidth, availableWidth);
-
-      qreal leftEnd = bounds.left() + leftWidth;
-      qreal rightStart = bounds.right() - rightWidth;
-      if (rightStart < leftEnd) {
-        const qreal midpoint = 0.5 * (leftEnd + rightStart);
-        leftEnd = midpoint;
-        rightStart = midpoint;
-      }
-
-      const QRectF leftBounds(bounds.left(), bounds.top(),
-          std::max<qreal>(0.0, leftEnd - bounds.left()), bounds.height());
-      if (!lowText.isEmpty()) {
-        painter.drawText(leftBounds, Qt::AlignLeft | Qt::AlignVCenter, lowText);
-      }
-
-      const qreal rightRectLeft = std::max<qreal>(bounds.left(), rightStart);
-      const QRectF rightBounds(rightRectLeft, bounds.top(),
-          std::max<qreal>(0.0, bounds.right() - rightRectLeft),
-          bounds.height());
-      if (!highText.isEmpty()) {
-        painter.drawText(rightBounds, Qt::AlignRight | Qt::AlignVCenter,
-            highText);
-      }
-
-      if (showValue) {
-        const qreal spacing = kHorizontalLabelSpacing;
-        qreal centerLeft = leftEnd + spacing * 0.5;
-        qreal centerRight = rightStart - spacing * 0.5;
-        if (centerRight < centerLeft) {
-          centerLeft = leftEnd;
-          centerRight = rightStart;
-        }
-        if (centerRight > centerLeft) {
-          painter.save();
-          painter.setPen(effectiveForegroundForValueText());
-          const QRectF centerBounds(centerLeft, bounds.top(),
-              centerRight - centerLeft, bounds.height());
-          painter.drawText(centerBounds, Qt::AlignHCenter | Qt::AlignVCenter,
-              valueText);
-          painter.restore();
-        }
-      }
-
+      painter.setPen(effectiveForegroundForValueText());
+      painter.drawText(bounds, Qt::AlignRight | Qt::AlignVCenter, valueText);
       painter.restore();
     }
+    painter.drawText(bounds, Qt::AlignRight | Qt::AlignTop, highText);
+    painter.restore();
     //drawDebugRect(limitRect);
   }
 
   painter.restore();
+}
+
+/* Horizontal labels where MEDM's valuatorRedrawValue and
+ * valuatorUpdateGraphicalInfoCb draw them: the limits and value share a
+ * baseline just above the scale, and the channel name is at the top left.
+ * MEDM uses the valuator font as is, so text is not shrunk to fit. */
+void SliderElement::paintHorizontalLabels(QPainter &painter,
+    const QRectF &limitRect) const
+{
+  if (!limitRect.isValid()) {
+    return;
+  }
+  const QFontMetrics metrics(painter.font());
+  const int widgetWidth = width();
+
+  if (label_ == MeterLabel::kChannel) {
+    const QString text = channel_.trimmed();
+    if (!text.isEmpty()) {
+      painter.drawText(QPoint(2, metrics.ascent() + 2), text);
+    }
+  }
+
+  QString lowText = formatLimit(effectiveLowLimit());
+  QString highText = formatLimit(effectiveHighLimit());
+  if (isDirectionInverted()) {
+    std::swap(lowText, highText);
+  }
+  const int baseline = static_cast<int>(limitRect.bottom())
+      - metrics.descent();
+  painter.drawText(QPoint(2, baseline), lowText);
+  painter.drawText(QPoint(widgetWidth - metrics.horizontalAdvance(highText)
+          - 2, baseline),
+      highText);
+
+  if (executeMode_
+      && (label_ == MeterLabel::kChannel || label_ == MeterLabel::kLimits)) {
+    const QString valueText = runtimeConnected_
+            && (hasRuntimeValue_ || dragging_)
+        ? formatLimit(currentDisplayedValue()) : QStringLiteral("--");
+    painter.save();
+    painter.setPen(effectiveForegroundForValueText());
+    painter.drawText(QPoint(widgetWidth / 2
+            - metrics.horizontalAdvance(valueText) / 2, baseline),
+        valueText);
+    painter.restore();
+  }
 }
 
 bool SliderElement::shouldShowLimitLabels() const

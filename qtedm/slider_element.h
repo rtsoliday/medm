@@ -91,6 +91,7 @@ private:
   void paintTicks(QPainter &painter, const QRectF &trackRect) const;
   void paintLabels(QPainter &painter, const QRectF &trackRect,
       const QRectF &limitRect, const QRectF &channelRect) const;
+  void paintHorizontalLabels(QPainter &painter, const QRectF &limitRect) const;
   bool shouldShowLimitLabels() const;
   QColor effectiveForeground() const;
   QColor effectiveForegroundForValueText() const;

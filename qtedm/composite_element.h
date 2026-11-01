@@ -54,6 +54,7 @@ public:
   void setChannelConnected(bool connected);
   bool isChannelConnected() const;
   void setRuntimeVisible(bool visible);
+  void setVisible(bool visible) override;
   
   /* keepCurrentBounds grows the composite around its children without
    * shrinking it below its current rectangle, which stays the area painted

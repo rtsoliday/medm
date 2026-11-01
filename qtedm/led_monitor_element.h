@@ -83,6 +83,7 @@ public:
   void setRuntimeConnected(bool connected);
   void setRuntimeSeverity(short severity);
   void setRuntimeVisible(bool visible);
+  void setVisible(bool visible) override;
   void setRuntimeValue(double value);
   void setRuntimeLimits(double low, double high);
   void setRuntimePrecision(int precision);

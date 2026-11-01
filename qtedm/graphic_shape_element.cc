@@ -159,8 +159,12 @@ void GraphicShapeElement::setVisible(bool visible)
 {
   if (!executeMode_) {
     designModeVisible_ = visible;
+    QWidget::setVisible(visible);
+    return;
   }
-  QWidget::setVisible(visible);
+  /* A composite showing its children must not show one that its own
+   * dynamic attribute hides. */
+  QWidget::setVisible(visible && designModeVisible_ && runtimeVisible_);
 }
 
 /* MEDM's graphics GC uses butt caps and the X default dash list of 4 pixels

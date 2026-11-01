@@ -419,6 +419,10 @@ void TextElement::setVisible(bool visible)
 {
   if (!executeMode_) {
     designModeVisible_ = visible;
+  } else {
+    /* A composite showing its children must not show one that its own
+     * dynamic attribute hides. */
+    visible = visible && designModeVisible_ && runtimeVisible_;
   }
   QLabel::setVisible(visible);
   updateOverflowVisibility();

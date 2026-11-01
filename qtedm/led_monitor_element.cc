@@ -542,6 +542,13 @@ void LedMonitorElement::applyRuntimeVisibility()
   QWidget::setVisible(!executeMode_ || runtimeVisible_);
 }
 
+/* A composite showing its children must not show one that its own
+ * visibility rule hides. */
+void LedMonitorElement::setVisible(bool visible)
+{
+  QWidget::setVisible(visible && (!executeMode_ || runtimeVisible_));
+}
+
 void LedMonitorElement::paintSelectionOverlay(QPainter &painter) const
 {
   painter.save();

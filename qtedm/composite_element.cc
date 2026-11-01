@@ -448,6 +448,17 @@ bool CompositeElement::isChannelConnected() const
   return channelConnected_;
 }
 
+/* A composite showing its children must not show a nested composite that
+ * its own connected channel hides. */
+void CompositeElement::setVisible(bool visible)
+{
+  if (executeMode_ && hasActiveChannel() && channelConnected_
+      && !runtimeVisible_) {
+    visible = false;
+  }
+  QWidget::setVisible(visible);
+}
+
 void CompositeElement::setRuntimeVisible(bool visible)
 {
   if (runtimeVisible_ == visible) {

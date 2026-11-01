@@ -25517,11 +25517,13 @@ bool DisplayWindow::loadDisplaySection(const AdlNode &displayNode)
     pendingResizeAreaSize_ = QSize(targetWidth, targetHeight);
     lastScaledAreaSize_ = QSize(targetWidth, targetHeight);
     QPoint targetPos = pos();
+    /* MEDM's repositionDisplay() moves a negative position to 0, so a
+     * display never opens partly off the left or top of the screen. */
     if (hasXProperty) {
-      targetPos.setX(geometry.x());
+      targetPos.setX(std::max(0, geometry.x()));
     }
     if (hasYProperty) {
-      targetPos.setY(geometry.y());
+      targetPos.setY(std::max(0, geometry.y()));
     }
     if ((hasXProperty || hasYProperty) && !preserveNextLoadPosition_) {
       // Preserve unspecified axes so partial geometry in the ADL stays intact.

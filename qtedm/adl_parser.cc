@@ -432,6 +432,7 @@ private:
             result.append(QChar(text_.mid(index_, 4).toUShort(nullptr, 16)));
             index_ += 4;
           } else {
+            result.append(QChar('\\'));
             result.append(escaped);
           }
           break;
@@ -459,6 +460,9 @@ private:
           break;
         }
         default:
+          /* MEDM reads backslashes literally, as in "Faults\Trips"; QtEDM
+           * writes only the escapes handled above. */
+          result.append(QChar('\\'));
           result.append(escaped);
           break;
         }

@@ -13,7 +13,7 @@ private slots:
   void parsesCommentsAndQuotedValues();
   void parsesEscapedQuotedValues();
   void parsesFixedWidthUnicodeEscapes();
-  void preservesMalformedUnicodeEscapeBehavior();
+  void keepsBackslashOfUnknownEscapes();
   void parsesLiteralDownArrow();
   void parsesTrailingLiteralBackslash_data();
   void parsesTrailingLiteralBackslash();
@@ -118,16 +118,21 @@ void TestAdlParser::parsesFixedWidthUnicodeEscapes()
       QStringLiteral("\u00b0C \u03a9 \u200b \u2028 \U0001f680 Af"));
 }
 
-void TestAdlParser::preservesMalformedUnicodeEscapeBehavior()
+void TestAdlParser::keepsBackslashOfUnknownEscapes()
 {
+  /* MEDM reads backslashes literally; only the escapes QtEDM writes are
+   * decoded, and a malformed unicode escape is not one of them. */
   QString error;
   const auto root = AdlParser::parse(QStringLiteral(
-      "text { textix=\"\\u12g4 \\u123 \\u \\qvalue\" }"), &error);
+      "text { textix=\"\\u12g4 \\u123 \\u \\qvalue\" }\n"
+      "text { textix=\"Faults\\Trips\\Warnings\" }"), &error);
   QVERIFY2(root.has_value(), qPrintable(error));
-  const AdlNode *text = ::findChild(*root, QStringLiteral("text"));
-  QVERIFY(text);
-  QCOMPARE(propertyValue(*text, QStringLiteral("textix")),
-      QStringLiteral("u12g4 u123 u qvalue"));
+  QStringList values;
+  for (const AdlNode &child : root->children) {
+    values.append(propertyValue(child, QStringLiteral("textix")));
+  }
+  QCOMPARE(values, QStringList({QStringLiteral("\\u12g4 \\u123 \\u \\qvalue"),
+      QStringLiteral("Faults\\Trips\\Warnings")}));
 }
 
 void TestAdlParser::parsesLiteralDownArrow()

@@ -22,8 +22,9 @@ constexpr qint64 kPassiveNotifyIntervalMs = 200;
 constexpr int kConnectionCompletionIdleMs = 100;
 constexpr size_t kMaximumCallbackBytes = 128 * 1024 * 1024;
 constexpr size_t kMaximumCallbackPayloadBytes = 64 * 1024 * 1024;
-/* Payload events use this fixed capacity. During overload, connection and
- * access state may additionally retain up to three entries per active ID. */
+/* Events use this fixed capacity. During overload each active ID may
+ * additionally retain its newest value, metadata, disconnect, reconnect and
+ * access state. */
 constexpr size_t kMaximumCallbackEvents = 4096;
 constexpr size_t kCallbackDrainBatch = 64;
 std::atomic<SharedChannelManager *> gSharedChannelManager{nullptr};
@@ -625,9 +626,43 @@ void SharedChannelManager::queueCallbackEvent(CallbackEvent event,
     } else {
       const bool lifecycle = event.kind == CallbackKind::kConnection
           || event.kind == CallbackKind::kAccessRights;
-      const auto overloaded = [this, dataBytes]() {
-        return callbackEvents_.size() >= kMaximumCallbackEvents
-            || callbackBytes_ + dataBytes > kMaximumCallbackBytes;
+      const auto countOverloaded = [this]() {
+        return callbackEvents_.size() >= kMaximumCallbackEvents;
+      };
+      const auto bytesOverloaded = [this, dataBytes]() {
+        return callbackBytes_ + dataBytes > kMaximumCallbackBytes;
+      };
+      const auto eraseEvent = [this](std::deque<CallbackEvent>::iterator it) {
+        noteCallbackEventRemoved(*it);
+        callbackBytes_ -= it->data.size();
+        ++droppedCallbackEvents_;
+        return callbackEvents_.erase(it);
+      };
+      /* The oldest value or metadata event that a newer one of the same
+       * channel and kind supersedes, counting this event as queued. A
+       * channel's newest state is never discarded to make room for other
+       * channels: it may be the last the channel ever sends (a record that
+       * never processes again), and losing it left large displays partly
+       * unfilled after their initial burst of connections. */
+      const QPair<quint64, int> incomingKey(event.channelInstanceId,
+          static_cast<int>(event.kind));
+      const auto oldestSuperseded = [&]() {
+        const bool supersedesQueued = !lifecycle
+            && queuedPayloadEvents_.contains(incomingKey);
+        if (supersededPayloadEvents_ == 0 && !supersedesQueued) {
+          return callbackEvents_.end();
+        }
+        return std::find_if(callbackEvents_.begin(), callbackEvents_.end(),
+            [&](const CallbackEvent &queued) {
+              if (queued.kind != CallbackKind::kValue
+                  && queued.kind != CallbackKind::kControlInfo) {
+                return false;
+              }
+              const QPair<quint64, int> key(queued.channelInstanceId,
+                  static_cast<int>(queued.kind));
+              return queuedPayloadEvents_.value(key) > 1
+                  || (supersedesQueued && key == incomingKey);
+            });
       };
       /* Preserve ordinary ordered bursts, including triggers and alarms.
        * Under overload replace this channel's older lifecycle state, then
@@ -635,7 +670,7 @@ void SharedChannelManager::queueCallbackEvent(CallbackEvent event,
        * must retain the last disconnect in its original position: processing
        * it clears the previous epoch's values, metadata and subscriptions.
        * Never discard another channel's sole lifecycle notification. */
-      if (lifecycle && overloaded()) {
+      if (lifecycle && (countOverloaded() || bytesOverloaded())) {
         bool retainedDisconnect = false;
         for (size_t index = callbackEvents_.size(); index > 0; --index) {
           auto it = callbackEvents_.begin()
@@ -647,39 +682,37 @@ void SharedChannelManager::queueCallbackEvent(CallbackEvent event,
               retainedDisconnect = true;
               continue;
             }
-            callbackBytes_ -= it->data.size();
-            callbackEvents_.erase(it);
-            ++droppedCallbackEvents_;
+            eraseEvent(it);
           }
         }
       }
-      while (!callbackEvents_.empty()
-          && overloaded()) {
-        auto oldest = std::find_if(callbackEvents_.begin(), callbackEvents_.end(),
-            [](const CallbackEvent &queued) {
-              return queued.kind == CallbackKind::kValue;
-            });
-        if (oldest == callbackEvents_.end()) {
-          oldest = std::find_if(callbackEvents_.begin(), callbackEvents_.end(),
+      /* At capacity a superseded state makes room, so a single channel's
+       * burst keeps its newest events. Without one the event is kept beyond
+       * the capacity: lifecycle events carry no payload, and each active ID
+       * retains at most its newest value and metadata in addition to the
+       * fixed capacity. */
+      if (countOverloaded()) {
+        auto victim = oldestSuperseded();
+        if (victim != callbackEvents_.end()) {
+          eraseEvent(victim);
+        }
+      }
+      /* The byte bound holds: superseded states go first, then, only as a
+       * last resort, the oldest values. */
+      while (bytesOverloaded()) {
+        auto victim = oldestSuperseded();
+        if (victim == callbackEvents_.end()) {
+          victim = std::find_if(callbackEvents_.begin(), callbackEvents_.end(),
               [](const CallbackEvent &queued) {
-                return queued.kind == CallbackKind::kControlInfo;
+                return queued.kind == CallbackKind::kValue;
               });
         }
-        if (oldest == callbackEvents_.end()) {
+        if (victim == callbackEvents_.end()) {
           break;
         }
-        callbackBytes_ -= oldest->data.size();
-        callbackEvents_.erase(oldest);
-        ++droppedCallbackEvents_;
+        eraseEvent(victim);
       }
-      /* Lifecycle events carry no payload. Distinct active channels must
-       * keep their final state even when there are more than 4096 of them.
-       * Coalescing retains at most a disconnect, a reconnect and access state
-       * per active ID beyond the ordinary burst capacity: 4096 + 3 * active
-       * IDs. Payload storage retains its independent fixed byte bound.
-       * Expendable events cannot displace a lifecycle-only inbox. */
-      if ((!lifecycle && overloaded())
-          || callbackBytes_ + dataBytes > kMaximumCallbackBytes) {
+      if (bytesOverloaded()) {
         ++droppedCallbackEvents_;
       } else {
         if (data && dataBytes > 0) {
@@ -687,6 +720,7 @@ void SharedChannelManager::queueCallbackEvent(CallbackEvent event,
               static_cast<int>(dataBytes));
         }
         callbackBytes_ += event.data.size();
+        noteCallbackEventQueued(event);
         callbackEvents_.push_back(std::move(event));
       }
     }
@@ -701,12 +735,49 @@ void SharedChannelManager::queueCallbackEvent(CallbackEvent event,
   }
 }
 
+/* Called with callbackMutex_ held. */
+void SharedChannelManager::noteCallbackEventQueued(const CallbackEvent &event)
+{
+  if (event.kind != CallbackKind::kValue
+      && event.kind != CallbackKind::kControlInfo) {
+    return;
+  }
+  int &count = queuedPayloadEvents_[qMakePair(event.channelInstanceId,
+      static_cast<int>(event.kind))];
+  if (count > 0) {
+    ++supersededPayloadEvents_;
+  }
+  ++count;
+}
+
+/* Called with callbackMutex_ held. */
+void SharedChannelManager::noteCallbackEventRemoved(const CallbackEvent &event)
+{
+  if (event.kind != CallbackKind::kValue
+      && event.kind != CallbackKind::kControlInfo) {
+    return;
+  }
+  const QPair<quint64, int> key(event.channelInstanceId,
+      static_cast<int>(event.kind));
+  auto it = queuedPayloadEvents_.find(key);
+  if (it == queuedPayloadEvents_.end()) {
+    return;
+  }
+  if (it.value() > 1) {
+    --supersededPayloadEvents_;
+    --it.value();
+  } else {
+    queuedPayloadEvents_.erase(it);
+  }
+}
+
 void SharedChannelManager::removeCallbackChannel(quint64 channelInstanceId)
 {
   std::lock_guard<std::mutex> lock(callbackMutex_);
   callbackChannels_.remove(channelInstanceId);
   for (auto it = callbackEvents_.begin(); it != callbackEvents_.end();) {
     if (it->channelInstanceId == channelInstanceId) {
+      noteCallbackEventRemoved(*it);
       callbackBytes_ -= it->data.size();
       it = callbackEvents_.erase(it);
     } else {
@@ -728,6 +799,7 @@ void SharedChannelManager::drainCallbackEvents()
       }
       event = std::move(callbackEvents_.front());
       callbackEvents_.pop_front();
+      noteCallbackEventRemoved(event);
       callbackBytes_ -= event.data.size();
     }
     switch (event.kind) {
@@ -1794,6 +1866,8 @@ void SharedChannelManager::shutdown()
     std::lock_guard<std::mutex> lock(callbackMutex_);
     callbackChannels_.clear();
     callbackEvents_.clear();
+    queuedPayloadEvents_.clear();
+    supersededPayloadEvents_ = 0;
     callbackBytes_ = 0;
   }
   connectionCompletionTimer_.stop();

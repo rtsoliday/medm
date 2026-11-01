@@ -179,6 +179,8 @@ private:
       size_t dataBytes = 0);
   void removeCallbackChannel(quint64 channelInstanceId);
   void drainCallbackEvents();
+  void noteCallbackEventQueued(const CallbackEvent &event);
+  void noteCallbackEventRemoved(const CallbackEvent &event);
 
   /* Deferred flush mechanism - batches CA operations to avoid blocking */
   void scheduleDeferredFlush();
@@ -208,9 +210,14 @@ private:
   std::mutex callbackMutex_;
   QSet<quint64> callbackChannels_;
   /* Ordered bursts are fixed-capacity. Overload may also retain the newest
-   * connection/access state and preceding disconnect per active ID, bounding
-   * lifecycle storage by active channels without losing epoch resets. */
+   * value, metadata, connection/access state and preceding disconnect per
+   * active ID, bounding that storage by active channels without losing a
+   * channel's latest state or epoch resets. */
   std::deque<CallbackEvent> callbackEvents_;
+  /* Queued value and metadata events per (channel, kind), and how many of
+   * them a newer event of the same channel and kind supersedes. */
+  QHash<QPair<quint64, int>, int> queuedPayloadEvents_;
+  size_t supersededPayloadEvents_ = 0;
   size_t callbackBytes_ = 0;
   bool callbackDrainScheduled_ = false;
   quint64 droppedCallbackEvents_ = 0;

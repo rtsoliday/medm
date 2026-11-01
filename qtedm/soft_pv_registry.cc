@@ -615,6 +615,8 @@ SharedChannelData SoftPvRegistry::buildData(const Entry &entry) const
   if (entry.hasControlInfo) {
     data.lopr = entry.low;
     data.hopr = entry.high;
+    data.displayLow = entry.low;
+    data.displayHigh = entry.high;
     data.precision = entry.precision;
     data.units = entry.units;
     data.hasControlInfo = true;

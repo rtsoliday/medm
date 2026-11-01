@@ -564,10 +564,12 @@ void CartesianPlotRuntime::updateChannelControlInfo(ChannelState &state,
   state.precisionValid = !isNumericFieldType(state.fieldType)
       || data.precision >= 0;
 
-  if (areAxisLimitsUsable(data.lopr, data.hopr)) {
+  /* MEDM ranges an axis over the display limits as sent, so equal limits
+   * (both 0 when the record sets none) leave the axis autoscaling. */
+  if (areAxisLimitsUsable(data.displayLow, data.displayHigh)) {
     state.runtimeLimitsValid = true;
-    state.runtimeLow = data.lopr;
-    state.runtimeHigh = data.hopr;
+    state.runtimeLow = data.displayLow;
+    state.runtimeHigh = data.displayHigh;
   } else {
     state.runtimeLimitsValid = false;
     state.runtimeLow = 0.0;
@@ -923,6 +925,12 @@ void CartesianPlotRuntime::recomputeAxisRuntimeLimits()
     case CartesianPlotTraceMode::kXYVector:
       break;
     }
+  }
+
+  /* As in MEDM, the channel range applies only when the lowest low limit
+   * is below the highest high limit; otherwise the axis autoscales. */
+  for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
+    valid[axis] = valid[axis] && minimums[axis] < maximums[axis];
   }
 
   invokeOnElement([minimums, maximums, valid](CartesianPlotElement *element) {
@@ -1287,7 +1295,7 @@ bool CartesianPlotRuntime::isTriggerEnabled() const
 
 bool CartesianPlotRuntime::areAxisLimitsUsable(double low, double high)
 {
-  if (!std::isfinite(low) || !std::isfinite(high) || high < low) {
+  if (!std::isfinite(low) || !std::isfinite(high)) {
     return false;
   }
   const double floatMax = static_cast<double>(std::numeric_limits<float>::max());

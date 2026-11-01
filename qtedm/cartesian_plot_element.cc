@@ -2448,6 +2448,15 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
       minimum = axisRuntimeMinimums_[axisIndex];
       maximum = axisRuntimeMaximums_[axisIndex];
       valid = true;
+    } else if (executeMode_) {
+      /* Without usable channel limits SciPlot stays in autoscale mode and
+       * MEDM ignores the range saved in the display. */
+      if (hasData[axisIndex]) {
+        minimum = autoMinimums[axisIndex];
+        maximum = autoMaximums[axisIndex];
+        valid = std::isfinite(minimum) && std::isfinite(maximum)
+            && maximum >= minimum;
+      }
     } else {
       valid = std::isfinite(minimum) && std::isfinite(maximum)
           && maximum > minimum;

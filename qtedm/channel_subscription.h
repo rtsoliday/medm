@@ -97,6 +97,10 @@ struct SharedChannelData
   /* Control information (from DBR_CTRL_* requests) */
   double hopr = 0.0;
   double lopr = 0.0;
+  /* Display limits as the server sent them, which MEDM uses unchanged;
+   * hopr and lopr above are ordered and never equal. */
+  double displayHigh = 0.0;
+  double displayLow = 0.0;
   short precision = -1;
   QString units;
   QStringList enumStrings;

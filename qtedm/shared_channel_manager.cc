@@ -1323,6 +1323,8 @@ void SharedChannelManager::handleControlInfo(SharedChannel *channel,
 
     data.lopr = orderedLow;
     data.hopr = orderedHigh;
+    data.displayLow = info->lower_disp_limit;
+    data.displayHigh = info->upper_disp_limit;
     data.precision = info->precision;
     data.hasPrecision = (info->precision >= 0);
     data.units = QString::fromLatin1(info->units);
@@ -1336,6 +1338,9 @@ void SharedChannelManager::handleControlInfo(SharedChannel *channel,
     for (int i = 0; i < info->no_str; ++i) {
       data.enumStrings.append(QString::fromLatin1(info->strs[i]));
     }
+    /* MEDM's limits for an enum span its states. */
+    data.displayLow = 0.0;
+    data.displayHigh = static_cast<double>(info->no_str) - 1.0;
     data.hasControlInfo = true;
     /* Update string value if we have an enum value */
     if (data.isEnum && data.enumValue < data.enumStrings.size()) {

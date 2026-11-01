@@ -315,8 +315,13 @@ void ImageElement::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   const QRect drawRect = rect().adjusted(0, 0, -1, -1);
 
+  /* MEDM draws an image with static visibility and no frame calc as a
+   * static image (isStaticDynamic), even while its channel is disconnected. */
+  const bool staticDynamics = visibilityMode_ == TextVisibilityMode::kStatic
+      && calc_.trimmed().isEmpty();
   const bool showImage = !pixmap_.isNull()
-      && (!executeMode_ || (runtimeConnected_ && runtimeFrameValid_));
+      && (!executeMode_ || staticDynamics
+          || (runtimeConnected_ && runtimeFrameValid_));
 
   if (showImage) {
     /*

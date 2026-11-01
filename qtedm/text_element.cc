@@ -544,7 +544,15 @@ bool TextElement::hasConfiguredChannel() const
 bool TextElement::shouldSuppressTextForDisconnect() const
 {
   return executeMode_ && !runtimeConnected_ && allowDisconnectIndication_
-      && hasConfiguredChannel();
+      && hasConfiguredChannel() && !hasStaticDynamics();
+}
+
+/* MEDM draws text whose color and visibility are both static as static
+ * text (isStaticDynamic), even while its channel is disconnected. */
+bool TextElement::hasStaticDynamics() const
+{
+  return colorMode_ == TextColorMode::kStatic
+      && visibilityMode_ == TextVisibilityMode::kStatic;
 }
 
 void TextElement::applyTextColor()
@@ -598,7 +606,7 @@ QColor TextElement::effectiveForegroundColor() const
     return baseColor;
   }
 
-  if (!runtimeConnected_) {
+  if (!runtimeConnected_ && !hasStaticDynamics()) {
     return QColor(255, 255, 255);
   }
 

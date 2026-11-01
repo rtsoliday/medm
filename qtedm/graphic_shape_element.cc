@@ -203,7 +203,11 @@ QColor GraphicShapeElement::effectiveForegroundColor() const
     return baseColor;
   }
 
-  if (!runtimeConnected_) {
+  /* MEDM draws a graphic whose color and visibility are both static as a
+   * static graphic (isStaticDynamic), even while its channel is
+   * disconnected. */
+  if (!runtimeConnected_ && (colorMode_ != TextColorMode::kStatic
+          || visibilityMode_ != TextVisibilityMode::kStatic)) {
     return QColor(255, 255, 255);
   }
 

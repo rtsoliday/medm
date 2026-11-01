@@ -522,6 +522,11 @@ QColor CompositeElement::defaultBackgroundColor() const
 
 bool CompositeElement::hasActiveChannel() const
 {
+  /* MEDM ignores the channels of a composite whose visibility is static
+   * (isStaticDynamic) and always draws its children. */
+  if (visibilityMode_ == TextVisibilityMode::kStatic) {
+    return false;
+  }
   for (const auto &channel : channels_) {
     if (!channel.trimmed().isEmpty()) {
       return true;

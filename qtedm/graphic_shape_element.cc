@@ -163,6 +163,26 @@ void GraphicShapeElement::setVisible(bool visible)
   QWidget::setVisible(visible);
 }
 
+/* MEDM's graphics GC uses butt caps and the X default dash list of 4 pixels
+ * on and 4 off, whatever the line width. Qt's DashLine scales its dashes
+ * with the width, and its square caps extend each dash, and each end of a
+ * wide line, by half the width. A solid line one pixel wide or thinner
+ * keeps Qt's caps, which draw its last pixel as X does. */
+QPen GraphicShapeElement::medmLinePen(const QColor &color, int width,
+    RectangleLineStyle style)
+{
+  QPen pen(color);
+  pen.setWidth(width);
+  if (style == RectangleLineStyle::kDash) {
+    const qreal unit = std::max(1, width);
+    pen.setDashPattern({4.0 / unit, 4.0 / unit});
+    pen.setCapStyle(Qt::FlatCap);
+  } else if (width > 1) {
+    pen.setCapStyle(Qt::FlatCap);
+  }
+  return pen;
+}
+
 QColor GraphicShapeElement::defaultForegroundColor() const
 {
   if (const QWidget *parent = parentWidget()) {

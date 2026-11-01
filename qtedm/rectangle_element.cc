@@ -154,16 +154,18 @@ void RectangleElement::paintEvent(QPaintEvent *event)
     painter.fillRect(deviceRect, currentColor);
   } else {
     painter.setBrush(Qt::NoBrush);
-    QPen pen(currentColor);
-    pen.setWidth(lineWidth_);
-    pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
-                                                         : Qt::SolidLine);
+    QPen pen = medmLinePen(currentColor, lineWidth_, lineStyle_);
     painter.setPen(pen);
     if (deviceRect.width() > 0 && deviceRect.height() > 0) {
       painter.drawRect(deviceRect);
     } else if (deviceRect.width() >= 0 && deviceRect.height() >= 0) {
       /* XDrawRectangle strokes a rectangle with no height or width as a
-       * line of the line width; displays use these as thick separators. */
+       * line of the line width; displays use these as thick separators.
+       * Its joins reach past the ends as square caps do. */
+      if (lineStyle_ == RectangleLineStyle::kSolid) {
+        pen.setCapStyle(Qt::SquareCap);
+        painter.setPen(pen);
+      }
       painter.drawLine(deviceRect.left(), deviceRect.top(),
           deviceRect.left() + deviceRect.width(),
           deviceRect.top() + deviceRect.height());

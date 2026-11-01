@@ -3,9 +3,11 @@
 #include <array>
 
 #include <QColor>
+#include <QPen>
 #include <QString>
 #include <QWidget>
 
+#include "graphic_properties.h"
 #include "text_properties.h"
 
 class QPainter;
@@ -43,6 +45,8 @@ public:
   void setVisible(bool visible) override;
 
 protected:
+  static QPen medmLinePen(const QColor &color, int width,
+      RectangleLineStyle style);
   QColor defaultForegroundColor() const;
   QColor effectiveForegroundColor() const;
 

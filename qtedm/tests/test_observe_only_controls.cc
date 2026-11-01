@@ -807,6 +807,11 @@ void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates()
     QPainter painter(&expected);
     painter.setRenderHint(QPainter::Antialiasing, false);
     QPen pen(Qt::black, std::max(1, lineWidth));
+    /* MEDM's graphics GC uses butt caps, so a wide line ends at its end
+     * points. */
+    if (lineWidth > 1) {
+      pen.setCapStyle(Qt::FlatCap);
+    }
     painter.setPen(filled ? QPen(Qt::NoPen) : pen);
     painter.setBrush(filled ? QBrush(Qt::black) : QBrush(Qt::NoBrush));
     /* MEDM's drawRectangle/drawOval/drawArc use ADL dimensions verbatim

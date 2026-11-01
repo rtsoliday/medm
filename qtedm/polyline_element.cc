@@ -173,10 +173,7 @@ void PolylineElement::paintEvent(QPaintEvent *event)
 
   const QColor effectiveColor = effectiveForegroundColor();
 
-  QPen pen(effectiveColor);
-  pen.setWidth(lineWidth_);
-  pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
-                                                       : Qt::SolidLine);
+  QPen pen = medmLinePen(effectiveColor, lineWidth_, lineStyle_);
   painter.setPen(pen);
   painter.setBrush(Qt::NoBrush);
   painter.drawPolyline(localPolyline_);

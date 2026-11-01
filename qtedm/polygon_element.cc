@@ -204,10 +204,7 @@ void PolygonElement::paintEvent(QPaintEvent *event)
     painter.drawPolygon(localPolygon_);
   } else {
     painter.setBrush(Qt::NoBrush);
-    QPen pen(effectiveColor);
-    pen.setWidth(lineWidth_);
-    pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
-                                                         : Qt::SolidLine);
+    QPen pen = medmLinePen(effectiveColor, lineWidth_, lineStyle_);
     painter.setPen(pen);
     painter.drawPolygon(localPolygon_);
   }

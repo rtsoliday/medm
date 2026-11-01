@@ -120,10 +120,7 @@ void ArcElement::paintEvent(QPaintEvent *event)
     painter.drawPie(drawRect, startAngle, spanAngle);
   } else {
     painter.setBrush(Qt::NoBrush);
-    QPen pen(effectiveColor);
-    pen.setWidth(lineWidth_);
-    pen.setStyle(lineStyle_ == RectangleLineStyle::kDash ? Qt::DashLine
-                                                         : Qt::SolidLine);
+    QPen pen = medmLinePen(effectiveColor, lineWidth_, lineStyle_);
     painter.setPen(pen);
     if (drawRect.width() > 0 && drawRect.height() > 0) {
       painter.drawArc(drawRect, startAngle, spanAngle);

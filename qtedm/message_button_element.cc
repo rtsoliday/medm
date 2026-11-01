@@ -25,6 +25,7 @@
 #include "medm_colors.h"
 #include "pv_name_utils.h"
 #include "window_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -386,6 +387,8 @@ void MessageButtonElement::setConfirmationRequired(bool required)
 
 void MessageButtonElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -413,6 +416,8 @@ bool MessageButtonElement::isExecuteMode() const
 
 void MessageButtonElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (runtimeConnected_ == connected) {
     return;
   }

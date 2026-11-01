@@ -28,6 +28,7 @@
 #include "pv_name_utils.h"
 #include "cursor_utils.h"
 #include "window_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -583,6 +584,8 @@ void WheelSwitchElement::setChannel(const QString &channel)
 
 void WheelSwitchElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -600,6 +603,8 @@ bool WheelSwitchElement::isExecuteMode() const
 
 void WheelSwitchElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (runtimeConnected_ == connected) {
     return;
   }
@@ -687,6 +692,8 @@ void WheelSwitchElement::setRuntimeValue(double value)
 
 void WheelSwitchElement::clearRuntimeState()
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   stopRepeating();
   runtimeConnected_ = false;
   runtimeWriteAccess_ = false;

@@ -16,6 +16,7 @@
 #include "pv_name_utils.h"
 #include "text_font_utils.h"
 #include "window_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -290,6 +291,8 @@ void TextEntryElement::setChannel(const QString &value)
 
 void TextEntryElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -333,6 +336,8 @@ bool TextEntryElement::isExecuteMode() const
 
 void TextEntryElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (runtimeConnected_ == connected) {
     return;
   }
@@ -413,6 +418,8 @@ void TextEntryElement::setRuntimePrecision(int precision)
 
 void TextEntryElement::clearRuntimeState()
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   runtimeConnected_ = false;
   runtimeWriteAccess_ = false;
   runtimeSeverity_ = 0;

@@ -23,6 +23,7 @@
 #include "pv_name_utils.h"
 #include "text_font_utils.h"
 #include "window_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -342,6 +343,8 @@ void SliderElement::setChannel(const QString &channel)
 
 void SliderElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -365,6 +368,8 @@ bool SliderElement::isExecuteMode() const
 
 void SliderElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (runtimeConnected_ == connected) {
     return;
   }
@@ -446,6 +451,8 @@ void SliderElement::setRuntimeValue(double value)
 
 void SliderElement::clearRuntimeState()
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (dragging_) {
     releaseMouse();
   }

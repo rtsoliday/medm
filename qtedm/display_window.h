@@ -32,6 +32,7 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QEvent>
+#include <QDynamicPropertyChangeEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -117,6 +118,7 @@
 #include "line_element.h"
 #include "line_runtime.h"
 #include "medm_colors.h"
+#include "medm_widget_state.h"
 #include "oval_element.h"
 #include "oval_runtime.h"
 #include "strip_chart_element.h"
@@ -538,6 +540,13 @@ public:
       case QEvent::ZOrderChange:
         owner_->requestStackingOrderRefresh();
         break;
+      case QEvent::DynamicPropertyChange:
+        if (static_cast<QDynamicPropertyChangeEvent *>(event)->propertyName()
+            == kMedmWidgetUnmanagedProperty) {
+          owner_->handleMedmWidgetUnmanagedChange(
+              qobject_cast<QWidget *>(watched));
+        }
+        break;
       default:
         break;
       }
@@ -937,6 +946,9 @@ private:
   void ensureElementInStack(QWidget *element);
   void refreshStackingOrder();
   void requestStackingOrderRefresh();
+  void updateUnmanagedStackingWidgets(
+      const QVector<QPair<QWidget *, bool>> &stackLayers);
+  void handleMedmWidgetUnmanagedChange(QWidget *widget);
   void markWidgetHasDynamicAttribute(QWidget *widget) const;
   bool widgetHasDynamicAttribute(const QWidget *widget) const;
   void recordWidgetOriginalGeometry(QWidget *widget,
@@ -1268,6 +1280,10 @@ private:
   QList<QPointer<QWidget>> multiSelection_;
   QList<QPointer<QWidget>> elementStack_;
   QSet<QWidget *> elementStackSet_;  /* Fast O(1) duplicate checking for elementStack_ */
+  /* Widget-backed elements that overlap an earlier widget or a later
+   * dynamic graphic. */
+  QSet<QWidget *> unmanagedStackingWidgets_;
+  quint64 unmanagedStackingFingerprint_ = 0;
   QHash<const QWidget *, QRect> originalAdlGeometries_;
   QHash<const QWidget *, QVector<QPoint>> originalPolylinePoints_;
   bool stackingRefreshPending_ = false;

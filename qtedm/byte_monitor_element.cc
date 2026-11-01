@@ -15,6 +15,7 @@
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -153,6 +154,8 @@ void ByteMonitorElement::setChannel(const QString &channel)
 
 void ByteMonitorElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -167,6 +170,8 @@ bool ByteMonitorElement::isExecuteMode() const
 
 void ByteMonitorElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (!executeMode_) {
     return;
   }
@@ -214,6 +219,8 @@ void ByteMonitorElement::setRuntimeValue(quint32 value)
 
 void ByteMonitorElement::clearRuntimeState()
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   runtimeConnected_ = false;
   runtimeSeverity_ = kInvalidSeverity;
   hasRuntimeValue_ = false;

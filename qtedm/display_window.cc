@@ -1,4 +1,5 @@
 #include "display_window.h"
+#include "medm_widget_state.h"
 
 #include "channel_access_context.h"
 #include "command_line_options.h"
@@ -28799,6 +28800,8 @@ void DisplayWindow::refreshStackingOrder()
   QList<QWidget *> dynamicWidgets;
   QList<QWidget *> medmWidgetBackedWidgets;
   QSet<QWidget *> liveElementStackSet;
+  /* Dynamic graphics, and widget-backed elements (true), in display order. */
+  QVector<QPair<QWidget *, bool>> stackLayers;
 
   for (auto it = elementStack_.begin(); it != elementStack_.end();) {
     QWidget *widget = it->data();
@@ -28827,18 +28830,32 @@ void DisplayWindow::refreshStackingOrder()
       }
     }
     if (isMedmWidgetBackedWidget(widget)) {
-      medmWidgetBackedWidgets.append(widget);
+      stackLayers.append({widget, true});
     } else if (needsGraphicDynamicLayer(widget)) {
-      dynamicWidgets.append(widget);
+      stackLayers.append({widget, false});
     } else if (isStaticGraphicWidget(widget)) {
       staticWidgets.append(widget);
     } else {
-      dynamicWidgets.append(widget);
+      stackLayers.append({widget, false});
     }
     ++it;
   }
 
   elementStackSet_ = liveElementStackSet;
+  updateUnmanagedStackingWidgets(stackLayers);
+  for (const auto &layer : stackLayers) {
+    QWidget *widget = layer.first;
+    /* MEDM unmanages a disconnected widget and paints its object in
+     * display order, below every widget and under later dynamic graphics.
+     * Only a widget overlapping one of those needs to move. */
+    if (layer.second
+        && !(executeModeActive_ && isMedmWidgetUnmanaged(widget)
+            && unmanagedStackingWidgets_.contains(widget))) {
+      medmWidgetBackedWidgets.append(widget);
+    } else {
+      dynamicWidgets.append(widget);
+    }
+  }
 
   /* Raise static widgets first so that interactive controls can sit on top
    * just like MEDM draws static graphics onto the background pixmap. */
@@ -28854,6 +28871,63 @@ void DisplayWindow::refreshStackingOrder()
     widget->raise();
   }
   stackingOrderInternallyUpdating_ = false;
+}
+
+/* Records the widget-backed elements whose stacking shows when their channel
+ * connects or disconnects: those overlapping an earlier widget, which an
+ * unmanaged one drops below, or a later dynamic graphic, which it drops
+ * under. The overlaps are found again only when the elements or the display
+ * size change, since a large display restacks often while it starts. */
+void DisplayWindow::updateUnmanagedStackingWidgets(
+    const QVector<QPair<QWidget *, bool>> &stackLayers)
+{
+  if (!executeModeActive_) {
+    unmanagedStackingWidgets_.clear();
+    unmanagedStackingFingerprint_ = 0;
+    return;
+  }
+  quint64 fingerprint = 1469598103934665603ULL;
+  const auto mix = [&fingerprint](quint64 value) {
+    fingerprint = (fingerprint ^ value) * 1099511628211ULL;
+  };
+  if (displayArea_) {
+    mix(static_cast<quint64>(displayArea_->width()));
+    mix(static_cast<quint64>(displayArea_->height()));
+  }
+  for (const auto &layer : stackLayers) {
+    mix(static_cast<quint64>(reinterpret_cast<quintptr>(layer.first)));
+  }
+  if (fingerprint == unmanagedStackingFingerprint_) {
+    return;
+  }
+  unmanagedStackingFingerprint_ = fingerprint;
+  unmanagedStackingWidgets_.clear();
+  QVector<QWidget *> earlierWidgetBacked;
+  for (const auto &layer : stackLayers) {
+    const QRect area = layer.first->geometry();
+    if (layer.second) {
+      for (QWidget *earlier : earlierWidgetBacked) {
+        if (earlier->geometry().intersects(area)) {
+          unmanagedStackingWidgets_.insert(layer.first);
+          break;
+        }
+      }
+      earlierWidgetBacked.append(layer.first);
+      continue;
+    }
+    for (QWidget *earlier : earlierWidgetBacked) {
+      if (earlier->geometry().intersects(area)) {
+        unmanagedStackingWidgets_.insert(earlier);
+      }
+    }
+  }
+}
+
+void DisplayWindow::handleMedmWidgetUnmanagedChange(QWidget *widget)
+{
+  if (widget && unmanagedStackingWidgets_.contains(widget)) {
+    requestStackingOrderRefresh();
+  }
 }
 
 void DisplayWindow::requestStackingOrderRefresh()
@@ -36638,6 +36712,8 @@ void DisplayWindow::leaveExecuteMode()
       element->setExecuteMode(false);
     }
   }
+  /* Widgets stacked with the graphics while disconnected return above them. */
+  refreshStackingOrder();
 }
 
 void DisplayWindow::removeTextRuntime(TextElement *element)

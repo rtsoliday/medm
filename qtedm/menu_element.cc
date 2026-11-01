@@ -24,6 +24,7 @@
 #include "cursor_utils.h"
 #include "pv_name_utils.h"
 #include "window_utils.h"
+#include "medm_widget_state.h"
 
 class CenteredDisplayComboBox : public QComboBox
 {
@@ -283,6 +284,8 @@ void MenuElement::setChannel(const QString &channel)
 
 void MenuElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -324,6 +327,8 @@ bool MenuElement::isExecuteMode() const
 
 void MenuElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (runtimeConnected_ == connected) {
     return;
   }

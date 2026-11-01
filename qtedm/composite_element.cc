@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QDebug>
+#include <QDynamicPropertyChangeEvent>
 #include <QTimer>
 
 #include "text_element.h"
@@ -36,6 +37,7 @@
 #include "strip_chart_element.h"
 #include "cartesian_plot_element.h"
 #include "window_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -915,7 +917,12 @@ void CompositeElement::refreshChildStackingOrder()
     }
 
     if (isMedmWidgetBackedChildWidget(child)) {
-      medmWidgetBackedWidgets.append(child);
+      /* MEDM paints a disconnected widget's object in display order. */
+      if (executeMode_ && isMedmWidgetUnmanaged(child)) {
+        dynamicWidgets.append(child);
+      } else {
+        medmWidgetBackedWidgets.append(child);
+      }
       continue;
     }
 
@@ -997,6 +1004,12 @@ bool CompositeElement::eventFilter(QObject *watched, QEvent *event)
     case QEvent::ParentChange:
     case QEvent::ZOrderChange:
       scheduleChildStackingRefresh();
+      break;
+    case QEvent::DynamicPropertyChange:
+      if (static_cast<QDynamicPropertyChangeEvent *>(event)->propertyName()
+          == kMedmWidgetUnmanagedProperty) {
+        scheduleChildStackingRefresh();
+      }
       break;
     default:
       break;

@@ -13,6 +13,7 @@
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -275,6 +276,8 @@ void ScaleMonitorElement::setChannel(const QString &channel)
 
 void ScaleMonitorElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -305,6 +308,8 @@ void ScaleMonitorElement::applyMedmMinimumSize()
 
 void ScaleMonitorElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (!executeMode_) {
     return;
   }
@@ -389,6 +394,8 @@ void ScaleMonitorElement::setRuntimePrecision(int precision)
 
 void ScaleMonitorElement::clearRuntimeState()
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   runtimeConnected_ = false;
   runtimeLimitsValid_ = false;
   hasRuntimeValue_ = false;

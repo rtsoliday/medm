@@ -2,6 +2,7 @@
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
+#include "medm_widget_state.h"
 
 #include <algorithm>
 #include <cmath>
@@ -276,6 +277,8 @@ void BarMonitorElement::setChannel(const QString &channel)
 
 void BarMonitorElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -308,6 +311,8 @@ void BarMonitorElement::applyMedmMinimumSize()
 
 void BarMonitorElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (runtimeConnected_ == connected) {
     return;
   }
@@ -379,6 +384,8 @@ void BarMonitorElement::setRuntimePrecision(int precision)
 
 void BarMonitorElement::clearRuntimeState()
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   runtimeConnected_ = false;
   runtimeLimitsValid_ = false;
   hasRuntimeValue_ = false;

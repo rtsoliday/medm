@@ -16,6 +16,7 @@
 #include <QtMath>
 
 #include "update_coordinator.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -365,6 +366,8 @@ void MeterElement::setChannel(const QString &channel)
 
 void MeterElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (executeMode_ == execute) {
     return;
   }
@@ -380,6 +383,8 @@ bool MeterElement::isExecuteMode() const
 
 void MeterElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   if (runtimeConnected_ == connected) {
     return;
   }
@@ -456,6 +461,8 @@ void MeterElement::setRuntimePrecision(int precision)
 
 void MeterElement::clearRuntimeState()
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && !runtimeConnected_; });
   runtimeConnected_ = false;
   runtimeLimitsValid_ = false;
   hasRuntimeValue_ = false;

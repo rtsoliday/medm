@@ -167,6 +167,8 @@ private slots:
   void sliderTroughRespectsAccess_data();
   void sliderTroughRespectsAccess();
   void executePickingFollowsVisibleStacking();
+  void disconnectedWidgetsStackInDisplayOrder();
+  void disconnectedCompositeChildrenStackInOrder();
   void hiddenRelatedDisplayUnderGraphicComposite();
   void compositeChildrenAreNotClipped_data();
   void compositeChildrenAreNotClipped();
@@ -3192,6 +3194,117 @@ void TestObserveOnlyControls::executePickingFollowsVisibleStacking()
   });
   window.showExecuteContextMenu(window.mapToGlobal(point));
   QVERIFY(axisMenuShown);
+}
+
+void TestObserveOnlyControls::disconnectedWidgetsStackInDisplayOrder()
+{
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.resize(500, 400);
+  window.show();
+  window.executeModeActive_ = true;
+
+  /* In ADL order: a static frame, a slider, a dynamic rectangle over the
+   * slider, a plot, a slider over the plot, and a slider clear of all. */
+  auto *frame = new RectangleElement(window.displayArea_);
+  frame->setGeometry(10, 10, 220, 120);
+  window.rectangleElements_.append(frame);
+  window.ensureElementInStack(frame);
+  frame->show();
+  auto *slider = new SliderElement(window.displayArea_);
+  slider->setGeometry(30, 40, 165, 25);
+  slider->setChannel(QStringLiteral("stack:slider"));
+  window.sliderElements_.append(slider);
+  window.ensureElementInStack(slider);
+  slider->show();
+  auto *cover = new RectangleElement(window.displayArea_);
+  cover->setGeometry(20, 20, 190, 100);
+  cover->setChannel(0, QStringLiteral("stack:cover"));
+  window.rectangleElements_.append(cover);
+  window.ensureElementInStack(cover);
+  cover->show();
+  auto *plot = new CartesianPlotElement(window.displayArea_);
+  plot->setGeometry(250, 150, 200, 120);
+  window.cartesianPlotElements_.append(plot);
+  window.ensureElementInStack(plot);
+  plot->show();
+  auto *onPlot = new SliderElement(window.displayArea_);
+  onPlot->setGeometry(260, 160, 150, 25);
+  onPlot->setChannel(QStringLiteral("stack:onPlot"));
+  window.sliderElements_.append(onPlot);
+  window.ensureElementInStack(onPlot);
+  onPlot->show();
+  auto *clear = new SliderElement(window.displayArea_);
+  clear->setGeometry(300, 330, 150, 25);
+  clear->setChannel(QStringLiteral("stack:clear"));
+  window.sliderElements_.append(clear);
+  window.ensureElementInStack(clear);
+  clear->show();
+
+  slider->setExecuteMode(true);
+  onPlot->setExecuteMode(true);
+  clear->setExecuteMode(true);
+  window.refreshStackingOrder();
+  QCoreApplication::processEvents();
+  QVERIFY(window.unmanagedStackingWidgets_.contains(slider));
+  QVERIFY(window.unmanagedStackingWidgets_.contains(onPlot));
+  QVERIFY(!window.unmanagedStackingWidgets_.contains(clear));
+
+  const auto stackIndex = [&window](QWidget *widget) {
+    return window.displayArea_->children().indexOf(widget);
+  };
+  /* MEDM paints a disconnected widget's object in display order. */
+  QVERIFY(stackIndex(frame) < stackIndex(slider));
+  QVERIFY(stackIndex(slider) < stackIndex(cover));
+
+  /* A connected widget is a window above the graphics. */
+  slider->setRuntimeConnected(true);
+  QCoreApplication::processEvents();
+  QVERIFY(stackIndex(slider) > stackIndex(cover));
+  slider->setRuntimeConnected(false);
+  QCoreApplication::processEvents();
+  QVERIFY(stackIndex(slider) < stackIndex(cover));
+  QVERIFY(stackIndex(frame) < stackIndex(slider));
+
+  /* A disconnected widget is drawn below an earlier widget it overlaps. */
+  QVERIFY(stackIndex(onPlot) < stackIndex(plot));
+  onPlot->setRuntimeConnected(true);
+  QCoreApplication::processEvents();
+  QVERIFY(stackIndex(onPlot) > stackIndex(plot));
+}
+
+void TestObserveOnlyControls::disconnectedCompositeChildrenStackInOrder()
+{
+  QWidget parent;
+  parent.resize(300, 200);
+  auto *composite = new CompositeElement(&parent);
+  composite->setGeometry(0, 0, 250, 150);
+  auto *slider = new SliderElement;
+  slider->setGeometry(30, 40, 165, 25);
+  slider->setChannel(QStringLiteral("stack:slider"));
+  composite->adoptChild(slider);
+  auto *cover = new RectangleElement;
+  cover->setGeometry(20, 20, 190, 100);
+  cover->setChannel(0, QStringLiteral("stack:cover"));
+  composite->adoptChild(cover);
+  parent.show();
+  composite->setExecuteMode(true);
+  slider->setExecuteMode(true);
+  QCoreApplication::processEvents();
+
+  const auto stackIndex = [composite](QWidget *widget) {
+    return composite->children().indexOf(widget);
+  };
+  QVERIFY(stackIndex(slider) < stackIndex(cover));
+  slider->setRuntimeConnected(true);
+  QCoreApplication::processEvents();
+  QVERIFY(stackIndex(slider) > stackIndex(cover));
+  slider->setRuntimeConnected(false);
+  QCoreApplication::processEvents();
+  QVERIFY(stackIndex(slider) < stackIndex(cover));
 }
 
 void TestObserveOnlyControls::compositeShapePicking_data()

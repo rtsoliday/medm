@@ -22,6 +22,7 @@
 #include "cursor_utils.h"
 #include "pv_name_utils.h"
 #include "window_utils.h"
+#include "medm_widget_state.h"
 
 namespace {
 
@@ -438,6 +439,8 @@ void ChoiceButtonElement::setChannel(const QString &channel)
 
 void ChoiceButtonElement::setExecuteMode(bool execute)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && (!runtimeConnected_ || runtimeNotEnum_); });
   if (executeMode_ == execute) {
     return;
   }
@@ -467,6 +470,8 @@ bool ChoiceButtonElement::isExecuteMode() const
 
 void ChoiceButtonElement::setRuntimeConnected(bool connected)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && (!runtimeConnected_ || runtimeNotEnum_); });
   if (runtimeConnected_ == connected) {
     return;
   }
@@ -485,6 +490,8 @@ void ChoiceButtonElement::setRuntimeConnected(bool connected)
  * drawn over the display there. */
 void ChoiceButtonElement::setRuntimeNotEnum(bool notEnum)
 {
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && (!runtimeConnected_ || runtimeNotEnum_); });
   if (runtimeNotEnum_ == notEnum) {
     return;
   }

@@ -5,10 +5,12 @@
 #include <QWidget>
 #include <QRectF>
 
+#include "medm_minimum_size.h"
 #include "monitor_properties.h"
 #include "text_properties.h"
 
 class QFontMetricsF;
+class QResizeEvent;
 
 class BarMonitorElement : public QWidget
 {
@@ -67,8 +69,11 @@ public:
 
 protected:
   void paintEvent(QPaintEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 private:
+  void applyMedmMinimumSize();
+
   struct Layout;
   Layout calculateLayout(const QRectF &contentRect,
       const QFontMetricsF &metrics) const;
@@ -109,6 +114,7 @@ private:
   bool hasExplicitPrecisionData_ = false;
   QString channel_;
   bool executeMode_ = false;
+  MedmMinimumSize medmMinimumSize_;
   bool runtimeConnected_ = false;
   bool runtimeLimitsValid_ = false;
   bool hasRuntimeValue_ = false;

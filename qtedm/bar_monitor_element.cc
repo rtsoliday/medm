@@ -138,6 +138,7 @@ void BarMonitorElement::setLabel(MeterLabel label)
     return;
   }
   label_ = label;
+  applyMedmMinimumSize();
   update();
 }
 
@@ -279,12 +280,28 @@ void BarMonitorElement::setExecuteMode(bool execute)
     return;
   }
   executeMode_ = execute;
+  applyMedmMinimumSize();
   clearRuntimeState();
 }
 
 bool BarMonitorElement::isExecuteMode() const
 {
   return executeMode_;
+}
+
+void BarMonitorElement::resizeEvent(QResizeEvent *event)
+{
+  QWidget::resizeEvent(event);
+  medmMinimumSize_.noteResize(*this);
+  applyMedmMinimumSize();
+}
+
+/* MEDM's bar with decorations is at least 20x20, leaving room for its
+ * trough and fill; without decorations it keeps the object size. */
+void BarMonitorElement::applyMedmMinimumSize()
+{
+  medmMinimumSize_.apply(*this,
+      executeMode_ && label_ != MeterLabel::kNoDecorations);
 }
 
 void BarMonitorElement::setRuntimeConnected(bool connected)

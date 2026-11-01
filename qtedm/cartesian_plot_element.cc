@@ -286,83 +286,76 @@ MedmMarkerStyle markerStyleForTrace(int traceIndex)
   return MedmMarkerStyle::kCircle;
 }
 
+/* MEDM sizes point markers from the plot's object height: pointSize is
+ * max(2, height / 70), three quarters of that for squares, and SciPlot
+ * gets two thirds of it as the marker's half width (medmCartesianPlot.c,
+ * CpSetAxisStyle in medmSciPlot.c). The shapes follow SciPlot's
+ * DrawMarker: corners are truncated to whole pixels, circles are filled
+ * with XFillArc and rectangles and polygons are filled and outlined. */
 void drawMedmMarker(QPainter &painter, const QPointF &point,
-    int traceIndex, qreal basePointSize)
+    int traceIndex, int objectHeight)
 {
   const MedmMarkerStyle style = markerStyleForTrace(traceIndex);
-  qreal markerSize = basePointSize * 1.3;
-  if (markerSize <= 0.0) {
-    return;
-  }
+  int pointSize = std::max(2, objectHeight / 70);
   if (style == MedmMarkerStyle::kSquare) {
-    markerSize *= 0.75;
+    pointSize = pointSize * 3 / 4;
   }
-  const qreal half = markerSize / 2.0;
-  const qreal x = point.x();
-  const qreal y = point.y();
+  const double size = pointSize * 2.0 / 3.0;
+  const double x = point.x();
+  const double y = point.y();
+  const auto pixel = [](double value) {
+    return static_cast<int>(value);
+  };
+  const auto drawShape = [&](std::initializer_list<QPointF> corners) {
+    QPolygon polygon;
+    for (const QPointF &corner : corners) {
+      polygon << QPoint(pixel(corner.x()), pixel(corner.y()));
+    }
+    painter.drawPolygon(polygon);
+  };
+  const double across = size * 0.866;
+  const double half = size / 2.0;
 
   switch (style) {
-  case MedmMarkerStyle::kCircle:
-    painter.drawEllipse(QPointF(x, y), half, half);
-    break;
-  case MedmMarkerStyle::kSquare:
-    painter.drawRect(QRectF(x - half, y - half, markerSize, markerSize));
-    break;
-  case MedmMarkerStyle::kUpTriangle: {
-    QPolygonF poly;
-    poly << QPointF(x, y - half)
-         << QPointF(x - half, y + half)
-         << QPointF(x + half, y + half);
-    painter.drawPolygon(poly);
+  case MedmMarkerStyle::kCircle: {
+    /* XFillArc covers its whole box. Qt fills only the inside of an
+     * unoutlined ellipse, so outline it in the fill color in a box one
+     * pixel smaller, which covers the same pixels. */
+    const int diameter = pixel(size * 2.0);
+    painter.drawEllipse(QRect(pixel(x - size), pixel(y - size),
+        diameter - 1, diameter - 1));
     break;
   }
-  case MedmMarkerStyle::kDiamond: {
-    QPolygonF poly;
-    poly << QPointF(x, y - half)
-         << QPointF(x - half, y)
-         << QPointF(x, y + half)
-         << QPointF(x + half, y);
-    painter.drawPolygon(poly);
+  case MedmMarkerStyle::kSquare: {
+    const double edge = size - 0.5;
+    const int width = pixel(2.0 * edge + 1.0);
+    painter.drawRect(QRect(pixel(x - edge), pixel(y - edge), width, width));
     break;
   }
-  case MedmMarkerStyle::kDownTriangle: {
-    QPolygonF poly;
-    poly << QPointF(x - half, y - half)
-         << QPointF(x + half, y - half)
-         << QPointF(x, y + half);
-    painter.drawPolygon(poly);
+  case MedmMarkerStyle::kUpTriangle:
+    drawShape({QPointF(x, y - size), QPointF(x + across, y + half),
+        QPointF(x - across, y + half)});
     break;
-  }
-  case MedmMarkerStyle::kRightTriangle: {
-    QPolygonF poly;
-    poly << QPointF(x - half, y - half)
-         << QPointF(x - half, y + half)
-         << QPointF(x + half, y);
-    painter.drawPolygon(poly);
+  case MedmMarkerStyle::kDiamond:
+    drawShape({QPointF(x, y - size), QPointF(x + size, y),
+        QPointF(x, y + size), QPointF(x - size, y)});
     break;
-  }
-  case MedmMarkerStyle::kLeftTriangle: {
-    QPolygonF poly;
-    poly << QPointF(x + half, y - half)
-         << QPointF(x + half, y + half)
-         << QPointF(x - half, y);
-    painter.drawPolygon(poly);
+  case MedmMarkerStyle::kDownTriangle:
+    drawShape({QPointF(x, y + size), QPointF(x + across, y - half),
+        QPointF(x - across, y - half)});
     break;
-  }
-  case MedmMarkerStyle::kBowTie: {
-    QPolygonF left;
-    left << QPointF(x, y)
-         << QPointF(x + half, y - half)
-         << QPointF(x + half, y + half);
-    painter.drawPolygon(left);
-
-    QPolygonF right;
-    right << QPointF(x, y)
-          << QPointF(x - half, y - half)
-          << QPointF(x - half, y + half);
-    painter.drawPolygon(right);
+  case MedmMarkerStyle::kRightTriangle:
+    drawShape({QPointF(x + size, y), QPointF(x - half, y + across),
+        QPointF(x - half, y - across)});
     break;
-  }
+  case MedmMarkerStyle::kLeftTriangle:
+    drawShape({QPointF(x - size, y), QPointF(x + half, y + across),
+        QPointF(x + half, y - across)});
+    break;
+  case MedmMarkerStyle::kBowTie:
+    drawShape({QPointF(x - size, y - size), QPointF(x - size, y + size),
+        QPointF(x + size, y - size), QPointF(x + size, y + size)});
+    break;
   }
 }
 
@@ -2248,9 +2241,8 @@ void CartesianPlotElement::paintTraces(QPainter &painter, const QRectF &rect) co
     case CartesianPlotStyle::kPoint: {
       painter.save();
       painter.setBrush(color);
-      const qreal basePointSize = std::max(2.0, rect.height() / 70.0);
       for (const QPointF &point : points) {
-        drawMedmMarker(painter, point, i, basePointSize);
+        drawMedmMarker(painter, point, i, height());
       }
       painter.restore();
       break;
@@ -2436,11 +2428,15 @@ void CartesianPlotElement::paintTracesExecute(QPainter &painter,
 
     switch (style_) {
     case CartesianPlotStyle::kPoint: {
+      /* SciPlot clips only lines to the plot area. It draws the whole
+       * marker of every point inside the area, across the axes too. */
       painter.save();
+      painter.setClipping(false);
       painter.setBrush(color);
-      const qreal basePointSize = std::max(2.0, rect.height() / 70.0);
       for (const QPointF &point : mappedPoints) {
-        drawMedmMarker(painter, point, i, basePointSize);
+        if (rect.contains(point)) {
+          drawMedmMarker(painter, point, i, height());
+        }
       }
       painter.restore();
       break;
@@ -3186,11 +3182,15 @@ void CartesianPlotElement::paintTracesOnly(QPainter &painter,
 
     switch (style_) {
     case CartesianPlotStyle::kPoint: {
+      /* SciPlot clips only lines to the plot area. It draws the whole
+       * marker of every point inside the area, across the axes too. */
       painter.save();
+      painter.setClipping(false);
       painter.setBrush(color);
-      const qreal basePointSize = std::max(2.0, rect.height() / 70.0);
       for (const QPointF &point : mappedPoints) {
-        drawMedmMarker(painter, point, i, basePointSize);
+        if (rect.contains(point)) {
+          drawMedmMarker(painter, point, i, height());
+        }
       }
       painter.restore();
       break;

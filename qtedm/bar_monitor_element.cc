@@ -66,7 +66,7 @@ BarMonitorElement::BarMonitorElement(QWidget *parent)
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
   limits_.lowDefault = 0.0;
-  limits_.highDefault = 100.0;
+  limits_.highDefault = 1.0;  /* MEDM's HOPR_DEFAULT */
   limits_.precisionDefault = 1;
   clearRuntimeState();
 }

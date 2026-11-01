@@ -1130,6 +1130,10 @@ void TestPluginsPropertyRules::builtInSliderProviderWriteHasOneAuditRecord()
   slider.setChannel(QStringLiteral("fake://slider-audit"));
   slider.setLabel(MeterLabel::kNone);
   slider.setIncrement(0.25);
+  /* The fake channel has no limits; range the slider over its value. */
+  PvLimits limits = slider.limits();
+  limits.highDefault = 10.0;
+  slider.setLimits(limits);
   slider.setExecuteMode(true);
   slider.show();
   SliderRuntime runtime(&slider);

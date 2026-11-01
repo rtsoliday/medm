@@ -232,7 +232,7 @@ StripChartElement::StripChartElement(QWidget *parent)
     pens_[i].limits.lowSource = PvLimitSource::kDefault;
     pens_[i].limits.highSource = PvLimitSource::kDefault;
     pens_[i].limits.lowDefault = 0.0;
-    pens_[i].limits.highDefault = 100.0;
+    pens_[i].limits.highDefault = 1.0;  /* MEDM's HOPR_DEFAULT */
     pens_[i].limits.precisionSource = PvLimitSource::kChannel;
     pens_[i].limits.precisionDefault = 0;
     pens_[i].color = defaultPenColor(i);

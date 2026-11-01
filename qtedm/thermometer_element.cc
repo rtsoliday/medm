@@ -131,7 +131,7 @@ ThermometerElement::ThermometerElement(QWidget *parent)
   setAutoFillBackground(false);
   foregroundColor_ = MedmColors::palette()[24];
   limits_.lowDefault = 0.0;
-  limits_.highDefault = 100.0;
+  limits_.highDefault = 1.0;  /* MEDM's HOPR_DEFAULT */
   limits_.precisionDefault = 1;
   clearRuntimeState();
 }

@@ -161,6 +161,12 @@ void RectangleElement::paintEvent(QPaintEvent *event)
     painter.setPen(pen);
     if (deviceRect.width() > 0 && deviceRect.height() > 0) {
       painter.drawRect(deviceRect);
+    } else if (deviceRect.width() >= 0 && deviceRect.height() >= 0) {
+      /* XDrawRectangle strokes a rectangle with no height or width as a
+       * line of the line width; displays use these as thick separators. */
+      painter.drawLine(deviceRect.left(), deviceRect.top(),
+          deviceRect.left() + deviceRect.width(),
+          deviceRect.top() + deviceRect.height());
     }
   }
 

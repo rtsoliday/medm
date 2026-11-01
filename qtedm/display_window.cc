@@ -26761,32 +26761,44 @@ QString DisplayWindow::expressionChannelEventSignalModeString(
   }
 }
 
+/* MEDM reads object geometry with atoi(), which keeps the leading integer
+ * of a value written with a fraction, so y=57.2 is 57 rather than invalid.
+ * Returns fallback when the value does not start with an integer. */
+static int adlGeometryValue(const QString &text, int fallback)
+{
+  const QString value = text.trimmed();
+  int end = 0;
+  if (end < value.size() && (value.at(end) == QLatin1Char('-')
+      || value.at(end) == QLatin1Char('+'))) {
+    ++end;
+  }
+  const int digitsStart = end;
+  while (end < value.size() && value.at(end) >= QLatin1Char('0')
+      && value.at(end) <= QLatin1Char('9')) {
+    ++end;
+  }
+  if (end == digitsStart) {
+    return fallback;
+  }
+  bool ok = false;
+  const int number = value.left(end).toInt(&ok);
+  return ok ? number : fallback;
+}
+
 QRect DisplayWindow::parseObjectGeometry(const AdlNode &parent) const
 {
   const AdlNode *objectNode = ::findChild(parent, QStringLiteral("object"));
   if (!objectNode) {
     return QRect();
   }
-  bool ok = false;
-  int x = propertyValue(*objectNode, QStringLiteral("x")).toInt(&ok);
-  if (!ok) {
-    x = 0;
-  }
-  ok = false;
-  int y = propertyValue(*objectNode, QStringLiteral("y")).toInt(&ok);
-  if (!ok) {
-    y = 0;
-  }
-  ok = false;
-  int width = propertyValue(*objectNode, QStringLiteral("width")).toInt(&ok);
-  if (!ok) {
-    width = kMinimumTextWidth;
-  }
-  ok = false;
-  int height = propertyValue(*objectNode, QStringLiteral("height")).toInt(&ok);
-  if (!ok) {
-    height = kMinimumTextHeight;
-  }
+  const int x = adlGeometryValue(
+      propertyValue(*objectNode, QStringLiteral("x")), 0);
+  const int y = adlGeometryValue(
+      propertyValue(*objectNode, QStringLiteral("y")), 0);
+  const int width = adlGeometryValue(
+      propertyValue(*objectNode, QStringLiteral("width")), kMinimumTextWidth);
+  const int height = adlGeometryValue(
+      propertyValue(*objectNode, QStringLiteral("height")), kMinimumTextHeight);
   return QRect(x, y, width, height);
 }
 

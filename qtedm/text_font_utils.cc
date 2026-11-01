@@ -1,5 +1,6 @@
 #include "text_font_utils.h"
 
+#include <algorithm>
 #include <array>
 
 #include <QFont>
@@ -403,4 +404,36 @@ QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &te
 
   /* Even smallest font is too wide, return it anyway */
   return LegacyFonts::font(aliases[0]);
+}
+
+QFont medmIndicatorFont(int widgetHeight)
+{
+  /* INDICATOR_FONT_DIVISOR in medmWidget.h: a bar's font is an eighth of
+   * its height, chosen by dmGetBestFontWithInfo (utils.c) from the fonts'
+   * ascent plus descent. */
+  const int preferredHeight = widgetHeight / 8;
+  const auto &aliases = textFontAliases();
+  const int nFonts = static_cast<int>(aliases.size());
+  const auto fontHeight = [&aliases](int index) {
+    const QFontMetrics metrics(LegacyFonts::font(aliases[index]));
+    return metrics.ascent() + metrics.descent();
+  };
+
+  int i = nFonts / 2;
+  int upper = nFonts - 1;
+  int lower = 0;
+  int count = 0;
+  while (i > 0 && i < nFonts && upper - lower > 2 && count < nFonts / 2) {
+    ++count;
+    const int height = fontHeight(i);
+    if (height > preferredHeight) {
+      upper = i;
+      i = upper - (upper - lower) / 2;
+    } else if (height < preferredHeight) {
+      lower = i;
+      i = lower + (upper - lower) / 2;
+    }
+  }
+  i = std::clamp(i, 0, nFonts - 1);
+  return LegacyFonts::font(aliases[i]);
 }

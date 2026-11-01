@@ -38,3 +38,7 @@ QFont medmSliderLabelFont(MeterLabel label, BarDirection direction,
 // Applies the (0.90 * height) - 4 constraint formula, then searches from largest
 // to smallest font that fits. This matches medmTextEntry.c's textFieldFontListIndex().
 QFont medmTextFieldFont(int height);
+
+// Returns the font MEDM gives a Bar: dmGetBestFontWithInfo() over the legacy
+// MEDM font aliases for an eighth of the widget height (medmBar.c).
+QFont medmIndicatorFont(int widgetHeight);

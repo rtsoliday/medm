@@ -1,15 +1,18 @@
 #include "bar_monitor_element.h"
 
 #include "medm_colors.h"
+#include "text_font_utils.h"
 #include "pv_name_utils.h"
 #include "medm_widget_state.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 #include <QApplication>
 #include <QFont>
 #include <QFontInfo>
+#include <QFontMetrics>
 #include <QFontMetricsF>
 #include <QPainter>
 #include <QPaintEvent>
@@ -432,74 +435,208 @@ void drawXcRect3d(QPainter &painter, const QRect &rect, int depth,
   }
 }
 
+/* cvtFloatToString (EPICS cvtFast.c), which Xc uses to print the limits
+ * and the value of a float bar. */
+QString xcFloatText(double value, int precision)
+{
+  const float number = static_cast<float>(value);
+  char text[64];
+  if (std::isnan(number) || precision > 8 || number > 10000000.0f
+      || number < -10000000.0f) {
+    if (precision > 8 || number >= 1e8f || number <= -1e8f) {
+      precision = std::min(precision, 12);
+      std::snprintf(text, sizeof(text), "%*.*e", precision + 6, precision,
+          static_cast<double>(number));
+    } else {
+      std::snprintf(text, sizeof(text), "%.*f", std::min(precision, 3),
+          static_cast<double>(number));
+    }
+  } else {
+    std::snprintf(text, sizeof(text), "%.*f", precision,
+        static_cast<double>(number));
+  }
+  return QString::fromLatin1(text);
+}
+
 } // namespace
 
-/* MEDM draws a bar labeled "none" as Xc's BarGraph with decorations but no
- * scale, value, or label (xc/BarGraph.c Resize, Redisplay, Draw_display). */
-void BarMonitorElement::paintXcBarWithoutScale(QPainter &painter,
-    int fontDescent) const
+/* MEDM draws every bar with decorations as Xc's BarGraph (xc/BarGraph.c
+ * Resize, Redisplay, Draw_display). Labels "outline", "limits" and
+ * "channel" add a scale with the limits, "limits" and "channel" a value
+ * box, and "channel" the channel name above the bar (medmBar.c). */
+void BarMonitorElement::paintXcBar(QPainter &painter,
+    const QFontMetrics &metrics) const
 {
   constexpr int kShadeDepth = 2;
-  const QColor background = effectiveBackground();
-  drawXcRect3d(painter, rect(), kShadeDepth, true, background);
-
-  const QRect face(kShadeDepth, kShadeDepth, width() - 2 * kShadeDepth,
-      height() - 2 * kShadeDepth);
-  const int valueBoxY = height() - 2 * kShadeDepth;
+  /* INDICATOR_OKAY_SIZE in medmWidget.h: longer bars get 11 scale
+   * segments instead of 5. */
+  constexpr int kIndicatorOkaySize = 80;
+  const int d = kShadeDepth;
+  const int w = width();
+  const int h = height();
   const bool vertical = (direction_ == BarDirection::kUp
       || direction_ == BarDirection::kDown);
+  const bool reversed = (direction_ == BarDirection::kDown
+      || direction_ == BarDirection::kLeft);
+  const int segments = label_ == MeterLabel::kNone ? 0
+      : ((vertical ? h : w) > kIndicatorOkaySize ? 11 : 5);
+  const bool valueVisible = label_ == MeterLabel::kLimits
+      || label_ == MeterLabel::kChannel;
+  const QString label = label_ == MeterLabel::kChannel
+      ? channel_.trimmed() : QString();
+  const int ascent = metrics.ascent();
+  const int descent = metrics.descent();
+  /* For numbers Xc ignores the descent to save space. */
+  const int fontHeight = ascent;
+
+  const QRect face(d, d, w - 2 * d, h - 2 * d);
+  const int precision = effectivePrecision();
+  const QString upperText = xcFloatText(effectiveHighLimit(), precision);
+  const QString lowerText = xcFloatText(effectiveLowLimit(), precision);
+  /* Down and left bars put the lower limit where the upper one would be. */
+  const QString &maxText = reversed ? lowerText : upperText;
+  const QString &minText = reversed ? upperText : lowerText;
+  const int maxValWidth = metrics.horizontalAdvance(maxText);
+  const int minValWidth = metrics.horizontalAdvance(minText);
+  int maxWidth = std::max(minValWidth, maxValWidth) + 2 * d;
+  if (segments == 0) {
+    maxWidth = face.width() - 2 * d;
+  }
+
+  QRect valueBox(0, h - 2 * d, 0, 0);
+  if (valueVisible) {
+    valueBox = QRect(w / 2 - maxWidth / 2,
+        h - fontHeight - (vertical ? 3 * d : 2 * d + 2),
+        maxWidth, fontHeight);
+  }
+
+  QPoint labelPos(face.x(), face.y());
+  if (!label.isEmpty()) {
+    labelPos = QPoint(w / 2 - metrics.horizontalAdvance(label) / 2,
+        face.y() + ascent + 1);
+  }
+
   QRect bar;
   if (vertical) {
-    const int x = face.x() + 2 * kShadeDepth;
-    const int y = face.y() + fontDescent + 2 * kShadeDepth;
-    bar = QRect(x, y, std::max(0, face.width() - x - kShadeDepth),
-        std::max(0, valueBoxY - y - 2 * kShadeDepth));
+    const int x = face.x()
+        + (segments > 0 ? maxWidth + face.width() / 32 : 0) + 2 * d;
+    const int y = labelPos.y() + descent + 2 * d;
+    bar = QRect(x, y, std::max(0, face.width() - x - d),
+        std::max(0, valueBox.y() - y
+            - (valueVisible ? fontHeight - descent : 2 * d)));
   } else {
-    const int x = face.x() + face.width() / 16 + kShadeDepth;
-    const int y = face.y() + 2 * kShadeDepth;
-    bar = QRect(x, y, std::max(0, (9 * face.width()) / 10 - 2 * kShadeDepth),
-        std::max(1, valueBoxY - y - kShadeDepth));
+    const int x = face.x() + face.width() / 16 + d;
+    const int y = labelPos.y()
+        + (segments > 0 ? fontHeight / 2 + face.height() / 8 + 1 : 0)
+        + 2 * d;
+    bar = QRect(x, y, std::max(0, (9 * face.width()) / 10 - 2 * d),
+        std::max(1, valueBox.y() - y - (valueVisible ? fontHeight : 0)
+            - d));
   }
-  drawXcRect3d(painter, bar.adjusted(-kShadeDepth, -kShadeDepth,
-      kShadeDepth, kShadeDepth), kShadeDepth, false, background);
-  if (bar.isEmpty()) {
-    return;
-  }
-  painter.fillRect(bar, barTrackColor());
 
-  const int length = vertical ? bar.height() : bar.width();
-  int d = static_cast<int>(normalizedSampleValue() * length + 0.49);
-  d = std::clamp(d, 0, length);
-  const int mid = length / 2;
-  const bool fromCenter = fillMode_ == BarFill::kFromCenter;
-  int start = 0;
-  int extent = d;
-  switch (direction_) {
-  case BarDirection::kUp:
-    start = fromCenter ? (d > mid ? length - d : mid) : length - d;
-    extent = fromCenter ? std::abs(d - mid) : d;
-    break;
-  case BarDirection::kDown:
-    start = fromCenter ? (d > mid ? mid : d) : 0;
-    extent = fromCenter ? std::abs(d - mid) : d;
-    break;
-  case BarDirection::kRight:
-    start = fromCenter ? (d > mid ? mid : d) : 0;
-    extent = fromCenter ? std::abs(d - mid) : d;
-    break;
-  case BarDirection::kLeft:
-  default:
-    start = fromCenter ? (d > mid ? length - d : mid) : length - d;
-    extent = fromCenter ? std::abs(d - mid) : d;
-    break;
+  const QColor background = effectiveBackground();
+  drawXcRect3d(painter, rect(), d, true, background);
+
+  /* Xc draws the label, scale, bar border and value box border clipped to
+   * the face. */
+  painter.save();
+  painter.setClipRect(face);
+  painter.setPen(Qt::black);
+  if (!label.isEmpty()) {
+    painter.drawText(labelPos, label);
   }
-  if (extent <= 0) {
-    return;
+  if (segments > 0) {
+    int x1 = bar.x();
+    int y1 = bar.y() - d - face.height() / 32;
+    int x2 = bar.x() + bar.width();
+    int y2 = y1;
+    if (vertical) {
+      x1 = bar.x() - d - face.width() / 32;
+      y1 = bar.y();
+      x2 = x1;
+      y2 = bar.y() + bar.height();
+    }
+    const int segLength = vertical ? face.width() / 16 : face.height() / 16;
+    painter.drawLine(x1, y1, x2, y2);
+    if (!vertical) {
+      painter.drawLine(x1, y1 - segLength, x1, y1);
+      painter.drawLine(x2, y2 - segLength, x2, y2);
+    }
+    const int spacing = (vertical ? bar.height() : bar.width())
+        / (segments + 1);
+    for (int j = 0; j < segments; ++j) {
+      if (vertical) {
+        const int y = y1 + (j + 1) * spacing;
+        painter.drawLine(x1 - segLength, y, x1, y);
+      } else {
+        const int x = x1 + (j + 1) * spacing;
+        painter.drawLine(x, y1 - segLength, x, y1);
+      }
+    }
+
+    QPoint maxPos;
+    QPoint minPos;
+    if (vertical) {
+      const int fontCenter = (ascent + descent) / 2 - descent;
+      maxPos = QPoint(std::max(d, x2 - maxValWidth), y1 + fontCenter);
+      minPos = QPoint(std::max(d, x2 - minValWidth), y2 + fontCenter);
+    } else {
+      const int textY = y1 - segLength - 1;
+      maxPos = QPoint(std::min(face.width() + d - maxValWidth,
+                          x2 - maxValWidth / 2),
+          textY);
+      minPos = QPoint(std::max(d, x1 - minValWidth / 2), textY);
+    }
+    painter.drawText(maxPos, maxText);
+    painter.drawText(minPos, minText);
   }
-  const QRect fill = vertical
-      ? QRect(bar.x(), bar.y() + start, bar.width(), extent)
-      : QRect(bar.x() + start, bar.y(), extent, bar.height());
-  painter.fillRect(fill, barFillColor());
+  drawXcRect3d(painter, bar.adjusted(-d, -d, d, d), d, false, background);
+  if (valueVisible) {
+    drawXcRect3d(painter, valueBox.adjusted(-d, -d, d, d), d, false,
+        background);
+  }
+  painter.restore();
+
+  /* Draw_display: the bar background, then the bar to the value. */
+  if (!bar.isEmpty()) {
+    painter.fillRect(bar, barTrackColor());
+    const int length = vertical ? bar.height() : bar.width();
+    int dim = static_cast<int>(normalizedSampleValue() * length + 0.49);
+    dim = std::clamp(dim, 0, length);
+    const int mid = length / 2;
+    const bool fromCenter = fillMode_ == BarFill::kFromCenter;
+    /* Down and right bars grow from the top or left of the bar, up and
+     * left bars from the bottom or right. */
+    const bool fromStart = (direction_ == BarDirection::kDown
+        || direction_ == BarDirection::kRight);
+    int start = 0;
+    if (fromStart) {
+      start = fromCenter ? (dim > mid ? mid : dim) : 0;
+    } else {
+      start = fromCenter ? (dim > mid ? length - dim : mid) : length - dim;
+    }
+    const int extent = fromCenter ? std::abs(dim - mid) : dim;
+    if (extent > 0) {
+      const QRect fill = vertical
+          ? QRect(bar.x(), bar.y() + start, bar.width(), extent)
+          : QRect(bar.x() + start, bar.y(), extent, bar.height());
+      painter.fillRect(fill, barFillColor());
+    }
+  }
+
+  if (valueVisible) {
+    painter.fillRect(valueBox, Qt::white);
+    const QString text = xcFloatText(currentValue(), precision);
+    painter.save();
+    painter.setClipRect(valueBox);
+    painter.setPen(Qt::black);
+    painter.drawText(QPoint(valueBox.x() + valueBox.width() / 2
+            - metrics.horizontalAdvance(text) / 2,
+        valueBox.y() + (valueBox.height() - (ascent + descent)) / 2
+            + ascent + 1),
+        text);
+    painter.restore();
+  }
 }
 
 void BarMonitorElement::paintEvent(QPaintEvent *event)
@@ -510,6 +647,26 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
   painter.setRenderHint(QPainter::Antialiasing, false);
 
   painter.fillRect(rect(), effectiveBackground());
+
+  if (executeMode_ && !runtimeConnected_) {
+    painter.fillRect(rect(), Qt::white);
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
+
+  const QFont labelFont = medmIndicatorFont(height());
+  painter.setFont(labelFont);
+  const QFontMetricsF metrics(labelFont);
+
+  if (label_ != MeterLabel::kNoDecorations) {
+    paintXcBar(painter, QFontMetrics(labelFont));
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
 
   // Paint 2-pixel raised bevel around outer edge (matching MEDM appearance)
   const QColor bg = effectiveBackground();
@@ -528,67 +685,6 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
   painter.setPen(QPen(bg.darker(170), 1));
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
-
-  if (executeMode_ && !runtimeConnected_) {
-    painter.fillRect(rect(), Qt::white);
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
-
-  const QFont baseFont = painter.font();
-
-  // Font setup for scale labels - match MEDM's algorithm:
-  // 1. preferredHeight = widget_height / INDICATOR_FONT_DIVISOR (8)
-  // 2. Find closest match from MEDM's fixed font table using binary search
-  // MEDM's fontSizeTable from siteSpecific.h:
-  static constexpr int kFontSizeTable[] = {
-    4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34
-  };
-  static constexpr int kNumFonts = sizeof(kFontSizeTable) / sizeof(kFontSizeTable[0]);
-  
-  const qreal widgetHeight = rect().height();
-  constexpr qreal kIndicatorFontDivisor = 8.0;
-  const int preferredPixelHeight = static_cast<int>(
-      std::max(1.0, widgetHeight / kIndicatorFontDivisor));
-
-  // Binary search to find best font (matches dmGetBestFontWithInfo)
-  int upper = kNumFonts - 1;
-  int lower = 0;
-  int i = kNumFonts / 2;
-  int count = 0;
-  
-  while ((i > 0) && (i < kNumFonts) && ((upper - lower) > 2) && (count < kNumFonts / 2)) {
-    count++;
-    if (kFontSizeTable[i] > preferredPixelHeight) {
-      upper = i;
-      i = upper - (upper - lower) / 2;
-    } else if (kFontSizeTable[i] < preferredPixelHeight) {
-      lower = i;
-      i = lower + (upper - lower) / 2;
-    } else {
-      break;  // exact match
-    }
-  }
-  
-  if (i < 0) i = 0;
-  if (i >= kNumFonts) i = kNumFonts - 1;
-  
-  const int chosenPixelSize = kFontSizeTable[i];
-
-  QFont labelFont = baseFont;
-  labelFont.setPixelSize(chosenPixelSize);
-  painter.setFont(labelFont);
-  const QFontMetricsF metrics(labelFont);
-
-  if (label_ == MeterLabel::kNone) {
-    paintXcBarWithoutScale(painter, qRound(metrics.descent()));
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
 
   const qreal padding = (label_ == MeterLabel::kNoDecorations) 
       ? 0.0 

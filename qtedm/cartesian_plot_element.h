@@ -178,7 +178,6 @@ private:
   QColor effectiveBackground() const;
   QColor effectiveTraceColor(int index) const;
   bool usesXrtMargins() const;
-  QRectF plotFrame() const;
   QRectF chartRect() const;
   void paintFrame(QPainter &painter) const;
   void paintGrid(QPainter &painter, const QRectF &rect) const;
@@ -189,7 +188,18 @@ private:
     std::vector<std::pair<int, qreal>> leftAxes;  // (axisIndex, xPosition)
     std::vector<std::pair<int, qreal>> rightAxes; // (axisIndex, xPosition)
   };
-  YAxisPositions calculateYAxisPositions(const QRectF &widgetBounds) const;
+  /* Where SciPlot's ComputeDimensions() puts the plot area, the Y axes and
+   * the text around them, in whole widget pixels. */
+  struct PlotLayout {
+    QRectF chart;
+    YAxisPositions axes;
+    std::array<qreal, 4> yLabelPositions{};
+    std::array<qreal, 4> yLabelBaselines{};
+    qreal xNumberBaseline = 0.0;
+    qreal xLabelBaseline = 0.0;
+    QPointF titleOrigin;
+  };
+  PlotLayout plotLayout() const;
   void paintLabels(QPainter &painter, const QRectF &rect) const;
   void paintTraces(QPainter &painter, const QRectF &rect) const;
   void paintSelectionOverlay(QPainter &painter) const;
@@ -205,10 +215,6 @@ private:
   bool mapPointToChart(const QPointF &value, const AxisRange &xRange,
       const AxisRange &yRange, const QRectF &rect, QPointF *mapped) const;
   qreal yAxisMaximumTickLabelWidth(int yAxisIndex,
-      const QFontMetrics &metrics,
-      const AxisRange *precomputedRange = nullptr) const;
-  qreal yAxisOutwardSpan(int yAxisIndex, const QFontMetrics &axisMetrics,
-      const QFontMetrics &labelMetrics,
       const AxisRange *precomputedRange = nullptr) const;
   int axisIndexForTrace(int traceIndex) const;
   void applySideToAxis(CartesianPlotYAxis axis, bool usesRightAxis,
@@ -217,7 +223,7 @@ private:
   bool isYAxisVisible(int yAxisIndex) const;
   bool shouldPaintYAxisCue(int yAxisIndex) const;
   void paintAxisColorCue(QPainter &painter, int yAxisIndex,
-      const QRectF &labelBounds, bool labelShown,
+      qreal labelPosition, qreal labelLength, bool labelShown,
       const QRectF &plotRect) const;
   void ensureRuntimeArraySizes();
   

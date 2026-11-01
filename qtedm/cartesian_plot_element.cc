@@ -28,9 +28,14 @@
 
 namespace {
 
-constexpr int kOuterMargin = 4;
-constexpr int kInnerMargin = 4;
-constexpr int kHorizontalMargin = 12;
+/* SciPlot's Margin resource, the Motif shadow of the plot widget and the
+ * width up to which SciPlot calls a plot tiny and leaves out side margins. */
+constexpr qreal kSciPlotMargin = 5.0;
+constexpr qreal kSciPlotShadowThickness = 2.0;
+constexpr int kSciPlotTinyWidth = 250;
+/* SciPlot's gap between a Y axis and its numbers on either side. */
+constexpr qreal kYAxisLeftNumberGap = 5.0;
+constexpr qreal kYAxisRightNumberGap = 8.0;
 /* SciPlot keeps the old XRT graph margins for displays saved by MEDM
  * 3.1.14 or earlier when the plot is wider than 250 pixels. */
 constexpr int kLastXrtMarginFileVersion = 30114;
@@ -45,9 +50,6 @@ constexpr int kMaximumSampleCount = kCartesianPlotMaximumSampleCount;
 constexpr int kDefaultTraceColorIndex = 14;
 constexpr int kMajorTickSize = 4;
 constexpr int kMinorTickSize = 2;
-constexpr qreal kAxisTickLabelGap = 2.0;
-constexpr qreal kAxisLabelGap = 4.0;
-constexpr qreal kAxisInterAxisGap = 2.0;
 
 /* MEDM sizes the Helvetica title font and the shared axis-number and
  * axis-label font from the smaller plot dimension (TITLE_SCALE_FACTOR and
@@ -243,6 +245,97 @@ QFont cartesianPlotTitleFont(const QSize &widgetSize)
   return cartesianPlotFont(widgetSize, kTitleScaleFactor);
 }
 
+/* The X bitmap Helvetica fonts SciPlot loads for plot text (the first
+ * -*-helvetica-medium-r-*-*-N-* match, from the 75 and 100 dpi Adobe
+ * fonts): max-bounds ascent and descent, and the advance widths of the
+ * characters in axis numbers. MEDM lays plots out with these; other sizes
+ * and characters fall back to the Qt font. */
+struct HelveticaMetrics
+{
+  int pixelSize;
+  int ascent;
+  int descent;
+  int digit;
+  int period;
+  int minus;
+  int plus;
+  int lowerE;
+  int upperE;
+  int colon;
+  int space;
+};
+
+constexpr std::array<HelveticaMetrics, 11> kHelveticaMetrics = {{
+    {8, 9, 2, 5, 2, 3, 5, 4, 6, 2, 2},
+    {10, 11, 2, 6, 3, 4, 6, 5, 7, 3, 3},
+    {11, 11, 2, 6, 3, 4, 6, 5, 7, 3, 3},
+    {12, 12, 3, 7, 3, 5, 7, 7, 8, 3, 4},
+    {14, 14, 3, 8, 3, 5, 9, 8, 9, 3, 4},
+    {17, 16, 4, 9, 4, 5, 10, 9, 11, 4, 5},
+    {18, 18, 4, 10, 5, 7, 10, 10, 11, 5, 5},
+    {20, 18, 4, 10, 5, 6, 10, 10, 13, 5, 5},
+    {24, 24, 5, 13, 6, 8, 14, 13, 16, 6, 6},
+    {25, 24, 5, 13, 6, 8, 14, 13, 16, 6, 6},
+    {34, 31, 7, 18, 9, 11, 19, 18, 22, 9, 9}}};
+
+const HelveticaMetrics *helveticaMetrics(int pixelSize)
+{
+  for (const HelveticaMetrics &metrics : kHelveticaMetrics) {
+    if (metrics.pixelSize == pixelSize) {
+      return &metrics;
+    }
+  }
+  return nullptr;
+}
+
+struct SciPlotFontBounds
+{
+  qreal ascent;
+  qreal descent;
+};
+
+SciPlotFontBounds sciPlotFontBounds(int pixelSize, const QFont &font)
+{
+  if (const HelveticaMetrics *metrics = helveticaMetrics(pixelSize)) {
+    return {static_cast<qreal>(metrics->ascent),
+        static_cast<qreal>(metrics->descent)};
+  }
+  const QFontMetricsF metrics(font);
+  return {metrics.ascent(), metrics.descent()};
+}
+
+/* XTextWidth() of text in the X font, as SciPlot measures labels. */
+qreal sciPlotTextWidth(int pixelSize, const QString &text, const QFont &font)
+{
+  const HelveticaMetrics *metrics = helveticaMetrics(pixelSize);
+  if (!metrics) {
+    return QFontMetricsF(font).horizontalAdvance(text);
+  }
+  int width = 0;
+  for (const QChar ch : text) {
+    if (ch.isDigit() && ch.unicode() < 128) {
+      width += metrics->digit;
+    } else if (ch == QLatin1Char('.')) {
+      width += metrics->period;
+    } else if (ch == QLatin1Char('-')) {
+      width += metrics->minus;
+    } else if (ch == QLatin1Char('+')) {
+      width += metrics->plus;
+    } else if (ch == QLatin1Char('e')) {
+      width += metrics->lowerE;
+    } else if (ch == QLatin1Char('E')) {
+      width += metrics->upperE;
+    } else if (ch == QLatin1Char(':')) {
+      width += metrics->colon;
+    } else if (ch == QLatin1Char(' ')) {
+      width += metrics->space;
+    } else {
+      return QFontMetricsF(font).horizontalAdvance(text);
+    }
+  }
+  return width;
+}
+
 /* MEDM uses one font for the axis numbers and the axis labels. */
 QFont cartesianPlotAxisFont(const QSize &widgetSize)
 {
@@ -373,7 +466,7 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
     min = std::floor(min);
     max = std::ceil(max);
   }
-  
+
   // Delta values for nice tick intervals (from MEDM's CAdeltas)
   // Must match MEDM exactly: {0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 2.5, 5.0}
   static constexpr int kNumDeltas = 8;
@@ -1535,105 +1628,117 @@ bool CartesianPlotElement::usesXrtMargins() const
       && width() > kXrtMinimumWidth;
 }
 
-/* The area for the plot, its axes and labels: as in SciPlot's
- * ComputeDimensions(), an old display's plot starts 3.5% of the width
- * further right and is 3.2% of the width narrower. */
-QRectF CartesianPlotElement::plotFrame() const
+/* SciPlot's ComputeDimensions(): the plot area and the axes, labels and
+ * title around it. The margins are 5 pixels (none to the sides of a plot
+ * 250 pixels wide or less), the widget shadow takes 2 pixels and the font
+ * heights are those of the X fonts MEDM uses. Half of the last X axis
+ * number sticks out to the right, half of the top Y axis number above the
+ * plot. An old display's plot starts 3.5% of the width further right and is
+ * 3.2% of the width narrower. X truncates the edges to whole pixels. */
+CartesianPlotElement::PlotLayout CartesianPlotElement::plotLayout() const
 {
-  QRectF frame = rect().adjusted(kOuterMargin, kOuterMargin,
-      -kOuterMargin, -kOuterMargin);
+  PlotLayout layout;
+  const QSize widgetSize = rect().size();
+  const QFont axisFont = cartesianPlotAxisFont(widgetSize);
+  const int axisPixels = cartesianPlotFontPixelHeight(widgetSize,
+      kAxesScaleFactor);
+  const SciPlotFontBounds axisBounds = sciPlotFontBounds(axisPixels,
+      axisFont);
+  const SciPlotFontBounds titleBounds = sciPlotFontBounds(
+      cartesianPlotFontPixelHeight(widgetSize, kTitleScaleFactor),
+      cartesianPlotTitleFont(widgetSize));
+  /* The axis numbers and the axis labels use the same font. */
+  const qreal axisHeight = axisBounds.ascent + axisBounds.descent;
+  const qreal labelHeight = axisHeight;
+
+  const bool tiny = width() <= kSciPlotTinyWidth;
+  const qreal xMargin = tiny ? 0.0 : kSciPlotMargin;
+  const qreal yMargin = kSciPlotMargin;
+  qreal xExtra = 0.0;
+  if (!tiny) {
+    const AxisRange xRange = resolvedAxisRange(0);
+    const QString label = (xRange.style == CartesianPlotAxisStyle::kTime)
+        ? QStringLiteral("08:00:00")
+        : QString::asprintf("%.6g", xRange.maximum);
+    xExtra = sciPlotTextWidth(axisPixels, label, axisFont) / 2.0;
+  }
+
+  bool axisOnLeft = false;
+  for (int i = 0; i < 4; ++i) {
+    if (isYAxisVisible(i) && !isYAxisOnRight(i)) {
+      axisOnLeft = true;
+    }
+  }
+  qreal x = axisOnLeft ? 0.0 : 2.0 * xMargin + xExtra;
   if (usesXrtMargins()) {
-    frame.adjust(kXrtLeftMarginFraction * width(), 0.0,
-        -kXrtRightMarginFraction * width(), 0.0);
+    x += kXrtLeftMarginFraction * width();
   }
-  return frame;
-}
-
-QRectF CartesianPlotElement::chartRect() const
-{
-  QRectF frame = plotFrame();
-  if (frame.width() <= 0.0 || frame.height() <= 0.0) {
-    return frame;
+  const qreal y = yMargin + axisHeight / 2.0;
+  qreal plotWidth = width() - xMargin - x - xExtra - xMargin;
+  if (usesXrtMargins()) {
+    plotWidth -= kXrtRightMarginFraction * width();
   }
-
-  const QFont titleFont = cartesianPlotTitleFont(this->rect().size());
-  const QFont labelFont = cartesianPlotAxisFont(this->rect().size());
-  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
-  
-  const QFontMetrics titleMetrics(titleFont);
-  const QFontMetrics labelMetrics(labelFont);
-  const QFontMetrics axisMetrics(axisFont);
-  
-  qreal topMargin = kInnerMargin;
-
-  qreal bottomMargin = kInnerMargin;
-  // Title appears at bottom in medm
+  qreal plotHeight = height() - y;
+  plotWidth -= kSciPlotShadowThickness;
+  plotHeight -= kSciPlotShadowThickness;
   if (!title_.trimmed().isEmpty()) {
-    bottomMargin += titleMetrics.height();
+    plotHeight -= titleBounds.ascent + titleBounds.descent;
   }
-  // X label below the axis numbers
+  const qreal axisNumberSize = yMargin + axisHeight;
+  plotHeight -= axisNumberSize;
   if (!xLabel_.trimmed().isEmpty()) {
-    const qreal axisnumbersize = kMajorTickSize + kAxisTickLabelGap
-        + axisMetrics.height();
-    bottomMargin += axisnumbersize + labelMetrics.height();
-  } else {
-    // Just the axis numbers
-    bottomMargin += kInnerMargin + axisMetrics.height();
+    plotHeight -= labelHeight;
   }
 
-  qreal leftMargin = kHorizontalMargin;
-  qreal rightMargin = kHorizontalMargin;
-  
-  // Calculate Y-axis positions to determine actual margins needed
-  const YAxisPositions axisPos = calculateYAxisPositions(frame);
-  
-  // Expand the chart area to the innermost Y-axis position on each side
-  if (!axisPos.leftAxes.empty()) {
-    const qreal innermostAxis = axisPos.leftAxes.back().second;
-    leftMargin = innermostAxis - frame.left();
-  }
-  
-  if (!axisPos.rightAxes.empty()) {
-    const qreal innermostAxis = axisPos.rightAxes.back().second;
-    rightMargin = frame.right() - innermostAxis;
-  }
-
-  frame.adjust(leftMargin, topMargin, -rightMargin, -bottomMargin);
-  return frame;
-}
-
-CartesianPlotElement::YAxisPositions 
-CartesianPlotElement::calculateYAxisPositions(const QRectF &widgetBounds) const
-{
-  YAxisPositions positions;
-  
-  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
-  const QFontMetrics axisMetrics(axisFont);
-  const QFont labelFont = cartesianPlotAxisFont(this->rect().size());
-  const QFontMetrics labelMetrics(labelFont);
-
-  qreal leftBoundary = widgetBounds.left();
-  qreal rightBoundary = widgetBounds.right();
-  
-  // Process axes in reverse order (Y4, Y3, Y2, Y1) like MEDM
+  /* Y4 is placed first and ends up outermost, Y1 innermost. */
+  const qreal axisLabelSize = xMargin + labelHeight;
+  qreal originX = x;
   for (int i = 3; i >= 0; --i) {
     if (!isYAxisVisible(i)) {
       continue;
     }
-
-    const qreal outwardSpan = yAxisOutwardSpan(i, axisMetrics, labelMetrics);
-    if (isYAxisOnRight(i)) {
-      const qreal axisX = rightBoundary - outwardSpan;
-      positions.rightAxes.push_back({i, axisX});
-      rightBoundary = axisX - kMajorTickSize - kAxisInterAxisGap;
+    const qreal numberWidth = yAxisMaximumTickLabelWidth(i);
+    plotWidth -= axisLabelSize;
+    qreal labelPos = 0.0;
+    if (!isYAxisOnRight(i)) {
+      plotWidth -= numberWidth + 2.0 * xMargin;
+      originX += axisLabelSize + numberWidth + 2.0 * xMargin;
+      layout.axes.leftAxes.push_back({i, std::floor(originX)});
+      labelPos = originX - numberWidth - xMargin - labelHeight / 2.0;
     } else {
-      const qreal axisX = leftBoundary + outwardSpan;
-      positions.leftAxes.push_back({i, axisX});
-      leftBoundary = axisX + kMajorTickSize + kAxisInterAxisGap;
+      plotWidth -= numberWidth;
+      const qreal axisX = originX + plotWidth;
+      layout.axes.rightAxes.push_back({i, std::floor(axisX)});
+      labelPos = axisX + numberWidth + 3.0 * xMargin;
+      if (i != 0) {
+        plotWidth -= 2.0 * xMargin;
+      }
     }
+    /* VTextCenter() puts the rotated label's baseline here. */
+    layout.yLabelPositions[i] = labelPos;
+    layout.yLabelBaselines[i] = std::floor(labelPos + labelHeight / 2.0
+        - axisBounds.descent);
   }
-  
-  return positions;
+
+  const qreal left = std::floor(originX);
+  const qreal top = std::floor(y);
+  const qreal right = std::floor(originX + plotWidth);
+  const qreal bottom = std::floor(y + plotHeight);
+  layout.chart = QRectF(left, top, right - left, bottom - top);
+  layout.xNumberBaseline = std::floor(y + plotHeight + yMargin
+      + axisBounds.ascent);
+  /* TextCenter() centers the X label on its position. */
+  layout.xLabelBaseline = std::floor(y + plotHeight + yMargin
+      + axisNumberSize + labelHeight / 2.0 - axisBounds.descent);
+  layout.titleOrigin = QPointF(std::floor(xMargin
+      + (usesXrtMargins() ? kXrtLeftMarginFraction * width() : 0.0)),
+      height() - yMargin);
+  return layout;
+}
+
+QRectF CartesianPlotElement::chartRect() const
+{
+  return plotLayout().chart;
 }
 
 void CartesianPlotElement::paintFrame(QPainter &painter) const
@@ -1750,9 +1855,8 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   const QFontMetrics axisMetrics(axisFont);
   const bool useCachedRanges = executeMode_ && cachedAxisRangesValid_;
   
-  // Get pre-calculated axis positions (working from widget edges inward)
-  const QRectF widgetBounds = plotFrame();
-  const YAxisPositions axisPos = calculateYAxisPositions(widgetBounds);
+  const PlotLayout layout = plotLayout();
+  const YAxisPositions &axisPos = layout.axes;
   
   // Draw all left-side Y-axes
   for (const auto &[axisIndex, xPosition] : axisPos.leftAxes) {
@@ -1777,23 +1881,9 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
   // Draw X-axis (bottom)
   painter.setFont(axisFont);
   
-  // Determine X-axis extent: extend to innermost Y-axis on each side if present
-  qreal xAxisLeft = rect.left();
-  qreal xAxisRight = rect.right();
-  
-  // Extend to innermost (last) left Y-axis if present
-  if (!axisPos.leftAxes.empty()) {
-    xAxisLeft = axisPos.leftAxes.back().second;
-  }
-  
-  // Extend to innermost (last) right Y-axis if present
-  if (!axisPos.rightAxes.empty()) {
-    xAxisRight = axisPos.rightAxes.back().second;
-  }
-  
-  // Bottom horizontal line - extends to innermost Y-axes
-  painter.drawLine(QPointF(xAxisLeft, rect.bottom()),
-      QPointF(xAxisRight, rect.bottom()));
+  /* SciPlot draws the X axis across the plot area only. */
+  painter.drawLine(QPointF(rect.left(), rect.bottom()),
+      QPointF(rect.right(), rect.bottom()));
   
   // Determine X-axis range for value labels
   double xAxisMin = 0.0;
@@ -1839,8 +1929,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
           axisTimeFormats_[xAxisIndex]);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
-      const qreal textY = rect.bottom() + kMajorTickSize
-          + axisMetrics.ascent() + kAxisTickLabelGap;
+      const qreal textY = layout.xNumberBaseline;
       painter.drawText(QPointF(textX, textY), label);
       
       // Minor ticks (2x, 3x, 4x, 5x, 6x, 7x, 8x, 9x within this decade)
@@ -1891,8 +1980,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
           axisTimeFormats_[xAxisIndex]);
       const qreal textWidth = axisMetrics.horizontalAdvance(label);
       const qreal textX = x - textWidth / 2.0;
-      const qreal textY = rect.bottom() + kMajorTickSize
-          + axisMetrics.ascent() + kAxisTickLabelGap;
+      const qreal textY = layout.xNumberBaseline;
       painter.drawText(QPointF(textX, textY), label);
       if (i > 0) {
         haveLastLabel = true;
@@ -1922,8 +2010,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
           xAxisStyle, axisTimeFormats_[xAxisIndex]);
       const qreal textX = rect.right()
           - axisMetrics.horizontalAdvance(label) / 2.0;
-      const qreal textY = rect.bottom() + kMajorTickSize
-          + axisMetrics.ascent() + kAxisTickLabelGap;
+      const qreal textY = layout.xNumberBaseline;
       painter.drawText(QPointF(textX, textY), label);
     }
   }
@@ -1936,6 +2023,13 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
   const QFontMetrics metrics(axisFont);
   painter.setFont(axisFont);
+  /* SciPlot puts a number 5 pixels left of a left axis or 8 pixels right of
+   * a right axis, centered on its tick with the X font's metrics. */
+  const SciPlotFontBounds bounds = sciPlotFontBounds(
+      cartesianPlotFontPixelHeight(this->rect().size(), kAxesScaleFactor),
+      axisFont);
+  const qreal numberRaise = (bounds.ascent + bounds.descent) / 2.0
+      - bounds.descent;
 
   // Convert yAxisIndex (0=Y1, 1=Y2, 2=Y3, 3=Y4) to array index (1=Y1, 2=Y2, 3=Y3, 4=Y4)
   const int arrayIndex = yAxisIndex + 1;
@@ -1972,13 +2066,12 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       const qreal textWidth = metrics.horizontalAdvance(label);
       
       if (onLeft) {
-        const qreal textX = axisX - kMajorTickSize - textWidth
-            - kAxisTickLabelGap;
-        const qreal textY = y + metrics.ascent() / 2.0;
+        const qreal textX = axisX - kYAxisLeftNumberGap - textWidth;
+        const qreal textY = y + numberRaise;
         painter.drawText(QPointF(textX, textY), label);
       } else {
-        const qreal textX = axisX + kMajorTickSize + kAxisTickLabelGap;
-        const qreal textY = y + metrics.ascent() / 2.0;
+        const qreal textX = axisX + kYAxisRightNumberGap;
+        const qreal textY = y + numberRaise;
         painter.drawText(QPointF(textX, textY), label);
       }
     }
@@ -2019,13 +2112,12 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
         const qreal textWidth = metrics.horizontalAdvance(label);
         
         if (onLeft) {
-          const qreal textX = axisX - kMajorTickSize - textWidth
-              - kAxisTickLabelGap;
-          const qreal textY = y + metrics.ascent() / 2.0;
+          const qreal textX = axisX - kYAxisLeftNumberGap - textWidth;
+          const qreal textY = y + numberRaise;
           painter.drawText(QPointF(textX, textY), label);
         } else {
-          const qreal textX = axisX + kMajorTickSize + kAxisTickLabelGap;
-          const qreal textY = y + metrics.ascent() / 2.0;
+          const qreal textX = axisX + kYAxisRightNumberGap;
+          const qreal textY = y + numberRaise;
           painter.drawText(QPointF(textX, textY), label);
         }
       }
@@ -2048,13 +2140,12 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       const qreal textWidth = metrics.horizontalAdvance(label);
       
       if (onLeft) {
-        const qreal textX = axisX - kMajorTickSize - textWidth
-            - kAxisTickLabelGap;
-        const qreal textY = y + metrics.ascent() / 2.0;
+        const qreal textX = axisX - kYAxisLeftNumberGap - textWidth;
+        const qreal textY = y + numberRaise;
         painter.drawText(QPointF(textX, textY), label);
       } else {
-        const qreal textX = axisX + kMajorTickSize + kAxisTickLabelGap;
-        const qreal textY = y + metrics.ascent() / 2.0;
+        const qreal textX = axisX + kYAxisRightNumberGap;
+        const qreal textY = y + numberRaise;
         painter.drawText(QPointF(textX, textY), label);
       }
       
@@ -2080,19 +2171,14 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   
   const QFont titleFont = cartesianPlotTitleFont(this->rect().size());
   const QFont labelFont = cartesianPlotAxisFont(this->rect().size());
-  const QFont axisFont = cartesianPlotAxisFont(this->rect().size());
-  const QFontMetrics titleMetrics(titleFont);
   const QFontMetrics labelMetrics(labelFont);
-  const QFontMetrics axisMetrics(axisFont);
+  const PlotLayout layout = plotLayout();
 
   // Title positioning: medm places title at bottom-left corner
   // y.TitlePos = height - ymargin, x.TitlePos = xmargin
   if (!title_.trimmed().isEmpty()) {
     painter.setFont(titleFont);
-    const qreal titleX = kOuterMargin + kHorizontalMargin
-        + (usesXrtMargins() ? kXrtLeftMarginFraction * width() : 0.0);
-    const qreal titleY = this->rect().height() - kInnerMargin;
-    painter.drawText(QPointF(titleX, titleY), title_.trimmed());
+    painter.drawText(layout.titleOrigin, title_.trimmed());
   }
 
   painter.setFont(labelFont);
@@ -2101,23 +2187,20 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   // TextCenter at (x.Origin + x.Size / 2.0, y.LabelPos)
   // where y.LabelPos = y.Origin + y.Size + ymargin + axisnumbersize
   if (!xLabel_.trimmed().isEmpty()) {
-    /* Below the axis numbers, which are kMajorTickSize + kAxisTickLabelGap
-     * under the plot, so the two never overlap. */
-    const qreal axisnumbersize = kMajorTickSize + kAxisTickLabelGap
-        + axisMetrics.height();
-    const qreal labelY = rect.bottom() + axisnumbersize + labelMetrics.ascent();
     const qreal labelX = rect.left() + rect.width() / 2.0;
     const qreal textWidth = labelMetrics.horizontalAdvance(xLabel_.trimmed());
-    painter.drawText(QPointF(labelX - textWidth / 2.0, labelY), xLabel_.trimmed());
+    painter.drawText(QPointF(labelX - textWidth / 2.0, layout.xLabelBaseline),
+        xLabel_.trimmed());
   }
 
-  // Y axis labels: positioned dynamically based on calculated axis positions
-  const QRectF widgetBounds = plotFrame();
-  const YAxisPositions axisPos = calculateYAxisPositions(widgetBounds);
+  /* Y axis labels read upward with their baselines where SciPlot puts
+   * them; the top of the text faces left. */
+  const YAxisPositions &axisPos = layout.axes;
   const qreal centerY = rect.top() + rect.height() / 2.0;
   
   // Draw labels for left-side axes
-  for (const auto &[axisIndex, xPosition] : axisPos.leftAxes) {
+  for (const auto &axis : axisPos.leftAxes) {
+    const int axisIndex = axis.first;
     const QString labelText = labelTextOrSpace(yLabels_[axisIndex]);
     
     painter.save();
@@ -2139,20 +2222,14 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     transform.rotate(-90.0);
     QImage rotatedImage = textImage.transformed(transform);
 
-    const qreal tickLabelWidth = yAxisMaximumTickLabelWidth(axisIndex,
-        axisMetrics);
-    const qreal drawX = xPosition - kMajorTickSize - kAxisTickLabelGap
-        - tickLabelWidth - kAxisLabelGap - rotatedImage.width();
+    const qreal drawX = layout.yLabelBaselines[axisIndex]
+        - labelMetrics.ascent();
     const qreal drawY = centerY - rotatedImage.height() / 2.0;
-    
-    // Ensure label stays within visible bounds
-    const qreal minX = kOuterMargin;
-    const qreal clippedDrawX = std::max(drawX, minX);
-    painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
+    painter.drawImage(QPointF(drawX, drawY), rotatedImage);
 
     if (shouldPaintYAxisCue(axisIndex)) {
-      const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
-      paintAxisColorCue(painter, axisIndex, labelBounds,
+      paintAxisColorCue(painter, axisIndex,
+          layout.yLabelPositions[axisIndex], rotatedImage.height(),
           !yLabels_[axisIndex].trimmed().isEmpty(), rect);
     }
     
@@ -2160,7 +2237,8 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
   }
   
   // Draw labels for right-side axes
-  for (const auto &[axisIndex, xPosition] : axisPos.rightAxes) {
+  for (const auto &axis : axisPos.rightAxes) {
+    const int axisIndex = axis.first;
     const QString labelText = labelTextOrSpace(yLabels_[axisIndex]);
     
     painter.save();
@@ -2182,20 +2260,14 @@ void CartesianPlotElement::paintLabels(QPainter &painter, const QRectF &rect) co
     transform.rotate(-90.0);
     QImage rotatedImage = textImage.transformed(transform);
 
-    const qreal tickLabelWidth = yAxisMaximumTickLabelWidth(axisIndex,
-        axisMetrics);
-    const qreal drawX = xPosition + kMajorTickSize + kAxisTickLabelGap
-        + tickLabelWidth + kAxisLabelGap;
+    const qreal drawX = layout.yLabelBaselines[axisIndex]
+        - labelMetrics.ascent();
     const qreal drawY = centerY - rotatedImage.height() / 2.0;
-    
-    // Ensure label stays within visible bounds
-    const qreal maxX = this->rect().width() - kOuterMargin - rotatedImage.width();
-    const qreal clippedDrawX = std::min(drawX, maxX);
-    painter.drawImage(QPointF(clippedDrawX, drawY), rotatedImage);
+    painter.drawImage(QPointF(drawX, drawY), rotatedImage);
 
     if (shouldPaintYAxisCue(axisIndex)) {
-      const QRectF labelBounds(QPointF(clippedDrawX, drawY), QSizeF(rotatedImage.size()));
-      paintAxisColorCue(painter, axisIndex, labelBounds,
+      paintAxisColorCue(painter, axisIndex,
+          layout.yLabelPositions[axisIndex], rotatedImage.height(),
           !yLabels_[axisIndex].trimmed().isEmpty(), rect);
     }
     
@@ -2610,8 +2682,10 @@ CartesianPlotElement::AxisRange CartesianPlotElement::resolvedAxisRange(
   return computeAxisRange(axisIndex, hasData, autoMinimums, autoMaximums);
 }
 
+/* The widest number on a Y axis as SciPlot's ComputeDimensions() measures
+ * it: in the X font, with each label rounded to the tick increment. */
 qreal CartesianPlotElement::yAxisMaximumTickLabelWidth(int yAxisIndex,
-    const QFontMetrics &metrics, const AxisRange *precomputedRange) const
+    const AxisRange *precomputedRange) const
 {
   if (yAxisIndex < 0 || yAxisIndex >= 4) {
     return 0.0;
@@ -2626,12 +2700,21 @@ qreal CartesianPlotElement::yAxisMaximumTickLabelWidth(int yAxisIndex,
   const bool isLog10 = (axisRange.style == CartesianPlotAxisStyle::kLog10);
   const NiceAxisRange nice = axisTicks(axisRange, false);
 
+  const QFont axisFont = cartesianPlotAxisFont(rect().size());
+  const int axisPixels = cartesianPlotFontPixelHeight(rect().size(),
+      kAxesScaleFactor);
   qreal maxWidth = 0.0;
   auto measureLabel = [&](double value) {
+    if (!isLog10 && nice.majorInc > 0.0) {
+      value = std::floor(value / nice.majorInc + 0.5) * nice.majorInc;
+      if (std::fabs(value) < std::numeric_limits<double>::min()) {
+        value = 0.0;
+      }
+    }
     const QString label = formatCartesianAxisValue(value, axisRange.style,
         axisTimeFormats_[arrayIndex]);
     maxWidth = std::max(maxWidth,
-        static_cast<qreal>(metrics.horizontalAdvance(label)));
+        sciPlotTextWidth(axisPixels, label, axisFont));
   };
 
   if (isLog10 && nice.drawMin > 0.0 && nice.drawMax > 0.0) {
@@ -2650,15 +2733,6 @@ qreal CartesianPlotElement::yAxisMaximumTickLabelWidth(int yAxisIndex,
   }
 
   return maxWidth;
-}
-
-qreal CartesianPlotElement::yAxisOutwardSpan(int yAxisIndex,
-    const QFontMetrics &axisMetrics, const QFontMetrics &labelMetrics,
-    const AxisRange *precomputedRange) const
-{
-  return kMajorTickSize + kAxisTickLabelGap
-      + yAxisMaximumTickLabelWidth(yAxisIndex, axisMetrics, precomputedRange)
-      + kAxisLabelGap + labelMetrics.height();
 }
 
 bool CartesianPlotElement::mapPointToChart(const QPointF &value,
@@ -2820,8 +2894,11 @@ bool CartesianPlotElement::shouldPaintYAxisCue(int yAxisIndex) const
  * (DrawCartesianYLabel): for each trace, a vertical line beside the axis
  * label from each end of the plot to 5 pixels short of the label, or the
  * full height without a label, 2 pixels left of the previous trace's. */
+/* SciPlot's DrawCartesianYLabel(): with more than one Y axis, a line in
+ * each trace's color above and below the axis label, the first 4 pixels
+ * right of the label position and each next one 2 pixels further left. */
 void CartesianPlotElement::paintAxisColorCue(QPainter &painter,
-    int yAxisIndex, const QRectF &labelBounds, bool labelShown,
+    int yAxisIndex, qreal labelPosition, qreal labelLength, bool labelShown,
     const QRectF &plotRect) const
 {
   if (width() <= 250) {
@@ -2836,12 +2913,14 @@ void CartesianPlotElement::paintAxisColorCue(QPainter &painter,
   default: return;
   }
 
-  const qreal labelLength = labelShown ? labelBounds.height() : -10.0;
+  if (!labelShown) {
+    labelLength = -10.0;
+  }
   const qreal top = plotRect.top();
   const qreal size = plotRect.height();
   const qreal upperEnd = top + (size - labelLength) / 2.0 - 5.0;
   const qreal lowerEnd = top + (size + labelLength) / 2.0 + 5.0;
-  qreal x = std::floor(labelBounds.left()) + 4.0;
+  qreal x = std::floor(labelPosition) + 4.0;
 
   painter.save();
   painter.setRenderHint(QPainter::Antialiasing, false);

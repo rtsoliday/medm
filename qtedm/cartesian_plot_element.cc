@@ -370,9 +370,16 @@ void drawMedmMarker(QPainter &painter, const QPointF &point,
 
 // Nice axis range computation matching MEDM's SciPlot ComputeAxis algorithm
 CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
-    double min, double max, bool isLog, bool isXAxis)
+    double min, double max, bool isLog, bool isXAxis, bool isTime)
 {
   NiceAxisRange result;
+
+  /* SciPlot ends a time axis on the whole seconds around the data instead
+   * of rounding it out to the major increment. */
+  if (isTime) {
+    min = std::floor(min);
+    max = std::ceil(max);
+  }
   
   // Delta values for nice tick intervals (from MEDM's CAdeltas)
   // Must match MEDM exactly: {0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 2.5, 5.0}
@@ -441,9 +448,9 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
   }
   delta *= std::pow(10.0, exponent);
   
-  // Round min down and max up to nearest delta
-  double calcMin = std::floor(min / delta) * delta;
-  double calcMax = std::ceil(max / delta) * delta;
+  // Round min down and max up to nearest delta (not for time axes)
+  double calcMin = isTime ? min : std::floor(min / delta) * delta;
+  double calcMax = isTime ? max : std::ceil(max / delta) * delta;
   
   // MEDM optimization: check next delta to see if it gives a tighter fit
   if (foundIndex + 1 < kNumDeltas) {
@@ -1862,13 +1869,25 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
     }
   } else {
     /* Linear X-axis ticks at SciPlot's "nice" major increment, as for the
-     * Y axes; a cached range was already rounded to it. */
+     * Y axes; a cached range was already rounded to it. SciPlot steps a
+     * time axis by whole seconds from its first sample, stops at its last
+     * sample and labels that sample too when the label fits. */
+    const bool timeAxis = (xAxisStyle == CartesianPlotAxisStyle::kTime);
     const NiceAxisRange nice = (xRange && xRange->valid)
         ? axisTicks(*xRange, true)
-        : computeNiceAxisRange(xAxisMin, xAxisMax, false, true);
+        : computeNiceAxisRange(xAxisMin, xAxisMax, false, true, timeAxis);
     const double span = nice.drawMax - nice.drawMin;
-    for (int i = 0; i <= nice.numMajor && span > 0.0; ++i) {
-      const double value = nice.drawMin + i * nice.majorInc;
+    const double increment = timeAxis ? std::ceil(nice.majorInc)
+                                      : nice.majorInc;
+    const int lastMajor = timeAxis ? nice.numMajor + 1 : nice.numMajor;
+    bool haveLastLabel = false;
+    qreal lastLabelLeft = 0.0;
+    qreal lastLabelHalfWidth = 0.0;
+    for (int i = 0; i <= lastMajor && span > 0.0; ++i) {
+      const double value = nice.drawMin + i * increment;
+      if (timeAxis && value > nice.drawMax) {
+        break;
+      }
       const qreal x = rect.left()
           + (value - nice.drawMin) / span * rect.width();
       // Major tick
@@ -1882,18 +1901,37 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       const qreal textY = rect.bottom() + kMajorTickSize
           + axisMetrics.ascent() + kAxisTickLabelGap;
       painter.drawText(QPointF(textX, textY), label);
+      if (i > 0) {
+        haveLastLabel = true;
+        lastLabelLeft = textX;
+        lastLabelHalfWidth = textWidth / 2.0;
+      }
 
       // Minor ticks
-      if (i < nice.numMajor) {
+      if (i < nice.numMajor || timeAxis) {
         /* SciPlot divides each major interval into numMinor parts. */
         for (int j = 1; j < nice.numMinor; ++j) {
-          const double minorValue = value + j * nice.majorInc / nice.numMinor;
+          const double minorValue = value + j * increment / nice.numMinor;
+          if (timeAxis && minorValue > nice.drawMax) {
+            break;
+          }
           const qreal minorX = rect.left()
               + (minorValue - nice.drawMin) / span * rect.width();
           painter.drawLine(QPointF(minorX, rect.bottom() - kMinorTickSize),
                            QPointF(minorX, rect.bottom() + kMinorTickSize));
         }
       }
+    }
+    if (timeAxis && haveLastLabel && axisPos.rightAxes.empty()
+        && lastLabelLeft + 2.0 * lastLabelHalfWidth
+            < rect.right() - lastLabelHalfWidth) {
+      const QString label = formatCartesianAxisValue(nice.drawMax,
+          xAxisStyle, axisTimeFormats_[xAxisIndex]);
+      const qreal textX = rect.right()
+          - axisMetrics.horizontalAdvance(label) / 2.0;
+      const qreal textY = rect.bottom() + kMajorTickSize
+          + axisMetrics.ascent() + kAxisTickLabelGap;
+      painter.drawText(QPointF(textX, textY), label);
     }
   }
 }
@@ -2525,7 +2563,8 @@ CartesianPlotElement::AxisRange CartesianPlotElement::computeAxisRange(
   // X-axis is index 0, all others are Y-axes
   const bool isXAxis = (axisIndex == 0);
   const NiceAxisRange nice = computeNiceAxisRange(
-      minimum, maximum, range.style == CartesianPlotAxisStyle::kLog10, isXAxis);
+      minimum, maximum, range.style == CartesianPlotAxisStyle::kLog10, isXAxis,
+      range.style == CartesianPlotAxisStyle::kTime);
   
   range.minimum = nice.drawMin;
   range.maximum = nice.drawMax;
@@ -2547,7 +2586,8 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::axisTicks(
         range.numMajor, range.numMinor};
   }
   return computeNiceAxisRange(range.minimum, range.maximum,
-      range.style == CartesianPlotAxisStyle::kLog10, isXAxis);
+      range.style == CartesianPlotAxisStyle::kLog10, isXAxis,
+      range.style == CartesianPlotAxisStyle::kTime);
 }
 
 CartesianPlotElement::AxisRange CartesianPlotElement::resolvedAxisRange(

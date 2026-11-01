@@ -250,7 +250,7 @@ private:
     int numMinor;
   };
   static NiceAxisRange computeNiceAxisRange(double min, double max, bool isLog,
-      bool isXAxis = false);
+      bool isXAxis = false, bool isTime = false);
   static NiceAxisRange axisTicks(const AxisRange &range, bool isXAxis);
 
   bool selected_ = false;

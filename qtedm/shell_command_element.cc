@@ -245,10 +245,10 @@ void ShellCommandElement::paintEvent(QPaintEvent *event)
   painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
 
   QRect bevelInner = bevelOuter.adjusted(1, 1, -1, -1);
-  painter.setPen(QPen(topShadow.lighter(110), 1));
+  painter.setPen(QPen(topShadow, 1));
   painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
   painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
-  painter.setPen(QPen(bottomShadow.darker(115), 1));
+  painter.setPen(QPen(bottomShadow, 1));
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 

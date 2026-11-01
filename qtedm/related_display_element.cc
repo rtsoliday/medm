@@ -382,10 +382,10 @@ void RelatedDisplayElement::paintMenuVisual(QPainter &painter,
   painter.drawLine(bevelOuter.topRight(), bevelOuter.bottomRight());
 
   QRect bevelInner = content;
-  painter.setPen(QPen(topShadow.lighter(110), 1));
+  painter.setPen(QPen(topShadow, 1));
   painter.drawLine(bevelInner.topLeft(), bevelInner.topRight());
   painter.drawLine(bevelInner.topLeft(), bevelInner.bottomLeft());
-  painter.setPen(QPen(bottomShadow.darker(115), 1));
+  painter.setPen(QPen(bottomShadow, 1));
   painter.drawLine(bevelInner.bottomLeft(), bevelInner.bottomRight());
   painter.drawLine(bevelInner.topRight(), bevelInner.bottomRight());
 
@@ -454,10 +454,10 @@ void RelatedDisplayElement::paintButtonVisual(QPainter &painter,
 
       /* Draw inner bevel */
       QRect innerBevel = buttonRect.adjusted(1, 1, -1, -1);
-      painter.setPen(QPen(topShadow.lighter(110), 1));
+      painter.setPen(QPen(topShadow, 1));
       painter.drawLine(innerBevel.topLeft(), innerBevel.topRight() - QPoint(1, 0));
       painter.drawLine(innerBevel.topLeft(), innerBevel.bottomLeft() - QPoint(0, 1));
-      painter.setPen(QPen(bottomShadow.darker(115), 1));
+      painter.setPen(QPen(bottomShadow, 1));
       painter.drawLine(innerBevel.bottomLeft(), innerBevel.bottomRight() - QPoint(1, 0));
       painter.drawLine(innerBevel.topRight(), innerBevel.bottomRight() - QPoint(0, 1));
 

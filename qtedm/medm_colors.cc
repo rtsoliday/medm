@@ -69,61 +69,44 @@ QColor alarmColorForSeverity(short severity)
 void computeShadowColors(const QColor &background,
     QColor &topShadow, QColor &bottomShadow)
 {
-  /* This function mimics Motif's XmGetColors() algorithm for computing
-   * shadow colors from a background color. The algorithm handles edge
-   * cases like very dark backgrounds (where percentage-based lighter/darker
-   * would produce invisible shadows).
-   *
-   * Motif's actual algorithm (from Xm/Visual.c):
-   * - For dark backgrounds, both shadows are computed as fractions toward
-   *   lighter colors to ensure visibility
-   * - The top shadow is brighter than the bottom shadow
-   *
-   * For black (0,0,0), Motif produces visible shadows on both sides.
-   */
+  /* Motif's XmGetColors() (Xm/Visual.c), which gives MEDM's widgets their
+   * shadows. It works on 16-bit X color components and sorts the
+   * background by a brightness that mixes intensity and luminosity:
+   * below 20% both shadows move toward white, above 93% both move toward
+   * black, and in between the top shadow moves toward white and the bottom
+   * shadow toward black by factors that depend on the brightness. */
+  constexpr int kMaxShort = 65535;
+  constexpr int kDarkThreshold = 20 * (kMaxShort / 100);
+  constexpr int kLiteThreshold = 93 * (kMaxShort / 100);
 
-  const int r = background.red();
-  const int g = background.green();
-  const int b = background.blue();
+  const int color[3] = {background.red() * 257, background.green() * 257,
+      background.blue() * 257};
+  const int intensity = (color[0] + color[1] + color[2]) / 3;
+  const int luminosity = static_cast<int>(0.30 * color[0]
+      + 0.59 * color[1] + 0.11 * color[2]);
+  const int brightness = (intensity * 75 + luminosity * 25) / 100;
 
-  /* Calculate brightness using weighted luminance formula */
-  const int brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-  int topR, topG, topB;
-  int botR, botG, botB;
-
-  /* Motif uses different thresholds and calculations */
-  if (brightness < 127) {
-    /* Dark background - Motif's formula increases brightness significantly.
-     * For very dark colors, Motif computes: color + (max - color) * factor
-     * Top shadow uses ~55% factor, bottom shadow uses ~27% factor.
-     * For black, this produces:
-     *   top shadow: ~RGB(140, 140, 140)
-     *   bottom shadow: ~RGB(69, 69, 69) */
-    const int topFactor = 55; /* percentage: 55% of the way to white */
-    topR = r + (255 - r) * topFactor / 100;
-    topG = g + (255 - g) * topFactor / 100;
-    topB = b + (255 - b) * topFactor / 100;
-
-    /* Bottom shadow for dark colors - also moves toward lighter but less so */
-    const int botFactor = 27; /* percentage: 27% of the way to white */
-    botR = r + (255 - r) * botFactor / 100;
-    botG = g + (255 - g) * botFactor / 100;
-    botB = b + (255 - b) * botFactor / 100;
-  } else {
-    /* Light background - use percentage-based calculation.
-     * Top shadow is lighter, bottom shadow is darker. */
-    topR = std::min(255, r + (255 - r) * 50 / 100);
-    topG = std::min(255, g + (255 - g) * 50 / 100);
-    topB = std::min(255, b + (255 - b) * 50 / 100);
-
-    botR = r * 50 / 100;
-    botG = g * 50 / 100;
-    botB = b * 50 / 100;
+  int top[3];
+  int bottom[3];
+  for (int i = 0; i < 3; ++i) {
+    const int value = color[i];
+    if (brightness < kDarkThreshold) {
+      top[i] = value + 50 * (kMaxShort - value) / 100;
+      bottom[i] = value + 30 * (kMaxShort - value) / 100;
+    } else if (brightness > kLiteThreshold) {
+      top[i] = value - value * 20 / 100;
+      bottom[i] = value - value * 40 / 100;
+    } else {
+      const int topFactor = 50 + brightness * (60 - 50) / kMaxShort;
+      const int bottomFactor = 60 + brightness * (40 - 60) / kMaxShort;
+      top[i] = value + topFactor * (kMaxShort - value) / 100;
+      bottom[i] = value - value * bottomFactor / 100;
+    }
   }
 
-  topShadow = QColor(topR, topG, topB);
-  bottomShadow = QColor(botR, botG, botB);
+  /* The X server keeps the high byte of each component. */
+  topShadow = QColor(top[0] >> 8, top[1] >> 8, top[2] >> 8);
+  bottomShadow = QColor(bottom[0] >> 8, bottom[1] >> 8, bottom[2] >> 8);
 }
 
 } // namespace MedmColors

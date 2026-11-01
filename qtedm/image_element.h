@@ -52,6 +52,7 @@ private:
   void reloadImage();
   void disposeMovie();
   void updateCurrentPixmap();
+  const QPixmap &displayPixmap();
   QColor foregroundColor() const;
   QColor backgroundColor() const;
 
@@ -60,6 +61,8 @@ private:
   QString calc_;
   QString baseDirectory_;
   QPixmap pixmap_;
+  QPixmap scaledPixmap_;
+  qint64 scaledSourceKey_ = 0;
   QMovie *movie_ = nullptr;
   std::shared_ptr<void> movieCacheReservation_;
   int cachedFrameCount_ = 0;

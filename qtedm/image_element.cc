@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QImage>
 #include <QImageReader>
 #include <QPainter>
 #include <QStringList>
@@ -23,6 +24,28 @@ ImageMemoryBudget &gifCacheBudget()
 {
   static ImageMemoryBudget budget(kMaximumAllGifCacheBytes);
   return budget;
+}
+
+/* Scale the way MEDM's resizeGIF does: each destination pixel copies the
+ * source pixel (sw * dx / dw, sh * dy / dh), with no filtering. */
+QImage medmScaledImage(const QImage &source, const QSize &size)
+{
+  const QImage src = source.convertToFormat(QImage::Format_ARGB32);
+  QImage dst(size, QImage::Format_ARGB32);
+  const int sw = src.width();
+  const int sh = src.height();
+  const int dw = size.width();
+  const int dh = size.height();
+  for (int dy = 0; dy < dh; ++dy) {
+    const QRgb *srcLine = reinterpret_cast<const QRgb *>(
+        src.constScanLine(static_cast<int>(
+            static_cast<qint64>(sh) * dy / dh)));
+    QRgb *dstLine = reinterpret_cast<QRgb *>(dst.scanLine(dy));
+    for (int dx = 0; dx < dw; ++dx) {
+      dstLine[dx] = srcLine[static_cast<qint64>(sw) * dx / dw];
+    }
+  }
+  return dst;
 }
 }
 
@@ -290,7 +313,6 @@ void ImageElement::paintEvent(QPaintEvent *event)
   Q_UNUSED(event);
 
   QPainter painter(this);
-  painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
   const QRect drawRect = rect().adjusted(0, 0, -1, -1);
 
   const bool showImage = !pixmap_.isNull()
@@ -300,9 +322,10 @@ void ImageElement::paintEvent(QPaintEvent *event)
     /*
      * Match MEDM image transparency semantics: transparent pixels resolve to
      * the display background, not to widgets stacked underneath the image.
+     * MEDM fills the whole object with the image, so it is not inset.
      */
-    painter.fillRect(drawRect, backgroundColor());
-    painter.drawPixmap(drawRect, pixmap_);
+    painter.fillRect(rect(), backgroundColor());
+    painter.drawPixmap(0, 0, displayPixmap());
   } else {
     const bool disconnected = executeMode_ && !runtimeConnected_;
     const bool invalidCalc = executeMode_ && runtimeConnected_ && runtimeInvalidCalc_;
@@ -464,6 +487,20 @@ void ImageElement::disposeMovie()
 	delete movie_;
 	movie_ = nullptr;
 	movieCacheReservation_.reset();
+}
+
+const QPixmap &ImageElement::displayPixmap()
+{
+  if (pixmap_.size() == size()) {
+    return pixmap_;
+  }
+  if (scaledSourceKey_ != pixmap_.cacheKey()
+      || scaledPixmap_.size() != size()) {
+    scaledPixmap_ = QPixmap::fromImage(
+        medmScaledImage(pixmap_.toImage(), size()));
+    scaledSourceKey_ = pixmap_.cacheKey();
+  }
+  return scaledPixmap_;
 }
 
 void ImageElement::updateCurrentPixmap()

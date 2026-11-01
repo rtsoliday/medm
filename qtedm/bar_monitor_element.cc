@@ -395,6 +395,106 @@ void BarMonitorElement::clearRuntimeState()
   }
 }
 
+namespace {
+
+/* Xc's Rect3d (xc/Control.c): a frame shadeDepth pixels wide with the
+ * Motif shadow colors, raised or depressed, around a background fill. */
+void drawXcRect3d(QPainter &painter, const QRect &rect, int depth,
+    bool raised, const QColor &background)
+{
+  QColor topShadow;
+  QColor bottomShadow;
+  MedmColors::computeShadowColors(background, topShadow, bottomShadow);
+  const QColor &upperLeft = raised ? topShadow : bottomShadow;
+  const QColor &lowerRight = raised ? bottomShadow : topShadow;
+  const int x = rect.x();
+  const int y = rect.y();
+  const int width = std::max(0, rect.width() - 1);
+  const int height = std::max(0, rect.height() - 1);
+  for (int j = 0; j < depth; ++j) {
+    painter.setPen(upperLeft);
+    painter.drawLine(x + j, y + j, x + j, y + height - j);
+    painter.drawLine(x + j, y + j, x + width - j, y + j);
+    painter.setPen(lowerRight);
+    painter.drawLine(x + j, y + height - j, x + width - j, y + height - j);
+    painter.drawLine(x + width - j, y + j, x + width - j, y + height - j);
+  }
+  if (width > 2 * depth && height > 2 * depth) {
+    painter.fillRect(x + depth, y + depth, width - 2 * depth,
+        height - 2 * depth, background);
+  }
+}
+
+} // namespace
+
+/* MEDM draws a bar labeled "none" as Xc's BarGraph with decorations but no
+ * scale, value, or label (xc/BarGraph.c Resize, Redisplay, Draw_display). */
+void BarMonitorElement::paintXcBarWithoutScale(QPainter &painter,
+    int fontDescent) const
+{
+  constexpr int kShadeDepth = 2;
+  const QColor background = effectiveBackground();
+  drawXcRect3d(painter, rect(), kShadeDepth, true, background);
+
+  const QRect face(kShadeDepth, kShadeDepth, width() - 2 * kShadeDepth,
+      height() - 2 * kShadeDepth);
+  const int valueBoxY = height() - 2 * kShadeDepth;
+  const bool vertical = (direction_ == BarDirection::kUp
+      || direction_ == BarDirection::kDown);
+  QRect bar;
+  if (vertical) {
+    const int x = face.x() + 2 * kShadeDepth;
+    const int y = face.y() + fontDescent + 2 * kShadeDepth;
+    bar = QRect(x, y, std::max(0, face.width() - x - kShadeDepth),
+        std::max(0, valueBoxY - y - 2 * kShadeDepth));
+  } else {
+    const int x = face.x() + face.width() / 16 + kShadeDepth;
+    const int y = face.y() + 2 * kShadeDepth;
+    bar = QRect(x, y, std::max(0, (9 * face.width()) / 10 - 2 * kShadeDepth),
+        std::max(1, valueBoxY - y - kShadeDepth));
+  }
+  drawXcRect3d(painter, bar.adjusted(-kShadeDepth, -kShadeDepth,
+      kShadeDepth, kShadeDepth), kShadeDepth, false, background);
+  if (bar.isEmpty()) {
+    return;
+  }
+  painter.fillRect(bar, barTrackColor());
+
+  const int length = vertical ? bar.height() : bar.width();
+  int d = static_cast<int>(normalizedSampleValue() * length + 0.49);
+  d = std::clamp(d, 0, length);
+  const int mid = length / 2;
+  const bool fromCenter = fillMode_ == BarFill::kFromCenter;
+  int start = 0;
+  int extent = d;
+  switch (direction_) {
+  case BarDirection::kUp:
+    start = fromCenter ? (d > mid ? length - d : mid) : length - d;
+    extent = fromCenter ? std::abs(d - mid) : d;
+    break;
+  case BarDirection::kDown:
+    start = fromCenter ? (d > mid ? mid : d) : 0;
+    extent = fromCenter ? std::abs(d - mid) : d;
+    break;
+  case BarDirection::kRight:
+    start = fromCenter ? (d > mid ? mid : d) : 0;
+    extent = fromCenter ? std::abs(d - mid) : d;
+    break;
+  case BarDirection::kLeft:
+  default:
+    start = fromCenter ? (d > mid ? length - d : mid) : length - d;
+    extent = fromCenter ? std::abs(d - mid) : d;
+    break;
+  }
+  if (extent <= 0) {
+    return;
+  }
+  const QRect fill = vertical
+      ? QRect(bar.x(), bar.y() + start, bar.width(), extent)
+      : QRect(bar.x() + start, bar.y(), extent, bar.height());
+  painter.fillRect(fill, barFillColor());
+}
+
 void BarMonitorElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
@@ -424,17 +524,6 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
 
   if (executeMode_ && !runtimeConnected_) {
     painter.fillRect(rect(), Qt::white);
-    if (selected_) {
-      paintSelectionOverlay(painter);
-    }
-    return;
-  }
-
-  const qreal padding = (label_ == MeterLabel::kNoDecorations) 
-      ? 0.0 
-      : (kLayoutPadding + kBevelWidth);
-  const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
-  if (!contentRect.isValid() || contentRect.isEmpty()) {
     if (selected_) {
       paintSelectionOverlay(painter);
     }
@@ -485,6 +574,25 @@ void BarMonitorElement::paintEvent(QPaintEvent *event)
   labelFont.setPixelSize(chosenPixelSize);
   painter.setFont(labelFont);
   const QFontMetricsF metrics(labelFont);
+
+  if (label_ == MeterLabel::kNone) {
+    paintXcBarWithoutScale(painter, qRound(metrics.descent()));
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
+
+  const qreal padding = (label_ == MeterLabel::kNoDecorations) 
+      ? 0.0 
+      : (kLayoutPadding + kBevelWidth);
+  const QRectF contentRect = rect().adjusted(padding, padding, -padding, -padding);
+  if (!contentRect.isValid() || contentRect.isEmpty()) {
+    if (selected_) {
+      paintSelectionOverlay(painter);
+    }
+    return;
+  }
 
   const Layout layout = calculateLayout(contentRect, metrics);
   if (!layout.trackRect.isValid() || layout.trackRect.isEmpty()) {

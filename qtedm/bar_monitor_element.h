@@ -77,6 +77,7 @@ private:
   struct Layout;
   Layout calculateLayout(const QRectF &contentRect,
       const QFontMetricsF &metrics) const;
+  void paintXcBarWithoutScale(QPainter &painter, int fontDescent) const;
   void paintTrack(QPainter &painter, const QRectF &trackRect) const;
   void paintFill(QPainter &painter, const QRectF &trackRect) const;
   void paintAxis(QPainter &painter, const Layout &layout) const;

@@ -573,12 +573,16 @@ test: test-cli test-unit test-ioc test-visual
 QTEDM_TEST_MANAGE_REPEATER ?= 0
 test-unit: SHELL := /bin/bash
 
+# A failing binary does not stop the loop, so a signal must exit explicitly.
+# Otherwise the remaining binaries run after cleanup removed their report
+# directory.
 test-unit: build-tests
 	@$(PYTHON) ../tests/testADL_SaveFiles.py --self-test
 	@$(PYTHON) ../tests/validate_qtedm_coverage.py
 	@set -e; \
 	. ../tests/lib/qtedm_test_env.sh; \
-	trap 'qtedm_test_cleanup $$?' EXIT HUP INT TERM; \
+	trap 'qtedm_test_cleanup $$?' EXIT; \
+	trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM; \
 	qtedm_test_setup_env; \
 	export QTEDM_TEST_MANAGE_REPEATER=$(QTEDM_TEST_MANAGE_REPEATER); \
 	qtedm_test_start_repeater; \

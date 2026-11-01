@@ -51,14 +51,30 @@ protected:
     QStyleOptionComboBox option;
     initStyleOption(&option);
 
-    // Draw frame, arrow and focus as usual, then render centered label text.
+    /* Draw the frame without the style's wide arrow area, then a small
+     * arrow at the right like Motif's cascade indicator, so the label has
+     * nearly the whole width, as in MEDM's option menu. */
     QStyleOptionComboBox frameOption(option);
     frameOption.currentText.clear();
     frameOption.currentIcon = QIcon();
+    frameOption.subControls &= ~QStyle::SC_ComboBoxArrow;
     painter.drawComplexControl(QStyle::CC_ComboBox, frameOption);
 
-    const QRect textRect = style()->subControlRect(
-        QStyle::CC_ComboBox, &option, QStyle::SC_ComboBoxEditField, this);
+    constexpr int kFrame = 3;
+    const QRect inner = rect().adjusted(kFrame, kFrame, -kFrame, -kFrame);
+    if (!inner.isValid()) {
+      return;
+    }
+    const int arrowSize = std::clamp(inner.height() / 2, 4, 9);
+    const QRect arrowRect(inner.right() - arrowSize + 1,
+        inner.top() + (inner.height() - arrowSize) / 2, arrowSize, arrowSize);
+    QStyleOption arrowOption(option);
+    arrowOption.rect = arrowRect;
+    style()->drawPrimitive(QStyle::PE_IndicatorArrowDown, &arrowOption,
+        &painter, this);
+
+    QRect textRect = inner;
+    textRect.setRight(arrowRect.left() - 2);
     if (!textRect.isValid()) {
       return;
     }
@@ -70,12 +86,14 @@ protected:
     const QString displayText = displayTextOverride_.isEmpty()
         ? option.currentText
         : displayTextOverride_;
+    /* Motif clips a label that does not fit rather than eliding it. */
+    const bool fits = fontMetrics().horizontalAdvance(displayText)
+        <= textRect.width();
     painter.setPen(textColor);
-    painter.drawText(
-        textRect,
-        Qt::AlignCenter,
-        fontMetrics().elidedText(
-            displayText, Qt::ElideRight, textRect.width()));
+    painter.setClipRect(textRect);
+    painter.drawText(textRect,
+        Qt::AlignVCenter | (fits ? Qt::AlignHCenter : Qt::AlignLeft),
+        displayText);
   }
 
 private:

@@ -606,7 +606,10 @@ void BarMonitorElement::paintXcBar(QPainter &painter,
 
   if (valueVisible) {
     painter.fillRect(valueBox, Qt::white);
-    const QString text = xcFloatText(currentValue(), precision);
+    /* Before a channel's first value, currentValue() is a sample value
+     * from the display's range, which must not read as the channel's. */
+    const QString text = executeMode_ && !hasRuntimeValue_
+        ? QStringLiteral("--") : xcFloatText(currentValue(), precision);
     painter.save();
     painter.setClipRect(valueBox);
     painter.setPen(Qt::black);

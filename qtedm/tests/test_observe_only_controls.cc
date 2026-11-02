@@ -38,6 +38,7 @@
 #include <QWindow>
 
 #include "audit_logger.h"
+#include "bar_monitor_element.h"
 #include "pva_channel_manager.h"
 #include "composite_element.h"
 #include "cartesian_plot_runtime.h"
@@ -141,6 +142,7 @@ private slots:
   void wheelSwitchStepsOutOfRangeValueAsXc();
   void compositeShowsImageChildWithDynamicVisibility();
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
+  void barValueBoxShowsNoValueBeforeFirstValue();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -5614,6 +5616,39 @@ void TestObserveOnlyControls::limitWidgetsWithoutLimitsBlockUseChannelLimits()
   QCOMPARE(explicitLimits.lowSource, PvLimitSource::kDefault);
   QCOMPARE(explicitLimits.highSource, PvLimitSource::kDefault);
   QCOMPARE(explicitLimits.highDefault, 5.0);
+}
+
+/* Until its channel sends a value, a connected bar must not print the
+ * sample value it draws in the editor, 65% of the display range here, as
+ * though the channel had sent it. */
+void TestObserveOnlyControls::barValueBoxShowsNoValueBeforeFirstValue()
+{
+  QWidget parent;
+  BarMonitorElement element(&parent);
+  element.resize(160, 40);
+  element.setLabel(MeterLabel::kLimits);
+  element.setDirection(BarDirection::kRight);
+  element.setForegroundColor(Qt::black);
+  element.setBackgroundColor(QColor(200, 200, 200));
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = 10.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 1;
+  element.setLimits(limits);
+  element.setExecuteMode(true);
+  element.setRuntimeConnected(true);
+  const auto render = [&element]() {
+    QImage image(element.size(), QImage::Format_RGB32);
+    element.render(&image);
+    return image;
+  };
+  const QImage withoutValue = render();
+  element.setRuntimeValue(6.5);
+  const QImage sampleValue = render();
+  QVERIFY(withoutValue != sampleValue);
 }
 
 void TestObserveOnlyControls::scaleMonitorValueBoxMatchesXcIndicator()

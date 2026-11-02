@@ -185,18 +185,33 @@ QVector<QRect> x11EllipseRingSpans(const QRect &box, int lineWidth)
   /* In each row the ring is a run of pixels from each side until the hole,
    * or one run through the middle. */
   for (int y = top; y <= bottom; ++y) {
-    int leftEnd = left;
-    while (leftEnd <= right && !inRing(leftEnd, y)) {
+    /* A ring pixel lies within half a line width of a point of the ellipse
+     * at least nearest above or below its center, so no farther across than
+     * reach. Scan from there, not from the box edges: the corners outside
+     * the ring held most of the pixels tested. */
+    const double nearest = std::max(0.0, std::abs(y - cy) - half);
+    if (nearest > b) {
+      continue;
+    }
+    const double across = nearest / b;
+    const double reach =
+        a * std::sqrt(std::max(0.0, 1.0 - across * across)) + half;
+    const int rowLeft = std::max(left,
+        static_cast<int>(std::floor(cx - reach)) - 1);
+    const int rowRight = std::min(right,
+        static_cast<int>(std::ceil(cx + reach)) + 1);
+    int leftEnd = rowLeft;
+    while (leftEnd <= rowRight && !inRing(leftEnd, y)) {
       ++leftEnd;
     }
-    if (leftEnd > right) {
+    if (leftEnd > rowRight) {
       continue;
     }
     const int leftStart = leftEnd;
-    while (leftEnd <= right && inRing(leftEnd, y)) {
+    while (leftEnd <= rowRight && inRing(leftEnd, y)) {
       ++leftEnd;
     }
-    int rightStart = right;
+    int rightStart = rowRight;
     while (rightStart >= leftEnd && !inRing(rightStart, y)) {
       --rightStart;
     }

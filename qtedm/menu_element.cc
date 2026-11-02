@@ -19,6 +19,7 @@
 #include <QStyle>
 #include <QStyleOptionComboBox>
 #include <QStylePainter>
+#include <QWheelEvent>
 
 #include "legacy_fonts.h"
 #include "cursor_utils.h"
@@ -44,6 +45,14 @@ public:
   }
 
 protected:
+  /* QComboBox steps its index and emits activated() for each wheel notch,
+   * which would write the channel while the pointer merely passes over the
+   * menu. MEDM's option menu ignores the wheel; pass it to the parent. */
+  void wheelEvent(QWheelEvent *event) override
+  {
+    event->ignore();
+  }
+
   void paintEvent(QPaintEvent *event) override
   {
     Q_UNUSED(event);

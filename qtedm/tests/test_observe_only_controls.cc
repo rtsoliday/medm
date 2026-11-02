@@ -35,6 +35,7 @@
 #include <QTableWidget>
 #include <QTimer>
 #include <QToolButton>
+#include <QWheelEvent>
 #include <QWindow>
 
 #include "audit_logger.h"
@@ -161,6 +162,7 @@ private slots:
   void rejectedSetpointShowsError();
   void menuLabelsUseMedmFont_data();
   void menuLabelsUseMedmFont();
+  void menuIgnoresMouseWheel();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
@@ -2061,6 +2063,37 @@ void TestObserveOnlyControls::menuLabelsUseMedmFont()
   QCoreApplication::processEvents();
   QTest::keyClick(combo, Qt::Key_Up);
   QCOMPARE(activated, 2);
+}
+
+/* As MEDM's option menu, a menu changes its channel only when the operator
+ * picks an item. Scrolling the mouse wheel over it must not write. */
+void TestObserveOnlyControls::menuIgnoresMouseWheel()
+{
+  MenuElement element;
+  element.resize(150, 40);
+  element.setChannel(QStringLiteral("__test:menu_wheel"));
+  element.setExecuteMode(true);
+  element.setRuntimeLabels({QStringLiteral("OFF"), QStringLiteral("ON"),
+      QStringLiteral("AUTO")});
+  element.setRuntimeConnected(true);
+  element.setRuntimeReadAccess(true);
+  element.setRuntimeWriteAccess(true);
+  element.setRuntimeValue(1);
+  int activated = -1;
+  element.setActivationCallback([&activated](int index) { activated = index; });
+  element.show();
+  QCoreApplication::processEvents();
+  auto *combo = element.findChild<QComboBox *>();
+  QVERIFY(combo);
+  const QPointF center = QRectF(combo->rect()).center();
+  const QPointF global = combo->mapToGlobal(center.toPoint());
+  for (int delta : {-120, 120, 120}) {
+    QWheelEvent wheel(center, global, QPoint(), QPoint(0, delta),
+        Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(combo, &wheel);
+  }
+  QCOMPARE(activated, -1);
+  QCOMPARE(combo->currentIndex(), 1);
 }
 
 void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()

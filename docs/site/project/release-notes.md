@@ -16,6 +16,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 ### Behavior changes
 
 - **Writes are shown when the IOC reports them.** After a Channel Access write, monitors of the PV no longer show the requested value before the IOC confirms it. If the IOC clamps, rejects, or overrides the write, the display keeps showing the IOC's value and alarm state. The control making the write shows the value you set until the IOC reports a value, then shows the IOC's value, as in MEDM, even when that value has not changed. If the IOC reports no value, the control keeps showing the value you set.
+- **Macros as in MEDM.** Where a macro name is given twice, as by a related display that passes `LOC` twice, the first value is used; QtEDM 1.0.0 used the last, so such a child display can now connect to different channels. Whitespace inside macro names and values from `-macro`, a related display, or a composite file is removed: `TITLE=Beam line` gives `Beamline`, and the missing comma in `xx=05 yy=BM` gives `xx` the value `05yy=BM`. A blank `-macro " "` defines no macros instead of being read as a display file name.
 - **Composite files inherit display macros.** A composite file without its own macros now resolves `$(P)` and similar references from the display's macros, as MEDM does. Macros given with the composite file name are added to the display's macros and take precedence. MEDM instead uses only the composite's own macros when it has any.
 - **Limits as in MEDM.** An upper limit that comes from its default, with no value given, is MEDM's 1 instead of 100 for bars, sliders, scale monitors, strip chart pens, wheel switches, and thermometers. A slider, wheel switch, scale monitor, or strip chart pen without a `limits` block, as in displays older than MEDM 2.2 or written by other tools, takes its limits from the channel, as MEDM does, instead of a fixed range that also bounded the values a slider or wheel switch writes.
 - **Negative hexadecimal values** show as their low 32 bits, as in MEDM, so -2 shows as `0xfffffffe` instead of `-0x2`. Entering such text in a hexadecimal text entry, text area, or setpoint control writes the negative value to a short or long channel.
@@ -28,11 +29,20 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - **NTNDArray image limits.** Maximum Input and Maximum Image are entered in bytes instead of MiB and are no longer capped at 4096 MiB. Maximum Dimension is no longer capped at 65536.
 - **Build variables.** `CC`, `CXX`, `CPPFLAGS`, `CXXFLAGS`, and `LDLIBS` set in the environment no longer change the build. Pass them on the `make` command line instead. `LDFLAGS` set in the environment is still added to the link on Linux and Windows.
 - **SDDS** is no longer required to build QtEDM. A build check confirms SDDS6 export where SDDS is available.
+- **Disconnected objects as in MEDM.** An object whose color and visibility are static draws normally while its channel is disconnected. A child hidden by its own visibility stays hidden in a shown composite. Disconnected widgets are stacked with the graphics in display order, so graphics drawn after them cover their white boxes.
+- **Cartesian plots as in MEDM's SciPlot.** Margins, fonts sized from the plot, tick increments and labels, markers, and time axes that span the data follow SciPlot, as does the title offset of displays older than file version 030115. The dotted grid is drawn only with `drawMajor=1`, which QtEDM saves for a plot with a grid; plots saved by QtEDM 1.0.0 with the default grid have no such key and now show no grid. A plot is white while any trace, trigger, erase, or count channel is disconnected, and a count that starts with a digit is read as a number. A string channel's trace plots at 0, and an axis whose channels have no usable display limits autoscales.
+- **Widgets drawn as MEDM's Xc and Motif widgets.** Scale monitors, bars (with their 20x20 minimum while connected), sliders, strip charts, choice buttons, menus, text entries, related display and shell command buttons, and bevel shadow colors follow MEDM's layout and drawing. A disconnected text entry is drawn without its bevel.
+- **Graphics drawn as by MEDM's X server.** Ovals cover the pixels of `XFillArc` and `XDrawArc`, dashed and wide lines use 4-pixel dashes and butt caps, outline rectangles thinner than their line width are drawn, display images fill their object without smoothing, and a composite's static graphics stack in display order and are clipped to its object when it has a channel.
+- **Qt warnings go to standard error**, as MEDM's messages do, even when standard error is not a terminal, unless `QT_FORCE_STDERR_LOGGING` is already set. Shell commands inherit that setting.
+- **Large displays fill faster.** When Channel Access delivers more events than QtEDM's inbox holds, each channel keeps its newest value instead of losing the oldest events, which could be a channel's only value, and only elements whose stacking order changed are restacked.
 
 ### Fixes
 
 - Legacy (pre-2.2) ADL files whose quoted values contain braces, such as `chan="SR:C01{BPM}"`, load correctly.
 - ADL files with an extra `}` between objects open as they do in MEDM instead of failing with "Expected section or key".
+- A backslash in an ADL string, other than in the escapes QtEDM writes, is kept as MEDM shows it, so `Faults\Trips` no longer reads `FaultsTrips`.
+- Object geometry written with a fraction, such as `y=57.2`, keeps its integer part, as in MEDM, instead of falling back to 0.
+- A display saved with a negative position opens at the edge of the screen, as MEDM moves it, instead of partly off the screen.
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
 - A wheel switch whose value is outside its limits steps toward them by the step you choose, as in MEDM. It used to write the nearest limit, so one Down click on a value of 50 with limits 0 to 1 wrote 1. A step that would move the value further out of range does nothing.
 - Menus, related display buttons, and wave tables fit their labels and empty-state text to the widget.
@@ -43,5 +53,5 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 
 ### Known issues
 
-- Saving a display written by MEDM rewrites strings that contain backslashes, because QtEDM decodes escapes such as `\t` when it reads a file. Keep an original copy of MEDM displays whose labels or shell commands contain backslashes.
+- Saving a display written by MEDM rewrites strings that contain backslashes. QtEDM decodes the escapes it writes, such as `\t`, when it reads a file, and saves each backslash as `\\`, which MEDM shows as two backslashes. Keep an original copy of MEDM displays whose labels or shell commands contain backslashes.
 - Opening a display with unreachable `pva://` PVs pauses for about one second per PV.

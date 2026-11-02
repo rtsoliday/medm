@@ -8,6 +8,14 @@
 #include "graphic_properties.h"
 #include "graphic_shape_element.h"
 
+class QPainter;
+
+/* Fill an ellipse with the spans the X server's miFillEllipseI
+ * (mi/mifillarc.c) generates for MEDM's XFillArc of a full circle. Qt
+ * rasterizes an unoutlined ellipse one column wider on the left, which
+ * hides that side of an outline drawn around it. */
+void fillX11Ellipse(QPainter &painter, const QRect &box, const QColor &color);
+
 class OvalElement : public GraphicShapeElement
 {
 public:

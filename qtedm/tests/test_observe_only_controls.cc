@@ -205,6 +205,8 @@ private slots:
   void legacyAttributesKeepQuotedBraces();
   void graphicEdgesMatchMedmCoordinates_data();
   void graphicEdgesMatchMedmCoordinates();
+  void ovalFillMatchesXFillArc_data();
+  void ovalFillMatchesXFillArc();
   void cosmeticOutlineEditsKeepObjectBounds_data();
   void cosmeticOutlineEditsKeepObjectBounds();
   void compositeShapePicking_data();
@@ -960,6 +962,66 @@ void TestObserveOnlyControls::legacyAttributesKeepQuotedBraces()
   QVERIFY(window.ovalElements_.last()->channel(0).isEmpty());
 }
 
+void TestObserveOnlyControls::ovalFillMatchesXFillArc_data()
+{
+  QTest::addColumn<QStringList>("rows");
+  /* XFillArc of a full circle as Xvfb drew it for installed MEDM 3.1.20. */
+  QTest::newRow("9x9") << QStringList{
+      QStringLiteral("........."),
+      QStringLiteral("..######."),
+      QStringLiteral(".########"),
+      QStringLiteral(".########"),
+      QStringLiteral(".########"),
+      QStringLiteral(".########"),
+      QStringLiteral(".########"),
+      QStringLiteral(".########"),
+      QStringLiteral("..######.")};
+  QTest::newRow("14x10") << QStringList{
+      QStringLiteral(".......#......"),
+      QStringLiteral("...#########.."),
+      QStringLiteral("..###########."),
+      QStringLiteral(".#############"),
+      QStringLiteral(".#############"),
+      QStringLiteral("##############"),
+      QStringLiteral(".#############"),
+      QStringLiteral(".#############"),
+      QStringLiteral("..###########."),
+      QStringLiteral("...#########..")};
+  QTest::newRow("15x11") << QStringList{
+      QStringLiteral("..............."),
+      QStringLiteral("....########..."),
+      QStringLiteral("..############."),
+      QStringLiteral(".##############"),
+      QStringLiteral(".##############"),
+      QStringLiteral(".##############"),
+      QStringLiteral(".##############"),
+      QStringLiteral(".##############"),
+      QStringLiteral(".##############"),
+      QStringLiteral("..############."),
+      QStringLiteral("....########...")};
+}
+
+void TestObserveOnlyControls::ovalFillMatchesXFillArc()
+{
+  QFETCH(QStringList, rows);
+  const int width = rows.first().size();
+  const int height = rows.size();
+  QImage image(width + 4, height + 4, QImage::Format_RGB32);
+  image.fill(Qt::white);
+  QPainter painter(&image);
+  fillX11Ellipse(painter, QRect(2, 2, width, height), Qt::black);
+  painter.end();
+  for (int y = 0; y < image.height(); ++y) {
+    for (int x = 0; x < image.width(); ++x) {
+      const bool inside = x >= 2 && y >= 2 && x < width + 2
+          && y < height + 2
+          && rows.at(y - 2).at(x - 2) == QLatin1Char('#');
+      QVERIFY2((image.pixel(x, y) == qRgb(0, 0, 0)) == inside,
+          qPrintable(QStringLiteral("pixel %1,%2").arg(x - 2).arg(y - 2)));
+    }
+  }
+}
+
 void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates_data()
 {
   QTest::addColumn<QString>("shape");
@@ -1097,7 +1159,11 @@ void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates()
         painter.drawRect(bounds);
       }
     } else if (shape == QStringLiteral("oval")) {
-      painter.drawEllipse(bounds);
+      if (filled) {
+        fillX11Ellipse(painter, bounds, Qt::black);
+      } else {
+        painter.drawEllipse(bounds);
+      }
     } else if (shape == QStringLiteral("arc")) {
       if (filled) {
         painter.drawPie(bounds, 0, arcSpan * 16);

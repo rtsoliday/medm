@@ -9,6 +9,81 @@
 #include <QPalette>
 #include <QPen>
 
+void fillX11Ellipse(QPainter &painter, const QRect &box, const QColor &color)
+{
+  const qint64 width = box.width();
+  const qint64 height = box.height();
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  /* miFillArcSetup */
+  qint64 y = height >> 1;
+  const qint64 dy = height & 1;
+  const qint64 yorg = box.y() + y;
+  const qint64 xorg = box.x() + (width >> 1) + (width & 1);
+  const qint64 dx = 1 - (width & 1);
+  qint64 xk = 0;
+  qint64 xm = 0;
+  qint64 yk = 0;
+  qint64 ym = 0;
+  qint64 e = 0;
+  if (width == height) {
+    ym = 8;
+    xm = 8;
+    yk = y << 3;
+    if (!dx) {
+      xk = 0;
+      e = -1;
+    } else {
+      ++y;
+      yk += 4;
+      xk = -4;
+      e = -(y << 3);
+    }
+  } else {
+    ym = (width * width) << 3;
+    xm = (height * height) << 3;
+    yk = y * ym;
+    if (!dy) {
+      yk -= ym >> 1;
+    }
+    if (!dx) {
+      xk = 0;
+      e = -(xm >> 3);
+    } else {
+      ++y;
+      yk += ym;
+      xk = -(xm >> 1);
+      e = xk - yk;
+    }
+  }
+
+  /* MIFILLARCSTEP and ADDSPANS */
+  qint64 x = 0;
+  while (y > 0) {
+    e += yk;
+    while (e >= 0) {
+      ++x;
+      xk -= xm;
+      e += xk;
+    }
+    --y;
+    yk -= ym;
+    qint64 spanWidth = (x << 1) + dx;
+    if (e == xk && spanWidth > 1) {
+      --spanWidth;
+    }
+    const int left = static_cast<int>(xorg - x);
+    painter.fillRect(QRect(left, static_cast<int>(yorg - y),
+        static_cast<int>(spanWidth), 1), color);
+    if ((y + dy) != 0 && (spanWidth > 1 || e != xk)) {
+      painter.fillRect(QRect(left, static_cast<int>(yorg + y + dy),
+          static_cast<int>(spanWidth), 1), color);
+    }
+  }
+}
+
 OvalElement::OvalElement(QWidget *parent)
   : GraphicShapeElement(parent)
 {
@@ -123,9 +198,7 @@ void OvalElement::paintEvent(QPaintEvent *event)
       ? rect() : medmOutlineRect(rect(), lineWidth_);
 
   if (fill_ == RectangleFill::kSolid) {
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(effectiveColor);
-    painter.drawEllipse(drawRect);
+    fillX11Ellipse(painter, drawRect, effectiveColor);
   } else {
     painter.setBrush(Qt::NoBrush);
     QPen pen = medmLinePen(effectiveColor, lineWidth_, lineStyle_);

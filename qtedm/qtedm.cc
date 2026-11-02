@@ -382,7 +382,11 @@ void applyCommandLineGeometry(DisplayWindow *window, const GeometrySpec &spec)
   }
 
   if (spec.hasX || spec.hasY) {
-    auto computeTarget = [&](const QSize &frameSize, const QRect &screenGeometry) {
+    /* Capture by value: moveWindow() may run from the event loop after this
+     * function returns, when the window parameter and the caller's spec are
+     * gone. */
+    auto computeTarget = [window, spec](const QSize &frameSize,
+                             const QRect &screenGeometry) {
       QPoint target = window->pos();
       if (spec.hasX) {
         if (spec.xFromRight) {

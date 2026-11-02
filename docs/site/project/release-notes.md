@@ -43,6 +43,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - A backslash in an ADL string, other than in the escapes QtEDM writes, is kept as MEDM shows it, so `Faults\Trips` no longer reads `FaultsTrips`.
 - Object geometry written with a fraction, such as `y=57.2`, keeps its integer part, as in MEDM, instead of falling back to 0.
 - A display saved with a negative position opens at the edge of the screen, as MEDM moves it, instead of partly off the screen.
+- A `-dg` geometry with a position, such as `qtedm -x -dg +100+200 display.adl`, no longer crashes QtEDM.
 - The tick labels of a zoomed or panned cartesian plot sit where their values are plotted. They were spread over the zoom window rounded out to nice values, so a label could be up to one tick step away from the data at its value.
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
 - A wheel switch whose value is outside its limits steps toward them by the step you choose, as in MEDM. It used to write the nearest limit, so one Down click on a value of 50 with limits 0 to 1 wrote 1. A step that would move the value further out of range does nothing.

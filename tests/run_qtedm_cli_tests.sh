@@ -60,3 +60,15 @@ if [[ "${fatal_status}" -ne 1 ]]; then
   echo "Expected unsupported-format exit status 1, got ${fatal_status}" >&2
   exit 1
 fi
+
+# A -dg position is applied from the event loop after the display opens,
+# when the function that scheduled the move has returned.
+set +e
+"${QTEDM_BIN}" -local -x -dg +10+20 -testExitAfterMs 500 \
+  "$(qtedm_test_native_path "${SCRIPT_DIR}/index.adl")" >/dev/null 2>&1
+geometry_status=$?
+set -e
+if [[ "${geometry_status}" -ne 0 ]]; then
+  echo "Expected qtedm -dg +10+20 exit status 0, got ${geometry_status}" >&2
+  exit 1
+fi

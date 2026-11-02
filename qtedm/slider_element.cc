@@ -33,6 +33,9 @@ constexpr short kInvalidSeverity = 3;
 constexpr double kValueEpsilonFactor = 1e-6;
 constexpr qreal kMinimumTrackTravel = 1.0;
 constexpr qreal kPreferredMinimumThumbExtent = 30.0;
+/* MEDM's BORDER_WIDTH: a valuator without labels is this much taller or
+ * wider than its scale, for the keyboard popup. */
+constexpr qreal kValuatorPopupBorder = 5.0;
 
 QColor alarmColorForSeverity(short severity)
 {
@@ -61,6 +64,24 @@ qreal boundedThumbExtent(qreal availableExtent)
   const qreal maxExtent = std::max<qreal>(1.0,
       availableExtent - kMinimumTrackTravel);
   return std::clamp(desiredExtent, 1.0, maxExtent);
+}
+
+/* The travel of the thumb's center in an XmScale trough, which
+ * SliderElement::troughRectForTrack() widens back to the trough. */
+QRectF thumbTravelInTrough(const QRectF &trough, bool vertical,
+    qreal *thumbExtent)
+{
+  const qreal extent = boundedThumbExtent(
+      vertical ? trough.height() : trough.width());
+  if (extent <= 0.0) {
+    return QRectF();
+  }
+  if (thumbExtent) {
+    *thumbExtent = extent;
+  }
+  const qreal endPadding = extent / 2.0 + 2.0;
+  return vertical ? trough.adjusted(0.0, endPadding, 0.0, -endPadding)
+                  : trough.adjusted(endPadding, 0.0, -endPadding, 0.0);
 }
 
 QFont shrinkFontToFit(const QFont &baseFont, const QStringList &texts,
@@ -723,6 +744,18 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
   const qreal widgetLeft = 0.0;
   const qreal widgetRight = static_cast<qreal>(width());
 
+  if (vertical && !showLimits) {
+    /* As in MEDM, the XmScale of a valuator without labels is its width
+     * less a border for the keyboard popup, at the right. The trough sits
+     * inside the scale's one-pixel highlight border. */
+    const qreal scaleWidth = std::max<qreal>(3.0,
+        contentRect.width() - kValuatorPopupBorder);
+    const QRectF trough(contentRect.right() - scaleWidth + 1.0,
+        contentRect.top() + 1.0, scaleWidth - 2.0,
+        contentRect.height() - 2.0);
+    return thumbTravelInTrough(trough, true, thumbExtent);
+  }
+
   if (vertical) {
     if (showChannel) {
       const qreal maxLabelHeight = std::min<qreal>(24.0,
@@ -747,32 +780,34 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
         }
       }
     }
-  } else if (showLimits) {
-    /* As in MEDM, the XmScale fills the bottom height/divisor rows and the
-     * channel title, limits and value are drawn in the rows above it. The
-     * trough sits inside the scale's one-pixel highlight border. */
-    const qreal heightDivisor = label_ == MeterLabel::kChannel ? 3.0 : 2.0;
+  } else {
+    /* As in MEDM, the XmScale fills the bottom height/divisor rows, less a
+     * border for the keyboard popup without labels, and the channel title,
+     * limits and value are drawn in the rows above it. The trough sits
+     * inside the scale's one-pixel highlight border. */
+    qreal heightDivisor = 1.0;
+    qreal popupBorder = kValuatorPopupBorder;
+    if (label_ == MeterLabel::kChannel) {
+      heightDivisor = 3.0;
+      popupBorder = 0.0;
+    } else if (showLimits) {
+      heightDivisor = 2.0;
+      popupBorder = 0.0;
+    }
     const qreal scaleHeight = std::max<qreal>(3.0,
-        std::floor(contentRect.height() / heightDivisor));
+        std::floor(contentRect.height() / heightDivisor) - popupBorder);
     const qreal scaleTop = contentRect.bottom() - scaleHeight;
     if (showChannel) {
       channelRect = QRectF(widgetLeft, contentRect.top(),
           widgetRight - widgetLeft, scaleTop - contentRect.top());
     }
-    limitRect = QRectF(contentRect.left(), contentRect.top(),
-        contentRect.width(), scaleTop - contentRect.top());
+    if (showLimits) {
+      limitRect = QRectF(contentRect.left(), contentRect.top(),
+          contentRect.width(), scaleTop - contentRect.top());
+    }
     const QRectF trough(contentRect.left() + 1.0, scaleTop + 1.0,
         contentRect.width() - 2.0, scaleHeight - 2.0);
-    const qreal computedThumbExtent = boundedThumbExtent(trough.width());
-    if (computedThumbExtent <= 0.0) {
-      return QRectF();
-    }
-    if (thumbExtent) {
-      *thumbExtent = computedThumbExtent;
-    }
-    /* troughRectForTrack() adds this back at both ends. */
-    const qreal endPadding = computedThumbExtent / 2.0 + 2.0;
-    return trough.adjusted(endPadding, 0.0, -endPadding, 0.0);
+    return thumbTravelInTrough(trough, false, thumbExtent);
   }
 
   //workingRect = workingRect.adjusted(4.0, 4.0, -4.0, -4.0);
@@ -781,67 +816,39 @@ QRectF SliderElement::trackRectForPainting(QRectF contentRect,
     return QRectF();
   }
 
-  /* Track size matches MEDM's heightDivisor logic:
-   * - LABEL_NONE/NO_DECORATIONS: divisor = 1 (100% of dimension)
-   * - OUTLINE/LIMITS: divisor = 2 (50% of dimension)
-   * - CHANNEL: divisor = 3 (33.3% of dimension)
-   * Track thickness is calculated from the FULL widget dimension (contentRect),
-   * not from workingRect which has already had label space removed.
-   */
-  int heightDivisor = 1;
-  if (label_ == MeterLabel::kOutline || label_ == MeterLabel::kLimits) {
-    heightDivisor = 2;
-  } else if (label_ == MeterLabel::kChannel) {
-    heightDivisor = 3;
+  /* As in MEDM, a vertical scale with labels is width/3 wide with the
+   * channel and width/2 otherwise. Its thickness is calculated from the FULL
+   * widget width (contentRect), not from workingRect which has already had
+   * label space removed. */
+  const int widthDivisor = label_ == MeterLabel::kChannel ? 3 : 2;
+  const qreal trackWidth = std::max<qreal>(9.0,
+      contentRect.width() / widthDivisor);
+  const qreal trackRight = contentRect.right() + 1.0;
+  const qreal availableWidth = std::max<qreal>(0.0,
+      trackRight - workingRect.left());
+  if (availableWidth <= 0.0) {
+    return QRectF();
   }
-
-  if (vertical) {
-    const qreal trackWidth = std::max<qreal>(9.0,
-        contentRect.width() / heightDivisor);
-    const qreal trackRight = contentRect.right() + 1.0;
-    const qreal availableWidth = std::max<qreal>(0.0,
-        trackRight - workingRect.left());
-    if (availableWidth <= 0.0) {
-      return QRectF();
+  const qreal clampedTrackWidth = std::min(trackWidth, availableWidth);
+  const qreal trackLeft = trackRight - clampedTrackWidth;
+  if (showLimits && limitRect.isValid()) {
+    const qreal adjustedRight = trackLeft - 1.0;
+    limitRect.setRight(adjustedRight);
+    if (limitRect.right() < limitRect.left()) {
+      limitRect.setRight(limitRect.left());
     }
-    const qreal clampedTrackWidth = std::min(trackWidth, availableWidth);
-    const qreal trackLeft = trackRight - clampedTrackWidth;
-    if (showLimits && limitRect.isValid()) {
-      const qreal adjustedRight = trackLeft - 1.0;
-      limitRect.setRight(adjustedRight);
-      if (limitRect.right() < limitRect.left()) {
-        limitRect.setRight(limitRect.left());
-      }
-    }
-    const qreal computedThumbExtent = boundedThumbExtent(workingRect.height());
-    if (computedThumbExtent <= 0.0) {
-      return QRectF();
-    }
-    if (thumbExtent) {
-      *thumbExtent = computedThumbExtent;
-    }
-    const qreal reducedHeight = std::max<qreal>(kMinimumTrackTravel,
-        workingRect.height() - computedThumbExtent);
-    return QRectF(trackLeft, workingRect.top() + computedThumbExtent / 2.0,
-        clampedTrackWidth, reducedHeight);
   }
-
-  const qreal trackHeight = std::max<qreal>(9.0,
-      contentRect.height() / heightDivisor);
-  const qreal clampedTrackHeight = std::max<qreal>(1.0,
-      std::min(trackHeight, workingRect.height()));
-  const qreal centerY = workingRect.center().y();
-  const qreal computedThumbExtent = boundedThumbExtent(workingRect.width());
+  const qreal computedThumbExtent = boundedThumbExtent(workingRect.height());
   if (computedThumbExtent <= 0.0) {
     return QRectF();
   }
   if (thumbExtent) {
     *thumbExtent = computedThumbExtent;
   }
-  const qreal reducedWidth = std::max<qreal>(kMinimumTrackTravel,
-      workingRect.width() - computedThumbExtent);
-  return QRectF(workingRect.left() + computedThumbExtent / 2.0,
-      centerY - clampedTrackHeight / 2.0, reducedWidth, clampedTrackHeight);
+  const qreal reducedHeight = std::max<qreal>(kMinimumTrackTravel,
+      workingRect.height() - computedThumbExtent);
+  return QRectF(trackLeft, workingRect.top() + computedThumbExtent / 2.0,
+      clampedTrackWidth, reducedHeight);
 }
 
 void SliderElement::paintTrack(QPainter &painter, const QRectF &trackRect) const

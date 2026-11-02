@@ -184,6 +184,8 @@ private slots:
   void sliderTroughClicks();
   void sliderThumbClickDoesNotStep_data();
   void sliderThumbClickDoesNotStep();
+  void sliderWithoutLabelsFitsMedmScale_data();
+  void sliderWithoutLabelsFitsMedmScale();
   void sliderTroughRespectsAccess_data();
   void sliderTroughRespectsAccess();
   void executePickingFollowsVisibleStacking();
@@ -3116,8 +3118,65 @@ void TestObserveOnlyControls::sliderThumbClickDoesNotStep()
   /* These points lie on the visible thumb, outside the old inset used
    * only for hit testing. A stationary thumb click must not step the PV. */
   QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier,
-      vertical ? QPoint(39, 30) : QPoint(30, 36));
+      vertical ? QPoint(37, 30) : QPoint(30, 36));
   QVERIFY(writes.isEmpty());
+}
+
+void TestObserveOnlyControls::sliderWithoutLabelsFitsMedmScale_data()
+{
+  QTest::addColumn<int>("direction");
+  QTest::addColumn<int>("label");
+  QTest::addColumn<QSize>("size");
+  QTest::addColumn<QRect>("trough");
+
+  /* The 80x14 valuators of LinacphasedetectorsBrief.adl, and their
+   * troughs as MEDM 3.1.20 draws them. */
+  QTest::newRow("right-none") << int(BarDirection::kRight)
+      << int(MeterLabel::kNone) << QSize(80, 14) << QRect(1, 6, 78, 7);
+  QTest::newRow("left-no-decorations") << int(BarDirection::kLeft)
+      << int(MeterLabel::kNoDecorations) << QSize(150, 30)
+      << QRect(1, 6, 148, 23);
+  QTest::newRow("up-none") << int(BarDirection::kUp)
+      << int(MeterLabel::kNone) << QSize(14, 80) << QRect(6, 1, 7, 78);
+  QTest::newRow("down-no-decorations") << int(BarDirection::kDown)
+      << int(MeterLabel::kNoDecorations) << QSize(30, 150)
+      << QRect(6, 1, 23, 148);
+}
+
+/* MEDM makes the XmScale of a valuator without labels BORDER_WIDTH less
+ * than its object across the trough, on the side away from the labels, and
+ * the trough sits inside the scale's one-pixel highlight border. */
+void TestObserveOnlyControls::sliderWithoutLabelsFitsMedmScale()
+{
+  QFETCH(int, direction);
+  QFETCH(int, label);
+  QFETCH(QSize, size);
+  QFETCH(QRect, trough);
+  SliderElement slider;
+  slider.resize(size);
+  slider.setDirection(static_cast<BarDirection>(direction));
+  slider.setLabel(static_cast<MeterLabel>(label));
+  const QColor background(187, 187, 187);
+  slider.setBackgroundColor(background);
+  slider.setChannel(QStringLiteral("test:slider:scale"));
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeLimits(0.0, 300.0);
+  slider.setRuntimeValue(130.0);
+  slider.show();
+
+  QImage rendered(slider.size(), QImage::Format_ARGB32);
+  rendered.fill(Qt::transparent);
+  slider.render(&rendered);
+  QRect painted;
+  for (int y = 0; y < rendered.height(); ++y) {
+    for (int x = 0; x < rendered.width(); ++x) {
+      if (rendered.pixelColor(x, y) != background) {
+        painted |= QRect(x, y, 1, 1);
+      }
+    }
+  }
+  QCOMPARE(painted, trough);
 }
 
 void TestObserveOnlyControls::sliderTroughRespectsAccess_data()

@@ -191,6 +191,7 @@ private slots:
   void compositeStaticGraphicsStackInDisplayOrder();
   void compositeChildrenAreNotClipped_data();
   void compositeChildrenAreNotClipped();
+  void compositeWithChannelClipsStaticGraphics();
   void buttonPixmapsMatchMedm_data();
   void buttonPixmapsMatchMedm();
   void statusRectangleCoversHiddenRelatedDisplay_data();
@@ -487,6 +488,120 @@ void TestObserveOnlyControls::compositeChildrenAreNotClipped()
     QVERIFY(image.pixelColor(QPoint(190, 14) * factor - origin)
         != QColor(Qt::white));
   }
+}
+
+void TestObserveOnlyControls::compositeWithChannelClipsStaticGraphics()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("rows.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  /* Like a row of MPSFEEPS_Gap.adl, the separator lies one pixel below the
+   * object of a composite with its own visibility channel. */
+  file.write(
+      "file { name=\"rows.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=200 height=100 } clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=2 colors { ffffff, 000000, } }\n"
+      "composite { object { x=10 y=10 width=100 height=17 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    polyline { object { x=10 y=27 width=100 height=0 }\n"
+      "      \"basic attribute\" { clr=1 }\n"
+      "      points {\n(10,27)\n(110,27)\n}\n"
+      "    }\n"
+      "    composite { object { x=60 y=12 width=60 height=10 }\n"
+      "      \"composite name\"=\"\"\n"
+      "      children {\n"
+      "        rectangle { object { x=90 y=12 width=30 height=10 }\n"
+      "          \"basic attribute\" { clr=1 } }\n"
+      "      }\n"
+      "    }\n"
+      "    rectangle { object { x=80 y=20 width=20 height=15 }\n"
+      "      \"basic attribute\" { clr=1 }\n"
+      "      \"dynamic attribute\" { vis=\"if zero\""
+      " chan=\"composite:dot\" } }\n"
+      "    \"related display\" { object { x=20 y=20 width=30 height=20 }\n"
+      "      display[0] { label=\"x\" name=\"x.adl\" } clr=1 bclr=0 }\n"
+      "  }\n"
+      "  \"dynamic attribute\" { vis=\"if not zero\""
+      " chan=\"composite:row\" }\n"
+      "}\n"
+      "composite { object { x=10 y=60 width=100 height=17 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    polyline { object { x=10 y=77 width=100 height=0 }\n"
+      "      \"basic attribute\" { clr=1 }\n"
+      "      points {\n(10,77)\n(110,77)\n}\n"
+      "    }\n"
+      "    text { object { x=10 y=60 width=60 height=15 }\n"
+      "      \"basic attribute\" { clr=1 } textix=\"S02US\" }\n"
+      "  }\n"
+      "}\n");
+  file.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  QCOMPARE(window.lineElements_.size(), 2);
+  QCOMPARE(window.rectangleElements_.size(), 2);
+  QCOMPARE(window.relatedDisplayElements_.size(), 1);
+  window.show();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+  /* The fit that records each composite's object comes with an
+   * execute-mode resize. */
+  window.scaleAllElements(200, 100, 200, 100);
+
+  /* A two-point polyline loads as a line. */
+  LineElement *rowSeparator = nullptr;
+  LineElement *plainSeparator = nullptr;
+  for (LineElement *line : window.lineElements_) {
+    if (line->mapTo(window.displayArea_, QPoint(0, 0)).y() < 50) {
+      rowSeparator = line;
+    } else {
+      plainSeparator = line;
+    }
+  }
+  RectangleElement *nestedRectangle = nullptr;
+  RectangleElement *dynamicRectangle = nullptr;
+  for (RectangleElement *rectangle : window.rectangleElements_) {
+    if (rectangle->channel(0).isEmpty()) {
+      nestedRectangle = rectangle;
+    } else {
+      dynamicRectangle = rectangle;
+    }
+  }
+  QVERIFY(rowSeparator);
+  QVERIFY(plainSeparator);
+  QVERIFY(nestedRectangle);
+  QVERIFY(dynamicRectangle);
+  RelatedDisplayElement *button = window.relatedDisplayElements_.first();
+
+  const auto paintsAt = [&window](QWidget *widget, const QPoint &point) {
+    const QPoint local = widget->mapFrom(window.displayArea_, point);
+    return widget->rect().contains(local)
+        && (widget->mask().isEmpty() || widget->mask().contains(local));
+  };
+  /* MEDM draws the static graphics of a composite with a channel, and of
+   * composites without one inside it, clipped to the composite's object. */
+  QVERIFY(!paintsAt(rowSeparator, QPoint(50, 27)));
+  QVERIFY(paintsAt(nestedRectangle, QPoint(100, 15)));
+  QVERIFY(!paintsAt(nestedRectangle, QPoint(115, 15)));
+  /* Children with their own channel and widgets are not clipped, nor are
+   * the children of a composite without a channel. */
+  QVERIFY(dynamicRectangle->mask().isEmpty());
+  QVERIFY(button->mask().isEmpty());
+  QVERIFY(paintsAt(plainSeparator, QPoint(50, 77)));
+
+  window.leaveExecuteMode();
+  QVERIFY(rowSeparator->mask().isEmpty());
+  QVERIFY(nestedRectangle->mask().isEmpty());
 }
 
 void TestObserveOnlyControls::buttonPixmapsMatchMedm_data()

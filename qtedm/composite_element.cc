@@ -100,6 +100,26 @@ bool isMonitorChildWidget(const QWidget *child)
       || dynamic_cast<const CartesianPlotElement *>(child);
 }
 
+/* MEDM draws a graphic object without a channel (chan[0]) as a static
+ * graphic, directly through the GC in effect. */
+bool isStaticGraphicChild(const QWidget *child)
+{
+  if (dynamic_cast<const RectangleElement *>(child)
+      || dynamic_cast<const OvalElement *>(child)
+      || dynamic_cast<const ArcElement *>(child)
+      || dynamic_cast<const LineElement *>(child)
+      || dynamic_cast<const PolylineElement *>(child)
+      || dynamic_cast<const PolygonElement *>(child)
+      || dynamic_cast<const ImageElement *>(child)) {
+    return dynamic_cast<const GraphicShapeElement *>(child)
+        ->channel(0).trimmed().isEmpty();
+  }
+  if (const auto *text = dynamic_cast<const TextElement *>(child)) {
+    return text->channel(0).trimmed().isEmpty();
+  }
+  return false;
+}
+
 } // namespace
 
 CompositeElement::CompositeElement(QWidget *parent)
@@ -381,6 +401,48 @@ QList<QWidget *> CompositeElement::childWidgets() const
   return result;
 }
 
+void CompositeElement::clipStaticGraphicsToObject()
+{
+  for (const auto &pointer : clippedStaticGraphics_) {
+    if (QWidget *widget = pointer.data()) {
+      widget->clearMask();
+    }
+  }
+  clippedStaticGraphics_.clear();
+  if (!executeMode_ || channel(0).trimmed().isEmpty()
+      || !objectRect_.isValid()) {
+    return;
+  }
+  clipStaticGraphicsOf(this);
+}
+
+void CompositeElement::clipStaticGraphicsOf(const CompositeElement *composite)
+{
+  for (QWidget *child : composite->childWidgets()) {
+    if (const auto *nested = dynamic_cast<const CompositeElement *>(child)) {
+      if (nested->channel(0).trimmed().isEmpty()) {
+        clipStaticGraphicsOf(nested);
+      }
+      continue;
+    }
+    if (!isStaticGraphicChild(child) || !isAncestorOf(child)) {
+      continue;
+    }
+    const QRect clip(child->mapFrom(this, objectRect_.topLeft()),
+        objectRect_.size());
+    if (clip.contains(child->rect())) {
+      continue;
+    }
+    QRegion region = QRegion(clip).intersected(child->rect());
+    if (region.isEmpty()) {
+      /* An empty mask would remove the mask; keep it off the widget. */
+      region = QRegion(-1, -1, 1, 1);
+    }
+    child->setMask(region);
+    clippedStaticGraphics_.append(child);
+  }
+}
+
 void CompositeElement::setExecuteMode(bool execute)
 {
   if (executeMode_ == execute) {
@@ -396,6 +458,9 @@ void CompositeElement::setExecuteMode(bool execute)
   }
 
   executeMode_ = execute;
+  if (!execute) {
+    clipStaticGraphicsToObject();
+  }
 
   /* Propagate the execute mode to ALL children FIRST
    * so they update their internal state before we modify visibility. */

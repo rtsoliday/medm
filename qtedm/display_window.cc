@@ -21238,6 +21238,11 @@ void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
   for (CompositeElement *e : compositeElements_) {
     fitComposite(e);
   }
+  /* With every composite in place, clip the static graphics of those with
+   * a channel to their objects, as MEDM's update tasks do. */
+  for (CompositeElement *composite : fittedComposites) {
+    composite->clipStaticGraphicsToObject();
+  }
 }
 
 bool DisplayWindow::save(QWidget *dialogParent)

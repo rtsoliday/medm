@@ -62,6 +62,15 @@ public:
    * white while the channel is disconnected. */
   void expandToFitChildren(bool keepCurrentBounds = false);
 
+  /* MEDM draws the children of a composite with a channel from the
+   * composite's update task, whose GC clips to the composite's object, so
+   * its static graphics, and those of composites without a channel inside
+   * it, show only within that object. Widgets and children with their own
+   * channel draw through their own update tasks and are not clipped. This
+   * masks those static graphics to the object after a growing fit in
+   * execute mode, and removes the masks otherwise. */
+  void clipStaticGraphicsToObject();
+
   /* MEDM draws the static graphics of a composite on the display's
    * background with the other static graphics, in display order, and its
    * dynamic graphics over them. These move the given children to a sibling
@@ -90,6 +99,7 @@ private:
   bool isMedmWidgetBackedChildWidget(const QWidget *child) const;
   bool isStaticChildWidget(const QWidget *child) const;
   bool isDynamicGraphicChildWidget(const QWidget *child) const;
+  void clipStaticGraphicsOf(const CompositeElement *composite);
   void refreshChildStackingOrder();
 
   bool selected_ = false;
@@ -114,5 +124,7 @@ private:
   bool hasExplicitCompositeName_ = false;
   /* The ADL object within the composite after a growing fit, or null. */
   QRect objectRect_;
+  /* Static graphics masked to objectRect_ by clipStaticGraphicsToObject(). */
+  QList<QPointer<QWidget>> clippedStaticGraphics_;
   QPointer<QWidget> staticChildLayer_;
 };

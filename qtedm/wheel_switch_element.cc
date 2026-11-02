@@ -887,11 +887,11 @@ void WheelSwitchElement::wheelEvent(QWheelEvent *event)
   selectedSlotIndex_ = slotIndex;
   if (delta > 0) {
     if (layout.columns.at(slotIndex).showUpButton) {
-      activateValue(displayedValue() + step, true);
+      stepValue(step, true);
     }
   } else {
     if (layout.columns.at(slotIndex).showDownButton) {
-      activateValue(displayedValue() - step, true);
+      stepValue(-step, true);
     }
   }
 
@@ -976,12 +976,12 @@ void WheelSwitchElement::keyPressEvent(QKeyEvent *event)
   }
   case Qt::Key_PageUp:
     stopRepeating();
-    activateValue(displayedValue() + valueStep(event->modifiers()) * 10.0, true);
+    stepValue(valueStep(event->modifiers()) * 10.0, true);
     event->accept();
     return;
   case Qt::Key_PageDown:
     stopRepeating();
-    activateValue(displayedValue() - valueStep(event->modifiers()) * 10.0, true);
+    stepValue(-valueStep(event->modifiers()) * 10.0, true);
     event->accept();
     return;
   case Qt::Key_Home:
@@ -1883,32 +1883,62 @@ void WheelSwitchElement::performStep(RepeatDirection direction, double step,
   if (direction == RepeatDirection::kNone) {
     return;
   }
-  double current = displayedValue();
-  double target = current;
-  if (direction == RepeatDirection::kUp) {
-    target = current + step;
-  } else if (direction == RepeatDirection::kDown) {
-    target = current - step;
+  stepValue(direction == RepeatDirection::kUp ? step : -step, forceSend);
+}
+
+/* Xc's increment_value() moves a value outside the limits one step toward
+ * them, unclamped, and refuses a step that would leave them in its own
+ * direction. Clamping such a step to the far limit wrote a value the
+ * operator never asked for: one Down click on 50 with limits 0 to 1 wrote
+ * 1. A step from inside the limits still stops at the limit it crosses. */
+void WheelSwitchElement::stepValue(double delta, bool forceSend)
+{
+  const double current = displayedValue();
+  double target = current + delta;
+  if (!std::isfinite(target)) {
+    return;
   }
-  activateValue(target, forceSend);
+  double low = effectiveLowLimit();
+  double high = effectiveHighLimit();
+  if (std::isfinite(low) && std::isfinite(high)) {
+    if (low > high) {
+      std::swap(low, high);
+    }
+    if (delta > 0.0 && target > high) {
+      if (current >= high) {
+        return;
+      }
+      target = high;
+    } else if (delta < 0.0 && target < low) {
+      if (current <= low) {
+        return;
+      }
+      target = low;
+    }
+  }
+  sendValue(target, forceSend);
 }
 
 void WheelSwitchElement::activateValue(double value, bool forceSend)
 {
-  double clamped = clampToLimits(value);
-  if (!std::isfinite(clamped)) {
+  sendValue(clampToLimits(value), forceSend);
+}
+
+void WheelSwitchElement::sendValue(double value, bool forceSend)
+{
+  if (!std::isfinite(value)) {
     return;
   }
-  bool changed = !hasLastSentValue_ || std::abs(clamped - lastSentValue_) > valueEpsilon();
-  runtimeValue_ = clamped;
+  bool changed = !hasLastSentValue_ || std::abs(value - lastSentValue_) > valueEpsilon();
+  runtimeValue_ = value;
   hasRuntimeValue_ = true;
   update();
   if (!activationCallback_) {
     return;
   }
   if (forceSend || changed) {
-    activationCallback_(clamped);
-    lastSentValue_ = clamped;
+    activationCallback_(value);
+    lastSentValue_ = value;
     hasLastSentValue_ = true;
   }
 }

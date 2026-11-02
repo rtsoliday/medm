@@ -137,6 +137,7 @@ private slots:
   void monitorGeometrySurvivesDeferredResize_data();
   void monitorGeometrySurvivesDeferredResize();
   void scaleMonitorValueBoxMatchesXcIndicator();
+  void wheelSwitchStepsOutOfRangeValueAsXc();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -5472,6 +5473,59 @@ void TestObserveOnlyControls::monitorGeometrySurvivesDeferredResize()
 /* Xc's Indicator (xc/Indicator.c) frames the value box with a depressed
  * Rect3d and prints the channel's value in it, while only the diamond
  * stops at the limits. */
+void TestObserveOnlyControls::wheelSwitchStepsOutOfRangeValueAsXc()
+{
+  QWidget parent;
+  WheelSwitchElement element(&parent);
+  element.resize(160, 40);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = 1.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 1;
+  element.setLimits(limits);
+  QList<double> writes;
+  element.setActivationCallback([&writes](double value) {
+    writes.append(value);
+  });
+  element.setExecuteMode(true);
+  element.setRuntimeConnected(true);
+  element.setRuntimeWriteAccess(true);
+
+  /* Xc's increment_value() moves a value above the limits down by the step
+   * itself and refuses a step further out of range. A Page step is ten
+   * steps of the 0.1 precision. */
+  element.setRuntimeValue(50.0);
+  QTest::keyClick(&element, Qt::Key_PageDown);
+  QCOMPARE(writes.size(), 1);
+  QVERIFY2(std::abs(writes.last() - 49.0) < 1e-9,
+      qPrintable(QString::number(writes.last())));
+  element.setRuntimeValue(50.0);
+  QTest::keyClick(&element, Qt::Key_PageUp);
+  QCOMPARE(writes.size(), 1);
+
+  element.setRuntimeValue(-5.0);
+  QTest::keyClick(&element, Qt::Key_PageUp);
+  QCOMPARE(writes.size(), 2);
+  QVERIFY2(std::abs(writes.last() + 4.0) < 1e-9,
+      qPrintable(QString::number(writes.last())));
+  element.setRuntimeValue(-5.0);
+  QTest::keyClick(&element, Qt::Key_PageDown);
+  QCOMPARE(writes.size(), 2);
+
+  /* A step from inside the limits still stops at the limit it crosses,
+   * and none is taken from the limit outward. */
+  element.setRuntimeValue(0.5);
+  QTest::keyClick(&element, Qt::Key_PageUp);
+  QCOMPARE(writes.size(), 3);
+  QCOMPARE(writes.last(), 1.0);
+  element.setRuntimeValue(1.0);
+  QTest::keyClick(&element, Qt::Key_PageUp);
+  QCOMPARE(writes.size(), 3);
+}
+
 void TestObserveOnlyControls::scaleMonitorValueBoxMatchesXcIndicator()
 {
   QWidget parent;

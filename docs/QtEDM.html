@@ -1088,7 +1088,7 @@ complete extension list.</p>
   <ul>
     <li><strong>Configure:</strong> Channel, number of digits, precision, colors, and limits.</li>
     <li><strong>Use when:</strong> Fine-grained numeric entry is common and accidental large jumps must be avoided.</li>
-    <li><strong>Runtime behavior:</strong> Digits can be stepped interactively in EXECUTE mode; writes are audit logged.</li>
+    <li><strong>Runtime behavior:</strong> Digits can be stepped interactively in EXECUTE mode; writes are audit logged. As in MEDM, a value outside the limits steps toward them by the step you choose, and a step that would move it further out of range does nothing.</li>
   </ul>
 </div>
 

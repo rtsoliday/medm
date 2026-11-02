@@ -31,6 +31,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - Legacy (pre-2.2) ADL files whose quoted values contain braces, such as `chan="SR:C01{BPM}"`, load correctly.
 - ADL files with an extra `}` between objects open as they do in MEDM instead of failing with "Expected section or key".
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
+- A wheel switch whose value is outside its limits steps toward them by the step you choose, as in MEDM. It used to write the nearest limit, so one Down click on a value of 50 with limits 0 to 1 wrote 1. A step that would move the value further out of range does nothing.
 - Menus, related display buttons, and wave tables fit their labels and empty-state text to the widget.
 - Related display and shell command buttons show their icon and label as MEDM does: together, centered on a button with one item and at the left of a menu button, with the label's leading spaces kept. On a small button the label no longer covers the icon.
 - Text 16 to 19 or 21 to 25 pixels high is no longer wider than in MEDM. The fonts for those heights had no space character, so spaces were drawn from a wider font and long labels could be cut off.

@@ -146,7 +146,9 @@ private:
   void startRepeating(RepeatDirection direction, double step, int slotIndex);
   void stopRepeating();
   void performStep(RepeatDirection direction, double step, bool forceSend);
+  void stepValue(double delta, bool forceSend);
   void activateValue(double value, bool forceSend);
+  void sendValue(double value, bool forceSend);
   void beginKeyboardEntry();
   void cancelKeyboardEntry();
   void commitKeyboardEntry();

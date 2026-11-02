@@ -227,6 +227,7 @@ private slots:
   void ovalFillMatchesXFillArc();
   void ovalOutlineMatchesXDrawArc_data();
   void ovalOutlineMatchesXDrawArc();
+  void fractionalPolylinePointsKeepIntegerPart();
   void cosmeticOutlineEditsKeepObjectBounds_data();
   void cosmeticOutlineEditsKeepObjectBounds();
   void compositeShapePicking_data();
@@ -1414,6 +1415,37 @@ void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates()
     window.polylineElements_.first()->setLineWidth(lineWidth);
     QCOMPARE(window.polylineElements_.first()->absolutePoints(), vertices);
   }
+}
+
+/* MEDM reads polyline points with atoi(), as it does object geometry, so a
+ * point written with a fraction keeps its integer part. */
+void TestObserveOnlyControls::fractionalPolylinePointsKeepIntegerPart()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("points.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write(
+      "file { name=\"points.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=100 height=100 } clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=2 colors { ffffff, 000000, } }\n"
+      "polyline { object { x=10 y=20 width=41 height=41 }\n"
+      "  \"basic attribute\" { clr=1 }\n"
+      "  points { (10.6,20) (50,20.9) (50,60) } }\n");
+  file.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  QCOMPARE(window.polylineElements_.size(), 1);
+  QCOMPARE(window.polylineElements_.first()->absolutePoints(),
+      (QVector<QPoint>{QPoint(10, 20), QPoint(50, 20), QPoint(50, 60)}));
 }
 
 void TestObserveOnlyControls::cosmeticOutlineEditsKeepObjectBounds_data()

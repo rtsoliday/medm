@@ -34968,11 +34968,12 @@ QVector<QPoint> DisplayWindow::parsePolylinePoints(
       const QStringList parts = inside.split(QLatin1Char(' '),
           Qt::SkipEmptyParts);
       if (parts.size() >= 2) {
-        bool okX = false;
-        bool okY = false;
-        const int x = parts.at(0).toInt(&okX);
-        const int y = parts.at(1).toInt(&okY);
-        if (okX && okY) {
+        /* As MEDM's atoi(), keep the integer part of a coordinate written
+         * with a fraction, as for object geometry. */
+        constexpr int kInvalid = std::numeric_limits<int>::min();
+        const int x = adlGeometryValue(parts.at(0), kInvalid);
+        const int y = adlGeometryValue(parts.at(1), kInvalid);
+        if (x != kInvalid && y != kInvalid) {
           points.append(QPoint(x, y));
         }
       }

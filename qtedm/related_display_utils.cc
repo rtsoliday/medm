@@ -2,12 +2,16 @@
 
 #include <QRegularExpression>
 
+#include "adl_parser.h"
 #include "macro_utils.h"
 
 namespace {
 
-QString expandMacros(const QString &input,
-    const QHash<QString, QString> &macros)
+/* Returns false when the arguments would expand beyond what a display file
+ * may hold: a display that passes $(A)$(A) as A to itself doubles them at
+ * each pass, and with each display it opens. */
+bool expandArgumentMacros(const QString &input,
+    const QHash<QString, QString> &macros, QString *output)
 {
   static constexpr int kMaxIterations = 10;
   static const QRegularExpression pattern(
@@ -27,18 +31,26 @@ QString expandMacros(const QString &input,
       if (macro == macros.constEnd()) {
         expanded.append(match.captured(0));
       } else {
+        if (macro->size() > kMaximumAdlInputCharacters - expanded.size()) {
+          return false;
+        }
         expanded.append(*macro);
         replaced = true;
       }
       lastIndex = match.capturedEnd();
     }
     expanded.append(current.mid(lastIndex));
+    if (expanded.size() > kMaximumAdlInputCharacters) {
+      return false;
+    }
     if (!replaced) {
-      return current;
+      *output = current;
+      return true;
     }
     current = expanded;
   }
-  return current;
+  *output = current;
+  return true;
 }
 
 bool parseMacroArguments(const QString &arguments,
@@ -106,8 +118,16 @@ bool prepareRelatedDisplayLaunch(const RelatedDisplayEntry &entry,
   prepared.fileName = fileName;
   prepared.replace = entry.mode == RelatedDisplayMode::kReplace
       || modifiers.testFlag(Qt::ControlModifier);
-  const QString expandedArguments =
-      expandMacros(entry.args, inheritedMacros);
+  QString expandedArguments;
+  if (!expandArgumentMacros(entry.args, inheritedMacros,
+          &expandedArguments)) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral(
+          "Related-display macro arguments expand to more than %1 "
+          "characters.").arg(kMaximumAdlInputCharacters);
+    }
+    return false;
+  }
   if (!parseMacroArguments(
           expandedArguments, &prepared.macros, errorMessage)) {
     return false;

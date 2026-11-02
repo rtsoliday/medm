@@ -10,7 +10,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - **Dynamic Shell Command values.** On Unix, the `&A`, `&T`, and `&P` values QtEDM inserts into a Shell Command are quoted so the shell does not interpret them, and values containing control characters such as line breaks are refused.
 - **Read-only mode.** `--read-only` now blocks Shell Commands and `MEDM_EXEC_LIST` Execute menu commands, as documented.
 - **Literal macro values.** As in MEDM, a macro value is inserted literally into the display file. Backslash escapes in a value are no longer decoded, so `C:\temp` no longer becomes a tab, and a quote, brace, or space in a value can no longer end a string or add display elements.
-- **Input limits.** Remote display requests are limited to 64 KiB; a `qtedm` that cannot send its request to a running QtEDM reports it and exits with status 1. Sessions are limited to 4 MiB and 100 windows. The animated GIF frame cache is limited to 64 MiB per image and 256 MiB in total.
+- **Input limits.** Remote display requests are limited to 64 KiB; a `qtedm` that cannot send its request to a running QtEDM reports it and exits with status 1. Sessions are limited to 4 MiB and 100 windows. The animated GIF frame cache is limited to 64 MiB per image and 256 MiB in total. A related display's macro arguments may expand to at most 16 Mi characters, the limit of a display file; beyond it the display does not open.
 - **Hardened Linux build.** The executable is built as a position-independent executable with full RELRO, immediate binding, a stack protector, and a non-executable stack. QtEDM no longer raises the core-dump size limit at startup.
 
 ### Behavior changes

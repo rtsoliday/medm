@@ -9,6 +9,7 @@ class TestRelatedDisplayUtils : public QObject
 private slots:
   void expandsMacrosAndSelectsLaunchMode();
   void rejectsMissingTargetsAndMalformedMacros();
+  void refusesArgumentsThatOutgrowADisplayFile();
 };
 
 void TestRelatedDisplayUtils::expandsMacrosAndSelectsLaunchMode()
@@ -63,6 +64,23 @@ void TestRelatedDisplayUtils::rejectsMissingTargetsAndMalformedMacros()
   QVERIFY(!prepareRelatedDisplayLaunch(entry, Qt::NoModifier, {},
       &result, &error));
   QVERIFY(error.contains(QStringLiteral("broken")));
+}
+
+/* A value that refers to its own macro 64 times grows 64-fold at each pass:
+ * 256 characters, then 16 Ki, 1 Mi, and 64 Mi, beyond any display file. */
+void TestRelatedDisplayUtils::refusesArgumentsThatOutgrowADisplayFile()
+{
+  RelatedDisplayEntry entry;
+  entry.name = QStringLiteral("child.adl");
+  entry.args = QStringLiteral("A=$(A)");
+  const QHash<QString, QString> inherited{
+      {QStringLiteral("A"), QStringLiteral("$(A)").repeated(64)}};
+  RelatedDisplayLaunchSpec result;
+  QString error;
+  QVERIFY(!prepareRelatedDisplayLaunch(entry, Qt::NoModifier, inherited,
+      &result, &error));
+  QVERIFY2(error.contains(QStringLiteral("expand to more than")),
+      qPrintable(error));
 }
 
 QTEST_APPLESS_MAIN(TestRelatedDisplayUtils)

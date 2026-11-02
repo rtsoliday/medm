@@ -4,6 +4,7 @@
 
 #include <QBrush>
 #include <QCoreApplication>
+#include <QEvent>
 #include <QFont>
 #include <QFontInfo>
 #include <QFontMetricsF>
@@ -282,6 +283,85 @@ void RelatedDisplayElement::setActivationCallback(
   activationCallback_ = callback;
 }
 
+/* Paints a hidden button's stipple on a layer with the geometry of origin,
+ * following the button's place and visibility there. */
+class RelatedDisplayElement::BackgroundStipple : public QWidget
+{
+public:
+  BackgroundStipple(RelatedDisplayElement *button, QWidget *origin,
+      QWidget *layer)
+    : QWidget(layer)
+    , button_(button)
+    , origin_(origin)
+  {
+    setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    setAttribute(Qt::WA_NoSystemBackground, true);
+    setAutoFillBackground(false);
+    for (QWidget *widget = button; widget && widget != origin;
+         widget = widget->parentWidget()) {
+      widget->installEventFilter(this);
+    }
+    follow();
+  }
+
+  ~BackgroundStipple() override
+  {
+    if (button_) {
+      button_->update();
+    }
+  }
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override
+  {
+    switch (event->type()) {
+    case QEvent::Move:
+    case QEvent::Resize:
+    case QEvent::Show:
+    case QEvent::Hide:
+      follow();
+      break;
+    default:
+      break;
+    }
+    return QWidget::eventFilter(watched, event);
+  }
+
+  void paintEvent(QPaintEvent *) override
+  {
+    if (!button_) {
+      return;
+    }
+    QPainter painter(this);
+    button_->paintHiddenVisual(painter, rect());
+  }
+
+private:
+  void follow()
+  {
+    if (!button_ || !origin_) {
+      hide();
+      return;
+    }
+    setGeometry(QRect(button_->mapTo(origin_.data(), QPoint(0, 0)),
+        button_->size()));
+    setVisible(button_->isVisibleTo(origin_.data()));
+  }
+
+  QPointer<RelatedDisplayElement> button_;
+  QPointer<QWidget> origin_;
+};
+
+void RelatedDisplayElement::paintStippleOn(QWidget *layer, QWidget *origin)
+{
+  delete backgroundStipple_.data();
+  backgroundStipple_.clear();
+  if (layer && origin && origin->isAncestorOf(this)) {
+    backgroundStipple_ = new BackgroundStipple(this, origin, layer);
+  }
+  update();
+}
+
 void RelatedDisplayElement::paintEvent(QPaintEvent *event)
 {
   QWidget::paintEvent(event);
@@ -291,7 +371,9 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
 
   const QRect canvas = rect();
   if (visual_ == RelatedDisplayVisual::kHiddenButton) {
-    paintHiddenVisual(painter, canvas);
+    if (!backgroundStipple_) {
+      paintHiddenVisual(painter, canvas);
+    }
     if (selected_) {
       paintSelectionOverlay(painter);
     }

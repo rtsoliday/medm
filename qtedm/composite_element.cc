@@ -536,9 +536,11 @@ void CompositeElement::setVisible(bool visible)
 }
 
 QWidget *CompositeElement::splitStaticChildren(
-    const QList<QWidget *> &children)
+    const QList<QWidget *> &children,
+    const QList<RelatedDisplayElement *> &hiddenButtons)
 {
-  if (staticChildLayer_ || children.isEmpty() || !parentWidget()) {
+  if (staticChildLayer_ || (children.isEmpty() && hiddenButtons.isEmpty())
+      || !parentWidget()) {
     return staticChildLayer_.data();
   }
   auto *layer = new QWidget(parentWidget());
@@ -550,12 +552,20 @@ QWidget *CompositeElement::splitStaticChildren(
   /* Keep the children's display order; setParent() hides a widget. */
   for (const auto &pointer : childWidgets_) {
     QWidget *child = pointer.data();
-    if (!child || !children.contains(child)) {
+    if (!child) {
       continue;
     }
-    const bool hidden = child->isHidden();
-    child->setParent(layer);
-    child->setVisible(!hidden);
+    if (children.contains(child)) {
+      const bool hidden = child->isHidden();
+      child->setParent(layer);
+      child->setVisible(!hidden);
+      continue;
+    }
+    for (RelatedDisplayElement *button : hiddenButtons) {
+      if (button && (button == child || child->isAncestorOf(button))) {
+        button->paintStippleOn(layer, this);
+      }
+    }
   }
   layer->setVisible(!isHidden());
   return layer;

@@ -28832,14 +28832,46 @@ bool containsRelatedDisplay(const QWidget *widget)
   return false;
 }
 
+bool compositeHasChannel(const CompositeElement *composite)
+{
+  for (const QString &channel : composite->channels()) {
+    if (!channel.trimmed().isEmpty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/* MEDM executes the children of a composite without a channel with the
+ * display, so it draws their hidden buttons on the background, those of
+ * nested composites without a channel too. A composite with a channel
+ * draws its children as it updates. */
+void collectBackgroundHiddenButtons(const CompositeElement *composite,
+    QList<RelatedDisplayElement *> &buttons)
+{
+  for (QWidget *child : composite->childWidgets()) {
+    if (auto *related = dynamic_cast<RelatedDisplayElement *>(child)) {
+      if (related->visual() == RelatedDisplayVisual::kHiddenButton) {
+        buttons.append(related);
+      }
+    } else if (const auto *nested =
+                   dynamic_cast<const CompositeElement *>(child)) {
+      if (!compositeHasChannel(nested)) {
+        collectBackgroundHiddenButtons(nested, buttons);
+      }
+    }
+  }
+}
+
 } // namespace
 
 /* MEDM draws static graphics on the display's background in display order,
  * those of composites too, and dynamic graphics over all of them. A
  * composite with dynamic graphics stacks above the static graphics, so its
- * static graphics move to a layer stacked with them in its place. A hidden
- * related display, also drawn on the background, must stay clickable in the
- * composite, so a composite with a related display stays whole. */
+ * static graphics move to a layer stacked with them in its place. A related
+ * display must stay clickable in the composite, so a child holding one stays
+ * there, and the stipple of a hidden one, also drawn on the background, is
+ * painted on that layer. */
 void DisplayWindow::splitCompositeStaticChildren()
 {
   for (CompositeElement *composite : compositeElements_) {
@@ -28848,25 +28880,21 @@ void DisplayWindow::splitCompositeStaticChildren()
         || composite->visibilityMode() != TextVisibilityMode::kStatic
         || composite->colorMode() != TextColorMode::kStatic
         || isStaticGraphicWidget(composite)
-        || containsRelatedDisplay(composite)) {
-      continue;
-    }
-    bool hasChannel = false;
-    for (const QString &channel : composite->channels()) {
-      hasChannel = hasChannel || !channel.trimmed().isEmpty();
-    }
-    if (hasChannel) {
+        || compositeHasChannel(composite)) {
       continue;
     }
     QList<QWidget *> staticChildren;
     for (QWidget *child : composite->childWidgets()) {
       if (child && isStaticGraphicWidget(child)
           && !needsGraphicDynamicLayer(child)
-          && !propertyRuleSets_.contains(child)) {
+          && !propertyRuleSets_.contains(child)
+          && !containsRelatedDisplay(child)) {
         staticChildren.append(child);
       }
     }
-    composite->splitStaticChildren(staticChildren);
+    QList<RelatedDisplayElement *> hiddenButtons;
+    collectBackgroundHiddenButtons(composite, hiddenButtons);
+    composite->splitStaticChildren(staticChildren, hiddenButtons);
   }
 }
 

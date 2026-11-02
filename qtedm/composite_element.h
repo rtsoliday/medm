@@ -10,6 +10,8 @@
 
 #include "text_properties.h"
 
+class RelatedDisplayElement;
+
 class CompositeElement : public QWidget
 {
 public:
@@ -75,8 +77,11 @@ public:
    * background with the other static graphics, in display order, and its
    * dynamic graphics over them. These move the given children to a sibling
    * that keeps the composite's geometry, for the display to stack with its
-   * static graphics, and back. */
-  QWidget *splitStaticChildren(const QList<QWidget *> &children);
+   * static graphics, and back. The stipples of the given hidden buttons,
+   * which MEDM draws there too, are painted on that sibling, in their place
+   * in display order, while the buttons stay to take clicks. */
+  QWidget *splitStaticChildren(const QList<QWidget *> &children,
+      const QList<RelatedDisplayElement *> &hiddenButtons);
   void mergeStaticChildren();
   QWidget *staticChildLayer() const;
 

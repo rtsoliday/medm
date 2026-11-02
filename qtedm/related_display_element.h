@@ -4,6 +4,7 @@
 #include <functional>
 
 #include <QColor>
+#include <QPointer>
 #include <QString>
 #include <QVector>
 #include <QWidget>
@@ -56,12 +57,20 @@ public:
   void setActivationCallback(
       const std::function<void(int, Qt::KeyboardModifiers)> &callback);
 
+  /* MEDM draws a hidden button's stipple on the display's background, below
+   * every dynamic graphic. This paints it instead on a child of layer, which
+   * has the geometry of the button's ancestor origin, while the button stays
+   * where it is to take clicks. Deleting layer gives the stipple back. */
+  void paintStippleOn(QWidget *layer, QWidget *origin);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+  class BackgroundStipple;
+
   QColor effectiveForeground() const;
   QColor effectiveBackground() const;
   QVector<int> buttonEntryIndices() const;
@@ -86,4 +95,5 @@ private:
   bool executeMode_ = false;
   std::function<void(int, Qt::KeyboardModifiers)> activationCallback_;
   int pressedEntryIndex_ = -1;
+  QPointer<QWidget> backgroundStipple_;
 };

@@ -36,7 +36,7 @@ Choose macro values that match your display and facility. `EPICS_DISPLAY_PATH` s
 bin/Linux-x86_64/qtedm --read-only path/to/display.adl
 ```
 
-`--read-only` starts execute mode with a persistent red indicator. Monitoring and navigation remain available while CA, PVA, soft-PV, snapshot-restore, and plugin-provider writes are blocked and Shell Command and Execute menu commands are disabled.
+`--read-only` starts execute mode with a persistent red indicator. Monitoring and navigation remain available while CA, PVA, soft-PV, snapshot-restore, and plugin-provider writes are blocked and Shell Command and Execute menu commands are refused when run.
 
 ## Next steps
 

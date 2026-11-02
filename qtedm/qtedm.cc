@@ -1268,7 +1268,8 @@ int main(int argc, char *argv[])
     executeOnlyLabel->setStyleSheet(
         QStringLiteral("QLabel { color: #8b0000; font-weight: bold; }"));
     executeOnlyLabel->setToolTip(QStringLiteral(
-        "All CA, PVA, and soft-PV writes are blocked."));
+        "CA, PVA, soft-PV, and plugin-provider writes, snapshot restores, "
+        "and shell commands are blocked."));
   }
   auto *executeOnlyWidget = new QWidget;
   auto *executeOnlyLayout = new QHBoxLayout(executeOnlyWidget);

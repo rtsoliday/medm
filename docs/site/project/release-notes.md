@@ -46,6 +46,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - A display saved with a negative position opens at the edge of the screen, as MEDM moves it, instead of partly off the screen.
 - A `-dg` geometry with a position, such as `qtedm -x -dg +100+200 display.adl`, no longer crashes QtEDM.
 - The tick labels of a zoomed or panned cartesian plot sit where their values are plotted. They were spread over the zoom window rounded out to nice values, so a label could be up to one tick step away from the data at its value.
+- A cartesian plot autoscaled over a value near the largest double, such as a 1.8e308 sentinel, keeps its ticks and draws the other points where they belong instead of all at the bottom.
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
 - The + and - buttons of a hexadecimal or octal Spin Box write the next whole number. They sent the next value as decimal text, which the control read in its own base, so + on a hexadecimal 9 wrote 16 and octal steps were refused.
 - A wheel switch whose value is outside its limits steps toward them by the step you choose, as in MEDM. It used to write the nearest limit, so one Down click on a value of 50 with limits 0 to 1 wrote 1. A step that would move the value further out of range does nothing.

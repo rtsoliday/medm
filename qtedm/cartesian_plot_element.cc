@@ -452,6 +452,19 @@ void drawMedmMarker(QPainter &painter, const QPointF &point,
   }
 }
 
+/* The tick loops run to numMajor. Casting an infinite or NaN count to int
+ * is undefined: x86-64 gives INT_MIN (no ticks) and arm64 INT_MAX, which
+ * makes the loops run for billions of steps. */
+constexpr int kMaxAxisTicks = 1000;
+
+int axisTickCount(double count)
+{
+  if (!std::isfinite(count) || count <= 0.0) {
+    return 0;
+  }
+  return count >= kMaxAxisTicks ? kMaxAxisTicks : static_cast<int>(count);
+}
+
 } // namespace
 
 // Nice axis range computation matching MEDM's SciPlot ComputeAxis algorithm
@@ -459,6 +472,17 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
     double min, double max, bool isLog, bool isXAxis, bool isTime)
 {
   NiceAxisRange result;
+
+  /* MEDM's safeFloat() keeps values of FLT_MAX and beyond from SciPlot,
+   * whose axes break on them. Bound the range so that rounding it out to
+   * whole ticks cannot overflow to infinity. */
+  constexpr double kAxisLimit = std::numeric_limits<double>::max() / 4.0;
+  if (std::isnan(min) || std::isnan(max)) {
+    min = 0.0;
+    max = 1.0;
+  }
+  min = std::clamp(min, -kAxisLimit, kAxisLimit);
+  max = std::clamp(max, -kAxisLimit, kAxisLimit);
 
   /* SciPlot ends a time axis on the whole seconds around the data instead
    * of rounding it out to the major increment. */
@@ -498,10 +522,16 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
       drawMin = std::pow(10.0, minExponent);
       drawMax = std::pow(10.0, maxExponent);
     }
+    /* A subnormal minimum rounds down to a decade that underflows to 0. */
+    if (!(drawMin > 0.0)) {
+      drawMin = 1e-307;
+      drawMax = std::max(drawMax, drawMin * 10.0);
+    }
     result.drawMin = drawMin;
     result.drawMax = drawMax;
     result.majorInc = 10.0;
-    result.numMajor = static_cast<int>(std::log10(result.drawMax / result.drawMin) + 0.0001);
+    result.numMajor = axisTickCount(
+        std::log10(result.drawMax) - std::log10(result.drawMin) + 0.0001);
     result.numMinor = 10;
     result.axisMin = result.drawMin;
     result.axisMax = result.drawMax;
@@ -518,15 +548,17 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
   }
   
   // Normalize the range to determine nice delta
-  const int exponent = static_cast<int>(std::floor(std::log10(range)));
+  const double exponentValue = std::floor(std::log10(range));
+  const int exponent = std::isfinite(exponentValue)
+      ? static_cast<int>(exponentValue) : 0;
   const double normalizedRange = range / std::pow(10.0, exponent);
-  
+
   // Find appropriate delta from the deltas array
   double delta = CAdeltas[0];
   int minorNum = CAminors[0];
   int foundIndex = 0;
   for (int i = 0; i < kNumDeltas; ++i) {
-    const int majorNum = static_cast<int>(std::ceil(normalizedRange / CAdeltas[i]));
+    const double majorNum = std::ceil(normalizedRange / CAdeltas[i]);
     if (majorNum <= maxMajor) {
       delta = CAdeltas[i];
       minorNum = CAminors[i];
@@ -542,7 +574,7 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
   
   // MEDM optimization: check next delta to see if it gives a tighter fit
   if (foundIndex + 1 < kNumDeltas) {
-    const int majornumN = static_cast<int>(std::ceil(normalizedRange / CAdeltas[foundIndex + 1]));
+    const double majornumN = std::ceil(normalizedRange / CAdeltas[foundIndex + 1]);
     if (majornumN > 2) {
       const double deltaN = CAdeltas[foundIndex + 1] * std::pow(10.0, exponent);
       const double calcMinN = std::floor(min / deltaN) * deltaN;
@@ -557,10 +589,21 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
     }
   }
   
+  /* A range too small to divide, such as one of subnormal width, keeps
+   * its own ends as a single major division. */
+  if (!std::isfinite(calcMin) || !std::isfinite(calcMax)
+      || !(calcMax > calcMin) || !std::isfinite(delta) || !(delta > 0.0)) {
+    calcMin = min;
+    calcMax = max;
+    delta = max - min;
+    minorNum = 0;
+  }
+
   result.drawMin = calcMin;
   result.drawMax = calcMax;
   result.majorInc = delta;
-  result.numMajor = static_cast<int>(std::floor((result.drawMax - result.drawMin) / delta + 0.5));
+  result.numMajor = axisTickCount(
+      std::floor((result.drawMax - result.drawMin) / delta + 0.5));
   result.numMinor = minorNum;
   result.axisMin = result.drawMin;
   result.axisMax = result.drawMax;

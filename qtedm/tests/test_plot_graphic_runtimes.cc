@@ -41,6 +41,7 @@ class TestPlotGraphicRuntimes : public QObject
 private slots:
   void cartesianTracksTraceModesPointsAndCapacity();
   void zoomedAxisTicksSitWhereTheirValuesArePlotted();
+  void hugeAxisRangesKeepFiniteTicks();
   void pvaKeepsDisplayLimitsAsSentForPlots();
   void heatmapTracksDimensionsRangeAndTransforms();
   void heatmapBoundsSyntheticPreviewForLargeConfiguredGrids();
@@ -51,6 +52,62 @@ private slots:
   void cartesianExportReadsWithSdds();
   void rendersWidgetsToExplicitPathsAndReportsFailures();
 };
+
+/* MEDM's safeFloat() keeps SciPlot from hanging on values of FLT_MAX and
+ * beyond. An axis autoscaled over a sentinel such as DBL_MAX must keep a
+ * finite range and tick count: rounding 1.797e308 up to whole ticks
+ * overflowed to infinity, and casting the infinite tick count to int was
+ * undefined, INT_MIN on x86-64 (no ticks, every point drawn at the bottom)
+ * and INT_MAX on arm64 (tick loops that never finish). */
+void TestPlotGraphicRuntimes::hugeAxisRangesKeepFiniteTicks()
+{
+  const double big = std::numeric_limits<double>::max();
+  struct Case
+  {
+    double minimum;
+    double maximum;
+    bool log;
+  };
+  const Case cases[] = {
+      {0.0, big, false},
+      {-big, big, false},
+      {-big, 0.0, false},
+      {0.0, std::numeric_limits<double>::denorm_min(), false},
+      {1e-300, big, true},
+      {std::numeric_limits<double>::denorm_min(), big, true},
+  };
+  for (const Case &axis : cases) {
+    for (bool xAxis : {true, false}) {
+      const auto nice = CartesianPlotElement::computeNiceAxisRange(
+          axis.minimum, axis.maximum, axis.log, xAxis);
+      const QByteArray label = QStringLiteral("%1..%2 log=%3 x=%4")
+          .arg(axis.minimum).arg(axis.maximum).arg(axis.log).arg(xAxis)
+          .toLatin1();
+      QVERIFY2(std::isfinite(nice.drawMin) && std::isfinite(nice.drawMax),
+          label.constData());
+      QVERIFY2(nice.drawMax > nice.drawMin, label.constData());
+      QVERIFY2(std::isfinite(nice.majorInc) && nice.majorInc > 0.0,
+          label.constData());
+      QVERIFY2(nice.numMajor >= 0 && nice.numMajor <= 1000,
+          label.constData());
+    }
+  }
+
+  /* Values far below the sentinel stay inside the axis. */
+  const auto sentinel =
+      CartesianPlotElement::computeNiceAxisRange(0.0, big, false, false);
+  QVERIFY(sentinel.numMajor > 0);
+  QCOMPARE(sentinel.drawMin, 0.0);
+  QVERIFY(10.0 < sentinel.drawMax);
+
+  /* Ordinary ranges are unchanged. */
+  const auto ordinary =
+      CartesianPlotElement::computeNiceAxisRange(0.0, 10.0, false, false);
+  QCOMPARE(ordinary.drawMin, 0.0);
+  QCOMPARE(ordinary.drawMax, 10.0);
+  QCOMPARE(ordinary.majorInc, 2.0);
+  QCOMPARE(ordinary.numMajor, 5);
+}
 
 /* A zoomed axis draws its data against the zoom window, so each tick must
  * sit where its value is plotted. Spreading the rounded range, 10 to 90

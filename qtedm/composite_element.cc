@@ -478,17 +478,10 @@ void CompositeElement::setExecuteMode(bool execute)
       elem->setExecuteMode(execute);
     } else if (auto *elem = dynamic_cast<SliderElement *>(child)) {
       elem->setExecuteMode(execute);
-    } else if (auto *elem = dynamic_cast<RectangleElement *>(child)) {
-      elem->setExecuteMode(execute);
-    } else if (auto *elem = dynamic_cast<OvalElement *>(child)) {
-      elem->setExecuteMode(execute);
-    } else if (auto *elem = dynamic_cast<ArcElement *>(child)) {
-      elem->setExecuteMode(execute);
-    } else if (auto *elem = dynamic_cast<LineElement *>(child)) {
-      elem->setExecuteMode(execute);
-    } else if (auto *elem = dynamic_cast<PolylineElement *>(child)) {
-      elem->setExecuteMode(execute);
-    } else if (auto *elem = dynamic_cast<PolygonElement *>(child)) {
+    } else if (auto *elem = dynamic_cast<GraphicShapeElement *>(child)) {
+      /* Every graphic, images included, must record its edit-mode
+       * visibility before applyRuntimeVisibility() hides it below. An
+       * image recorded hidden would never show in execute mode. */
       elem->setExecuteMode(execute);
     }
   }

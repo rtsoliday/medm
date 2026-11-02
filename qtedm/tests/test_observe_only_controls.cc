@@ -50,6 +50,7 @@
 #include "extension_object_registry.h"
 #include "find_pv_dialog.h"
 #include "heatmap_element.h"
+#include "image_element.h"
 #include "led_monitor_element.h"
 #include "legacy_fonts.h"
 #include "main_window_controller.h"
@@ -138,6 +139,7 @@ private slots:
   void monitorGeometrySurvivesDeferredResize();
   void scaleMonitorValueBoxMatchesXcIndicator();
   void wheelSwitchStepsOutOfRangeValueAsXc();
+  void compositeShowsImageChildWithDynamicVisibility();
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
@@ -5525,6 +5527,38 @@ void TestObserveOnlyControls::wheelSwitchStepsOutOfRangeValueAsXc()
   element.setRuntimeValue(1.0);
   QTest::keyClick(&element, Qt::Key_PageUp);
   QCOMPARE(writes.size(), 3);
+}
+
+void TestObserveOnlyControls::compositeShowsImageChildWithDynamicVisibility()
+{
+  QWidget parent;
+  parent.resize(200, 200);
+  auto *composite = new CompositeElement(&parent);
+  composite->setGeometry(10, 10, 100, 100);
+  composite->setVisibilityMode(TextVisibilityMode::kIfNotZero);
+  composite->setChannel(0, QStringLiteral("composite:image:visibility"));
+  auto *image = new ImageElement(composite);
+  image->setGeometry(5, 5, 40, 40);
+  composite->adoptChild(image);
+  parent.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&parent));
+  QVERIFY(image->isVisible());
+
+  /* enterExecuteMode starts composites before images, and the composite
+   * hides its children until its channel connects. */
+  composite->setExecuteMode(true);
+  image->setExecuteMode(true);
+  QCoreApplication::processEvents();
+  QVERIFY(!image->isVisible());
+  composite->setChannelConnected(true);
+  composite->setRuntimeVisible(true);
+  QCoreApplication::processEvents();
+  QVERIFY(image->isVisible());
+
+  composite->setExecuteMode(false);
+  image->setExecuteMode(false);
+  QCoreApplication::processEvents();
+  QVERIFY(image->isVisible());
 }
 
 /* MEDM's limitsAttributeInit() gives every limits block channel sources,

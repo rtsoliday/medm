@@ -207,6 +207,8 @@ private slots:
   void graphicEdgesMatchMedmCoordinates();
   void ovalFillMatchesXFillArc_data();
   void ovalFillMatchesXFillArc();
+  void ovalOutlineMatchesXDrawArc_data();
+  void ovalOutlineMatchesXDrawArc();
   void cosmeticOutlineEditsKeepObjectBounds_data();
   void cosmeticOutlineEditsKeepObjectBounds();
   void compositeShapePicking_data();
@@ -1022,6 +1024,77 @@ void TestObserveOnlyControls::ovalFillMatchesXFillArc()
   }
 }
 
+void TestObserveOnlyControls::ovalOutlineMatchesXDrawArc_data()
+{
+  QTest::addColumn<int>("lineWidth");
+  QTest::addColumn<QStringList>("rows");
+  /* Outline ovals of these sizes and widths as Xvfb drew them for installed
+   * MEDM 3.1.20: drawOval's XDrawArc inset by (width + 1)/2. */
+  QTest::newRow("11x11-width1") << 1 << QStringList{
+      QStringLiteral("..........."),
+      QStringLiteral("....####..."),
+      QStringLiteral("..##....##."),
+      QStringLiteral("..#......#."),
+      QStringLiteral(".#........#"),
+      QStringLiteral(".#........#"),
+      QStringLiteral(".#........#"),
+      QStringLiteral(".#........#"),
+      QStringLiteral("..#......#."),
+      QStringLiteral("..##....##."),
+      QStringLiteral("....####...")};
+  /* Pixels exactly a half width from the ellipse count at the top and
+   * left outer edge and the bottom and right inner edge only. */
+  QTest::newRow("10x10-width2") << 2 << QStringList{
+      QStringLiteral(".....#...."),
+      QStringLiteral("..######.."),
+      QStringLiteral(".####.###."),
+      QStringLiteral(".##.....##"),
+      QStringLiteral(".##.....##"),
+      QStringLiteral("##......##"),
+      QStringLiteral(".##.....##"),
+      QStringLiteral(".##.....##"),
+      QStringLiteral(".########."),
+      QStringLiteral("..######..")};
+  QTest::newRow("15x11-width2") << 2 << QStringList{
+      QStringLiteral("..............."),
+      QStringLiteral("....########..."),
+      QStringLiteral("..############."),
+      QStringLiteral(".###........###"),
+      QStringLiteral(".##..........##"),
+      QStringLiteral(".##..........##"),
+      QStringLiteral(".##..........##"),
+      QStringLiteral(".##..........##"),
+      QStringLiteral(".###........###"),
+      QStringLiteral("..############."),
+      QStringLiteral("....########...")};
+}
+
+void TestObserveOnlyControls::ovalOutlineMatchesXDrawArc()
+{
+  QFETCH(int, lineWidth);
+  QFETCH(QStringList, rows);
+  const int width = rows.first().size();
+  const int height = rows.size();
+  QImage image(width + 4, height + 4, QImage::Format_RGB32);
+  image.fill(Qt::white);
+  QPainter painter(&image);
+  for (const QRect &span : x11EllipseRingSpans(
+           medmOutlineRect(QRect(2, 2, width, height), lineWidth),
+           lineWidth)) {
+    painter.fillRect(span, Qt::black);
+  }
+  painter.end();
+  for (int y = 0; y < image.height(); ++y) {
+    for (int x = 0; x < image.width(); ++x) {
+      const bool inside = x >= 2 && y >= 2 && x < width + 2
+          && y < height + 2
+          && rows.at(y - 2).at(x - 2) == QLatin1Char('#');
+      QVERIFY2((image.pixel(x, y) == qRgb(0, 0, 0)) == inside,
+          qPrintable(QStringLiteral("pixel %1,%2").arg(x - 2).arg(y - 2)));
+    }
+  }
+}
+
 void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates_data()
 {
   QTest::addColumn<QString>("shape");
@@ -1161,6 +1234,10 @@ void TestObserveOnlyControls::graphicEdgesMatchMedmCoordinates()
     } else if (shape == QStringLiteral("oval")) {
       if (filled) {
         fillX11Ellipse(painter, bounds, Qt::black);
+      } else if (lineWidth >= 1) {
+        for (const QRect &span : x11EllipseRingSpans(bounds, lineWidth)) {
+          painter.fillRect(span, Qt::black);
+        }
       } else {
         painter.drawEllipse(bounds);
       }

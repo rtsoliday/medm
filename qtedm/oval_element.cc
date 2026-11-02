@@ -1,6 +1,7 @@
 #include "oval_element.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QApplication>
 #include <QPainter>
@@ -82,6 +83,136 @@ void fillX11Ellipse(QPainter &painter, const QRect &box, const QColor &color)
           static_cast<int>(spanWidth), 1), color);
     }
   }
+}
+
+namespace {
+
+/* Root of the distance equation by bisection, from D. Eberly, "Distance
+ * from a Point to an Ellipse, an Ellipsoid, or a Hyperellipsoid". */
+double ellipseDistanceRoot(double r0, double z0, double z1, double g)
+{
+  const double n0 = r0 * z0;
+  double s0 = z1 - 1.0;
+  double s1 = g < 0.0 ? 0.0 : std::hypot(n0, z1) - 1.0;
+  double s = 0.0;
+  for (int i = 0; i < 200; ++i) {
+    s = (s0 + s1) / 2.0;
+    if (s == s0 || s == s1) {
+      break;
+    }
+    const double ratio0 = n0 / (s + r0);
+    const double ratio1 = z1 / (s + 1.0);
+    g = ratio0 * ratio0 + ratio1 * ratio1 - 1.0;
+    if (g > 0.0) {
+      s0 = s;
+    } else if (g < 0.0) {
+      s1 = s;
+    } else {
+      break;
+    }
+  }
+  return s;
+}
+
+/* Distance from (x, y) to the ellipse with semi-axes a and b centered at
+ * the origin. */
+double ellipseDistance(double a, double b, double x, double y)
+{
+  x = std::abs(x);
+  y = std::abs(y);
+  if (a == b) {
+    return std::abs(std::hypot(x, y) - a);
+  }
+  if (a < b) {
+    std::swap(a, b);
+    std::swap(x, y);
+  }
+  if (y > 0.0) {
+    if (x > 0.0) {
+      const double z0 = x / a;
+      const double z1 = y / b;
+      const double g = z0 * z0 + z1 * z1 - 1.0;
+      if (g == 0.0) {
+        return 0.0;
+      }
+      const double r0 = (a / b) * (a / b);
+      const double s = ellipseDistanceRoot(r0, z0, z1, g);
+      return std::hypot(r0 * x / (s + r0) - x, y / (s + 1.0) - y);
+    }
+    return std::abs(y - b);
+  }
+  const double numerator = a * x;
+  const double denominator = a * a - b * b;
+  if (numerator < denominator) {
+    const double ratio = numerator / denominator;
+    return std::hypot(a * ratio - x, b * std::sqrt(1.0 - ratio * ratio));
+  }
+  return std::abs(x - a);
+}
+
+} // namespace
+
+QVector<QRect> x11EllipseRingSpans(const QRect &box, int lineWidth)
+{
+  QVector<QRect> spans;
+  if (lineWidth < 1 || box.width() <= 0 || box.height() <= 0) {
+    return spans;
+  }
+  const double a = box.width() / 2.0;
+  const double b = box.height() / 2.0;
+  const double half = lineWidth / 2.0;
+  const double cx = box.x() + a;
+  const double cy = box.y() + b;
+  /* X spans are half open: a pixel exactly half a line width from the
+   * ellipse belongs to the ring at its top and left outer edge and its
+   * bottom and right inner edge, but not at the opposite ones. */
+  const auto inRing = [&](int x, int y) {
+    const double dx = x - cx;
+    const double dy = y - cy;
+    const double distance = ellipseDistance(a, b, dx, dy);
+    if (distance != half) {
+      return distance < half;
+    }
+    const bool outside = (dx * dx) / (a * a) + (dy * dy) / (b * b) > 1.0;
+    const bool before = dx != 0.0 ? dx < 0.0 : dy < 0.0;
+    return outside == before;
+  };
+  const int top = static_cast<int>(std::floor(cy - b - half));
+  const int bottom = static_cast<int>(std::ceil(cy + b + half));
+  const int left = static_cast<int>(std::floor(cx - a - half));
+  const int right = static_cast<int>(std::ceil(cx + a + half));
+
+  /* In each row the ring is a run of pixels from each side until the hole,
+   * or one run through the middle. */
+  for (int y = top; y <= bottom; ++y) {
+    int leftEnd = left;
+    while (leftEnd <= right && !inRing(leftEnd, y)) {
+      ++leftEnd;
+    }
+    if (leftEnd > right) {
+      continue;
+    }
+    const int leftStart = leftEnd;
+    while (leftEnd <= right && inRing(leftEnd, y)) {
+      ++leftEnd;
+    }
+    int rightStart = right;
+    while (rightStart >= leftEnd && !inRing(rightStart, y)) {
+      --rightStart;
+    }
+    const int rightEnd = rightStart + 1;
+    while (rightStart >= leftEnd && inRing(rightStart, y)) {
+      --rightStart;
+    }
+    ++rightStart;
+    if (rightEnd <= leftEnd) {
+      spans.append(QRect(leftStart, y, leftEnd - leftStart, 1));
+    } else {
+      spans.append(QRect(leftStart, y, leftEnd - leftStart, 1));
+      spans.append(QRect(rightStart, y, rightEnd - rightStart, 1));
+    }
+  }
+  return spans;
 }
 
 OvalElement::OvalElement(QWidget *parent)
@@ -199,6 +330,15 @@ void OvalElement::paintEvent(QPaintEvent *event)
 
   if (fill_ == RectangleFill::kSolid) {
     fillX11Ellipse(painter, drawRect, effectiveColor);
+  } else if (lineWidth_ >= 1 && lineStyle_ == RectangleLineStyle::kSolid) {
+    if (ringBox_ != drawRect || ringLineWidth_ != lineWidth_) {
+      ringBox_ = drawRect;
+      ringLineWidth_ = lineWidth_;
+      ringSpans_ = x11EllipseRingSpans(drawRect, lineWidth_);
+    }
+    for (const QRect &span : std::as_const(ringSpans_)) {
+      painter.fillRect(span, effectiveColor);
+    }
   } else {
     painter.setBrush(Qt::NoBrush);
     QPen pen = medmLinePen(effectiveColor, lineWidth_, lineStyle_);

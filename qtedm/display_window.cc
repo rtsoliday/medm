@@ -21226,13 +21226,24 @@ void DisplayWindow::scaleAllElements(int oldWidth, int oldHeight,
    * grow nested composites before their parents to contain them. */
   QSet<CompositeElement *> fittedComposites;
   std::function<void(CompositeElement *)> fitComposite =
-      [&fittedComposites, &fitComposite](CompositeElement *composite) {
+      [&fittedComposites, &fitComposite, scaleX, scaleY](
+          CompositeElement *composite) {
         if (!composite || fittedComposites.contains(composite)) {
           return;
         }
         fittedComposites.insert(composite);
         for (QWidget *child : composite->childWidgets()) {
           fitComposite(dynamic_cast<CompositeElement *>(child));
+        }
+        /* A composite file's object is the bounding box of the file's
+         * objects, not the possibly older size saved in the display. */
+        const QSize fileObject = composite->fileObjectSize();
+        if (!fileObject.isEmpty()) {
+          composite->resize(
+              std::max(1, static_cast<int>(std::lround(
+                  fileObject.width() * static_cast<double>(scaleX)))),
+              std::max(1, static_cast<int>(std::lround(
+                  fileObject.height() * static_cast<double>(scaleY)))));
         }
         composite->expandToFitChildren(true);
       };
@@ -35372,6 +35383,8 @@ CompositeElement *DisplayWindow::loadCompositeElement(
              their objects starts at the composite's x and y. */
           int minX = std::numeric_limits<int>::max();
           int minY = std::numeric_limits<int>::max();
+          int maxX = std::numeric_limits<int>::min();
+          int maxY = std::numeric_limits<int>::min();
           for (const auto &child : document->children) {
             const QString childName = normalizedAdlName(child.name);
             if (childName == QStringLiteral("file")
@@ -35383,10 +35396,19 @@ CompositeElement *DisplayWindow::loadCompositeElement(
             const QRect childRect = parseObjectGeometry(child);
             minX = std::min(minX, childRect.x());
             minY = std::min(minY, childRect.y());
+            maxX = std::max(maxX, childRect.x() + childRect.width());
+            maxY = std::max(maxY, childRect.y() + childRect.height());
           }
           const QPoint fileOrigin =
               minX == std::numeric_limits<int>::max()
               ? QPoint() : QPoint(minX, minY);
+          /* That bounding box is also the composite's object, which MEDM
+           * clips the composite's static graphics to and paints white
+           * while its channel is disconnected. The object saved in the
+           * display can be older than the file. */
+          if (minX != std::numeric_limits<int>::max()) {
+            composite->setFileObjectSize(QSize(maxX - minX, maxY - minY));
+          }
           ElementLoadContextGuard guard(*this, composite, -fileOrigin, true,
               composite);
           const bool previousElementsFromAdlFile = elementsFromAdlFile_;

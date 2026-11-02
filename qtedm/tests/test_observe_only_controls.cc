@@ -207,6 +207,7 @@ private slots:
   void compositeStaticGraphicsStackInDisplayOrder();
   void compositeChildrenAreNotClipped_data();
   void compositeChildrenAreNotClipped();
+  void compositeFileWithChannelClipsToItsContents();
   void compositeWithChannelClipsStaticGraphics();
   void buttonPixmapsMatchMedm_data();
   void buttonPixmapsMatchMedm();
@@ -413,6 +414,64 @@ void TestObserveOnlyControls::compositeStaticGraphicsStackInDisplayOrder()
     window.leaveExecuteMode();
     QCOMPARE(body->parentWidget(), static_cast<QWidget *>(composite));
   }
+}
+
+/* MEDM's compositeFileParse() makes a composite file's object the
+ * bounding box of the file's objects, and a composite with a channel clips
+ * its static graphics to that object. Clipping them to the older, narrower
+ * object saved in the display cut off everything past it. */
+void TestObserveOnlyControls::compositeFileWithChannelClipsToItsContents()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  auto writeFile = [&directory](const QString &name,
+                       const QString &contents) {
+    QFile file(directory.filePath(name));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      return false;
+    }
+    const QByteArray bytes = contents.toLatin1();
+    return file.write(bytes) == static_cast<qint64>(bytes.size());
+  };
+  QVERIFY(writeFile(QStringLiteral("panel.adl"), QStringLiteral(
+      "file { name=\"panel.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=200 height=40 } clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=2 colors { ffffff, 000000, } }\n"
+      "rectangle { object { x=8 y=9 width=170 height=20 }\n"
+      "  \"basic attribute\" { clr=1 } }\n")));
+  QVERIFY(writeFile(QStringLiteral("main.adl"), QStringLiteral(
+      "file { name=\"main.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=240 height=120 }"
+      " clr=1 bclr=0 }\n"
+      "\"color map\" { ncolors=2 colors { ffffff, 000000, } }\n"
+      "composite { object { x=11 y=60 width=50 height=20 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  \"composite file\"=\"panel.adl\"\n"
+      "  \"dynamic attribute\" { vis=\"if not zero\""
+      " chan=\"composite:file:visible\" }\n"
+      "}\n")));
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(directory.filePath(QStringLiteral("main.adl")),
+      &error), qPrintable(error));
+  QCOMPARE(window.compositeElements_.size(), 1);
+  QCOMPARE(window.compositeElements_.first()->fileObjectSize(),
+      QSize(170, 20));
+  QCOMPARE(window.rectangleElements_.size(), 1);
+  window.show();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+  window.scaleAllElements(240, 120, 240, 120);
+  RectangleElement *rectangle = window.rectangleElements_.first();
+  QVERIFY2(rectangle->mask().isEmpty(),
+      qPrintable(QStringLiteral("masked to %1 px")
+          .arg(rectangle->mask().boundingRect().width())));
 }
 
 void TestObserveOnlyControls::compositeChildrenAreNotClipped_data()

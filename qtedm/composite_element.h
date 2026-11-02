@@ -28,6 +28,10 @@ public:
 
   QString compositeFile() const;
   void setCompositeFile(const QString &filePath);
+  /* The size of the bounding box of a composite file's objects, which
+   * MEDM makes the composite's object; empty for other composites. */
+  QSize fileObjectSize() const;
+  void setFileObjectSize(const QSize &size);
 
   QColor foregroundColor() const;
   void setForegroundColor(const QColor &color);
@@ -129,6 +133,7 @@ private:
   bool hasExplicitCompositeName_ = false;
   /* The ADL object within the composite after a growing fit, or null. */
   QRect objectRect_;
+  QSize fileObjectSize_;
   /* Static graphics masked to objectRect_ by clipStaticGraphicsToObject(). */
   QList<QPointer<QWidget>> clippedStaticGraphics_;
   QPointer<QWidget> staticChildLayer_;

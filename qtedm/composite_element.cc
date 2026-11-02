@@ -193,6 +193,16 @@ void CompositeElement::setCompositeFile(const QString &filePath)
   compositeFile_ = filePath;
 }
 
+QSize CompositeElement::fileObjectSize() const
+{
+  return fileObjectSize_;
+}
+
+void CompositeElement::setFileObjectSize(const QSize &size)
+{
+  fileObjectSize_ = size;
+}
+
 QColor CompositeElement::foregroundColor() const
 {
   if (foregroundColor_.isValid()) {

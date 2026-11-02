@@ -352,7 +352,8 @@ private:
   QPointer<QWidget> origin_;
 };
 
-void RelatedDisplayElement::paintStippleOn(QWidget *layer, QWidget *origin)
+QWidget *RelatedDisplayElement::paintStippleOn(QWidget *layer,
+    QWidget *origin)
 {
   delete backgroundStipple_.data();
   backgroundStipple_.clear();
@@ -360,6 +361,7 @@ void RelatedDisplayElement::paintStippleOn(QWidget *layer, QWidget *origin)
     backgroundStipple_ = new BackgroundStipple(this, origin, layer);
   }
   update();
+  return backgroundStipple_.data();
 }
 
 void RelatedDisplayElement::paintEvent(QPaintEvent *event)

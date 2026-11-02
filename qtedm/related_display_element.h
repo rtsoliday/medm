@@ -60,8 +60,9 @@ public:
   /* MEDM draws a hidden button's stipple on the display's background, below
    * every dynamic graphic. This paints it instead on a child of layer, which
    * has the geometry of the button's ancestor origin, while the button stays
-   * where it is to take clicks. Deleting layer gives the stipple back. */
-  void paintStippleOn(QWidget *layer, QWidget *origin);
+   * where it is to take clicks. Deleting layer gives the stipple back.
+   * Returns the child that paints the stipple, or null. */
+  QWidget *paintStippleOn(QWidget *layer, QWidget *origin);
 
 protected:
   void paintEvent(QPaintEvent *event) override;

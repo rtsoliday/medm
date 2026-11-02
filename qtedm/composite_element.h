@@ -137,4 +137,7 @@ private:
   /* Static graphics masked to objectRect_ by clipStaticGraphicsToObject(). */
   QList<QPointer<QWidget>> clippedStaticGraphics_;
   QPointer<QWidget> staticChildLayer_;
+  /* The static children and hidden button stipples on staticChildLayer_,
+   * in display order. */
+  QList<QPointer<QWidget>> staticLayerOrder_;
 };

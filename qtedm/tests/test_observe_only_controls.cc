@@ -209,6 +209,7 @@ private slots:
   void disconnectedCompositeChildrenStackInOrder();
   void hiddenRelatedDisplayUnderGraphicComposite();
   void hiddenRelatedDisplayStippleUnderEarlierGraphics();
+  void hiddenRelatedDisplayStippleOverEarlierGraphics();
   void compositeStaticGraphicsStackInDisplayOrder();
   void compositeChildrenAreNotClipped_data();
   void compositeChildrenAreNotClipped();
@@ -359,6 +360,59 @@ void TestObserveOnlyControls::hiddenRelatedDisplayStippleUnderEarlierGraphics()
     QTest::mouseClick(target, Qt::LeftButton, Qt::NoModifier,
         target->mapFrom(window.displayArea_, QPoint(40, 40)));
     QCOMPARE(activations, pass + 1);
+    window.leaveExecuteMode();
+  }
+}
+
+/* MEDM draws a hidden button's stipple in display order with the static
+ * graphics, so it covers a filled rectangle before it in the same
+ * composite. */
+void TestObserveOnlyControls::hiddenRelatedDisplayStippleOverEarlierGraphics()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("panel.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write(
+      "file { name=\"panel.adl\" version=030120 }\n"
+      "display { object { x=0 y=0 width=200 height=120 } clr=1 bclr=4 }\n"
+      "\"color map\" { ncolors=5 colors { ffffff, 000000, ff0000, 00ff00,"
+      " bbbbbb, } }\n"
+      "composite { object { x=20 y=20 width=100 height=50 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    rectangle { object { x=20 y=20 width=80 height=40 }\n"
+      "      \"basic attribute\" { clr=3 } }\n"
+      "    \"related display\" { object { x=20 y=20 width=80 height=40 }\n"
+      "      display[0] { name=\"target.adl\" }\n"
+      "      clr=1 bclr=4 visual=\"invisible\" }\n"
+      "    rectangle { object { x=110 y=60 width=10 height=10 }\n"
+      "      \"basic attribute\" { clr=2 }\n"
+      "      \"dynamic attribute\" { vis=\"if not zero\""
+      " chan=\"panel:dot\" } }\n"
+      "  }\n"
+      "}\n");
+  file.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  window.show();
+  for (int pass = 0; pass < 2; ++pass) {
+    window.enterExecuteMode();
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    const QImage image = window.displayArea_->grab().toImage();
+    /* (80,40) is on the stipple's 4x4 pattern from the button's corner at
+     * (20,20); (82,40) is not, so it shows the green rectangle. */
+    QCOMPARE(image.pixelColor(82, 40), QColor(0x00, 0xff, 0x00));
+    QCOMPARE(image.pixelColor(80, 40), QColor(Qt::black));
     window.leaveExecuteMode();
   }
 }

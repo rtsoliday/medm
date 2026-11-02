@@ -552,6 +552,7 @@ QWidget *CompositeElement::splitStaticChildren(
   layer->setAutoFillBackground(false);
   layer->setGeometry(geometry());
   staticChildLayer_ = layer;
+  staticLayerOrder_.clear();
   /* Keep the children's display order; setParent() hides a widget. */
   for (const auto &pointer : childWidgets_) {
     QWidget *child = pointer.data();
@@ -562,11 +563,14 @@ QWidget *CompositeElement::splitStaticChildren(
       const bool hidden = child->isHidden();
       child->setParent(layer);
       child->setVisible(!hidden);
+      staticLayerOrder_.append(child);
       continue;
     }
     for (RelatedDisplayElement *button : hiddenButtons) {
       if (button && (button == child || child->isAncestorOf(button))) {
-        button->paintStippleOn(layer, this);
+        if (QWidget *stipple = button->paintStippleOn(layer, this)) {
+          staticLayerOrder_.append(stipple);
+        }
       }
     }
   }
@@ -581,6 +585,7 @@ void CompositeElement::mergeStaticChildren()
   }
   QWidget *layer = staticChildLayer_.data();
   staticChildLayer_.clear();
+  staticLayerOrder_.clear();
   for (const auto &pointer : childWidgets_) {
     QWidget *child = pointer.data();
     if (!child || child->parentWidget() != layer) {
@@ -1126,6 +1131,16 @@ void CompositeElement::refreshChildStackingOrder()
    */
   for (QWidget *widget : staticWidgets) {
     if (widget) {
+      widget->raise();
+    }
+  }
+  /* Raising a static child on the split-off layer lifts it above the
+   * stipples of hidden buttons there, which MEDM draws in display order with
+   * the static graphics. Restore that order on the layer. */
+  for (const auto &pointer : staticLayerOrder_) {
+    QWidget *widget = pointer.data();
+    if (widget && staticChildLayer_
+        && widget->parentWidget() == staticChildLayer_.data()) {
       widget->raise();
     }
   }

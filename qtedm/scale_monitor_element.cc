@@ -66,9 +66,11 @@ ScaleMonitorElement::ScaleMonitorElement(QWidget *parent)
 {
   setAttribute(Qt::WA_OpaquePaintEvent, true);
   setAutoFillBackground(false);
-  limits_.lowSource = PvLimitSource::kDefault;
-  limits_.highSource = PvLimitSource::kDefault;
-  limits_.precisionSource = PvLimitSource::kDefault;
+  /* As MEDM's limitsAttributeInit(), a new scale monitor takes its limits
+   * and precision from the channel. */
+  limits_.lowSource = PvLimitSource::kChannel;
+  limits_.highSource = PvLimitSource::kChannel;
+  limits_.precisionSource = PvLimitSource::kChannel;
   limits_.lowDefault = 0.0;
   limits_.highDefault = 1.0;  /* MEDM's HOPR_DEFAULT */
   limits_.precisionDefault = 1;

@@ -196,6 +196,7 @@ private slots:
   void sliderTrackEnclosesHandle();
   void shortSliderDrawsAndDrags_data();
   void shortSliderDrawsAndDrags();
+  void newValuatorsTakeChannelLimits();
   void sliderTroughClicks_data();
   void sliderTroughClicks();
   void sliderThumbClickDoesNotStep_data();
@@ -3372,6 +3373,53 @@ void TestObserveOnlyControls::shortSliderDrawsAndDrags()
   QTest::mouseRelease(&slider, Qt::LeftButton, Qt::NoModifier, end);
   QVERIFY2(!writes.isEmpty(), "Dragging a short slider's thumb must write");
   QVERIFY(writes.last() > 5.0);
+}
+
+/* As MEDM's limitsAttributeInit(), a slider, wheel switch, or scale monitor
+ * created in the editor takes its limits and precision from the channel,
+ * so it is saved without default sources and reopens the same way. */
+void TestObserveOnlyControls::newValuatorsTakeChannelLimits()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  window.createSliderElement(QRect(10, 10, 120, 30));
+  window.createWheelSwitchElement(QRect(10, 50, 120, 40));
+  window.createScaleMonitorElement(QRect(10, 100, 120, 40));
+  QCOMPARE(window.sliderElements_.size(), 1);
+  QCOMPARE(window.wheelSwitchElements_.size(), 1);
+  QCOMPARE(window.scaleMonitorElements_.size(), 1);
+  const auto channelSources = [](const PvLimits &limits) {
+    return limits.lowSource == PvLimitSource::kChannel
+        && limits.highSource == PvLimitSource::kChannel
+        && limits.precisionSource == PvLimitSource::kChannel;
+  };
+  QVERIFY(channelSources(window.sliderElements_.first()->limits()));
+  QVERIFY(channelSources(window.wheelSwitchElements_.first()->limits()));
+  QVERIFY(channelSources(window.scaleMonitorElements_.first()->limits()));
+
+  const QString path = directory.filePath(QStringLiteral("new.adl"));
+  QVERIFY(window.writeAdlFile(path));
+  QFile saved(path);
+  QVERIFY(saved.open(QIODevice::ReadOnly | QIODevice::Text));
+  const QByteArray contents = saved.readAll();
+  QVERIFY2(!contents.contains("Src="), contents.constData());
+
+  DisplayWindow reopened(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  reopened.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(reopened.loadFromFile(path, &error), qPrintable(error));
+  QCOMPARE(reopened.sliderElements_.size(), 1);
+  QVERIFY(channelSources(reopened.sliderElements_.first()->limits()));
+  QVERIFY(channelSources(reopened.wheelSwitchElements_.first()->limits()));
+  QVERIFY(channelSources(reopened.scaleMonitorElements_.first()->limits()));
 }
 
 void TestObserveOnlyControls::sliderTroughClicks_data()

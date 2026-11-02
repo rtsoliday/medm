@@ -363,9 +363,11 @@ WheelSwitchElement::WheelSwitchElement(QWidget *parent)
   setFocusPolicy(Qt::StrongFocus);
   setMouseTracking(true);
 
-  limits_.lowSource = PvLimitSource::kDefault;
-  limits_.highSource = PvLimitSource::kDefault;
-  limits_.precisionSource = PvLimitSource::kDefault;
+  /* As MEDM's limitsAttributeInit(), a new wheel switch takes its limits
+   * and precision from the channel. */
+  limits_.lowSource = PvLimitSource::kChannel;
+  limits_.highSource = PvLimitSource::kChannel;
+  limits_.precisionSource = PvLimitSource::kChannel;
   limits_.lowDefault = 0.0;
 
   limits_.highDefault = 1.0;  /* MEDM's HOPR_DEFAULT */

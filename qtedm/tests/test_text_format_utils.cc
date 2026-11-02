@@ -61,7 +61,9 @@ void TestTextFormatUtils::formatsSexagesimalAndIntegers()
 {
   QCOMPARE(TextFormatUtils::makeSexagesimal(12.5, 2),
       QStringLiteral("12:30"));
-  QCOMPARE(TextFormatUtils::formatHex(-255), QStringLiteral("-0xff"));
+  QCOMPARE(TextFormatUtils::formatHex(255), QStringLiteral("0xff"));
+  QCOMPARE(TextFormatUtils::formatHex(-2), QStringLiteral("0xfffffffe"));
+  QCOMPARE(TextFormatUtils::formatHex(-255), QStringLiteral("0xffffff01"));
   QCOMPARE(TextFormatUtils::formatOctal(493), QStringLiteral("755"));
 }
 
@@ -72,8 +74,9 @@ void TestTextFormatUtils::formatsMinimumSignedInteger()
   magnitude = 0UL - magnitude;
 
   QCOMPARE(TextFormatUtils::formatHex(minimum),
-      QStringLiteral("-0x")
-          + QString::number(static_cast<qulonglong>(magnitude), 16));
+      QStringLiteral("0x")
+          + QString::number(static_cast<qulonglong>(
+              static_cast<unsigned long>(minimum) & 0xffffffffUL), 16));
   QCOMPARE(TextFormatUtils::formatOctal(minimum),
       QStringLiteral("-")
           + QString::number(static_cast<qulonglong>(magnitude), 8));

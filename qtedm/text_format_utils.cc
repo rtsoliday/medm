@@ -174,10 +174,16 @@ QString makeSexagesimal(double value, unsigned short precision)
   return body;
 }
 
+/* As MEDM's localCvtLongToHexString(), a negative value shows as its
+ * low 32 bits in two's complement, so -2 is 0xfffffffe, not -0x2. */
 QString formatHex(long value)
 {
   char buffer[kMaxTextField];
-  if (value == 0) {
+  unsigned long bits = static_cast<unsigned long>(value);
+  if (value < 0) {
+    bits &= 0xffffffffUL;
+  }
+  if (bits == 0) {
     buffer[0] = '0';
     buffer[1] = 'x';
     buffer[2] = '0';
@@ -185,24 +191,16 @@ QString formatHex(long value)
     return QString::fromLatin1(buffer);
   }
 
-  const bool negative = value < 0;
-  unsigned long magnitude = static_cast<unsigned long>(value);
-  if (negative) {
-    magnitude = 0UL - magnitude;
-  }
   char digits[sizeof(long) * 2 + 1];
   int index = 0;
-  while (magnitude != 0 && index < static_cast<int>(sizeof(digits))) {
-    unsigned long temp = magnitude / 16;
-    unsigned long digit = magnitude - temp * 16;
+  while (bits != 0 && index < static_cast<int>(sizeof(digits))) {
+    unsigned long temp = bits / 16;
+    unsigned long digit = bits - temp * 16;
     digits[index++] = static_cast<char>((digit < 10)
         ? ('0' + digit) : ('a' + digit - 10));
-    magnitude = temp;
+    bits = temp;
   }
   int pos = 0;
-  if (negative) {
-    buffer[pos++] = '-';
-  }
   buffer[pos++] = '0';
   buffer[pos++] = 'x';
   for (int i = index - 1; i >= 0; --i) {

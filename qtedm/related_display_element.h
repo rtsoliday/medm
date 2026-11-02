@@ -75,6 +75,7 @@ private:
   QColor effectiveBackground() const;
   QVector<int> buttonEntryIndices() const;
   int activeEntryCount() const;
+  bool showsButtonGrid() const;
   bool entryVisibleInMenu(int index) const;
   void paintMenuVisual(QPainter &painter, const QRect &content) const;
   void paintButtonVisual(QPainter &painter, const QRect &content,

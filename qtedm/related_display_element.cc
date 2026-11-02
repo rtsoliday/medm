@@ -381,12 +381,7 @@ void RelatedDisplayElement::paintEvent(QPaintEvent *event)
   }
 
   painter.fillRect(canvas, effectiveBackground());
-  /* MEDM makes a push button of any visual with at most one labeled
-   * entry, so only several entries appear as buttons. */
-  const bool buttons = activeEntryCount() > 1
-      && (visual_ == RelatedDisplayVisual::kRowOfButtons
-          || visual_ == RelatedDisplayVisual::kColumnOfButtons);
-  if (buttons) {
+  if (showsButtonGrid()) {
     /* Match MEDM sizing for button visuals. */
     paintButtonVisual(painter, canvas,
         visual_ == RelatedDisplayVisual::kColumnOfButtons);
@@ -428,6 +423,15 @@ int RelatedDisplayElement::activeEntryCount() const
   /* Match MEDM behavior: only count entries with non-empty labels.
    * Entries with just a name but no label are not shown as buttons. */
   return buttonEntryIndices().size();
+}
+
+/* MEDM makes a push button of any visual with at most one labeled entry,
+ * so only several entries appear, and are clicked, as buttons. */
+bool RelatedDisplayElement::showsButtonGrid() const
+{
+  return activeEntryCount() > 1
+      && (visual_ == RelatedDisplayVisual::kRowOfButtons
+          || visual_ == RelatedDisplayVisual::kColumnOfButtons);
 }
 
 bool RelatedDisplayElement::entryVisibleInMenu(int index) const
@@ -642,13 +646,14 @@ void RelatedDisplayElement::mousePressEvent(QMouseEvent *event)
     return;
   }
 
-  if (visual_ == RelatedDisplayVisual::kRowOfButtons
-      || visual_ == RelatedDisplayVisual::kColumnOfButtons) {
+  if (showsButtonGrid()) {
     pressedEntryIndex_ = buttonEntryIndexAt(event->pos());
     event->accept();
     return;
   }
 
+  /* A hidden button, or MEDM's push button for a row or column with at
+   * most one labeled entry, opens the first entry with a name. */
   pressedEntryIndex_ = firstUsableEntryIndex();
   event->accept();
 }
@@ -665,13 +670,12 @@ void RelatedDisplayElement::mouseReleaseEvent(QMouseEvent *event)
   }
 
   int targetIndex = -1;
-  if (visual_ == RelatedDisplayVisual::kRowOfButtons
-      || visual_ == RelatedDisplayVisual::kColumnOfButtons) {
+  if (showsButtonGrid()) {
     int hitIndex = buttonEntryIndexAt(event->pos());
     if (hitIndex >= 0 && hitIndex == pressedEntryIndex_) {
       targetIndex = hitIndex;
     }
-  } else if (visual_ == RelatedDisplayVisual::kHiddenButton) {
+  } else if (visual_ != RelatedDisplayVisual::kMenu) {
     const int candidate = firstUsableEntryIndex();
     if (candidate >= 0 && pressedEntryIndex_ == candidate
         && rect().contains(event->pos())) {

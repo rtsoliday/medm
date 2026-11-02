@@ -137,6 +137,8 @@ private slots:
   void relatedDisplayLabelPadding();
   void relatedDisplayLabelsClipToCells_data();
   void relatedDisplayLabelsClipToCells();
+  void relatedDisplayPushButtonOpensFirstNamedEntry_data();
+  void relatedDisplayPushButtonOpensFirstNamedEntry();
   void monitorGeometrySurvivesDeferredResize_data();
   void monitorGeometrySurvivesDeferredResize();
   void scaleMonitorValueBoxMatchesXcIndicator();
@@ -5935,6 +5937,44 @@ void TestObserveOnlyControls::relatedDisplayLabelsClipToCells()
                : cellSize.height() / 2);
   QTest::mouseClick(&element, Qt::LeftButton, Qt::NoModifier, lastCellCenter);
   QCOMPARE(activated, count - 1);
+}
+
+void TestObserveOnlyControls::relatedDisplayPushButtonOpensFirstNamedEntry_data()
+{
+  QTest::addColumn<bool>("vertical");
+  QTest::addColumn<bool>("labelSecond");
+  QTest::newRow("row-no-labels") << false << false;
+  QTest::newRow("column-no-labels") << true << false;
+  QTest::newRow("row-second-labeled") << false << true;
+  QTest::newRow("column-second-labeled") << true << true;
+}
+
+/* As in MEDM's executeDlRelatedDisplay(), a row or column of
+ * buttons with at most one labeled entry is one push button that opens
+ * the first entry with a name, wherever it is clicked. */
+void TestObserveOnlyControls::relatedDisplayPushButtonOpensFirstNamedEntry()
+{
+  QFETCH(bool, vertical);
+  QFETCH(bool, labelSecond);
+  RelatedDisplayElement element;
+  element.setVisual(vertical ? RelatedDisplayVisual::kColumnOfButtons
+                             : RelatedDisplayVisual::kRowOfButtons);
+  element.resize(vertical ? QSize(80, 120) : QSize(160, 30));
+  element.setExecuteMode(true);
+  element.setEntryName(0, QStringLiteral("first.adl"));
+  element.setEntryName(1, QStringLiteral("second.adl"));
+  if (labelSecond) {
+    element.setEntryLabel(1, QStringLiteral("Second"));
+  }
+  QList<int> activated;
+  element.setActivationCallback([&](int index, Qt::KeyboardModifiers) {
+    activated.append(index);
+  });
+  for (const QPoint &point : {QPoint(5, 5),
+           QPoint(element.width() - 5, element.height() - 5)}) {
+    QTest::mouseClick(&element, Qt::LeftButton, Qt::NoModifier, point);
+  }
+  QCOMPARE(activated, (QList<int>{0, 0}));
 }
 
 void TestObserveOnlyControls::relatedDisplayLabelPadding()

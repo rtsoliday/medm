@@ -2,6 +2,7 @@
 
 #include "medm_colors.h"
 #include "text_font_utils.h"
+#include "text_format_utils.h"
 #include "pv_name_utils.h"
 #include "medm_widget_state.h"
 
@@ -18,6 +19,8 @@
 #include <QPaintEvent>
 #include <QPalette>
 #include <QPen>
+
+using TextFormatUtils::xcFloatText;
 
 namespace {
 
@@ -433,29 +436,6 @@ void drawXcRect3d(QPainter &painter, const QRect &rect, int depth,
     painter.fillRect(x + depth, y + depth, width - 2 * depth,
         height - 2 * depth, background);
   }
-}
-
-/* cvtFloatToString (EPICS cvtFast.c), which Xc uses to print the limits
- * and the value of a float bar. */
-QString xcFloatText(double value, int precision)
-{
-  const float number = static_cast<float>(value);
-  char text[64];
-  if (std::isnan(number) || precision > 8 || number > 10000000.0f
-      || number < -10000000.0f) {
-    if (precision > 8 || number >= 1e8f || number <= -1e8f) {
-      precision = std::min(precision, 12);
-      std::snprintf(text, sizeof(text), "%*.*e", precision + 6, precision,
-          static_cast<double>(number));
-    } else {
-      std::snprintf(text, sizeof(text), "%.*f", std::min(precision, 3),
-          static_cast<double>(number));
-    }
-  } else {
-    std::snprintf(text, sizeof(text), "%.*f", precision,
-        static_cast<double>(number));
-  }
-  return QString::fromLatin1(text);
 }
 
 } // namespace

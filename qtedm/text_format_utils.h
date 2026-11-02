@@ -20,6 +20,10 @@ int clampPrecision(int precision);
 /* Format a non-finite value without passing it through integer conversions. */
 QString formatNonFinite(double value);
 
+/* cvtFloatToString (EPICS cvtFast.c), which Xc uses to print the limits
+ * and the value of a float bar or indicator. */
+QString xcFloatText(double value, int precision);
+
 /* Convert a double to long without undefined behavior outside long's range. */
 long saturatedLongFromDouble(double value, bool roundToNearest = false);
 

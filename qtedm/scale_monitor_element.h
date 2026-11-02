@@ -79,14 +79,11 @@ private:
   bool isVertical() const;
   void paintSelectionOverlay(QPainter &painter) const;
   double sampleValue() const;
-  QString formattedSampleValue() const;
   double effectiveLowLimit() const;
   double effectiveHighLimit() const;
   int effectivePrecision() const;
   double currentValue() const;
   double defaultSampleValue() const;
-  QString formatValue(double value, char format = 'f', int precision = -1) const;
-  QString axisLabelText(double value) const;
   double clampToLimits(double value) const;
   double valueEpsilon() const;
 

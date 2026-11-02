@@ -10,10 +10,15 @@
 #include <QPaintEvent>
 #include <QPalette>
 #include <QPen>
+#include <QPolygonF>
 
 #include "medm_colors.h"
 #include "pv_name_utils.h"
 #include "medm_widget_state.h"
+#include "text_font_utils.h"
+#include "text_format_utils.h"
+
+using TextFormatUtils::xcFloatText;
 
 namespace {
 
@@ -429,48 +434,7 @@ void ScaleMonitorElement::paintEvent(QPaintEvent *event)
     return;
   }
 
-  const QFont baseFont = painter.font();
-
-  // Font setup for scale labels - match MEDM's algorithm (same as Bar widget):
-  // 1. preferredHeight = widget_height / INDICATOR_FONT_DIVISOR (8)
-  // 2. Find closest match from MEDM's fixed font table using binary search
-  // MEDM's fontSizeTable from siteSpecific.h:
-  static constexpr int kFontSizeTable[] = {
-    4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34
-  };
-  static constexpr int kNumFonts = sizeof(kFontSizeTable) / sizeof(kFontSizeTable[0]);
-
-  const qreal widgetHeight = rect().height();
-  constexpr qreal kIndicatorFontDivisor = 8.0;
-  const int preferredPixelHeight = static_cast<int>(
-      std::max(1.0, widgetHeight / kIndicatorFontDivisor));
-
-  // Binary search to find best font (matches dmGetBestFontWithInfo)
-  int upper = kNumFonts - 1;
-  int lower = 0;
-  int i = kNumFonts / 2;
-  int count = 0;
-
-  while ((i > 0) && (i < kNumFonts) && ((upper - lower) > 2) && (count < kNumFonts / 2)) {
-    count++;
-    if (kFontSizeTable[i] > preferredPixelHeight) {
-      upper = i;
-      i = upper - (upper - lower) / 2;
-    } else if (kFontSizeTable[i] < preferredPixelHeight) {
-      lower = i;
-      i = lower + (upper - lower) / 2;
-    } else {
-      break;  // exact match
-    }
-  }
-
-  if (i < 0) i = 0;
-  if (i >= kNumFonts) i = kNumFonts - 1;
-
-  const int chosenPixelSize = kFontSizeTable[i];
-
-  QFont labelFont = baseFont;
-  labelFont.setPixelSize(chosenPixelSize);
+  const QFont labelFont = medmIndicatorFont(height());
   painter.setFont(labelFont);
 
   paintXcIndicator(painter, QFontMetrics(labelFont));
@@ -504,8 +468,9 @@ void ScaleMonitorElement::paintXcIndicator(QPainter &painter,
   const int fontHeight = ascent;
 
   const QRect face(d, d, width - 2 * d, height - 2 * d);
-  const QString upperText = formatValue(effectiveHighLimit());
-  const QString lowerText = formatValue(effectiveLowLimit());
+  const int precision = effectivePrecision();
+  const QString upperText = xcFloatText(effectiveHighLimit(), precision);
+  const QString lowerText = xcFloatText(effectiveLowLimit(), precision);
   const int maxValWidth = metrics.horizontalAdvance(upperText);
   const int minValWidth = metrics.horizontalAdvance(lowerText);
   int maxWidth = std::max(minValWidth, maxValWidth) + 2 * d;
@@ -571,7 +536,8 @@ void ScaleMonitorElement::paintXcIndicator(QPainter &painter,
 
   drawXcRect3d(painter, 0, 0, width, height, true, shade1, shade2, bg);
 
-  /* Xc draws the label, scale and bar border clipped to the face. */
+  /* Xc draws the label, scale, bar border and value box border clipped to
+   * the face. */
   painter.save();
   painter.setClipRect(face);
   painter.setPen(Qt::black);
@@ -613,6 +579,11 @@ void ScaleMonitorElement::paintXcIndicator(QPainter &painter,
   }
   drawXcRect3d(painter, barX - d, barY - d, barWidth + 2 * d,
       barHeight + 2 * d, false, shade1, shade2, bg);
+  if (valueVisible) {
+    drawXcRect3d(painter, valueBox.x() - d, valueBox.y() - d,
+        valueBox.width() + 2 * d, valueBox.height() + 2 * d, false, shade1,
+        shade2, bg);
+  }
   painter.restore();
 
   /* Draw_display: the bar background, then the diamond at the value. */
@@ -647,12 +618,20 @@ void ScaleMonitorElement::paintXcIndicator(QPainter &painter,
   painter.setClipRect(bar);
   painter.setPen(Qt::NoPen);
   painter.setBrush(effectiveForeground());
-  painter.drawPolygon(points, 4);
+  /* XFillPolygon samples pixels at integer coordinates, Qt at pixel
+   * centers. */
+  QPolygonF diamond;
+  for (const QPoint &point : points) {
+    diamond << QPointF(point) + QPointF(0.5, 0.5);
+  }
+  painter.drawPolygon(diamond);
   painter.restore();
 
   if (valueVisible) {
     painter.fillRect(valueBox, Qt::white);
-    const QString text = formattedSampleValue();
+    /* Xc prints the value itself; only the diamond stops at the limits. */
+    const QString text = executeMode_ && !hasRuntimeValue_
+        ? QStringLiteral("--") : xcFloatText(currentValue(), precision);
     painter.save();
     painter.setClipRect(valueBox);
     painter.setPen(Qt::black);
@@ -668,16 +647,6 @@ void ScaleMonitorElement::paintXcIndicator(QPainter &painter,
 double ScaleMonitorElement::sampleValue() const
 {
   return clampToLimits(currentValue());
-}
-
-QString ScaleMonitorElement::formattedSampleValue() const
-{
-  if (executeMode_) {
-    if (!runtimeConnected_ || !hasRuntimeValue_) {
-      return QStringLiteral("--");
-    }
-  }
-  return formatValue(sampleValue());
 }
 
 QColor ScaleMonitorElement::effectiveForeground() const
@@ -795,25 +764,6 @@ double ScaleMonitorElement::defaultSampleValue() const
   }
   const double normalized = std::clamp(kSampleNormalizedValue, 0.0, 1.0);
   return low + span * normalized;
-}
-
-QString ScaleMonitorElement::formatValue(double value, char format, int precision) const
-{
-  if (!std::isfinite(value)) {
-    return QStringLiteral("--");
-  }
-  int digits = precision;
-  if (digits < 0) {
-    digits = effectivePrecision();
-  } else {
-    digits = std::clamp(digits, 0, 17);
-  }
-  return QString::number(value, format, digits);
-}
-
-QString ScaleMonitorElement::axisLabelText(double value) const
-{
-  return formatValue(value, 'f', -1);
 }
 
 double ScaleMonitorElement::clampToLimits(double value) const

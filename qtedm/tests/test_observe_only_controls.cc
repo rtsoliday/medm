@@ -67,6 +67,7 @@
 #include "pv_table_element.h"
 #include "rectangle_element.h"
 #include "related_display_element.h"
+#include "scale_monitor_element.h"
 #include "setpoint_control_element.h"
 #include "setpoint_control_runtime.h"
 #include "shell_command_element.h"
@@ -77,6 +78,7 @@
 #include "tabbed_display_element.h"
 #include "text_element.h"
 #include "text_area_element.h"
+#include "text_font_utils.h"
 #include "text_monitor_element.h"
 #include "wave_table_element.h"
 #include "wave_table_runtime.h"
@@ -134,6 +136,7 @@ private slots:
   void relatedDisplayLabelsClipToCells();
   void monitorGeometrySurvivesDeferredResize_data();
   void monitorGeometrySurvivesDeferredResize();
+  void scaleMonitorValueBoxMatchesXcIndicator();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -5461,6 +5464,74 @@ void TestObserveOnlyControls::monitorGeometrySurvivesDeferredResize()
     BarMonitorElement element(&parent);
     check(element);
   }
+}
+
+/* Xc's Indicator (xc/Indicator.c) frames the value box with a depressed
+ * Rect3d and prints the channel's value in it, while only the diamond
+ * stops at the limits. */
+void TestObserveOnlyControls::scaleMonitorValueBoxMatchesXcIndicator()
+{
+  QWidget parent;
+  ScaleMonitorElement element(&parent);
+  const QColor background(200, 200, 200);
+  element.resize(160, 40);
+  element.setLabel(MeterLabel::kLimits);
+  element.setDirection(BarDirection::kRight);
+  element.setForegroundColor(Qt::black);
+  element.setBackgroundColor(background);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = 10.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 1;
+  element.setLimits(limits);
+  element.setExecuteMode(true);
+  element.setRuntimeConnected(true);
+  const auto render = [&element](double value) {
+    element.setRuntimeValue(value);
+    QImage image(element.size(), QImage::Format_RGB32);
+    element.render(&image);
+    return image;
+  };
+  const QImage atLimit = render(10.0);
+  const QImage beyondLimit = render(25.0);
+
+  /* Value box geometry from Resize in xc/Indicator.c. */
+  const QFontMetrics metrics(medmIndicatorFont(element.height()));
+  const int depth = 2;
+  const int maxWidth = std::max(
+      metrics.horizontalAdvance(QStringLiteral("10.0")),
+      metrics.horizontalAdvance(QStringLiteral("0.0"))) + 2 * depth;
+  const QRect valueBox(element.width() / 2 - maxWidth / 2,
+      element.height() - metrics.ascent() - 2 * depth - 2, maxWidth,
+      metrics.ascent());
+
+  bool textDiffers = false;
+  for (int y = 0; y < atLimit.height(); ++y) {
+    for (int x = 0; x < atLimit.width(); ++x) {
+      if (atLimit.pixel(x, y) != beyondLimit.pixel(x, y)) {
+        QVERIFY2(valueBox.contains(x, y),
+            qPrintable(QStringLiteral("pixel %1,%2").arg(x).arg(y)));
+        textDiffers = true;
+      }
+    }
+  }
+  QVERIFY(textDiffers);
+
+  QColor topShadow;
+  QColor bottomShadow;
+  MedmColors::computeShadowColors(background, topShadow, bottomShadow);
+  const int middle = valueBox.center().y();
+  QCOMPARE(QColor(beyondLimit.pixel(valueBox.left() - 1, middle)),
+      bottomShadow);
+  QCOMPARE(QColor(beyondLimit.pixel(valueBox.left() - 2, middle)),
+      bottomShadow);
+  QCOMPARE(QColor(beyondLimit.pixel(valueBox.right() + 1, middle)),
+      topShadow);
+  QCOMPARE(QColor(beyondLimit.pixel(valueBox.right() + 2, middle)),
+      topShadow);
 }
 
 void TestObserveOnlyControls::relatedDisplayLabelsClipToCells_data()

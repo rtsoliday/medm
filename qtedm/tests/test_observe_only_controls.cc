@@ -44,6 +44,7 @@
 #include "cartesian_plot_runtime.h"
 #include "cartesian_plot_element.h"
 #include "choice_button_element.h"
+#include "choice_button_runtime.h"
 #include "display_state.h"
 #include "display_window.h"
 #include "expression_channel_element.h"
@@ -143,6 +144,7 @@ private slots:
   void compositeShowsImageChildWithDynamicVisibility();
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void barValueBoxShowsNoValueBeforeFirstValue();
+  void choiceButtonDoesNotWriteChannelThatIsNotEnum();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -5649,6 +5651,34 @@ void TestObserveOnlyControls::barValueBoxShowsNoValueBeforeFirstValue()
   element.setRuntimeValue(6.5);
   const QImage sampleValue = render();
   QVERIFY(withoutValue != sampleValue);
+}
+
+/* A channel that reconnects as a type other than enum keeps the buttons of
+ * its earlier connection; as in MEDM, which creates none, they must not
+ * write the button index to it. */
+void TestObserveOnlyControls::choiceButtonDoesNotWriteChannelThatIsNotEnum()
+{
+  auto &soft = SoftPvRegistry::instance();
+  const QString name = QStringLiteral("__test:choice_not_enum");
+  soft.registerName(name, true);
+  soft.setConnected(name, true);
+  registeredNames_.append(name);
+  soft.publishValue(name, 5.0);
+
+  ChoiceButtonElement element;
+  element.setChannel(name);
+  ChoiceButtonRuntime runtime(&element);
+  runtime.channelName_ = name;
+  runtime.started_ = true;
+  runtime.connected_ = true;
+  runtime.lastWriteAccess_ = true;
+  runtime.notEnum_ = true;
+  runtime.handleActivation(1);
+
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 5.0);
+  runtime.started_ = false;
 }
 
 void TestObserveOnlyControls::scaleMonitorValueBoxMatchesXcIndicator()

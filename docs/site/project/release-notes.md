@@ -20,6 +20,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - **Limits as in MEDM.** An upper limit that comes from its default, with no value given, is MEDM's 1 instead of 100 for bars, sliders, scale monitors, strip chart pens, wheel switches, and thermometers. A slider, wheel switch, scale monitor, or strip chart pen without a `limits` block, as in displays older than MEDM 2.2 or written by other tools, takes its limits from the channel, as MEDM does, instead of a fixed range that also bounded the values a slider or wheel switch writes.
 - **Negative hexadecimal values** show as their low 32 bits, as in MEDM, so -2 shows as `0xfffffffe` instead of `-0x2`. Entering such text in a hexadecimal text entry, text area, or setpoint control writes the negative value to a short or long channel.
 - **Choice buttons clip long labels** to the button instead of drawing past its edge.
+- **Choice buttons need an enum channel.** As in MEDM, a choice button whose channel is not an enum draws no buttons, writes nothing, and reports that the channel is not an ENUM type. QtEDM 1.0.0 drew "0" and "1" buttons for such a channel.
 - **Resource Palette** sizes itself to the screen, keeps the size you choose, and aligns its columns.
 - **Saved numbers** use the shortest exact form where fixed notation would lose precision.
 - **Symbol state colors** can be edited with an alpha channel in the editor. Saving stores the nearest palette color.

@@ -18,6 +18,7 @@ class DisplayWindow;
 class ChoiceButtonRuntime : public QObject
 {
   friend class DisplayWindow;
+  friend class TestObserveOnlyControls;
 public:
   explicit ChoiceButtonRuntime(ChoiceButtonElement *element);
   ~ChoiceButtonRuntime() override;

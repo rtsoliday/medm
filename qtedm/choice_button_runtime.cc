@@ -275,7 +275,9 @@ void ChoiceButtonRuntime::handleAccessRights(bool canRead, bool canWrite)
 
 void ChoiceButtonRuntime::handleActivation(int value)
 {
-  if (!started_ || !connected_ || !lastWriteAccess_) {
+  /* MEDM creates no buttons for a channel that is not an enum, so none can
+   * write the index of a button left from an earlier connection. */
+  if (!started_ || !connected_ || !lastWriteAccess_ || notEnum_) {
     return;
   }
   if (value < 0) {

@@ -19,6 +19,7 @@
 #include <QSignalBlocker>
 
 #include "legacy_fonts.h"
+#include "medm_colors.h"
 #include "cursor_utils.h"
 #include "pv_name_utils.h"
 #include "window_utils.h"
@@ -27,7 +28,6 @@
 namespace {
 
 constexpr int kSampleButtonCount = 2;
-constexpr int kButtonMargin = 0;
 constexpr int kChoiceButtonShadow = 4;
 
 const std::array<QString, 16> &choiceButtonFontAliases()
@@ -128,6 +128,46 @@ int indexForGridCell(int row, int column, int rows, int columns, int itemCount,
   return index < itemCount ? index : -1;
 }
 
+/* The grid of MEDM's createToggleButtons(): each button is height/n high
+ * (row), width/n wide (column), or width/k by height/k with k =
+ * max(2, ceil(sqrt(n))) columns (row column). The radio box packs them
+ * without spacing and leaves any remainder empty at the bottom and right. */
+struct ChoiceButtonGrid
+{
+  int rows = 1;
+  int columns = 1;
+  QSize cell;
+};
+
+ChoiceButtonGrid choiceButtonGrid(const QSize &size, int buttonCount,
+    ChoiceButtonStacking stacking)
+{
+  const int count = std::max(1, buttonCount);
+  ChoiceButtonGrid grid;
+  switch (stacking) {
+  case ChoiceButtonStacking::kRow:
+    grid.rows = count;
+    grid.columns = 1;
+    grid.cell = QSize(size.width(), size.height() / count);
+    break;
+  case ChoiceButtonStacking::kRowColumn: {
+    const int side = std::max(2,
+        static_cast<int>(std::ceil(std::sqrt(static_cast<double>(count)))));
+    grid.columns = side;
+    grid.rows = (count + side - 1) / side;
+    grid.cell = QSize(size.width() / side, size.height() / side);
+    break;
+  }
+  case ChoiceButtonStacking::kColumn:
+  default:
+    grid.rows = 1;
+    grid.columns = count;
+    grid.cell = QSize(size.width() / count, size.height());
+    break;
+  }
+  return grid;
+}
+
 QFont shrinkFontToFit(const QString &text, const QRect &bounds, QFont font)
 {
   // The fallback widget font may be sized in pixels or points.
@@ -190,16 +230,6 @@ QColor alarmColorForSeverity(short severity)
   }
 }
 
-QColor lightenForBevel(const QColor &base, double factor)
-{
-  return blendedColor(base, QColor(Qt::white), factor);
-}
-
-QColor darkenForBevel(const QColor &base, double factor)
-{
-  return blendedColor(base, QColor(Qt::black), factor);
-}
-
 void paintChoiceButton(QPainter &painter, const QRect &bounds, bool checked,
     bool enabled, const QColor &textColor, const QColor &backgroundColor,
     const QString &text, const QFont &font)
@@ -216,48 +246,28 @@ void paintChoiceButton(QPainter &painter, const QRect &bounds, bool checked,
   painter.setBrush(face);
   painter.fillRect(bounds, face);
 
-  //QRect outer = bounds.adjusted(0, 0, -1, -1);
-  QRect outer = bounds.adjusted(0, 0, 0, 0);
-  if (!outer.isValid()) {
-    outer = bounds;
+  /* MEDM's toggle buttons have a 2-pixel Motif shadow in the colors
+   * XmGetColors() derives from the background, reversed while set, drawn
+   * as XmeDrawShadows() does with mitred corners. */
+  QColor topShadow;
+  QColor bottomShadow;
+  MedmColors::computeShadowColors(face, topShadow, bottomShadow);
+  const QColor topLeft = checked ? bottomShadow : topShadow;
+  const QColor bottomRight = checked ? topShadow : bottomShadow;
+  const int x = bounds.x();
+  const int y = bounds.y();
+  const int w = bounds.width();
+  const int h = bounds.height();
+  const int shadow = std::min(kChoiceButtonShadow / 2, std::min(w, h) / 2);
+  for (int i = 0; i < shadow; ++i) {
+    painter.fillRect(x, y + i, w - i, 1, topLeft);
+    painter.fillRect(x + i, y, 1, h - i, topLeft);
+    painter.fillRect(x + i + 1, y + h - i - 1, w - i - 1, 1, bottomRight);
+    painter.fillRect(x + w - i - 1, y + i + 1, 1, h - i - 1, bottomRight);
   }
 
-  const QRect inner = outer.adjusted(1, 1, -1, -1);
-  //const QRect inner = outer.adjusted(0, 0, 0, 0);
-
-  const QColor highlightOuter = lightenForBevel(face, 0.6);
-  const QColor highlightInner = lightenForBevel(face, 0.35);
-  const QColor shadowOuter = darkenForBevel(face, 0.55);
-  const QColor shadowInner = darkenForBevel(face, 0.3);
-
-  const QColor topOuter = checked ? shadowOuter : highlightOuter;
-  const QColor topInner = checked ? shadowInner : highlightInner;
-  const QColor bottomOuter = checked ? highlightOuter : shadowOuter;
-  const QColor bottomInner = checked ? highlightInner : shadowInner;
-
-  painter.setBrush(Qt::NoBrush);
-
-  if (outer.isValid()) {
-    painter.setPen(topOuter);
-    painter.drawLine(outer.topLeft(), outer.topRight());
-    painter.drawLine(outer.topLeft(), outer.bottomLeft());
-
-    painter.setPen(bottomOuter);
-    painter.drawLine(outer.bottomLeft(), outer.bottomRight());
-    painter.drawLine(outer.topRight(), outer.bottomRight());
-  }
-
-  if (inner.isValid()) {
-    painter.setPen(topInner);
-    painter.drawLine(inner.topLeft(), inner.topRight());
-    painter.drawLine(inner.topLeft(), inner.bottomLeft());
-
-    painter.setPen(bottomInner);
-    painter.drawLine(inner.bottomLeft(), inner.bottomRight());
-    painter.drawLine(inner.topRight(), inner.bottomRight());
-  }
-
-  QRect textArea = bounds.adjusted(3, 2, -3, -2);
+  /* The label is centered in the button and clipped only by its shadow. */
+  QRect textArea = bounds.adjusted(shadow, shadow, -shadow, -shadow);
   if (!textArea.isValid()) {
     textArea = bounds;
   }
@@ -270,7 +280,14 @@ void paintChoiceButton(QPainter &painter, const QRect &bounds, bool checked,
   }
   painter.setPen(penColor);
   painter.setClipRect(textArea, Qt::IntersectClip);
-  painter.drawText(textArea, Qt::AlignCenter, text);
+  /* Motif centers the label within its 2-pixel margins with integer
+   * division, which moves a label wider than that area half a pixel right
+   * of exact centering. */
+  const int margin = shadow + 2;
+  const int textWidth = QFontMetrics(font).horizontalAdvance(text);
+  const int textX = x + margin + (w - 2 * margin - textWidth) / 2;
+  painter.drawText(QRect(textX, textArea.y(), textWidth, textArea.height()),
+      Qt::AlignLeft | Qt::AlignVCenter | Qt::TextDontClip, text);
   painter.restore();
 }
 
@@ -678,90 +695,34 @@ void ChoiceButtonElement::paintEvent(QPaintEvent *event)
       || (buttons_.isEmpty() && shouldShowRuntimeButtons());
   
   if (shouldShowButtons && (!executeMode_ || buttons_.isEmpty())) {
-    int rows = 1;
-    int columns = kSampleButtonCount;
-    switch (stacking_) {
-    case ChoiceButtonStacking::kRow:
-      rows = kSampleButtonCount;
-      columns = 1;
-      break;
-    case ChoiceButtonStacking::kRowColumn: {
-      const int base = static_cast<int>(std::ceil(std::sqrt(kSampleButtonCount)));
-      columns = std::max(1, base);
-      rows = static_cast<int>(std::ceil(static_cast<double>(kSampleButtonCount) / columns));
-      break;
-    }
-    case ChoiceButtonStacking::kColumn:
-    default:
-      rows = 1;
-      columns = kSampleButtonCount;
-      break;
-    }
-
-    rows = std::max(1, rows);
-    columns = std::max(1, columns);
-
-    const QRect content = canvas.adjusted(0, 0, 0, 0);
-    const int cellWidth = content.width() / columns;
-    const int cellHeight = content.height() / rows;
-    const int extraWidth = content.width() - cellWidth * columns;
-    const int extraHeight = content.height() - cellHeight * rows;
-
-    QColor foreground = effectiveForeground();
-    QColor background = effectiveBackground();
+    const ChoiceButtonGrid grid =
+        choiceButtonGrid(canvas.size(), kSampleButtonCount, stacking_);
+    const QColor foreground = effectiveForeground();
+    const QColor background = effectiveBackground();
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(Qt::NoBrush);
 
-    int drawnCount = 0;
-    int y = content.top();
-    bool done = false;
-    for (int row = 0; row < rows; ++row) {
-      int rowHeight = cellHeight;
-      if (row < extraHeight) {
-        rowHeight += 1;
-      }
-      int x = content.left();
-      for (int column = 0; column < columns; ++column) {
-        int columnWidth = cellWidth;
-        if (column < extraWidth) {
-          columnWidth += 1;
-        }
-        QRect buttonRect(x, y, columnWidth, rowHeight);
-        QRect interior = buttonRect.adjusted(kButtonMargin, kButtonMargin,
-            -kButtonMargin, -kButtonMargin);
-        if (interior.width() <= 0 || interior.height() <= 0) {
-          interior = buttonRect.adjusted(1, 1, -1, -1);
-        }
-
-        const int sampleIndex = indexForGridCell(row, column, rows, columns,
-            kSampleButtonCount, stacking_);
+    for (int row = 0; row < grid.rows; ++row) {
+      for (int column = 0; column < grid.columns; ++column) {
+        const int sampleIndex = indexForGridCell(row, column, grid.rows,
+            grid.columns, kSampleButtonCount, stacking_);
         if (sampleIndex < 0 || sampleIndex >= kSampleButtonCount) {
-          x += columnWidth;
           continue;
         }
-
-        QString label = QStringLiteral("%1...").arg(sampleIndex);
-        const QRect textBounds = interior.adjusted(3, 2, -3, -2);
+        const QRect buttonRect(canvas.left() + column * grid.cell.width(),
+            canvas.top() + row * grid.cell.height(), grid.cell.width(),
+            grid.cell.height());
+        const QString label = QStringLiteral("%1...").arg(sampleIndex);
+        const QRect textBounds = buttonRect.adjusted(2, 2, -2, -2);
         QFont labelFont = medmChoiceButtonFont(height(), kSampleButtonCount,
             stacking_, std::max(1, textBounds.height()));
         if (labelFont.family().isEmpty()) {
           labelFont = shrinkFontToFit(label, textBounds, font());
         }
-        paintChoiceButton(painter, interior,
+        paintChoiceButton(painter, buttonRect,
             sampleIndex == 0, true, foreground, background, label, labelFont);
-
-        x += columnWidth;
-        ++drawnCount;
-        if (drawnCount >= kSampleButtonCount) {
-          done = true;
-          break;
-        }
       }
-      if (done) {
-        break;
-      }
-      y += rowHeight;
     }
   }
 
@@ -874,78 +835,24 @@ void ChoiceButtonElement::layoutButtons()
   }
 
   const int buttonCount = buttons_.size();
-  int rows = 1;
-  int columns = buttonCount;
-  switch (stacking_) {
-  case ChoiceButtonStacking::kRow:
-    rows = buttonCount;
-    columns = 1;
-    break;
-  case ChoiceButtonStacking::kRowColumn: {
-    const int base = static_cast<int>(std::ceil(std::sqrt(buttonCount)));
-    columns = std::max(1, base);
-    rows = static_cast<int>(std::ceil(static_cast<double>(buttonCount) / columns));
-    break;
-  }
-  case ChoiceButtonStacking::kColumn:
-  default:
-    rows = 1;
-    columns = buttonCount;
-    break;
-  }
-
-  rows = std::max(1, rows);
-  columns = std::max(1, columns);
-
-  const QRect content = rect().adjusted(0, 0, 0, 0);
-  const int cellWidth = columns > 0 ? content.width() / columns : content.width();
-  const int cellHeight = rows > 0 ? content.height() / rows : content.height();
-  const int extraWidth = content.width() - cellWidth * columns;
-  const int extraHeight = content.height() - cellHeight * rows;
-
-  int positionedCount = 0;
-  bool done = false;
-  int y = content.top();
-  for (int row = 0; row < rows; ++row) {
-    int rowHeight = cellHeight;
-    if (row < extraHeight) {
-      rowHeight += 1;
-    }
-    int x = content.left();
-    for (int column = 0; column < columns; ++column) {
-      int columnWidth = cellWidth;
-      if (column < extraWidth) {
-        columnWidth += 1;
+  const QRect content = rect();
+  const ChoiceButtonGrid grid =
+      choiceButtonGrid(content.size(), buttonCount, stacking_);
+  for (int row = 0; row < grid.rows; ++row) {
+    for (int column = 0; column < grid.columns; ++column) {
+      const int index = indexForGridCell(row, column, grid.rows,
+          grid.columns, buttonCount, stacking_);
+      if (index < 0 || index >= buttonCount) {
+        continue;
       }
-      QRect buttonRect(x, y, columnWidth, rowHeight);
-      QRect interior = buttonRect.adjusted(kButtonMargin, kButtonMargin,
-          -kButtonMargin, -kButtonMargin);
-      if (interior.width() <= 0 || interior.height() <= 0) {
-        interior = buttonRect.adjusted(1, 1, -1, -1);
-      }
-
-      const int index = indexForGridCell(row, column, rows, columns,
-          buttonCount, stacking_);
-      if (index >= 0 && index < buttonCount) {
-        if (QAbstractButton *button = buttons_.value(index)) {
-          button->setGeometry(interior);
-          applyButtonFont(button, interior);
-        }
-        ++positionedCount;
-        if (positionedCount >= buttonCount) {
-          done = true;
-        }
-      }
-
-      x += columnWidth;
-      if (done) {
-        break;
+      if (QAbstractButton *button = buttons_.value(index)) {
+        const QRect buttonRect(content.left() + column * grid.cell.width(),
+            content.top() + row * grid.cell.height(), grid.cell.width(),
+            grid.cell.height());
+        button->setGeometry(buttonRect);
+        applyButtonFont(button, buttonRect);
       }
     }
-    if (done) {
-      break;
-    }
-    y += rowHeight;
   }
 }
 
@@ -1021,7 +928,7 @@ void ChoiceButtonElement::applyButtonFont(QAbstractButton *button,
   }
 
   const QString label = button->text();
-  const QRect textBounds = bounds.adjusted(3, 2, -3, -2);
+  const QRect textBounds = bounds.adjusted(2, 2, -2, -2);
   QFont buttonFont = medmChoiceButtonFont(height(), buttons_.size(),
       stacking_, std::max(1, textBounds.height()));
   /* As in MEDM, the legacy font depends on the button height only, and a

@@ -126,6 +126,7 @@ class TestObserveOnlyControls : public QObject
 private slots:
   void choiceButtonLabelsUseMedmFont_data();
   void choiceButtonLabelsUseMedmFont();
+  void choiceButtonsUseMedmGridAndShadows();
   void textEntryUsesMotifShadows();
   void cartesianPlotBlanksUntilAuxiliaryChannelsConnect();
   void relatedDisplayLabelPadding();
@@ -1172,6 +1173,71 @@ void TestObserveOnlyControls::choiceButtonLabelsUseMedmFont()
   const auto buttons = element.findChildren<QAbstractButton *>();
   QTest::mouseClick(buttons.last(), Qt::LeftButton);
   QCOMPARE(activated, 3);
+}
+
+void TestObserveOnlyControls::choiceButtonsUseMedmGridAndShadows()
+{
+  struct Layout
+  {
+    QSize size;
+    ChoiceButtonStacking stacking;
+    int count;
+    QSize cell;
+    int rows;
+  };
+  /* MEDM's createToggleButtons() makes each button height/n high (row),
+   * width/n wide (column), or width/k by height/k with k =
+   * max(2, ceil(sqrt(n))) columns filled top to bottom (row column), and
+   * leaves the remainder empty. */
+  const QList<Layout> layouts = {
+      {QSize(110, 70), ChoiceButtonStacking::kRow, 4, QSize(110, 17), 4},
+      {QSize(203, 25), ChoiceButtonStacking::kColumn, 4, QSize(50, 25), 1},
+      {QSize(157, 100), ChoiceButtonStacking::kRowColumn, 10, QSize(39, 25),
+          3},
+  };
+  const QColor background(0x73, 0xdf, 0xff);
+  for (const Layout &layout : layouts) {
+    ChoiceButtonElement element;
+    element.resize(layout.size);
+    element.setStacking(layout.stacking);
+    element.setChannel(QStringLiteral("__test:choice"));
+    element.setForegroundColor(Qt::black);
+    element.setBackgroundColor(background);
+    element.setExecuteMode(true);
+    QStringList labels;
+    for (int i = 0; i < layout.count; ++i) {
+      labels.append(QString::number(i));
+    }
+    element.setRuntimeLabels(labels);
+    element.setRuntimeConnected(true);
+    element.setRuntimeWriteAccess(true);
+    element.show();
+    QCoreApplication::processEvents();
+
+    const auto buttons = element.findChildren<QAbstractButton *>();
+    QCOMPARE(buttons.size(), layout.count);
+    for (const QAbstractButton *button : buttons) {
+      const int index = button->text().toInt();
+      const int row = index % layout.rows;
+      const int column = index / layout.rows;
+      QCOMPARE(button->geometry(), QRect(QPoint(column * layout.cell.width(),
+          row * layout.cell.height()), layout.cell));
+    }
+
+    if (layout.stacking == ChoiceButtonStacking::kRow) {
+      /* One-color 2-pixel Motif shadows, as measured in MEDM, and the
+       * remainder below the buttons in the background color. */
+      const QImage image = element.grab().toImage();
+      for (int x : {0, 1}) {
+        QCOMPARE(image.pixelColor(x, 8), QColor(0xc3, 0xf2, 0xff));
+      }
+      for (int x : {108, 109}) {
+        QCOMPARE(image.pixelColor(x, 8), QColor(0x3f, 0x7b, 0x8c));
+      }
+      QCOMPARE(image.pixelColor(2, 8), background);
+      QCOMPARE(image.pixelColor(55, 69), background);
+    }
+  }
 }
 
 void TestObserveOnlyControls::textEntryUsesMotifShadows()

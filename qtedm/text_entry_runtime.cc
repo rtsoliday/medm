@@ -658,8 +658,12 @@ bool TextEntryRuntime::parseNumericInput(const QString &text,
     return std::isfinite(value);
   }
 
+  /* MEDM reads "0x" input as hexadecimal in any format and puts it to a
+   * short or long as a DBR_LONG, so 0xfffffffc is -4 there too. */
   if (trimmed.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive)) {
-    value = static_cast<double>(trimmed.mid(2).toLongLong(&ok, 16));
+    value = TextFormatUtils::integerInputValue(
+        trimmed.mid(2).toLongLong(&ok, 16),
+        fieldType_ == DBR_SHORT || fieldType_ == DBR_LONG);
     if (ok) {
       return true;
     }

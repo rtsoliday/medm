@@ -96,6 +96,13 @@ void TestTextEntryRuntime::parsesShownHexadecimalOfNegativeLong()
   runtime.fieldType_ = DBR_LONG;
   QVERIFY(runtime.parseNumericInput(TextFormatUtils::formatOctal(-4), value));
   QCOMPARE(value, -4.0);
+  /* MEDM reads "0x" input as hexadecimal in a decimal entry too. */
+  element.setFormat(TextMonitorFormat::kDecimal);
+  QVERIFY(runtime.parseNumericInput(shown, value));
+  QCOMPARE(value, -4.0);
+  runtime.fieldType_ = DBR_DOUBLE;
+  QVERIFY(runtime.parseNumericInput(shown, value));
+  QCOMPARE(value, 4294967292.0);
 }
 
 void TestTextEntryRuntime::rejectsInvalidNumericAndSexagesimalInput()

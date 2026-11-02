@@ -1532,6 +1532,13 @@ spaces in a value cannot end a quoted string or add display elements. A value
 may refer to other macros, which are expanded up to ten levels deep. References
 to undefined macros are left unchanged.</p>
 
+<p>Macro lists follow MEDM's rules. In a list given with <code>-macro</code>,
+by a Related Display, or for a composite file, whitespace inside each name and
+value is removed, so <code>TITLE=Beam line</code> defines the value
+<code>Beamline</code>, and a missing comma joins two definitions into one value.
+When a list defines a name more than once, the first definition is used. A
+blank <code>-macro</code> value defines no macros.</p>
+
 <h3>Local Plugins and Property Rules</h3>
 
 <p>Reviewed facility plugins can add display types and CA/PVA-adjacent data or

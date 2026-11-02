@@ -19,6 +19,12 @@ These cover the MEDM slider/chart/indicator layouts, Motif bevels, clipped
 choice labels, updated LED fixture text colors, and the initialized wheel
 switch alarm probe. Other references and tolerances were kept.
 
+On 2026-11-02, the Qt6 6.11.2 test verification refreshed Slider, Thermometer,
+ChoiceButton, ScaleMonitor, and Layering after reviewing their differences
+against the committed MEDM rendering fixes. These cover the narrower
+undecorated slider, choice-button grid and shadows, Indicator font and value
+box, and text-entry shadows. Comparison tolerances were kept.
+
 The canonical fixture PV prefix is `qtedm_visual:`. Visible channel labels are
 part of the reference images, so a different prefix changes the comparison
 input. The visual runner isolates its IOC with a private CA server port on

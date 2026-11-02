@@ -5416,17 +5416,20 @@ void TestObserveOnlyControls::oversizedRelatedDisplayStaysFitted()
       delete child;
     }
   });
+  /* Cocoa can expose the first child window after the post-show timers.
+   * Wait for execute mode and its geometry instead of assuming that window
+   * exposure and both deferred resizes finish within 200 milliseconds. */
+  QVERIFY(QTest::qWaitForWindowExposed(child));
   QTest::qWait(200); // Include both deferred post-show geometry callbacks.
-  QVERIFY(child->executeModeActive_);
-  QVERIFY(child->width() <= available.width());
-  QVERIFY(child->height() <= available.height());
+  QTRY_VERIFY(child->executeModeActive_);
+  QTRY_VERIFY(child->width() <= available.width());
+  QTRY_VERIFY(child->height() <= available.height());
   QCOMPARE(child->rectangleElements_.size(), 1);
-  QVERIFY(child->displayArea_->rect().contains(
+  QTRY_VERIFY(child->displayArea_->rect().contains(
       child->rectangleElements_.first()->geometry()));
   const qreal originalAspect = qreal(oversized.width()) / oversized.height();
-  const qreal fittedAspect = qreal(child->displayArea_->width())
-      / child->displayArea_->height();
-  QVERIFY(std::abs(originalAspect - fittedAspect) < 0.02);
+  QTRY_VERIFY(std::abs(originalAspect - qreal(child->displayArea_->width())
+      / child->displayArea_->height()) < 0.02);
 #endif
 }
 

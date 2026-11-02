@@ -32,6 +32,12 @@ QImage medmScaledImage(const QImage &source, const QSize &size)
 {
   const QImage src = source.convertToFormat(QImage::Format_ARGB32);
   QImage dst(size, QImage::Format_ARGB32);
+  /* Qt returns a null image, whose scan lines are null, for an empty
+   * source or a destination over its allocation limit, such as a
+   * 25000x25000 image object. Draw nothing rather than write through it. */
+  if (src.isNull() || dst.isNull()) {
+    return QImage();
+  }
   const int sw = src.width();
   const int sh = src.height();
   const int dw = size.width();

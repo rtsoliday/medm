@@ -35,8 +35,8 @@ static SharedChannelData toSharedChannelData(const PvaBridgeData &bridgeData)
   data.hasTimestamp = false;
   data.hopr = bridgeData.hopr;
   data.lopr = bridgeData.lopr;
-  data.displayHigh = bridgeData.hopr;
-  data.displayLow = bridgeData.lopr;
+  data.displayHigh = bridgeData.displayHigh;
+  data.displayLow = bridgeData.displayLow;
   data.precision = bridgeData.precision;
   data.units = QString::fromUtf8(bridgeData.units.c_str());
   for (const std::string &entry : bridgeData.enumStrings) {

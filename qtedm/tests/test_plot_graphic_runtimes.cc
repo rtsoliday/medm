@@ -16,6 +16,7 @@
 #include "heatmap_element.h"
 #include "image_element.h"
 #include "plot_export_utils.h"
+#include "pva_bridge.h"
 #include "rectangle_element.h"
 #include "widget_image_export_utils.h"
 
@@ -40,6 +41,7 @@ class TestPlotGraphicRuntimes : public QObject
 private slots:
   void cartesianTracksTraceModesPointsAndCapacity();
   void zoomedAxisTicksSitWhereTheirValuesArePlotted();
+  void pvaKeepsDisplayLimitsAsSentForPlots();
   void heatmapTracksDimensionsRangeAndTransforms();
   void heatmapBoundsSyntheticPreviewForLargeConfiguredGrids();
   void dynamicGraphicAppliesRuntimeVisibilityAndSeverity();
@@ -108,6 +110,27 @@ void TestPlotGraphicRuntimes::zoomedAxisTicksSitWhereTheirValuesArePlotted()
   QVERIFY(std::abs(CartesianPlotElement::tickFraction(decades, 10.0, true)
       - (1.0 - std::log10(2.0)) / (std::log10(50.0) - std::log10(2.0)))
       < 1e-12);
+}
+
+/* A PVA record without display limits sends 0 and 0. Widgets range over
+ * ordered limits that are never equal, 0 to 1 here, but a plot must see
+ * the limits as sent, as for Channel Access, to autoscale instead of
+ * clipping data far outside 0 to 1. */
+void TestPlotGraphicRuntimes::pvaKeepsDisplayLimitsAsSentForPlots()
+{
+  PvaBridgeData data;
+  pvaBridgeSetLimits(&data, 0.0, 0.0);
+  QVERIFY(data.hasControlInfo);
+  QCOMPARE(data.lopr, 0.0);
+  QCOMPARE(data.hopr, 1.0);
+  QCOMPARE(data.displayLow, 0.0);
+  QCOMPARE(data.displayHigh, 0.0);
+
+  pvaBridgeSetLimits(&data, 10.0, -5.0);
+  QCOMPARE(data.lopr, -5.0);
+  QCOMPARE(data.hopr, 10.0);
+  QCOMPARE(data.displayLow, 10.0);
+  QCOMPARE(data.displayHigh, -5.0);
 }
 
 void TestPlotGraphicRuntimes::cartesianTracksTraceModesPointsAndCapacity()

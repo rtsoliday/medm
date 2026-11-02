@@ -23,6 +23,11 @@ struct PvaBridgeData
   short status = 0;
   double hopr = 0.0;
   double lopr = 0.0;
+  /* The display limits as the server sends them, unordered and
+   * possibly equal, so a plot autoscales as MEDM's does when they
+   * give no range. */
+  double displayLow = 0.0;
+  double displayHigh = 0.0;
   short precision = -1;
   std::string units;
   std::vector<std::string> enumStrings;
@@ -48,6 +53,9 @@ bool pvaBridgeRefresh(PvaBridgeChannel *channel, bool updatesPaused);
 int pvaBridgePoll(PvaBridgeChannel *channel, bool *connectionChanged,
     bool updatesPaused);
 void pvaBridgeSetMonitoringPaused(PvaBridgeChannel *channel, bool paused);
+
+/* Sets the limits of data from the low and high limits a server sends. */
+void pvaBridgeSetLimits(PvaBridgeData *data, double low, double high);
 
 bool pvaBridgeGetData(const PvaBridgeChannel *channel, PvaBridgeData *data);
 const PvaBridgeData *pvaBridgeData(const PvaBridgeChannel *channel);

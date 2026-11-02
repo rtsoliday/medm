@@ -152,23 +152,17 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
   data.hasUnits = !data.units.empty();
 
   if (reading.hasDisplayLimits) {
-    data.lopr = reading.displayLimitLow;
-    data.hopr = reading.displayLimitHigh;
-    data.hasControlInfo = true;
+    pvaBridgeSetLimits(&data, reading.displayLimitLow,
+        reading.displayLimitHigh);
   } else if (reading.hasControlLimits) {
-    data.lopr = reading.controlLimitLow;
-    data.hopr = reading.controlLimitHigh;
-    data.hasControlInfo = true;
+    pvaBridgeSetLimits(&data, reading.controlLimitLow,
+        reading.controlLimitHigh);
   }
-
-  if (data.hasControlInfo) {
-    const double low = std::min(data.lopr, data.hopr);
-    double high = std::max(data.lopr, data.hopr);
-    if (high == low) {
-      high = low + 1.0;
-    }
-    data.lopr = low;
-    data.hopr = high;
+  /* As in MEDM, the display limits of an enum span its states. */
+  if (data.isEnum && !data.enumStrings.empty()) {
+    data.displayLow = 0.0;
+    data.displayHigh =
+        static_cast<double>(data.enumStrings.size()) - 1.0;
   }
 
   if (reading.hasPrecision) {
@@ -196,6 +190,24 @@ static void updateCachedData(PvaBridgeChannelImpl *channel, bool updatesPaused)
 }
 
 } // namespace
+
+/* Widgets range over ordered, never equal limits. A plot ranges over
+ * the limits as sent and autoscales when they give no range, as it
+ * does for a Channel Access channel, so keep those too. */
+void pvaBridgeSetLimits(PvaBridgeData *data, double low, double high)
+{
+  if (!data) {
+    return;
+  }
+  data->displayLow = low;
+  data->displayHigh = high;
+  data->lopr = std::min(low, high);
+  data->hopr = std::max(low, high);
+  if (data->hopr == data->lopr) {
+    data->hopr = data->lopr + 1.0;
+  }
+  data->hasControlInfo = true;
+}
 
 struct PvaBridgeChannel
 {

@@ -13,6 +13,7 @@
 #include <QSignalBlocker>
 
 #include "cursor_utils.h"
+#include "medm_colors.h"
 #include "pv_name_utils.h"
 #include "text_font_utils.h"
 #include "window_utils.h"
@@ -492,9 +493,13 @@ void TextEntryElement::applyPaletteColors()
   /* Set stylesheet with 2-pixel lowered bevel matching Shell Command style */
   QString fgName = fg.name(QColor::HexRgb);
   QString bgName = bg.name(QColor::HexRgb);
-  /* Create lowered bevel: darker top/left, lighter bottom/right (opposite of raised) */
-  QString topColor = bg.darker(145).name(QColor::HexRgb);
-  QString bottomColor = bg.lighter(135).name(QColor::HexRgb);
+  /* Lowered Motif bevel, as on MEDM's XmTextField: the bottom shadow on the
+   * top and left, the top shadow on the bottom and right. */
+  QColor topShadow;
+  QColor bottomShadow;
+  MedmColors::computeShadowColors(bg, topShadow, bottomShadow);
+  QString topColor = bottomShadow.name(QColor::HexRgb);
+  QString bottomColor = topShadow.name(QColor::HexRgb);
   if (executeMode_ && !runtimeConnected_) {
     /* MEDM unmanages a disconnected text entry and paints its whole
      * object white, with no bevel. */

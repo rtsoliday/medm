@@ -126,6 +126,7 @@ class TestObserveOnlyControls : public QObject
 private slots:
   void choiceButtonLabelsUseMedmFont_data();
   void choiceButtonLabelsUseMedmFont();
+  void textEntryUsesMotifShadows();
   void cartesianPlotBlanksUntilAuxiliaryChannelsConnect();
   void relatedDisplayLabelPadding();
   void relatedDisplayLabelsClipToCells_data();
@@ -1171,6 +1172,29 @@ void TestObserveOnlyControls::choiceButtonLabelsUseMedmFont()
   const auto buttons = element.findChildren<QAbstractButton *>();
   QTest::mouseClick(buttons.last(), Qt::LeftButton);
   QCOMPARE(activated, 3);
+}
+
+void TestObserveOnlyControls::textEntryUsesMotifShadows()
+{
+  /* MEDM's XmTextField has a lowered 2-pixel shadow in the colors that
+   * XmGetColors() derives from its background, which on black are grey 76
+   * on the top and left and grey 127 on the bottom and right. */
+  TextEntryElement entry;
+  entry.resize(100, 24);
+  entry.setForegroundColor(Qt::yellow);
+  entry.setBackgroundColor(Qt::black);
+  entry.setExecuteMode(true);
+  entry.setRuntimeConnected(true);
+  entry.setRuntimeWriteAccess(true);
+  entry.show();
+  QCoreApplication::processEvents();
+  const QImage image = entry.grab().toImage();
+  QCOMPARE(image.pixelColor(0, 12), QColor(76, 76, 76));
+  QCOMPARE(image.pixelColor(1, 12), QColor(76, 76, 76));
+  QCOMPARE(image.pixelColor(50, 0), QColor(76, 76, 76));
+  QCOMPARE(image.pixelColor(99, 12), QColor(127, 127, 127));
+  QCOMPARE(image.pixelColor(50, 23), QColor(127, 127, 127));
+  QCOMPARE(image.pixelColor(50, 12), QColor(Qt::black));
 }
 
 void TestObserveOnlyControls::cartesianPlotBlanksUntilAuxiliaryChannelsConnect()

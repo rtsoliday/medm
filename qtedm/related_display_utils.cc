@@ -2,6 +2,8 @@
 
 #include <QRegularExpression>
 
+#include "macro_utils.h"
+
 namespace {
 
 QString expandMacros(const QString &input,
@@ -63,7 +65,7 @@ bool parseMacroArguments(const QString &arguments,
       }
       return false;
     }
-    const QString name = trimmed.left(equals).trimmed();
+    const QString name = removeMacroWhitespace(trimmed.left(equals));
     if (name.isEmpty()) {
       if (errorMessage) {
         *errorMessage = QStringLiteral(
@@ -73,7 +75,7 @@ bool parseMacroArguments(const QString &arguments,
     }
     /* MEDM's lookupNameValue returns the first definition of a name. */
     if (!macros->contains(name)) {
-      macros->insert(name, trimmed.mid(equals + 1).trimmed());
+      macros->insert(name, removeMacroWhitespace(trimmed.mid(equals + 1)));
     }
   }
   return true;

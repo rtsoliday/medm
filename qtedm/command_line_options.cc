@@ -9,6 +9,8 @@
 
 #include <epicsVersion.h>
 
+#include "macro_utils.h"
+
 /* Report the EPICS Base this binary was built against, as the About dialog
  * does, rather than a hard-coded release. */
 const char kQtEdmVersionString[] =
@@ -271,8 +273,9 @@ MacroMap parseMacroDefinitionString(const QString &macroString)
           trimmedEntry.toLocal8Bit().constData());
       continue;
     }
-    const QString name = trimmedEntry.left(equalsIndex).trimmed();
-    const QString value = trimmedEntry.mid(equalsIndex + 1).trimmed();
+    const QString name = removeMacroWhitespace(trimmedEntry.left(equalsIndex));
+    const QString value =
+        removeMacroWhitespace(trimmedEntry.mid(equalsIndex + 1));
     if (name.isEmpty()) {
       fprintf(stderr, "\nInvalid macro definition: %s\n",
           trimmedEntry.toLocal8Bit().constData());

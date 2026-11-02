@@ -12,6 +12,7 @@
 #include "property_rule_editor_dialog.h"
 #include "plot_export_utils.h"
 #include "related_display_utils.h"
+#include "macro_utils.h"
 #include "shell_command_utils.h"
 #include "widget_image_export_utils.h"
 #include "window_utils.h"
@@ -26411,8 +26412,9 @@ QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
     if (equalsIndex <= 0) {
       continue;
     }
-    const QString name = trimmedEntry.left(equalsIndex).trimmed();
-    const QString value = trimmedEntry.mid(equalsIndex + 1).trimmed();
+    const QString name = removeMacroWhitespace(trimmedEntry.left(equalsIndex));
+    const QString value =
+        removeMacroWhitespace(trimmedEntry.mid(equalsIndex + 1));
     if (name.isEmpty()) {
       continue;
     }

@@ -32,8 +32,10 @@ void TestRelatedDisplayUtils::expandsMacrosAndSelectsLaunchMode()
   /* As in MEDM, the first definition of a name wins. */
   QCOMPARE(result.macros.value(QStringLiteral("P")),
       QStringLiteral("ioc:"));
+  /* MEDM substitutes the parent's macros into the arguments and then drops
+   * every whitespace character from each value. */
   QCOMPARE(result.macros.value(QStringLiteral("DESC")),
-      QStringLiteral("Beam line"));
+      QStringLiteral("Beamline"));
   QCOMPARE(result.macros.value(QStringLiteral("NESTED")),
       QStringLiteral("ioc:value"));
 

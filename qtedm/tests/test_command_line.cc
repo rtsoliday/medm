@@ -170,6 +170,14 @@ void TestCommandLine::parsesMacrosAndGeometry()
   QCOMPARE(macros.value(QStringLiteral("C")), QStringLiteral("3"));
   QCOMPARE(macros.size(), 3);
 
+  /* MEDM's generateNameValueTable() drops every whitespace character from
+   * names and values, so a missing comma joins two definitions. */
+  const MacroMap spaced = parseMacroDefinitionString(
+      QStringLiteral("xx=05 yy=BM, D E = a\tb "));
+  QCOMPARE(spaced.value(QStringLiteral("xx")), QStringLiteral("05yy=BM"));
+  QCOMPARE(spaced.value(QStringLiteral("DE")), QStringLiteral("ab"));
+  QCOMPARE(spaced.size(), 2);
+
   const std::optional<GeometrySpec> spec =
       geometrySpecFromString(QStringLiteral("640x480-15+25"));
   QVERIFY(spec.has_value());

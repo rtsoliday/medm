@@ -231,6 +231,16 @@ QString formatHex(long value)
   return QString::fromLatin1(buffer);
 }
 
+/* Writing 0xfffffffe as 4294967294 to a long overflowed the IOC's double
+ * to long conversion, which on x86 stores -2147483648 instead of -2. */
+double integerInputValue(qlonglong value, bool signedIntegerChannel)
+{
+  if (signedIntegerChannel && value > 0x7fffffffLL && value <= 0xffffffffLL) {
+    return static_cast<double>(value - 0x100000000LL);
+  }
+  return static_cast<double>(value);
+}
+
 QString formatOctal(long value)
 {
   char buffer[kMaxTextField];

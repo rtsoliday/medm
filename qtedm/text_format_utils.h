@@ -41,9 +41,15 @@ void localCvtDoubleToExpNotationString(double value, char *textField,
 QString makeSexagesimal(double value, unsigned short precision);
 
 /* Format a long as hexadecimal string with 0x prefix.
- * Handles negative values with leading minus sign.
- * Returns string like "0x1a2b" or "-0xff". */
+ * A negative value shows as its low 32 bits, as in MEDM.
+ * Returns string like "0x1a2b", or "0xffffff01" for -255. */
 QString formatHex(long value);
+
+/* Returns the value to write for an integer read from hexadecimal or octal
+ * input. For a channel of a signed integer type, a value from 0x80000000
+ * to 0xffffffff is the negative number formatHex() shows that way, as
+ * MEDM's (long)strtoul() and DBR_LONG put make it. */
+double integerInputValue(qlonglong value, bool signedIntegerChannel);
 
 /* Format a long as octal string.
  * Handles negative values with leading minus sign.

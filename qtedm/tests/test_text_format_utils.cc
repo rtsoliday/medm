@@ -14,6 +14,7 @@ private slots:
   void formatsEngineeringNotationBoundaries();
   void formatsSexagesimalAndIntegers();
   void formatsMinimumSignedInteger();
+  void readsNegativeHexadecimalBackForSignedChannels();
   void saturatesDoubleToLong();
 };
 
@@ -80,6 +81,23 @@ void TestTextFormatUtils::formatsMinimumSignedInteger()
   QCOMPARE(TextFormatUtils::formatOctal(minimum),
       QStringLiteral("-")
           + QString::number(static_cast<qulonglong>(magnitude), 8));
+}
+
+void TestTextFormatUtils::readsNegativeHexadecimalBackForSignedChannels()
+{
+  /* formatHex(-4) shows 0xfffffffc; a signed channel reads it as -4. */
+  bool ok = false;
+  const qlonglong shown = TextFormatUtils::formatHex(-4).toLongLong(&ok, 16);
+  QVERIFY(ok);
+  QCOMPARE(TextFormatUtils::integerInputValue(shown, true), -4.0);
+  QCOMPARE(TextFormatUtils::integerInputValue(shown, false), 4294967292.0);
+  QCOMPARE(TextFormatUtils::integerInputValue(0x7fffffffLL, true),
+      2147483647.0);
+  QCOMPARE(TextFormatUtils::integerInputValue(0x80000000LL, true),
+      -2147483648.0);
+  QCOMPARE(TextFormatUtils::integerInputValue(0x100000000LL, true),
+      4294967296.0);
+  QCOMPARE(TextFormatUtils::integerInputValue(-2, true), -2.0);
 }
 
 void TestTextFormatUtils::saturatesDoubleToLong()

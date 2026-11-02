@@ -50,6 +50,7 @@ private:
   bool setpointConnected_ = false;
   bool readbackConnected_ = false;
   bool setpointNumeric_ = false;
+  bool setpointSignedInteger_ = false;
   bool readbackNumeric_ = false;
   bool writeAccess_ = false;
   int channelPrecision_ = -1;

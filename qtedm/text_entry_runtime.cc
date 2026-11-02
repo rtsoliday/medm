@@ -619,10 +619,12 @@ bool TextEntryRuntime::parseNumericInput(const QString &text,
 
   switch (format) {
   case TextMonitorFormat::kHexadecimal:
-    value = static_cast<double>(trimmed.toLongLong(&ok, 16));
+    value = TextFormatUtils::integerInputValue(trimmed.toLongLong(&ok, 16),
+        fieldType_ == DBR_SHORT || fieldType_ == DBR_LONG);
     return ok;
   case TextMonitorFormat::kOctal:
-    value = static_cast<double>(trimmed.toLongLong(&ok, 8));
+    value = TextFormatUtils::integerInputValue(trimmed.toLongLong(&ok, 8),
+        fieldType_ == DBR_SHORT || fieldType_ == DBR_LONG);
     return ok;
   case TextMonitorFormat::kSexagesimal:
     if (!parseSexagesimal(trimmed, value)) {

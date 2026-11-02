@@ -149,6 +149,8 @@ void SetpointControlRuntime::handleSetpointConnection(bool connected,
   if (connected) {
     setpointConnected_ = true;
     setpointNumeric_ = isSupportedNumeric(data);
+    setpointSignedInteger_ = data.nativeFieldType == DBR_SHORT
+        || data.nativeFieldType == DBR_LONG;
     if (!setpointNumeric_) {
       invokeOnElement([](SetpointControlElement *element) {
         element->setSetpointConnected(false);
@@ -164,6 +166,7 @@ void SetpointControlRuntime::handleSetpointConnection(bool connected,
   } else {
     setpointConnected_ = false;
     setpointNumeric_ = false;
+    setpointSignedInteger_ = false;
     writeAccess_ = false;
     invokeOnElement([](SetpointControlElement *element) {
       element->setSetpointConnected(false);
@@ -419,10 +422,12 @@ bool SetpointControlRuntime::parseNumericInput(const QString &text,
                                             : TextMonitorFormat::kDecimal;
   switch (format) {
   case TextMonitorFormat::kHexadecimal:
-    value = static_cast<double>(trimmed.toLongLong(&ok, 16));
+    value = TextFormatUtils::integerInputValue(trimmed.toLongLong(&ok, 16),
+        setpointSignedInteger_);
     return ok;
   case TextMonitorFormat::kOctal:
-    value = static_cast<double>(trimmed.toLongLong(&ok, 8));
+    value = TextFormatUtils::integerInputValue(trimmed.toLongLong(&ok, 8),
+        setpointSignedInteger_);
     return ok;
   default:
     break;

@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include <db_access.h>
+
 #include "soft_pv_registry.h"
 #include "text_entry_element.h"
 #include "text_entry_runtime.h"
@@ -15,6 +17,7 @@ private slots:
   void parsesNumericFormats_data();
   void parsesNumericFormats();
   void rejectsInvalidNumericAndSexagesimalInput();
+  void parsesShownHexadecimalOfNegativeLong();
   void wrapsSexagesimalValuesWithCircularControlLimits();
   void parsesEnumLabelsAndNumericRepresentations();
   void sizesAndTruncatesCharArrayInput();
@@ -68,6 +71,31 @@ void TestTextEntryRuntime::parsesNumericFormats()
   double actual = 0.0;
   QVERIFY(runtime.parseNumericInput(text, actual));
   QVERIFY(std::abs(actual - expected) < 1e-12);
+}
+
+/* The entry shows -4 on a long as 0xfffffffc, as MEDM does. Editing that
+ * text must write -4, not 4294967292, which the IOC's conversion to a long
+ * turns into -2147483648. */
+void TestTextEntryRuntime::parsesShownHexadecimalOfNegativeLong()
+{
+  TextEntryElement element;
+  element.setFormat(TextMonitorFormat::kHexadecimal);
+  TextEntryRuntime runtime(&element);
+  const QString shown = TextFormatUtils::formatHex(-4);
+  double value = 0.0;
+  runtime.fieldType_ = DBR_LONG;
+  QVERIFY(runtime.parseNumericInput(shown, value));
+  QCOMPARE(value, -4.0);
+  runtime.fieldType_ = DBR_SHORT;
+  QVERIFY(runtime.parseNumericInput(shown, value));
+  QCOMPARE(value, -4.0);
+  runtime.fieldType_ = DBR_DOUBLE;
+  QVERIFY(runtime.parseNumericInput(shown, value));
+  QCOMPARE(value, 4294967292.0);
+  element.setFormat(TextMonitorFormat::kOctal);
+  runtime.fieldType_ = DBR_LONG;
+  QVERIFY(runtime.parseNumericInput(TextFormatUtils::formatOctal(-4), value));
+  QCOMPARE(value, -4.0);
 }
 
 void TestTextEntryRuntime::rejectsInvalidNumericAndSexagesimalInput()

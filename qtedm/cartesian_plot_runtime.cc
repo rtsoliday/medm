@@ -149,6 +149,29 @@ static inline void printConfiguredAxisInfo(const CartesianPlotElement *element,
 }
 #endif
 
+/* MEDM's executeDlCartesianPlot() reads a count that starts with a digit
+ * as a number with atoi(), not as a channel, so "1:scope:position.NORD"
+ * is a count of 1. */
+bool countIsNumber(const QString &count, int *value = nullptr)
+{
+  if (count.isEmpty() || count.front() < QLatin1Char('0')
+      || count.front() > QLatin1Char('9')) {
+    return false;
+  }
+  if (value) {
+    long long number = 0;
+    for (const QChar ch : count) {
+      if (ch < QLatin1Char('0') || ch > QLatin1Char('9')) {
+        break;
+      }
+      number = std::min(number * 10 + (ch.unicode() - '0'),
+          static_cast<long long>(std::numeric_limits<int>::max()));
+    }
+    *value = static_cast<int>(number);
+  }
+  return true;
+}
+
 } // namespace
 
 CartesianPlotRuntime::CartesianPlotRuntime(CartesianPlotElement *element)
@@ -207,7 +230,8 @@ void CartesianPlotRuntime::start()
       needsCa = true;
     } else if (!eraseName.isEmpty() && parsePvName(eraseName).protocol == PvProtocol::kCa) {
       needsCa = true;
-    } else if (!countName.isEmpty() && parsePvName(countName).protocol == PvProtocol::kCa) {
+    } else if (!countName.isEmpty() && !countIsNumber(countName)
+        && parsePvName(countName).protocol == PvProtocol::kCa) {
       needsCa = true;
     }
   }
@@ -280,6 +304,9 @@ void CartesianPlotRuntime::start()
   }
 
   countChannel_.name = element_->countChannel().trimmed();
+  if (countIsNumber(countChannel_.name, &configuredCount_)) {
+    countChannel_.name.clear();
+  }
   if (!countChannel_.name.isEmpty()) {
     createAuxiliaryChannel(ChannelKind::kCount, countChannel_,
         countContext_);
@@ -855,8 +882,20 @@ void CartesianPlotRuntime::updateRuntimePaintState()
     }
   }
 
-  /* MEDM checks only the trace channels: a trigger, erase, or count channel
-   * that never connects does not blank the plot. */
+  /* MEDM's cartesianPlotDraw() also paints the plot white while its
+   * trigger, erase, or count channel is not connected. */
+  if (ready && !triggerChannel_.name.isEmpty()
+      && !channelReadyForDisplay(triggerChannel_)) {
+    ready = false;
+  }
+  if (ready && !eraseChannel_.name.isEmpty()
+      && !channelReadyForDisplay(eraseChannel_)) {
+    ready = false;
+  }
+  if (ready && !countChannel_.name.isEmpty()
+      && !channelReadyForDisplay(countChannel_)) {
+    ready = false;
+  }
 
   invokeOnElement([hasConfiguredTrace, ready](CartesianPlotElement *element) {
     element->setRuntimePaintReady(hasConfiguredTrace, ready);

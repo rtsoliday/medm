@@ -126,6 +126,7 @@ class TestObserveOnlyControls : public QObject
 private slots:
   void choiceButtonLabelsUseMedmFont_data();
   void choiceButtonLabelsUseMedmFont();
+  void cartesianPlotBlanksUntilAuxiliaryChannelsConnect();
   void relatedDisplayLabelPadding();
   void relatedDisplayLabelsClipToCells_data();
   void relatedDisplayLabelsClipToCells();
@@ -1055,6 +1056,55 @@ void TestObserveOnlyControls::choiceButtonLabelsUseMedmFont()
   const auto buttons = element.findChildren<QAbstractButton *>();
   QTest::mouseClick(buttons.last(), Qt::LeftButton);
   QCOMPARE(activated, 3);
+}
+
+void TestObserveOnlyControls::cartesianPlotBlanksUntilAuxiliaryChannelsConnect()
+{
+  auto &soft = SoftPvRegistry::instance();
+  const QString yName = QStringLiteral("__test:plot_y");
+  const QString triggerName = QStringLiteral("__test:plot_trigger");
+  for (const QString &name : {yName, triggerName}) {
+    soft.registerName(name, true);
+    registeredNames_.append(name);
+  }
+  soft.setControlInfo(yName, 0.0, 10.0, 2);
+  soft.setConnected(yName, true);
+  soft.publishValue(yName, 5.0);
+  soft.setControlInfo(triggerName, 0.0, 1.0, 0);
+
+  CartesianPlotElement plot;
+  plot.resize(200, 150);
+  plot.setBackgroundColor(Qt::black);
+  plot.setTraceYChannel(0, yName);
+  plot.setTriggerChannel(triggerName);
+  plot.setExecuteMode(true);
+  const auto blank = [&plot]() {
+    return plot.grab().toImage().pixelColor(100, 75) == QColor(Qt::white);
+  };
+
+  /* MEDM's cartesianPlotDraw() paints the plot white while its trigger,
+   * erase, or count channel is not connected. */
+  {
+    CartesianPlotRuntime runtime(&plot);
+    runtime.start();
+    QCoreApplication::processEvents();
+    QVERIFY(blank());
+    soft.setConnected(triggerName, true);
+    soft.publishValue(triggerName, 1.0);
+    QTRY_VERIFY(!blank());
+    runtime.stop();
+  }
+
+  /* MEDM reads a count that starts with a digit as a number, not as a
+   * channel, as in the "1:scope:position.NORD" of a mistaken macro. */
+  plot.setTriggerChannel(QString());
+  plot.setCountChannel(QStringLiteral("12:missing:position.NORD"));
+  CartesianPlotRuntime runtime(&plot);
+  runtime.start();
+  QVERIFY(runtime.countChannel_.name.isEmpty());
+  QCOMPARE(runtime.configuredCount_, 12);
+  QTRY_VERIFY(!blank());
+  runtime.stop();
 }
 
 void TestObserveOnlyControls::init()

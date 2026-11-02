@@ -172,6 +172,7 @@ private slots:
   void recursiveExternalCompositeIncludesAreRejected();
   void waterfallBufferIsBoundedForHugeWaveforms();
   void stripChartPreservesSourceTimestamps();
+  void stripChartResamplesWhenLimitsResizeChart();
   void waveformCopiesAreBounded();
   void waveformCountsTrackPayloadLength();
   void emptyWaveformStatusFitsViewport_data();
@@ -2490,6 +2491,34 @@ void TestObserveOnlyControls::stripChartPreservesSourceTimestamps()
   QCOMPARE(chart.sampleCount(), 1);
   QCOMPARE(chart.sampleValue(0, 0), 3.25);
   QCOMPARE(chart.sampleTimestampMs(0), sourceTimestampMs);
+}
+
+/* A channel's limits set the width of the Y labels and so of the chart.
+ * Sampling must follow that width, or a chart drawn narrower than its
+ * sample buffer shows less than its period under the period's labels. */
+void TestObserveOnlyControls::stripChartResamplesWhenLimitsResizeChart()
+{
+  StripChartElement chart;
+  chart.resize(400, 200);
+  chart.setChannel(0, QStringLiteral("source:limits"));
+  chart.setExecuteMode(true);
+  chart.setRuntimeConnected(0, true);
+  chart.setRuntimeReadAccessKnown(0, true);
+  chart.setRuntimeReadAccess(0, true);
+  chart.setRuntimeLimits(0, 0.0, 1.0);
+  constexpr qint64 startMs = 1700000000000LL;
+  chart.addRuntimeSample(0, 0.5, startMs);
+  QVERIFY(chart.maybeAppendSamples(startMs) > 0);
+  const int narrowLabelsWidth = chart.chartRect().width();
+  QCOMPARE(chart.cachedChartWidth_, narrowLabelsWidth);
+
+  chart.setRuntimeLimits(0, -12345.678, 98765.4321);
+  const int wideLabelsWidth = chart.chartRect().width();
+  QVERIFY(wideLabelsWidth < narrowLabelsWidth);
+  chart.maybeAppendSamples(startMs + 1);
+  QCOMPARE(chart.cachedChartWidth_, wideLabelsWidth);
+  QCOMPARE(chart.sampleIntervalMs_,
+      std::max(chart.periodMilliseconds() / wideLabelsWidth, 10.0));
 }
 
 void TestObserveOnlyControls::waveformCopiesAreBounded()

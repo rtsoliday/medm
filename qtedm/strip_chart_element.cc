@@ -1924,13 +1924,17 @@ int StripChartElement::maybeAppendSamples(qint64 nowMs)
     return 0;
   }
 
-  if (cachedChartWidth_ <= 0) {
-    const int width = chartRect().width();
-    if (width <= 0) {
-      lastSampleMs_ = nowMs;
-      nextAdvanceTimeMs_ = 0;
-      return 0;
-    }
+  /* The chart is as wide as its Y labels leave it, and they widen or
+   * narrow when a channel's limits arrive or the autoscaled range changes.
+   * Keep one column per period / width of the chart being drawn, or the
+   * time axis labels the wrong span. */
+  const int width = chartRect().width();
+  if (width <= 0) {
+    lastSampleMs_ = nowMs;
+    nextAdvanceTimeMs_ = 0;
+    return 0;
+  }
+  if (width != cachedChartWidth_) {
     updateSamplingGeometry(width);
   }
 

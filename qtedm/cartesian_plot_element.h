@@ -21,6 +21,7 @@ class QFontMetrics;
 class CartesianPlotElement : public QWidget
 {
   Q_OBJECT
+  friend class TestPlotGraphicRuntimes;
 
 public:
   explicit CartesianPlotElement(QWidget *parent = nullptr);
@@ -172,6 +173,8 @@ private:
     double majorInc = 0.0;
     int numMajor = 0;
     int numMinor = 0;
+    /* A zoomed range is the zoom window itself, not rounded. */
+    bool zoomed = false;
   };
 
   QColor effectiveForeground() const;
@@ -254,10 +257,16 @@ private:
     double majorInc;
     int numMajor;
     int numMinor;
+    /* The range the data is drawn against: drawMin to drawMax, or for a
+     * zoomed axis the zoom window, which shows only the ticks inside it. */
+    double axisMin;
+    double axisMax;
   };
   static NiceAxisRange computeNiceAxisRange(double min, double max, bool isLog,
       bool isXAxis = false, bool isTime = false);
   static NiceAxisRange axisTicks(const AxisRange &range, bool isXAxis);
+  static double tickFraction(const NiceAxisRange &nice, double value,
+      bool isLog);
 
   bool selected_ = false;
   QColor foregroundColor_;

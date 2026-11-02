@@ -503,6 +503,8 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
     result.majorInc = 10.0;
     result.numMajor = static_cast<int>(std::log10(result.drawMax / result.drawMin) + 0.0001);
     result.numMinor = 10;
+    result.axisMin = result.drawMin;
+    result.axisMax = result.drawMax;
     return result;
   }
 
@@ -560,7 +562,9 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::computeNiceAxisRange(
   result.majorInc = delta;
   result.numMajor = static_cast<int>(std::floor((result.drawMax - result.drawMin) / delta + 0.5));
   result.numMinor = minorNum;
-  
+  result.axisMin = result.drawMin;
+  result.axisMax = result.drawMax;
+
   return result;
 }
 
@@ -1551,6 +1555,7 @@ void CartesianPlotElement::applyZoomToRange(AxisRange &range, int axisIndex) con
   range.minimum = zoomMinimums_[axisIndex];
   range.maximum = zoomMaximums_[axisIndex];
   range.numMajor = 0;
+  range.zoomed = true;
 }
 
 bool CartesianPlotElement::event(QEvent *event)
@@ -1917,31 +1922,29 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
     double majorValue = nice.drawMin;
     for (int i = 0; i <= nice.numMajor; ++i) {
       // Calculate screen position from log scale
-      const double logMin = std::log10(nice.drawMin);
-      const double logMax = std::log10(nice.drawMax);
-      const double logValue = std::log10(majorValue);
-      const double normalizedPos = (logValue - logMin) / (logMax - logMin);
-      const qreal x = rect.left() + normalizedPos * rect.width();
-      
-      // Major tick
-      painter.drawLine(QPointF(x, rect.bottom() - kMajorTickSize),
-                       QPointF(x, rect.bottom() + kMajorTickSize));
-      
-      // Major tick label
-      QString label = formatCartesianAxisValue(majorValue, xAxisStyle,
-          axisTimeFormats_[xAxisIndex]);
-      const qreal textWidth = axisMetrics.horizontalAdvance(label);
-      const qreal textX = x - textWidth / 2.0;
-      const qreal textY = layout.xNumberBaseline;
-      painter.drawText(QPointF(textX, textY), label);
-      
+      const double normalizedPos = tickFraction(nice, majorValue, true);
+      if (normalizedPos >= 0.0) {
+        const qreal x = rect.left() + normalizedPos * rect.width();
+
+        // Major tick
+        painter.drawLine(QPointF(x, rect.bottom() - kMajorTickSize),
+                         QPointF(x, rect.bottom() + kMajorTickSize));
+
+        // Major tick label
+        QString label = formatCartesianAxisValue(majorValue, xAxisStyle,
+            axisTimeFormats_[xAxisIndex]);
+        const qreal textWidth = axisMetrics.horizontalAdvance(label);
+        const qreal textX = x - textWidth / 2.0;
+        const qreal textY = layout.xNumberBaseline;
+        painter.drawText(QPointF(textX, textY), label);
+      }
+
       // Minor ticks (2x, 3x, 4x, 5x, 6x, 7x, 8x, 9x within this decade)
       if (i < nice.numMajor && nice.numMinor > 0) {
         for (int j = 2; j < nice.numMinor + 1; ++j) {
           const double minorValue = majorValue * j;
-          if (minorValue < nice.drawMax) {
-            const double logMinor = std::log10(minorValue);
-            const double minorNormPos = (logMinor - logMin) / (logMax - logMin);
+          const double minorNormPos = tickFraction(nice, minorValue, true);
+          if (minorValue < nice.drawMax && minorNormPos >= 0.0) {
             const qreal minorX = rect.left() + minorNormPos * rect.width();
             painter.drawLine(QPointF(minorX, rect.bottom() - kMinorTickSize),
                              QPointF(minorX, rect.bottom() + kMinorTickSize));
@@ -1973,22 +1976,24 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
       if (timeAxis && value > nice.drawMax) {
         break;
       }
-      const qreal x = rect.left()
-          + (value - nice.drawMin) / span * rect.width();
-      // Major tick
-      painter.drawLine(QPointF(x, rect.bottom() - kMajorTickSize),
-                       QPointF(x, rect.bottom() + kMajorTickSize));
+      const double position = tickFraction(nice, value, false);
+      if (position >= 0.0) {
+        const qreal x = rect.left() + position * rect.width();
+        // Major tick
+        painter.drawLine(QPointF(x, rect.bottom() - kMajorTickSize),
+                         QPointF(x, rect.bottom() + kMajorTickSize));
 
-      QString label = formatCartesianAxisValue(value, xAxisStyle,
-          axisTimeFormats_[xAxisIndex]);
-      const qreal textWidth = axisMetrics.horizontalAdvance(label);
-      const qreal textX = x - textWidth / 2.0;
-      const qreal textY = layout.xNumberBaseline;
-      painter.drawText(QPointF(textX, textY), label);
-      if (i > 0) {
-        haveLastLabel = true;
-        lastLabelLeft = textX;
-        lastLabelHalfWidth = textWidth / 2.0;
+        QString label = formatCartesianAxisValue(value, xAxisStyle,
+            axisTimeFormats_[xAxisIndex]);
+        const qreal textWidth = axisMetrics.horizontalAdvance(label);
+        const qreal textX = x - textWidth / 2.0;
+        const qreal textY = layout.xNumberBaseline;
+        painter.drawText(QPointF(textX, textY), label);
+        if (i > 0) {
+          haveLastLabel = true;
+          lastLabelLeft = textX;
+          lastLabelHalfWidth = textWidth / 2.0;
+        }
       }
 
       // Minor ticks
@@ -1999,8 +2004,11 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
           if (timeAxis && minorValue > nice.drawMax) {
             break;
           }
-          const qreal minorX = rect.left()
-              + (minorValue - nice.drawMin) / span * rect.width();
+          const double minorPosition = tickFraction(nice, minorValue, false);
+          if (minorPosition < 0.0) {
+            continue;
+          }
+          const qreal minorX = rect.left() + minorPosition * rect.width();
           painter.drawLine(QPointF(minorX, rect.bottom() - kMinorTickSize),
                            QPointF(minorX, rect.bottom() + kMinorTickSize));
         }
@@ -2009,7 +2017,7 @@ void CartesianPlotElement::paintAxes(QPainter &painter, const QRectF &rect) cons
     if (timeAxis && haveLastLabel && axisPos.rightAxes.empty()
         && lastLabelLeft + 2.0 * lastLabelHalfWidth
             < rect.right() - lastLabelHalfWidth) {
-      const QString label = formatCartesianAxisValue(nice.drawMax,
+      const QString label = formatCartesianAxisValue(nice.axisMax,
           xAxisStyle, axisTimeFormats_[xAxisIndex]);
       const qreal textX = rect.right()
           - axisMetrics.horizontalAdvance(label) / 2.0;
@@ -2053,13 +2061,11 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
   // Draw ticks and numbers
   if (isLog10 && nice.drawMin > 0 && nice.drawMax > 0) {
     // Logarithmic axis - match MEDM's tick drawing behavior
-    const double logMin = std::log10(nice.drawMin);
-    const double logMax = std::log10(nice.drawMax);
-    
     // Draw first major tick at drawMin
-    {
-      const qreal y = rect.bottom();  // At the bottom (min value)
-      
+    const double firstPosition = tickFraction(nice, nice.drawMin, true);
+    if (firstPosition >= 0.0) {
+      const qreal y = rect.bottom() - firstPosition * rect.height();
+
       // Major tick
       painter.drawLine(QPointF(axisX - kMajorTickSize, y),
                        QPointF(axisX + kMajorTickSize, y));
@@ -2088,9 +2094,8 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       // (matching MEDM's: for (j = 2; j < num_y_minor; j++))
       for (int j = 2; j < nice.numMinor; ++j) {
         const double minorValue = majorValue * j;
-        if (minorValue <= nice.drawMax) {
-          const double minorLogValue = std::log10(minorValue);
-          const double minorNormalizedLog = (minorLogValue - logMin) / (logMax - logMin);
+        const double minorNormalizedLog = tickFraction(nice, minorValue, true);
+        if (minorValue <= nice.drawMax && minorNormalizedLog >= 0.0) {
           const qreal minorY = rect.bottom() - minorNormalizedLog * rect.height();
           painter.drawLine(QPointF(axisX - kMinorTickSize, minorY),
                            QPointF(axisX + kMinorTickSize, minorY));
@@ -2101,9 +2106,9 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
       majorValue *= nice.majorInc;
       
       // Draw major tick and label at this position
-      if (majorValue <= nice.drawMax * 1.0001) {  // Small tolerance for floating point
-        const double logValue = std::log10(majorValue);
-        const double normalizedLog = (logValue - logMin) / (logMax - logMin);
+      const double normalizedLog = tickFraction(nice, majorValue, true);
+      if (majorValue <= nice.drawMax * 1.0001  // Small tolerance for floating point
+          && normalizedLog >= 0.0) {
         const qreal y = rect.bottom() - normalizedLog * rect.height();
         
         // Major tick
@@ -2129,35 +2134,40 @@ void CartesianPlotElement::paintYAxis(QPainter &painter, const QRectF &rect,
     // Linear axis - use nice axis values for tick labels
     for (int i = 0; i <= nice.numMajor; ++i) {
       const double value = nice.drawMin + i * nice.majorInc;
-      
-      // Position based on nice range
-      const double normalized = (value - nice.drawMin) / (nice.drawMax - nice.drawMin);
-      const qreal y = rect.bottom() - normalized * rect.height();
-      
-      // Major tick
-      painter.drawLine(QPointF(axisX - kMajorTickSize, y),
-                       QPointF(axisX + kMajorTickSize, y));
-      
-      QString label = formatCartesianAxisValue(value, axisStyle,
-          axisTimeFormats_[arrayIndex]);
-      const qreal textWidth = metrics.horizontalAdvance(label);
-      
-      if (onLeft) {
-        const qreal textX = axisX - kYAxisLeftNumberGap - textWidth;
-        const qreal textY = y + numberRaise;
-        painter.drawText(QPointF(textX, textY), label);
-      } else {
-        const qreal textX = axisX + kYAxisRightNumberGap;
-        const qreal textY = y + numberRaise;
-        painter.drawText(QPointF(textX, textY), label);
+
+      // Position on the range the data is drawn against
+      const double normalized = tickFraction(nice, value, false);
+      if (normalized >= 0.0) {
+        const qreal y = rect.bottom() - normalized * rect.height();
+
+        // Major tick
+        painter.drawLine(QPointF(axisX - kMajorTickSize, y),
+                         QPointF(axisX + kMajorTickSize, y));
+
+        QString label = formatCartesianAxisValue(value, axisStyle,
+            axisTimeFormats_[arrayIndex]);
+        const qreal textWidth = metrics.horizontalAdvance(label);
+
+        if (onLeft) {
+          const qreal textX = axisX - kYAxisLeftNumberGap - textWidth;
+          const qreal textY = y + numberRaise;
+          painter.drawText(QPointF(textX, textY), label);
+        } else {
+          const qreal textX = axisX + kYAxisRightNumberGap;
+          const qreal textY = y + numberRaise;
+          painter.drawText(QPointF(textX, textY), label);
+        }
       }
-      
+
       // Minor ticks
       if (i < nice.numMajor) {
         /* SciPlot divides each major interval into numMinor parts. */
         for (int j = 1; j < nice.numMinor; ++j) {
           const double minorValue = value + j * nice.majorInc / nice.numMinor;
-          const double minorNormalized = (minorValue - nice.drawMin) / (nice.drawMax - nice.drawMin);
+          const double minorNormalized = tickFraction(nice, minorValue, false);
+          if (minorNormalized < 0.0) {
+            continue;
+          }
           const qreal minorY = rect.bottom() - minorNormalized * rect.height();
           painter.drawLine(QPointF(axisX - kMinorTickSize, minorY),
                            QPointF(axisX + kMinorTickSize, minorY));
@@ -2654,11 +2664,46 @@ CartesianPlotElement::NiceAxisRange CartesianPlotElement::axisTicks(
 {
   if (range.numMajor > 0) {
     return NiceAxisRange{range.minimum, range.maximum, range.majorInc,
-        range.numMajor, range.numMinor};
+        range.numMajor, range.numMinor, range.minimum, range.maximum};
   }
-  return computeNiceAxisRange(range.minimum, range.maximum,
+  NiceAxisRange nice = computeNiceAxisRange(range.minimum, range.maximum,
       range.style == CartesianPlotAxisStyle::kLog10, isXAxis,
       range.style == CartesianPlotAxisStyle::kTime);
+  /* A zoomed axis keeps its window, against which its data is drawn, and
+   * labels the nice ticks inside it. Spreading the rounded range over the
+   * axis instead put each label up to one major increment away from the
+   * data at that value. */
+  if (range.zoomed) {
+    nice.axisMin = range.minimum;
+    nice.axisMax = range.maximum;
+  }
+  return nice;
+}
+
+/* Where along the axis a tick value is drawn, from 0 at axisMin to 1 at
+ * axisMax, or -1 for a value outside that range. */
+double CartesianPlotElement::tickFraction(const NiceAxisRange &nice,
+    double value, bool isLog)
+{
+  double low = nice.axisMin;
+  double high = nice.axisMax;
+  if (isLog) {
+    if (!(value > 0.0) || !(low > 0.0) || !(high > 0.0)) {
+      return -1.0;
+    }
+    value = std::log10(value);
+    low = std::log10(low);
+    high = std::log10(high);
+  }
+  if (!(high > low)) {
+    return -1.0;
+  }
+  const double fraction = (value - low) / (high - low);
+  constexpr double kTolerance = 1e-9;
+  if (!(fraction >= -kTolerance && fraction <= 1.0 + kTolerance)) {
+    return -1.0;
+  }
+  return fraction;
 }
 
 CartesianPlotElement::AxisRange CartesianPlotElement::resolvedAxisRange(
@@ -2708,6 +2753,9 @@ qreal CartesianPlotElement::yAxisMaximumTickLabelWidth(int yAxisIndex,
       kAxesScaleFactor);
   qreal maxWidth = 0.0;
   auto measureLabel = [&](double value) {
+    if (tickFraction(nice, value, isLog10) < 0.0) {
+      return;
+    }
     if (!isLog10 && nice.majorInc > 0.0) {
       value = std::floor(value / nice.majorInc + 0.5) * nice.majorInc;
       if (std::fabs(value) < std::numeric_limits<double>::min()) {

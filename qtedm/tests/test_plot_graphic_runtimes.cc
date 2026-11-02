@@ -9,6 +9,7 @@
 #include <QRegularExpression>
 #include <QTemporaryDir>
 
+#include <cmath>
 #include <limits>
 
 #include "cartesian_plot_element.h"
@@ -38,6 +39,7 @@ class TestPlotGraphicRuntimes : public QObject
 
 private slots:
   void cartesianTracksTraceModesPointsAndCapacity();
+  void zoomedAxisTicksSitWhereTheirValuesArePlotted();
   void heatmapTracksDimensionsRangeAndTransforms();
   void heatmapBoundsSyntheticPreviewForLargeConfiguredGrids();
   void dynamicGraphicAppliesRuntimeVisibilityAndSeverity();
@@ -47,6 +49,66 @@ private slots:
   void cartesianExportReadsWithSdds();
   void rendersWidgetsToExplicitPathsAndReportsFailures();
 };
+
+/* A zoomed axis draws its data against the zoom window, so each tick must
+ * sit where its value is plotted. Spreading the rounded range, 10 to 90
+ * for a window of 13 to 87, over the axis put the label 20 at 12.5% of
+ * the axis instead of 9.5%. */
+void TestPlotGraphicRuntimes::zoomedAxisTicksSitWhereTheirValuesArePlotted()
+{
+  CartesianPlotElement::AxisRange zoomed;
+  zoomed.minimum = 13.0;
+  zoomed.maximum = 87.0;
+  zoomed.valid = true;
+  zoomed.zoomed = true;
+  const auto ticks = CartesianPlotElement::axisTicks(zoomed, true);
+  QCOMPARE(ticks.axisMin, 13.0);
+  QCOMPARE(ticks.axisMax, 87.0);
+  QVERIFY(ticks.drawMin < 13.0);
+  int shown = 0;
+  for (int i = 0; i <= ticks.numMajor; ++i) {
+    const double value = ticks.drawMin + i * ticks.majorInc;
+    const double fraction =
+        CartesianPlotElement::tickFraction(ticks, value, false);
+    if (value < 13.0 || value > 87.0) {
+      QCOMPARE(fraction, -1.0);
+      continue;
+    }
+    ++shown;
+    QVERIFY2(std::abs(fraction - (value - 13.0) / 74.0) < 1e-12,
+        qPrintable(QString::number(value)));
+  }
+  QVERIFY(shown >= 3);
+
+  /* An unzoomed range is already rounded; its ticks span the axis. */
+  CartesianPlotElement::AxisRange rounded;
+  rounded.minimum = 10.0;
+  rounded.maximum = 90.0;
+  rounded.valid = true;
+  rounded.majorInc = 20.0;
+  rounded.numMajor = 4;
+  rounded.numMinor = 4;
+  const auto full = CartesianPlotElement::axisTicks(rounded, true);
+  QCOMPARE(full.axisMin, 10.0);
+  QCOMPARE(full.axisMax, 90.0);
+  QCOMPARE(CartesianPlotElement::tickFraction(full, 10.0, false), 0.0);
+  QCOMPARE(CartesianPlotElement::tickFraction(full, 50.0, false), 0.5);
+  QCOMPARE(CartesianPlotElement::tickFraction(full, 90.0, false), 1.0);
+
+  /* A zoomed log axis labels the decades inside its window. */
+  CartesianPlotElement::AxisRange zoomedLog;
+  zoomedLog.minimum = 2.0;
+  zoomedLog.maximum = 50.0;
+  zoomedLog.valid = true;
+  zoomedLog.style = CartesianPlotAxisStyle::kLog10;
+  zoomedLog.zoomed = true;
+  const auto decades = CartesianPlotElement::axisTicks(zoomedLog, false);
+  QCOMPARE(CartesianPlotElement::tickFraction(decades, 1.0, true), -1.0);
+  QCOMPARE(CartesianPlotElement::tickFraction(decades, 100.0, true), -1.0);
+  QVERIFY(std::abs(CartesianPlotElement::tickFraction(decades, 10.0, true)
+      - (1.0 - std::log10(2.0)) / (std::log10(50.0) - std::log10(2.0)))
+      < 1e-12);
+}
 
 void TestPlotGraphicRuntimes::cartesianTracksTraceModesPointsAndCapacity()
 {

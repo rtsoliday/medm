@@ -191,6 +191,8 @@ private slots:
   void sliderIncrementDialogActions();
   void sliderTrackEnclosesHandle_data();
   void sliderTrackEnclosesHandle();
+  void shortSliderDrawsAndDrags_data();
+  void shortSliderDrawsAndDrags();
   void sliderTroughClicks_data();
   void sliderTroughClicks();
   void sliderThumbClickDoesNotStep_data();
@@ -3192,6 +3194,67 @@ void TestObserveOnlyControls::sliderTrackEnclosesHandle()
     QVERIFY2(rendered.pixelColor(point) != background,
         "Track must extend beyond the entire handle at both limits");
   }
+}
+
+void TestObserveOnlyControls::shortSliderDrawsAndDrags_data()
+{
+  QTest::addColumn<int>("direction");
+  QTest::addColumn<QSize>("size");
+  for (int length : {20, 30, 36}) {
+    const QByteArray right = QStringLiteral("right-%1").arg(length).toLatin1();
+    QTest::newRow(right.constData())
+        << int(BarDirection::kRight) << QSize(length, 20);
+    const QByteArray up = QStringLiteral("up-%1").arg(length).toLatin1();
+    QTest::newRow(up.constData())
+        << int(BarDirection::kUp) << QSize(20, length);
+  }
+}
+
+/* MEDM draws and moves the thumb of an XmScale shorter than the thumb.
+ * Such a slider must not draw nothing and ignore the mouse. */
+void TestObserveOnlyControls::shortSliderDrawsAndDrags()
+{
+  QFETCH(int, direction);
+  QFETCH(QSize, size);
+  SliderElement slider;
+  slider.resize(size);
+  slider.setDirection(static_cast<BarDirection>(direction));
+  slider.setLabel(MeterLabel::kNone);
+  const QColor background(160, 160, 160);
+  slider.setBackgroundColor(background);
+  slider.setChannel(QStringLiteral("test:slider:short"));
+  slider.setLimits(PvLimits{});
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, 10.0);
+  slider.setRuntimeValue(5.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+
+  QImage rendered(slider.size(), QImage::Format_ARGB32);
+  rendered.fill(Qt::transparent);
+  slider.render(&rendered);
+  int drawn = 0;
+  for (int y = 0; y < rendered.height(); ++y) {
+    for (int x = 0; x < rendered.width(); ++x) {
+      if (rendered.pixelColor(x, y) != background) {
+        ++drawn;
+      }
+    }
+  }
+  QVERIFY2(drawn > 0, "A short slider must draw its scale");
+
+  const bool vertical = direction == int(BarDirection::kUp);
+  const QPoint center(size.width() / 2, size.height() / 2);
+  const QPoint end = vertical ? QPoint(center.x(), 0)
+                              : QPoint(size.width() - 1, center.y());
+  QTest::mousePress(&slider, Qt::LeftButton, Qt::NoModifier, center);
+  QTest::mouseMove(&slider, end);
+  QTest::mouseRelease(&slider, Qt::LeftButton, Qt::NoModifier, end);
+  QVERIFY2(!writes.isEmpty(), "Dragging a short slider's thumb must write");
+  QVERIFY(writes.last() > 5.0);
 }
 
 void TestObserveOnlyControls::sliderTroughClicks_data()

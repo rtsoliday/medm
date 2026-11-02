@@ -71,11 +71,16 @@ qreal boundedThumbExtent(qreal availableExtent)
 QRectF thumbTravelInTrough(const QRectF &trough, bool vertical,
     qreal *thumbExtent)
 {
-  const qreal extent = boundedThumbExtent(
-      vertical ? trough.height() : trough.width());
+  const qreal length = vertical ? trough.height() : trough.width();
+  qreal extent = boundedThumbExtent(length);
   if (extent <= 0.0) {
     return QRectF();
   }
+  /* MEDM draws and moves the thumb of a scale too short for it. Shrink
+   * the thumb so it keeps some travel, or the slider would draw nothing
+   * and ignore clicks. */
+  extent = std::min(extent,
+      std::max<qreal>(1.0, length - 4.0 - kMinimumTrackTravel));
   if (thumbExtent) {
     *thumbExtent = extent;
   }

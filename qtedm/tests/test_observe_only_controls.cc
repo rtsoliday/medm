@@ -138,6 +138,7 @@ private slots:
   void monitorGeometrySurvivesDeferredResize();
   void scaleMonitorValueBoxMatchesXcIndicator();
   void wheelSwitchStepsOutOfRangeValueAsXc();
+  void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -5524,6 +5525,61 @@ void TestObserveOnlyControls::wheelSwitchStepsOutOfRangeValueAsXc()
   element.setRuntimeValue(1.0);
   QTest::keyClick(&element, Qt::Key_PageUp);
   QCOMPARE(writes.size(), 3);
+}
+
+/* MEDM's limitsAttributeInit() gives every limits block channel sources,
+ * and QtEDM writes no block when all limits come from the channel. A
+ * widget without a block must not fall back to the 0 to 1 default range,
+ * which would also bound the values a slider or wheel switch writes. */
+void TestObserveOnlyControls::limitWidgetsWithoutLimitsBlockUseChannelLimits()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("limits.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write(
+      "file { name=\"limits.adl\" version=030122 }\n"
+      "display { object { x=0 y=0 width=300 height=200 } clr=1 bclr=4 }\n"
+      "\"color map\" { ncolors=5 colors { ffffff, 000000, ff0000, 00ff00,"
+      " bbbbbb, } }\n"
+      "valuator { object { x=10 y=10 width=120 height=40 }\n"
+      "  control { chan=\"limits:valuator\" clr=1 bclr=4 }\n"
+      "  label=\"none\" }\n"
+      "\"wheel switch\" { object { x=10 y=60 width=120 height=40 }\n"
+      "  control { chan=\"limits:wheel\" clr=1 bclr=4 } }\n"
+      "indicator { object { x=10 y=110 width=120 height=40 }\n"
+      "  monitor { chan=\"limits:indicator\" clr=1 bclr=4 } }\n"
+      "valuator { object { x=150 y=10 width=120 height=40 }\n"
+      "  control { chan=\"limits:valuator:default\" clr=1 bclr=4 }\n"
+      "  label=\"none\"\n"
+      "  limits { loprSrc=\"default\" hoprSrc=\"default\""
+      " hoprDefault=5 } }\n");
+  file.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  QCOMPARE(window.sliderElements_.size(), 2);
+  QCOMPARE(window.wheelSwitchElements_.size(), 1);
+  QCOMPARE(window.scaleMonitorElements_.size(), 1);
+  const auto isChannel = [](const PvLimits &limits) {
+    return limits.lowSource == PvLimitSource::kChannel
+        && limits.highSource == PvLimitSource::kChannel
+        && limits.precisionSource == PvLimitSource::kChannel;
+  };
+  QVERIFY(isChannel(window.sliderElements_.at(0)->limits()));
+  QVERIFY(isChannel(window.wheelSwitchElements_.first()->limits()));
+  QVERIFY(isChannel(window.scaleMonitorElements_.first()->limits()));
+  const PvLimits explicitLimits = window.sliderElements_.at(1)->limits();
+  QCOMPARE(explicitLimits.lowSource, PvLimitSource::kDefault);
+  QCOMPARE(explicitLimits.highSource, PvLimitSource::kDefault);
+  QCOMPARE(explicitLimits.highDefault, 5.0);
 }
 
 void TestObserveOnlyControls::scaleMonitorValueBoxMatchesXcIndicator()

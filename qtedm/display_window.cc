@@ -30536,7 +30536,10 @@ SliderElement *DisplayWindow::loadSliderElement(const AdlNode &valuatorNode)
     element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
     element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
      element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
-  } else if (loadingLegacyAdl_) {
+  } else {
+    /* As MEDM's limitsAttributeInit(), a valuator without a limits block
+     * takes its limits from the channel, as QtEDM writes one whose limits
+     * all come from the channel. */
     PvLimits limits = element->limits();
     limits.lowSource = PvLimitSource::kChannel;
     limits.highSource = PvLimitSource::kChannel;
@@ -30749,6 +30752,14 @@ WheelSwitchElement *DisplayWindow::loadWheelSwitchElement(const AdlNode &wheelNo
     if (hasPrecisionValue) {
       element->setPrecision(static_cast<double>(limits.precisionDefault));
     }
+  } else {
+    /* As MEDM's limitsAttributeInit(), a wheel switch without a limits
+     * block takes its limits from the channel. */
+    PvLimits limits = element->limits();
+    limits.lowSource = PvLimitSource::kChannel;
+    limits.highSource = PvLimitSource::kChannel;
+    limits.precisionSource = PvLimitSource::kChannel;
+    element->setLimits(limits);
   }
 
   auto channelSetter = [element](int index, const QString &value) {
@@ -32604,6 +32615,15 @@ ScaleMonitorElement *DisplayWindow::loadScaleMonitorElement(
     element->setHasExplicitLowLimitData(hasExplicitLowLimitData);
     element->setHasExplicitHighLimitData(hasExplicitHighLimitData);
     element->setHasExplicitPrecisionData(hasExplicitPrecisionData);
+  } else {
+    /* As MEDM's limitsAttributeInit(), an indicator without a limits
+     * block, as in files older than 2.2, takes its limits from the
+     * channel. */
+    PvLimits limits = element->limits();
+    limits.lowSource = PvLimitSource::kChannel;
+    limits.highSource = PvLimitSource::kChannel;
+    limits.precisionSource = PvLimitSource::kChannel;
+    element->setLimits(limits);
   }
 
   if (currentCompositeOwner_) {

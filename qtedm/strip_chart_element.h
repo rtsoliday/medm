@@ -24,6 +24,7 @@ class QResizeEvent;
 
 class StripChartElement : public QWidget
 {
+  friend class TestArchivesSnapshots;
   friend class TestObserveOnlyControls;
 
 public:
@@ -78,6 +79,7 @@ public:
       qint64 windowEndMs);
   void clearRuntimeState();
   void clearPenRuntimeState(int index);
+  void clearPenRuntimeValue(int index);
 
   bool isArchivePlot() const;
   void setArchivePlot(bool enabled);

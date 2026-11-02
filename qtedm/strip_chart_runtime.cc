@@ -336,6 +336,7 @@ void StripChartRuntime::handleConnectionEvent(int index,
         element->setRuntimeConnected(index, true);
         element->setRuntimeReadAccessKnown(index, true);
         element->setRuntimeReadAccess(index, true);
+        element->clearPenRuntimeValue(index);
       });
       updateArchiveStatus(
           QStringLiteral("Live PV disconnected; showing archive history."));

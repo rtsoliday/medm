@@ -107,6 +107,7 @@ private slots:
   void archiveRequestTimesOut();
   void archiveOwnerDestructionReleasesReply();
   void archivePenFailuresSurviveOtherPenCompletions();
+  void archiveLiveDisconnectLeavesGaps();
   void archiveHistoryPreservesTimestampGaps();
   void archiveHistoryRendersConnectedLine();
   void snapshotDefaultExtensionIsAppended();
@@ -374,6 +375,52 @@ void TestArchivesSnapshots::archivePenFailuresSurviveOtherPenCompletions()
   QVERIFY(runtime.pens_[1].archiveError.isEmpty());
   QVERIFY(chart.archiveStatus().isEmpty());
   QVERIFY(chart.toolTip().isEmpty());
+}
+
+/* An archive plot keeps its history when the live channel disconnects, but
+ * the columns added afterwards must be gaps. Repeating the last live value
+ * scrolled a flat line on as if the channel were still reporting. */
+void TestArchivesSnapshots::archiveLiveDisconnectLeavesGaps()
+{
+  ControlledArchiveProvider provider;
+  StripChartElement chart;
+  chart.resize(320, 160);
+  chart.setArchivePlot(true);
+  chart.setExecuteMode(true);
+  chart.setChannel(0, QStringLiteral("TEST:LIVE"));
+  StripChartRuntime runtime(&chart);
+  runtime.archiveProvider_ = &provider;
+  runtime.started_ = true;
+  runtime.pens_[0].channelName = QStringLiteral("TEST:LIVE");
+  SharedChannelData live;
+  live.isNumeric = true;
+  live.numericValue = 3.0;
+  runtime.handleConnectionEvent(0, true, live);
+  runtime.requestArchive(0);
+  QCOMPARE(provider.pending.size(), 1);
+  ArchiveResult history;
+  history.samples.append({QDateTime::currentMSecsSinceEpoch() - 1000,
+      12.5, 0, 0});
+  provider.finish(0, history);
+  runtime.handleValueEvent(0, live);
+
+  chart.appendSampleColumn();
+  QCOMPARE(chart.sampleValue(0, chart.sampleCount() - 1), 3.0);
+
+  runtime.handleConnectionEvent(0, false, SharedChannelData{});
+  QVERIFY(chart.archiveStatus().contains(
+      QStringLiteral("Live PV disconnected")));
+  const int before = chart.sampleCount();
+  chart.appendSampleColumn();
+  QVERIFY(before > 0);
+  QVERIFY(std::isnan(chart.sampleValue(0, chart.sampleCount() - 1)));
+  int finite = 0;
+  for (int index = 0; index < chart.sampleCount(); ++index) {
+    if (std::isfinite(chart.sampleValue(0, index))) {
+      ++finite;
+    }
+  }
+  QVERIFY2(finite > 0, "The archive history must be kept");
 }
 
 void TestArchivesSnapshots::archiveHistoryPreservesTimestampGaps()

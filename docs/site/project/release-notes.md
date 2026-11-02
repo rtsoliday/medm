@@ -56,6 +56,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - Related display and shell command buttons show their icon and label as MEDM does: together, centered on a button with one item and at the left of a menu button, with the label's leading spaces kept. On a small button the label no longer covers the icon. A row or column of related display buttons with at most one label is one button, as in MEDM, and opens the first display with a name.
 - Text 16 to 19 or 21 to 25 pixels high is no longer wider than in MEDM. The fonts for those heights had no space character, so spaces were drawn from a wider font and long labels could be cut off.
 - Composites no longer cut off their contents in execute mode. A button, outline, or label that extends past its composite's stored size is drawn in full, as in MEDM, and a composite file's contents start at the composite's position instead of a few pixels away.
+- An archive strip chart whose live channel disconnects keeps its history and leaves a gap for the time the channel is gone. It repeated the last live value, which scrolled on as if the channel were still reporting.
 - `make clean` works on Windows, and QtEDM compiles without warnings.
 
 ### Known issues

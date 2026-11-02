@@ -846,6 +846,19 @@ void StripChartElement::clearRuntimeState()
   update();
 }
 
+/* Keep a pen's history but stop extending it with the last live value, so
+ * the columns added while its channel is gone are gaps, not a flat line
+ * that looks like current data. */
+void StripChartElement::clearPenRuntimeValue(int index)
+{
+  if (index < 0 || index >= penCount()) {
+    return;
+  }
+  Pen &pen = pens_[index];
+  pen.hasRuntimeValue = false;
+  pen.hasIntervalRange = false;
+}
+
 void StripChartElement::clearPenRuntimeState(int index)
 {
   if (index < 0 || index >= penCount()) {

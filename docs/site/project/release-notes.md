@@ -46,6 +46,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - A `-dg` geometry with a position, such as `qtedm -x -dg +100+200 display.adl`, no longer crashes QtEDM.
 - The tick labels of a zoomed or panned cartesian plot sit where their values are plotted. They were spread over the zoom window rounded out to nice values, so a label could be up to one tick step away from the data at its value.
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
+- The + and - buttons of a hexadecimal or octal Spin Box write the next whole number. They sent the next value as decimal text, which the control read in its own base, so + on a hexadecimal 9 wrote 16 and octal steps were refused.
 - A wheel switch whose value is outside its limits steps toward them by the step you choose, as in MEDM. It used to write the nearest limit, so one Down click on a value of 50 with limits 0 to 1 wrote 1. A step that would move the value further out of range does nothing.
 - Menus, related display buttons, and wave tables fit their labels and empty-state text to the widget.
 - Related display and shell command buttons show their icon and label as MEDM does: together, centered on a button with one item and at the left of a menu button, with the label's leading spaces kept. On a small button the label no longer covers the icon. A row or column of related display buttons with at most one label is one button, as in MEDM, and opens the first display with a name.

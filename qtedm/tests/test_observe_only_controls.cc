@@ -242,6 +242,8 @@ private slots:
   void symbolMappingRejectsInvalidRanges_data();
   void symbolMappingRejectsInvalidRanges();
   void spinBoxPropertiesPreserveExtremeSteps();
+  void spinBoxStepsInItsFormat_data();
+  void spinBoxStepsInItsFormat();
   void symbolMappingLayoutAndDefaults();
   void inlineColorMapsSurviveRenderingSaveAndUndo();
   void invalidInlineColorMapPreservesLoadedDisplay();
@@ -5237,6 +5239,84 @@ void TestObserveOnlyControls::spinBoxPropertiesPreserveExtremeSteps()
     QVERIFY(checked);
     QVERIFY(spin->stepSize() == step);
   }
+}
+
+void TestObserveOnlyControls::spinBoxStepsInItsFormat_data()
+{
+  QTest::addColumn<int>("format");
+  QTest::addColumn<double>("value");
+  QTest::addColumn<QString>("text");
+  QTest::addColumn<int>("direction");
+  QTest::addColumn<double>("expected");
+
+  QTest::newRow("decimal-up") << int(TextMonitorFormat::kDecimal)
+      << 9.0 << QStringLiteral("9") << 1 << 10.0;
+  QTest::newRow("hex-up") << int(TextMonitorFormat::kHexadecimal)
+      << 9.0 << QStringLiteral("0x9") << 1 << 10.0;
+  QTest::newRow("hex-down-negative") << int(TextMonitorFormat::kHexadecimal)
+      << -4.0 << QStringLiteral("0xfffffffc") << -1 << -5.0;
+  QTest::newRow("octal-up") << int(TextMonitorFormat::kOctal)
+      << 7.0 << QStringLiteral("7") << 1 << 8.0;
+  QTest::newRow("octal-down") << int(TextMonitorFormat::kOctal)
+      << 8.0 << QStringLiteral("10") << -1 << 7.0;
+}
+
+/* The runtime reads a spin box's text in the control's format, so the
+ * + and - buttons of a hexadecimal or octal control must send the stepped
+ * value in that base: from 9, + must write 10, not "10" read as 16. */
+void TestObserveOnlyControls::spinBoxStepsInItsFormat()
+{
+  QFETCH(int, format);
+  QFETCH(double, value);
+  QFETCH(QString, text);
+  QFETCH(int, direction);
+  QFETCH(double, expected);
+
+  SetpointControlElement spinbox;
+  spinbox.setQtedmSpinBox(true);
+  spinbox.setFormat(static_cast<TextMonitorFormat>(format));
+  spinbox.setStepSize(1.0);
+  spinbox.setPrecision(0);
+  PvLimits limits = spinbox.limits();
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.lowDefault = -100.0;
+  limits.highDefault = 100.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 0;
+  spinbox.setLimits(limits);
+  spinbox.setSetpointChannel(QStringLiteral("__test:spinbox:format"));
+  QStringList sent;
+  spinbox.setActivationCallback([&sent](const QString &value) {
+    sent.append(value);
+  });
+  spinbox.setExecuteMode(true);
+  spinbox.setSetpointConnected(true);
+  spinbox.setSetpointWriteAccess(true);
+  spinbox.setSetpointValue(value, text);
+  auto *button = spinbox.findChild<QToolButton *>(direction > 0
+      ? QStringLiteral("qtedmSpinBoxIncrementButton")
+      : QStringLiteral("qtedmSpinBoxDecrementButton"));
+  QVERIFY(button);
+  button->click();
+  QCOMPARE(sent.size(), 1);
+
+  /* Read the text back as SetpointControlRuntime::parseNumericInput does. */
+  bool ok = false;
+  double written = 0.0;
+  switch (static_cast<TextMonitorFormat>(format)) {
+  case TextMonitorFormat::kHexadecimal:
+    written = static_cast<double>(sent.first().toLongLong(&ok, 16));
+    break;
+  case TextMonitorFormat::kOctal:
+    written = static_cast<double>(sent.first().toLongLong(&ok, 8));
+    break;
+  default:
+    written = sent.first().toDouble(&ok);
+    break;
+  }
+  QVERIFY2(ok, qPrintable(sent.first()));
+  QCOMPARE(written, expected);
 }
 
 void TestObserveOnlyControls::symbolMappingLayoutAndDefaults()

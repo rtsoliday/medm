@@ -20,6 +20,7 @@
 #include "cursor_utils.h"
 #include "pv_name_utils.h"
 #include "text_font_utils.h"
+#include "text_format_utils.h"
 #include "window_utils.h"
 
 namespace {
@@ -1206,10 +1207,16 @@ void SetpointControlElement::stepBy(int direction)
       || !runtimeWriteAccess_) {
     return;
   }
+  /* The runtime reads the text in this control's format, so a hexadecimal
+   * or octal control steps and writes whole numbers in that base. */
+  const int base = format_ == TextMonitorFormat::kHexadecimal ? 16
+      : format_ == TextMonitorFormat::kOctal ? 8 : 10;
   double current = hasSetpointValue_ ? setpointValue_ : 0.0;
-  if (setpointEdit_) {
+  if (setpointEdit_ && (base == 10 || dirty_)) {
     bool ok = false;
-    const double edited = setpointEdit_->text().trimmed().toDouble(&ok);
+    const QString text = setpointEdit_->text().trimmed();
+    const double edited = base == 10 ? text.toDouble(&ok)
+        : static_cast<double>(text.toLongLong(&ok, base));
     if (ok && std::isfinite(edited)) {
       current = edited;
     }
@@ -1219,6 +1226,17 @@ void SetpointControlElement::stepBy(int direction)
   const double high = displayHighLimit();
   if (std::isfinite(low) && std::isfinite(high) && low <= high) {
     next = std::clamp(next, low, high);
+  }
+  if (base != 10) {
+    /* QString::number() writes a negative number in another base as its
+     * 64-bit two's complement, which does not read back. */
+    const long stepped = TextFormatUtils::saturatedLongFromDouble(next, true);
+    const qulonglong magnitude = stepped < 0
+        ? 0ULL - static_cast<qulonglong>(stepped)
+        : static_cast<qulonglong>(stepped);
+    activationCallback_((stepped < 0 ? QStringLiteral("-") : QString())
+        + QString::number(magnitude, base));
+    return;
   }
   const int precision = precisionSource() == PvLimitSource::kChannel
       && runtimePrecision_ >= 0 ? runtimePrecision_ : precisionDefault();

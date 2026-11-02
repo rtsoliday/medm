@@ -175,6 +175,7 @@ private slots:
   void waterfallBufferIsBoundedForHugeWaveforms();
   void stripChartPreservesSourceTimestamps();
   void stripChartResamplesWhenLimitsResizeChart();
+  void stripChartKeepsNarrowChannelLimits();
   void waveformCopiesAreBounded();
   void waveformCountsTrackPayloadLength();
   void emptyWaveformStatusFitsViewport_data();
@@ -2620,6 +2621,23 @@ void TestObserveOnlyControls::stripChartPreservesSourceTimestamps()
 /* A channel's limits set the width of the Y labels and so of the chart.
  * Sampling must follow that width, or a chart drawn narrower than its
  * sample buffer shows less than its period under the period's labels. */
+/* MEDM raises a strip chart pen's upper limit only when both channel limits
+ * are 0. A vacuum gauge whose limits are 1e-11 to 1e-9 Torr keeps them; an
+ * absolute 1e-9 threshold replaced them with 1e-11 to 1, which drew the
+ * trace along the bottom of the chart. */
+void TestObserveOnlyControls::stripChartKeepsNarrowChannelLimits()
+{
+  StripChartElement chart;
+  chart.setChannel(0, QStringLiteral("test:strip:vacuum"));
+  chart.setChannel(1, QStringLiteral("test:strip:zero"));
+  chart.setRuntimeLimits(0, 1e-11, 1e-9);
+  chart.setRuntimeLimits(1, 0.0, 0.0);
+  QCOMPARE(chart.effectivePenLow(0), 1e-11);
+  QCOMPARE(chart.effectivePenHigh(0), 1e-9);
+  QCOMPARE(chart.effectivePenLow(1), 0.0);
+  QCOMPARE(chart.effectivePenHigh(1), 1.0);
+}
+
 void TestObserveOnlyControls::stripChartResamplesWhenLimitsResizeChart()
 {
   StripChartElement chart;

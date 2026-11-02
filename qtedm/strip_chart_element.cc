@@ -35,8 +35,16 @@ constexpr int kLateThresholdMs = 100;
 constexpr int kLateCountThreshold = 5;
 constexpr int kOnTimeCountThreshold = 20;
 constexpr int kIntervalIncrementMs = 100;
-constexpr double kMinimumRangeEpsilon = 1e-9;
 constexpr int kMaxSampleBurst = 32;
+
+/* The span a pen is drawn over. Small-unit channels, such as vacuum
+ * pressures near 1e-10 Torr, keep their own span; only equal limits, which
+ * would divide by zero, are drawn over a span of 1. */
+double drawRange(double low, double high)
+{
+  const double range = std::abs(high - low);
+  return range > 0.0 ? range : 1.0;
+}
 
 constexpr int kDefaultPenColorIndex = 14;
 
@@ -609,7 +617,9 @@ void StripChartElement::setRuntimeLimits(int index, double low, double high)
   if (!std::isfinite(low) || !std::isfinite(high)) {
     return;
   }
-  if (std::abs(high - low) < kMinimumRangeEpsilon) {
+  /* MEDM raises an upper limit only when both limits are 0; a narrow
+   * channel range such as 1e-11 to 1e-9 is kept. */
+  if (high == low) {
     high = low + 1.0;
   }
   Pen &pen = pens_[index];
@@ -1587,7 +1597,7 @@ void StripChartElement::paintRuntimePens(QPainter &painter, const QRect &content
     if (!std::isfinite(low) || !std::isfinite(high)) {
       continue;
     }
-    const double range = std::max(std::abs(high - low), kMinimumRangeEpsilon);
+    const double range = drawRange(low, high);
     QPen penColor(effectivePenColor(i));
     penColor.setWidth(1);
     painter.setPen(penColor);
@@ -2284,7 +2294,7 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
           if (!std::isfinite(low) || !std::isfinite(high)) {
             continue;
           }
-          const double range = std::max(std::abs(high - low), 1e-12);
+          const double range = drawRange(low, high);
 
           const double value = pen.samples[static_cast<std::size_t>(sampleIdx)];
           if (!std::isfinite(value)) {
@@ -2304,9 +2314,13 @@ void StripChartElement::ensurePenCache(const QRect &plotArea)
             std::swap(sampleLow, sampleHigh);
           }
 
-          // When zoomed, allow values outside the visible range
-          const double normalizedLow = (sampleLow - low) / range;
-          const double normalizedHigh = (sampleHigh - low) / range;
+          /* A column is a vertical line in the cache image, so bounding it
+           * just outside the chart draws the same pixels and keeps the
+           * conversion to int defined for values far out of range. */
+          const double normalizedLow =
+              std::clamp((sampleLow - low) / range, -1.0, 2.0);
+          const double normalizedHigh =
+              std::clamp((sampleHigh - low) / range, -1.0, 2.0);
           const int yLow = static_cast<int>((height - 1) * (1.0 - normalizedLow));
           const int yHigh = static_cast<int>((height - 1) * (1.0 - normalizedHigh));
 
@@ -2549,7 +2563,7 @@ void StripChartElement::computeAutoscaleLimits() const
     // No data yet - use default range
     autoscaleLow_ = 0.0;
     autoscaleHigh_ = 1.0;
-  } else if (std::abs(maxVal - minVal) < kMinimumRangeEpsilon) {
+  } else if (!(maxVal > minVal)) {
     // All values are the same - expand range around that value
     const double value = (minVal + maxVal) / 2.0;
     const double margin = std::abs(value) * 0.1;

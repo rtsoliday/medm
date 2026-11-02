@@ -196,6 +196,18 @@ void TestCommandLine::requiredOptionValuesAreNotSwallowed()
   QCOMPARE(missingMacro.displayFiles,
       QStringList({QStringLiteral("screen.adl")}));
 
+  /* MEDM takes any argument after -macro, so a blank one defines no macros
+   * instead of becoming a display file. */
+  for (const QString &blank : {QString(), QStringLiteral(" ")}) {
+    const CommandLineOptions blankMacro = parseCommandLine(QStringList{
+        QStringLiteral("qtedm"), QStringLiteral("-x"),
+        QStringLiteral("-macro"), blank, QStringLiteral("screen.adl")});
+    QVERIFY(blankMacro.invalidOption.isEmpty());
+    QVERIFY(blankMacro.macroString.isEmpty());
+    QCOMPARE(blankMacro.displayFiles,
+        QStringList({QStringLiteral("screen.adl")}));
+  }
+
   const CommandLineOptions missingGeometry = parseCommandLine(QStringList{
       QStringLiteral("qtedm"), QStringLiteral("-dg"),
       QStringLiteral("-x"), QStringLiteral("screen.adl")});

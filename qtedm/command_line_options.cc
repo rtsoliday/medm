@@ -132,10 +132,16 @@ CommandLineOptions parseCommandLine(const QStringList &args)
                arg == QLatin1String("--crash-test")) {
       options.crashTest = true;
     } else if (arg == QLatin1String("-macro")) {
-      const QString candidate = (i + 1) < args.size()
+      const bool hasValue = (i + 1) < args.size();
+      const QString candidate = hasValue
           ? args.at(i + 1).trimmed()
           : QString();
-      if (!candidate.isEmpty()
+      if (hasValue && candidate.isEmpty()) {
+        /* MEDM takes the next argument as the macro string whatever it is,
+         * so a blank one, as from a script without macros, defines none. */
+        ++i;
+        options.macroString.clear();
+      } else if (!candidate.isEmpty()
           && !candidate.startsWith(QLatin1Char('-'))) {
         QString tmp = args.at(++i);
         if (!tmp.isEmpty() && tmp.front() == QLatin1Char('"')) {

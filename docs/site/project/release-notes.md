@@ -62,4 +62,5 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 
 - Saving a display written by MEDM rewrites strings that contain backslashes. QtEDM decodes the escapes it writes, such as `\t`, when it reads a file, and saves each backslash as `\\`, which MEDM shows as two backslashes. Keep an original copy of MEDM displays whose labels or shell commands contain backslashes.
 - Opening a display with unreachable `pva://` PVs pauses for about one second per PV.
+- As in MEDM, a negative value of a float, double, or char Channel Access channel shown in hexadecimal, such as `0xfffffffc` for -4, reads back as a large positive number, so entering the text shown writes 4294967292. Enter negative values of such channels in decimal.
 - A `pva://` channel reports every numeric type as a double, so hexadecimal or octal text from `0x80000000` to `0xffffffff` entered for a signed integer `pva://` PV is written as a large positive number, which does not fit the PV. A negative value of such a PV is shown in that range. Enter negative values of `pva://` integers in decimal.

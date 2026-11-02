@@ -205,6 +205,8 @@ private slots:
   void sliderWithoutLabelsFitsMedmScale();
   void sliderTroughRespectsAccess_data();
   void sliderTroughRespectsAccess();
+  void sliderStepsFromOutOfRangeValue_data();
+  void sliderStepsFromOutOfRangeValue();
   void executePickingFollowsVisibleStacking();
   void disconnectedWidgetsStackInDisplayOrder();
   void disconnectedCompositeChildrenStackInOrder();
@@ -3650,6 +3652,46 @@ void TestObserveOnlyControls::sliderTroughRespectsAccess()
   slider.show();
   QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier, QPoint(156, 5));
   QVERIFY(writes.isEmpty());
+}
+
+void TestObserveOnlyControls::sliderStepsFromOutOfRangeValue_data()
+{
+  QTest::addColumn<double>("value");
+  QTest::addColumn<int>("key");
+  QTest::addColumn<double>("expected");
+
+  QTest::newRow("above-down") << 50.0 << int(Qt::Key_Left) << 49.0;
+  QTest::newRow("above-up") << 50.0 << int(Qt::Key_Right) << 1.0;
+  QTest::newRow("below-up") << -50.0 << int(Qt::Key_Right) << -49.0;
+  QTest::newRow("below-down") << -50.0 << int(Qt::Key_Left) << 0.0;
+  QTest::newRow("inside-up") << 0.0 << int(Qt::Key_Right) << 1.0;
+}
+
+/* MEDM's valuatorValueChanged() bounds a step only by the limit it moves
+ * toward: MAX(lopr, value - increment) or MIN(hopr, value + increment).
+ * A slider at 50 with limits 0 to 1, as for a channel whose HOPR and LOPR
+ * are both 0, steps down to 49 instead of jumping to the upper limit. */
+void TestObserveOnlyControls::sliderStepsFromOutOfRangeValue()
+{
+  QFETCH(double, value);
+  QFETCH(int, key);
+  QFETCH(double, expected);
+  SliderElement slider;
+  slider.resize(160, 24);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:out-of-range"));
+  slider.setIncrement(1.0);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, 1.0);
+  slider.setRuntimeValue(value);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+  QTest::keyClick(&slider, static_cast<Qt::Key>(key));
+  QCOMPARE(writes.size(), 1);
+  QCOMPARE(writes.first(), expected);
 }
 
 void TestObserveOnlyControls::sliderRightClickRespectsActualStacking()

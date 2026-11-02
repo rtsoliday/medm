@@ -1495,8 +1495,12 @@ void SliderElement::sendActivationValue(double value, bool force)
   if (!std::isfinite(value)) {
     return;
   }
+  /* Drags pass values within the limits. A step from a value outside them
+   * is bounded by applyKeyboardDelta() only on the side it moves toward,
+   * as in MEDM, and is sent as it is. */
   const double clamped = clampToLimits(value);
-  const double toSend = dragging_ ? clamped : quantizeToIncrement(clamped);
+  const double toSend = clamped != value ? value
+      : dragging_ ? clamped : quantizeToIncrement(clamped);
   if (!force && hasLastSentValue_
       && std::abs(toSend - lastSentValue_) <= sliderEpsilon()) {
     return;
@@ -1625,8 +1629,23 @@ bool SliderElement::applyKeyboardDelta(double delta)
     baseValue = defaultSampleValue();
   }
 
+  /* MEDM's valuatorValueChanged() bounds a step only by the limit it moves
+   * toward, MAX(lopr, value - increment) or MIN(hopr, value + increment),
+   * so a value outside the limits steps from where it is instead of
+   * jumping to the opposite limit. */
   double candidate = baseValue + delta;
-  candidate = quantizeToIncrement(clampToLimits(candidate));
+  double low = effectiveLowLimit();
+  double high = effectiveHighLimit();
+  if (std::isfinite(low) && std::isfinite(high)) {
+    if (low > high) {
+      std::swap(low, high);
+    }
+    candidate = delta < 0.0 ? std::max(low, candidate)
+                            : std::min(high, candidate);
+    if (candidate >= low && candidate <= high) {
+      candidate = quantizeToIncrement(candidate);
+    }
+  }
 
   if (!std::isfinite(candidate)) {
     return false;

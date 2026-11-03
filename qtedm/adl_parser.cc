@@ -341,6 +341,9 @@ private:
     }
 
     QString result;
+    /* The closing quote found after an escaped quote, so later escaped
+     * quotes before it need not scan the line again. */
+    int knownClosingQuote = -1;
 
     while (!atEnd()) {
 
@@ -379,8 +382,8 @@ private:
            * QtEDM also writes escaped quotes, so retain that interpretation
            * when a closing quote remains on this line. Its writer escapes
            * newlines; do not consume subsequent ADL lines to find a quote. */
-          bool closingQuote = false;
-          for (int next = index_; next < text_.size(); ++next) {
+          for (int next = index_;
+               knownClosingQuote < index_ && next < text_.size(); ++next) {
             const QChar candidate = text_.at(next);
             if (candidate == QChar('\n') || candidate == QChar('\r')) {
               break;
@@ -392,11 +395,10 @@ private:
                 ++next;
               }
             } else if (candidate == QChar('"')) {
-              closingQuote = true;
-              break;
+              knownClosingQuote = next;
             }
           }
-          if (!closingQuote) {
+          if (knownClosingQuote < index_) {
             result.append(QChar('\\'));
             return result;
           }

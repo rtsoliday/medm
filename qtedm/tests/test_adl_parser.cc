@@ -12,6 +12,7 @@ private slots:
   void parsesMinimalFixture();
   void parsesCommentsAndQuotedValues();
   void parsesEscapedQuotedValues();
+  void parsesManyEscapedQuotesInLinearTime();
   void parsesFixedWidthUnicodeEscapes();
   void keepsBackslashOfUnknownEscapes();
   void parsesLiteralDownArrow();
@@ -103,6 +104,33 @@ void TestAdlParser::parsesEscapedQuotedValues()
   QVERIFY(textNode);
   QCOMPARE(propertyValue(*textNode, QStringLiteral("textix")),
       QStringLiteral("chan=\" \" path=\\tmp\\screen adl\\n"));
+}
+
+/* Each escaped quote looked for a closing quote by scanning the rest of
+ * the line, so a string of n escaped quotes took time in n squared: about
+ * half a minute for 300000 here, and a display file of them hung QtEDM.
+ * The value must stay the same; the time bound is far above linear. */
+void TestAdlParser::parsesManyEscapedQuotesInLinearTime()
+{
+  constexpr int kQuotes = 300000;
+  QString text = QStringLiteral("text { textix=\"");
+  text.reserve(text.size() + 2 * kQuotes + 8);
+  for (int i = 0; i < kQuotes; ++i) {
+    text.append(QStringLiteral("\\\""));
+  }
+  text.append(QStringLiteral("\" }"));
+
+  QElapsedTimer timer;
+  timer.start();
+  QString error;
+  const auto root = AdlParser::parse(text, &error);
+  const qint64 elapsedMs = timer.elapsed();
+  QVERIFY2(root.has_value(), qPrintable(error));
+  const AdlNode *textNode = ::findChild(*root, QStringLiteral("text"));
+  QVERIFY(textNode);
+  QCOMPARE(propertyValue(*textNode, QStringLiteral("textix")),
+      QString(kQuotes, QChar('"')));
+  QVERIFY2(elapsedMs < 5000, qPrintable(QString::number(elapsedMs)));
 }
 
 void TestAdlParser::parsesFixedWidthUnicodeEscapes()

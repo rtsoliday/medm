@@ -68,6 +68,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - Text 16 to 19 or 21 to 25 pixels high is no longer wider than in MEDM. The fonts for those heights had no space character, so spaces were drawn from a wider font and long labels could be cut off.
 - Composites no longer cut off their contents in execute mode. A button, outline, or label that extends past its composite's stored size is drawn in full, as in MEDM, and a composite file's contents start at the composite's position instead of a few pixels away.
 - An archive strip chart whose live channel disconnects, or whose history arrives while that channel is gone, keeps its history and keeps scrolling with a gap for the time the channel is gone. It repeated the last value, which scrolled on as if the channel were still reporting, or with no other live channel stopped with that value at the right edge. Once the channel reports again, the line joins the samples on either side of the gap, as it joins archived samples.
+- An archive strip chart that merges live data shows a live value whose timestamp is ahead of this computer's clock, as from an IOC whose clock runs ahead, at the time it arrives. Such a value was dropped, so the chart kept showing the previous value at its right edge.
 - `make clean` works on Windows, and QtEDM compiles without warnings.
 
 ### Known issues

@@ -108,6 +108,7 @@ private slots:
   void archiveOwnerDestructionReleasesReply();
   void archivePenFailuresSurviveOtherPenCompletions();
   void archiveLiveDisconnectLeavesGaps();
+  void archiveLiveValueAheadOfClockIsShown();
   void archiveHistoryWithoutLiveChannelLeavesGaps();
   void archiveHistoryPreservesTimestampGaps();
   void archiveHistoryRendersConnectedLine();
@@ -424,6 +425,44 @@ void TestArchivesSnapshots::archiveLiveDisconnectLeavesGaps()
     }
   }
   QVERIFY2(finite > 0, "The archive history must be kept");
+}
+
+/* Merged archive history ends at this host's clock. A live value stamped by
+ * an IOC whose clock runs 2 s ahead was dropped from it, so the chart kept
+ * scrolling the archived 12.5 at its right edge instead of the live 7. */
+void TestArchivesSnapshots::archiveLiveValueAheadOfClockIsShown()
+{
+  ControlledArchiveProvider provider;
+  StripChartElement chart;
+  chart.resize(320, 160);
+  chart.setArchivePlot(true);
+  chart.setExecuteMode(true);
+  chart.setChannel(0, QStringLiteral("TEST:AHEAD"));
+  StripChartRuntime runtime(&chart);
+  runtime.archiveProvider_ = &provider;
+  runtime.started_ = true;
+  runtime.pens_[0].channelName = QStringLiteral("TEST:AHEAD");
+  SharedChannelData live;
+  live.isNumeric = true;
+  live.numericValue = 7.0;
+  live.nativeFieldType = DBR_DOUBLE;
+  live.nativeElementCount = 1;
+  live.hasTimestamp = true;
+  const qint64 aheadMs = QDateTime::currentMSecsSinceEpoch() + 2000;
+  live.timestamp.secPastEpoch = static_cast<epicsUInt32>(
+      aheadMs / 1000 - POSIX_TIME_AT_EPICS_EPOCH);
+  live.timestamp.nsec = static_cast<epicsUInt32>((aheadMs % 1000) * 1000000);
+  runtime.handleConnectionEvent(0, true, live);
+  runtime.requestArchive(0);
+  QCOMPARE(provider.pending.size(), 1);
+  ArchiveResult history;
+  history.samples.append({QDateTime::currentMSecsSinceEpoch() - 1000,
+      12.5, 0, 0});
+  provider.finish(0, history);
+  runtime.handleValueEvent(0, live);
+
+  chart.appendSampleColumn();
+  QCOMPARE(chart.sampleValue(0, chart.sampleCount() - 1), 7.0);
 }
 
 /* History that arrives while the live channel is gone, or before it ever

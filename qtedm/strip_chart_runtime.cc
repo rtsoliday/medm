@@ -395,7 +395,11 @@ void StripChartRuntime::handleValueEvent(int index,
 
   if (element_ && element_->isArchivePlot()) {
     ArchiveSample live;
-    live.timestampMs = timestampMs;
+    /* Merged history ends at this host's clock. A value stamped by an IOC
+     * whose clock runs ahead fell after that end and was dropped, leaving
+     * the previous value at the right edge; place it at its arrival. */
+    live.timestampMs = std::min(timestampMs,
+        QDateTime::currentMSecsSinceEpoch());
     live.value = numericValue;
     live.status = data.status;
     live.severity = data.severity;

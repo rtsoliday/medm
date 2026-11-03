@@ -551,6 +551,13 @@ void SliderElement::mousePressEvent(QMouseEvent *event)
       -1.0, -1.0, 1.0, 1.0);
 
   if (thumbRect.contains(pos)) {
+    /* Without finite limits a thumb position has no value: MEDM, which
+     * converts HOPR through float, would write infinity. Start no drag. */
+    if (!std::isfinite(effectiveLowLimit())
+        || !std::isfinite(effectiveHighLimit())) {
+      event->accept();
+      return;
+    }
     beginDrag(currentDisplayedValue(), false);
     /* As Motif's XmScale, keep the point where the thumb was grabbed under
      * the pointer, so the first motion moves the value by that motion
@@ -1409,7 +1416,9 @@ double SliderElement::valueFromPosition(const QPointF &pos) const
   const double low = effectiveLowLimit();
   const double high = effectiveHighLimit();
   if (!std::isfinite(low) || !std::isfinite(high)) {
-    return normalized;
+    /* The raw 0 to 1 position is no value of the channel; a click in the
+     * trough then steps toward the side of the thumb it is on. */
+    return currentDisplayedValue();
   }
   const double span = high - low;
   if (!std::isfinite(span) || std::abs(span) < 1e-12) {

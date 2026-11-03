@@ -152,6 +152,7 @@ private slots:
   void wheelSwitchStepsAsXcIncrementValue();
   void wheelSwitchShowsButtonsAsXc();
   void equalChannelLimitsAreNotWidened();
+  void sliderWithInfiniteLimitWritesNoPosition();
   void compositeShowsImageChildWithDynamicVisibility();
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void barValueBoxShowsNoValueBeforeFirstValue();
@@ -6348,6 +6349,36 @@ void TestObserveOnlyControls::wheelSwitchStepsAsXcIncrementValue()
   }
   QCOMPARE(sent.size(), 1);
   QCOMPARE(sent.first(), expected);
+}
+
+/* Channel limits pass through float, as in MEDM, so a HOPR beyond its
+ * range becomes infinite. A drag then wrote the raw 0 to 1 position of the
+ * thumb whatever the limits; MEDM would compute infinity. Such a slider now
+ * starts no drag, and a click in its trough steps toward the side of the
+ * thumb it is on: right of the thumb, 5 steps to 6. */
+void TestObserveOnlyControls::sliderWithInfiniteLimitWritesNoPosition()
+{
+  SliderElement slider;
+  slider.resize(200, 30);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:infinite-limit"));
+  slider.setIncrement(1.0);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, std::numeric_limits<double>::infinity());
+  slider.setRuntimeValue(5.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+  const QPoint thumb(120, 15);
+  QTest::mousePress(&slider, Qt::LeftButton, Qt::NoModifier, thumb);
+  QTest::mouseMove(&slider, thumb + QPoint(10, 0));
+  QTest::mouseRelease(&slider, Qt::LeftButton, Qt::NoModifier,
+      thumb + QPoint(10, 0));
+  QVERIFY2(writes.isEmpty(), qPrintable(QString::number(writes.value(0))));
+  QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier, QPoint(195, 15));
+  QCOMPARE(writes, QList<double>({6.0}));
 }
 
 /* MEDM widens channel limits only when both are 0. A slider or wheel

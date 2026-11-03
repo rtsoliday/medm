@@ -21934,6 +21934,15 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
         }
         continue;
       }
+      /* MEDM reads an old falling or rising line as a polyline with no
+       * points: it draws nothing, but it still takes the pending dynamic
+       * attribute, so that attribute must not reach the next graphic. */
+      if (trimmed.startsWith(QStringLiteral("\"falling line\""))
+          || trimmed.startsWith(QStringLiteral("\"rising line\""))
+          || trimmed.startsWith(QStringLiteral("falling line"))
+          || trimmed.startsWith(QStringLiteral("rising line"))) {
+        pendingDynamicAttr.clear();
+      }
       /* Detect widget that should receive pending attributes */
       {
         const bool isWidget = trimmed.startsWith(QStringLiteral("rectangle"))
@@ -35797,6 +35806,11 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadTabbedDisplayElement(node) != nullptr;
   } else if (name == QStringLiteral("qtedm_plugin")) {
     loaded = loadPluginElement(node) != nullptr;
+  } else if (name == QStringLiteral("falling line")
+      || name == QStringLiteral("rising line")) {
+    /* MEDM reads these old elements as polylines with no points: they draw
+     * nothing, but still take the pending dynamic attribute. */
+    pendingDynamicAttribute_ = std::nullopt;
   }
 
   /* As in MEDM's parseAndAppendDisplayList, an old-format basic attribute

@@ -248,6 +248,8 @@ private slots:
   void statusRectangleCoversHiddenRelatedDisplay();
   void legacyAttributesApplyLikeMedm_data();
   void legacyAttributesApplyLikeMedm();
+  void legacyFallingLineTakesDynamicAttribute_data();
+  void legacyFallingLineTakesDynamicAttribute();
   void legacyOneLineDynamicBlocksKeepLaterObjects();
   void textUpdateShrinksPastExactFit();
   void tabPageMacrosKeepInnerSpaces();
@@ -1102,6 +1104,62 @@ void TestObserveOnlyControls::legacyAttributesApplyLikeMedm()
   QCOMPARE(staticOval->colorMode(), TextColorMode::kStatic);
   QCOMPARE(staticOval->visibilityMode(), TextVisibilityMode::kStatic);
   QCOMPARE(staticOval->color(), window.colorForIndex(15));
+}
+
+void TestObserveOnlyControls::legacyFallingLineTakesDynamicAttribute_data()
+{
+  legacyAttributesApplyLikeMedm_data();
+}
+
+void TestObserveOnlyControls::legacyFallingLineTakesDynamicAttribute()
+{
+  QFETCH(QByteArray, basicName);
+  QFETCH(QByteArray, dynamicName);
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile fixture(directory.filePath(QStringLiteral("legacy.adl")));
+  QVERIFY(fixture.open(QIODevice::WriteOnly));
+  /* MEDM reads an old falling or rising line as a polyline with no points,
+   * so it draws nothing but still takes the pending dynamic attribute.  In
+   * L3_DU1_MUX.adl the attribute must not hide the next text instead. */
+  const QByteArray dynamic = dynamicName + " {\n\tattr {\n\t\tmod {\n"
+      "\t\t\tclr=\"static\"\n\t\t\tvis=\"if zero\"\n\t\t}\n\t\tparam {\n"
+      "\t\t\tchan=\"legacy:switch\"\n\t\t}\n\t}\n}\n";
+  const QByteArray adl =
+      "file {\n\tname=\"legacy.adl\"\n}\n"
+      "display {\n\tobject {\n\t\twidth=60\n\t\theight=60\n\t}\n"
+      "\tclr=14\n\tbclr=4\n}\n"
+      + basicName + " {\n\tattr {\n\t\tclr=15\n\t\tfill=\"solid\"\n"
+      "\t}\n}\n"
+      + dynamic
+      + "\"falling line\" {\n\tobject {\n\t\tx=5\n\t\ty=5\n\t\twidth=2\n"
+      "\t\theight=20\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=10\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n"
+      + dynamic
+      + "\"rising line\" {\n\tobject {\n\t\tx=5\n\t\ty=30\n\t\twidth=2\n"
+      "\t\theight=20\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=30\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n";
+  QCOMPARE(fixture.write(adl), qint64(adl.size()));
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture.fileName(), &error), qPrintable(error));
+  QCOMPARE(window.ovalElements_.size(), 2);
+  QVERIFY(window.polylineElements_.isEmpty());
+  for (OvalElement *oval : window.ovalElements_) {
+    QVERIFY(oval->channel(0).isEmpty());
+    QCOMPARE(oval->visibilityMode(), TextVisibilityMode::kStatic);
+    QCOMPARE(oval->color(), window.colorForIndex(15));
+  }
 }
 
 /* MEDM removes the whitespace inside the macro lists it reads, but a tab

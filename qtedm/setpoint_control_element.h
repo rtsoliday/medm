@@ -84,6 +84,7 @@ public:
 
   void setSetpointConnected(bool connected);
   void setSetpointWriteAccess(bool writeAccess);
+  void setSetpointSignedInteger(bool signedInteger);
   void setSetpointSeverity(short severity);
   void setSetpointValue(double value, const QString &text);
   void setSetpointMetadata(double low, double high, int precision,
@@ -170,6 +171,7 @@ private:
   bool runtimeSetpointConnected_ = false;
   bool runtimeReadbackConnected_ = false;
   bool runtimeWriteAccess_ = false;
+  bool setpointSignedInteger_ = false;
   short runtimeSetpointSeverity_ = 3;
   short runtimeReadbackSeverity_ = 3;
   bool hasSetpointValue_ = false;

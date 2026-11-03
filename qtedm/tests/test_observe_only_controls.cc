@@ -83,6 +83,7 @@
 #include "text_element.h"
 #include "text_area_element.h"
 #include "text_font_utils.h"
+#include "text_format_utils.h"
 #include "text_monitor_element.h"
 #include "wave_table_element.h"
 #include "wave_table_runtime.h"
@@ -5419,22 +5420,41 @@ void TestObserveOnlyControls::spinBoxStepsInItsFormat_data()
   QTest::addColumn<QString>("text");
   QTest::addColumn<int>("direction");
   QTest::addColumn<double>("expected");
+  QTest::addColumn<QString>("edited");
+  QTest::addColumn<bool>("signedInteger");
 
   QTest::newRow("decimal-up") << int(TextMonitorFormat::kDecimal)
-      << 9.0 << QStringLiteral("9") << 1 << 10.0;
+      << 9.0 << QStringLiteral("9") << 1 << 10.0 << QString() << false;
   QTest::newRow("hex-up") << int(TextMonitorFormat::kHexadecimal)
-      << 9.0 << QStringLiteral("0x9") << 1 << 10.0;
+      << 9.0 << QStringLiteral("0x9") << 1 << 10.0 << QString() << false;
   QTest::newRow("hex-down-negative") << int(TextMonitorFormat::kHexadecimal)
-      << -4.0 << QStringLiteral("0xfffffffc") << -1 << -5.0;
+      << -4.0 << QStringLiteral("0xfffffffc") << -1 << -5.0 << QString()
+      << true;
   QTest::newRow("octal-up") << int(TextMonitorFormat::kOctal)
-      << 7.0 << QStringLiteral("7") << 1 << 8.0;
+      << 7.0 << QStringLiteral("7") << 1 << 8.0 << QString() << false;
   QTest::newRow("octal-down") << int(TextMonitorFormat::kOctal)
-      << 8.0 << QStringLiteral("10") << -1 << 7.0;
+      << 8.0 << QStringLiteral("10") << -1 << 7.0 << QString() << false;
+  QTest::newRow("hex-edited-up") << int(TextMonitorFormat::kHexadecimal)
+      << 9.0 << QStringLiteral("0x9") << 1 << 33.0 << QStringLiteral("0x20")
+      << true;
+  QTest::newRow("hex-edited-negative-down")
+      << int(TextMonitorFormat::kHexadecimal) << -4.0
+      << QStringLiteral("0xfffffffc") << -1 << -11.0
+      << QStringLiteral("0xfffffff6") << true;
+  QTest::newRow("hex-edited-negative-up")
+      << int(TextMonitorFormat::kHexadecimal) << -4.0
+      << QStringLiteral("0xfffffffc") << 1 << -9.0
+      << QStringLiteral("0xfffffff6") << true;
+  QTest::newRow("octal-edited-negative-up") << int(TextMonitorFormat::kOctal)
+      << -4.0 << QStringLiteral("-4") << 1 << -9.0
+      << QStringLiteral("37777777766") << true;
 }
 
 /* The runtime reads a spin box's text in the control's format, so the
  * + and - buttons of a hexadecimal or octal control must send the stepped
- * value in that base: from 9, + must write 10, not "10" read as 16. */
+ * value in that base: from 9, + must write 10, not "10" read as 16. Edited
+ * text steps from its value as the runtime reads it, so 0xfffffff6 on a
+ * long steps from -10 instead of writing the clamped high limit. */
 void TestObserveOnlyControls::spinBoxStepsInItsFormat()
 {
   QFETCH(int, format);
@@ -5442,6 +5462,8 @@ void TestObserveOnlyControls::spinBoxStepsInItsFormat()
   QFETCH(QString, text);
   QFETCH(int, direction);
   QFETCH(double, expected);
+  QFETCH(QString, edited);
+  QFETCH(bool, signedInteger);
 
   SetpointControlElement spinbox;
   spinbox.setQtedmSpinBox(true);
@@ -5463,8 +5485,16 @@ void TestObserveOnlyControls::spinBoxStepsInItsFormat()
   });
   spinbox.setExecuteMode(true);
   spinbox.setSetpointConnected(true);
+  spinbox.setSetpointSignedInteger(signedInteger);
   spinbox.setSetpointWriteAccess(true);
   spinbox.setSetpointValue(value, text);
+  if (!edited.isEmpty()) {
+    auto *edit = spinbox.findChild<QLineEdit *>();
+    QVERIFY(edit);
+    edit->selectAll();
+    QTest::keyClicks(edit, edited);
+    QVERIFY(spinbox.isDirty());
+  }
   auto *button = spinbox.findChild<QToolButton *>(direction > 0
       ? QStringLiteral("qtedmSpinBoxIncrementButton")
       : QStringLiteral("qtedmSpinBoxDecrementButton"));
@@ -5477,10 +5507,12 @@ void TestObserveOnlyControls::spinBoxStepsInItsFormat()
   double written = 0.0;
   switch (static_cast<TextMonitorFormat>(format)) {
   case TextMonitorFormat::kHexadecimal:
-    written = static_cast<double>(sent.first().toLongLong(&ok, 16));
+    written = TextFormatUtils::integerInputValue(
+        sent.first().toLongLong(&ok, 16), signedInteger);
     break;
   case TextMonitorFormat::kOctal:
-    written = static_cast<double>(sent.first().toLongLong(&ok, 8));
+    written = TextFormatUtils::integerInputValue(
+        sent.first().toLongLong(&ok, 8), signedInteger);
     break;
   default:
     written = sent.first().toDouble(&ok);

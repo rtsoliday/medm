@@ -160,8 +160,10 @@ void SetpointControlRuntime::handleSetpointConnection(bool connected,
       return;
     }
     updateMetadataFromSetpoint(data);
-    invokeOnElement([](SetpointControlElement *element) {
+    const bool signedInteger = setpointSignedInteger_;
+    invokeOnElement([signedInteger](SetpointControlElement *element) {
       element->setSetpointConnected(true);
+      element->setSetpointSignedInteger(signedInteger);
     });
   } else {
     setpointConnected_ = false;

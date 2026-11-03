@@ -486,6 +486,7 @@ void SetpointControlElement::setSetpointConnected(bool connected)
   runtimeSetpointConnected_ = connected;
   if (!connected) {
     runtimeWriteAccess_ = false;
+    setpointSignedInteger_ = false;
     hasSetpointValue_ = false;
     dirty_ = false;
     pending_ = false;
@@ -504,6 +505,11 @@ void SetpointControlElement::setSetpointWriteAccess(bool writeAccess)
   runtimeWriteAccess_ = writeAccess;
   updateChildInteraction();
   updateStatusText();
+}
+
+void SetpointControlElement::setSetpointSignedInteger(bool signedInteger)
+{
+  setpointSignedInteger_ = signedInteger;
 }
 
 void SetpointControlElement::setSetpointSeverity(short severity)
@@ -665,6 +671,7 @@ void SetpointControlElement::clearRuntimeState()
   runtimeSetpointConnected_ = false;
   runtimeReadbackConnected_ = false;
   runtimeWriteAccess_ = false;
+  setpointSignedInteger_ = false;
   runtimeSetpointSeverity_ = 3;
   runtimeReadbackSeverity_ = 3;
   hasSetpointValue_ = false;
@@ -1208,7 +1215,10 @@ void SetpointControlElement::stepBy(int direction)
     return;
   }
   /* The runtime reads the text in this control's format, so a hexadecimal
-   * or octal control steps and writes whole numbers in that base. */
+   * or octal control steps and writes whole numbers in that base. Read
+   * edited text as the runtime does: 0xfffffff6 is -10 on a short or long,
+   * not a value above the limits that the step would clamp to the high
+   * limit. */
   const int base = format_ == TextMonitorFormat::kHexadecimal ? 16
       : format_ == TextMonitorFormat::kOctal ? 8 : 10;
   double current = hasSetpointValue_ ? setpointValue_ : 0.0;
@@ -1216,7 +1226,8 @@ void SetpointControlElement::stepBy(int direction)
     bool ok = false;
     const QString text = setpointEdit_->text().trimmed();
     const double edited = base == 10 ? text.toDouble(&ok)
-        : static_cast<double>(text.toLongLong(&ok, base));
+        : TextFormatUtils::integerInputValue(text.toLongLong(&ok, base),
+              setpointSignedInteger_);
     if (ok && std::isfinite(edited)) {
       current = edited;
     }

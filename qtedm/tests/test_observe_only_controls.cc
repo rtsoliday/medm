@@ -227,6 +227,7 @@ private slots:
   void sliderThumbClickKeepsOutOfRangeValue();
   void sliderStepsByExactIncrement_data();
   void sliderStepsByExactIncrement();
+  void sliderSendsStepsSmallAgainstSpan();
   void sliderRepeatsStepAfterChannelMovesBack();
   void sliderDragKeepsGrabOffset();
   void executePickingFollowsVisibleStacking();
@@ -4067,6 +4068,37 @@ void TestObserveOnlyControls::sliderStepsByExactIncrement_data()
   QTest::newRow("fraction-up") << 3.3 << int(Qt::Key_Right) << 4.3;
   QTest::newRow("fraction-down") << 3.3 << int(Qt::Key_Left) << 2.3;
   QTest::newRow("stops-at-high") << 9.5 << int(Qt::Key_Right) << 10.0;
+}
+
+/* A step no larger than a millionth of the span was dropped as no change,
+ * so with limits 0 to 1000 and an increment of 0.001 neither arrow keys
+ * nor clicks in the trough wrote anything. MEDM sends value + increment. */
+void TestObserveOnlyControls::sliderSendsStepsSmallAgainstSpan()
+{
+  SliderElement slider;
+  slider.resize(160, 24);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:fine-step"));
+  slider.setIncrement(0.001);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, 1000.0);
+  slider.setRuntimeValue(500.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+  QTest::keyClick(&slider, Qt::Key_Right);
+  QTest::keyClick(&slider, Qt::Key_Left);
+  QTest::keyClick(&slider, Qt::Key_Left);
+  QCOMPARE(writes.size(), 3);
+  QCOMPARE(writes.at(0), 500.001);
+  QCOMPARE(writes.at(1), 500.0);
+  QCOMPARE(writes.at(2), 499.999);
+
+  slider.setRuntimeValue(1000.0);
+  QTest::keyClick(&slider, Qt::Key_Right);
+  QCOMPARE(writes.size(), 3);
 }
 
 /* MEDM's valuatorValueChanged() adds or subtracts exactly the increment.

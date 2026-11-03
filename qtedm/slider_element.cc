@@ -1648,7 +1648,10 @@ bool SliderElement::applyKeyboardDelta(double delta)
     return false;
   }
 
-  if (hasRuntimeValue_ && std::abs(candidate - runtimeValue_) <= sliderEpsilon()) {
+  /* Only a step held at the limit it moves toward leaves the value as it
+   * is. Any other step is sent, however small against the limits: a
+   * millionth of the span dropped every 0.001 step for limits 0 to 1000. */
+  if (candidate == runtimeValue_) {
     return false;
   }
 

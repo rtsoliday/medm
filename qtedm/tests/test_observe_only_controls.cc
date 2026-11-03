@@ -217,6 +217,8 @@ private slots:
   void sliderStepsFromOutOfRangeValue_data();
   void sliderStepsFromOutOfRangeValue();
   void sliderThumbClickKeepsOutOfRangeValue();
+  void sliderStepsByExactIncrement_data();
+  void sliderStepsByExactIncrement();
   void sliderRepeatsStepAfterChannelMovesBack();
   void sliderDragKeepsGrabOffset();
   void executePickingFollowsVisibleStacking();
@@ -3911,6 +3913,7 @@ void TestObserveOnlyControls::sliderStepsFromOutOfRangeValue_data()
   QTest::newRow("below-up") << -50.0 << int(Qt::Key_Right) << -49.0;
   QTest::newRow("below-down") << -50.0 << int(Qt::Key_Left) << 0.0;
   QTest::newRow("inside-up") << 0.0 << int(Qt::Key_Right) << 1.0;
+  QTest::newRow("above-down-into-range") << 1.4 << int(Qt::Key_Left) << 0.4;
 }
 
 /* MEDM's valuatorValueChanged() bounds a step only by the limit it moves
@@ -3931,6 +3934,44 @@ void TestObserveOnlyControls::sliderStepsFromOutOfRangeValue()
   slider.setRuntimeConnected(true);
   slider.setRuntimeWriteAccess(true);
   slider.setRuntimeLimits(0.0, 1.0);
+  slider.setRuntimeValue(value);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+  QTest::keyClick(&slider, static_cast<Qt::Key>(key));
+  QCOMPARE(writes.size(), 1);
+  QCOMPARE(writes.first(), expected);
+}
+
+void TestObserveOnlyControls::sliderStepsByExactIncrement_data()
+{
+  QTest::addColumn<double>("value");
+  QTest::addColumn<int>("key");
+  QTest::addColumn<double>("expected");
+
+  QTest::newRow("half-up") << 3.5 << int(Qt::Key_Right) << 4.5;
+  QTest::newRow("fraction-up") << 3.3 << int(Qt::Key_Right) << 4.3;
+  QTest::newRow("fraction-down") << 3.3 << int(Qt::Key_Left) << 2.3;
+  QTest::newRow("stops-at-high") << 9.5 << int(Qt::Key_Right) << 10.0;
+}
+
+/* MEDM's valuatorValueChanged() adds or subtracts exactly the increment.
+ * Snapping the result to multiples of the increment from the lower limit
+ * wrote 5 for a step up from 3.5. */
+void TestObserveOnlyControls::sliderStepsByExactIncrement()
+{
+  QFETCH(double, value);
+  QFETCH(int, key);
+  QFETCH(double, expected);
+  SliderElement slider;
+  slider.resize(160, 24);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:exact"));
+  slider.setIncrement(1.0);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, 10.0);
   slider.setRuntimeValue(value);
   QList<double> writes;
   slider.setActivationCallback([&](double next) { writes.append(next); });

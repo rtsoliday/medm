@@ -1510,18 +1510,15 @@ void SliderElement::sendActivationValue(double value, bool force)
   if (!std::isfinite(value)) {
     return;
   }
-  /* Drags pass values within the limits. A step from a value outside them
-   * is bounded by applyKeyboardDelta() only on the side it moves toward,
-   * as in MEDM, and is sent as it is. */
-  const double clamped = clampToLimits(value);
-  const double toSend = clamped != value ? value
-      : dragging_ ? clamped : quantizeToIncrement(clamped);
+  /* Drags pass values within the limits. A step is bounded by
+   * applyKeyboardDelta() only on the side it moves toward, as in MEDM, and
+   * is sent as it is. */
   if (!force && hasLastSentValue_
-      && std::abs(toSend - lastSentValue_) <= sliderEpsilon()) {
+      && std::abs(value - lastSentValue_) <= sliderEpsilon()) {
     return;
   }
-  activationCallback_(toSend);
-  lastSentValue_ = toSend;
+  activationCallback_(value);
+  lastSentValue_ = value;
   hasLastSentValue_ = true;
 }
 
@@ -1556,33 +1553,6 @@ double SliderElement::sliderEpsilon() const
     epsilon = 1e-9;
   }
   return epsilon;
-}
-
-double SliderElement::quantizeToIncrement(double value) const
-{
-  double increment = increment_;
-  if (!std::isfinite(increment) || increment <= 0.0) {
-    return value;
-  }
-  double low = effectiveLowLimit();
-  double high = effectiveHighLimit();
-  if (!std::isfinite(low) || !std::isfinite(high)) {
-    return value;
-  }
-  if (low > high) {
-    std::swap(low, high);
-  }
-  if (std::abs(high - low) < 1e-12) {
-    return low;
-  }
-  const double steps = std::round((value - low) / increment);
-  double quantized = low + steps * increment;
-  if (quantized < low) {
-    quantized = low;
-  } else if (quantized > high) {
-    quantized = high;
-  }
-  return quantized;
 }
 
 double SliderElement::defaultSampleValue() const
@@ -1647,7 +1617,8 @@ bool SliderElement::applyKeyboardDelta(double delta)
   /* MEDM's valuatorValueChanged() bounds a step only by the limit it moves
    * toward, MAX(lopr, value - increment) or MIN(hopr, value + increment),
    * so a value outside the limits steps from where it is instead of
-   * jumping to the opposite limit. */
+   * jumping to the opposite limit, and a value between steps of the
+   * increment moves by exactly the increment. */
   double candidate = baseValue + delta;
   double low = effectiveLowLimit();
   double high = effectiveHighLimit();
@@ -1657,9 +1628,6 @@ bool SliderElement::applyKeyboardDelta(double delta)
     }
     candidate = delta < 0.0 ? std::max(low, candidate)
                             : std::min(high, candidate);
-    if (candidate >= low && candidate <= high) {
-      candidate = quantizeToIncrement(candidate);
-    }
   }
 
   if (!std::isfinite(candidate)) {

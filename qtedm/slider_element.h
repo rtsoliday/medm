@@ -115,7 +115,6 @@ private:
   void updateCursor();
   bool isInteractive() const;
   double sliderEpsilon() const;
-  double quantizeToIncrement(double value) const;
   double defaultSampleValue() const;
   QString formatLimit(double value) const;
   double keyboardStep(Qt::KeyboardModifiers modifiers) const;

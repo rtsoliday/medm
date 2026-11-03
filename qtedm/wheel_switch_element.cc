@@ -665,8 +665,11 @@ void WheelSwitchElement::setRuntimeLimits(double low, double high)
   if (!std::isfinite(low) || !std::isfinite(high)) {
     return;
   }
-  if (std::abs(high - low) < 1e-12) {
-    high = low + 1.0;
+  /* As MEDM's wheelSwitchUpdateGraphicalInfoCb(), widen only 0 to 0; equal
+   * limits elsewhere, such as 5 to 5, are kept, so nothing past them is
+   * written. */
+  if (high == 0.0 && low == 0.0) {
+    high = 1.0;
   }
   runtimeLow_ = low;
   runtimeHigh_ = high;

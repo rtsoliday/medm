@@ -151,6 +151,7 @@ private slots:
   void wheelSwitchStepsAsXcIncrementValue_data();
   void wheelSwitchStepsAsXcIncrementValue();
   void wheelSwitchShowsButtonsAsXc();
+  void equalChannelLimitsAreNotWidened();
   void compositeShowsImageChildWithDynamicVisibility();
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void barValueBoxShowsNoValueBeforeFirstValue();
@@ -6347,6 +6348,49 @@ void TestObserveOnlyControls::wheelSwitchStepsAsXcIncrementValue()
   }
   QCOMPARE(sent.size(), 1);
   QCOMPARE(sent.first(), expected);
+}
+
+/* MEDM widens channel limits only when both are 0. A slider or wheel
+ * switch whose channel reports 5 to 5 keeps them, so a step from 5 writes
+ * nothing; QtEDM widened them to 5 to 6 and wrote 6. */
+void TestObserveOnlyControls::equalChannelLimitsAreNotWidened()
+{
+  SliderElement slider;
+  slider.resize(160, 24);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:equal-limits"));
+  slider.setIncrement(1.0);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(5.0, 5.0);
+  slider.setRuntimeValue(5.0);
+  QList<double> sliderWrites;
+  slider.setActivationCallback([&](double next) { sliderWrites.append(next); });
+  slider.show();
+  QTest::keyClick(&slider, Qt::Key_Right);
+  QVERIFY2(sliderWrites.isEmpty(),
+      qPrintable(QString::number(sliderWrites.value(0))));
+
+  QWidget parent;
+  WheelSwitchElement wheel(&parent);
+  wheel.resize(200, 50);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kChannel;
+  limits.highSource = PvLimitSource::kChannel;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 1;
+  wheel.setLimits(limits);
+  QList<double> wheelWrites;
+  wheel.setActivationCallback([&](double next) { wheelWrites.append(next); });
+  wheel.setExecuteMode(true);
+  wheel.setRuntimeConnected(true);
+  wheel.setRuntimeWriteAccess(true);
+  wheel.setRuntimeLimits(5.0, 5.0);
+  wheel.setRuntimeValue(5.0);
+  QTest::keyClick(&wheel, Qt::Key_PageUp);
+  QVERIFY2(wheelWrites.isEmpty(),
+      qPrintable(QString::number(wheelWrites.value(0))));
 }
 
 /* Xc's set_button_visibility() decides from the value limited to the

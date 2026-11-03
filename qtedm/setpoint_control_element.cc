@@ -1008,20 +1008,20 @@ void SetpointControlElement::updateFontForGeometry()
 
   QFont fittedFont = commonFont;
   if (labelWidget_) {
-    fittedFont = medmTextMonitorFontWithWidthCheck(fittedFont,
+    fittedFont = fitTextFontToWidth(fittedFont,
         labelWidget_->text(), labelWidget_->width());
     fittedFont = forceFitFontToWidth(fittedFont, labelWidget_->text(),
         labelWidget_->width());
   }
   if (executeMode_) {
     if (setpointEdit_) {
-      fittedFont = medmTextMonitorFontWithWidthCheck(fittedFont,
+      fittedFont = fitTextFontToWidth(fittedFont,
           setpointEdit_->text(), setpointEdit_->contentsRect().width());
       fittedFont = forceFitFontToWidth(fittedFont, setpointEdit_->text(),
           setpointEdit_->contentsRect().width());
     }
     if (readbackEdit_ && readbackEdit_->isVisible()) {
-      fittedFont = medmTextMonitorFontWithWidthCheck(fittedFont,
+      fittedFont = fitTextFontToWidth(fittedFont,
           readbackEdit_->text(), readbackEdit_->contentsRect().width());
       fittedFont = forceFitFontToWidth(fittedFont, readbackEdit_->text(),
           readbackEdit_->contentsRect().width());

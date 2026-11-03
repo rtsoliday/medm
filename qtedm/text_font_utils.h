@@ -23,8 +23,14 @@ QFont medmMessageButtonFont(int heightConstraint);
 
 // Shrinks a font to fit text within width constraint, starting from a base font.
 // Matches MEDM's medmTextUpdate.c behavior (line 396-404) where font is reduced
-// if text is too wide. Returns the original font if text fits, or a smaller font.
+// if text is too wide. Returns the original font if text fits, or a smaller font
+// whose text is narrower than maxWidth.
 QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &text,
+    int maxWidth);
+
+// Like medmTextMonitorFontWithWidthCheck, but also takes a smaller font whose
+// text exactly fills maxWidth.
+QFont fitTextFontToWidth(const QFont &baseFont, const QString &text,
     int maxWidth);
 
 // Returns a font compatible with MEDM sizing rules for Slider widgets.

@@ -249,6 +249,7 @@ private slots:
   void legacyAttributesApplyLikeMedm_data();
   void legacyAttributesApplyLikeMedm();
   void legacyOneLineDynamicBlocksKeepLaterObjects();
+  void textUpdateShrinksPastExactFit();
   void tabPageMacrosKeepInnerSpaces();
   void legacyAttributesKeepQuotedBraces();
   void graphicEdgesMatchMedmCoordinates_data();
@@ -1200,6 +1201,30 @@ void TestObserveOnlyControls::legacyOneLineDynamicBlocksKeepLaterObjects()
   QCOMPARE(dynamicOval->colorMode(), TextColorMode::kAlarm);
   QCOMPARE(dynamicOval->visibilityMode(), TextVisibilityMode::kIfNotZero);
   QVERIFY(window.ovalElements_.last()->channel(0).isEmpty());
+}
+
+/* MEDM's textUpdateDraw() keeps a text update's font when the text exactly
+ * fills the width, but once it shrinks takes a smaller font only when the
+ * text is narrower than the width (xxBpmAcq_1.adl's 60-pixel "0.0000"). */
+void TestObserveOnlyControls::textUpdateShrinksPastExactFit()
+{
+  LegacyFonts::setWidgetDMAliasMode(LegacyFonts::WidgetDMAliasMode::kFixed);
+  const QString text = QStringLiteral("0.0000");
+  const QFont base = LegacyFonts::font(QStringLiteral("widgetDM_24"));
+  const QFont exact = LegacyFonts::font(QStringLiteral("widgetDM_20"));
+  const QFont smaller = LegacyFonts::font(QStringLiteral("widgetDM_18"));
+  const int baseWidth = QFontMetrics(base).horizontalAdvance(text);
+  const int exactWidth = QFontMetrics(exact).horizontalAdvance(text);
+  QVERIFY(baseWidth > exactWidth);
+  QVERIFY(QFontMetrics(smaller).horizontalAdvance(text) < exactWidth);
+
+  QVERIFY(medmTextMonitorFontWithWidthCheck(base, text, baseWidth) == base);
+  QVERIFY(medmTextMonitorFontWithWidthCheck(base, text, exactWidth)
+      == smaller);
+  QVERIFY(medmTextMonitorFontWithWidthCheck(base, text, exactWidth + 1)
+      == exact);
+  /* The setpoint control keeps a font that exactly fills its field. */
+  QVERIFY(fitTextFontToWidth(base, text, exactWidth) == exact);
 }
 
 void TestObserveOnlyControls::legacyAttributesKeepQuotedBraces()

@@ -343,26 +343,12 @@ QFont medmTextMonitorFont(const QString &text, const QSize &availableSize)
 }
 
 
-QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &text,
-    int maxWidth)
+static QFont shrinkFontToWidth(const QFont &baseFont, const QString &text,
+    int maxWidth, bool acceptExactFit)
 {
   if (maxWidth <= 0 || text.isEmpty()) {
     return baseFont;
   }
-
-  /* This matches MEDM's medmTextUpdate.c textUpdateDraw (line 396-404):
-   *   if((int)dlTextUpdate->object.width  < textWidth) {
-   *     switch(dlTextUpdate->align) {
-   *     case HORIZ_CENTER:
-   *     case HORIZ_RIGHT:
-   *       while(i > 0) {
-   *         i--;
-   *         textWidth = XTextWidth(fontTable[i],textField,strLen);
-   *         if((int)dlTextUpdate->object.width > textWidth) break;
-   *       }
-   *     }
-   *   }
-   */
 
   QFontMetrics metrics(baseFont);
   int textWidth = metrics.horizontalAdvance(text);
@@ -397,13 +383,39 @@ QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &te
 
     const QFontMetrics smallerMetrics(smallerFont);
     textWidth = smallerMetrics.horizontalAdvance(text);
-    if (textWidth <= maxWidth) {
+    if (textWidth < maxWidth || (acceptExactFit && textWidth == maxWidth)) {
       return smallerFont;
     }
   }
 
   /* Even smallest font is too wide, return it anyway */
   return LegacyFonts::font(aliases[0]);
+}
+
+QFont medmTextMonitorFontWithWidthCheck(const QFont &baseFont, const QString &text,
+    int maxWidth)
+{
+  /* This matches MEDM's medmTextUpdate.c textUpdateDraw (line 396-404):
+   *   if((int)dlTextUpdate->object.width  < textWidth) {
+   *     switch(dlTextUpdate->align) {
+   *     case HORIZ_CENTER:
+   *     case HORIZ_RIGHT:
+   *       while(i > 0) {
+   *         i--;
+   *         textWidth = XTextWidth(fontTable[i],textField,strLen);
+   *         if((int)dlTextUpdate->object.width > textWidth) break;
+   *       }
+   *     }
+   *   }
+   * The base font is kept when the text exactly fills the width, but a
+   * smaller font is taken only when the text is narrower than the width. */
+  return shrinkFontToWidth(baseFont, text, maxWidth, false);
+}
+
+QFont fitTextFontToWidth(const QFont &baseFont, const QString &text,
+    int maxWidth)
+{
+  return shrinkFontToWidth(baseFont, text, maxWidth, true);
 }
 
 QFont medmIndicatorFont(int widgetHeight)

@@ -47,6 +47,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - Object geometry and polyline or polygon points written with a fraction, such as `y=57.2`, keep their integer part, as in MEDM, instead of falling back to 0 or dropping the point.
 - A display saved with a negative position opens at the edge of the screen, as MEDM moves it, instead of partly off the screen.
 - A `-dg` geometry with a position, such as `qtedm -x -dg +100+200 display.adl`, no longer crashes QtEDM.
+- A text update too narrow for its text shrinks to the font MEDM uses, the largest whose text is narrower than the update. QtEDM 1.0.0 also accepted a font whose text exactly filled it, so the text could show one size larger than in MEDM.
 - The tick labels of a zoomed or panned cartesian plot sit where their values are plotted. They were spread over the zoom window rounded out to nice values, so a label could be up to one tick step away from the data at its value.
 - A cartesian plot autoscaled over a value near the largest double, such as a 1.8e308 sentinel, keeps its ticks and draws the other points where they belong instead of all at the bottom.
 - A cartesian plot's log axis pans and zooms in decades. A one-pixel drag could move its minimum below 0, which hid every point and labeled the axis linearly. A click that moves less than the drag distance, or a sideways scroll or tilt of the mouse wheel, no longer freezes the axes in a zoomed state, and zooming stops before an axis loses its range.

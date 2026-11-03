@@ -47,7 +47,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 - A `-dg` geometry with a position, such as `qtedm -x -dg +100+200 display.adl`, no longer crashes QtEDM.
 - The tick labels of a zoomed or panned cartesian plot sit where their values are plotted. They were spread over the zoom window rounded out to nice values, so a label could be up to one tick step away from the data at its value.
 - A cartesian plot autoscaled over a value near the largest double, such as a 1.8e308 sentinel, keeps its ticks and draws the other points where they belong instead of all at the bottom.
-- A cartesian plot's log axis pans and zooms in decades. A one-pixel drag could move its minimum below 0, which hid every point and labeled the axis linearly. A click that moves less than the drag distance no longer freezes the axes in a zoomed state, and zooming stops before an axis loses its range.
+- A cartesian plot's log axis pans and zooms in decades. A one-pixel drag could move its minimum below 0, which hid every point and labeled the axis linearly. A click that moves less than the drag distance, or a sideways scroll or tilt of the mouse wheel, no longer freezes the axes in a zoomed state, and zooming stops before an axis loses its range.
 - A cartesian plot of a `pva://` channel whose server sends no display limits or precision, such as an NTScalar without display metadata, autoscales its axis once the first value arrives. It stayed white.
 - A rejected setpoint edit no longer stays displayed as if it had been applied.
 - The + and - buttons of a hexadecimal or octal Spin Box write the next whole number. They sent the next value as decimal text, which the control read in its own base, so + on a hexadecimal 9 wrote 16 and octal steps were refused.

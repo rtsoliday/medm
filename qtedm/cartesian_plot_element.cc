@@ -1550,6 +1550,14 @@ void CartesianPlotElement::wheelEvent(QWheelEvent *event)
     return;
   }
 
+  /* A horizontal wheel or tilt has no vertical delta and zooms nothing.
+   * Marking the plot zoomed with its window unchanged would stop its axes
+   * from following the data. */
+  if (event->angleDelta().y() == 0) {
+    QWidget::wheelEvent(event);
+    return;
+  }
+
   // Initialize zoom state from current display if not already zoomed
   if (!zoomed_) {
     for (int axis = 0; axis < kCartesianAxisCount; ++axis) {

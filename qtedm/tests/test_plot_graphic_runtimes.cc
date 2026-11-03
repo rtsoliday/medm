@@ -46,6 +46,7 @@ private slots:
   void zoomedAxisTicksSitWhereTheirValuesArePlotted();
   void hugeAxisRangesKeepFiniteTicks();
   void logAxisPanAndZoomStayDrawable();
+  void horizontalWheelDoesNotZoom();
   void pvaKeepsDisplayLimitsAsSentForPlots();
   void heatmapTracksDimensionsRangeAndTransforms();
   void heatmapBoundsSyntheticPreviewForLargeConfiguredGrids();
@@ -187,6 +188,36 @@ void TestPlotGraphicRuntimes::logAxisPanAndZoomStayDrawable()
     QVERIFY(plot.zoomMaximums_[axis] > plot.zoomMinimums_[axis]);
   }
   QVERIFY(plot.zoomMinimums_[1] > 0.0);
+}
+
+/* A horizontal wheel or tilt has no vertical delta. It must not leave the
+ * plot zoomed with its window unchanged, which stopped the axes from
+ * following the data; a vertical notch still zooms. */
+void TestPlotGraphicRuntimes::horizontalWheelDoesNotZoom()
+{
+  CartesianPlotElement plot;
+  plot.resize(400, 300);
+  plot.setTraceYChannel(0, QStringLiteral("plot:wheel"));
+  plot.setExecuteMode(true);
+  plot.show();
+  QCoreApplication::processEvents();
+  for (int axis : {0, 1}) {
+    plot.cachedAxisRanges_[axis].minimum = 0.0;
+    plot.cachedAxisRanges_[axis].maximum = 10.0;
+    plot.cachedAxisRanges_[axis].valid = true;
+  }
+  plot.cachedAxisRangesValid_ = true;
+  const QPointF center = plot.chartRect().center();
+  auto wheel = [&plot, center](const QPoint &delta) {
+    QWheelEvent event(center, plot.mapToGlobal(center.toPoint()),
+        QPoint(), delta, Qt::NoButton, Qt::NoModifier,
+        Qt::NoScrollPhase, false);
+    QApplication::sendEvent(&plot, &event);
+  };
+  wheel(QPoint(120, 0));
+  QVERIFY(!plot.isZoomed());
+  wheel(QPoint(0, 120));
+  QVERIFY(plot.isZoomed());
 }
 
 /* A zoomed axis draws its data against the zoom window, so each tick must

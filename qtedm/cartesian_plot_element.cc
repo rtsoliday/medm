@@ -7,6 +7,7 @@
 
 #include <QtGlobal>
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -463,6 +464,31 @@ int axisTickCount(double count)
     return 0;
   }
   return count >= kMaxAxisTicks ? kMaxAxisTicks : static_cast<int>(count);
+}
+
+/* Pan and zoom move a log axis in decades, as it is drawn. */
+double toAxisSpace(double value, bool log)
+{
+  return log ? std::log10(value) : value;
+}
+
+double fromAxisSpace(double value, bool log)
+{
+  return log ? std::pow(10.0, value) : value;
+}
+
+/* A pan or zoom step must leave a window the axis can draw: finite,
+ * wider than doubles can resolve, and above 0 on a log axis. */
+bool usableZoomWindow(double minimum, double maximum, bool log)
+{
+  if (!std::isfinite(minimum) || !std::isfinite(maximum)
+      || !(maximum > minimum) || (log && !(minimum > 0.0))) {
+    return false;
+  }
+  const double low = toAxisSpace(minimum, log);
+  const double high = toAxisSpace(maximum, log);
+  return std::isfinite(high - low)
+      && high - low > std::max(std::fabs(low), std::fabs(high)) * 1e-12;
 }
 
 } // namespace
@@ -1405,9 +1431,10 @@ void CartesianPlotElement::mousePressEvent(QMouseEvent *event)
       }
     }
     if (event->button() == Qt::LeftButton) {
-      // Start panning
+      // Start panning from the axes as drawn
       const QRectF chart = chartRect();
-      if (chart.contains(event->pos())) {
+      if (chart.contains(event->pos())
+          && (zoomed_ || cachedAxisRangesValid_)) {
         panning_ = true;
         panStartPos_ = event->pos();
         // Initialize zoom state if not already zoomed
@@ -1458,27 +1485,42 @@ void CartesianPlotElement::mouseMoveEvent(QMouseEvent *event)
     }
     
     const QPointF delta = event->pos() - panStartPos_;
-    
-    // Convert pixel delta to data delta for each axis
-    // X axis (index 0)
-    {
-      const double xRange = panStartMaximums_[0] - panStartMinimums_[0];
-      const double xDelta = -delta.x() * xRange / chart.width();
-      zoomMinimums_[0] = panStartMinimums_[0] + xDelta;
-      zoomMaximums_[0] = panStartMaximums_[0] + xDelta;
+    /* A click that wobbles a pixel is not a pan; it must not freeze the
+     * axes in a zoomed state. */
+    if (!zoomed_ && delta.manhattanLength()
+        < QApplication::startDragDistance()) {
+      event->accept();
+      return;
     }
-    
-    // Y axes - apply same delta to all visible Y axes
-    for (int axis = 1; axis < kCartesianAxisCount; ++axis) {
-      if (!isYAxisVisible(axis - 1)) {
-        continue;
+
+    /* Shift each axis by the pointer's motion as a fraction of the axis,
+     * in decades on a log axis, and keep any axis the shift would leave
+     * without a drawable window. */
+    bool changed = false;
+    auto panAxis = [&](int axis, double pixels, double length) {
+      const bool log = axisStyles_[axis] == CartesianPlotAxisStyle::kLog10;
+      const double low = toAxisSpace(panStartMinimums_[axis], log);
+      const double high = toAxisSpace(panStartMaximums_[axis], log);
+      const double shift = pixels * (high - low) / length;
+      const double minimum = fromAxisSpace(low + shift, log);
+      const double maximum = fromAxisSpace(high + shift, log);
+      if (usableZoomWindow(minimum, maximum, log)) {
+        zoomMinimums_[axis] = minimum;
+        zoomMaximums_[axis] = maximum;
+        changed = true;
       }
-      const double yRange = panStartMaximums_[axis] - panStartMinimums_[axis];
-      const double yDelta = delta.y() * yRange / chart.height();  // Y is inverted
-      zoomMinimums_[axis] = panStartMinimums_[axis] + yDelta;
-      zoomMaximums_[axis] = panStartMaximums_[axis] + yDelta;
+    };
+    panAxis(0, -delta.x(), chart.width());
+    for (int axis = 1; axis < kCartesianAxisCount; ++axis) {
+      if (isYAxisVisible(axis - 1)) {
+        panAxis(axis, delta.y(), chart.height());  // Y is inverted
+      }
     }
-    
+    if (!changed) {
+      event->accept();
+      return;
+    }
+
     zoomed_ = true;
     cachedAxisRangesValid_ = false;
     invalidateStaticCache();
@@ -1503,11 +1545,11 @@ void CartesianPlotElement::wheelEvent(QWheelEvent *event)
   const QPointF pos = event->posF();
 #endif
   
-  if (!chart.contains(pos)) {
+  if (!chart.contains(pos) || (!zoomed_ && !cachedAxisRangesValid_)) {
     QWidget::wheelEvent(event);
     return;
   }
-  
+
   // Initialize zoom state from current display if not already zoomed
   if (!zoomed_) {
     for (int axis = 0; axis < kCartesianAxisCount; ++axis) {
@@ -1531,27 +1573,23 @@ void CartesianPlotElement::wheelEvent(QWheelEvent *event)
   const double chartX = (pos.x() - chart.left()) / chart.width();
   const double chartY = 1.0 - (pos.y() - chart.top()) / chart.height();  // Y inverted
   
-  // Zoom X axis centered on mouse position
+  // Zoom each axis about the value under the mouse
+  bool changed = false;
   if (zoomX) {
-    const double xMin = zoomMinimums_[0];
-    const double xMax = zoomMaximums_[0];
-    const double xCenter = xMin + chartX * (xMax - xMin);
-    zoomAxis(0, factor, xCenter);
+    changed = zoomAxis(0, factor, chartX) || changed;
   }
-  
-  // Zoom Y axes centered on mouse position
   if (zoomY) {
     for (int axis = 1; axis < kCartesianAxisCount; ++axis) {
-      if (!isYAxisVisible(axis - 1)) {
-        continue;
+      if (isYAxisVisible(axis - 1)) {
+        changed = zoomAxis(axis, factor, chartY) || changed;
       }
-      const double yMin = zoomMinimums_[axis];
-      const double yMax = zoomMaximums_[axis];
-      const double yCenter = yMin + chartY * (yMax - yMin);
-      zoomAxis(axis, factor, yCenter);
     }
   }
-  
+  if (!changed) {
+    event->accept();
+    return;
+  }
+
   zoomed_ = true;
   cachedAxisRangesValid_ = false;
   invalidateStaticCache();
@@ -1559,21 +1597,32 @@ void CartesianPlotElement::wheelEvent(QWheelEvent *event)
   event->accept();
 }
 
-void CartesianPlotElement::zoomAxis(int axisIndex, double factor, double center)
+/* Scale an axis's window by factor about the point at centerFraction of
+ * it, in decades on a log axis, so the value under the pointer stays put.
+ * A step that would leave no drawable window, such as zooming past what
+ * doubles resolve, is refused. */
+bool CartesianPlotElement::zoomAxis(int axisIndex, double factor,
+    double centerFraction)
 {
   if (axisIndex < 0 || axisIndex >= kCartesianAxisCount) {
-    return;
+    return false;
   }
-  
-  const double oldMin = zoomMinimums_[axisIndex];
-  const double oldMax = zoomMaximums_[axisIndex];
-  const double oldRange = oldMax - oldMin;
-  const double newRange = oldRange * factor;
-  
-  // Keep center point at same position
-  const double centerRatio = (center - oldMin) / oldRange;
-  zoomMinimums_[axisIndex] = center - centerRatio * newRange;
-  zoomMaximums_[axisIndex] = center + (1.0 - centerRatio) * newRange;
+
+  const bool log = axisStyles_[axisIndex] == CartesianPlotAxisStyle::kLog10;
+  const double low = toAxisSpace(zoomMinimums_[axisIndex], log);
+  const double high = toAxisSpace(zoomMaximums_[axisIndex], log);
+  const double newRange = (high - low) * factor;
+  const double center = low + centerFraction * (high - low);
+  const double minimum =
+      fromAxisSpace(center - centerFraction * newRange, log);
+  const double maximum =
+      fromAxisSpace(center + (1.0 - centerFraction) * newRange, log);
+  if (!usableZoomWindow(minimum, maximum, log)) {
+    return false;
+  }
+  zoomMinimums_[axisIndex] = minimum;
+  zoomMaximums_[axisIndex] = maximum;
+  return true;
 }
 
 bool CartesianPlotElement::isZoomed() const

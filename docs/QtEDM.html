@@ -1617,8 +1617,8 @@ differences, current limitations, and additions:</p>
   </li>
   <li><strong>Cartesian Plot Zoom/Pan</strong> &ndash; QtEDM adds interactive zoom and pan capabilities to Cartesian Plot widgets in EXECUTE mode:
     <ul>
-      <li><strong>Zoom:</strong> Use the mouse wheel to zoom in and out. The zoom is centered on the cursor position. Hold Shift while scrolling to zoom only the X axis, or hold Ctrl to zoom only the Y axis.</li>
-      <li><strong>Pan:</strong> Click and drag with the left mouse button to pan the view. The cursor changes to a closed hand while panning.</li>
+      <li><strong>Zoom:</strong> Use the mouse wheel to zoom in and out. The zoom is centered on the cursor position. Hold Shift while scrolling to zoom only the X axis, or hold Ctrl to zoom only the Y axis. A log axis zooms in decades, and zooming stops where an axis could no longer be drawn.</li>
+      <li><strong>Pan:</strong> Click and drag with the left mouse button to pan the view. The cursor changes to a closed hand while panning. A log axis pans in decades. A click that moves less than the drag distance leaves the view unchanged.</li>
       <li><strong>Reset:</strong> Right-click on a zoomed plot to access the "Reset Zoom" option and restore the original view. Zoom state is also automatically reset when switching from EXECUTE to EDIT mode.</li>
     </ul>
   </li>

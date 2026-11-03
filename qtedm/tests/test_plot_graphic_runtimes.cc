@@ -1,13 +1,16 @@
 #include <QtTest/QtTest>
 
+#include <QApplication>
 #include <QDir>
 #include <QImage>
+#include <QMouseEvent>
 #include <QMovie>
 #include <QPainter>
 #include <QFile>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QTemporaryDir>
+#include <QWheelEvent>
 
 #include <cmath>
 #include <limits>
@@ -42,6 +45,7 @@ private slots:
   void cartesianTracksTraceModesPointsAndCapacity();
   void zoomedAxisTicksSitWhereTheirValuesArePlotted();
   void hugeAxisRangesKeepFiniteTicks();
+  void logAxisPanAndZoomStayDrawable();
   void pvaKeepsDisplayLimitsAsSentForPlots();
   void heatmapTracksDimensionsRangeAndTransforms();
   void heatmapBoundsSyntheticPreviewForLargeConfiguredGrids();
@@ -107,6 +111,82 @@ void TestPlotGraphicRuntimes::hugeAxisRangesKeepFiniteTicks()
   QCOMPARE(ordinary.drawMax, 10.0);
   QCOMPARE(ordinary.majorInc, 2.0);
   QCOMPARE(ordinary.numMajor, 5);
+}
+
+/* A log axis is drawn in decades, so it must pan and zoom in decades.
+ * Linear arithmetic moved the minimum of a 1e-3 to 1e3 axis below 0 with a
+ * one-pixel drag, and every point vanished. A click that wobbles a pixel
+ * must not freeze the axes as zoomed, and no zoom step may leave an axis
+ * without a drawable window. */
+void TestPlotGraphicRuntimes::logAxisPanAndZoomStayDrawable()
+{
+  CartesianPlotElement plot;
+  plot.resize(400, 300);
+  plot.setTraceYChannel(0, QStringLiteral("plot:log"));
+  plot.setTraceYAxis(0, CartesianPlotYAxis::kY1);
+  plot.setAxisStyle(1, CartesianPlotAxisStyle::kLog10);
+  plot.setExecuteMode(true);
+  plot.show();
+  QCoreApplication::processEvents();
+  plot.cachedAxisRanges_[0].minimum = 0.0;
+  plot.cachedAxisRanges_[0].maximum = 10.0;
+  plot.cachedAxisRanges_[0].valid = true;
+  plot.cachedAxisRanges_[1].minimum = 1e-3;
+  plot.cachedAxisRanges_[1].maximum = 1e3;
+  plot.cachedAxisRanges_[1].valid = true;
+  plot.cachedAxisRanges_[1].style = CartesianPlotAxisStyle::kLog10;
+  plot.cachedAxisRangesValid_ = true;
+  const QRectF chart = plot.chartRect();
+  QVERIFY(chart.width() > 50.0 && chart.height() > 50.0);
+  const QPoint start = chart.center().toPoint();
+  /* The plot does not grab the mouse, so deliver the motion to it. */
+  auto drag = [&plot, start](const QPoint &offset) {
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, start);
+    const QPoint end = start + offset;
+    QMouseEvent move(QEvent::MouseMove, QPointF(end),
+        QPointF(plot.mapToGlobal(end)), Qt::NoButton, Qt::LeftButton,
+        Qt::NoModifier);
+    QApplication::sendEvent(&plot, &move);
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, end);
+  };
+
+  drag(QPoint(0, -1));
+  QVERIFY(!plot.isZoomed());
+
+  const int pixels = qRound(chart.height() / 5.0);
+  drag(QPoint(0, -pixels));
+  QVERIFY(plot.isZoomed());
+  double low = plot.zoomMinimums_[1];
+  double high = plot.zoomMaximums_[1];
+  QVERIFY(low > 0.0);
+  QVERIFY(std::abs(std::log10(high / low) - 6.0) < 1e-9);
+  QVERIFY(std::abs((std::log10(low) + 3.0)
+      + 6.0 * pixels / chart.height()) < 1e-9);
+
+  /* Wheel zoom keeps the decade under the pointer and stays above 0. */
+  const QPointF center = chart.center();
+  const double centerDecade = (std::log10(low) + std::log10(high)) / 2.0;
+  auto wheel = [&](int delta, int notches) {
+    for (int i = 0; i < notches; ++i) {
+      QWheelEvent event(center, plot.mapToGlobal(center.toPoint()),
+          QPoint(), QPoint(0, delta), Qt::NoButton, Qt::NoModifier,
+          Qt::NoScrollPhase, false);
+      QApplication::sendEvent(&plot, &event);
+    }
+  };
+  wheel(-120, 30);
+  low = plot.zoomMinimums_[1];
+  high = plot.zoomMaximums_[1];
+  QVERIFY(low > 0.0 && std::isfinite(high) && high > low);
+  QVERIFY(std::abs((std::log10(low) + std::log10(high)) / 2.0
+      - centerDecade) < 1e-6);
+  wheel(120, 1000);
+  for (int axis : {0, 1}) {
+    QVERIFY(std::isfinite(plot.zoomMinimums_[axis]));
+    QVERIFY(std::isfinite(plot.zoomMaximums_[axis]));
+    QVERIFY(plot.zoomMaximums_[axis] > plot.zoomMinimums_[axis]);
+  }
+  QVERIFY(plot.zoomMinimums_[1] > 0.0);
 }
 
 /* A zoomed axis draws its data against the zoom window, so each tick must

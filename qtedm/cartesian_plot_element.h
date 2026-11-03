@@ -248,7 +248,7 @@ private:
   // Zoom/pan helpers
   void applyZoomToRange(AxisRange &range, int axisIndex) const;
   QPointF chartToData(const QPointF &chartPos, const QRectF &chartArea) const;
-  void zoomAxis(int axisIndex, double factor, double center);
+  bool zoomAxis(int axisIndex, double factor, double centerFraction);
   
   struct NiceAxisRange
   {

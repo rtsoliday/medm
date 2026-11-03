@@ -246,6 +246,7 @@ private slots:
   void buttonPixmapsMatchMedm();
   void statusRectangleCoversHiddenRelatedDisplay_data();
   void statusRectangleCoversHiddenRelatedDisplay();
+  void legacyAttributesApplyLikeMedm_data();
   void legacyAttributesApplyLikeMedm();
   void legacyOneLineDynamicBlocksKeepLaterObjects();
   void tabPageMacrosKeepInnerSpaces();
@@ -1039,8 +1040,21 @@ void TestObserveOnlyControls::statusRectangleCoversHiddenRelatedDisplay()
   }
 }
 
+void TestObserveOnlyControls::legacyAttributesApplyLikeMedm_data()
+{
+  QTest::addColumn<QByteArray>("basicName");
+  QTest::addColumn<QByteArray>("dynamicName");
+  QTest::newRow("quoted") << QByteArray("\"basic attribute\"")
+                          << QByteArray("\"dynamic attribute\"");
+  /* As in L3_DU1_MUX.adl, which has no version. */
+  QTest::newRow("angle-brackets") << QByteArray("\"<<basic attribute>>\"")
+                                  << QByteArray("\"<<dynamic attribute>>\"");
+}
+
 void TestObserveOnlyControls::legacyAttributesApplyLikeMedm()
 {
+  QFETCH(QByteArray, basicName);
+  QFETCH(QByteArray, dynamicName);
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
   QFile fixture(directory.filePath(QStringLiteral("legacy.adl")));
@@ -1053,9 +1067,9 @@ void TestObserveOnlyControls::legacyAttributesApplyLikeMedm()
       "file {\n\tname=\"legacy.adl\"\n}\n"
       "display {\n\tobject {\n\t\twidth=60\n\t\theight=60\n\t}\n"
       "\tclr=14\n\tbclr=4\n}\n"
-      "\"basic attribute\" {\n\tattr {\n\t\tclr=15\n\t\tfill=\"solid\"\n"
+      + basicName + " {\n\tattr {\n\t\tclr=15\n\t\tfill=\"solid\"\n"
       "\t}\n}\n"
-      "\"dynamic attribute\" {\n\tattr {\n\t\tmod {\n\t\t\tclr=\"alarm\"\n"
+      + dynamicName + " {\n\tattr {\n\t\tmod {\n\t\t\tclr=\"alarm\"\n"
       "\t\t\tvis=\"if not zero\"\n\t\t}\n\t\tparam {\n"
       "\t\t\tchan=\"legacy:run\"\n\t\t}\n\t}\n}\n"
       "oval {\n\tobject {\n\t\tx=10\n\t\ty=10\n\t\twidth=15\n"

@@ -35799,7 +35799,9 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
     loaded = loadPluginElement(node) != nullptr;
   }
 
-  /* Clear pending basic attribute after loading applicable widgets */
+  /* As in MEDM's parseAndAppendDisplayList, an old-format basic attribute
+   * stays in effect for every later graphic until the next one replaces it,
+   * while a dynamic attribute applies only to the next graphic. */
   if (loaded && (name == QStringLiteral("rectangle")
       || name == QStringLiteral("oval")
       || name == QStringLiteral("arc")
@@ -35807,7 +35809,6 @@ bool DisplayWindow::loadElementNode(const AdlNode &node)
       || name == QStringLiteral("polyline")
       || name == QStringLiteral("line")
       || name == QStringLiteral("polygon"))) {
-    pendingBasicAttribute_ = std::nullopt;
     pendingDynamicAttribute_ = std::nullopt;
   }
 

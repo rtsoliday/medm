@@ -1088,7 +1088,7 @@ complete extension list.</p>
   <ul>
     <li><strong>Configure:</strong> Channel, number of digits, precision, colors, and limits.</li>
     <li><strong>Use when:</strong> Fine-grained numeric entry is common and accidental large jumps must be avoided.</li>
-    <li><strong>Runtime behavior:</strong> Digits can be stepped interactively in EXECUTE mode; writes are audit logged. As in MEDM, a step is rounded to the decimals of the format, a value outside the limits steps toward them by the step you choose, and a step that would pass a limit, or the largest value the format shows, does nothing, so holding a button stops one step short of the limit. As in MEDM, the mouse wheel does not change the value.</li>
+    <li><strong>Runtime behavior:</strong> Digits can be stepped interactively in EXECUTE mode; writes are audit logged. As in MEDM, a step is rounded to the decimals of the format, a value outside the limits steps toward them by the step you choose, and a step that would pass a limit, or the largest value the format shows, does nothing, so holding a button stops one step short of the limit. A digit shows its buttons, and its arrow keys step, only where the step stays within the limits or, for a value outside them, comes back within them. As in MEDM, the mouse wheel does not change the value.</li>
   </ul>
 </div>
 

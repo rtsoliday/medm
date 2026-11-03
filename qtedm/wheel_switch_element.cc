@@ -1452,11 +1452,25 @@ WheelSwitchElement::Layout WheelSwitchElement::layoutForRect(const QRectF &bound
   return layout;
 }
 
+/* Xc's set_button_visibility() decides from the value limited to the
+ * format's bounds, so a value outside the limits shows only the buttons of
+ * steps that come back within them. The arrow keys step only where a
+ * button shows, as Xc's do. */
 void WheelSwitchElement::updateLayoutValueState(Layout &layout) const
 {
-  const double value = displayedValue();
-  const double lowLimit = effectiveLowLimit();
-  const double highLimit = effectiveHighLimit();
+  double low = effectiveLowLimit();
+  double high = effectiveHighLimit();
+  if (low > high) {
+    std::swap(low, high);
+  }
+  const WheelSwitchFormatBounds bounds = wheelSwitchFormatBounds(
+      wheelSwitchFormatInfo(format_, effectiveLowLimit(),
+          effectiveHighLimit(), effectivePrecision()),
+      low, high);
+  const double lowLimit = bounds.minimum;
+  const double highLimit = bounds.maximum;
+  const double value = std::min(std::max(displayedValue(), lowLimit),
+      highLimit);
   
   // Calculate roundoff as 0.1 times the smallest increment (rightmost digit)
   double roundoff = 0.0;

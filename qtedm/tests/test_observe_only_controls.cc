@@ -150,6 +150,7 @@ private slots:
   void wheelSwitchStepsOutOfRangeValueAsXc();
   void wheelSwitchStepsAsXcIncrementValue_data();
   void wheelSwitchStepsAsXcIncrementValue();
+  void wheelSwitchShowsButtonsAsXc();
   void compositeShowsImageChildWithDynamicVisibility();
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void barValueBoxShowsNoValueBeforeFirstValue();
@@ -6346,6 +6347,42 @@ void TestObserveOnlyControls::wheelSwitchStepsAsXcIncrementValue()
   }
   QCOMPARE(sent.size(), 1);
   QCOMPARE(sent.first(), expected);
+}
+
+/* Xc's set_button_visibility() decides from the value limited to the
+ * format's bounds. With limits 0 to 1, a %5.1f switch at 50 shows the Down
+ * buttons of the ones and tenths, whose steps come back within the limits,
+ * but not of the tens, and its arrow keys step only where a button shows.
+ * QtEDM showed the tens Down button and its arrow key wrote 40. */
+void TestObserveOnlyControls::wheelSwitchShowsButtonsAsXc()
+{
+  QWidget parent;
+  WheelSwitchElement element(&parent);
+  element.resize(200, 50);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = 1.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 1;
+  element.setLimits(limits);
+  element.setFormat(QStringLiteral("%5.1f"));
+  QList<double> writes;
+  element.setActivationCallback([&writes](double value) {
+    writes.append(value);
+  });
+  element.setExecuteMode(true);
+  element.setRuntimeConnected(true);
+  element.setRuntimeWriteAccess(true);
+  element.setRuntimeValue(50.0);
+  QTest::keyClick(&element, Qt::Key_Left);
+  QTest::keyClick(&element, Qt::Key_Left);
+  QTest::keyClick(&element, Qt::Key_Down);
+  QVERIFY2(writes.isEmpty(), qPrintable(QString::number(writes.value(0))));
+  QTest::keyClick(&element, Qt::Key_Right);
+  QTest::keyClick(&element, Qt::Key_Down);
+  QCOMPARE(writes, QList<double>({49.0}));
 }
 
 void TestObserveOnlyControls::wheelSwitchStepsOutOfRangeValueAsXc()

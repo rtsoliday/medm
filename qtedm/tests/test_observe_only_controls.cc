@@ -5627,6 +5627,10 @@ void TestObserveOnlyControls::testActionsRejectInvalidAndAmbiguousSelectors()
   QCOMPARE(waterfall->bufferedSampleCount(), 1);
   QCOMPARE(waterfall->sampleLength(0), 3);
   QCOMPARE(waterfall->sampleValue(0, 0), 4.0);
+  /* The window never entered execute mode, so it does not stop the runtime
+   * it did not start. Stopped while its element is destroyed, the runtime
+   * called into the partly destroyed element, which UBSan reports. */
+  waterfallRuntime->stop();
 }
 
 void TestObserveOnlyControls::

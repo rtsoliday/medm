@@ -148,6 +148,7 @@ private:
   bool hasRuntimeValue_ = false;
   bool dragging_ = false;
   double dragValue_ = 0.0;
+  QPointF dragGrabOffset_;
   double lastSentValue_ = 0.0;
   bool hasLastSentValue_ = false;
   std::function<void(double)> activationCallback_;

@@ -210,6 +210,7 @@ private slots:
   void sliderTroughRespectsAccess();
   void sliderStepsFromOutOfRangeValue_data();
   void sliderStepsFromOutOfRangeValue();
+  void sliderDragKeepsGrabOffset();
   void executePickingFollowsVisibleStacking();
   void disconnectedWidgetsStackInDisplayOrder();
   void disconnectedCompositeChildrenStackInOrder();
@@ -3743,6 +3744,35 @@ void TestObserveOnlyControls::sliderStepsFromOutOfRangeValue()
   QTest::keyClick(&slider, static_cast<Qt::Key>(key));
   QCOMPARE(writes.size(), 1);
   QCOMPARE(writes.first(), expected);
+}
+
+/* As Motif's XmScale, a drag keeps the point where the thumb was grabbed
+ * under the pointer. Grabbing the thumb 6 pixels right of its center and
+ * moving 1 pixel must move the value by about 1 pixel's worth, not jump
+ * the thumb's center to the pointer, which wrote about 7 pixels' worth. */
+void TestObserveOnlyControls::sliderDragKeepsGrabOffset()
+{
+  SliderElement slider;
+  slider.resize(200, 30);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:grab"));
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, 100.0);
+  slider.setRuntimeValue(50.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+  const QPoint grab(slider.width() / 2 + 6, slider.height() / 2);
+  QTest::mousePress(&slider, Qt::LeftButton, Qt::NoModifier, grab);
+  QVERIFY(writes.isEmpty());
+  QTest::mouseMove(&slider, grab + QPoint(1, 0));
+  QTest::mouseRelease(&slider, Qt::LeftButton, Qt::NoModifier,
+      grab + QPoint(1, 0));
+  QVERIFY(!writes.isEmpty());
+  QVERIFY2(writes.last() > 50.0 && writes.last() < 52.0,
+      qPrintable(QString::number(writes.last())));
 }
 
 void TestObserveOnlyControls::sliderRightClickRespectsActualStacking()

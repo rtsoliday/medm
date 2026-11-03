@@ -550,6 +550,10 @@ void SliderElement::mousePressEvent(QMouseEvent *event)
 
   if (thumbRect.contains(pos)) {
     beginDrag(currentDisplayedValue(), false);
+    /* As Motif's XmScale, keep the point where the thumb was grabbed under
+     * the pointer, so the first motion moves the value by that motion
+     * instead of jumping the thumb's center to the pointer. */
+    dragGrabOffset_ = pos - thumbRect.center();
     event->accept();
     return;
   }
@@ -612,7 +616,7 @@ void SliderElement::mouseMoveEvent(QMouseEvent *event)
 #else
   const QPointF pos = event->localPos();
 #endif
-  updateDrag(valueFromPosition(pos), false);
+  updateDrag(valueFromPosition(pos - dragGrabOffset_), false);
   event->accept();
 }
 
@@ -643,7 +647,7 @@ void SliderElement::mouseReleaseEvent(QMouseEvent *event)
   if (releaseOnThumb) {
     endDrag(currentDisplayedValue(), false);
   } else {
-    endDrag(valueFromPosition(pos), true);
+    endDrag(valueFromPosition(pos - dragGrabOffset_), true);
   }
   event->accept();
 }
@@ -1451,6 +1455,7 @@ QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect,
 void SliderElement::beginDrag(double value, bool sendInitial)
 {
   dragging_ = true;
+  dragGrabOffset_ = QPointF();
   grabMouse();
   double clamped = clampToLimits(value);
   dragValue_ = clamped;

@@ -233,6 +233,7 @@ private slots:
   void executePickingFollowsVisibleStacking();
   void disconnectedWidgetsStackInDisplayOrder();
   void disconnectedCompositeChildrenStackInOrder();
+  void disconnectedCompositeUnderLaterChannelComposite();
   void hiddenRelatedDisplayUnderGraphicComposite();
   void hiddenRelatedDisplayStippleUnderEarlierGraphics();
   void hiddenRelatedDisplayStippleOverEarlierGraphics();
@@ -4864,6 +4865,73 @@ void TestObserveOnlyControls::disconnectedCompositeChildrenStackInOrder()
   slider->setRuntimeConnected(false);
   QCoreApplication::processEvents();
   QVERIFY(stackIndex(slider) < stackIndex(cover));
+}
+
+/* MEDM's compositeDraw() draws a disconnected composite's white rectangle
+ * from its update task, in display order, and a later composite whose
+ * channel has static visibility draws its children over it from its own
+ * (TFBamplifier.adl's On/Off labels). */
+void TestObserveOnlyControls::disconnectedCompositeUnderLaterChannelComposite()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString path = directory.filePath(QStringLiteral("compstack.adl"));
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write(
+      "file { name=\"compstack.adl\" version=030114 }\n"
+      "display { object { x=0 y=0 width=120 height=80 } clr=1 bclr=2 }\n"
+      "\"color map\" { ncolors=4 colors { ffffff, 000000, 339900, fd0000,"
+      " } }\n"
+      "composite { object { x=10 y=10 width=60 height=60 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    \"choice button\" { object { x=10 y=10 width=60 height=20 }\n"
+      "      control { chan=\"compstack:ctl\" clr=1 bclr=0 }\n"
+      "      stacking=\"column\" }\n"
+      "  }\n"
+      "  \"dynamic attribute\" { vis=\"if not zero\""
+      " chan=\"compstack:remote\" }\n"
+      "}\n"
+      "composite { object { x=10 y=10 width=60 height=60 }\n"
+      "  \"composite name\"=\"\"\n"
+      "  children {\n"
+      "    rectangle { object { x=20 y=14 width=40 height=12 }\n"
+      "      \"basic attribute\" { clr=3 } }\n"
+      "  }\n"
+      "  \"dynamic attribute\" { chan=\"compstack:remote\" }\n"
+      "}\n");
+  file.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(),
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(path, &error), qPrintable(error));
+  QCOMPARE(window.compositeElements_.size(), 2);
+  CompositeElement *controls = window.compositeElements_.first();
+  CompositeElement *labels = window.compositeElements_.last();
+  window.show();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+  QCoreApplication::processEvents();
+
+  const QImage image = window.displayArea_->grab().toImage();
+  QCOMPARE(image.pixelColor(15, 12), QColor(Qt::white));
+  QCOMPARE(image.pixelColor(40, 20), QColor(0xfd, 0x00, 0x00));
+
+  const auto stackIndex = [&window](QWidget *widget) {
+    return window.displayArea_->children().indexOf(widget);
+  };
+  QVERIFY(stackIndex(controls) < stackIndex(labels));
+  /* A connected composite's widgets are windows above the graphics. */
+  controls->setChannelConnected(true);
+  QCoreApplication::processEvents();
+  QVERIFY(stackIndex(controls) > stackIndex(labels));
+  window.leaveExecuteMode();
 }
 
 void TestObserveOnlyControls::compositeShapePicking_data()

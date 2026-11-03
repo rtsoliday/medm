@@ -776,6 +776,12 @@ bool CompositeElement::forwardMouseEventToParent(QMouseEvent *event) const
 
 void CompositeElement::applyRuntimeVisibility()
 {
+  /* MEDM's compositeDraw() hides a disconnected composite's widgets and
+   * draws a white rectangle in their place from its update task, in display
+   * order, so later dynamic graphics draw over it. */
+  const MedmWidgetUnmanagedUpdate unmanaged(*this,
+      [this]() { return executeMode_ && hasActiveChannel()
+          && !channelConnected_; });
   if (!executeMode_) {
     QWidget::setVisible(designModeVisible_);
     for (const auto &pointer : childWidgets_) {

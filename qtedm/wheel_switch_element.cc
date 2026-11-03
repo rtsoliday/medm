@@ -632,6 +632,9 @@ void WheelSwitchElement::setRuntimeConnected(bool connected)
   }
   runtimeConnected_ = connected;
   if (!runtimeConnected_) {
+    /* A held button's release is ignored while the switch cannot write,
+     * so its repeat would resume writing on reconnect. */
+    stopRepeating();
     runtimeWriteAccess_ = false;
     runtimeSeverity_ = kInvalidSeverity;
   }
@@ -645,6 +648,9 @@ void WheelSwitchElement::setRuntimeWriteAccess(bool writeAccess)
     return;
   }
   runtimeWriteAccess_ = writeAccess;
+  if (!runtimeWriteAccess_) {
+    stopRepeating();
+  }
   updateCursor();
 }
 
@@ -2220,6 +2226,12 @@ int WheelSwitchElement::moveSelectedSlot(const Layout &layout, int direction)
 void WheelSwitchElement::handleRepeatTimeout()
 {
   if (repeatDirection_ == RepeatDirection::kNone) {
+    return;
+  }
+  /* As Xc's timer procs, which stop rescheduling once the button is
+   * unmanaged, end a repeat the switch can no longer make. */
+  if (!isInteractive()) {
+    stopRepeating();
     return;
   }
   performStep(repeatDirection_, repeatStep_, false);

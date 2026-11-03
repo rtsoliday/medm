@@ -174,6 +174,8 @@ private slots:
   void menuLabelsUseMedmFont();
   void menuIgnoresMouseWheel();
   void wheelSwitchIgnoresMouseWheel();
+  void wheelSwitchRepeatEndsWhenWritesStop_data();
+  void wheelSwitchRepeatEndsWhenWritesStop();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
@@ -2296,6 +2298,57 @@ void TestObserveOnlyControls::wheelSwitchIgnoresMouseWheel()
   }
   QVERIFY(writes.isEmpty());
   QTest::keyClick(&element, Qt::Key_PageUp);
+  QCOMPARE(writes.size(), 1);
+}
+
+void TestObserveOnlyControls::wheelSwitchRepeatEndsWhenWritesStop_data()
+{
+  QTest::addColumn<bool>("disconnect");
+
+  QTest::newRow("disconnect") << true;
+  QTest::newRow("write-access-lost") << false;
+}
+
+/* The release of a held button or arrow key is ignored while the switch
+ * cannot write. Its repeat timer kept running, so once the channel came
+ * back with write access the switch stepped and wrote every 90 ms by
+ * itself until it reached a bound. */
+void TestObserveOnlyControls::wheelSwitchRepeatEndsWhenWritesStop()
+{
+  QFETCH(bool, disconnect);
+  QWidget parent;
+  WheelSwitchElement element(&parent);
+  element.resize(160, 40);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = 100.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 0;
+  element.setLimits(limits);
+  QList<double> writes;
+  element.setActivationCallback([&writes](double value) {
+    writes.append(value);
+  });
+  element.setExecuteMode(true);
+  element.setRuntimeConnected(true);
+  element.setRuntimeWriteAccess(true);
+  element.setRuntimeValue(50.0);
+  parent.show();
+  QCoreApplication::processEvents();
+
+  QTest::keyPress(&element, Qt::Key_Up);
+  QCOMPARE(writes.size(), 1);
+  if (disconnect) {
+    element.setRuntimeConnected(false);
+  } else {
+    element.setRuntimeWriteAccess(false);
+  }
+  QTest::keyRelease(&element, Qt::Key_Up);
+  element.setRuntimeConnected(true);
+  element.setRuntimeWriteAccess(true);
+  QTest::qWait(700);
   QCOMPARE(writes.size(), 1);
 }
 

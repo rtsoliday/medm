@@ -616,6 +616,7 @@ void SliderElement::mouseMoveEvent(QMouseEvent *event)
 #else
   const QPointF pos = event->localPos();
 #endif
+  dragMoved_ = true;
   updateDrag(valueFromPosition(pos - dragGrabOffset_), false);
   event->accept();
 }
@@ -644,7 +645,15 @@ void SliderElement::mouseReleaseEvent(QMouseEvent *event)
     releaseOnThumb = thumbRect.contains(pos);
   }
 
-  if (releaseOnThumb) {
+  if (releaseOnThumb && !dragMoved_) {
+    /* As MEDM's XmScale, a click on the thumb changes nothing. A value
+     * outside the limits stays shown instead of the limit the thumb is
+     * drawn at, so the next step starts from the channel's value. */
+    dragging_ = false;
+    releaseMouse();
+    updateCursor();
+    update();
+  } else if (releaseOnThumb) {
     endDrag(currentDisplayedValue(), false);
   } else {
     endDrag(valueFromPosition(pos - dragGrabOffset_), true);
@@ -1455,13 +1464,14 @@ QRectF SliderElement::thumbRectForTrack(const QRectF &trackRect,
 void SliderElement::beginDrag(double value, bool sendInitial)
 {
   dragging_ = true;
+  dragMoved_ = false;
   dragGrabOffset_ = QPointF();
   grabMouse();
   double clamped = clampToLimits(value);
   dragValue_ = clamped;
-  runtimeValue_ = clamped;
-  hasRuntimeValue_ = true;
   if (sendInitial) {
+    runtimeValue_ = clamped;
+    hasRuntimeValue_ = true;
     hasLastSentValue_ = false;
     sendActivationValue(clamped, true);
   } else {

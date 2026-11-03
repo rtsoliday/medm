@@ -215,6 +215,7 @@ private slots:
   void sliderTroughRespectsAccess();
   void sliderStepsFromOutOfRangeValue_data();
   void sliderStepsFromOutOfRangeValue();
+  void sliderThumbClickKeepsOutOfRangeValue();
   void sliderDragKeepsGrabOffset();
   void executePickingFollowsVisibleStacking();
   void disconnectedWidgetsStackInDisplayOrder();
@@ -3796,6 +3797,31 @@ void TestObserveOnlyControls::sliderStepsFromOutOfRangeValue()
   QTest::keyClick(&slider, static_cast<Qt::Key>(key));
   QCOMPARE(writes.size(), 1);
   QCOMPARE(writes.first(), expected);
+}
+
+/* As MEDM's XmScale, a click on the thumb changes nothing. The thumb of a
+ * slider at 50 with limits 0 to 1 is drawn at 1, but the click must leave
+ * 50 shown, so the next step writes 49 instead of 0. */
+void TestObserveOnlyControls::sliderThumbClickKeepsOutOfRangeValue()
+{
+  SliderElement slider;
+  slider.resize(160, 40);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:thumb-out-of-range"));
+  slider.setIncrement(1.0);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, 1.0);
+  slider.setRuntimeValue(50.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+
+  QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier, QPoint(129, 36));
+  QVERIFY(writes.isEmpty());
+  QTest::keyClick(&slider, Qt::Key_Left);
+  QCOMPARE(writes, QList<double>({49.0}));
 }
 
 /* As Motif's XmScale, a drag keeps the point where the thumb was grabbed

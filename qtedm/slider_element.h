@@ -147,6 +147,7 @@ private:
   double runtimeValue_ = 0.0;
   bool hasRuntimeValue_ = false;
   bool dragging_ = false;
+  bool dragMoved_ = false;
   double dragValue_ = 0.0;
   QPointF dragGrabOffset_;
   double lastSentValue_ = 0.0;

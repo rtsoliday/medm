@@ -1159,7 +1159,10 @@ complete extension list.</p>
   buttons to the existing setpoint implementation and therefore inherits PV
   control limits, precision, engineering units, alarm color, connection state,
   access rights, and audit logging. The step size is edited with
-  <em>QtEDM Extension Properties...</em>.</p>
+  <em>QtEDM Extension Properties...</em>. A step from the channel's value, or
+  from text you have edited, stops at the limit it moves toward. A step from
+  a value outside the limits is refused, as Enter refuses that value, and the
+  buttons write nothing until the channel sends a value.</p>
 </div>
 
 <div class="widget-entry">

@@ -1221,8 +1221,12 @@ void SetpointControlElement::stepBy(int direction)
    * limit. */
   const int base = format_ == TextMonitorFormat::kHexadecimal ? 16
       : format_ == TextMonitorFormat::kOctal ? 8 : 10;
-  double current = hasSetpointValue_ ? setpointValue_ : 0.0;
-  if (setpointEdit_ && (base == 10 || dirty_)) {
+  /* Step from the channel's value or from text the operator edited. Before
+   * the first value, or on a channel the control cannot read, 0 or text
+   * left from before a reconnect is not the setpoint. */
+  bool hasCurrent = hasSetpointValue_;
+  double current = setpointValue_;
+  if (setpointEdit_ && (dirty_ || (base == 10 && hasSetpointValue_))) {
     bool ok = false;
     const QString text = setpointEdit_->text().trimmed();
     const double edited = base == 10 ? text.toDouble(&ok)
@@ -1230,12 +1234,21 @@ void SetpointControlElement::stepBy(int direction)
               setpointSignedInteger_);
     if (ok && std::isfinite(edited)) {
       current = edited;
+      hasCurrent = true;
     }
+  }
+  if (!hasCurrent) {
+    return;
   }
   double next = current + static_cast<double>(direction) * stepSize_;
   const double low = displayLowLimit();
   const double high = displayHighLimit();
-  if (std::isfinite(low) && std::isfinite(high) && low <= high) {
+  /* Bound only a step that starts within the limits. A step from outside
+   * them, from the IOC or typed, reaches the runtime as it is and is
+   * refused as Enter refuses it: clamping wrote the high limit for + on a
+   * value above it, moving the setpoint down. */
+  if (std::isfinite(low) && std::isfinite(high) && low <= high
+      && current >= low && current <= high) {
     next = std::clamp(next, low, high);
   }
   if (base != 10) {

@@ -271,6 +271,7 @@ private slots:
   void spinBoxPropertiesPreserveExtremeSteps();
   void spinBoxStepsInItsFormat_data();
   void spinBoxStepsInItsFormat();
+  void spinBoxStepsNeedValueWithinLimits();
   void symbolMappingLayoutAndDefaults();
   void inlineColorMapsSurviveRenderingSaveAndUndo();
   void invalidInlineColorMapPreservesLoadedDisplay();
@@ -2191,6 +2192,74 @@ void TestObserveOnlyControls::rejectedSetpointShowsError()
   QCOMPARE(edit->palette().color(QPalette::Base), normalBase);
   QVERIFY(!edit->toolTip().contains(message));
   QVERIFY(!edit->accessibleDescription().contains(message));
+}
+
+/* The + and - buttons clamped every step to the limits, so + on a value
+ * above the high limit wrote the high limit, moving the setpoint down, and
+ * - wrote it too; Enter refuses the same value. Without a value from the
+ * channel, a step went from 0. */
+void TestObserveOnlyControls::spinBoxStepsNeedValueWithinLimits()
+{
+  const QString name = QStringLiteral("__test:spinbox_step_limits");
+  auto &soft = SoftPvRegistry::instance();
+  soft.registerName(name, true);
+  registeredNames_.append(name);
+  soft.setConnected(name, true);
+  soft.setControlInfo(name, 10.0, 90.0, 0);
+  soft.publishValue(name, 95.0);
+
+  SetpointControlElement element;
+  element.resize(400, 40);
+  element.setQtedmSpinBox(true);
+  element.setStepSize(1.0);
+  element.setSetpointChannel(name);
+  element.setShowReadback(false);
+  element.setExecuteMode(true);
+  SetpointControlRuntime runtime(&element);
+  runtime.start();
+  element.show();
+  auto *edit = element.findChild<QLineEdit *>();
+  QVERIFY(edit);
+  QTRY_VERIFY(!edit->isReadOnly());
+  QTRY_COMPARE(element.runtimeSetpointValue(), 95.0);
+  auto *up = element.findChild<QToolButton *>(
+      QStringLiteral("qtedmSpinBoxIncrementButton"));
+  auto *down = element.findChild<QToolButton *>(
+      QStringLiteral("qtedmSpinBoxDecrementButton"));
+  QVERIFY(up);
+  QVERIFY(down);
+  SoftPvInfoSnapshot snapshot;
+  up->click();
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 95.0);
+  QVERIFY(edit->toolTip().contains(QStringLiteral("Above high limit")));
+  down->click();
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 95.0);
+
+  soft.publishValue(name, 89.0);
+  QTRY_COMPARE(element.runtimeSetpointValue(), 89.0);
+  up->click();
+  up->click();
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 90.0);
+
+  SetpointControlElement bare;
+  bare.setQtedmSpinBox(true);
+  bare.setStepSize(1.0);
+  bare.setSetpointChannel(QStringLiteral("__test:spinbox:no-value"));
+  QStringList sent;
+  bare.setActivationCallback([&sent](const QString &value) {
+    sent.append(value);
+  });
+  bare.setExecuteMode(true);
+  bare.setSetpointConnected(true);
+  bare.setSetpointWriteAccess(true);
+  auto *bareUp = bare.findChild<QToolButton *>(
+      QStringLiteral("qtedmSpinBoxIncrementButton"));
+  QVERIFY(bareUp);
+  bareUp->click();
+  QVERIFY2(sent.isEmpty(), qPrintable(sent.value(0)));
 }
 
 void TestObserveOnlyControls::menuLabelsUseMedmFont_data()

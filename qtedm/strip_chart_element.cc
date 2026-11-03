@@ -1941,7 +1941,10 @@ int StripChartElement::maybeAppendSamples(qint64 nowMs)
     return 0;
   }
 
-  if (!anyPenReady()) {
+  /* An archive plot that merges live data keeps its clock running while its
+   * live channels are gone, so that time is a gap. Stopping it left the last
+   * live value at the right edge, where the time axis says "now". */
+  if (!anyPenReady() && !(archivePlot_ && archiveLiveMerge_)) {
     lastSampleMs_ = nowMs;
     nextAdvanceTimeMs_ = 0;
     return 0;

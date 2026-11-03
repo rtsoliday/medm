@@ -208,6 +208,13 @@ void StripChartRuntime::requestArchive(int index)
               : QStringLiteral("Loaded %1 archive sample(s).")
                     .arg(result.samples.size()));
           self->applyMergedHistory(index);
+          /* History that arrives while the live channel is gone must not
+           * extend its last sample as if the channel were reporting. */
+          if (!current.connected) {
+            self->invokeOnElement([index](StripChartElement *element) {
+              element->clearPenRuntimeValue(index);
+            });
+          }
         } else if (!result.cancelled) {
           current.archiveError = result.error.isEmpty()
               ? QStringLiteral("Archive query failed.") : result.error;

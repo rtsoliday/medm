@@ -108,6 +108,7 @@ private slots:
   void archiveOwnerDestructionReleasesReply();
   void archivePenFailuresSurviveOtherPenCompletions();
   void archiveLiveDisconnectLeavesGaps();
+  void archiveHistoryWithoutLiveChannelLeavesGaps();
   void archiveHistoryPreservesTimestampGaps();
   void archiveHistoryRendersConnectedLine();
   void snapshotDefaultExtensionIsAppended();
@@ -379,7 +380,8 @@ void TestArchivesSnapshots::archivePenFailuresSurviveOtherPenCompletions()
 
 /* An archive plot keeps its history when the live channel disconnects, but
  * the columns added afterwards must be gaps. Repeating the last live value
- * scrolled a flat line on as if the channel were still reporting. */
+ * scrolled a flat line on as if the channel were still reporting, and with
+ * no other live pen the chart stopped with that value at its right edge. */
 void TestArchivesSnapshots::archiveLiveDisconnectLeavesGaps()
 {
   ControlledArchiveProvider provider;
@@ -411,8 +413,9 @@ void TestArchivesSnapshots::archiveLiveDisconnectLeavesGaps()
   QVERIFY(chart.archiveStatus().contains(
       QStringLiteral("Live PV disconnected")));
   const int before = chart.sampleCount();
-  chart.appendSampleColumn();
   QVERIFY(before > 0);
+  QVERIFY(chart.maybeAppendSamples(std::max(
+      QDateTime::currentMSecsSinceEpoch(), chart.nextAdvanceTimeMs_)) > 0);
   QVERIFY(std::isnan(chart.sampleValue(0, chart.sampleCount() - 1)));
   int finite = 0;
   for (int index = 0; index < chart.sampleCount(); ++index) {
@@ -421,6 +424,40 @@ void TestArchivesSnapshots::archiveLiveDisconnectLeavesGaps()
     }
   }
   QVERIFY2(finite > 0, "The archive history must be kept");
+}
+
+/* History that arrives while the live channel is gone, or before it ever
+ * connected, is drawn, but its last sample must not be extended as if the
+ * channel were reporting. */
+void TestArchivesSnapshots::archiveHistoryWithoutLiveChannelLeavesGaps()
+{
+  ControlledArchiveProvider provider;
+  StripChartElement chart;
+  chart.resize(320, 160);
+  chart.setArchivePlot(true);
+  chart.setExecuteMode(true);
+  chart.setChannel(0, QStringLiteral("TEST:GONE"));
+  StripChartRuntime runtime(&chart);
+  runtime.archiveProvider_ = &provider;
+  runtime.started_ = true;
+  runtime.pens_[0].channelName = QStringLiteral("TEST:GONE");
+  runtime.requestArchive(0);
+  QCOMPARE(provider.pending.size(), 1);
+  ArchiveResult history;
+  history.samples.append({QDateTime::currentMSecsSinceEpoch() - 1000,
+      12.5, 0, 0});
+  provider.finish(0, history);
+
+  QVERIFY(chart.maybeAppendSamples(std::max(
+      QDateTime::currentMSecsSinceEpoch(), chart.nextAdvanceTimeMs_)) > 0);
+  QVERIFY(std::isnan(chart.sampleValue(0, chart.sampleCount() - 1)));
+  int finite = 0;
+  for (int index = 0; index < chart.sampleCount(); ++index) {
+    if (std::isfinite(chart.sampleValue(0, index))) {
+      ++finite;
+    }
+  }
+  QCOMPARE(finite, 1);
 }
 
 void TestArchivesSnapshots::archiveHistoryPreservesTimestampGaps()

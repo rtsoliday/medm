@@ -135,6 +135,7 @@ private slots:
   void choiceButtonsUseMedmGridAndShadows();
   void textEntryUsesMotifShadows();
   void cartesianPlotBlanksUntilAuxiliaryChannelsConnect();
+  void cartesianPlotDrawsPvaChannelWithoutMetadata();
   void relatedDisplayLabelPadding();
   void relatedDisplayLabelsClipToCells_data();
   void relatedDisplayLabelsClipToCells();
@@ -1692,6 +1693,53 @@ void TestObserveOnlyControls::cartesianPlotBlanksUntilAuxiliaryChannelsConnect()
   QVERIFY(runtime.countChannel_.name.isEmpty());
   QCOMPARE(runtime.configuredCount_, 12);
   QTRY_VERIFY(!blank());
+  runtime.stop();
+}
+
+/* A pva:// channel sends its display limits and precision with its value,
+ * and a server may send neither, as for an NTScalar without display
+ * metadata. Its first value must make the plot ready, autoscaling the
+ * axis, instead of leaving it white for good. A Channel Access channel
+ * still waits for the control information it always gets. */
+void TestObserveOnlyControls::cartesianPlotDrawsPvaChannelWithoutMetadata()
+{
+  CartesianPlotElement plot;
+  plot.resize(200, 150);
+  plot.setBackgroundColor(Qt::black);
+  plot.setTraceYChannel(0, QStringLiteral("pva://__test:plot_bare"));
+  plot.setExecuteMode(true);
+  const auto blank = [&plot]() {
+    return plot.grab().toImage().pixelColor(100, 75) == QColor(Qt::white);
+  };
+  CartesianPlotRuntime runtime(&plot);
+  runtime.start();
+  QCoreApplication::processEvents();
+  QVERIFY(blank());
+
+  SharedChannelData data;
+  data.connected = true;
+  data.canRead = true;
+  data.nativeFieldType = DBR_DOUBLE;
+  data.nativeElementCount = 1;
+  runtime.handleConnection(runtime.yContexts_[0], true, data);
+  QVERIFY(!runtime.channelReadyForDisplay(runtime.traces_[0].y));
+
+  data.hasValue = true;
+  data.isNumeric = true;
+  data.numericValue = 5.0;
+  runtime.handleValue(runtime.yContexts_[0], data);
+  QVERIFY(runtime.channelReadyForDisplay(runtime.traces_[0].y));
+  QVERIFY(!runtime.traces_[0].y.runtimeLimitsValid);
+  QTRY_VERIFY(!blank());
+
+  CartesianPlotRuntime::ChannelState ca;
+  ca.name = QStringLiteral("__test:plot_ca");
+  ca.connected = true;
+  ca.readAccessKnown = true;
+  ca.canRead = true;
+  ca.fieldType = DBR_DOUBLE;
+  runtime.updateChannelControlInfo(ca, data);
+  QVERIFY(!runtime.channelReadyForDisplay(ca));
   runtime.stop();
 }
 

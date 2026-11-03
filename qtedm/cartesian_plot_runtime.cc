@@ -597,17 +597,24 @@ void CartesianPlotRuntime::handleAccessRights(const ChannelContext &context,
 void CartesianPlotRuntime::updateChannelControlInfo(ChannelState &state,
     const SharedChannelData &data)
 {
-  if (!data.hasControlInfo) {
+  /* A pva:// channel sends its display limits and precision with its
+   * value, and a server may send neither, as for an NTScalar without
+   * display metadata. Its first value then settles them: no limits, so
+   * the axis autoscales, and no precision, as for a string channel.
+   * Waiting for them instead left the plot white for good. */
+  const bool pva = parsePvName(state.name).protocol == PvProtocol::kPva;
+  if (!data.hasControlInfo && !(pva && data.hasValue)) {
     return;
   }
 
   state.hasControlInfo = true;
-  state.precisionValid = !isNumericFieldType(state.fieldType)
+  state.precisionValid = pva || !isNumericFieldType(state.fieldType)
       || data.precision >= 0;
 
   /* MEDM ranges an axis over the display limits as sent, so equal limits
    * (both 0 when the record sets none) leave the axis autoscaling. */
-  if (areAxisLimitsUsable(data.displayLow, data.displayHigh)) {
+  if (data.hasControlInfo
+      && areAxisLimitsUsable(data.displayLow, data.displayHigh)) {
     state.runtimeLimitsValid = true;
     state.runtimeLow = data.displayLow;
     state.runtimeHigh = data.displayHigh;
@@ -660,7 +667,8 @@ void CartesianPlotRuntime::handleTraceValue(int index, bool isX,
     channel.canRead = true;
     updateRuntimePaintState();
   }
-  if (data.hasControlInfo) {
+  if (data.hasControlInfo || (!channel.hasControlInfo
+      && parsePvName(channel.name).protocol == PvProtocol::kPva)) {
     handleTraceControlInfo(index, isX, data);
   }
   TraceState &trace = traces_[index];

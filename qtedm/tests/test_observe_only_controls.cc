@@ -235,6 +235,7 @@ private slots:
   void statusRectangleCoversHiddenRelatedDisplay();
   void legacyAttributesApplyLikeMedm();
   void legacyOneLineDynamicBlocksKeepLaterObjects();
+  void tabPageMacrosKeepInnerSpaces();
   void legacyAttributesKeepQuotedBraces();
   void graphicEdgesMatchMedmCoordinates_data();
   void graphicEdgesMatchMedmCoordinates();
@@ -1072,6 +1073,63 @@ void TestObserveOnlyControls::legacyAttributesApplyLikeMedm()
   QCOMPARE(staticOval->colorMode(), TextColorMode::kStatic);
   QCOMPARE(staticOval->visibilityMode(), TextVisibilityMode::kStatic);
   QCOMPARE(staticOval->color(), window.colorForIndex(15));
+}
+
+/* MEDM removes the whitespace inside the macro lists it reads, but a tab
+ * page is a QtEDM extension: as in QtEDM 1.0.0 and as the manual says,
+ * its macro values keep their inner spaces, while the first definition of
+ * a repeated name still wins. */
+void TestObserveOnlyControls::tabPageMacrosKeepInnerSpaces()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile childFile(directory.filePath(QStringLiteral("child.adl")));
+  QVERIFY(childFile.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray childAdl =
+      "file { name=\"child.adl\" version=040004 }\n"
+      "display { object { x=0 y=0 width=100 height=60 } clr=1 bclr=0 }\n"
+      "color map { ncolors=2 colors { ffffff, 000000, } }\n";
+  QCOMPARE(childFile.write(childAdl), qint64(childAdl.size()));
+  childFile.close();
+  const QString parentPath = directory.filePath(QStringLiteral("parent.adl"));
+  QFile parentFile(parentPath);
+  QVERIFY(parentFile.open(QIODevice::WriteOnly | QIODevice::Text));
+  const QByteArray parentAdl =
+      "file { name=\"parent.adl\" version=040004 }\n"
+      "display { object { x=0 y=0 width=200 height=120 } clr=1 bclr=0 }\n"
+      "color map { ncolors=2 colors { ffffff, 000000, } }\n"
+      "qtedm_tabbed_display {\n"
+      "  object { x=10 y=10 width=180 height=100 }\n"
+      "  mode=\"tabs\" active_page=\"child\"\n"
+      "  page { id=\"child\" label=\"Child\" display=\"child.adl\""
+      " macros=\"TITLE=Sector 1, TITLE=Other\" keepAlive=\"true\" }\n"
+      "}\n";
+  QCOMPARE(parentFile.write(parentAdl), qint64(parentAdl.size()));
+  parentFile.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = false;
+  DisplayWindow window(QApplication::palette(), QApplication::palette(),
+      QApplication::font(), QApplication::font(), state);
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(parentPath, &error), qPrintable(error));
+  state->displays.append(&window);
+  state->activeDisplay = &window;
+  window.show();
+  window.enterExecuteMode();
+  QCoreApplication::processEvents();
+  QCOMPARE(window.tabbedDisplayElements_.size(), 1);
+  TabbedDisplayElement *tabbed = window.tabbedDisplayElements_.front();
+  QTRY_VERIFY(tabbed->pageContent(0));
+  auto *child = dynamic_cast<DisplayWindow *>(tabbed->pageContent(0)
+      ->property("_qtedmChildDisplay").value<QObject *>());
+  QVERIFY(child);
+  QCOMPARE(child->macroDefinitions_.value(QStringLiteral("TITLE")),
+      QStringLiteral("Sector 1"));
+  window.leaveExecuteMode();
+  state->displays.removeAll(&window);
+  state->activeDisplay.clear();
 }
 
 /* MEDM's tokenizer reads a pre-2.2 mod{} or param{} sub-block written on

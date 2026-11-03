@@ -26440,7 +26440,7 @@ void DisplayWindow::runShellCommand(const QString &command)
 }
 
 QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
-    const QString &macroString) const
+    const QString &macroString, bool removeWhitespace) const
 {
   QHash<QString, QString> macros;
   if (macroString.trimmed().isEmpty()) {
@@ -26457,9 +26457,12 @@ QHash<QString, QString> DisplayWindow::parseMacroDefinitionString(
     if (equalsIndex <= 0) {
       continue;
     }
-    const QString name = removeMacroWhitespace(trimmedEntry.left(equalsIndex));
-    const QString value =
-        removeMacroWhitespace(trimmedEntry.mid(equalsIndex + 1));
+    const QString name = removeWhitespace
+        ? removeMacroWhitespace(trimmedEntry.left(equalsIndex))
+        : trimmedEntry.left(equalsIndex).trimmed();
+    const QString value = removeWhitespace
+        ? removeMacroWhitespace(trimmedEntry.mid(equalsIndex + 1))
+        : trimmedEntry.mid(equalsIndex + 1).trimmed();
     if (name.isEmpty()) {
       continue;
     }
@@ -35547,8 +35550,11 @@ TabbedDisplayElement *DisplayWindow::loadTabbedDisplayElement(
         }
 
         QHash<QString, QString> mergedMacros = macroDefinitions_;
+        /* Tab pages are a QtEDM extension, so MEDM's rule that removes the
+         * whitespace inside macro values does not apply to them: a page's
+         * TITLE=Sector 1 stays "Sector 1", as in QtEDM 1.0.0. */
         const QHash<QString, QString> pageMacros =
-            parseMacroDefinitionString(page.macros);
+            parseMacroDefinitionString(page.macros, false);
         for (auto it = pageMacros.constBegin(); it != pageMacros.constEnd();
              ++it) {
           mergedMacros.insert(it.key(), it.value());

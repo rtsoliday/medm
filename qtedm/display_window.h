@@ -1021,7 +1021,8 @@ private:
       int entryIndex, Qt::KeyboardModifiers modifiers);
   QString resolveRelatedDisplayFile(const QString &fileName) const;
   QStringList buildDisplaySearchPaths() const;
-  QHash<QString, QString> parseMacroDefinitionString(const QString &macroString) const;
+  QHash<QString, QString> parseMacroDefinitionString(const QString &macroString,
+      bool removeWhitespace = true) const;
   void registerDisplayWindow(DisplayWindow *displayWin,
       bool delayExecuteMode = false);
   ImageType parseImageType(const QString &value) const;

@@ -94,6 +94,7 @@ void MenuRuntime::resetRuntimeState()
   connected_ = false;
   lastSeverity_ = 0;
   lastValue_ = -1;
+  showNextValue_ = false;
   lastReadAccessKnown_ = false;
   lastReadAccess_ = false;
   lastWriteAccess_ = false;
@@ -236,7 +237,11 @@ void MenuRuntime::handleChannelData(const SharedChannelData &data)
                << "outside available state range 0-" << (stateCount - 1);
   }
 
-  if (enumValue != lastValue_ || valueOutOfRange != lastValueOutOfRange_) {
+  /* After a write, show the IOC's next value even when it has not changed,
+   * as MEDM does, so a write the IOC rejects does not stay shown. */
+  if (showNextValue_ || enumValue != lastValue_
+      || valueOutOfRange != lastValueOutOfRange_) {
+    showNextValue_ = false;
     lastValue_ = enumValue;
     lastValueOutOfRange_ = valueOutOfRange;
     if (element_) {
@@ -292,6 +297,7 @@ void MenuRuntime::handleActivation(int value)
                << channelName_;
     return;
   }
+  showNextValue_ = true;
   AuditLogger::instance().logPut(channelName_, value,
       QStringLiteral("Menu"));
 }

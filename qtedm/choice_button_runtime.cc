@@ -93,6 +93,7 @@ void ChoiceButtonRuntime::resetRuntimeState()
   connected_ = false;
   lastSeverity_ = 0;
   lastValue_ = -1;
+  showNextValue_ = false;
   lastReadAccessKnown_ = false;
   lastReadAccess_ = false;
   lastWriteAccess_ = false;
@@ -226,7 +227,11 @@ void ChoiceButtonRuntime::handleChannelData(const SharedChannelData &data)
                << "outside available state range 0-" << (stateCount - 1);
   }
 
-  if (!valueOutOfRange && (enumValue != lastValue_ || lastValueOutOfRange_)) {
+  /* After a write, show the IOC's next value even when it has not changed,
+   * as MEDM does, so a write the IOC rejects does not stay shown. */
+  if (!valueOutOfRange && (showNextValue_ || enumValue != lastValue_
+      || lastValueOutOfRange_)) {
+    showNextValue_ = false;
     lastValue_ = enumValue;
     lastValueOutOfRange_ = false;
     if (element_) {
@@ -290,6 +295,7 @@ void ChoiceButtonRuntime::handleActivation(int value)
                << channelName_;
     return;
   }
+  showNextValue_ = true;
   AuditLogger::instance().logPut(channelName_, value,
       QStringLiteral("ChoiceButton"));
 }

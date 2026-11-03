@@ -6,6 +6,7 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QButtonGroup>
 #include <QComboBox>
 #include <QDir>
 #include <QDialogButtonBox>
@@ -62,6 +63,7 @@
 #include "medm_colors.h"
 #include "meter_element.h"
 #include "menu_element.h"
+#include "menu_runtime.h"
 #include "oval_element.h"
 #include "plugin_element.h"
 #include "polyline_element.h"
@@ -150,6 +152,7 @@ private slots:
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void barValueBoxShowsNoValueBeforeFirstValue();
   void choiceButtonDoesNotWriteChannelThatIsNotEnum();
+  void enumControlsShowIocValueAfterWrite();
   void oversizedRelatedDisplayStaysFitted_data();
   void oversizedRelatedDisplayStaysFitted();
   void init();
@@ -6249,6 +6252,76 @@ void TestObserveOnlyControls::choiceButtonDoesNotWriteChannelThatIsNotEnum()
   QVERIFY(soft.infoSnapshot(name, snapshot));
   QCOMPARE(snapshot.value, 5.0);
   runtime.started_ = false;
+}
+
+/* After a write, a menu or choice button shows the IOC's next value even
+ * when it has not changed, as MEDM does. An IOC that rejects the write and
+ * posts the value it holds must not leave the operator's choice shown. */
+void TestObserveOnlyControls::enumControlsShowIocValueAfterWrite()
+{
+  auto &soft = SoftPvRegistry::instance();
+  const QString name = QStringLiteral("__test:enum_rejected_write");
+  soft.registerName(name, true);
+  soft.setConnected(name, true);
+  registeredNames_.append(name);
+
+  SharedChannelData data;
+  data.connected = true;
+  data.hasValue = true;
+  data.isEnum = true;
+  data.nativeFieldType = DBF_ENUM;
+  data.enumValue = 0;
+  data.enumStrings = QStringList{QStringLiteral("Off"), QStringLiteral("On")};
+
+  MenuElement menu;
+  menu.setChannel(name);
+  menu.setExecuteMode(true);
+  MenuRuntime menuRuntime(&menu);
+  menuRuntime.channelName_ = name;
+  menuRuntime.started_ = true;
+  menuRuntime.connected_ = true;
+  menuRuntime.lastReadAccessKnown_ = true;
+  menuRuntime.lastReadAccess_ = true;
+  menuRuntime.lastWriteAccess_ = true;
+  menuRuntime.handleChannelData(data);
+  auto *combo = menu.findChild<QComboBox *>();
+  QVERIFY(combo);
+  QCOMPARE(combo->currentIndex(), 0);
+  {
+    const QSignalBlocker blocker(combo);
+    combo->setCurrentIndex(1);
+  }
+  menuRuntime.handleActivation(1);
+  SoftPvInfoSnapshot snapshot;
+  QVERIFY(soft.infoSnapshot(name, snapshot));
+  QCOMPARE(snapshot.value, 1.0);
+  menuRuntime.handleChannelData(data);
+  QCOMPARE(combo->currentIndex(), 0);
+  menuRuntime.started_ = false;
+
+  ChoiceButtonElement choice;
+  choice.setChannel(name);
+  choice.setExecuteMode(true);
+  ChoiceButtonRuntime choiceRuntime(&choice);
+  choiceRuntime.channelName_ = name;
+  choiceRuntime.started_ = true;
+  choiceRuntime.connected_ = true;
+  choiceRuntime.lastReadAccessKnown_ = true;
+  choiceRuntime.lastReadAccess_ = true;
+  choiceRuntime.lastWriteAccess_ = true;
+  choiceRuntime.handleChannelData(data);
+  auto *group = choice.findChild<QButtonGroup *>();
+  QVERIFY(group);
+  QCOMPARE(group->checkedId(), 0);
+  {
+    const QSignalBlocker blocker(group);
+    QVERIFY(group->button(1));
+    group->button(1)->setChecked(true);
+  }
+  choiceRuntime.handleActivation(1);
+  choiceRuntime.handleChannelData(data);
+  QCOMPARE(group->checkedId(), 0);
+  choiceRuntime.started_ = false;
 }
 
 void TestObserveOnlyControls::scaleMonitorValueBoxMatchesXcIndicator()

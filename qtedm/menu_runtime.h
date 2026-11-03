@@ -18,6 +18,7 @@ class DisplayWindow;
 class MenuRuntime : public QObject
 {
   friend class DisplayWindow;
+  friend class TestObserveOnlyControls;
 public:
   explicit MenuRuntime(MenuElement *element);
   ~MenuRuntime() override;
@@ -42,6 +43,7 @@ private:
   bool connected_ = false;
   short lastSeverity_ = 0;
   short lastValue_ = -1;
+  bool showNextValue_ = false;
   bool lastReadAccessKnown_ = false;
   bool lastReadAccess_ = false;
   bool lastWriteAccess_ = false;

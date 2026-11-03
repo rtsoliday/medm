@@ -39,7 +39,7 @@ Changes since QtEDM 1.0.0. `qtedm -version` and **Help > About QtEDM** report th
 
 ### Fixes
 
-- Legacy (pre-2.2) ADL files whose quoted values contain braces, such as `chan="SR:C01{BPM}"`, load correctly.
+- Legacy (pre-2.2) ADL files whose quoted values contain braces, such as `chan="SR:C01{BPM}"`, load correctly. As in MEDM, their dynamic attributes' `mod` and `param` settings, also when written on one line such as `param { chan="X" }`, apply to the next object, and a basic attribute stays in effect for later objects.
 - ADL files with an extra `}` between objects open as they do in MEDM instead of failing with "Expected section or key".
 - A backslash in an ADL string, other than in the escapes QtEDM writes, is kept as MEDM shows it, so `Faults\Trips` no longer reads `FaultsTrips`.
 - Object geometry and polyline or polygon points written with a fraction, such as `y=57.2`, keep their integer part, as in MEDM, instead of falling back to 0 or dropping the point.

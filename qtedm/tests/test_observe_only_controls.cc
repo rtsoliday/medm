@@ -234,6 +234,7 @@ private slots:
   void statusRectangleCoversHiddenRelatedDisplay_data();
   void statusRectangleCoversHiddenRelatedDisplay();
   void legacyAttributesApplyLikeMedm();
+  void legacyOneLineDynamicBlocksKeepLaterObjects();
   void legacyAttributesKeepQuotedBraces();
   void graphicEdgesMatchMedmCoordinates_data();
   void graphicEdgesMatchMedmCoordinates();
@@ -1071,6 +1072,48 @@ void TestObserveOnlyControls::legacyAttributesApplyLikeMedm()
   QCOMPARE(staticOval->colorMode(), TextColorMode::kStatic);
   QCOMPARE(staticOval->visibilityMode(), TextVisibilityMode::kStatic);
   QCOMPARE(staticOval->color(), window.colorForIndex(15));
+}
+
+/* MEDM's tokenizer reads a pre-2.2 mod{} or param{} sub-block written on
+ * one line like any other. Counting only its opening brace left the
+ * converter inside the dynamic attribute, and every later object of the
+ * file was dropped without an error. */
+void TestObserveOnlyControls::legacyOneLineDynamicBlocksKeepLaterObjects()
+{
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile fixture(directory.filePath(QStringLiteral("legacy_one_line.adl")));
+  QVERIFY(fixture.open(QIODevice::WriteOnly));
+  const QByteArray adl =
+      "file {\n\tname=\"legacy_one_line.adl\"\n}\n"
+      "display {\n\tobject {\n\t\twidth=60\n\t\theight=60\n\t}\n"
+      "\tclr=14\n\tbclr=4\n}\n"
+      "\"dynamic attribute\" {\n\tattr {\n"
+      "\t\tmod { clr=\"alarm\" vis=\"if not zero\" }\n"
+      "\t\tparam { chan=\"legacy:run{1}\" }\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=10\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n"
+      "oval {\n\tobject {\n\t\tx=30\n\t\ty=10\n\t\twidth=15\n"
+      "\t\theight=15\n\t}\n}\n";
+  QCOMPARE(fixture.write(adl), qint64(adl.size()));
+  fixture.close();
+
+  auto state = std::make_shared<DisplayState>();
+  state->editMode = true;
+  const QPalette palette = QApplication::palette();
+  const QFont font = QApplication::font();
+  DisplayWindow window(palette, palette, font, font,
+      std::weak_ptr<DisplayState>(state));
+  window.setAttribute(Qt::WA_DeleteOnClose, false);
+  QString error;
+  QVERIFY2(window.loadFromFile(fixture.fileName(), &error), qPrintable(error));
+  QCOMPARE(window.ovalElements_.size(), 2);
+
+  OvalElement *dynamicOval = window.ovalElements_.first();
+  QCOMPARE(dynamicOval->channel(0), QStringLiteral("legacy:run{1}"));
+  QCOMPARE(dynamicOval->colorMode(), TextColorMode::kAlarm);
+  QCOMPARE(dynamicOval->visibilityMode(), TextVisibilityMode::kIfNotZero);
+  QVERIFY(window.ovalElements_.last()->channel(0).isEmpty());
 }
 
 void TestObserveOnlyControls::legacyAttributesKeepQuotedBraces()

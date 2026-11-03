@@ -21852,6 +21852,25 @@ static bool containsUnquotedAdl(const QString &line, QChar ch)
   return false;
 }
 
+static int countUnquotedAdl(const QString &line, QChar ch)
+{
+  int count = 0;
+  bool quoted = false;
+  bool escaped = false;
+  for (const QChar c : line) {
+    if (escaped) {
+      escaped = false;
+    } else if (quoted && c == QLatin1Char('\\')) {
+      escaped = true;
+    } else if (c == QLatin1Char('"')) {
+      quoted = !quoted;
+    } else if (!quoted && c == ch) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
     int fileVersion) const
 {
@@ -21997,6 +22016,21 @@ QString DisplayWindow::convertLegacyAdlFormat(const QString &adlText,
       /* Old files nest the properties in mod{} (clr, vis, calc) and
        * param{} (chan) sub-blocks.  Keep only the property lines so the
        * injected block uses the modern flat layout the loaders expect. */
+      if (countUnquotedAdl(trimmed, QChar('{')) > 0
+          && countUnquotedAdl(trimmed, QChar('{'))
+              == countUnquotedAdl(trimmed, QChar('}'))) {
+        /* MEDM's tokenizer also reads a sub-block on one line, such as
+         * param { chan="X" }. Keep its properties; counting only its
+         * opening brace lost the rest of the file. */
+        static const QRegularExpression property(QStringLiteral(
+            "[A-Za-z_][A-Za-z0-9_]*=(\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s{}\"]+)"));
+        QRegularExpressionMatchIterator match = property.globalMatch(trimmed);
+        while (match.hasNext()) {
+          pendingDynamicAttr.append(QStringLiteral("\t\t")
+              + match.next().captured(0));
+        }
+        continue;
+      }
       if (containsUnquotedAdl(trimmed, QChar('{'))) {
         braceDepth++;
         continue;

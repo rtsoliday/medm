@@ -867,38 +867,10 @@ void WheelSwitchElement::focusOutEvent(QFocusEvent *event)
 
 void WheelSwitchElement::wheelEvent(QWheelEvent *event)
 {
-  if (!isInteractive() || keyboardEntryActive_) {
-    QWidget::wheelEvent(event);
-    return;
-  }
-
-  const int delta = event->angleDelta().y();
-  if (delta == 0) {
-    QWidget::wheelEvent(event);
-    return;
-  }
-
-  const Layout layout = layoutForRect(contentRect());
-  int slotIndex = -1;
-  double step = 0.0;
-  if (!selectedSlotStep(layout, event->modifiers(), &slotIndex, &step)) {
-    QWidget::wheelEvent(event);
-    return;
-  }
-
-  selectedSlotIndex_ = slotIndex;
-  if (delta > 0) {
-    if (layout.columns.at(slotIndex).showUpButton) {
-      stepValue(step, true);
-    }
-  } else {
-    if (layout.columns.at(slotIndex).showDownButton) {
-      stepValue(-step, true);
-    }
-  }
-
-  update();
-  event->accept();
+  /* As MEDM's Xc WheelSwitch, which binds no wheel buttons, the mouse
+   * wheel does not step the value. Stepping wrote the channel whenever the
+   * pointer passed over the switch while a display was scrolled. */
+  QWidget::wheelEvent(event);
 }
 
 void WheelSwitchElement::keyPressEvent(QKeyEvent *event)

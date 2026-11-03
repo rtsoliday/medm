@@ -168,6 +168,7 @@ private slots:
   void menuLabelsUseMedmFont_data();
   void menuLabelsUseMedmFont();
   void menuIgnoresMouseWheel();
+  void wheelSwitchIgnoresMouseWheel();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
@@ -2251,6 +2252,44 @@ void TestObserveOnlyControls::menuIgnoresMouseWheel()
   }
   QCOMPARE(activated, -1);
   QCOMPARE(combo->currentIndex(), 1);
+}
+
+/* MEDM's Xc WheelSwitch binds no wheel buttons. Scrolling the mouse wheel
+ * over a wheel switch, as when scrolling a display past it, must not step
+ * its value or write its channel. */
+void TestObserveOnlyControls::wheelSwitchIgnoresMouseWheel()
+{
+  QWidget parent;
+  WheelSwitchElement element(&parent);
+  element.resize(160, 40);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = 10.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 1;
+  element.setLimits(limits);
+  QList<double> writes;
+  element.setActivationCallback([&writes](double value) {
+    writes.append(value);
+  });
+  element.setExecuteMode(true);
+  element.setRuntimeConnected(true);
+  element.setRuntimeWriteAccess(true);
+  element.setRuntimeValue(5.0);
+  parent.show();
+  QCoreApplication::processEvents();
+  const QPointF center = QRectF(element.rect()).center();
+  const QPointF global = element.mapToGlobal(center.toPoint());
+  for (int delta : {-120, 120, 120}) {
+    QWheelEvent wheel(center, global, QPoint(), QPoint(0, delta),
+        Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(&element, &wheel);
+  }
+  QVERIFY(writes.isEmpty());
+  QTest::keyClick(&element, Qt::Key_PageUp);
+  QCOMPARE(writes.size(), 1);
 }
 
 void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()

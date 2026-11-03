@@ -216,6 +216,7 @@ private slots:
   void sliderStepsFromOutOfRangeValue_data();
   void sliderStepsFromOutOfRangeValue();
   void sliderThumbClickKeepsOutOfRangeValue();
+  void sliderRepeatsStepAfterChannelMovesBack();
   void sliderDragKeepsGrabOffset();
   void executePickingFollowsVisibleStacking();
   void disconnectedWidgetsStackInDisplayOrder();
@@ -3822,6 +3823,30 @@ void TestObserveOnlyControls::sliderThumbClickKeepsOutOfRangeValue()
   QVERIFY(writes.isEmpty());
   QTest::keyClick(&slider, Qt::Key_Left);
   QCOMPARE(writes, QList<double>({49.0}));
+}
+
+/* MEDM sends every step. After a step writes 6 and another client puts
+ * the channel back to 5, the same step must write 6 again instead of
+ * being dropped as a repeat while the slider shows 6. */
+void TestObserveOnlyControls::sliderRepeatsStepAfterChannelMovesBack()
+{
+  SliderElement slider;
+  slider.resize(160, 24);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:repeat"));
+  slider.setIncrement(1.0);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(0.0, 10.0);
+  slider.setRuntimeValue(5.0);
+  QList<double> writes;
+  slider.setActivationCallback([&](double next) { writes.append(next); });
+  slider.show();
+  QTest::keyClick(&slider, Qt::Key_Right);
+  slider.setRuntimeValue(5.0);
+  QTest::keyClick(&slider, Qt::Key_Right);
+  QCOMPARE(writes, QList<double>({6.0, 6.0}));
 }
 
 /* As Motif's XmScale, a drag keeps the point where the thumb was grabbed

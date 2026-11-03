@@ -1673,7 +1673,9 @@ bool SliderElement::applyKeyboardDelta(double delta)
   runtimeValue_ = candidate;
   hasRuntimeValue_ = true;
   dragValue_ = candidate;
-  sendActivationValue(candidate, false);
+  /* MEDM sends every step. A step to the value this slider wrote last
+   * must still be sent when the channel has moved away from it since. */
+  sendActivationValue(candidate, true);
   update();
   return true;
 }

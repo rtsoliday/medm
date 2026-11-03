@@ -1913,6 +1913,11 @@ void WheelSwitchElement::performStep(RepeatDirection direction, double step,
  * %.2f format. */
 void WheelSwitchElement::stepValue(double delta, bool forceSend)
 {
+  /* Until the channel sends a finite value the switch shows no digits,
+   * and the sample value it would step from is not the channel's. */
+  if (executeMode_ && !hasRuntimeValue_) {
+    return;
+  }
   const double current = displayedValue();
   double target = current + delta;
   if (!std::isfinite(target)) {

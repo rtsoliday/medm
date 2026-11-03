@@ -176,6 +176,7 @@ private slots:
   void wheelSwitchIgnoresMouseWheel();
   void wheelSwitchRepeatEndsWhenWritesStop_data();
   void wheelSwitchRepeatEndsWhenWritesStop();
+  void stepsWaitForChannelValue();
   void toggleWritesAlternatingValuesThroughSoftPv();
   void toggleMatchesNormalizedEnumAndStringValues();
   void oversizedWindowGetsRealOnScreenGeometry();
@@ -2350,6 +2351,61 @@ void TestObserveOnlyControls::wheelSwitchRepeatEndsWhenWritesStop()
   element.setRuntimeWriteAccess(true);
   QTest::qWait(700);
   QCOMPARE(writes.size(), 1);
+}
+
+/* A channel that is connected and writable but has sent no finite value,
+ * as while it reports NaN, has no value to step from. The slider stepped
+ * from 60% of the file's default limits and the wheel switch from its
+ * sample value: here an arrow key wrote 1.6 to a channel with limits 100
+ * to 200, and PageUp wrote a value the switch did not show. */
+void TestObserveOnlyControls::stepsWaitForChannelValue()
+{
+  SliderElement slider;
+  slider.resize(160, 24);
+  slider.setLabel(MeterLabel::kNone);
+  slider.setChannel(QStringLiteral("test:slider:no-value"));
+  slider.setIncrement(1.0);
+  slider.setExecuteMode(true);
+  slider.setRuntimeConnected(true);
+  slider.setRuntimeWriteAccess(true);
+  slider.setRuntimeLimits(100.0, 200.0);
+  QList<double> sliderWrites;
+  slider.setActivationCallback([&](double next) { sliderWrites.append(next); });
+  slider.show();
+  QTest::keyClick(&slider, Qt::Key_Right);
+  QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier, QPoint(155, 12));
+  QTest::mouseClick(&slider, Qt::LeftButton, Qt::NoModifier, QPoint(5, 12));
+  QVERIFY2(sliderWrites.isEmpty(),
+      qPrintable(QString::number(sliderWrites.value(0))));
+  slider.setRuntimeValue(150.0);
+  QTest::keyClick(&slider, Qt::Key_Right);
+  QCOMPARE(sliderWrites, QList<double>({151.0}));
+
+  QWidget parent;
+  WheelSwitchElement wheel(&parent);
+  wheel.resize(160, 40);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = 100.0;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 0;
+  wheel.setLimits(limits);
+  QList<double> wheelWrites;
+  wheel.setActivationCallback([&](double next) { wheelWrites.append(next); });
+  wheel.setExecuteMode(true);
+  wheel.setRuntimeConnected(true);
+  wheel.setRuntimeWriteAccess(true);
+  parent.show();
+  QCoreApplication::processEvents();
+  QTest::keyClick(&wheel, Qt::Key_PageUp);
+  QTest::keyClick(&wheel, Qt::Key_PageDown);
+  QVERIFY2(wheelWrites.isEmpty(),
+      qPrintable(QString::number(wheelWrites.value(0))));
+  wheel.setRuntimeValue(50.0);
+  QTest::keyClick(&wheel, Qt::Key_PageUp);
+  QCOMPARE(wheelWrites, QList<double>({60.0}));
 }
 
 void TestObserveOnlyControls::toggleWritesAlternatingValuesThroughSoftPv()

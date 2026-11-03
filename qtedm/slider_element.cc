@@ -1620,10 +1620,13 @@ bool SliderElement::applyKeyboardDelta(double delta)
     return false;
   }
 
-  double baseValue = hasRuntimeValue_ ? runtimeValue_ : currentDisplayedValue();
-  if (!std::isfinite(baseValue)) {
-    baseValue = defaultSampleValue();
+  /* A step moves the channel's value. Until the channel sends a finite
+   * value, as while it reports NaN, the editor's sample value stands in
+   * for it, and stepping from that wrote a value nobody chose. */
+  if (!hasRuntimeValue_ || !std::isfinite(runtimeValue_)) {
+    return false;
   }
+  const double baseValue = runtimeValue_;
 
   /* MEDM's valuatorValueChanged() bounds a step only by the limit it moves
    * toward, MAX(lopr, value - increment) or MIN(hopr, value + increment),

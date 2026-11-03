@@ -100,8 +100,9 @@ bin/Linux-x86_64/qtedm --read-only displays/operator.adl
 ```
 
 `-x` starts in EXECUTE mode. `--read-only` also starts in EXECUTE mode, but
-blocks CA, PVA, soft-PV, snapshot-restore, and plugin-provider writes while
-leaving monitoring and navigation available. Use `EPICS_DISPLAY_PATH` to find
+blocks CA, PVA, soft-PV, snapshot-restore, and plugin-provider writes and
+refuses Shell Command and Execute menu commands, while leaving monitoring and
+navigation available. Use `EPICS_DISPLAY_PATH` to find
 ADL files that are not supplied with an explicit path; its separator is `:` on
 Unix and `;` on Windows.
 

@@ -6,7 +6,9 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include <QApplication>
@@ -291,6 +293,39 @@ WheelSwitchFormatInfo wheelSwitchFormatInfo(const QString &format,
   return info;
 }
 
+struct WheelSwitchFormatBounds
+{
+  double minimum = 0.0;
+  double maximum = 0.0;
+  double smallestIncrement = 0.0;
+};
+
+/* Xc's compute_format_min_max(): the values the format can show and the
+ * buttons can set, within the limits. */
+WheelSwitchFormatBounds wheelSwitchFormatBounds(
+    const WheelSwitchFormatInfo &info, double lowLimit, double highLimit)
+{
+  WheelSwitchFormatBounds bounds;
+  const int digitSlots = info.digitSize - 1 - (info.pointValid ? 1 : 0);
+  double minmin = 0.0;
+  double maxmax = 0.0;
+  if (digitSlots > 0) {
+    double increment = 1.0;
+    for (int i = 0; i < info.pointPosition; ++i) {
+      increment /= 10.0;
+    }
+    bounds.smallestIncrement = increment;
+    for (int i = 0; i < digitSlots; ++i) {
+      minmin -= increment * 9.0;
+      maxmax += increment * 9.0;
+      increment *= 10.0;
+    }
+  }
+  bounds.minimum = std::max(lowLimit, minmin);
+  bounds.maximum = std::min(highLimit, maxmax);
+  return bounds;
+}
+
 QString formattedWheelSwitchValue(double value, double lowLimit, double highLimit,
     const WheelSwitchFormatInfo &info, bool *overflow = nullptr)
 {
@@ -298,26 +333,11 @@ QString formattedWheelSwitchValue(double value, double lowLimit, double highLimi
     *overflow = false;
   }
 
-  const int digitSlots = info.digitSize - 1 - (info.pointValid ? 1 : 0);
-  double minmin = 0.0;
-  double maxmax = 0.0;
-  double smallestIncrement = 0.0;
-  if (digitSlots > 0) {
-    double increment = 1.0;
-    for (int i = 0; i < info.pointPosition; ++i) {
-      increment /= 10.0;
-    }
-    smallestIncrement = increment;
-    for (int i = 0; i < digitSlots; ++i) {
-      minmin -= increment * 9.0;
-      maxmax += increment * 9.0;
-      increment *= 10.0;
-    }
-  }
-
-  const double formatMin = std::max(lowLimit, minmin);
-  const double formatMax = std::min(highLimit, maxmax);
-  const double roundoff = smallestIncrement * 0.1;
+  const WheelSwitchFormatBounds bounds =
+      wheelSwitchFormatBounds(info, lowLimit, highLimit);
+  const double formatMin = bounds.minimum;
+  const double formatMax = bounds.maximum;
+  const double roundoff = bounds.smallestIncrement * 0.1;
 
   const QByteArray formatBytes = info.formatString.toLatin1();
   if (value < formatMax + roundoff && value > formatMin - roundoff) {
@@ -1860,11 +1880,14 @@ void WheelSwitchElement::performStep(RepeatDirection direction, double step,
   stepValue(direction == RepeatDirection::kUp ? step : -step, forceSend);
 }
 
-/* Xc's increment_value() moves a value outside the limits one step toward
- * them, unclamped, and refuses a step that would leave them in its own
- * direction. Clamping such a step to the far limit wrote a value the
- * operator never asked for: one Down click on 50 with limits 0 to 1 wrote
- * 1. A step from inside the limits still stops at the limit it crosses. */
+/* Xc's increment_value() rounds the stepped value to the decimals of the
+ * format, as its sprintf() and atof() do, and does nothing when the result
+ * would pass the format's bound in the step's direction: the nearer of the
+ * limit and the largest value the format shows. A value outside the limits
+ * therefore moves one step toward them, unclamped, and a step that would
+ * leave them does nothing. A held button or PageUp stops one step short of
+ * the limit instead of writing it, and 1.23456 + 0.01 writes 1.24 for a
+ * %.2f format. */
 void WheelSwitchElement::stepValue(double delta, bool forceSend)
 {
   const double current = displayedValue();
@@ -1874,21 +1897,24 @@ void WheelSwitchElement::stepValue(double delta, bool forceSend)
   }
   double low = effectiveLowLimit();
   double high = effectiveHighLimit();
-  if (std::isfinite(low) && std::isfinite(high)) {
-    if (low > high) {
-      std::swap(low, high);
-    }
-    if (delta > 0.0 && target > high) {
-      if (current >= high) {
-        return;
-      }
-      target = high;
-    } else if (delta < 0.0 && target < low) {
-      if (current <= low) {
-        return;
-      }
-      target = low;
-    }
+  if (low > high) {
+    std::swap(low, high);
+  }
+  const WheelSwitchFormatInfo info = wheelSwitchFormatInfo(format_,
+      effectiveLowLimit(), effectiveHighLimit(), effectivePrecision());
+  const int length = std::snprintf(nullptr, 0, "%.*f", info.precision,
+      target);
+  if (length <= 0) {
+    return;
+  }
+  std::string text(static_cast<std::size_t>(length) + 1, '\0');
+  std::snprintf(text.data(), text.size(), "%.*f", info.precision, target);
+  target = std::strtod(text.c_str(), nullptr);
+  const WheelSwitchFormatBounds bounds =
+      wheelSwitchFormatBounds(info, low, high);
+  if ((delta > 0.0 && !(target <= bounds.maximum))
+      || (delta < 0.0 && !(target >= bounds.minimum))) {
+    return;
   }
   sendValue(target, forceSend);
 }

@@ -148,6 +148,8 @@ private slots:
   void monitorGeometrySurvivesDeferredResize();
   void scaleMonitorValueBoxMatchesXcIndicator();
   void wheelSwitchStepsOutOfRangeValueAsXc();
+  void wheelSwitchStepsAsXcIncrementValue_data();
+  void wheelSwitchStepsAsXcIncrementValue();
   void compositeShowsImageChildWithDynamicVisibility();
   void limitWidgetsWithoutLimitsBlockUseChannelLimits();
   void barValueBoxShowsNoValueBeforeFirstValue();
@@ -6285,6 +6287,67 @@ void TestObserveOnlyControls::monitorGeometrySurvivesDeferredResize()
 /* Xc's Indicator (xc/Indicator.c) frames the value box with a depressed
  * Rect3d and prints the channel's value in it, while only the diamond
  * stops at the limits. */
+void TestObserveOnlyControls::wheelSwitchStepsAsXcIncrementValue_data()
+{
+  QTest::addColumn<double>("high");
+  QTest::addColumn<QString>("format");
+  QTest::addColumn<double>("value");
+  QTest::addColumn<int>("key");
+  QTest::addColumn<bool>("writes");
+  QTest::addColumn<double>("expected");
+
+  QTest::newRow("rounds-to-format") << 10.0 << QString() << 1.23456
+      << int(Qt::Key_Up) << true << 1.24;
+  QTest::newRow("page-inside-limit") << 1.0 << QString() << 0.85
+      << int(Qt::Key_PageUp) << true << 0.95;
+  QTest::newRow("page-stops-short-of-limit") << 1.0 << QString() << 0.95
+      << int(Qt::Key_PageUp) << false << 0.0;
+  QTest::newRow("page-stops-at-format-bound") << 1000.0
+      << QStringLiteral("%4.1f") << 9.5 << int(Qt::Key_PageUp) << false << 0.0;
+}
+
+/* Xc's increment_value() rounds the stepped value with the format's
+ * sprintf() and atof() and does nothing when the result would pass the
+ * nearer of the limit and the largest value the format shows. QtEDM wrote
+ * 1.24456 for a 0.01 step from 1.23456, wrote the limit 1 for a 0.1 step
+ * from 0.95, and wrote 10.5 where a %4.1f format ends at 9.9. */
+void TestObserveOnlyControls::wheelSwitchStepsAsXcIncrementValue()
+{
+  QFETCH(double, high);
+  QFETCH(QString, format);
+  QFETCH(double, value);
+  QFETCH(int, key);
+  QFETCH(bool, writes);
+  QFETCH(double, expected);
+  QWidget parent;
+  WheelSwitchElement element(&parent);
+  element.resize(200, 50);
+  PvLimits limits;
+  limits.lowSource = PvLimitSource::kDefault;
+  limits.lowDefault = 0.0;
+  limits.highSource = PvLimitSource::kDefault;
+  limits.highDefault = high;
+  limits.precisionSource = PvLimitSource::kDefault;
+  limits.precisionDefault = 2;
+  element.setLimits(limits);
+  if (!format.isEmpty()) {
+    element.setFormat(format);
+  }
+  QList<double> sent;
+  element.setActivationCallback([&sent](double next) { sent.append(next); });
+  element.setExecuteMode(true);
+  element.setRuntimeConnected(true);
+  element.setRuntimeWriteAccess(true);
+  element.setRuntimeValue(value);
+  QTest::keyClick(&element, static_cast<Qt::Key>(key));
+  if (!writes) {
+    QVERIFY2(sent.isEmpty(), qPrintable(QString::number(sent.value(0))));
+    return;
+  }
+  QCOMPARE(sent.size(), 1);
+  QCOMPARE(sent.first(), expected);
+}
+
 void TestObserveOnlyControls::wheelSwitchStepsOutOfRangeValueAsXc()
 {
   QWidget parent;
@@ -6327,9 +6390,13 @@ void TestObserveOnlyControls::wheelSwitchStepsOutOfRangeValueAsXc()
   QTest::keyClick(&element, Qt::Key_PageDown);
   QCOMPARE(writes.size(), 2);
 
-  /* A step from inside the limits still stops at the limit it crosses,
-   * and none is taken from the limit outward. */
+  /* As in Xc, a step from inside the limits that would pass one does
+   * nothing; a step that reaches it exactly is taken, and none is taken
+   * from the limit outward. */
   element.setRuntimeValue(0.5);
+  QTest::keyClick(&element, Qt::Key_PageUp);
+  QCOMPARE(writes.size(), 2);
+  element.setRuntimeValue(0.0);
   QTest::keyClick(&element, Qt::Key_PageUp);
   QCOMPARE(writes.size(), 3);
   QCOMPARE(writes.last(), 1.0);
